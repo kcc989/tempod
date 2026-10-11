@@ -8,8 +8,11 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "typecheck": "tsc -p tsconfig.json && tsc -p scripts/tsconfig.json",
+    "test": "vitest run",
+    "protocol:gen": "bun scripts/gen-schema.ts",
+    "protocol:fixtures": "bun scripts/gen-fixtures.ts",
+    "protocol:check": "bun scripts/check.ts"
   },
   "dependencies": {
     "effect": "4.0.3",

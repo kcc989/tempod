@@ -12,7 +12,9 @@ pub struct ClientRuntime {
 impl ClientRuntime {
     /// The real runtime starts a tokio runtime with 2 worker threads here (07, Threads).
     pub fn start() -> Self {
-        Self { started_at: Instant::now() }
+        Self {
+            started_at: Instant::now(),
+        }
     }
 
     pub fn started_at(&self) -> Instant {

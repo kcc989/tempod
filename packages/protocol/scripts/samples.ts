@@ -8,7 +8,11 @@ const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ErrorBody: [
     { code: "NOT_FOUND", message: "Not found." },
-    { code: "PUSH_REJECTED", message: "Push was rejected. Pull or rebase first.", detail: "non-fast-forward" },
+    {
+      code: "PUSH_REJECTED",
+      message: "Push was rejected. Pull or rebase first.",
+      detail: "non-fast-forward",
+    },
   ],
   SessionMode: w.claudeSession.modes,
   ConfigSelectOption: [
@@ -16,7 +20,9 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { value: "default", name: "Default", description: "The recommended model" },
     { value: "gpt-5", name: "GPT-5", description: null },
   ],
-  ConfigSelectGroup: [{ group: "recommended", name: "Recommended", options: [{ value: "gpt-5-codex", name: "GPT-5 Codex" }] }],
+  ConfigSelectGroup: [
+    { group: "recommended", name: "Recommended", options: [{ value: "gpt-5-codex", name: "GPT-5 Codex" }] },
+  ],
   ConfigOption: [...w.claudeSession.configOptions, ...w.codexSession.configOptions],
   AvailableCommand: w.claudeSession.commands,
   PermissionOption: w.permissionOptions,
@@ -47,7 +53,10 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     },
   ],
 
-  Project: [w.project, { ...w.project, id: uid(2), name: "docs", repoId: 812345679, settings: {}, sortOrder: 1 }],
+  Project: [
+    w.project,
+    { ...w.project, id: uid(2), name: "docs", repoId: 812345679, settings: {}, sortOrder: 1 },
+  ],
   WorkspaceSummary: [w.lisbon, w.oslo, w.kyoto],
   OpProgress: [w.opProgress],
   ChangedFile: w.changedFiles,
@@ -67,16 +76,31 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   Mention: [{ path: "src/app.tsx" }],
   TurnPrompt: [
     w.turn(1).prompt,
-    { text: "Address the review comments", mentions: [], attachmentIds: [uid(401)], reviewCommentIds: [uid(701)] },
+    {
+      text: "Address the review comments",
+      mentions: [],
+      attachmentIds: [uid(401)],
+      reviewCommentIds: [uid(701)],
+    },
   ],
   Turn: [
     w.turn(1, { prompt: { ...w.turn(1).prompt, mentions: [{ path: "src/app.tsx" }] } }),
     w.turn(2, { status: "running", stopReason: null, checkpointId: null, endedAt: null }),
-    w.turn(3, { status: "queued", queuePos: 0, stopReason: null, checkpointId: null, startedAt: null, endedAt: null }),
+    w.turn(3, {
+      status: "queued",
+      queuePos: 0,
+      stopReason: null,
+      checkpointId: null,
+      startedAt: null,
+      endedAt: null,
+    }),
     w.turn(4, { status: "failed", stopReason: null, errorCode: "AGENT_CRASHED", reverted: true }),
   ],
   UserMessageContent: [w.userMessageContent],
-  AgentMessageContent: [{ text: "Done." }, { text: "I added the toggle", blocks: [{ type: "text", text: "I added the toggle" }] }],
+  AgentMessageContent: [
+    { text: "Done." },
+    { text: "I added the toggle", blocks: [{ type: "text", text: "I added the toggle" }] },
+  ],
   AgentThoughtContent: [{ text: "The header lives in src/app.tsx." }],
   ToolCallItemContent: [
     w.toolCallContent,
@@ -95,19 +119,44 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   NoticeContent: [{ level: "info", text: "Claude is ready." }],
   HandoffContent: [{ text: "Earlier, Claude added a dark mode toggle." }],
   RevertMarkerContent: [{ checkpointId: uid(301), toTurnSeq: 1 }],
-  ErrorContent: [{ code: "AGENT_CRASHED", detail: null }, { code: "CREDENTIAL_INVALID" }, { code: "INTERNAL", detail: "exit 137" }],
+  ErrorContent: [
+    { code: "AGENT_CRASHED", detail: null },
+    { code: "CREDENTIAL_INVALID" },
+    { code: "INTERNAL", detail: "exit 137" },
+  ],
   Item: w.itemsOfEveryKind,
   ScriptRun: [w.scriptRun, w.setupRun],
   ScriptRunWithLog: [{ ...w.setupRun, logTail: "installed 412 packages in 3.1s\n" }],
   ReviewComment: [
     w.reviewComment,
-    { ...w.reviewComment, id: uid(702), lineStart: null, lineEnd: null, side: null, status: "sent", sentTurnId: uid(102) },
+    {
+      ...w.reviewComment,
+      id: uid(702),
+      lineStart: null,
+      lineEnd: null,
+      side: null,
+      status: "sent",
+      sentTurnId: uid(102),
+    },
   ],
   PermissionRequest: [w.permissionRequest],
-  CheckpointInfo: [w.checkpoint, { id: uid(302), turnId: null, turnSeq: null, reason: "pre_sleep", createdAt: at(500) }],
+  CheckpointInfo: [
+    w.checkpoint,
+    { id: uid(302), turnId: null, turnSeq: null, reason: "pre_sleep", createdAt: at(500) },
+  ],
   CheckRun: [
-    { name: "test", status: "completed", conclusion: "failure", url: "https://github.com/acme/webapp/actions/runs/1" },
-    { name: "lint", status: "in_progress", conclusion: null, url: "https://github.com/acme/webapp/actions/runs/2" },
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "failure",
+      url: "https://github.com/acme/webapp/actions/runs/1",
+    },
+    {
+      name: "lint",
+      status: "in_progress",
+      conclusion: null,
+      url: "https://github.com/acme/webapp/actions/runs/2",
+    },
   ],
   CredentialState: [w.credentialStatus.claude, w.credentialStatus.openrouter],
   CredentialStatus: [w.credentialStatus],
@@ -125,7 +174,14 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
 
 export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   WsHello: [
-    { type: "hello", v: 1, workspace: w.lisbonDetail, sessions: [w.claudeSession, w.codexSession], turns: [w.turn(1)], itemsRev: 10 },
+    {
+      type: "hello",
+      v: 1,
+      workspace: w.lisbonDetail,
+      sessions: [w.claudeSession, w.codexSession],
+      turns: [w.turn(1)],
+      itemsRev: 10,
+    },
   ],
   WsItems: [
     { type: "items", items: w.itemsOfEveryKind.slice(0, 5), itemsRev: 10, done: false },
@@ -136,12 +192,22 @@ export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   WsItemDelta: [{ type: "item.delta", itemId: uid(1006), append: { text: " to the header." }, itemsRev: 11 }],
   WsWorkspace: [{ type: "workspace", workspace: w.lisbonDetail }],
   WsSession: [{ type: "session", session: w.claudeSession }],
-  WsTurn: [{ type: "turn", turn: w.turn(2, { status: "running", stopReason: null, endedAt: null, checkpointId: null }) }],
+  WsTurn: [
+    {
+      type: "turn",
+      turn: w.turn(2, { status: "running", stopReason: null, endedAt: null, checkpointId: null }),
+    },
+  ],
   WsTurnDeleted: [{ type: "turn.deleted", turnId: uid(103) }],
   WsPermission: [{ type: "permission", request: w.permissionRequest }],
   WsScriptOutput: [
     { type: "script.output", runId: uid(601), stream: "stdout", data: "  VITE v7.1.0  ready in 412 ms\n" },
-    { type: "script.output", runId: uid(601), stream: "stderr", data: "warning: port 3000 in use, trying 3001\n" },
+    {
+      type: "script.output",
+      runId: uid(601),
+      stream: "stderr",
+      data: "warning: port 3000 in use, trying 3001\n",
+    },
   ],
   WsScriptRun: [{ type: "script.run", run: w.scriptRun }],
   WsChanges: [{ type: "changes", ...w.changesSummary }],
@@ -149,8 +215,13 @@ export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   WsError: [{ type: "error", code: "SETUP_FAILED", message: "Setup failed. See the Setup tab." }],
   WsPong: [{ type: "pong" }],
   ClientPing: [{ type: "ping" }],
-  HubHello: [{ type: "hello", v: 1, workspaces: [w.lisbon, w.oslo] }, { type: "hello", v: 1, workspaces: [] }],
-  HubWorkspace: [{ type: "workspace", summary: { ...w.lisbon, state: "ready", attention: "unread", rev: 42 } }],
+  HubHello: [
+    { type: "hello", v: 1, workspaces: [w.lisbon, w.oslo] },
+    { type: "hello", v: 1, workspaces: [] },
+  ],
+  HubWorkspace: [
+    { type: "workspace", summary: { ...w.lisbon, state: "ready", attention: "unread", rev: 42 } },
+  ],
   HubWorkspaceRemoved: [{ type: "workspace.removed", workspaceId: w.W3 }],
   TerminalResize: [{ type: "resize", cols: 120, rows: 36 }],
   TerminalReady: [{ type: "ready" }],
@@ -164,13 +235,20 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   listInstallations: [{}],
   linkProject: [{ installationId: 51234567, repoId: 812345678 }],
   listProjects: [{}],
-  updateProjectSettings: [{ projectId: PROJECT_ID, settings: { agent: { default: "codex" }, git: { archive_on_merge: true } } }],
+  updateProjectSettings: [
+    { projectId: PROJECT_ID, settings: { agent: { default: "codex" }, git: { archive_on_merge: true } } },
+  ],
   unlinkProject: [{ projectId: PROJECT_ID }],
   listBranches: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, query: "feat" }],
   listOpenPullRequests: [{ projectId: PROJECT_ID }],
   createWorkspace: [
     { projectId: PROJECT_ID, source: { kind: "new", baseBranch: "main" } },
-    { projectId: PROJECT_ID, source: { kind: "pr", number: 42 }, agent: "codex", prompt: { text: "Fix the flaky test" } },
+    {
+      projectId: PROJECT_ID,
+      source: { kind: "pr", number: 42 },
+      agent: "codex",
+      prompt: { text: "Fix the flaky test" },
+    },
   ],
   listWorkspaces: [{}, { includeArchived: true }],
   getWorkspace: [ws],
@@ -215,7 +293,14 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   getChanges: [{ ...ws, scope: "branch" }],
   getFileDiff: [{ ...ws, scope: "uncommitted", path: "src/app.tsx" }],
   addReviewComment: [
-    { ...ws, path: "src/app.tsx", lineStart: 12, lineEnd: 14, side: "new", body: "Move this into the header." },
+    {
+      ...ws,
+      path: "src/app.tsx",
+      lineStart: 12,
+      lineEnd: 14,
+      side: "new",
+      body: "Move this into the header.",
+    },
     { ...ws, path: "src/app.tsx", body: "Split this file." },
   ],
   deleteReviewComment: [{ ...ws, commentId: uid(701) }],
@@ -290,4 +375,3 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   RotatePreviewTokenOut: [{ previewToken: "q8w7e5r1k3j9x2m4" }],
   ListProjectSecretNamesOut: [{ names: ["DATABASE_URL", "STRIPE_KEY"] }],
 };
-

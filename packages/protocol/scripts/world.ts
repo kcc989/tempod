@@ -88,7 +88,13 @@ export const summary = (
   ...overrides,
 });
 
-export const lisbon = summary(W1, { slug: "lisbon", title: "Add dark mode toggle", state: "working", rev: 41, lastActivityAt: at(60) });
+export const lisbon = summary(W1, {
+  slug: "lisbon",
+  title: "Add dark mode toggle",
+  state: "working",
+  rev: 41,
+  lastActivityAt: at(60),
+});
 export const oslo = summary(W2, {
   slug: "oslo",
   title: "Fix flaky checkout test",
@@ -133,7 +139,10 @@ export const opProgress: P.OpProgress = {
   ],
 };
 
-export const detail = (s: P.WorkspaceSummary, overrides: Partial<P.WorkspaceDetail> = {}): P.WorkspaceDetail => ({
+export const detail = (
+  s: P.WorkspaceSummary,
+  overrides: Partial<P.WorkspaceDetail> = {},
+): P.WorkspaceDetail => ({
   ...s,
   errorCode: null,
   errorDetail: null,
@@ -214,7 +223,13 @@ export const codexSession: P.Session = {
         { group: "other", name: "Other", options: [{ value: "gpt-5", name: "GPT-5", description: null }] },
       ],
     },
-    { id: "web_search", name: "Web search", type: "boolean", description: "Let the agent search the web", currentValue: false },
+    {
+      id: "web_search",
+      name: "Web search",
+      type: "boolean",
+      description: "Let the agent search the web",
+      currentValue: false,
+    },
   ],
   config: {},
   commands: [],
@@ -308,7 +323,12 @@ export const permissionContent: P.PermissionContent = {
 /** One item of every kind, in the order a turn makes them. */
 export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
   item("user_message", { n: 1, rev: 1, seconds: 100, content: userMessageContent }),
-  item("agent_thought", { n: 2, rev: 2, seconds: 101, content: { text: "The header lives in src/app.tsx." } }),
+  item("agent_thought", {
+    n: 2,
+    rev: 2,
+    seconds: 101,
+    content: { text: "The header lives in src/app.tsx." },
+  }),
   item("plan", { n: 3, rev: 3, seconds: 102, content: planContent }),
   item("tool_call", { n: 4, rev: 4, seconds: 103, status: "in_progress", content: toolCallContent }),
   item("permission", { n: 5, rev: 5, seconds: 104, status: "pending", content: permissionContent }),
@@ -327,8 +347,20 @@ export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
     turnId: null,
     content: { text: "Earlier, Claude added a dark mode toggle in src/theme/toggle.tsx." },
   }),
-  item("revert_marker", { n: 9, rev: 9, seconds: 108, turnId: null, content: { checkpointId: uid(301), toTurnSeq: 1 } }),
-  item("error", { n: 10, rev: 10, seconds: 109, status: "failed", content: { code: "AGENT_CRASHED", detail: null } }),
+  item("revert_marker", {
+    n: 9,
+    rev: 9,
+    seconds: 108,
+    turnId: null,
+    content: { checkpointId: uid(301), toTurnSeq: 1 },
+  }),
+  item("error", {
+    n: 10,
+    rev: 10,
+    seconds: 109,
+    status: "failed",
+    content: { code: "AGENT_CRASHED", detail: null },
+  }),
 ];
 
 export const permissionRequest: P.PermissionRequest = {
@@ -442,7 +474,9 @@ export const diagnostics: P.Diagnostics = {
     { ts: at(-110), level: "info", msg: "op.step", data: { op: "wake", step: "repo.clone" } },
     { ts: at(-100), level: "warn", msg: "tempod.reconnect" },
   ],
-  egress: [{ ts: at(250), method: "GET", host: "registry.npmjs.org", path: "/react", status: 200, ms: 84, rule: 9 }],
+  egress: [
+    { ts: at(250), method: "GET", host: "registry.npmjs.org", path: "/react", status: 200, ms: 84, rule: 9 },
+  ],
   sessions: [
     { id: S1, agent: "claude", acpSessionId: "a1b2c3", capabilities: { loadSession: true }, live: true },
     { id: S2, agent: "codex", acpSessionId: null, capabilities: {}, live: false },

@@ -16,7 +16,9 @@ pub fn get(account: &str) -> Option<String> {
 }
 
 pub fn set(account: &str, password: &str) -> Result<(), String> {
-    let mut items = items().lock().map_err(|_| "keychain stub poisoned".to_string())?;
+    let mut items = items()
+        .lock()
+        .map_err(|_| "keychain stub poisoned".to_string())?;
     items.insert(account.to_string(), password.to_string());
     Ok(())
 }

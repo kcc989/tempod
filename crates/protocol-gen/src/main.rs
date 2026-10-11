@@ -11,7 +11,8 @@ use serde_json::{Map, Value, json};
 use typify::{TypeSpace, TypeSpaceImpl, TypeSpaceSettings};
 
 /// Types written by hand in tempo-protocol (see spikes/S16.md for why), with the impls typify may rely on.
-const HAND_WRITTEN: &[(&str, &[TypeSpaceImpl])] = &[("Item", &[]), ("Empty", &[TypeSpaceImpl::Default])];
+const HAND_WRITTEN: &[(&str, &[TypeSpaceImpl])] =
+    &[("Item", &[]), ("Empty", &[TypeSpaceImpl::Default])];
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -31,6 +32,7 @@ fn generate(schema_dir: &Path, out: &Path) -> Result<(), String> {
     let mut settings = TypeSpaceSettings::default();
     settings.with_struct_builder(false);
     settings.with_derive("PartialEq".to_string());
+    settings.with_map_type("::std::collections::BTreeMap");
     for (name, impls) in HAND_WRITTEN {
         if !defs.contains_key(*name) {
             return Err(format!("hand-written type {name} has no schema"));
@@ -46,7 +48,9 @@ fn generate(schema_dir: &Path, out: &Path) -> Result<(), String> {
                 .map_err(|e| format!("{k}: {e}"))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    space.add_ref_types(schemas).map_err(|e| format!("typify: {e}"))?;
+    space
+        .add_ref_types(schemas)
+        .map_err(|e| format!("typify: {e}"))?;
     if space.uses_regress() || space.uses_chrono() || space.uses_uuid() {
         return Err("the generated code needs a crate tempo-protocol does not depend on".into());
     }
@@ -80,9 +84,14 @@ fn read_schemas(dir: &Path) -> Result<(Defs, Value), String> {
     let mut defs = Defs::new();
     let mut api = None;
     for path in paths {
-        let name = path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+        let name = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let mut value: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+        let mut value: Value =
+            serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
         if let Value::Object(map) = &mut value {
             map.remove("$schema");
             map.remove("title");
@@ -144,7 +153,9 @@ fn normalize_object(map: Map<String, Value>) -> Value {
         }
         // Schema.Number's JSON codec also accepts "Infinity", "-Infinity" and "NaN"; JSON.stringify never sends them.
         if unique.contains(&json!({"type": "number"})) {
-            unique.retain(|m| m != &json!({"type": "string", "enum": ["Infinity", "-Infinity", "NaN"]}));
+            unique.retain(|m| {
+                m != &json!({"type": "string", "enum": ["Infinity", "-Infinity", "NaN"]})
+            });
         }
         if unique.contains(&json!({})) {
             return Value::Object(map);
@@ -180,7 +191,9 @@ fn rust_type(fn_name: &str, side: &str, schema: &Value) -> Result<String, String
     {
         return Ok(format!("::std::vec::Vec<{t}>"));
     }
-    Err(format!("Api.json: {fn_name}.{side} is neither a reference nor an array of one"))
+    Err(format!(
+        "Api.json: {fn_name}.{side} is neither a reference nor an array of one"
+    ))
 }
 
 fn api_table(api: &Value) -> Result<String, String> {
@@ -193,7 +206,9 @@ fn api_table(api: &Value) -> Result<String, String> {
     );
     let mut all = String::new();
     for (name, f) in functions {
-        let props = f.get("properties").ok_or(format!("Api.json: {name} has no properties"))?;
+        let props = f
+            .get("properties")
+            .ok_or(format!("Api.json: {name} has no properties"))?;
         let method = match props.pointer("/method/const").and_then(Value::as_str) {
             Some("GET") => "Get",
             Some("POST") => "Post",
@@ -224,7 +239,10 @@ fn wire_registry(defs: &Defs) -> String {
     let mut arms = String::new();
     for name in defs.keys() {
         let _ = writeln!(names, "        \"{name}\",");
-        let _ = writeln!(arms, "            \"{name}\" => crate::roundtrip::<crate::{name}>(text),");
+        let _ = writeln!(
+            arms,
+            "            \"{name}\" => crate::roundtrip::<crate::{name}>(text),"
+        );
     }
     format!(
         "\n/// Every wire type by its schema name, for the fixture tests.\n#[doc(hidden)]\npub mod wire {{\n    \
@@ -233,4 +251,66 @@ fn wire_registry(defs: &Defs) -> String {
          pub fn roundtrip(name: &str, text: &str) -> Option<Result<::serde_json::Value, ::std::string::String>> {{\n        \
          Some(match name {{\n{arms}            _ => return None,\n        }})\n    }}\n}}\n"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn numbers_drop_the_non_finite_strings() {
+        let effect = json!({"anyOf": [{"type": "number"}, {"type": "string", "enum": ["Infinity", "-Infinity", "NaN"]}]});
+        assert_eq!(normalize(effect), json!({"type": "number"}));
+    }
+
+    #[test]
+    fn nested_nullable_unions_flatten() {
+        let effect = json!({"anyOf": [{"anyOf": [{"$ref": "Turn.json"}, {"type": "null"}]}, {"type": "null"}]});
+        assert_eq!(
+            normalize(effect),
+            json!({"anyOf": [{"$ref": "#/definitions/Turn"}, {"type": "null"}]})
+        );
+    }
+
+    #[test]
+    fn unknown_absorbs_its_union() {
+        assert_eq!(
+            normalize(json!({"anyOf": [{}, {"type": "null"}]})),
+            json!({})
+        );
+    }
+
+    #[test]
+    fn open_objects_and_empty_structs() {
+        let effect = json!({"type": "object", "properties": {"a": {"not": {"type": "null"}}}, "additionalProperties": true});
+        assert_eq!(
+            normalize(effect),
+            json!({"type": "object", "properties": {"a": {"type": "object", "properties": {}}}})
+        );
+        let record = json!({"type": "object", "additionalProperties": {"type": "string"}});
+        assert_eq!(normalize(record.clone()), record);
+    }
+
+    #[test]
+    fn api_types_are_references_or_arrays_of_them() {
+        assert_eq!(
+            rust_type("f", "input", &json!({"$ref": "Empty.json"})).unwrap(),
+            "crate::Empty"
+        );
+        assert_eq!(
+            rust_type(
+                "f",
+                "output",
+                &json!({"type": "array", "items": {"$ref": "Project.json"}})
+            )
+            .unwrap(),
+            "::std::vec::Vec<crate::Project>"
+        );
+        assert!(rust_type("f", "output", &json!({"type": "string"})).is_err());
+    }
+
+    #[test]
+    fn pascal_case_function_names() {
+        assert_eq!(pascal("sendPrompt"), "SendPrompt");
+    }
 }

@@ -47,7 +47,8 @@ impl ImageCache for LocalImageCache {
                 "Remote images are not loaded.",
             ))));
         }
-        self.inner.update(cx, |cache, cx| cache.load(resource, window, cx))
+        self.inner
+            .update(cx, |cache, cx| cache.load(resource, window, cx))
     }
 }
 
@@ -58,10 +59,17 @@ mod tests {
 
     #[test]
     fn uris_are_blocked_and_local_files_are_not() {
-        for uri in ["https://x.test/p.png", "http://x.test/p.png", "data:image/png;base64,AA==", "file:///a.png"] {
+        for uri in [
+            "https://x.test/p.png",
+            "http://x.test/p.png",
+            "data:image/png;base64,AA==",
+            "file:///a.png",
+        ] {
             assert!(is_blocked(&Resource::Uri(uri.to_string().into())), "{uri}");
         }
-        assert!(!is_blocked(&Resource::Path(Arc::from(Path::new("/tmp/a.png")))));
+        assert!(!is_blocked(&Resource::Path(Arc::from(Path::new(
+            "/tmp/a.png"
+        )))));
         assert!(!is_blocked(&Resource::Embedded("icons/x.svg".into())));
     }
 }

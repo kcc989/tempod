@@ -19,7 +19,10 @@ pub fn classify(url: &str) -> LinkTarget {
     if lower.starts_with(WORKSPACE_PREFIX) {
         let path = &url[WORKSPACE_PREFIX.len()..];
         let path = path.split(['?', '#']).next().unwrap_or_default();
-        let safe = !path.is_empty() && path.split('/').all(|seg| !seg.is_empty() && seg != "." && seg != "..");
+        let safe = !path.is_empty()
+            && path
+                .split('/')
+                .all(|seg| !seg.is_empty() && seg != "." && seg != "..");
         if safe {
             return LinkTarget::FileTab(path.to_string());
         }
@@ -33,14 +36,26 @@ mod tests {
 
     #[test]
     fn web_links_open_in_the_browser() {
-        assert_eq!(classify("https://example.com/a?b"), LinkTarget::Browser("https://example.com/a?b".into()));
-        assert_eq!(classify("HTTP://x.test"), LinkTarget::Browser("HTTP://x.test".into()));
+        assert_eq!(
+            classify("https://example.com/a?b"),
+            LinkTarget::Browser("https://example.com/a?b".into())
+        );
+        assert_eq!(
+            classify("HTTP://x.test"),
+            LinkTarget::Browser("HTTP://x.test".into())
+        );
     }
 
     #[test]
     fn workspace_files_open_a_file_tab() {
-        assert_eq!(classify("file:///workspace/src/main.rs"), LinkTarget::FileTab("src/main.rs".into()));
-        assert_eq!(classify("file:///workspace/a.md#L3"), LinkTarget::FileTab("a.md".into()));
+        assert_eq!(
+            classify("file:///workspace/src/main.rs"),
+            LinkTarget::FileTab("src/main.rs".into())
+        );
+        assert_eq!(
+            classify("file:///workspace/a.md#L3"),
+            LinkTarget::FileTab("a.md".into())
+        );
     }
 
     #[test]

@@ -20,7 +20,12 @@
     "test:e2e": "bun run --cwd tests/e2e test",
     "check:versions": "bun container/check-versions.ts",
     "deploy": "alchemy deploy ./alchemy.run.ts",
-    "build:tempod": "turbo run build --filter=@tempo/tempod"
+    "build:tempod": "turbo run build --filter=@tempo/tempod",
+    "protocol:gen": "bun packages/protocol/scripts/gen-schema.ts",
+    "protocol:fixtures": "bun packages/protocol/scripts/gen-fixtures.ts",
+    "mac:dev": "cargo run -p tempo-mac",
+    "mac:test": "cargo test --workspace",
+    "mac:release": "bash scripts/mac/release.sh"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

@@ -50,19 +50,20 @@ const toDraft07 = (name: string, schema: Schema.Top): { root: Json; definitions:
 };
 
 const roots = new Map<string, Json>();
-const seenDefinitions = new Map<string, Json>();
+const references: Array<{ readonly from: string; readonly name: string; readonly schema: Json }> = [];
 for (const [name, schema] of WIRE_TYPES) {
   const { root, definitions } = toDraft07(name, schema);
   roots.set(name, root);
-  for (const [k, v] of Object.entries(definitions)) seenDefinitions.set(`${name} → ${k}`, v);
+  for (const [ref, def] of Object.entries(definitions))
+    references.push({ from: name, name: ref, schema: def });
 }
 
 // Each referenced type must be a wire type whose own file has the same schema.
-for (const [where, def] of seenDefinitions) {
-  const ref = where.split(" → ")[1]!;
-  const own = roots.get(ref);
-  if (!own) throw new Error(`${where}: ${ref} is not a registered wire type`);
-  if (stableJson(own) !== stableJson(def)) throw new Error(`${where}: differs from ${ref}.json`);
+for (const { from, name, schema } of references) {
+  const own = roots.get(name);
+  if (!own) throw new Error(`${from} refers to ${name}, which is not a registered wire type`);
+  if (stableJson(own) !== stableJson(schema))
+    throw new Error(`${from} sees ${name} differently from ${name}.json`);
 }
 
 const META = "http://json-schema.org/draft-07/schema#";
@@ -73,7 +74,8 @@ const refOf = (t: TypeRef): Json =>
 const api: Json = {
   $schema: META,
   title: "Api",
-  description: "Server functions at POST /api/v1/rpc/<name>: the HTTP method of the web wrapper, the input and the output.",
+  description:
+    "Server functions at POST /api/v1/rpc/<name>: the HTTP method of the web wrapper, the input and the output.",
   type: "object",
   properties: Object.fromEntries(
     API_FUNCTIONS.map((f) => [
@@ -102,5 +104,7 @@ for (const [name, root] of roots) write(name, { $schema: META, title: name, ...r
 write("Api", api);
 formatFiles(written);
 
-if (!process.argv.includes("--schema-only")) run(["cargo", "run", "--quiet", "-p", "protocol-gen", "--", schemaDir, generatedRs]);
-console.log(`protocol:gen wrote ${written.length} schema files and ${generatedRs.slice(repoRoot.length + 1)}`);
+run(["cargo", "run", "--quiet", "-p", "protocol-gen", "--", schemaDir, generatedRs]);
+console.log(
+  `protocol:gen wrote ${written.length} schema files and ${generatedRs.slice(repoRoot.length + 1)}`,
+);

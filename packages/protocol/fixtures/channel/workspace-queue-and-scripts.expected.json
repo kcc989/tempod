@@ -1,6 +1,6 @@
 {
   "channel": "workspace",
-  "messages": 24,
+  "messages": 25,
   "state": {
     "backlogDone": true,
     "changes": null,
@@ -107,7 +107,32 @@
         "01k70000000000000000000109"
       ]
     },
-    "permissions": {},
+    "permissions": {
+      "01k700000000000000000000ht": {
+        "itemId": "01k7000000000000000000011e",
+        "options": [
+          {
+            "kind": "allow_once",
+            "name": "Allow",
+            "optionId": "allow_once"
+          },
+          {
+            "kind": "allow_always",
+            "name": "Always allow",
+            "optionId": "allow_always"
+          },
+          {
+            "kind": "reject_once",
+            "name": "Reject",
+            "optionId": "reject_once"
+          }
+        ],
+        "requestId": "01k700000000000000000000ht",
+        "sessionId": "01k7000000000000000000000p",
+        "title": "Run bun test",
+        "turnId": "01k70000000000000000000039"
+      }
+    },
     "ready": true,
     "scriptOutput": {
       "01k700000000000000000000k2": "bun install v1.4.2\nwarn: lockfile is out of date\ninstalled 412 packages in 3.1s\n",

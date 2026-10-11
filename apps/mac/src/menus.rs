@@ -9,7 +9,8 @@ pub fn app_menus() -> Vec<Menu> {
         MenuItem::action("Zoom", Zoom),
         MenuItem::separator(),
     ];
-    window.extend((1..=9).map(|n| MenuItem::action(format!("Workspace {n}"), SwitchToWorkspace(n))));
+    window
+        .extend((1..=9).map(|n| MenuItem::action(format!("Workspace {n}"), SwitchToWorkspace(n))));
 
     vec![
         Menu::new("Tempo").items([
@@ -55,7 +56,10 @@ pub fn app_menus() -> Vec<Menu> {
             MenuItem::action("Next Workspace That Needs You", NextWorkspaceNeedingYou),
         ]),
         Menu::new("Window").items(window),
-        Menu::new("Help").items([MenuItem::action("Open Tempo in Browser", OpenTempoInBrowser)]),
+        Menu::new("Help").items([MenuItem::action(
+            "Open Tempo in Browser",
+            OpenTempoInBrowser,
+        )]),
     ]
 }
 
@@ -81,19 +85,54 @@ mod tests {
     fn menus_match_the_table_in_07() {
         let menus = app_menus();
         let titles: Vec<_> = menus.iter().map(|m| m.name.to_string()).collect();
-        assert_eq!(titles, ["Tempo", "File", "Edit", "View", "Workspace", "Window", "Help"]);
+        assert_eq!(
+            titles,
+            [
+                "Tempo",
+                "File",
+                "Edit",
+                "View",
+                "Workspace",
+                "Window",
+                "Help"
+            ]
+        );
         assert_eq!(
             names(&menus[0]),
-            ["About Tempo", "Check for Updates…", "Settings…", "Sign Out", "Hide Tempo", "Quit Tempo"]
+            [
+                "About Tempo",
+                "Check for Updates…",
+                "Settings…",
+                "Sign Out",
+                "Hide Tempo",
+                "Quit Tempo"
+            ]
         );
-        assert_eq!(names(&menus[1]), ["New Workspace", "New Chat", "Close Tab", "Open File"]);
+        assert_eq!(
+            names(&menus[1]),
+            ["New Workspace", "New Chat", "Close Tab", "Open File"]
+        );
         assert_eq!(
             names(&menus[2]),
-            ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All", "Search Files"]
+            [
+                "Undo",
+                "Redo",
+                "Cut",
+                "Copy",
+                "Paste",
+                "Select All",
+                "Search Files"
+            ]
         );
         assert_eq!(
             names(&menus[3]),
-            ["Command Palette", "Toggle Sidebar", "Toggle Right Side", "Toggle Bottom Panel", "Diff"]
+            [
+                "Command Palette",
+                "Toggle Sidebar",
+                "Toggle Right Side",
+                "Toggle Bottom Panel",
+                "Diff"
+            ]
         );
         assert_eq!(
             names(&menus[4]),
@@ -128,7 +167,12 @@ mod tests {
         ];
         for menu in app_menus() {
             for item in &menu.items {
-                if let MenuItem::Action { action, os_action: None, .. } = item {
+                if let MenuItem::Action {
+                    action,
+                    os_action: None,
+                    ..
+                } = item
+                {
                     let name = action.name();
                     if !unbound.contains(&name) {
                         assert!(bound.iter().any(|b| b == name), "{name} has no key binding");

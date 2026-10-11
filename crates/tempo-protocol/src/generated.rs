@@ -1010,7 +1010,7 @@ pub struct DiagnosticsOpsItem {
     pub kind: OpKind,
     pub status: OpStatus,
     pub step: ::std::string::String,
-    pub timings: ::std::collections::HashMap<::std::string::String, f64>,
+    pub timings: ::std::collections::BTreeMap<::std::string::String, f64>,
     #[serde(rename = "updatedAt")]
     pub updated_at: f64,
 }
@@ -3687,7 +3687,7 @@ pub struct Settings {
     pub agent: SettingsAgent,
     pub environment: SettingsEnvironment,
     pub environment_variables:
-        ::std::collections::HashMap<::std::string::String, ::std::string::String>,
+        ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
     pub git: SettingsGit,
     pub prompts: SettingsPrompts,
     pub scripts: SettingsScripts,
@@ -3722,7 +3722,7 @@ pub struct SettingsLayer {
     pub environment: ::std::option::Option<SettingsLayerEnvironment>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub environment_variables: ::std::option::Option<
-        ::std::collections::HashMap<::std::string::String, ::std::string::String>,
+        ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
     >,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub git: ::std::option::Option<SettingsLayerGit>,
@@ -3776,7 +3776,7 @@ pub struct SettingsLayerScripts {
     pub auto_run_after_setup: ::std::option::Option<bool>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub run: ::std::option::Option<
-        ::std::collections::HashMap<::std::string::String, SettingsLayerScriptsRunValue>,
+        ::std::collections::BTreeMap<::std::string::String, SettingsLayerScriptsRunValue>,
     >,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub run_mode: ::std::option::Option<RunMode>,
@@ -3804,7 +3804,7 @@ pub struct SettingsReadResult {
     pub errors: ::std::vec::Vec<::std::string::String>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub sources:
-        ::std::option::Option<::std::collections::HashMap<::std::string::String, SettingsSource>>,
+        ::std::option::Option<::std::collections::BTreeMap<::std::string::String, SettingsSource>>,
     pub warnings: ::std::vec::Vec<::std::string::String>,
 }
 ///`SettingsScripts`
@@ -3812,7 +3812,7 @@ pub struct SettingsReadResult {
 pub struct SettingsScripts {
     pub archive: ::std::string::String,
     pub auto_run_after_setup: bool,
-    pub run: ::std::collections::HashMap<::std::string::String, RunScript>,
+    pub run: ::std::collections::BTreeMap<::std::string::String, RunScript>,
     pub run_mode: RunMode,
     pub setup: ::std::string::String,
 }
@@ -4353,7 +4353,7 @@ pub struct WorkspaceDetail {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub settings_sources:
-        ::std::option::Option<::std::collections::HashMap<::std::string::String, SettingsSource>>,
+        ::std::option::Option<::std::collections::BTreeMap<::std::string::String, SettingsSource>>,
     #[serde(
         rename = "settingsWarnings",
         skip_serializing_if = "::std::option::Option::is_none"

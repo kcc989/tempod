@@ -1,13 +1,7 @@
 //! Wire types of Tempo protocol 1 (07, C5): serde types generated from `packages/protocol`, the few
 //! types typify does not produce well (spikes/S16.md), and a typed table of the server functions.
 
-#[allow(
-    clippy::all,
-    clippy::pedantic,
-    unused_imports,
-    irrefutable_let_patterns,
-    reason = "typify output"
-)]
+#[allow(clippy::all, reason = "typify output")]
 mod generated;
 mod item;
 
@@ -61,7 +55,8 @@ where
 {
     let first: T = serde_json::from_str(text).map_err(|e| format!("decode: {e}"))?;
     let encoded = serde_json::to_string(&first).map_err(|e| format!("encode: {e}"))?;
-    let second: T = serde_json::from_str(&encoded).map_err(|e| format!("decode of the encoding: {e}"))?;
+    let second: T =
+        serde_json::from_str(&encoded).map_err(|e| format!("decode of the encoding: {e}"))?;
     if first != second {
         return Err(format!("decode(encode(x)) != x:\n{first:?}\n{second:?}"));
     }

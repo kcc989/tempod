@@ -13,7 +13,9 @@ pub fn escape_raw_html(src: &str) -> Cow<'_, str> {
         return Cow::Borrowed(src);
     }
     let mut out = String::with_capacity(src.len() + 32);
-    let mut state = State::Normal { group_unsafe: false };
+    let mut state = State::Normal {
+        group_unsafe: false,
+    };
     for line in src.split_inclusive('\n') {
         let body = line.trim_end_matches(['\n', '\r']);
         state = match state {
@@ -28,7 +30,9 @@ pub fn escape_raw_html(src: &str) -> Cow<'_, str> {
                 }
                 FenceLine::Close => {
                     out.push_str(line);
-                    State::Normal { group_unsafe: false }
+                    State::Normal {
+                        group_unsafe: false,
+                    }
                 }
                 FenceLine::Ambiguous => {
                     escape_inline(line, false, &mut out);
@@ -44,10 +48,14 @@ pub fn escape_raw_html(src: &str) -> Cow<'_, str> {
                     State::Uncertain
                 } else if body.trim().is_empty() {
                     out.push_str(line);
-                    State::Normal { group_unsafe: false }
+                    State::Normal {
+                        group_unsafe: false,
+                    }
                 } else {
                     let unmatched = escape_inline(line, !group_unsafe, &mut out);
-                    State::Normal { group_unsafe: group_unsafe || unmatched }
+                    State::Normal {
+                        group_unsafe: group_unsafe || unmatched,
+                    }
                 }
             }
         };
@@ -58,7 +66,9 @@ pub fn escape_raw_html(src: &str) -> Cow<'_, str> {
 enum State {
     /// `group_unsafe`: an earlier line of this paragraph left a backtick run open, so a code
     /// span may continue onto this line.
-    Normal { group_unsafe: bool },
+    Normal {
+        group_unsafe: bool,
+    },
     InFence(Fence),
     Uncertain,
 }
@@ -109,14 +119,20 @@ fn opening_fence(line: &str) -> Option<Fence> {
     if len < 3 || (ch == b'`' && rest[len..].contains('`')) {
         return None;
     }
-    Some(Fence { ch, len, indent: col })
+    Some(Fence {
+        ch,
+        len,
+        indent: col,
+    })
 }
 
 /// A run of 3 or more backticks or tildes after list or quote markers, or any other spot where
 /// a fence may open that `opening_fence` does not accept.
 fn fence_like(line: &str) -> bool {
     let rest = line.trim_start_matches(|c: char| {
-        c.is_ascii_whitespace() || c.is_ascii_digit() || matches!(c, '>' | '-' | '+' | '*' | '.' | ')')
+        c.is_ascii_whitespace()
+            || c.is_ascii_digit()
+            || matches!(c, '>' | '-' | '+' | '*' | '.' | ')')
     });
     rest.starts_with("```") || rest.starts_with("~~~")
 }
@@ -208,20 +224,32 @@ mod tests {
 
     #[test]
     fn text_without_angle_brackets_is_borrowed() {
-        assert!(matches!(esc("plain **text**"), std::borrow::Cow::Borrowed(_)));
+        assert!(matches!(
+            esc("plain **text**"),
+            std::borrow::Cow::Borrowed(_)
+        ));
     }
 
     #[test]
     fn tags_in_text_are_escaped() {
-        assert_eq!(esc("hi <img src=x onerror=y>"), "hi &lt;img src=x onerror=y>");
-        assert_eq!(esc("<div>\nblock\n</div>\n"), "&lt;div>\nblock\n&lt;/div>\n");
+        assert_eq!(
+            esc("hi <img src=x onerror=y>"),
+            "hi &lt;img src=x onerror=y>"
+        );
+        assert_eq!(
+            esc("<div>\nblock\n</div>\n"),
+            "&lt;div>\nblock\n&lt;/div>\n"
+        );
         assert_eq!(esc("a <b>bold</b>"), "a &lt;b>bold&lt;/b>");
     }
 
     #[test]
     fn fenced_code_is_left_alone() {
         let src = "x <a>\n```rust\nlet v: Vec<u8> = vec![];\n```\nafter <i>\n";
-        assert_eq!(esc(src), "x &lt;a>\n```rust\nlet v: Vec<u8> = vec![];\n```\nafter &lt;i>\n");
+        assert_eq!(
+            esc(src),
+            "x &lt;a>\n```rust\nlet v: Vec<u8> = vec![];\n```\nafter &lt;i>\n"
+        );
         let tilde = "~~~ info `ok`\n<b>\n~~~~\n<b>";
         assert_eq!(esc(tilde), "~~~ info `ok`\n<b>\n~~~~\n&lt;b>");
     }
@@ -259,7 +287,10 @@ mod tests {
     #[test]
     fn a_fence_in_a_list_item_keeps_its_code() {
         let src = "1. Run:\n   ```sh\n   echo <x>\n   ```\n2. Then <b>\n";
-        assert_eq!(esc(src), "1. Run:\n   ```sh\n   echo <x>\n   ```\n2. Then &lt;b>\n");
+        assert_eq!(
+            esc(src),
+            "1. Run:\n   ```sh\n   echo <x>\n   ```\n2. Then &lt;b>\n"
+        );
     }
 
     #[test]
@@ -272,13 +303,22 @@ mod tests {
             esc("  ```\nfoo\n  ```\n  <img src=x>"),
             "  ```\nfoo\n  ```\n  &lt;img src=x>"
         );
-        assert_eq!(esc("> ```\n> <b>\n```\n<i>"), "> ```\n> &lt;b>\n```\n&lt;i>");
-        assert_eq!(esc("``` a`b\n<b>\n```\n<i>"), "``` a`b\n&lt;b>\n```\n&lt;i>");
+        assert_eq!(
+            esc("> ```\n> <b>\n```\n<i>"),
+            "> ```\n> &lt;b>\n```\n&lt;i>"
+        );
+        assert_eq!(
+            esc("``` a`b\n<b>\n```\n<i>"),
+            "``` a`b\n&lt;b>\n```\n&lt;i>"
+        );
     }
 
     #[test]
     fn crlf_lines() {
-        assert_eq!(esc("```\r\n<b>\r\n```\r\n<i>\r\n"), "```\r\n<b>\r\n```\r\n&lt;i>\r\n");
+        assert_eq!(
+            esc("```\r\n<b>\r\n```\r\n<i>\r\n"),
+            "```\r\n<b>\r\n```\r\n&lt;i>\r\n"
+        );
     }
 
     #[test]

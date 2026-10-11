@@ -14,7 +14,8 @@ const COMPOSER_INPUT: &str = "Composer > Input";
 /// Keys bound outside the terminal that are not ⌘ shortcuts. In the terminal
 /// they must reach the shell (07, Terminal), so the terminal context unbinds them.
 /// `tab` and `shift-tab` are GPUI Kit's focus traversal in its `Root` context.
-pub const TERMINAL_PASSTHROUGH: &[&str] = &["tab", "shift-tab", "ctrl-tab", "ctrl-shift-tab", "ctrl-o"];
+pub const TERMINAL_PASSTHROUGH: &[&str] =
+    &["tab", "shift-tab", "ctrl-tab", "ctrl-shift-tab", "ctrl-o"];
 
 pub fn bindings() -> Vec<KeyBinding> {
     let ws = Some(WORKSPACE);
@@ -57,7 +58,11 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-v", MarkFileViewed, Some(DIFF)),
     ];
     for n in 1..=9 {
-        out.push(KeyBinding::new(&format!("cmd-{n}"), SwitchToWorkspace(n), ws));
+        out.push(KeyBinding::new(
+            &format!("cmd-{n}"),
+            SwitchToWorkspace(n),
+            ws,
+        ));
     }
     for keys in TERMINAL_PASSTHROUGH {
         out.push(KeyBinding::new(keys, NoAction, Some(TERMINAL)));
@@ -103,7 +108,10 @@ mod tests {
     fn no_key_is_bound_twice_in_one_context() {
         let mut seen = HashSet::new();
         for (keys, _, context) in table() {
-            assert!(seen.insert((keys.clone(), context.clone())), "{keys} twice in {context:?}");
+            assert!(
+                seen.insert((keys.clone(), context.clone())),
+                "{keys} twice in {context:?}"
+            );
         }
     }
 
@@ -160,7 +168,10 @@ mod tests {
     fn bindings_use_only_the_four_contexts_of_07() {
         let allowed = ["", WORKSPACE, DIFF, TERMINAL, "Composer > Input"];
         for (keys, action, context) in table() {
-            assert!(allowed.contains(&context.as_str()), "{keys} {action} in {context}");
+            assert!(
+                allowed.contains(&context.as_str()),
+                "{keys} {action} in {context}"
+            );
         }
     }
 
@@ -174,7 +185,10 @@ mod tests {
         for (keys, action, context) in table() {
             let outside = context.is_empty() || context == WORKSPACE;
             if outside && !keys.contains("cmd") {
-                assert!(passthrough.contains(&keys), "{keys} ({action}) would not reach the shell");
+                assert!(
+                    passthrough.contains(&keys),
+                    "{keys} ({action}) would not reach the shell"
+                );
             }
         }
         assert!(passthrough.contains("tab") && passthrough.contains("shift-tab"));

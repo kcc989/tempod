@@ -19,7 +19,15 @@ const hubWorkspace = (summary: P.WorkspaceSummary): P.HubServerMessage => ({ typ
 const lisbon = (rev: number, o: Partial<P.WorkspaceSummary> = {}) => ({ ...w.lisbon, rev, ...o });
 const oslo = (rev: number, o: Partial<P.WorkspaceSummary> = {}) => ({ ...w.oslo, rev, ...o });
 const nairobi = (rev: number, o: Partial<P.WorkspaceSummary> = {}) =>
-  w.summary(W4, { slug: "nairobi", title: "", state: "creating", rev, createdAt: at(900), lastActivityAt: at(900), ...o });
+  w.summary(W4, {
+    slug: "nairobi",
+    title: "",
+    state: "creating",
+    rev,
+    createdAt: at(900),
+    lastActivityAt: at(900),
+    ...o,
+  });
 
 const hubSidebar: ChannelSession = {
   name: "hub-sidebar",
@@ -30,8 +38,8 @@ const hubSidebar: ChannelSession = {
     hubWorkspace(lisbon(42, { state: "ready", attention: "unread", lastActivityAt: at(400) })),
     hubWorkspace(oslo(16, { state: "error", attention: "error" })),
     hubWorkspace(oslo(18, { state: "starting", attention: "none" })),
-    hubWorkspace(oslo(19, { state: "ready" })),
-    hubWorkspace(oslo(20, { state: "working", lastActivityAt: at(500) })),
+    hubWorkspace(oslo(19, { state: "ready", attention: "none" })),
+    hubWorkspace(oslo(20, { state: "working", attention: "none", lastActivityAt: at(500) })),
     hubWorkspace(oslo(21, { state: "working", attention: "needs_input", lastActivityAt: at(510) })),
     { type: "pong" },
     hubWorkspace(nairobi(1)),
@@ -40,7 +48,9 @@ const hubSidebar: ChannelSession = {
     { type: "workspace.removed", workspaceId: W3 },
     { type: "workspace.removed", workspaceId: uid(99) },
     hubWorkspace(lisbon(43, { state: "ready", attention: "none", pinned: true })),
-    hubWorkspace(oslo(22, { state: "ready", attention: "unread", prState: "merged", checksState: "success" })),
+    hubWorkspace(
+      oslo(22, { state: "ready", attention: "unread", prState: "merged", checksState: "success" }),
+    ),
   ],
 };
 
@@ -63,26 +73,66 @@ const T2 = uid(102);
 const T3 = uid(103);
 const T4 = uid(104);
 
-const turn1 = w.turn(1, { prompt: { text: "Add a dark mode toggle", mentions: [{ path: "src/app.tsx" }], attachmentIds: [], reviewCommentIds: [] } });
+const turn1 = w.turn(1, {
+  prompt: {
+    text: "Add a dark mode toggle",
+    mentions: [{ path: "src/app.tsx" }],
+    attachmentIds: [],
+    reviewCommentIds: [],
+  },
+});
 const turn2Running = w.turn(2, {
   status: "running",
   stopReason: null,
   checkpointId: null,
   endedAt: null,
-  prompt: { text: "Persist the choice in localStorage", mentions: [], attachmentIds: [], reviewCommentIds: [] },
+  prompt: {
+    text: "Persist the choice in localStorage",
+    mentions: [],
+    attachmentIds: [],
+    reviewCommentIds: [],
+  },
 });
-const turn2Done = { ...turn2Running, status: "completed" as const, stopReason: "end_turn", checkpointId: uid(302), endedAt: at(290) };
+const turn2Done = {
+  ...turn2Running,
+  status: "completed" as const,
+  stopReason: "end_turn",
+  checkpointId: uid(302),
+  endedAt: at(290),
+};
 
 const runningDetail = w.detail(w.lisbon, { runningTurnId: T2, ports: w.lisbonDetail.ports });
-const readyDetail = w.detail({ ...w.lisbon, state: "ready", attention: "unread", rev: 44 }, { ports: w.lisbonDetail.ports, pushed: false });
+const readyDetail = w.detail(
+  { ...w.lisbon, state: "ready", attention: "unread", rev: 44 },
+  { ports: w.lisbonDetail.ports, pushed: false },
+);
 
 const user = (n: number, rev: number, seconds: number, turnId: string, text: string) =>
-  w.item("user_message", { n, rev, seconds, turnId, content: { text, mentions: [], attachments: [], reviewCommentIds: [] } });
-const agent = (n: number, rev: number, seconds: number, turnId: string, text: string, status: P.Item["status"] = "completed") =>
-  w.item("agent_message", { n, rev, seconds, turnId, status, content: { text } });
+  w.item("user_message", {
+    n,
+    rev,
+    seconds,
+    turnId,
+    content: { text, mentions: [], attachments: [], reviewCommentIds: [] },
+  });
+const agent = (
+  n: number,
+  rev: number,
+  seconds: number,
+  turnId: string,
+  text: string,
+  status: P.Item["status"] = "completed",
+) => w.item("agent_message", { n, rev, seconds, turnId, status, content: { text } });
 const thought = (n: number, rev: number, seconds: number, turnId: string, text: string) =>
   w.item("agent_thought", { n, rev, seconds, turnId, content: { text } });
-const tool = (n: number, rev: number, seconds: number, turnId: string, status: P.Item["status"], title: string) =>
+const tool = (
+  n: number,
+  rev: number,
+  seconds: number,
+  turnId: string,
+  status: P.Item["status"],
+  title: string,
+) =>
   w.item("tool_call", {
     n,
     rev,
@@ -106,7 +156,14 @@ const firstLoad: ChannelSession = {
   name: "workspace-first-load",
   channel: "workspace",
   messages: [
-    { type: "hello", v: 1, workspace: runningDetail, sessions: [w.claudeSession, w.codexSession], turns: [turn1, turn2Running], itemsRev: 24 },
+    {
+      type: "hello",
+      v: 1,
+      workspace: runningDetail,
+      sessions: [w.claudeSession, w.codexSession],
+      turns: [turn1, turn2Running],
+      itemsRev: 24,
+    },
     {
       type: "items",
       items: [
@@ -116,7 +173,14 @@ const firstLoad: ChannelSession = {
         tool(14, 4, 103, T1, "completed", "Read src/app.tsx"),
         tool(15, 9, 104, T1, "completed", "Edit src/app.tsx"),
         agent(16, 10, 150, T1, "I added a toggle to the header."),
-        w.item("notice", { n: 17, rev: 5, seconds: 5, turnId: null, sessionId: S2, content: { level: "info", text: "Codex is starting." } }),
+        w.item("notice", {
+          n: 17,
+          rev: 5,
+          seconds: 5,
+          turnId: null,
+          sessionId: S2,
+          content: { level: "info", text: "Codex is starting." },
+        }),
       ],
       itemsRev: 24,
       done: false,
@@ -132,19 +196,46 @@ const firstLoad: ChannelSession = {
       itemsRev: 24,
       done: false,
     },
-    { type: "items", items: [agent(23, 24, 220, T2, "Saving the theme", "streaming")], itemsRev: 24, done: true },
+    {
+      type: "items",
+      items: [agent(23, 24, 220, T2, "Saving the theme", "streaming")],
+      itemsRev: 24,
+      done: true,
+    },
     { type: "item.delta", itemId: uid(1023), append: { text: " in localStorage" }, itemsRev: 25 },
     { type: "item.delta", itemId: uid(1023), append: { text: " under `theme`." }, itemsRev: 26 },
     // Stale after the backlog: dropped.
     { type: "item.delta", itemId: uid(1023), append: { text: " (repeated)" }, itemsRev: 25 },
-    { type: "item.upsert", item: tool(22, 27, 210, T2, "completed", "Edit src/theme/toggle.tsx"), itemsRev: 27 },
+    {
+      type: "item.upsert",
+      item: tool(22, 27, 210, T2, "completed", "Edit src/theme/toggle.tsx"),
+      itemsRev: 27,
+    },
     { type: "item.upsert", item: tool(59, 28, 239, T2, "pending", "bun test"), itemsRev: 28 },
     { type: "item.upsert", item: permissionItem(29, null, "pending"), itemsRev: 29 },
-    { type: "permission", request: { ...w.permissionRequest, requestId: uid(560), turnId: T2, itemId: uid(1060), title: "Run bun test" } },
+    {
+      type: "permission",
+      request: {
+        ...w.permissionRequest,
+        requestId: uid(560),
+        turnId: T2,
+        itemId: uid(1060),
+        title: "Run bun test",
+      },
+    },
     { type: "session", session: { ...w.claudeSession, status: "running" } },
     { type: "item.upsert", item: permissionItem(30, "allow_once", "completed"), itemsRev: 30 },
     // The request again after it was answered: ignored.
-    { type: "permission", request: { ...w.permissionRequest, requestId: uid(560), turnId: T2, itemId: uid(1060), title: "Run bun test" } },
+    {
+      type: "permission",
+      request: {
+        ...w.permissionRequest,
+        requestId: uid(560),
+        turnId: T2,
+        itemId: uid(1060),
+        title: "Run bun test",
+      },
+    },
     { type: "item.upsert", item: tool(59, 31, 239, T2, "completed", "bun test"), itemsRev: 31 },
     // Stale: lower than 31.
     { type: "item.upsert", item: tool(22, 23, 210, T2, "failed", "Edit src/theme/toggle.tsx"), itemsRev: 23 },
@@ -173,7 +264,14 @@ const reconnect: ChannelSession = {
   name: "workspace-reconnect",
   channel: "workspace",
   messages: [
-    { type: "hello", v: 1, workspace: runningDetail, sessions: [w.claudeSession], turns: [turn1, turn2Running], itemsRev: 6 },
+    {
+      type: "hello",
+      v: 1,
+      workspace: runningDetail,
+      sessions: [w.claudeSession],
+      turns: [turn1, turn2Running],
+      itemsRev: 6,
+    },
     {
       type: "items",
       items: [
@@ -189,18 +287,37 @@ const reconnect: ChannelSession = {
     { type: "item.delta", itemId: uid(1023), append: { text: " the theme" }, itemsRev: 8 },
     { type: "item.delta", itemId: uid(1023), append: { text: " in localStorage" }, itemsRev: 9 },
     // The socket closed with 4008; the client reconnects with sinceRev=9.
-    { type: "hello", v: 1, workspace: runningDetail, sessions: [w.claudeSession], turns: [turn1, turn2Running], itemsRev: 12 },
+    {
+      type: "hello",
+      v: 1,
+      workspace: runningDetail,
+      sessions: [w.claudeSession],
+      turns: [turn1, turn2Running],
+      itemsRev: 12,
+    },
     {
       type: "items",
-      items: [tool(22, 10, 210, T2, "completed", "Edit src/theme/toggle.tsx"), agent(23, 11, 220, T2, "Saving the theme in localStorage", "streaming")],
+      items: [
+        tool(22, 10, 210, T2, "completed", "Edit src/theme/toggle.tsx"),
+        agent(23, 11, 220, T2, "Saving the theme in localStorage", "streaming"),
+      ],
       itemsRev: 12,
       done: false,
     },
     // Live while the backlog is still arriving: lower itemsRev values are not stale yet.
-    { type: "item.upsert", item: agent(23, 12, 220, T2, "Saving the theme in localStorage. Done.", "completed"), itemsRev: 12 },
+    {
+      type: "item.upsert",
+      item: agent(23, 12, 220, T2, "Saving the theme in localStorage. Done.", "completed"),
+      itemsRev: 12,
+    },
     { type: "item.upsert", item: thought(24, 8, 215, T2, "Check the storage key."), itemsRev: 8 },
     // The per-item rule: rev 11 is older than the rev 12 just applied.
-    { type: "items", items: [agent(23, 11, 220, T2, "Saving the theme in localStorage", "streaming")], itemsRev: 12, done: true },
+    {
+      type: "items",
+      items: [agent(23, 11, 220, T2, "Saving the theme in localStorage", "streaming")],
+      itemsRev: 12,
+      done: true,
+    },
     { type: "item.delta", itemId: uid(1023), append: { text: " (late)" }, itemsRev: 11 },
     { type: "turn", turn: turn2Done },
     { type: "item.upsert", item: agent(25, 13, 300, T2, "Anything else?"), itemsRev: 13 },
@@ -219,7 +336,14 @@ const queuedTurn = (n: number, pos: number, text: string): P.Turn =>
     prompt: { text, mentions: [], attachmentIds: [], reviewCommentIds: [] },
   });
 
-const setupRun: P.ScriptRun = { ...w.setupRun, id: uid(610), status: "running", exitCode: null, endedAt: null, startedAt: at(320) };
+const setupRun: P.ScriptRun = {
+  ...w.setupRun,
+  id: uid(610),
+  status: "running",
+  exitCode: null,
+  endedAt: null,
+  startedAt: at(320),
+};
 
 const queue: ChannelSession = {
   name: "workspace-queue-and-scripts",
@@ -235,7 +359,11 @@ const queue: ChannelSession = {
     },
     {
       type: "items",
-      items: [user(11, 1, 100, T1, "Add a dark mode toggle"), agent(16, 2, 150, T1, "Done."), user(21, 3, 200, T2, "Persist it")],
+      items: [
+        user(11, 1, 100, T1, "Add a dark mode toggle"),
+        agent(16, 2, 150, T1, "Done."),
+        user(21, 3, 200, T2, "Persist it"),
+      ],
       itemsRev: 3,
       done: true,
     },
@@ -245,10 +373,18 @@ const queue: ChannelSession = {
     { type: "turn.deleted", turnId: T3 },
     { type: "turn.deleted", turnId: uid(199) },
     { type: "workspace", workspace: { ...runningDetail, queue: [T4] } },
-    { type: "turn", turn: { ...turn2Running, status: "cancelled", stopReason: "cancelled", endedAt: at(300) } },
     {
       type: "turn",
-      turn: { ...queuedTurn(4, 0, "Update the README"), status: "running", queuePos: null, startedAt: at(301) },
+      turn: { ...turn2Running, status: "cancelled", stopReason: "cancelled", endedAt: at(300) },
+    },
+    {
+      type: "turn",
+      turn: {
+        ...queuedTurn(4, 0, "Update the README"),
+        status: "running",
+        queuePos: null,
+        startedAt: at(301),
+      },
     },
     { type: "item.upsert", item: user(31, 4, 301, T4, "Update the README"), itemsRev: 4 },
     { type: "session", session: { ...w.claudeSession, status: "running", modeId: "plan" } },
@@ -261,13 +397,51 @@ const queue: ChannelSession = {
     { type: "script.output", runId: uid(611), stream: "stdout", data: "  VITE ready in 412 ms\n" },
     {
       type: "item.upsert",
-      item: w.item("revert_marker", { n: 32, rev: 5, seconds: 330, turnId: null, content: { checkpointId: uid(301), toTurnSeq: 1 } }),
+      item: w.item("revert_marker", {
+        n: 32,
+        rev: 5,
+        seconds: 330,
+        turnId: null,
+        content: { checkpointId: uid(301), toTurnSeq: 1 },
+      }),
       itemsRev: 5,
     },
     { type: "turn", turn: { ...turn1, reverted: true } },
     { type: "workspace", workspace: { ...readyDetail, queue: [], runningTurnId: T4, state: "working" } },
-    { type: "item.upsert", item: w.item("error", { n: 33, rev: 6, seconds: 340, turnId: T4, status: "failed", content: { code: "AGENT_CRASHED" } }), itemsRev: 6 },
-    { type: "turn", turn: { ...queuedTurn(4, 0, "Update the README"), status: "failed", queuePos: null, errorCode: "AGENT_CRASHED", startedAt: at(301), endedAt: at(340) } },
+    {
+      type: "item.upsert",
+      item: w.item("error", {
+        n: 33,
+        rev: 6,
+        seconds: 340,
+        turnId: T4,
+        status: "failed",
+        content: { code: "AGENT_CRASHED" },
+      }),
+      itemsRev: 6,
+    },
+    {
+      type: "turn",
+      turn: {
+        ...queuedTurn(4, 0, "Update the README"),
+        status: "failed",
+        queuePos: null,
+        errorCode: "AGENT_CRASHED",
+        startedAt: at(301),
+        endedAt: at(340),
+      },
+    },
+    // A request whose item has not arrived yet stays pending.
+    {
+      type: "permission",
+      request: {
+        ...w.permissionRequest,
+        requestId: uid(570),
+        sessionId: S2,
+        turnId: uid(105),
+        itemId: uid(1070),
+      },
+    },
   ],
 };
 
@@ -300,18 +474,41 @@ const backlog = (): ChannelSession => {
     pages.push({ type: "items", items: items.slice(i, i + 500), itemsRev, done: i + 500 >= items.length });
   }
   const turns = Array.from({ length: 40 }, (_, t) =>
-    w.turn(t + 1, { id: uid(2000 + t), sessionId: t % 4 === 3 ? S2 : S1, queuedAt: at(1000 + t * 60), startedAt: at(1000 + t * 60), endedAt: at(1015 + t * 60) }),
+    w.turn(t + 1, {
+      id: uid(2000 + t),
+      sessionId: t % 4 === 3 ? S2 : S1,
+      queuedAt: at(1000 + t * 60),
+      startedAt: at(1000 + t * 60),
+      endedAt: at(1015 + t * 60),
+    }),
   );
   return {
     name: "workspace-backlog",
     channel: "workspace",
     messages: [
-      { type: "hello", v: 1, workspace: readyDetail, sessions: [w.claudeSession, w.codexSession], turns, itemsRev },
+      {
+        type: "hello",
+        v: 1,
+        workspace: readyDetail,
+        sessions: [w.claudeSession, w.codexSession],
+        turns,
+        itemsRev,
+      },
       ...pages,
-      { type: "item.upsert", item: agent(10_000 + itemsRev + 1, itemsRev + 1, 4000, uid(2039), "One more thing."), itemsRev: itemsRev + 1 },
+      {
+        type: "item.upsert",
+        item: agent(10_000 + itemsRev + 1, itemsRev + 1, 4000, uid(2039), "One more thing."),
+        itemsRev: itemsRev + 1,
+      },
     ],
   };
 };
 
-export const CHANNEL_SESSIONS: ReadonlyArray<ChannelSession> = [hubSidebar, hubReconnect, firstLoad, reconnect, queue, backlog()];
-
+export const CHANNEL_SESSIONS: ReadonlyArray<ChannelSession> = [
+  hubSidebar,
+  hubReconnect,
+  firstLoad,
+  reconnect,
+  queue,
+  backlog(),
+];

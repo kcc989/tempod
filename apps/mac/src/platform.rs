@@ -23,7 +23,10 @@ impl TokenStore for MemoryTokenStore {
     }
 
     fn set(&self, host: &str, token: &str) -> Result<(), String> {
-        let mut tokens = self.tokens.lock().map_err(|_| "token store poisoned".to_string())?;
+        let mut tokens = self
+            .tokens
+            .lock()
+            .map_err(|_| "token store poisoned".to_string())?;
         tokens.insert(host.to_string(), token.to_string());
         Ok(())
     }
@@ -35,10 +38,28 @@ impl TokenStore for MemoryTokenStore {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub struct Keychain;
+
+#[cfg(target_os = "macos")]
+impl TokenStore for Keychain {
+    fn get(&self, host: &str) -> Option<String> {
+        crate::macos::keychain::get(host)
+    }
+
+    fn set(&self, host: &str, token: &str) -> Result<(), String> {
+        crate::macos::keychain::set(host, token)
+    }
+
+    fn delete(&self, host: &str) {
+        crate::macos::keychain::delete(host)
+    }
+}
+
 pub fn token_store() -> Box<dyn TokenStore> {
     #[cfg(target_os = "macos")]
     {
-        Box::new(crate::macos::keychain::Keychain)
+        Box::new(Keychain)
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -69,7 +90,7 @@ pub struct Notice<'a> {
 
 pub fn notify(notice: &Notice<'_>) {
     #[cfg(target_os = "macos")]
-    crate::macos::notifications::post(notice);
+    crate::macos::notifications::post(notice.workspace_id, notice.title, notice.body);
     #[cfg(not(target_os = "macos"))]
     let _ = notice;
 }
