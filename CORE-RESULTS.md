@@ -1,3 +1,56 @@
+# Tempo core continuation results — 2026-10-11
+
+**Not deployed.** The implementation and production-image checks below passed, but this run is blocked by managed network access and state-store secret recovery. No live agent acceptance, credential-leak audit or three consecutive hosted gate runs are claimed. Paid model evaluations were not run.
+
+## Current revision and changes
+
+- Fetched main: `5e259d6abd8c21d1afc40abebe0c3a983fbc78c5`. PR #4 was already merged and had no review comments; its latest CI and main CI passed. The published web and native client changes are included in this baseline.
+- Follow-up branch: `codex/core-deploy-contracts`; implementation SHA: `0dfac8f5cb600cdc76a8552a8704098c3950ab3a`. This results document is committed separately. No automatic merge is authorized or performed.
+- Added persisted optional PR titles to shared workspace-detail and refresh contracts, including closed/merged PRs and title-only updates. Added owner-authenticated same-origin attachment retrieval, including archived workspaces, safe raster MIME responses, binary downloads for active formats, private/no-store headers and size checks. Effect schemas, JSON schemas, Rust types and fixtures change together with 02/05 and implementation notes.
+- Pinned Alchemy's missing Effect Node peer at 4.0.3 within the existing Effect stack. The deployment wrapper checks the existing state-store endpoint before invoking Alchemy and disables automatic bootstrap approval for an existing store. Three preflight tests run in the root test command.
+- Fixed a race in the existing transport-recovery test fixture: finish startup and drain its daemon connection before resetting the isolated database. The first full root run exposed the race; the corrected final run passed.
+- ACP v1 and OpenCode 1.18.35 remain pinned. No experimental TUI-v2 version or new agent/provider credentials were configured.
+
+## Current validation
+
+Commands use Bun 1.4.2 and Rust 1.97.0. This runner's writable tool/profile/cache directories are under `/workspace`; proxy and CA settings are preserved.
+
+| Command | Actual result |
+| --- | --- |
+| `bun install --frozen-lockfile` | Pass; updated lockfile installs without changes. |
+| `bun run typecheck` | Pass, seven workspace tasks and root scripts. |
+| `bun run lint` | Pass. |
+| `bun run format:check`, `bun run check:versions`, `git diff --check` | Pass. |
+| `TURBO_FORCE=true bun run test` | Final pass, all seven tasks plus three deployment guard tests. Worker 732; UI logic 294; components 31; protocol 202; settings 9; cities 3. Host daemon tests have three image-only skips; host conformance skips 40; hosted e2e skips 44 without a deployment. Skips are not acceptance evidence. |
+| `bun run build` | Pass, application and compiled Linux daemon. |
+| `bun run protocol:gen`, `bun run protocol:fixtures`, `bun run --cwd packages/protocol protocol:check` | Pass; 372 outputs checked, including generated Rust and new attachment/title fixtures. |
+| `cargo test -p tempo-protocol -p protocol-gen` | Pass, 16 tests. |
+| `cargo test -p tempo-client` | Pass, 39 tests. Native UI/platform acceptance is not established. |
+| `DOCKER_CONFIG=/workspace/docker-config TEMPO_TEST_MOUNT_SOURCE=1 TEMPO_BUILD_CA=/etc/ssl/certs/ca-certificates.crt bun run test:tempod:container` | Pass in the complete production Linux image: **119 passed, 0 failed**, 647 assertions. Image **3,171,713,382 bytes**, id `sha256:2928ec1c55dce72aeef9f1e2bf37ee622d853e9245aa9d36cbb2ca25a26cc343`. Tests run as image uid 1000 under tini with frozen Linux dependencies/source read-only. Daemon source is unchanged from fetched main. The clean runner had 30 GB free initially; Docker used the existing vfs daemon. |
+| Main production-image GitHub Actions job | Independently passed on `5e259d6`: [run 38183387333](https://github.com/kcc989/tempod/actions/runs/38183387333), job 114600495287, 119 tests/zero failures. This closes the previous final-source image-capacity blocker for that revision. |
+| Sequential offline adapters in that production image, `CONFORMANCE_LIVE=0` | Claude 5 pass/3 skip; OpenCode 5 pass/3 skip; Pi 5 pass/3 skip. Codex 1 pass/3 skip/4 fail: session/new requires authentication. No prompts or paid evaluations ran. Reports in `docs/evidence/core/continuation-offline/` omit stderr. |
+
+## Cloudflare and failed deployment
+
+Configured target: **https://tempod.dev**, preview zone `typecast.dev`, owner GitHub id `3671149`. This is the configured target, **not an actual deployed app URL**. Both zones are active in the configured account. `*.typecast.dev` has the required existing proxied `AAAA 100::` record. API reads of zones/DNS, Workers, D1, R2, custom domains and Secrets Store succeeded. No `tempo` Worker/D1, `tempo-data` bucket or app custom domain existed before provisioning. The existing `alchemy-state-store` Worker and account Secrets Store were detected.
+
+The first `bun run deploy --yes --no-input` failed loading Alchemy's missing `@effect/platform-node` peer; adding the pinned peer resolved that actual SDK failure. The next attempt reached Alchemy state-store setup. The proxy rejects `alchemy-state-store.apingot.workers.dev` and `tempod.dev` with CONNECT 403. The SDK incorrectly treated the failed store health probe as absence and entered bootstrap. **This attempt modified the pre-existing state-store auth and encryption secrets** (`AlchemyStateStoreToken` and `AlchemyStateStoreEncryptionKey`, modified 2026-10-11 23:33 UTC). The agent stopped the attempt and informed the owner. Tempo's encryption/auth/setup secrets were never generated and Tempo resources were not created. No secret values or setup tokens are published here.
+
+The new preflight now fails before Alchemy when that store is unreachable. Do not rerun SDK bootstrap, destroy remote state, change its namespace or rotate keys to bypass this incident. Preserve this runner's private `.alchemy/state/CloudflareStateStore/` and `/workspace/alchemy-profile/`, and the original operator's bootstrap/profile state. Existing encrypted state may be unreadable until the original encryption value is restored securely from an original backup; recoverability has not been verified. The original values cannot be retrieved from the normal Secrets Store API. Actual deployment and hosted verification are pending recovery.
+
+## Remaining decisions and exact setup sequence
+
+1. Apply managed network-policy access for `alchemy-state-store.apingot.workers.dev`, `tempod.dev`, `tempo.apingot.workers.dev`, `typecast.dev` and `*.typecast.dev`; preserve API/registry/package/browser access. No proxy bypass was attempted.
+2. Recover the original state-store auth/encryption values and verify existing remote state using the original profile/stage before proceeding. Do not send these values in chat or commit them. The network and original-state requests are pending with the owner.
+3. Decide the turn-usage contract. ACP v1 usage_update supplies context occupancy in tokens (`used`/`size`), while prompt-response usage is optional and its member descriptions say cumulative session totals. 04 requires tokens under each turn, but 02 has only session usage. The choice between per-turn differences of cumulative totals and a context snapshot is unresolved; no numbers were invented or attributed from the most recent session. AGENTS.md's "If the spec is silent, or two tabs disagree, stop and ask" applies. This request was sent while independent work continued.
+4. Resume `bun run deploy` with the same account/profile/stage after recovery. Keep its printed `https://tempod.dev/setup/github?token=<private setup token>` link private. There is no usable setup token from this attempt.
+5. Open the printed link; submit the manifest to GitHub; confirm **Create GitHub App**; follow **Install**; select repositories; finish installation; sign in at `https://tempod.dev/login` as `kcc989`. Follow `docs/deployment/CORE-TEST-DEPLOYMENT.md`. Agent credentials are linked later only through Tempo Settings, never container env.
+6. Verify public endpoints, setup completion, owner/non-owner authentication, generated deployed bindings and infrastructure smokes after deployment. They could not run against an app in this attempt. Client consumption of the new PR-title and attachment routes, turn usage after a spec decision, live agent turns, credential-leak auditing, repeated hosted Gates B–D and native Gate E remain open.
+
+The earlier report below is historical evidence from PR #4; the current results above supersede its revision, image-capacity and deployment-input status.
+
+---
+
 # Tempo core results — 2026-10-11
 
 The recovery fixes and ACP v1 mode integration are implemented, and all root checks pass. **Core acceptance remains blocked:** no hosted test environment, real credentials or repeated hosted acceptance runs were available. This report does not close Gates A–E.
