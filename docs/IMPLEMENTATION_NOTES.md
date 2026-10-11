@@ -30,6 +30,8 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | Server functions | `listScriptRuns {workspaceId}` → runs with `logTail` | The Setup and Run tabs need history after a reload; the channel sends output only live. |
 | HTTP | `GET /api/setup/status` → `{configured, installUrl}`, no auth | The sign-in page must know whether the GitHub App exists; the Add project dialog needs the install link. Both facts are public. |
 | tempod | A second `hello` on an open socket updates branch, base branch and env | `setBaseBranch` and `renameBranch` change what tempod uses for checkpoints and changes. |
+| `agent.exited` | `reason`: `crashed`, `evicted` (LRU close) or `cancelled` (killed after a cancel timeout) | 01 sends `agent.exited` only for an unexpected exit, but the DO must still learn that a planned exit ended the process, so the next prompt reloads the session. Only `crashed` makes a crash notice. |
+| `repo.clone` params | `mode`: `create` or `wake` | On create, 03's checkout per source applies (`new` always branches from `origin/<baseBranch>`). On a fresh-disk wake, the branch is tracked from origin when it exists. |
 | tempod | Full script logs at `$HOME/.tempod/logs/<runId>.log` | 01 says the DO writes the full log (up to 50 MiB) to R2 at exit. The DO reads this file with `Files` after `script.exited`. |
 
 ## Choices where the spec is silent
@@ -47,6 +49,9 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | Setup | With no setup script, `setup_status` stays `none`. |
 | Project settings | `updateProjectSettings` asks every live workspace of the project to run `settings.read` again. `setProjectSecret` and `deleteProjectSecret` send `env.set`. |
 | Commit author | From `GET /user/{TEMPO_OWNER_GITHUB_ID}` with the installation token: name, else login; email `<id>+<login>@users.noreply.github.com` (03). |
+| Seq numbers | tempod keeps one incarnation per database (01). On a hello whose incarnation differs, it sends `incarnation.changed` at seq 1 and renumbers pending events from 2. When the incarnation is one the DO saw before (a disk restored from an older snapshot), the DO deletes its stored events for that incarnation first, so the restarted seqs cannot collide with kept rows. |
+| ACP client capabilities | 01 says `session.notices: true`; `@agentclientprotocol/sdk` 1.8.0 types it as an object, so tempod sends `notices: {}`. |
+| File watcher | 01's exclude pattern is cut off in the table. tempod excludes `(^|/)(\.git|node_modules)(/|$)`. |
 | Base image | `container/pin-base.ts` reads the digest from the Docker Hub registry API. Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to avoid the anonymous rate limit. |
 
 ## Spec ambiguities found by the tests

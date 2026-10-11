@@ -96,6 +96,8 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
     }
     case "agent.exited": {
       core.liveSessions.delete(event.sessionId);
+      // Planned exits: the session reloads on its next prompt; a cancelled turn has already ended.
+      if (event.reason === "evicted" || event.reason === "cancelled") return;
       const tail = event.stderrTail.trim().split("\n").slice(-20).join("\n");
       core.notice("error", `The agent stopped unexpectedly.${tail ? `\n${tail}` : ""}`, event.sessionId);
       const running = core.runningTurn();

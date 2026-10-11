@@ -105,6 +105,8 @@ export const TempodEvent = Schema.Union([
     code: Schema.NullOr(Schema.Number),
     signal: Schema.NullOr(Schema.String),
     stderrTail: Schema.String,
+    /** Additive: "evicted" (LRU close) and "cancelled" (killed after a cancel timeout) are planned exits. */
+    reason: Schema.optional(Schema.Literals(["crashed", "evicted", "cancelled"])),
   }),
   ev("script.output", { runId: Schema.String, stream: ScriptStream, data: Schema.String }),
   ev("script.exited", {
@@ -192,6 +194,8 @@ export const TEMPOD_REQUESTS = {
       baseBranch: Schema.String,
       source: Source,
       author: Schema.Struct({ name: Schema.String, email: Schema.String }),
+      /** Additive: "create" follows the 03 checkout per source; "wake" tracks origin/<branch> when it exists. */
+      mode: Schema.optional(Schema.Literals(["create", "wake"])),
     }),
     Schema.Struct({ headSha: Schema.String, remoteHeadSha: Schema.optional(Schema.NullOr(Schema.String)) }),
     10 * 60_000,

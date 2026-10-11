@@ -12,6 +12,7 @@ import {
   type TempodParams,
   type TempodResult,
 } from "@tempo/protocol";
+import { eq } from "drizzle-orm";
 import { Schema } from "effect";
 import { events } from "../../db/workspace-do.ts";
 import { log } from "../../log.ts";
@@ -164,6 +165,10 @@ export class TempodClient {
         .returning({ id: events.id })
         .all();
       if (inserted.length === 0) return;
+    }
+    if (event.kind === "incarnation.changed") {
+      // tempod restarts at seq 1; rows kept for a reused incarnation (an older disk) would collide.
+      this.core.db.delete(events).where(eq(events.incarnation, event.incarnation)).run();
     }
     await this.onEvent(event, envelope);
     if (event.kind === "incarnation.changed") {

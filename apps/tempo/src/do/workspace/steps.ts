@@ -116,6 +116,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
         baseBranch: row.baseBranch,
         source,
         author: core.author(),
+        mode: op.kind === "create" ? "create" : "wake",
       },
       { signal },
     );
