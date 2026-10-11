@@ -364,6 +364,9 @@ The largest risk is that GPUI is pre-1.0. GPUI Kit bundles a GPUI snapshot (`gpu
 - [ ] Q9. Is Apple silicon only acceptable, or do you need Intel Macs?
 - [ ] Q10. Should the app cache transcripts on disk for offline reading? This spec keeps them in memory only.
 
+## Workspace file links
+Decode valid percent escapes in `file:///workspace/<path>` filenames. Ignore malformed escapes, invalid UTF-8, control characters, empty path segments and `.` or `..` segments. Invalid file links render as text and do not open a browser or a file panel. A line fragment is parsed before decoding the filename.
+
 ## Sources
 
 Pages read on 2026-10-11.

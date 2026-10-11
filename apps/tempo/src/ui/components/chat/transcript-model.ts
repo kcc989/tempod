@@ -152,14 +152,21 @@ export const fileLinkTarget = (
   href: string,
 ): { readonly path: string; readonly line: number | null } | null => {
   if (!href.startsWith("file:///workspace/")) return null;
-  let rest = decodeURIComponent(href.slice("file:///workspace/".length));
+  let rest = href.slice("file:///workspace/".length);
   let line: number | null = null;
   const hash = /#L(\d+)(?:-L?\d+)?$/.exec(rest);
   if (hash) {
     line = Number(hash[1]);
     rest = rest.slice(0, hash.index);
   }
-  return rest ? { path: rest, line } : null;
+  try {
+    rest = decodeURIComponent(rest);
+  } catch {
+    return null;
+  }
+  if (!rest || rest.split("/").some((part) => !part || part === "." || part === "..") || /\p{Cc}/u.test(rest))
+    return null;
+  return { path: rest, line };
 };
 
 export const locationLabel = (loc: { readonly path: string; readonly line?: number | null }): string => {

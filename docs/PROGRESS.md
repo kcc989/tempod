@@ -7,10 +7,10 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 ## Current state
 
 - **Continuation is active.** The prior loops stopped at the account usage limit; their interim code is now being checked locally on macOS.
-- **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 713 Worker, 294 UI logic, 201 protocol, 109 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
-- **Native baseline:** `cargo test --workspace` (157 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac, including the runtime wiring.
-- **Image verification:** `bun run test:tempod:container` is building on the shared Colima engine. No Linux image test result yet.
-- **Remote CI and deployment:** not verified by this continuation. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
+- **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 713 Worker, 294 UI logic, 14 component, 201 protocol, 109 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
+- **Native baseline:** `cargo test --workspace` (158 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac, including the runtime wiring.
+- **Image verification:** `bun run test:tempod:container` passes on the shared Colima engine: 112 tests, including uid/gid 1000, tini as PID 1, adapter/tool presence and orphan cleanup. The production image is 1,715,652,650 bytes (under 6 GB).
+- **Remote CI and deployment:** GitHub CI passed milestone `408f985` (3m31s). The file-link follow-up is awaiting its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
 
 ## Continuation changes
 
@@ -21,7 +21,8 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 - Fixed the container uid conflict: the pinned Node base already owns uid/gid 1000, so the image renames that account to `tempo` rather than trying to create it again. Updated 01's Dockerfile example.
 - Added a test image derived from the complete workspace image, a pinned-arguments test command, a secrets/cache-excluding Docker context, and a main/manual image-test workflow. Production still uses `container/Dockerfile`.
 - Added owner-approved pinned `tini` to launch the daemon and reap orphaned children. Updated 01; image tests check uid, PID 1 and orphan reaping.
-- Added owner-approved pinned `happy-dom` and `@testing-library/react`, with 9 passing component tests for permission keyboard controls, focus, read-only chats, saved answers, safe Markdown and file links.
+- Added owner-approved pinned `happy-dom` and `@testing-library/react`, with 14 passing component tests for permission keyboard controls, focus, read-only chats, saved answers, safe Markdown and file links.
+- Fixed workspace file links in both clients: decoded filenames work; malformed escapes, invalid UTF-8, controls and invalid path segments are ignored. Spec 04 and 07 now state these rules.
 - Connected the Mac app to the real two-thread I/O runtime. Wake events reconnect its channels; unauthorized and incompatible-client signals reach AppState. Device sign-in and live store/view wiring are still pending.
 
 ## Summary
@@ -126,8 +127,8 @@ All 18 review findings are fixed, and 109 tests pass.
 
 **tempod**
 - [ ] A fresh spec review after the 18 fixes.
-- [x] Implement zombie reaping (Q-2, owner approved). Linux image verification pending.
-- [ ] Run its tests inside the container image (rule 14).
+- [x] Implement zombie reaping (Q-2, owner approved). Verified by the Linux image smoke tests.
+- [x] Run daemon tests inside the full container image (112 pass, rule 14).
 
 **Web UI (04)**
 - [ ] Sidebar (15%): indicators, hover card, context menu, sort, sections, workspace actions.

@@ -32,6 +32,16 @@ describe("agent Markdown (04, 05)", () => {
     expect(screen.getByText("Run")).toBeTruthy();
   });
 
+  it.each(["%FF", "%00", "../etc/passwd", "%2e%2e/etc/passwd", "src//main.ts"])(
+    "ignores an invalid workspace file link: %s",
+    (path) => {
+      const { container } = markdown(`[Source](file:///workspace/${path})`);
+      expect(container.querySelector("a, button")).toBeNull();
+      expect(openFile).not.toHaveBeenCalled();
+      expect(screen.getByText("Source")).toBeTruthy();
+    },
+  );
+
   it("opens workspace file links in the file panel", () => {
     markdown("[Source](file:///workspace/src/main.ts#L12)");
     fireEvent.click(screen.getByRole("button", { name: "Source" }));

@@ -171,6 +171,9 @@ describe("item helpers", () => {
     expect(fileLinkTarget("file:///workspace/src/a%20b.ts#L7")).toEqual({ path: "src/a b.ts", line: 7 });
     expect(fileLinkTarget("file:///workspace/README.md")).toEqual({ path: "README.md", line: null });
     expect(fileLinkTarget("https://example.com")).toBeNull();
+    expect(fileLinkTarget("file:///workspace/a%23b.ts")).toEqual({ path: "a#b.ts", line: null });
+    for (const path of ["src/%", "%FF", "%00", "../etc/passwd", "%2e%2e/etc/passwd", "src//main.ts"])
+      expect(fileLinkTarget(`file:///workspace/${path}`)).toBeNull();
   });
 
   it("picks the first allow and the first reject option", () => {

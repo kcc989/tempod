@@ -32,7 +32,7 @@ const isWeb = (url: string | undefined): url is string => !!url && /^https?:\/\/
 
 /** Keeps workspace file links so they can open a file tab; everything else as react-markdown does. */
 const urlTransform = (url: string): string =>
-  url.startsWith("file:///workspace/") ? url : defaultUrlTransform(url);
+  url.startsWith("file:///workspace/") ? (fileLinkTarget(url) ? url : "") : defaultUrlTransform(url);
 
 function MarkdownLink({ href, children }: { href?: string | undefined; children?: React.ReactNode }) {
   const { workspaceId } = useContext(Env);
