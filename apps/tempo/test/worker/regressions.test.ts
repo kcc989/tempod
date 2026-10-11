@@ -34,7 +34,7 @@ describe("regressions", () => {
     const { stub } = await seedWorkspace(seeded);
     await driveToReady(stub);
     const created = await stub.createSession({ agent: "claude" });
-    const sessionId = created.ok ? created.value.id : "";
+    const sessionId = (created as unknown as { value?: { id: string } }).value?.id ?? "";
     expect(sessionId).not.toBe("");
     await runInDurableObject(stub, (instance: unknown) => {
       internals(instance as WorkspaceDO).core.setState("stopping");
