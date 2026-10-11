@@ -1,0 +1,13 @@
+[package]
+name = "tempo-terminal"
+version = "0.1.0"
+description = "Tempo for Mac (07, C8): the terminal element, a fork of gpui-terminal 0.1.0"
+edition.workspace = true
+# The fork keeps gpui-terminal's licence (see NOTICE, LICENSE-MIT and LICENSE-APACHE).
+license = "MIT OR Apache-2.0"
+publish.workspace = true
+
+[dependencies]
+alacritty_terminal = { version = "=0.25.1", default-features = false }
+async-channel = "=2.5.0"
+gpui-kit = { version = "=0.7.1" }

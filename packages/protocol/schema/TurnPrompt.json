@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TurnPrompt",
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string"
+    },
+    "mentions": {
+      "type": "array",
+      "items": {
+        "$ref": "Mention.json"
+      }
+    },
+    "attachmentIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reviewCommentIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["text", "mentions", "attachmentIds", "reviewCommentIds"],
+  "additionalProperties": true
+}

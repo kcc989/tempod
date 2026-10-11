@@ -1,0 +1,559 @@
+{
+  "channel": "workspace",
+  "messages": 29,
+  "state": {
+    "backlogDone": true,
+    "changes": {
+      "additions": 0,
+      "deletions": 0,
+      "files": []
+    },
+    "changesSeq": 2,
+    "credentialInvalid": ["codex"],
+    "items": {
+      "01k700000000000000000000zk": {
+        "content": {
+          "attachments": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Add a dark mode toggle"
+        },
+        "createdAt": 1791709300000,
+        "id": "01k700000000000000000000zk",
+        "kind": "user_message",
+        "rev": 1,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709300000
+      },
+      "01k700000000000000000000zm": {
+        "content": {
+          "text": "The header lives in src/app.tsx."
+        },
+        "createdAt": 1791709301000,
+        "id": "01k700000000000000000000zm",
+        "kind": "agent_thought",
+        "rev": 2,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709301000
+      },
+      "01k700000000000000000000zn": {
+        "content": {
+          "entries": [
+            {
+              "content": "Add a theme context",
+              "priority": "high",
+              "status": "completed"
+            },
+            {
+              "content": "Build the toggle",
+              "priority": "medium",
+              "status": "in_progress"
+            },
+            {
+              "content": "Persist the choice",
+              "priority": "low",
+              "status": "pending"
+            }
+          ]
+        },
+        "createdAt": 1791709302000,
+        "id": "01k700000000000000000000zn",
+        "kind": "plan",
+        "rev": 3,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709302000
+      },
+      "01k700000000000000000000zp": {
+        "content": {
+          "content": [],
+          "locations": [],
+          "title": "Read src/app.tsx",
+          "toolCallId": "toolu_14",
+          "toolKind": "execute"
+        },
+        "createdAt": 1791709303000,
+        "id": "01k700000000000000000000zp",
+        "kind": "tool_call",
+        "rev": 4,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709303000
+      },
+      "01k700000000000000000000zq": {
+        "content": {
+          "content": [],
+          "locations": [],
+          "title": "Edit src/app.tsx",
+          "toolCallId": "toolu_15",
+          "toolKind": "execute"
+        },
+        "createdAt": 1791709304000,
+        "id": "01k700000000000000000000zq",
+        "kind": "tool_call",
+        "rev": 9,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709304000
+      },
+      "01k700000000000000000000zr": {
+        "content": {
+          "text": "I added a toggle to the header."
+        },
+        "createdAt": 1791709350000,
+        "id": "01k700000000000000000000zr",
+        "kind": "agent_message",
+        "rev": 10,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709350000
+      },
+      "01k700000000000000000000zs": {
+        "content": {
+          "level": "info",
+          "text": "Codex is starting."
+        },
+        "createdAt": 1791709205000,
+        "id": "01k700000000000000000000zs",
+        "kind": "notice",
+        "rev": 5,
+        "sessionId": "01k7000000000000000000000p",
+        "status": "completed",
+        "turnId": null,
+        "updatedAt": 1791709205000
+      },
+      "01k700000000000000000000zt": {
+        "content": {
+          "text": "Use a context provider."
+        },
+        "createdAt": 1791709320000,
+        "id": "01k700000000000000000000zt",
+        "kind": "agent_thought",
+        "rev": 21,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709320000
+      },
+      "01k700000000000000000000zx": {
+        "content": {
+          "attachments": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Persist the choice in localStorage"
+        },
+        "createdAt": 1791709400000,
+        "id": "01k700000000000000000000zx",
+        "kind": "user_message",
+        "rev": 20,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709400000
+      },
+      "01k700000000000000000000zy": {
+        "content": {
+          "content": [],
+          "locations": [],
+          "title": "Edit src/theme/toggle.tsx",
+          "toolCallId": "toolu_22",
+          "toolKind": "execute"
+        },
+        "createdAt": 1791709410000,
+        "id": "01k700000000000000000000zy",
+        "kind": "tool_call",
+        "rev": 27,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709410000
+      },
+      "01k700000000000000000000zz": {
+        "content": {
+          "text": "Saving the theme in localStorage under `theme`. Tests pass."
+        },
+        "createdAt": 1791709420000,
+        "id": "01k700000000000000000000zz",
+        "kind": "agent_message",
+        "rev": 32,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709420000
+      },
+      "01k70000000000000000000113": {
+        "content": {
+          "content": [],
+          "locations": [],
+          "title": "bun test",
+          "toolCallId": "toolu_59",
+          "toolKind": "execute"
+        },
+        "createdAt": 1791709439000,
+        "id": "01k70000000000000000000113",
+        "kind": "tool_call",
+        "rev": 31,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709439000
+      },
+      "01k70000000000000000000114": {
+        "content": {
+          "chosenOptionId": "allow_once",
+          "options": [
+            {
+              "kind": "allow_once",
+              "name": "Allow",
+              "optionId": "allow_once"
+            },
+            {
+              "kind": "allow_always",
+              "name": "Always allow",
+              "optionId": "allow_always"
+            },
+            {
+              "kind": "reject_once",
+              "name": "Reject",
+              "optionId": "reject_once"
+            }
+          ],
+          "requestId": "01k700000000000000000000hg",
+          "title": "Run bun test",
+          "toolCallId": "toolu_59"
+        },
+        "createdAt": 1791709440000,
+        "id": "01k70000000000000000000114",
+        "kind": "permission",
+        "rev": 30,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709440000
+      }
+    },
+    "itemsRev": 34,
+    "order": {
+      "01k7000000000000000000000n": [
+        "01k700000000000000000000zk",
+        "01k700000000000000000000zm",
+        "01k700000000000000000000zn",
+        "01k700000000000000000000zp",
+        "01k700000000000000000000zq",
+        "01k700000000000000000000zt",
+        "01k700000000000000000000zr",
+        "01k700000000000000000000zx",
+        "01k700000000000000000000zy",
+        "01k700000000000000000000zz",
+        "01k70000000000000000000113",
+        "01k70000000000000000000114"
+      ],
+      "01k7000000000000000000000p": ["01k700000000000000000000zs"]
+    },
+    "permissions": {},
+    "ready": true,
+    "scriptOutput": {},
+    "scriptRuns": {},
+    "sessions": {
+      "01k7000000000000000000000n": {
+        "agent": "claude",
+        "commands": [
+          {
+            "description": "Review the current changes",
+            "name": "review"
+          },
+          {
+            "description": null,
+            "input": {
+              "hint": "what to document"
+            },
+            "name": "init"
+          }
+        ],
+        "config": {
+          "model": "default"
+        },
+        "configOptions": [
+          {
+            "category": "model",
+            "currentValue": "default",
+            "id": "model",
+            "name": "Model",
+            "options": [
+              {
+                "description": "The recommended model",
+                "name": "Default",
+                "value": "default"
+              },
+              {
+                "name": "Opus",
+                "value": "opus"
+              }
+            ],
+            "type": "select"
+          }
+        ],
+        "id": "01k7000000000000000000000n",
+        "modeId": "default",
+        "modes": [
+          {
+            "description": "Ask before editing files",
+            "id": "default",
+            "name": "Default"
+          },
+          {
+            "description": null,
+            "id": "acceptEdits",
+            "name": "Accept Edits"
+          },
+          {
+            "id": "plan",
+            "name": "Plan Mode"
+          }
+        ],
+        "sortOrder": 0,
+        "status": "idle",
+        "title": "Claude",
+        "usage": {
+          "cachedReadTokens": 12000,
+          "inputTokens": 18234,
+          "outputTokens": 2211
+        }
+      },
+      "01k7000000000000000000000p": {
+        "agent": "codex",
+        "commands": [],
+        "config": {},
+        "configOptions": [
+          {
+            "category": "model",
+            "currentValue": "gpt-5-codex",
+            "id": "model",
+            "name": "Model",
+            "options": [
+              {
+                "group": "recommended",
+                "name": "Recommended",
+                "options": [
+                  {
+                    "name": "GPT-5 Codex",
+                    "value": "gpt-5-codex"
+                  }
+                ]
+              },
+              {
+                "group": "other",
+                "name": "Other",
+                "options": [
+                  {
+                    "description": null,
+                    "name": "GPT-5",
+                    "value": "gpt-5"
+                  }
+                ]
+              }
+            ],
+            "type": "select"
+          },
+          {
+            "currentValue": false,
+            "description": "Let the agent search the web",
+            "id": "web_search",
+            "name": "Web search",
+            "type": "boolean"
+          }
+        ],
+        "id": "01k7000000000000000000000p",
+        "modeId": null,
+        "modes": [],
+        "sortOrder": 1,
+        "status": "starting",
+        "title": "Codex",
+        "usage": {}
+      }
+    },
+    "turns": {
+      "01k70000000000000000000035": {
+        "checkpointId": "01k7000000000000000000009d",
+        "endedAt": 1791709360000,
+        "errorCode": null,
+        "id": "01k70000000000000000000035",
+        "prompt": {
+          "attachmentIds": [],
+          "mentions": [
+            {
+              "path": "src/app.tsx"
+            }
+          ],
+          "reviewCommentIds": [],
+          "text": "Add a dark mode toggle"
+        },
+        "queuePos": null,
+        "queuedAt": 1791709300000,
+        "reverted": false,
+        "seq": 1,
+        "sessionId": "01k7000000000000000000000n",
+        "startedAt": 1791709301000,
+        "status": "completed",
+        "stopReason": "end_turn"
+      },
+      "01k70000000000000000000036": {
+        "checkpointId": "01k7000000000000000000009e",
+        "endedAt": 1791709490000,
+        "errorCode": null,
+        "id": "01k70000000000000000000036",
+        "prompt": {
+          "attachmentIds": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Persist the choice in localStorage"
+        },
+        "queuePos": null,
+        "queuedAt": 1791709400000,
+        "reverted": false,
+        "seq": 2,
+        "sessionId": "01k7000000000000000000000n",
+        "startedAt": 1791709401000,
+        "status": "completed",
+        "stopReason": "end_turn"
+      }
+    },
+    "workspace": {
+      "archivedAt": null,
+      "attention": "unread",
+      "baseBranch": "main",
+      "branch": "tempo/lisbon",
+      "checksState": null,
+      "createdAt": 1791622800000,
+      "defaultAgent": "claude",
+      "errorCode": null,
+      "errorDetail": null,
+      "id": "01k7000000000000000000000b",
+      "imageRef": "registry.cloudflare.com/acme/tempo-workspace:2026-10-10",
+      "lastActivityAt": 1791709260000,
+      "op": null,
+      "pinned": false,
+      "ports": [
+        {
+          "port": 3000,
+          "url": "https://3000-01k7000000000000000000000b-k3j9x2m4q8w7e5r1.example-previews.com"
+        }
+      ],
+      "prNumber": null,
+      "prState": null,
+      "previewToken": "k3j9x2m4q8w7e5r1",
+      "projectId": "01k70000000000000000000001",
+      "pushed": false,
+      "queue": [],
+      "rev": 44,
+      "runningTurnId": null,
+      "settings": {
+        "agent": {
+          "default": "claude",
+          "model": ""
+        },
+        "environment": {
+          "egress_allowlist": ["registry.npmjs.org", "*.githubusercontent.com"],
+          "egress_policy": "allowlist",
+          "instance": {
+            "diskMb": 12000,
+            "memoryMib": 8192,
+            "vcpu": 2
+          },
+          "sleep_after_idle_minutes": 30
+        },
+        "environment_variables": {
+          "NODE_ENV": "development"
+        },
+        "git": {
+          "archive_on_merge": false,
+          "branch_prefix": "tempo/",
+          "delete_branch_on_archive": false
+        },
+        "prompts": {
+          "general": ""
+        },
+        "scripts": {
+          "archive": "",
+          "auto_run_after_setup": true,
+          "run": {
+            "dev": {
+              "command": "bun run dev",
+              "cwd": ".",
+              "default": true
+            },
+            "test": {
+              "command": "bun test",
+              "cwd": "packages/api",
+              "default": false
+            }
+          },
+          "run_mode": "concurrent",
+          "setup": "bun install"
+        }
+      },
+      "setupStatus": "succeeded",
+      "slug": "lisbon",
+      "state": "ready",
+      "title": "Add dark mode toggle"
+    }
+  },
+  "events": [
+    {
+      "line": 18,
+      "event": {
+        "kind": "turnEnded",
+        "turn": {
+          "id": "01k70000000000000000000036",
+          "sessionId": "01k7000000000000000000000n",
+          "seq": 2,
+          "status": "completed",
+          "queuePos": null,
+          "prompt": {
+            "text": "Persist the choice in localStorage",
+            "mentions": [],
+            "attachmentIds": [],
+            "reviewCommentIds": []
+          },
+          "stopReason": "end_turn",
+          "errorCode": null,
+          "checkpointId": "01k7000000000000000000009e",
+          "reverted": false,
+          "queuedAt": 1791709400000,
+          "startedAt": 1791709401000,
+          "endedAt": 1791709490000
+        }
+      }
+    },
+    {
+      "line": 24,
+      "event": {
+        "kind": "credentialInvalid",
+        "provider": "codex"
+      }
+    },
+    {
+      "line": 25,
+      "event": {
+        "kind": "credentialInvalid",
+        "provider": "codex"
+      }
+    },
+    {
+      "line": 26,
+      "event": {
+        "kind": "error",
+        "code": "SETUP_FAILED",
+        "message": "Setup failed. See the Setup tab."
+      }
+    }
+  ]
+}

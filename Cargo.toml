@@ -1,0 +1,19 @@
+# Tempo for Mac (07): the native client and its crates. Each crate pins its own dependencies.
+[workspace]
+resolver = "3"
+members = [
+  "apps/mac",
+  "crates/tempo-protocol",
+  "crates/tempo-client",
+  "crates/tempo-terminal",
+  "crates/protocol-gen",
+]
+
+[workspace.package]
+edition = "2024"
+license = "UNLICENSED"
+publish = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

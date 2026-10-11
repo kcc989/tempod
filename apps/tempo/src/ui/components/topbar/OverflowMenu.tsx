@@ -1,0 +1,121 @@
+import {
+  ArchiveIcon,
+  EllipsisIcon,
+  ExternalLinkIcon,
+  LaptopIcon,
+  LinkIcon,
+  MoonIcon,
+  PowerIcon,
+  RotateCwIcon,
+  StethoscopeIcon,
+} from "lucide-react";
+import { Button } from "~/ui/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "~/ui/components/ui/dropdown-menu";
+import { useProject } from "~/ui/hooks/useProjects";
+import { macWorkspaceUrl } from "~/ui/lib/links";
+import { formatBinding } from "~/ui/lib/shortcuts";
+import { openDialog } from "~/ui/state/workspace-ui";
+import { canArchive, githubUrlFor, powerAction, type WorkspaceView } from "./topbar-logic";
+import type { WorkspaceActions } from "./useWorkspaceActions";
+
+/**
+ * 04, Overflow menu: Wake or Sleep, Rotate preview link, Open on GitHub, Copy workspace link,
+ * Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links here.
+ */
+export function OverflowMenu({
+  view,
+  actions,
+  phone = false,
+}: {
+  view: WorkspaceView;
+  actions: WorkspaceActions;
+  phone?: boolean;
+}) {
+  const { w, d } = view;
+  const project = useProject(w.projectId);
+  const power = powerAction(w.state);
+  const ports = phone ? (d?.ports ?? []) : [];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="More actions">
+          <EllipsisIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        {ports.length > 0 && (
+          <>
+            <DropdownMenuLabel>Previews</DropdownMenuLabel>
+            {ports.map((p) => (
+              <DropdownMenuItem key={p.port} asChild>
+                <a href={p.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLinkIcon />
+                  <span className="font-mono tabular-nums">{p.port} ↗</span>
+                </a>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem
+          disabled={!power.enabled || actions.pending.power}
+          onSelect={() => (power.kind === "wake" ? actions.wake() : actions.sleep())}
+        >
+          {power.kind === "wake" ? <PowerIcon /> : <MoonIcon />}
+          {power.label}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={w.state === "archived" || w.state === "archiving"}
+          onSelect={() => void actions.rotatePreview()}
+        >
+          <RotateCwIcon />
+          Rotate preview link
+        </DropdownMenuItem>
+        {project ? (
+          <DropdownMenuItem asChild>
+            <a href={githubUrlFor(project, w, d?.pushed)} target="_blank" rel="noopener noreferrer">
+              <ExternalLinkIcon />
+              Open on GitHub
+            </a>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled>
+            <ExternalLinkIcon />
+            Open on GitHub
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={() => void actions.copyLink()}>
+          <LinkIcon />
+          Copy workspace link
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => openDialog({ kind: "diagnostics", workspaceId: w.id })}>
+          <StethoscopeIcon />
+          Diagnostics
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href={macWorkspaceUrl(w.id)}>
+            <LaptopIcon />
+            Open in Tempo for Mac
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={!canArchive(w.state) || actions.pending.archive}
+          onSelect={() => actions.archive()}
+        >
+          <ArchiveIcon />
+          Archive
+          {!phone && <DropdownMenuShortcut>{formatBinding("archive")}</DropdownMenuShortcut>}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

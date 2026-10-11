@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ItemStatus",
+  "type": "string",
+  "enum": ["streaming", "pending", "in_progress", "completed", "failed", "cancelled"]
+}

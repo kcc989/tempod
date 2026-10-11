@@ -1,0 +1,21 @@
+{
+  "base_image": "node:24-trixie-slim",
+  "base_image_digest": "sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66",
+  "sandbox_shim": "docker.io/cloudflare/sandbox:1.0.0",
+  "npm": {
+    "@agentclientprotocol/claude-agent-acp": "0.89.1",
+    "@agentclientprotocol/codex-acp": "2.2.2",
+    "opencode-ai": "1.18.35",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "pi-acp": "0.0.34",
+    "playwright": "1.61.1",
+    "@playwright/mcp": "0.0.83"
+  },
+  "build_args": {
+    "GH_VERSION": "2.102.0",
+    "BUN_VERSION": "1.4.2",
+    "PLAYWRIGHT_MCP_VERSION": "0.0.83",
+    "TINI_VERSION": "0.19.0-3+b8"
+  },
+  "acp_sdk": "1.8.0"
+}

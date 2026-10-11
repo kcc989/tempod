@@ -1,0 +1,1 @@
+{"type":"turn","turn":{"id":"01k70000000000000000000036","sessionId":"01k7000000000000000000000n","seq":2,"status":"running","queuePos":null,"prompt":{"text":"Prompt 2","mentions":[],"attachmentIds":[],"reviewCommentIds":[]},"stopReason":null,"errorCode":null,"checkpointId":null,"reverted":false,"queuedAt":1791709400000,"startedAt":1791709401000,"endedAt":null}}

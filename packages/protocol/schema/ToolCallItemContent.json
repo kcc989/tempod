@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ToolCallItemContent",
+  "type": "object",
+  "properties": {
+    "toolCallId": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "toolKind": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "locations": {
+      "type": "array",
+      "items": {
+        "$ref": "ToolLocation.json"
+      }
+    },
+    "content": {
+      "type": "array",
+      "items": {
+        "$ref": "ContentBlock.json"
+      }
+    },
+    "rawInput": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rawOutput": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["toolCallId", "title", "locations", "content"],
+  "additionalProperties": true
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NoticeContent",
+  "type": "object",
+  "properties": {
+    "level": {
+      "$ref": "NoticeLevel.json"
+    },
+    "text": {
+      "type": "string"
+    }
+  },
+  "required": ["level", "text"],
+  "additionalProperties": true
+}

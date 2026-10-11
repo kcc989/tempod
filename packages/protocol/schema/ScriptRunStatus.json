@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScriptRunStatus",
+  "type": "string",
+  "enum": ["running", "exited", "killed", "failed_to_start", "timed_out"]
+}

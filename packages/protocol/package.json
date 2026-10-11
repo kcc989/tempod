@@ -1,0 +1,24 @@
+{
+  "name": "@tempo/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p scripts/tsconfig.json",
+    "test": "vitest run",
+    "protocol:gen": "bun scripts/gen-schema.ts",
+    "protocol:fixtures": "bun scripts/gen-fixtures.ts",
+    "protocol:check": "bun scripts/check.ts"
+  },
+  "dependencies": {
+    "effect": "4.0.3",
+    "ulid": "3.0.2"
+  },
+  "devDependencies": {
+    "vitest": "4.1.11"
+  }
+}

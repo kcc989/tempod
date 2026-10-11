@@ -1,0 +1,2 @@
+{}
+{"agent":{"default":"claude"},"scripts":{"setup":"bun install","run":{"dev":{"command":"bun run dev"}}},"environment":{"instance":"standard-4","egress_allowlist":["registry.npmjs.org"]}}

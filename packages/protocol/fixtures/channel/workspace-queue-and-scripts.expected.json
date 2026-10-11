@@ -1,0 +1,472 @@
+{
+  "channel": "workspace",
+  "messages": 25,
+  "state": {
+    "backlogDone": true,
+    "changes": null,
+    "changesSeq": 0,
+    "credentialInvalid": [],
+    "items": {
+      "01k700000000000000000000zk": {
+        "content": {
+          "attachments": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Add a dark mode toggle"
+        },
+        "createdAt": 1791709300000,
+        "id": "01k700000000000000000000zk",
+        "kind": "user_message",
+        "rev": 1,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709300000
+      },
+      "01k700000000000000000000zr": {
+        "content": {
+          "text": "Done."
+        },
+        "createdAt": 1791709350000,
+        "id": "01k700000000000000000000zr",
+        "kind": "agent_message",
+        "rev": 2,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709350000
+      },
+      "01k700000000000000000000zx": {
+        "content": {
+          "attachments": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Persist it"
+        },
+        "createdAt": 1791709400000,
+        "id": "01k700000000000000000000zx",
+        "kind": "user_message",
+        "rev": 3,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709400000
+      },
+      "01k70000000000000000000107": {
+        "content": {
+          "attachments": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Update the README"
+        },
+        "createdAt": 1791709501000,
+        "id": "01k70000000000000000000107",
+        "kind": "user_message",
+        "rev": 4,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000038",
+        "updatedAt": 1791709501000
+      },
+      "01k70000000000000000000108": {
+        "content": {
+          "checkpointId": "01k7000000000000000000009d",
+          "toTurnSeq": 1
+        },
+        "createdAt": 1791709530000,
+        "id": "01k70000000000000000000108",
+        "kind": "revert_marker",
+        "rev": 5,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": null,
+        "updatedAt": 1791709530000
+      },
+      "01k70000000000000000000109": {
+        "content": {
+          "code": "AGENT_CRASHED"
+        },
+        "createdAt": 1791709540000,
+        "id": "01k70000000000000000000109",
+        "kind": "error",
+        "rev": 6,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "failed",
+        "turnId": "01k70000000000000000000038",
+        "updatedAt": 1791709540000
+      }
+    },
+    "itemsRev": 6,
+    "order": {
+      "01k7000000000000000000000n": [
+        "01k700000000000000000000zk",
+        "01k700000000000000000000zr",
+        "01k700000000000000000000zx",
+        "01k70000000000000000000107",
+        "01k70000000000000000000108",
+        "01k70000000000000000000109"
+      ]
+    },
+    "permissions": {
+      "01k700000000000000000000ht": {
+        "itemId": "01k7000000000000000000011e",
+        "options": [
+          {
+            "kind": "allow_once",
+            "name": "Allow",
+            "optionId": "allow_once"
+          },
+          {
+            "kind": "allow_always",
+            "name": "Always allow",
+            "optionId": "allow_always"
+          },
+          {
+            "kind": "reject_once",
+            "name": "Reject",
+            "optionId": "reject_once"
+          }
+        ],
+        "requestId": "01k700000000000000000000ht",
+        "sessionId": "01k7000000000000000000000p",
+        "title": "Run bun test",
+        "turnId": "01k70000000000000000000039"
+      }
+    },
+    "ready": true,
+    "scriptOutput": {
+      "01k700000000000000000000k2": "bun install v1.4.2\nwarn: lockfile is out of date\ninstalled 412 packages in 3.1s\n",
+      "01k700000000000000000000k3": "  VITE ready in 412 ms\n"
+    },
+    "scriptRuns": {
+      "01k700000000000000000000k2": {
+        "command": "bun install",
+        "endedAt": 1791709524000,
+        "exitCode": 0,
+        "id": "01k700000000000000000000k2",
+        "kind": "setup",
+        "scriptId": null,
+        "signal": null,
+        "startedAt": 1791709520000,
+        "status": "exited"
+      }
+    },
+    "sessions": {
+      "01k7000000000000000000000n": {
+        "agent": "claude",
+        "commands": [
+          {
+            "description": "Review the current changes",
+            "name": "review"
+          },
+          {
+            "description": null,
+            "input": {
+              "hint": "what to document"
+            },
+            "name": "init"
+          }
+        ],
+        "config": {
+          "model": "default"
+        },
+        "configOptions": [
+          {
+            "category": "model",
+            "currentValue": "default",
+            "id": "model",
+            "name": "Model",
+            "options": [
+              {
+                "description": "The recommended model",
+                "name": "Default",
+                "value": "default"
+              },
+              {
+                "name": "Opus",
+                "value": "opus"
+              }
+            ],
+            "type": "select"
+          }
+        ],
+        "id": "01k7000000000000000000000n",
+        "modeId": "plan",
+        "modes": [
+          {
+            "description": "Ask before editing files",
+            "id": "default",
+            "name": "Default"
+          },
+          {
+            "description": null,
+            "id": "acceptEdits",
+            "name": "Accept Edits"
+          },
+          {
+            "id": "plan",
+            "name": "Plan Mode"
+          }
+        ],
+        "sortOrder": 0,
+        "status": "running",
+        "title": "Claude",
+        "usage": {
+          "cachedReadTokens": 12000,
+          "inputTokens": 18234,
+          "outputTokens": 2211
+        }
+      },
+      "01k7000000000000000000000p": {
+        "agent": "codex",
+        "commands": [],
+        "config": {},
+        "configOptions": [
+          {
+            "category": "model",
+            "currentValue": "gpt-5-codex",
+            "id": "model",
+            "name": "Model",
+            "options": [
+              {
+                "group": "recommended",
+                "name": "Recommended",
+                "options": [
+                  {
+                    "name": "GPT-5 Codex",
+                    "value": "gpt-5-codex"
+                  }
+                ]
+              },
+              {
+                "group": "other",
+                "name": "Other",
+                "options": [
+                  {
+                    "description": null,
+                    "name": "GPT-5",
+                    "value": "gpt-5"
+                  }
+                ]
+              }
+            ],
+            "type": "select"
+          },
+          {
+            "currentValue": false,
+            "description": "Let the agent search the web",
+            "id": "web_search",
+            "name": "Web search",
+            "type": "boolean"
+          }
+        ],
+        "id": "01k7000000000000000000000p",
+        "modeId": null,
+        "modes": [],
+        "sortOrder": 1,
+        "status": "starting",
+        "title": "Codex",
+        "usage": {}
+      }
+    },
+    "turns": {
+      "01k70000000000000000000035": {
+        "checkpointId": "01k7000000000000000000009d",
+        "endedAt": 1791709360000,
+        "errorCode": null,
+        "id": "01k70000000000000000000035",
+        "prompt": {
+          "attachmentIds": [],
+          "mentions": [
+            {
+              "path": "src/app.tsx"
+            }
+          ],
+          "reviewCommentIds": [],
+          "text": "Add a dark mode toggle"
+        },
+        "queuePos": null,
+        "queuedAt": 1791709300000,
+        "reverted": true,
+        "seq": 1,
+        "sessionId": "01k7000000000000000000000n",
+        "startedAt": 1791709301000,
+        "status": "completed",
+        "stopReason": "end_turn"
+      },
+      "01k70000000000000000000036": {
+        "checkpointId": null,
+        "endedAt": 1791709500000,
+        "errorCode": null,
+        "id": "01k70000000000000000000036",
+        "prompt": {
+          "attachmentIds": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Persist the choice in localStorage"
+        },
+        "queuePos": null,
+        "queuedAt": 1791709400000,
+        "reverted": false,
+        "seq": 2,
+        "sessionId": "01k7000000000000000000000n",
+        "startedAt": 1791709401000,
+        "status": "cancelled",
+        "stopReason": "cancelled"
+      },
+      "01k70000000000000000000038": {
+        "checkpointId": null,
+        "endedAt": 1791709540000,
+        "errorCode": "AGENT_CRASHED",
+        "id": "01k70000000000000000000038",
+        "prompt": {
+          "attachmentIds": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Update the README"
+        },
+        "queuePos": null,
+        "queuedAt": 1791709454000,
+        "reverted": false,
+        "seq": 4,
+        "sessionId": "01k7000000000000000000000n",
+        "startedAt": 1791709501000,
+        "status": "failed",
+        "stopReason": null
+      }
+    },
+    "workspace": {
+      "archivedAt": null,
+      "attention": "unread",
+      "baseBranch": "main",
+      "branch": "tempo/lisbon",
+      "checksState": null,
+      "createdAt": 1791622800000,
+      "defaultAgent": "claude",
+      "errorCode": null,
+      "errorDetail": null,
+      "id": "01k7000000000000000000000b",
+      "imageRef": "registry.cloudflare.com/acme/tempo-workspace:2026-10-10",
+      "lastActivityAt": 1791709260000,
+      "op": null,
+      "pinned": false,
+      "ports": [
+        {
+          "port": 3000,
+          "url": "https://3000-01k7000000000000000000000b-k3j9x2m4q8w7e5r1.example-previews.com"
+        }
+      ],
+      "prNumber": null,
+      "prState": null,
+      "previewToken": "k3j9x2m4q8w7e5r1",
+      "projectId": "01k70000000000000000000001",
+      "pushed": false,
+      "queue": [],
+      "rev": 44,
+      "runningTurnId": "01k70000000000000000000038",
+      "settings": {
+        "agent": {
+          "default": "claude",
+          "model": ""
+        },
+        "environment": {
+          "egress_allowlist": ["registry.npmjs.org", "*.githubusercontent.com"],
+          "egress_policy": "allowlist",
+          "instance": {
+            "diskMb": 12000,
+            "memoryMib": 8192,
+            "vcpu": 2
+          },
+          "sleep_after_idle_minutes": 30
+        },
+        "environment_variables": {
+          "NODE_ENV": "development"
+        },
+        "git": {
+          "archive_on_merge": false,
+          "branch_prefix": "tempo/",
+          "delete_branch_on_archive": false
+        },
+        "prompts": {
+          "general": ""
+        },
+        "scripts": {
+          "archive": "",
+          "auto_run_after_setup": true,
+          "run": {
+            "dev": {
+              "command": "bun run dev",
+              "cwd": ".",
+              "default": true
+            },
+            "test": {
+              "command": "bun test",
+              "cwd": "packages/api",
+              "default": false
+            }
+          },
+          "run_mode": "concurrent",
+          "setup": "bun install"
+        }
+      },
+      "setupStatus": "succeeded",
+      "slug": "lisbon",
+      "state": "working",
+      "title": "Add dark mode toggle"
+    }
+  },
+  "events": [
+    {
+      "line": 9,
+      "event": {
+        "kind": "turnEnded",
+        "turn": {
+          "id": "01k70000000000000000000036",
+          "sessionId": "01k7000000000000000000000n",
+          "seq": 2,
+          "status": "cancelled",
+          "queuePos": null,
+          "prompt": {
+            "text": "Persist the choice in localStorage",
+            "mentions": [],
+            "attachmentIds": [],
+            "reviewCommentIds": []
+          },
+          "stopReason": "cancelled",
+          "errorCode": null,
+          "checkpointId": null,
+          "reverted": false,
+          "queuedAt": 1791709400000,
+          "startedAt": 1791709401000,
+          "endedAt": 1791709500000
+        }
+      }
+    },
+    {
+      "line": 24,
+      "event": {
+        "kind": "turnEnded",
+        "turn": {
+          "id": "01k70000000000000000000038",
+          "sessionId": "01k7000000000000000000000n",
+          "seq": 4,
+          "status": "failed",
+          "queuePos": null,
+          "prompt": {
+            "text": "Update the README",
+            "mentions": [],
+            "attachmentIds": [],
+            "reviewCommentIds": []
+          },
+          "stopReason": null,
+          "errorCode": "AGENT_CRASHED",
+          "checkpointId": null,
+          "reverted": false,
+          "queuedAt": 1791709454000,
+          "startedAt": 1791709501000,
+          "endedAt": 1791709540000
+        }
+      }
+    }
+  ]
+}

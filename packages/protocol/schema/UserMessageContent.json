@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UserMessageContent",
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string"
+    },
+    "mentions": {
+      "type": "array",
+      "items": {
+        "$ref": "Mention.json"
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name", "mime"],
+        "additionalProperties": true
+      }
+    },
+    "reviewCommentIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["text", "mentions", "attachments", "reviewCommentIds"],
+  "additionalProperties": true
+}

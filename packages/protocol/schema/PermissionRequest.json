@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PermissionRequest",
+  "type": "object",
+  "properties": {
+    "requestId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    },
+    "itemId": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "$ref": "PermissionOption.json"
+      }
+    }
+  },
+  "required": ["requestId", "sessionId", "turnId", "itemId", "title", "options"],
+  "additionalProperties": true
+}

@@ -1,0 +1,1 @@
+{"diff":"diff --git a/src/app.tsx b/src/app.tsx\n--- a/src/app.tsx\n+++ b/src/app.tsx\n@@ -10,3 +10,3 @@\n export function App() {\n-  return <Header />;\n+  return <Header toggle />;\n }\n"}

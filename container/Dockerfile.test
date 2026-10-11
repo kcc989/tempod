@@ -1,0 +1,10 @@
+# Run daemon tests with the same agents, tools and uid as the workspace.
+FROM tempo-workspace:local
+ENV TEMPO_IMAGE_TEST=1
+USER root
+RUN install -d -o tempo -g tempo /opt/tempo
+USER tempo
+WORKDIR /opt/tempo
+COPY --chown=tempo:tempo . .
+RUN bun install --frozen-lockfile
+ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "--cwd", "packages/tempod", "test"]

@@ -1,0 +1,2 @@
+{"type":"script.output","runId":"01k700000000000000000000js","stream":"stdout","data":"  VITE v7.1.0  ready in 412 ms\n"}
+{"type":"script.output","runId":"01k700000000000000000000js","stream":"stderr","data":"warning: port 3000 in use, trying 3001\n"}

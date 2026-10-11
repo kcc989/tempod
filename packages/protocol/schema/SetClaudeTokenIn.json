@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SetClaudeTokenIn",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 4096
+    }
+  },
+  "required": ["token"],
+  "additionalProperties": true
+}

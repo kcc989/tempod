@@ -1,0 +1,2 @@
+{"toolCallId":"toolu_01","title":"Edit src/app.tsx","toolKind":"edit","locations":[{"path":"src/app.tsx","line":12},{"path":"src/theme/toggle.tsx"}],"content":[{"type":"diff","path":"src/app.tsx","oldText":"<Header />","newText":"<Header toggle />"}],"rawInput":{"file_path":"src/app.tsx","old_string":"<Header />","new_string":"<Header toggle />"}}
+{"toolCallId":"toolu_03","title":"bun test","toolKind":null,"locations":[],"content":[],"rawInput":null,"rawOutput":{"exitCode":0,"stdout":"12 pass"}}

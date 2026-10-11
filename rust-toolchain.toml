@@ -1,0 +1,4 @@
+# 07: one pinned stable Rust, 1.92 or later.
+[toolchain]
+channel = "1.97.0"
+components = ["rustfmt", "clippy"]

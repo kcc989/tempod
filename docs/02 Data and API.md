@@ -173,6 +173,7 @@ CREATE TABLE turns (
   session_id     TEXT NOT NULL REFERENCES sessions(id),
   seq            INTEGER NOT NULL UNIQUE,  -- 1, 2, 3 … per workspace
   queue_pos      INTEGER,                  -- set only while queued
+  steering_pending INTEGER NOT NULL DEFAULT 0 CHECK (steering_pending IN (0, 1)), -- durable live-delivery reservation
   status         TEXT NOT NULL CHECK (status IN ('queued','running','completed','cancelled','failed','interrupted')),
   prompt_json    TEXT NOT NULL,            -- {text, mentions, attachmentIds, reviewCommentIds}
   stop_reason    TEXT,                     -- ACP stopReason
@@ -495,7 +496,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `createSession` | `{workspaceId, agent, model?, modeId?}` | `Session` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED` |
 | `closeSession` | `{workspaceId, sessionId}` | `{}` | `SESSION_BUSY` |
 | `renameSession` | `{workspaceId, sessionId, title}` | `{}` | — |
-| `sendPrompt` | `{workspaceId, sessionId, text, mentions, attachmentIds, reviewCommentIds}` | `Turn` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `VALIDATION_FAILED` |
+| `sendPrompt` | `{workspaceId, sessionId, text, mentions, attachmentIds, reviewCommentIds, delivery?: "queue" or "steer"}` | `Turn`; the running turn when steering is injected, otherwise the queued turn | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `VALIDATION_FAILED` |
 | `cancelTurn` | `{workspaceId, turnId}` | `{}` | `TURN_NOT_ACTIVE` |
 | `editQueuedTurn` | `{workspaceId, turnId, text}` | `Turn` | `TURN_NOT_QUEUED` |
 | `deleteQueuedTurn` | `{workspaceId, turnId}` | `{}` | `TURN_NOT_QUEUED` |
@@ -560,8 +561,8 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | `Project` | `id, installationId, repoId, owner, name, defaultBranch, settings, sortOrder` |
 | `WorkspaceSummary` | `id, projectId, slug, title, branch, baseBranch, state, attention, defaultAgent, prNumber, prState, checksState, pinned, lastActivityAt, createdAt, archivedAt, rev` |
 | `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, previewToken, ports: [{port, url}], settings, runningTurnId, queue: [turnId], imageRef, op` |
-| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder` |
-| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt` |
+| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported) |
+| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false) |
 | `Item` | `id, sessionId, turnId, kind, status, content, rev, createdAt, updatedAt` |
 | `ScriptRun` | `id, kind, scriptId, command, status, exitCode, signal, startedAt, endedAt` |
 | `ReviewComment` | `id, path, lineStart, lineEnd, side, body, status, sentTurnId, createdAt` |
@@ -653,6 +654,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `script.stop` | `{runId}` | `{}` | 15 s |
 | `session.start` | `{sessionId, agent, env, modeId?, model?, acpSessionId?}` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
 | `session.prompt` | `{sessionId, turnId, content}` | `{accepted: true}`; the end comes as `turn.ended` | 30 s |
+| `session.steer` | `{sessionId, turnId, messageId, content}` | `{outcome: "injected" or "promptRequired" or "unsupported"}`; the existing prompt owns the turn lifecycle | 30 s |
 | `session.cancel` | `{sessionId, turnId}` | `{}` | 20 s |
 | `session.setMode` | `{sessionId, modeId}` | `{}` | 30 s |
 | `session.setConfig` | `{sessionId, configId, value}` | `{configOptions}` | 30 s |

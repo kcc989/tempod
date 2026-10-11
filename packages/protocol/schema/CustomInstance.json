@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CustomInstance",
+  "type": "object",
+  "properties": {
+    "vcpu": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 1,
+          "maximum": 4
+        }
+      ]
+    },
+    "memoryMib": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 4096,
+          "maximum": 12288
+        }
+      ]
+    },
+    "diskMb": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 1,
+          "maximum": 20000
+        }
+      ]
+    }
+  },
+  "required": ["vcpu", "memoryMib", "diskMb"],
+  "additionalProperties": true
+}

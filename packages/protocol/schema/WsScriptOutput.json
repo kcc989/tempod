@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WsScriptOutput",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["script.output"]
+    },
+    "runId": {
+      "type": "string"
+    },
+    "stream": {
+      "type": "string",
+      "enum": ["stdout", "stderr"]
+    },
+    "data": {
+      "type": "string"
+    }
+  },
+  "required": ["type", "runId", "stream", "data"],
+  "additionalProperties": true
+}

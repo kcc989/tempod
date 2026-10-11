@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SendPromptIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "mentions": {
+      "type": "array",
+      "items": {
+        "$ref": "Mention.json"
+      }
+    },
+    "attachmentIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reviewCommentIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "delivery": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["queue", "steer"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["workspaceId", "sessionId", "text", "mentions", "attachmentIds", "reviewCommentIds"],
+  "additionalProperties": true
+}

@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Attention",
+  "type": "string",
+  "enum": ["none", "unread", "needs_input", "error"]
+}

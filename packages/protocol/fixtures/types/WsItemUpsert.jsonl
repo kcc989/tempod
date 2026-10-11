@@ -1,0 +1,1 @@
+{"type":"item.upsert","item":{"id":"01k700000000000000000000ze","sessionId":"01k7000000000000000000000n","turnId":"01k70000000000000000000035","rev":6,"createdAt":1791709305000,"updatedAt":1791709305000,"kind":"agent_message","status":"streaming","content":{"text":"I added the toggle","blocks":[{"type":"text","text":"I added the toggle"}]}},"itemsRev":6}

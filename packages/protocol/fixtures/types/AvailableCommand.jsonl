@@ -1,0 +1,2 @@
+{"name":"review","description":"Review the current changes"}
+{"name":"init","description":null,"input":{"hint":"what to document"}}

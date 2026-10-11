@@ -33,6 +33,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Sidebar, hover card, right-click menu, History | Same |  |
 | New workspace dialog | Same | First prompt is text only, as on the web |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
+| Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model and mode pickers | Same |  |
 | Attachments, @-mentions, `/` commands | Same | Also accepts files dragged from Finder |
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
@@ -363,6 +364,9 @@ The largest risk is that GPUI is pre-1.0. GPUI Kit bundles a GPUI snapshot (`gpu
 - [ ] Q8. Will anyone but you install the app? If not, ad-hoc builds may be enough, and notarization can wait.
 - [ ] Q9. Is Apple silicon only acceptable, or do you need Intel Macs?
 - [ ] Q10. Should the app cache transcripts on disk for offline reading? This spec keeps them in memory only.
+
+## Workspace file links
+Decode valid percent escapes in `file:///workspace/<path>` filenames. Ignore malformed escapes, invalid UTF-8, control characters, empty path segments and `.` or `..` segments. Invalid file links render as text and do not open a browser or a file panel. A line fragment is parsed before decoding the filename.
 
 ## Sources
 

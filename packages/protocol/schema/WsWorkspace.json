@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WsWorkspace",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["workspace"]
+    },
+    "workspace": {
+      "$ref": "WorkspaceDetail.json"
+    }
+  },
+  "required": ["type", "workspace"],
+  "additionalProperties": true
+}

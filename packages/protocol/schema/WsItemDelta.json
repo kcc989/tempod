@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WsItemDelta",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["item.delta"]
+    },
+    "itemId": {
+      "type": "string"
+    },
+    "append": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["text"],
+      "additionalProperties": true
+    },
+    "itemsRev": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": ["type", "itemId", "append", "itemsRev"],
+  "additionalProperties": true
+}

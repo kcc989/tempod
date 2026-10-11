@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SetApiKeyIn",
+  "type": "object",
+  "properties": {
+    "provider": {
+      "$ref": "ApiKeyProvider.json"
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["provider", "key"],
+  "additionalProperties": true
+}

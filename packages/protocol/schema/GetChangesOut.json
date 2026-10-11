@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetChangesOut",
+  "type": "object",
+  "properties": {
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "ChangedFile.json"
+      }
+    },
+    "baseSha": {
+      "type": "string"
+    },
+    "headSha": {
+      "type": "string"
+    }
+  },
+  "required": ["files", "baseSha", "headSha"],
+  "additionalProperties": true
+}

@@ -1,0 +1,1 @@
+{"files":[{"path":"src/theme/toggle.tsx","status":"added","additions":48,"deletions":0},{"path":"src/app.tsx","status":"modified","additions":6,"deletions":2},{"path":"src/styles/colors.css","oldPath":"src/colors.css","status":"renamed","additions":3,"deletions":1}],"baseSha":"9f2c1e0b7a6d5c4b3a291807f6e5d4c3b2a19087","headSha":"1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"}

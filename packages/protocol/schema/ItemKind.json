@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ItemKind",
+  "type": "string",
+  "enum": [
+    "user_message",
+    "agent_message",
+    "agent_thought",
+    "tool_call",
+    "plan",
+    "permission",
+    "notice",
+    "handoff",
+    "revert_marker",
+    "error"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SetSessionModeIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "modeId": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId", "sessionId", "modeId"],
+  "additionalProperties": true
+}

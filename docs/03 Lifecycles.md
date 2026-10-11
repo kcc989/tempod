@@ -163,6 +163,14 @@ A prompt becomes a queued turn at once. The queue runner sends it when the works
 5. If the state is `sleeping` or `error`, insert a `wake` op.
 6. Run the queue runner.
 
+**Live steering.** `sendPrompt` accepts optional `delivery: "queue" | "steer"`; the default is `queue`. A steering message is first saved as a queued turn and user message. When the same chat has a running turn and its adapter advertised steering, reserve the queued turn with `steering_pending = 1` and pause the queue runner while sending `session.steer`. The daemon uses the ACP v1 `_session/steering` extension with `_meta.steering.idleBehavior = "promptRequired"`. It checks the target turn and deduplicates the message id.
+
+- `injected`: move the saved user message, attachments and sent review comments to the running turn, then delete the reserved turn. Do not cancel or restart the running turn.
+- Unsupported adapter, no running turn, or `promptRequired`: clear the reservation and keep the message queued for normal delivery.
+- Unconfirmed delivery, including a DO restart with a reservation: mark the message's turn failed, clear its queue position and reservation, and show that delivery could not be confirmed. Do not replay it automatically; the user must check the response before retrying.
+
+Reserved messages cannot be edited, deleted or reordered until delivery settles. The reservation is durable so a restart cannot send the same text as a new prompt after the agent already received it.
+
 **Queue runner.** It runs after any change to state, turns, sessions or `setup_status`. It starts the lowest `queue_pos` turn only if all of these are true:
 
 - `state` is `ready`.

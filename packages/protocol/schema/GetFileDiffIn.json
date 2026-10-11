@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetFileDiffIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "DiffScope.json"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId", "scope", "path"],
+  "additionalProperties": true
+}

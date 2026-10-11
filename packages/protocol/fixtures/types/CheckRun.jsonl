@@ -1,0 +1,2 @@
+{"name":"test","status":"completed","conclusion":"failure","url":"https://github.com/acme/webapp/actions/runs/1"}
+{"name":"lint","status":"in_progress","conclusion":null,"url":"https://github.com/acme/webapp/actions/runs/2"}

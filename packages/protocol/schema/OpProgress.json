@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpProgress",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "$ref": "OpKind.json"
+    },
+    "status": {
+      "$ref": "OpStatus.json"
+    },
+    "step": {
+      "type": "string"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "done", "failed", "skipped"]
+          },
+          "ms": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["name", "status", "ms"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["kind", "status", "step", "steps"],
+  "additionalProperties": true
+}

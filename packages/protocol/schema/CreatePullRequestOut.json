@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CreatePullRequestOut",
+  "type": "object",
+  "properties": {
+    "number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "url": {
+      "type": "string"
+    }
+  },
+  "required": ["number", "url"],
+  "additionalProperties": true
+}
