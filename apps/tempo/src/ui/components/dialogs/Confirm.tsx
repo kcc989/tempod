@@ -50,7 +50,9 @@ function ConfirmBody({ req }: { req: ConfirmRequest }) {
         />
       )}
       <AlertDialogFooter>
-        <AlertDialogCancel onClick={() => resolveConfirm(req.id, false)}>{req.cancelLabel ?? "Cancel"}</AlertDialogCancel>
+        <AlertDialogCancel onClick={() => resolveConfirm(req.id, false)}>
+          {req.cancelLabel ?? "Cancel"}
+        </AlertDialogCancel>
         <AlertDialogAction
           variant={req.destructive ? "destructive" : "default"}
           disabled={blocked}

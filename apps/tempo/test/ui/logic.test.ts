@@ -8,7 +8,10 @@ import { pillText, primaryAction, statusIndicator, titleFor } from "~/ui/lib/ind
 import { BINDINGS, SHORTCUT_ROWS, formatCombo, matchGlobal, matches, matchesCombo } from "~/ui/lib/shortcuts";
 import { session } from "./fixtures";
 
-const ev = (code: string, mods: Partial<{ meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }> = {}) => ({
+const ev = (
+  code: string,
+  mods: Partial<{ meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }> = {},
+) => ({
   code,
   metaKey: mods.meta ?? false,
   ctrlKey: mods.ctrl ?? false,
@@ -55,7 +58,10 @@ describe("indicators", () => {
     expect(statusIndicator({ attention: "error", state: "working" })?.kind).toBe("error");
     expect(statusIndicator({ attention: "unread", state: "working" })?.kind).toBe("working");
     expect(statusIndicator({ attention: "unread", state: "ready" })?.kind).toBe("unread");
-    expect(statusIndicator({ attention: "none", state: "stopping" })).toEqual({ kind: "busy", tooltip: "Going to sleep" });
+    expect(statusIndicator({ attention: "none", state: "stopping" })).toEqual({
+      kind: "busy",
+      tooltip: "Going to sleep",
+    });
     expect(statusIndicator({ attention: "none", state: "sleeping" })?.kind).toBe("sleeping");
     expect(statusIndicator({ attention: "none", state: "ready" })).toBeNull();
   });
@@ -79,11 +85,13 @@ describe("indicators", () => {
       prState: null,
       checksState: null,
     } as const;
-    expect(primaryAction({ ...base, hasUncommitted: true, prNumber: 3, prState: "open" })?.kind).toBe("commitPush");
-    expect(primaryAction({ ...base, pushed: true })?.kind).toBe("createPr");
-    expect(primaryAction({ ...base, pushed: true, prNumber: 3, prState: "open", checksState: "failure" })?.kind).toBe(
-      "viewChecks",
+    expect(primaryAction({ ...base, hasUncommitted: true, prNumber: 3, prState: "open" })?.kind).toBe(
+      "commitPush",
     );
+    expect(primaryAction({ ...base, pushed: true })?.kind).toBe("createPr");
+    expect(
+      primaryAction({ ...base, pushed: true, prNumber: 3, prState: "open", checksState: "failure" })?.kind,
+    ).toBe("viewChecks");
     expect(primaryAction({ ...base, pushed: true, prNumber: 3, prState: "open" })?.kind).toBe("merge");
     expect(primaryAction({ ...base, pushed: true, prNumber: 3, prState: "merged" })?.kind).toBe("archive");
     expect(primaryAction(base)).toBeNull();
@@ -121,9 +129,12 @@ describe("agents", () => {
     expect(togglePlanTarget(session({ modes, modeId: "plan" }), "default")).toBe("default");
     expect(togglePlanTarget(session({ modes, modeId: "plan" }), null)).toBe("bypassPermissions");
     expect(togglePlanTarget(session({ agent: "pi", modes: [], modeId: null }), null)).toBeNull();
-    expect(togglePlanTarget(session({ agent: "codex", modes: [{ id: "read-only", name: "R" }], modeId: "x" }), null)).toBe(
-      "read-only",
-    );
+    expect(
+      togglePlanTarget(
+        session({ agent: "codex", modes: [{ id: "read-only", name: "R" }], modeId: "x" }),
+        null,
+      ),
+    ).toBe("read-only");
   });
 });
 
@@ -173,7 +184,9 @@ describe("diffs", () => {
   });
 
   it("detects binary diffs", () => {
-    expect(parseUnifiedDiff("diff --git a/i.png b/i.png\nBinary files a/i.png and b/i.png differ\n").binary).toBe(true);
+    expect(
+      parseUnifiedDiff("diff --git a/i.png b/i.png\nBinary files a/i.png and b/i.png differ\n").binary,
+    ).toBe(true);
   });
 
   it("line diff reproduces both texts", () => {

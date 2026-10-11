@@ -31,9 +31,20 @@ export function EmptyState({
 }
 
 /** A failed load: the error-table message and Retry. */
-export function ErrorState({ error, onRetry, className }: { error: unknown; onRetry?: () => void; className?: string }) {
+export function ErrorState({
+  error,
+  onRetry,
+  className,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+  className?: string;
+}) {
   return (
-    <div role="alert" className={cn("flex flex-col items-center justify-center gap-2 p-6 text-center", className)}>
+    <div
+      role="alert"
+      className={cn("flex flex-col items-center justify-center gap-2 p-6 text-center", className)}
+    >
       <AlertCircleIcon className="size-5 text-destructive" />
       <p className="text-sm">{errorText(error)}</p>
       {onRetry && (
@@ -66,7 +77,9 @@ export function CenteredLoading({ label, className }: { label: string; className
 
 /** 04, Phone width: terminal, Run output and the file tree are not shown. */
 export function PhoneUnavailable({ className }: { className?: string }) {
-  return <EmptyState icon={MonitorIcon} title="Open Tempo on a larger screen for this." className={className} />;
+  return (
+    <EmptyState icon={MonitorIcon} title="Open Tempo on a larger screen for this." className={className} />
+  );
 }
 
 export function NotFoundState({ action, className }: { action?: ReactNode; className?: string }) {

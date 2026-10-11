@@ -88,10 +88,26 @@ const b = (id: ActionId, label: string, key: KeyCombo, scope: ShortcutScope = "g
 const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
-  { action: "Command palette", bindings: [b("palette", "Command palette", { code: "KeyK", mod: true })], conductor: "⌘K" },
-  { action: "New workspace", bindings: [b("newWorkspace", "New workspace", { code: "KeyN", alt: true })], conductor: "⌘N" },
-  { action: "New chat tab", bindings: [b("newChat", "New chat tab", { code: "KeyT", alt: true })], conductor: "⌘T" },
-  { action: "Close tab", bindings: [b("closeTab", "Close tab", { code: "KeyW", alt: true })], conductor: "⌘W" },
+  {
+    action: "Command palette",
+    bindings: [b("palette", "Command palette", { code: "KeyK", mod: true })],
+    conductor: "⌘K",
+  },
+  {
+    action: "New workspace",
+    bindings: [b("newWorkspace", "New workspace", { code: "KeyN", alt: true })],
+    conductor: "⌘N",
+  },
+  {
+    action: "New chat tab",
+    bindings: [b("newChat", "New chat tab", { code: "KeyT", alt: true })],
+    conductor: "⌘T",
+  },
+  {
+    action: "Close tab",
+    bindings: [b("closeTab", "Close tab", { code: "KeyW", alt: true })],
+    conductor: "⌘W",
+  },
   {
     action: "Next or previous center tab",
     bindings: [
@@ -121,7 +137,11 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
     bindings: [b("nextNeedsYou", "Next workspace that needs you", { code: "KeyG", alt: true })],
     conductor: "⌘⌥L",
   },
-  { action: "Toggle sidebar", bindings: [b("toggleSidebar", "Toggle sidebar", { code: "KeyB", mod: true })], conductor: "⌘B" },
+  {
+    action: "Toggle sidebar",
+    bindings: [b("toggleSidebar", "Toggle sidebar", { code: "KeyB", mod: true })],
+    conductor: "⌘B",
+  },
   {
     action: "Toggle right side",
     bindings: [b("toggleRight", "Toggle right side", { code: "KeyB", mod: true, alt: true })],
@@ -132,9 +152,17 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
     bindings: [b("toggleBottom", "Toggle bottom panel", { code: "KeyJ", alt: true })],
     conductor: "⌘J",
   },
-  { action: "Focus composer", bindings: [b("focusComposer", "Focus composer", { code: "KeyL", alt: true })], conductor: "⌘L" },
+  {
+    action: "Focus composer",
+    bindings: [b("focusComposer", "Focus composer", { code: "KeyL", alt: true })],
+    conductor: "⌘L",
+  },
   { action: "Send", bindings: [b("send", "Send", { code: "Enter" }, "composer")], conductor: "Enter" },
-  { action: "New line", bindings: [b("newLine", "New line", { code: "Enter", shift: true }, "composer")], conductor: "⇧Enter" },
+  {
+    action: "New line",
+    bindings: [b("newLine", "New line", { code: "Enter", shift: true }, "composer")],
+    conductor: "⇧Enter",
+  },
   {
     action: "Stop the turn",
     bindings: [b("stop", "Stop the turn", { code: "Escape" }, "composer")],
@@ -147,8 +175,16 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
     display: { mac: "⇧Tab in the composer", other: "Shift+Tab in the composer" },
     conductor: "⇧Tab",
   },
-  { action: "Model picker", bindings: [b("modelPicker", "Model picker", { code: "Slash", mod: true })], conductor: "⌘/" },
-  { action: "Attach a file", bindings: [b("attach", "Attach a file", { code: "KeyU", mod: true })], conductor: "⌘U" },
+  {
+    action: "Model picker",
+    bindings: [b("modelPicker", "Model picker", { code: "Slash", mod: true })],
+    conductor: "⌘/",
+  },
+  {
+    action: "Attach a file",
+    bindings: [b("attach", "Attach a file", { code: "KeyU", mod: true })],
+    conductor: "⌘U",
+  },
   {
     action: "Approve or deny a permission",
     bindings: [
@@ -158,7 +194,11 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
     display: { mac: "Enter or ⌫ on the focused card", other: "Enter or Backspace on the focused card" },
     conductor: "Enter or ⌫",
   },
-  { action: "Expand all tool calls", bindings: [b("expandAll", "Expand all tool calls", { code: "KeyO", ctrl: true })], conductor: "⌃O" },
+  {
+    action: "Expand all tool calls",
+    bindings: [b("expandAll", "Expand all tool calls", { code: "KeyO", ctrl: true })],
+    conductor: "⌃O",
+  },
   { action: "Diff tab", bindings: [b("diffTab", "Diff tab", { code: "KeyD", alt: true })], conductor: "⌘⇧D" },
   {
     action: "Branch or uncommitted scope",
@@ -173,11 +213,31 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
     ],
     conductor: "↓ or ↑",
   },
-  { action: "Mark file viewed", bindings: [b("markViewed", "Mark file viewed", { code: "KeyV", ctrl: true }, "diff")], conductor: "⌃V" },
-  { action: "Open file", bindings: [b("openFile", "Open file", { code: "KeyP", mod: true })], conductor: "⌘P" },
-  { action: "Search files", bindings: [b("searchFiles", "Search files", { code: "KeyF", mod: true, shift: true })], conductor: "⌘⇧F" },
-  { action: "Commit and push", bindings: [b("commitPush", "Commit and push", { code: "KeyY", alt: true })], conductor: "⌘⇧Y" },
-  { action: "Create PR", bindings: [b("createPr", "Create PR", { code: "KeyP", alt: true })], conductor: "⌘⇧P" },
+  {
+    action: "Mark file viewed",
+    bindings: [b("markViewed", "Mark file viewed", { code: "KeyV", ctrl: true }, "diff")],
+    conductor: "⌃V",
+  },
+  {
+    action: "Open file",
+    bindings: [b("openFile", "Open file", { code: "KeyP", mod: true })],
+    conductor: "⌘P",
+  },
+  {
+    action: "Search files",
+    bindings: [b("searchFiles", "Search files", { code: "KeyF", mod: true, shift: true })],
+    conductor: "⌘⇧F",
+  },
+  {
+    action: "Commit and push",
+    bindings: [b("commitPush", "Commit and push", { code: "KeyY", alt: true })],
+    conductor: "⌘⇧Y",
+  },
+  {
+    action: "Create PR",
+    bindings: [b("createPr", "Create PR", { code: "KeyP", alt: true })],
+    conductor: "⌘⇧P",
+  },
   { action: "Merge", bindings: [b("merge", "Merge", { code: "KeyM", alt: true })], conductor: "⌘⇧M" },
   { action: "Archive", bindings: [b("archive", "Archive", { code: "KeyA", alt: true })], conductor: "⌘⇧A" },
   {
@@ -185,7 +245,11 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
     bindings: [b("toggleRun", "Start or stop the default run script", { code: "KeyR", alt: true })],
     conductor: "⌘R",
   },
-  { action: "Settings", bindings: [b("settings", "Settings", { code: "Comma", alt: true })], conductor: "⌘," },
+  {
+    action: "Settings",
+    bindings: [b("settings", "Settings", { code: "Comma", alt: true })],
+    conductor: "⌘,",
+  },
 ];
 
 export const BINDINGS: ReadonlyArray<Binding> = SHORTCUT_ROWS.flatMap((r) => r.bindings);
@@ -238,7 +302,8 @@ const CODE_LABELS: Record<string, string> = {
 };
 
 const codeLabel = (code: string): string =>
-  CODE_LABELS[code] ?? (code.startsWith("Key") ? code.slice(3) : code.startsWith("Digit") ? code.slice(5) : code);
+  CODE_LABELS[code] ??
+  (code.startsWith("Key") ? code.slice(3) : code.startsWith("Digit") ? code.slice(5) : code);
 
 export const formatCombo = (k: KeyCombo, mac: boolean): string => {
   const key = codeLabel(k.code);
@@ -252,7 +317,11 @@ export const formatCombo = (k: KeyCombo, mac: boolean): string => {
 };
 
 export const formatRow = (row: ShortcutRow, mac: boolean): string =>
-  row.display ? (mac ? row.display.mac : row.display.other) : row.bindings.map((x) => formatCombo(x.key, mac)).join(" or ");
+  row.display
+    ? mac
+      ? row.display.mac
+      : row.display.other
+    : row.bindings.map((x) => formatCombo(x.key, mac)).join(" or ");
 
 export const formatBinding = (id: ActionId, mac: boolean = isMacPlatform()): string =>
   formatCombo(bindingFor(id).key, mac);

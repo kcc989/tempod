@@ -7,9 +7,11 @@ export const workspaceUrl = (workspaceId: string): string =>
   `${globalThis.location?.origin ?? ""}${workspacePath(workspaceId)}`;
 
 /** 07: Open in Tempo for Mac. */
-export const macWorkspaceUrl = (workspaceId: string): string => `tempo://workspace/${encodeURIComponent(workspaceId)}`;
+export const macWorkspaceUrl = (workspaceId: string): string =>
+  `tempo://workspace/${encodeURIComponent(workspaceId)}`;
 
-const gh = (owner: string, name: string) => `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+const gh = (owner: string, name: string) =>
+  `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
 
 export const githubRepoUrl = (owner: string, name: string): string => gh(owner, name);
 

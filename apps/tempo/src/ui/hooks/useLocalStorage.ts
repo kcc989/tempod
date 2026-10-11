@@ -12,7 +12,7 @@ const subscribe = (listener: () => void): (() => void) => {
   };
 };
 
-const parse = <T,>(raw: string | null, fallback: T, guard?: (u: unknown) => u is T): T => {
+const parse = <T>(raw: string | null, fallback: T, guard?: (u: unknown) => u is T): T => {
   if (raw === null) return fallback;
   try {
     const v: unknown = JSON.parse(raw);

@@ -3,8 +3,19 @@ import type * as React from "react";
 import { cn } from "~/ui/lib/utils";
 
 /** 04: the sidebar hover card opens after 400 ms. */
-function HoverCard({ openDelay = 400, closeDelay = 100, ...props }: React.ComponentProps<typeof HoverCardPrimitive.Root>) {
-  return <HoverCardPrimitive.Root data-slot="hover-card" openDelay={openDelay} closeDelay={closeDelay} {...props} />;
+function HoverCard({
+  openDelay = 400,
+  closeDelay = 100,
+  ...props
+}: React.ComponentProps<typeof HoverCardPrimitive.Root>) {
+  return (
+    <HoverCardPrimitive.Root
+      data-slot="hover-card"
+      openDelay={openDelay}
+      closeDelay={closeDelay}
+      {...props}
+    />
+  );
 }
 
 function HoverCardTrigger(props: React.ComponentProps<typeof HoverCardPrimitive.Trigger>) {

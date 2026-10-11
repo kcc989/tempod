@@ -16,7 +16,10 @@ export interface ShortcutOptions {
  * Binds actions from the 04 table to handlers. Matches KeyboardEvent.code with exact modifiers;
  * ⌘ is Meta on macOS and Ctrl elsewhere; every handled key calls preventDefault.
  */
-export function useShortcuts(handlers: Partial<Record<ActionId, ShortcutHandler>>, options: ShortcutOptions = {}): void {
+export function useShortcuts(
+  handlers: Partial<Record<ActionId, ShortcutHandler>>,
+  options: ShortcutOptions = {},
+): void {
   const { target, enabled = true, allowPlainInEditable = false } = options;
 
   const onKey = useEffectEvent((e: KeyboardEvent, mac: boolean) => {

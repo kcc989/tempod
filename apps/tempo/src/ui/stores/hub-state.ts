@@ -84,7 +84,9 @@ export const sidebarSections = (
 ): SidebarSection[] => {
   const listed = Object.values(workspaces).filter(isListed);
   const cmp = (a: WorkspaceSummary, b: WorkspaceSummary) =>
-    sort === "created" ? b.createdAt - a.createdAt : b.lastActivityAt - a.lastActivityAt || b.createdAt - a.createdAt;
+    sort === "created"
+      ? b.createdAt - a.createdAt
+      : b.lastActivityAt - a.lastActivityAt || b.createdAt - a.createdAt;
   const sections: SidebarSection[] = [];
   const pinned = listed.filter((w) => w.pinned).sort(cmp);
   if (pinned.length > 0) sections.push({ key: "pinned", projectId: null, workspaces: pinned });

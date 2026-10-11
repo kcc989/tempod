@@ -129,7 +129,8 @@ export const workspaceUiStore = (workspaceId: string): Store<WorkspaceUiState> =
   return s;
 };
 
-export const getWorkspaceUi = (workspaceId: string): WorkspaceUiState => workspaceUiStore(workspaceId).getSnapshot();
+export const getWorkspaceUi = (workspaceId: string): WorkspaceUiState =>
+  workspaceUiStore(workspaceId).getSnapshot();
 
 const update = (workspaceId: string, f: (s: WorkspaceUiState) => WorkspaceUiState): void =>
   workspaceUiStore(workspaceId).set(f);
@@ -144,7 +145,11 @@ const withActive = (s: WorkspaceUiState, key: string | null): WorkspaceUiState =
 let tabSeq = 0;
 
 /** Opens (or re-opens) a tab. An existing tab with the same key is updated in place. */
-export const openTab = (workspaceId: string, tab: CenterTab, opts: { readonly activate?: boolean } = {}): string => {
+export const openTab = (
+  workspaceId: string,
+  tab: CenterTab,
+  opts: { readonly activate?: boolean } = {},
+): string => {
   const key = tabKey(tab);
   const activate = opts.activate ?? true;
   update(workspaceId, (s) => {
@@ -234,7 +239,8 @@ export const openFile = (workspaceId: string, path: string, line: number | null 
 export const openDiff = (workspaceId: string, path: string | null = null): string =>
   openTab(workspaceId, { kind: "diff", path });
 
-export const openBrowser = (workspaceId: string, url: string): string => openTab(workspaceId, { kind: "browser", url });
+export const openBrowser = (workspaceId: string, url: string): string =>
+  openTab(workspaceId, { kind: "browser", url });
 
 /** The session of the active chat tab, else of the chat shown most recently. */
 export const targetChatSession = (s: WorkspaceUiState): string | null => {
@@ -249,7 +255,11 @@ let insertionSeq = 0;
  * Queues a chip or text for a composer and shows that chat. The composer takes it with
  * takeInsertions. Without a sessionId it goes to the target chat (see targetChatSession).
  */
-export const insertIntoComposer = (workspaceId: string, insertion: ComposerInsertion, sessionId?: string): void =>
+export const insertIntoComposer = (
+  workspaceId: string,
+  insertion: ComposerInsertion,
+  sessionId?: string,
+): void =>
   update(workspaceId, (s) => {
     const target = sessionId ?? targetChatSession(s);
     let next: WorkspaceUiState = {
@@ -257,7 +267,8 @@ export const insertIntoComposer = (workspaceId: string, insertion: ComposerInser
       insertions: [...s.insertions, { id: ++insertionSeq, sessionId: target, insertion }],
       composerFocusSeq: s.composerFocusSeq + 1,
     };
-    if (target !== null && next.tabs.some((t) => t.key === `chat:${target}`)) next = withActive(next, `chat:${target}`);
+    if (target !== null && next.tabs.some((t) => t.key === `chat:${target}`))
+      next = withActive(next, `chat:${target}`);
     return next;
   });
 
@@ -345,7 +356,9 @@ let layout: Store<LayoutState> | null = null;
 
 export const layoutStore = (): Store<LayoutState> => {
   if (!layout) {
-    const stored = readJson<StoredLayout | null>(LAYOUT_KEY, null, (u): u is StoredLayout => isStoredLayout(u));
+    const stored = readJson<StoredLayout | null>(LAYOUT_KEY, null, (u): u is StoredLayout =>
+      isStoredLayout(u),
+    );
     layout = new Store<LayoutState>({ ...defaultLayout, ...stored });
   }
   return layout;
@@ -360,8 +373,16 @@ export const setLayout = (patch: Partial<LayoutState>): void => {
   if (!changed) return;
   store.update(patch);
   const next = store.getSnapshot();
-  if (next.sidebarOpen !== prev.sidebarOpen || next.rightOpen !== prev.rightOpen || next.bottomOpen !== prev.bottomOpen) {
-    writeJson(LAYOUT_KEY, { sidebarOpen: next.sidebarOpen, rightOpen: next.rightOpen, bottomOpen: next.bottomOpen });
+  if (
+    next.sidebarOpen !== prev.sidebarOpen ||
+    next.rightOpen !== prev.rightOpen ||
+    next.bottomOpen !== prev.bottomOpen
+  ) {
+    writeJson(LAYOUT_KEY, {
+      sidebarOpen: next.sidebarOpen,
+      rightOpen: next.rightOpen,
+      bottomOpen: next.bottomOpen,
+    });
   }
 };
 

@@ -15,7 +15,9 @@ import { agentMessage, detail, session, turn, userMessage } from "./fixtures";
 const apply = (state: WorkspaceState, ...msgs: WorkspaceServerMessage[]): WorkspaceState =>
   msgs.reduce((s, m) => applyWorkspaceMessage(s, m).state, state);
 
-const hello = (over: Partial<Extract<WorkspaceServerMessage, { type: "hello" }>> = {}): WorkspaceServerMessage => ({
+const hello = (
+  over: Partial<Extract<WorkspaceServerMessage, { type: "hello" }>> = {},
+): WorkspaceServerMessage => ({
   type: "hello",
   v: 1,
   workspace: detail(),
@@ -86,7 +88,12 @@ describe("workspace channel state", () => {
   it("applies backlog items even when their rev is lower, by per-item rev", () => {
     let s = apply(emptyWorkspaceState, hello());
     s = apply(s, { type: "item.upsert", item: agentMessage("a", "v2", { rev: 9 }), itemsRev: 9 });
-    s = apply(s, { type: "items", items: [agentMessage("a", "v1", { rev: 2 }), userMessage("u", "q", { rev: 3 })], itemsRev: 9, done: true });
+    s = apply(s, {
+      type: "items",
+      items: [agentMessage("a", "v1", { rev: 2 }), userMessage("u", "q", { rev: 3 })],
+      itemsRev: 9,
+      done: true,
+    });
     expect((s.items["a"] as Extract<Item, { kind: "agent_message" }>).content.text).toBe("v2");
     expect(s.items["u"]).toBeDefined();
   });
@@ -105,7 +112,10 @@ describe("workspace channel state", () => {
     const s = live();
     const r1 = applyWorkspaceMessage(s, { type: "turn", turn: turn({ status: "completed", endedAt: 5000 }) });
     expect(r1.events).toEqual([{ kind: "turnEnded", turn: expect.objectContaining({ id: "t1" }) }]);
-    const r2 = applyWorkspaceMessage(r1.state, { type: "turn", turn: turn({ status: "completed", endedAt: 5000 }) });
+    const r2 = applyWorkspaceMessage(r1.state, {
+      type: "turn",
+      turn: turn({ status: "completed", endedAt: 5000 }),
+    });
     expect(r2.events).toEqual([]);
   });
 
@@ -169,7 +179,11 @@ describe("workspace channel state", () => {
   });
 
   it("emits background errors", () => {
-    const r = applyWorkspaceMessage(live(), { type: "error", code: "SETUP_FAILED", message: "Setup failed." });
+    const r = applyWorkspaceMessage(live(), {
+      type: "error",
+      code: "SETUP_FAILED",
+      message: "Setup failed.",
+    });
     expect(r.events).toEqual([{ kind: "error", code: "SETUP_FAILED", message: "Setup failed." }]);
   });
 });

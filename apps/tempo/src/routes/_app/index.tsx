@@ -48,7 +48,13 @@ function Home({ compact = false }: { compact?: boolean }) {
 
   const failed = queries.find((q) => q.isError);
   if (failed) {
-    return <ErrorState className={compact ? undefined : "h-full"} error={failed.error} onRetry={() => queries.forEach((q) => void q.refetch())} />;
+    return (
+      <ErrorState
+        className={compact ? undefined : "h-full"}
+        error={failed.error}
+        onRetry={() => queries.forEach((q) => void q.refetch())}
+      />
+    );
   }
   if (queries.some((q) => q.isPending) || !hub.ready) {
     return compact ? null : <CenteredLoading label="Loading" />;
@@ -109,7 +115,8 @@ function Home({ compact = false }: { compact?: boolean }) {
 /** 04: a project with no workspaces shows `Start a workspace` with a prompt box that opens New workspace. */
 function StartWorkspace({ project }: { project: Project }) {
   const [prompt, setPrompt] = useState("");
-  const start = () => openDialog({ kind: "newWorkspace", projectId: project.id, ...(prompt.trim() ? { prompt } : {}) });
+  const start = () =>
+    openDialog({ kind: "newWorkspace", projectId: project.id, ...(prompt.trim() ? { prompt } : {}) });
   return (
     <form
       className="flex w-full max-w-lg flex-col gap-2 rounded-lg border p-4"

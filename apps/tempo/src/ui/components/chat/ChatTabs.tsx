@@ -45,7 +45,11 @@ export function ChatTabs({ workspaceId }: ChatTabsProps) {
   const active = ui.tabs.find((t) => t.key === ui.activeKey);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div role="tablist" aria-label="Center tabs" className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b px-1">
+      <div
+        role="tablist"
+        aria-label="Center tabs"
+        className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b px-1"
+      >
         {ui.tabs.map((t) => {
           const Icon = CENTER_TAB_KINDS[t.tab.kind].icon;
           const selected = t.key === ui.activeKey;
@@ -60,11 +64,22 @@ export function ChatTabs({ workspaceId }: ChatTabsProps) {
               >
                 <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate">
-                  <CenterTabPart part="Title" workspaceId={workspaceId} tab={t.tab} active={selected} seq={t.seq} />
+                  <CenterTabPart
+                    part="Title"
+                    workspaceId={workspaceId}
+                    tab={t.tab}
+                    active={selected}
+                    seq={t.seq}
+                  />
                 </span>
               </button>
               {t.tab.kind !== "chat" && (
-                <Button size="icon-sm" variant="ghost" aria-label="Close tab" onClick={() => closeTab(workspaceId, t.key)}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Close tab"
+                  onClick={() => closeTab(workspaceId, t.key)}
+                >
                   <XIcon />
                 </Button>
               )}

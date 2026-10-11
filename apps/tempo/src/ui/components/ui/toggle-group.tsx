@@ -5,7 +5,10 @@ import type * as React from "react";
 import { toggleVariants } from "~/ui/components/ui/toggle";
 import { cn } from "~/ui/lib/utils";
 
-const ToggleGroupContext = createContext<VariantProps<typeof toggleVariants>>({ size: "default", variant: "default" });
+const ToggleGroupContext = createContext<VariantProps<typeof toggleVariants>>({
+  size: "default",
+  variant: "default",
+});
 
 /** A segmented control, for example Branch / Uncommitted or Unified / Split. */
 function ToggleGroup({

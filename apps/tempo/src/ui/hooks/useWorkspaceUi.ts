@@ -39,7 +39,11 @@ export function useDialogState(): DialogState | null {
  */
 export function useDialog<K extends DialogKind>(
   kind: K,
-): { readonly open: boolean; readonly args: DialogOf<K> | null; readonly onOpenChange: (open: boolean) => void } {
+): {
+  readonly open: boolean;
+  readonly args: DialogOf<K> | null;
+  readonly onOpenChange: (open: boolean) => void;
+} {
   const dialog = useStoreSelector(dialogStore, (s) => s.dialog);
   const args = dialog?.kind === kind ? (dialog as DialogOf<K>) : null;
   const onOpenChange = useCallback(

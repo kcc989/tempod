@@ -18,7 +18,10 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
           if (!item) return null;
           const text = "text" in item.content ? item.content.text : item.kind.replace("_", " ");
           return (
-            <div key={id} className={item.kind === "user_message" ? "self-end rounded-md bg-muted px-2 py-1" : ""}>
+            <div
+              key={id}
+              className={item.kind === "user_message" ? "self-end rounded-md bg-muted px-2 py-1" : ""}
+            >
               <p className="text-sm whitespace-pre-wrap">{text}</p>
             </div>
           );

@@ -16,7 +16,9 @@ function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
 }
 
 function KbdGroup({ className, ...props }: React.ComponentProps<"span">) {
-  return <span data-slot="kbd-group" className={cn("inline-flex items-center gap-1", className)} {...props} />;
+  return (
+    <span data-slot="kbd-group" className={cn("inline-flex items-center gap-1", className)} {...props} />
+  );
 }
 
 /** The platform label of a shortcut from the 04 table, for example ⌥N on macOS and Alt+N elsewhere. */

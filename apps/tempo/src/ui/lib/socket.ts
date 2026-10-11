@@ -7,7 +7,14 @@ import { CloseCode, reconnectDelay } from "@tempo/protocol";
  * attempt so the workspace channel can send its highest sinceRev.
  */
 
-export type SocketStatus = "connecting" | "open" | "reconnecting" | "replaced" | "bad_version" | "not_found" | "stopped";
+export type SocketStatus =
+  | "connecting"
+  | "open"
+  | "reconnecting"
+  | "replaced"
+  | "bad_version"
+  | "not_found"
+  | "stopped";
 
 export interface SocketLike {
   readonly readyState: number;

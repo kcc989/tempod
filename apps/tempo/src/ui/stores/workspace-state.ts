@@ -131,9 +131,9 @@ const upsertItems = (
         copiedOrder = true;
       }
       if (prev && prev.sessionId !== item.sessionId) {
-        (order as Record<string, ReadonlyArray<string>>)[prev.sessionId] = (order[prev.sessionId] ?? []).filter(
-          (id) => id !== item.id,
-        );
+        (order as Record<string, ReadonlyArray<string>>)[prev.sessionId] = (
+          order[prev.sessionId] ?? []
+        ).filter((id) => id !== item.id);
       }
       (order as Record<string, ReadonlyArray<string>>)[item.sessionId] = insertOrdered(
         order[item.sessionId] ?? [],
@@ -279,7 +279,12 @@ export const queuedTurns = (state: WorkspaceState): Turn[] =>
     .sort((a, b) => (a.queuePos ?? Infinity) - (b.queuePos ?? Infinity) || a.queuedAt - b.queuedAt);
 
 /** The workspace queue with `turnId` moved to `toIndex` among the session's own queued turns. */
-export const reorderedQueue = (state: WorkspaceState, sessionId: string, turnId: string, toIndex: number): string[] => {
+export const reorderedQueue = (
+  state: WorkspaceState,
+  sessionId: string,
+  turnId: string,
+  toIndex: number,
+): string[] => {
   const all = queuedTurns(state).map((t) => t.id);
   const mine = queuedTurns(state)
     .filter((t) => t.sessionId === sessionId)

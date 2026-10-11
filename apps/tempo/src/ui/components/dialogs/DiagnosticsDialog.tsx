@@ -22,5 +22,7 @@ function Body({ workspaceId }: { workspaceId: string }) {
   const d = useCallQuery("getDiagnostics", { workspaceId });
   if (d.isPending) return <SkeletonRows />;
   if (d.isError) return <ErrorState error={d.error} onRetry={() => void d.refetch()} />;
-  return <pre className="max-h-[60dvh] overflow-auto font-mono text-xs">{JSON.stringify(d.data, null, 2)}</pre>;
+  return (
+    <pre className="max-h-[60dvh] overflow-auto font-mono text-xs">{JSON.stringify(d.data, null, 2)}</pre>
+  );
 }

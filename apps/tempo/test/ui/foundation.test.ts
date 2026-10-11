@@ -5,14 +5,22 @@ import { installLocalStorage, removeLocalStorage } from "./storage-stub";
 const toastError = vi.fn();
 vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
 
-const { errorCode, errorText, isBannerShown, onUnauthenticated, showBanner, toastError: showToast } = await import(
-  "~/ui/lib/toast"
-);
-const { readThemePreference, resolveTheme, setThemePreference, themeStore, THEME_BOOT_SCRIPT } = await import("~/ui/lib/theme");
+const {
+  errorCode,
+  errorText,
+  isBannerShown,
+  onUnauthenticated,
+  showBanner,
+  toastError: showToast,
+} = await import("~/ui/lib/toast");
+const { readThemePreference, resolveTheme, setThemePreference, themeStore, THEME_BOOT_SCRIPT } =
+  await import("~/ui/lib/theme");
 const { firstRunSteps, isFirstRunDone } = await import("~/ui/lib/first-run");
 const { githubBranchUrl, macWorkspaceUrl, workspacePath } = await import("~/ui/lib/links");
 
-const creds = (set: Partial<Record<"claude" | "codex" | "openrouter" | "anthropic" | "openai", boolean>>) => ({
+const creds = (
+  set: Partial<Record<"claude" | "codex" | "openrouter" | "anthropic" | "openai", boolean>>,
+) => ({
   claude: { set: set.claude ?? false, updatedAt: null },
   codex: { set: set.codex ?? false, updatedAt: null, lastRefresh: null },
   openrouter: { set: set.openrouter ?? false, updatedAt: null },
@@ -38,7 +46,9 @@ describe("toastError", () => {
   it("maps unknown errors to INTERNAL", () => {
     expect(errorCode(new TypeError("fetch failed"))).toBe("INTERNAL");
     expect(errorText(new TypeError("fetch failed"))).toBe("Something went wrong.");
-    expect(errorText({ code: "PR_EXISTS", message: "A pull request already exists." })).toBe("A pull request already exists.");
+    expect(errorText({ code: "PR_EXISTS", message: "A pull request already exists." })).toBe(
+      "A pull request already exists.",
+    );
   });
 
   it("skips codes a banner shows, and caller-skipped codes", () => {
@@ -112,13 +122,23 @@ describe("first run", () => {
 
   it("is done when all five steps are", () => {
     const steps = firstRunSteps(base);
-    expect(steps.map((s) => s.id)).toEqual(["createApp", "installApp", "addLogin", "linkRepo", "createWorkspace"]);
+    expect(steps.map((s) => s.id)).toEqual([
+      "createApp",
+      "installApp",
+      "addLogin",
+      "linkRepo",
+      "createWorkspace",
+    ]);
     expect(isFirstRunDone(steps)).toBe(true);
   });
 
   it("marks each missing step", () => {
     const steps = firstRunSteps({ ...base, installationCount: 0, credentials: creds({}), workspaceCount: 0 });
-    expect(steps.filter((s) => !s.done).map((s) => s.id)).toEqual(["installApp", "addLogin", "createWorkspace"]);
+    expect(steps.filter((s) => !s.done).map((s) => s.id)).toEqual([
+      "installApp",
+      "addLogin",
+      "createWorkspace",
+    ]);
     expect(isFirstRunDone(steps)).toBe(false);
   });
 
@@ -134,6 +154,8 @@ describe("links", () => {
   it("builds app, Mac and GitHub URLs", () => {
     expect(workspacePath("01h")).toBe("/w/01h");
     expect(macWorkspaceUrl("01h")).toBe("tempo://workspace/01h");
-    expect(githubBranchUrl("acme", "app", "tempo/lisbon")).toBe("https://github.com/acme/app/tree/tempo/lisbon");
+    expect(githubBranchUrl("acme", "app", "tempo/lisbon")).toBe(
+      "https://github.com/acme/app/tree/tempo/lisbon",
+    );
   });
 });

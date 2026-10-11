@@ -1,7 +1,14 @@
 import type { WorkspaceSummary } from "@tempo/protocol";
 import { ReconnectingSocket, wsUrl, type SocketLike, type SocketStatus } from "~/ui/lib/socket";
 import { connectionMonitor } from "./connection";
-import { applyHubMessage, emptyHubState, mergeSummary, notifyEvents, type HubState, type NotifyEvent } from "./hub-state";
+import {
+  applyHubMessage,
+  emptyHubState,
+  mergeSummary,
+  notifyEvents,
+  type HubState,
+  type NotifyEvent,
+} from "./hub-state";
 import { parseHubMessage } from "./parse";
 
 export interface HubSnapshot extends HubState {

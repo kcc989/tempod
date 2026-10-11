@@ -39,7 +39,11 @@ function ContextMenuSubTrigger({
     <ContextMenuPrimitive.SubTrigger
       data-slot="context-menu-sub-trigger"
       data-inset={inset}
-      className={cn(itemClass, "data-[state=open]:bg-accent data-[state=open]:text-accent-foreground", className)}
+      className={cn(
+        itemClass,
+        "data-[state=open]:bg-accent data-[state=open]:text-accent-foreground",
+        className,
+      )}
       {...props}
     >
       {children}
@@ -48,7 +52,10 @@ function ContextMenuSubTrigger({
   );
 }
 
-function ContextMenuSubContent({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
+function ContextMenuSubContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
   return (
     <ContextMenuPrimitive.SubContent
       data-slot="context-menu-sub-content"
@@ -58,10 +65,17 @@ function ContextMenuSubContent({ className, ...props }: React.ComponentProps<typ
   );
 }
 
-function ContextMenuContent({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Content>) {
+function ContextMenuContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.Content>) {
   return (
     <ContextMenuPrimitive.Portal>
-      <ContextMenuPrimitive.Content data-slot="context-menu-content" className={cn(contentClass, className)} {...props} />
+      <ContextMenuPrimitive.Content
+        data-slot="context-menu-content"
+        className={cn(contentClass, className)}
+        {...props}
+      />
     </ContextMenuPrimitive.Portal>
   );
 }
@@ -71,7 +85,10 @@ function ContextMenuItem({
   inset,
   variant = "default",
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.Item> & { inset?: boolean; variant?: "default" | "destructive" }) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.Item> & {
+  inset?: boolean;
+  variant?: "default" | "destructive";
+}) {
   return (
     <ContextMenuPrimitive.Item
       data-slot="context-menu-item"
@@ -146,7 +163,10 @@ function ContextMenuLabel({
   );
 }
 
-function ContextMenuSeparator({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Separator>) {
+function ContextMenuSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.Separator>) {
   return (
     <ContextMenuPrimitive.Separator
       data-slot="context-menu-separator"

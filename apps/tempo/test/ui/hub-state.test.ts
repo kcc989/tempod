@@ -37,11 +37,7 @@ describe("hub channel state", () => {
   });
 
   it("raises notification events on the 04 transitions", () => {
-    const prev = hello(
-      summary({ id: "a", state: "working" }),
-      summary({ id: "b" }),
-      summary({ id: "c" }),
-    );
+    const prev = hello(summary({ id: "a", state: "working" }), summary({ id: "b" }), summary({ id: "c" }));
     const next = [
       summary({ id: "a", state: "ready", attention: "unread", rev: 2 }),
       summary({ id: "b", attention: "needs_input", rev: 2 }),

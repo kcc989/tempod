@@ -78,7 +78,9 @@ describe("tab refs", () => {
   });
 
   it("uses one key per session, file path, the diff tab and browser URL", () => {
-    expect(tabKey({ kind: "file", path: "a.ts", line: 1 })).toBe(tabKey({ kind: "file", path: "a.ts", line: 9 }));
+    expect(tabKey({ kind: "file", path: "a.ts", line: 1 })).toBe(
+      tabKey({ kind: "file", path: "a.ts", line: 9 }),
+    );
     expect(tabKey({ kind: "diff", path: "a" })).toBe(tabKey({ kind: "diff", path: null }));
   });
 });
@@ -209,7 +211,12 @@ describe("panels and layout", () => {
     toggleSidebar();
     toggleRight();
     setPhonePane("changes");
-    expect(getLayout()).toMatchObject({ sidebarOpen: false, rightOpen: false, bottomOpen: true, phonePane: "changes" });
+    expect(getLayout()).toMatchObject({
+      sidebarOpen: false,
+      rightOpen: false,
+      bottomOpen: true,
+      phonePane: "changes",
+    });
     expect(JSON.parse(storage.get("tempo:layout:panels")!)).toEqual({
       sidebarOpen: false,
       rightOpen: false,
@@ -274,7 +281,9 @@ describe("dialogs and confirmations", () => {
   });
 
   it("uses the 04 confirmation texts", () => {
-    expect(CONFIRM_TEXT.revert(3).description).toBe("Files go back to the end of turn 3. A safety checkpoint is saved first.");
+    expect(CONFIRM_TEXT.revert(3).description).toBe(
+      "Files go back to the end of turn 3. A safety checkpoint is saved first.",
+    );
     expect(CONFIRM_TEXT.rotatePreview().description).toBe("Old preview links will stop working.");
   });
 });

@@ -11,7 +11,11 @@ export interface BottomPanelProps {
 export function BottomPanel({ workspaceId }: BottomPanelProps) {
   const tab = useWorkspaceUiSelector(workspaceId, (s) => s.bottomTab);
   return (
-    <Tabs value={tab} onValueChange={(v) => setBottomTab(workspaceId, v as BottomTab)} className="h-full min-h-0 gap-0">
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setBottomTab(workspaceId, v as BottomTab)}
+      className="h-full min-h-0 gap-0"
+    >
       <TabsList variant="line" className="w-full justify-start px-2">
         <TabsTrigger value="setup">Setup</TabsTrigger>
         <TabsTrigger value="run">Run</TabsTrigger>

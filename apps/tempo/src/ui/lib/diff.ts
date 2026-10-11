@@ -123,7 +123,8 @@ export const diffLines = (oldText: string, newText: string): DiffLine[] => {
     else if (op.kind === "del") out.push({ kind: "del", text: op.text, oldLine: ++o, newLine: null });
     else out.push({ kind: "add", text: op.text, oldLine: null, newLine: ++n });
   }
-  for (let i = endA; i < a.length; i++) out.push({ kind: "context", text: a[i]!, oldLine: ++o, newLine: ++n });
+  for (let i = endA; i < a.length; i++)
+    out.push({ kind: "context", text: a[i]!, oldLine: ++o, newLine: ++n });
   return out;
 };
 

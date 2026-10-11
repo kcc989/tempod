@@ -3,7 +3,13 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ERROR_MESSAGES } from "@tempo/protocol";
 import { LogInIcon } from "lucide-react";
 import { useState } from "react";
-import { loginErrorText, safeRedirect, sessionQueryOptions, setupStatusQueryOptions, signInWithGithub } from "~/ui/auth";
+import {
+  loginErrorText,
+  safeRedirect,
+  sessionQueryOptions,
+  setupStatusQueryOptions,
+  signInWithGithub,
+} from "~/ui/auth";
 import { Button } from "~/ui/components/ui/button";
 import { LoadingText } from "~/ui/components/ui/spinner";
 

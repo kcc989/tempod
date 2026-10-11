@@ -60,7 +60,8 @@ export const runAction = (id: ActionId): boolean => {
 };
 
 /** Global bindings that have an enabled handler, in table order (for the command palette). */
-export const availableActions = (): Binding[] => BINDINGS.filter((b) => b.scope === "global" && hasAction(b.id));
+export const availableActions = (): Binding[] =>
+  BINDINGS.filter((b) => b.scope === "global" && hasAction(b.id));
 
 export const subscribeActions = (listener: () => void): (() => void) => {
   listeners.add(listener);

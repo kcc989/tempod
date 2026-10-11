@@ -24,7 +24,11 @@ function LoadingText({ label, className }: { label: string; className?: string }
     return () => clearTimeout(t);
   }, []);
   return (
-    <span role="status" aria-live="polite" className={cn("inline-flex items-center gap-2 text-sm text-muted-foreground", className)}>
+    <span
+      role="status"
+      aria-live="polite"
+      className={cn("inline-flex items-center gap-2 text-sm text-muted-foreground", className)}
+    >
       <Loader2Icon aria-hidden className="size-3.5 shrink-0 animate-spin" />
       <span className={showWords ? undefined : "sr-only"}>{label}</span>
     </span>

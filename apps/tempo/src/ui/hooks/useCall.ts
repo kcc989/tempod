@@ -42,7 +42,9 @@ export function useCallQuery<K extends FnName>(
 
 /** Invalidates every cached call of these functions (any input). */
 export const invalidateCalls = (queryClient: QueryClient, ...names: FnName[]): Promise<void> =>
-  Promise.all(names.map((n) => queryClient.invalidateQueries({ queryKey: callKey(n) }))).then(() => undefined);
+  Promise.all(names.map((n) => queryClient.invalidateQueries({ queryKey: callKey(n) }))).then(
+    () => undefined,
+  );
 
 export interface CallMutationOptions<K extends FnName> {
   /** Functions whose cached results become stale on success. */

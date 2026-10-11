@@ -42,9 +42,13 @@ describe("auth helpers", () => {
   it("names sessions by browser and OS", () => {
     expect(sessionLabel(null)).toBe("Unknown device");
     expect(
-      sessionLabel("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"),
+      sessionLabel(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+      ),
     ).toBe("Safari on macOS");
-    expect(sessionLabel("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36")).toBe("Chrome on Linux");
+    expect(
+      sessionLabel("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36"),
+    ).toBe("Chrome on Linux");
     expect(sessionLabel("Tempo/1.0 (Mac OS X 15.0)")).toBe("Tempo for Mac");
   });
 });

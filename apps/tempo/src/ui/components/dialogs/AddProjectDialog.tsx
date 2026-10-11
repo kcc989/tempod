@@ -25,7 +25,8 @@ function Installations() {
   const installations = useCallQuery("listInstallations", {});
   const setup = useQuery(setupStatusQueryOptions);
   if (installations.isPending) return <SkeletonRows rows={4} />;
-  if (installations.isError) return <ErrorState error={installations.error} onRetry={() => void installations.refetch()} />;
+  if (installations.isError)
+    return <ErrorState error={installations.error} onRetry={() => void installations.refetch()} />;
   if (installations.data.length === 0) {
     return setup.data?.installUrl ? (
       <Button asChild>
@@ -59,7 +60,12 @@ function Repos({ installationId, account }: { installationId: number; account: s
           <span className="truncate">
             {r.owner}/{r.name}
           </span>
-          <Button size="sm" variant="outline" disabled={link.isPending} onClick={() => link.mutate({ installationId, repoId: r.repoId })}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={link.isPending}
+            onClick={() => link.mutate({ installationId, repoId: r.repoId })}
+          >
             Link
           </Button>
         </div>

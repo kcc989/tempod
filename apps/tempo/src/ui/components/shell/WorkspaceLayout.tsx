@@ -50,7 +50,11 @@ export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
     );
   }
   if (!ready && !summary) return <CenteredLoading label="Loading workspace" />;
-  return isPhone ? <PhoneWorkspace workspaceId={workspaceId} /> : <DesktopWorkspace workspaceId={workspaceId} />;
+  return isPhone ? (
+    <PhoneWorkspace workspaceId={workspaceId} />
+  ) : (
+    <DesktopWorkspace workspaceId={workspaceId} />
+  );
 }
 
 function useWorkspaceActions(workspaceId: string, projectId: string | undefined) {
@@ -61,7 +65,9 @@ function useWorkspaceActions(workspaceId: string, projectId: string | undefined)
   useAction("focusComposer", () => focusComposer(workspaceId));
   useAction("openFile", () => openDialog({ kind: "openFile", workspaceId }));
   useAction("searchFiles", () => openDialog({ kind: "searchFiles", workspaceId }));
-  useAction("newWorkspace", () => openDialog(projectId ? { kind: "newWorkspace", projectId } : { kind: "newWorkspace" }));
+  useAction("newWorkspace", () =>
+    openDialog(projectId ? { kind: "newWorkspace", projectId } : { kind: "newWorkspace" }),
+  );
 }
 
 function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {

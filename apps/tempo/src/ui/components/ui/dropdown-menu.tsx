@@ -47,7 +47,10 @@ function DropdownMenuItem({
   inset,
   variant = "default",
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & { inset?: boolean; variant?: "default" | "destructive" }) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
+  inset?: boolean;
+  variant?: "default" | "destructive";
+}) {
   return (
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
@@ -126,7 +129,10 @@ function DropdownMenuLabel({
   );
 }
 
-function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
+function DropdownMenuSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
   return (
     <DropdownMenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
@@ -160,7 +166,11 @@ function DropdownMenuSubTrigger({
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
-      className={cn(itemClass, "data-[state=open]:bg-accent data-[state=open]:text-accent-foreground", className)}
+      className={cn(
+        itemClass,
+        "data-[state=open]:bg-accent data-[state=open]:text-accent-foreground",
+        className,
+      )}
       {...props}
     >
       {children}
@@ -169,11 +179,18 @@ function DropdownMenuSubTrigger({
   );
 }
 
-function DropdownMenuSubContent({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+function DropdownMenuSubContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
-      className={cn(contentClass, "origin-(--radix-dropdown-menu-content-transform-origin) shadow-lg", className)}
+      className={cn(
+        contentClass,
+        "origin-(--radix-dropdown-menu-content-transform-origin) shadow-lg",
+        className,
+      )}
       {...props}
     />
   );

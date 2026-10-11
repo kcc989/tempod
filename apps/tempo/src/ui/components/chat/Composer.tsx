@@ -25,7 +25,13 @@ export function Composer({ workspaceId, sessionId }: ComposerProps) {
     const drain = () => {
       if (workspaceUiStore(workspaceId).getSnapshot().insertions.length === 0) return;
       const added = takeInsertions(workspaceId, sessionId)
-        .map((p) => (p.insertion.kind === "mention" ? `@${p.insertion.path}` : p.insertion.kind === "text" ? p.insertion.text : ""))
+        .map((p) =>
+          p.insertion.kind === "mention"
+            ? `@${p.insertion.path}`
+            : p.insertion.kind === "text"
+              ? p.insertion.text
+              : "",
+        )
         .filter(Boolean)
         .join(" ");
       if (added) setText((t) => (t ? `${t} ${added}` : added));

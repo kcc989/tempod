@@ -3,7 +3,8 @@ import { isEditableTarget, isMacPlatform, isPlainCombo, matchGlobal } from "~/ui
 import { runAction } from "~/ui/state/actions";
 
 const modalOpen = (): boolean =>
-  document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]') !== null;
+  document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]') !==
+  null;
 
 /**
  * The one window key listener for global actions (04, Keyboard shortcuts). It runs the registered

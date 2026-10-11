@@ -31,7 +31,12 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-10 shrink-0 items-center justify-between border-b px-3">
         <span className="text-sm font-medium">Workspaces</span>
-        <Button size="icon-sm" variant="ghost" aria-label="Add project" onClick={() => openDialog({ kind: "addProject" })}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Add project"
+          onClick={() => openDialog({ kind: "addProject" })}
+        >
           <PlusIcon />
         </Button>
       </div>
@@ -63,7 +68,13 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
                     onClick={() => variant === "phone" && setPhonePane("chat")}
                     className="flex flex-col rounded-md px-2 py-1 hover:bg-sidebar-accent data-[status=active]:bg-sidebar-accent"
                   >
-                    <span className={w.attention === "unread" || w.attention === "needs_input" ? "truncate font-semibold" : "truncate"}>
+                    <span
+                      className={
+                        w.attention === "unread" || w.attention === "needs_input"
+                          ? "truncate font-semibold"
+                          : "truncate"
+                      }
+                    >
                       {w.title}
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
@@ -83,7 +94,12 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
             History
           </Link>
         </Button>
-        <Button size="icon-sm" variant="ghost" aria-label="Settings" onClick={() => openDialog({ kind: "settings" })}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Settings"
+          onClick={() => openDialog({ kind: "settings" })}
+        >
           <SettingsIcon />
         </Button>
       </div>

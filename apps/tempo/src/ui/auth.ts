@@ -40,7 +40,10 @@ const fetchSession = async (): Promise<AuthSession | null> => {
   }
   if (!data) return null;
   const u = data.user;
-  return { user: { id: u.id, name: u.name, email: u.email, image: u.image ?? null }, sessionId: data.session.id };
+  return {
+    user: { id: u.id, name: u.name, email: u.email, image: u.image ?? null },
+    sessionId: data.session.id,
+  };
 };
 
 export const sessionQueryOptions = queryOptions({
@@ -52,7 +55,9 @@ export const sessionQueryOptions = queryOptions({
 
 /** Only same-site paths are followed after sign-in. */
 export const safeRedirect = (path: unknown): string =>
-  typeof path === "string" && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") ? path : "/";
+  typeof path === "string" && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\")
+    ? path
+    : "/";
 
 /** 05: a sign-in refused by the owner check comes back to /login as ?error=forbidden. */
 export const loginErrorText = (error: string | undefined): string | null => {
@@ -91,7 +96,12 @@ export interface DeviceSession {
   readonly current: boolean;
 }
 
-const ms = (d: unknown): number => (d instanceof Date ? d.getTime() : typeof d === "string" || typeof d === "number" ? new Date(d).getTime() : 0);
+const ms = (d: unknown): number =>
+  d instanceof Date
+    ? d.getTime()
+    : typeof d === "string" || typeof d === "number"
+      ? new Date(d).getTime()
+      : 0;
 
 export const listDeviceSessions = async (currentSessionId?: string): Promise<DeviceSession[]> => {
   const { data, error } = await authClient().listSessions();
@@ -171,10 +181,13 @@ export const formatUserCode = (code: string): string => {
 };
 
 export const claimDeviceCode = async (userCode: string): Promise<DeviceLookup> => {
-  const { data, error } = await authClient().$fetch<{ status: DeviceCodeStatus; client_id?: string }>("/device", {
-    method: "GET",
-    query: { user_code: userCode },
-  });
+  const { data, error } = await authClient().$fetch<{ status: DeviceCodeStatus; client_id?: string }>(
+    "/device",
+    {
+      method: "GET",
+      query: { user_code: userCode },
+    },
+  );
   if (error || !data) return failure(error);
   return { ok: true, status: data.status, clientId: data.client_id ?? null };
 };

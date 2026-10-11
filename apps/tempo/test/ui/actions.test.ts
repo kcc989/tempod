@@ -4,7 +4,10 @@ import { isPlainCombo, matchAction, bindingFor } from "~/ui/lib/shortcuts";
 
 afterEach(() => resetActions());
 
-const ev = (code: string, mods: Partial<{ meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }> = {}) => ({
+const ev = (
+  code: string,
+  mods: Partial<{ meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }> = {},
+) => ({
   code,
   metaKey: mods.meta ?? false,
   ctrlKey: mods.ctrl ?? false,
@@ -66,7 +69,9 @@ describe("matchAction", () => {
 
   it("skips plain keys in text fields unless allowed", () => {
     expect(matchAction(ev("KeyJ"), ["nextFile"], true, { editable: true })).toBeUndefined();
-    expect(matchAction(ev("KeyJ"), ["nextFile"], true, { editable: true, allowPlainInEditable: true })).toBe("nextFile");
+    expect(matchAction(ev("KeyJ"), ["nextFile"], true, { editable: true, allowPlainInEditable: true })).toBe(
+      "nextFile",
+    );
     expect(matchAction(ev("KeyU", { meta: true }), ["attach"], true, { editable: true })).toBe("attach");
     expect(matchAction(ev("KeyU", { ctrl: true }), ["attach"], false, { editable: true })).toBe("attach");
   });

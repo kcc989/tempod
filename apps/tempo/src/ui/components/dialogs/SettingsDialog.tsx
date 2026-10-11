@@ -29,7 +29,13 @@ export function SettingsDialog() {
         </DialogHeader>
         <Tabs
           value={tab}
-          onValueChange={(v) => openDialog({ kind: "settings", tab: v as SettingsTab, ...(args?.projectId ? { projectId: args.projectId } : {}) })}
+          onValueChange={(v) =>
+            openDialog({
+              kind: "settings",
+              tab: v as SettingsTab,
+              ...(args?.projectId ? { projectId: args.projectId } : {}),
+            })
+          }
         >
           <TabsList variant="line" className="w-full justify-start">
             {TABS.map((t) => (

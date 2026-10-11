@@ -32,7 +32,13 @@ const SIDEBAR_KEY = "layout:sidebar-width";
 const clampWidth = (n: number) => Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, Math.round(n)));
 
 const readSidebarWidth = (): number =>
-  clampWidth(readJson<number>(SIDEBAR_KEY, SIDEBAR_WIDTH.default, (u): u is number => typeof u === "number" && Number.isFinite(u)));
+  clampWidth(
+    readJson<number>(
+      SIDEBAR_KEY,
+      SIDEBAR_WIDTH.default,
+      (u): u is number => typeof u === "number" && Number.isFinite(u),
+    ),
+  );
 
 /**
  * The signed-in frame: sidebar | main on wide screens, one pane plus bottom navigation on phones.
@@ -49,7 +55,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     () =>
       onUnauthenticated(() => {
         queryClient.removeQueries({ queryKey: sessionQueryOptions.queryKey });
-        void navigate({ to: "/login", search: { redirect: `${window.location.pathname}${window.location.search}` } });
+        void navigate({
+          to: "/login",
+          search: { redirect: `${window.location.pathname}${window.location.search}` },
+        });
       }),
     [navigate, queryClient],
   );
@@ -89,12 +98,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 function DesktopFrame({ children }: { children: ReactNode }) {
   const { sidebarOpen } = useLayout();
   // Read again each time the sidebar opens, so it comes back at the width it was closed at.
-  const initialWidth = useMemo(() => (sidebarOpen ? readSidebarWidth() : SIDEBAR_WIDTH.default), [sidebarOpen]);
+  const initialWidth = useMemo(
+    () => (sidebarOpen ? readSidebarWidth() : SIDEBAR_WIDTH.default),
+    [sidebarOpen],
+  );
   const width = useRef(initialWidth);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    [],
+  );
 
   const onSidebarResize = (size: { inPixels: number }) => {
     if (size.inPixels <= 0) return;

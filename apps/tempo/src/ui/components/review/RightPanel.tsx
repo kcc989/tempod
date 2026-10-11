@@ -16,7 +16,11 @@ export function RightPanel({ workspaceId }: RightPanelProps) {
   const ws = useWorkspace(workspaceId);
   const files = ws.changes?.files ?? ws.workspace?.changes?.files ?? [];
   return (
-    <Tabs value={tab} onValueChange={(v) => setRightTab(workspaceId, v as RightTab)} className="h-full min-h-0 gap-0">
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setRightTab(workspaceId, v as RightTab)}
+      className="h-full min-h-0 gap-0"
+    >
       <TabsList variant="line" className="w-full justify-start px-2">
         <TabsTrigger value="changes">Changes</TabsTrigger>
         <TabsTrigger value="files">All files</TabsTrigger>

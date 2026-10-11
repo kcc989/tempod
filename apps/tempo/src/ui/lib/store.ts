@@ -26,7 +26,8 @@ export class Store<T> {
   }
 }
 
-export const useStore = <T,>(store: Store<T>): T => useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+export const useStore = <T>(store: Store<T>): T =>
+  useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 
 /** Reads one slice. The selector must return a stable value (a field, not a new object). */
 export const useStoreSelector = <T, S>(store: Store<T>, select: (state: T) => S): S => {

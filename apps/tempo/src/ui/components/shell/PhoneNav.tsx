@@ -19,8 +19,16 @@ export function PhoneNav() {
   };
 
   return (
-    <nav aria-label="Sections" className="grid shrink-0 grid-cols-3 border-t bg-sidebar pb-[env(safe-area-inset-bottom)]">
-      <NavButton icon={LayoutListIcon} label="Workspaces" active={current === null} onClick={() => void navigate({ to: "/" })} />
+    <nav
+      aria-label="Sections"
+      className="grid shrink-0 grid-cols-3 border-t bg-sidebar pb-[env(safe-area-inset-bottom)]"
+    >
+      <NavButton
+        icon={LayoutListIcon}
+        label="Workspaces"
+        active={current === null}
+        onClick={() => void navigate({ to: "/" })}
+      />
       <NavButton
         icon={MessageSquareIcon}
         label="Chat"

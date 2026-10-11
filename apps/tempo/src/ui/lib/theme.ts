@@ -8,7 +8,8 @@ export type ResolvedTheme = "light" | "dark";
 export const THEME_KEY = "theme";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
-export const isThemePreference = (u: unknown): u is ThemePreference => u === "system" || u === "light" || u === "dark";
+export const isThemePreference = (u: unknown): u is ThemePreference =>
+  u === "system" || u === "light" || u === "dark";
 
 export const readThemePreference = (): ThemePreference => {
   const raw = readString(THEME_KEY);
@@ -42,7 +43,9 @@ export const applyThemeClass = (resolved: ResolvedTheme): void => {
 
 const refresh = (preference: ThemePreference = themeStore.getSnapshot().preference): void => {
   const resolved = resolveTheme(preference, systemPrefersDark());
-  themeStore.set((prev) => (prev.preference === preference && prev.resolved === resolved ? prev : { preference, resolved }));
+  themeStore.set((prev) =>
+    prev.preference === preference && prev.resolved === resolved ? prev : { preference, resolved },
+  );
   applyThemeClass(resolved);
 };
 

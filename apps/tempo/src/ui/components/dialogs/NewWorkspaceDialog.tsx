@@ -23,7 +23,13 @@ export function NewWorkspaceDialog() {
   );
 }
 
-function NewWorkspaceForm({ args, projects }: { args: DialogOf<"newWorkspace">; projects: ReadonlyArray<Project> }) {
+function NewWorkspaceForm({
+  args,
+  projects,
+}: {
+  args: DialogOf<"newWorkspace">;
+  projects: ReadonlyArray<Project>;
+}) {
   const navigate = useNavigate();
   const [projectId, setProjectId] = useState(args.projectId ?? projects[0]?.id ?? "");
   const [prompt, setPrompt] = useState(args.prompt ?? "");

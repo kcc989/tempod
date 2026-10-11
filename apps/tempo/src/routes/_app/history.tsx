@@ -76,15 +76,30 @@ function HistoryRow({ workspace: w, project }: { workspace: WorkspaceSummary; pr
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm">{w.title}</span>
         <span className="truncate text-xs text-muted-foreground">
-          {[project, `${w.branch} · ${w.slug}`, w.archivedAt ? `archived ${formatRelative(w.archivedAt)}` : null]
+          {[
+            project,
+            `${w.branch} · ${w.slug}`,
+            w.archivedAt ? `archived ${formatRelative(w.archivedAt)}` : null,
+          ]
             .filter(Boolean)
             .join(" — ")}
         </span>
       </div>
-      <Button size="sm" variant="outline" disabled={busy} onClick={() => restore.mutate({ workspaceId: w.id })}>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => restore.mutate({ workspaceId: w.id })}
+      >
         Restore
       </Button>
-      <Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => void onDelete()}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-destructive"
+        disabled={busy}
+        onClick={() => void onDelete()}
+      >
         Delete
       </Button>
     </li>

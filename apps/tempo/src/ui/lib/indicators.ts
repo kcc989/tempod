@@ -22,7 +22,12 @@ export const statusIndicator = (
   if (s.attention === "error") return { kind: "error", tooltip: "Needs attention" };
   if (s.state === "working") return { kind: "working", tooltip: "Working" };
   if (s.attention === "unread") return { kind: "unread", tooltip: "New activity" };
-  if (s.state === "creating" || s.state === "starting" || s.state === "setting_up" || s.state === "stopping") {
+  if (
+    s.state === "creating" ||
+    s.state === "starting" ||
+    s.state === "setting_up" ||
+    s.state === "stopping"
+  ) {
     return { kind: "busy", tooltip: pillText(s.state, { op: op ?? null }).text };
   }
   if (s.state === "sleeping") return { kind: "sleeping", tooltip: "Sleeping" };

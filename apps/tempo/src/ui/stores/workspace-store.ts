@@ -105,7 +105,10 @@ export class WorkspaceStore {
   }
 }
 
-const stores = new Map<string, { store: WorkspaceStore; refs: number; timer: ReturnType<typeof setTimeout> | null }>();
+const stores = new Map<
+  string,
+  { store: WorkspaceStore; refs: number; timer: ReturnType<typeof setTimeout> | null }
+>();
 
 /** Grace period before a store whose view unmounted closes its socket. */
 const RELEASE_MS = 5_000;
@@ -147,6 +150,7 @@ export const releaseWorkspaceStore = (store: WorkspaceStore): void => {
 };
 
 /** The store of a workspace that is open right now, if any. */
-export const peekWorkspaceStore = (workspaceId: string): WorkspaceStore | undefined => stores.get(workspaceId)?.store;
+export const peekWorkspaceStore = (workspaceId: string): WorkspaceStore | undefined =>
+  stores.get(workspaceId)?.store;
 
 export const openWorkspaceStores = (): WorkspaceStore[] => [...stores.values()].map((e) => e.store);

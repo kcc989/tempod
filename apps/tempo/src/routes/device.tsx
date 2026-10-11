@@ -51,7 +51,8 @@ function EnterCode() {
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (normalizeUserCode(code)) void navigate({ to: "/device", search: { user_code: normalizeUserCode(code) } });
+        if (normalizeUserCode(code))
+          void navigate({ to: "/device", search: { user_code: normalizeUserCode(code) } });
       }}
     >
       <Label htmlFor="user-code">Enter the code shown in Tempo for Mac.</Label>
@@ -102,7 +103,9 @@ function Approve({ userCode }: { userCode: string }) {
         </p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">Check that this code matches the one in Tempo for Mac.</p>
+          <p className="text-sm text-muted-foreground">
+            Check that this code matches the one in Tempo for Mac.
+          </p>
           <div className="flex gap-2">
             <Button className="flex-1" onClick={() => void decide(true)} disabled={busy}>
               Approve
