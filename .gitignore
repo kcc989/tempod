@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.output/
+.turbo/
+.wrangler/
+.alchemy/
+.tanstack/
+*.log
+.DS_Store
+.env
+.env.*
+.dev.vars
+coverage/
+apps/tempo/src/routeTree.gen.ts.bak

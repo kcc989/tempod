@@ -1,0 +1,29 @@
+{
+  "name": "tempo",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "workspaces": ["apps/*", "packages/*", "tests/*"],
+  "scripts": {
+    "dev": "turbo run dev --filter=@tempo/app",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "oxlint --deny-warnings .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "test": "turbo run test",
+    "test:conformance": "bun run --cwd tests/conformance test",
+    "test:e2e": "bun run --cwd tests/e2e test",
+    "check:versions": "bun container/check-versions.ts",
+    "deploy": "bun run build:tempod && alchemy deploy ./alchemy.run.ts",
+    "build:tempod": "turbo run build --filter=@tempo/tempod"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "alchemy": "2.0.0-beta.81",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "turbo": "2.11.7",
+    "typescript": "6.0.3"
+  }
+}
