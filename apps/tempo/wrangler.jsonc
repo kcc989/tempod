@@ -16,7 +16,13 @@
     {
       "class_name": "WorkspaceDO",
       "scheduling_policy": "durable_object",
-      "images": { "workspace": { "dockerfile": "../../container/Dockerfile" } }
+      "images": {
+        "workspace": {
+          "dockerfile": "../../container/Dockerfile",
+          "build_context": "../..",
+          "build_vars": { "GH_VERSION": "2.62.0", "BUN_VERSION": "1.4.2", "PLAYWRIGHT_MCP_VERSION": "0.0.83" }
+        }
+      }
     }
   ],
   "durable_objects": {
