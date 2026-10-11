@@ -52,16 +52,19 @@ export function ChangesView({
   const sum = totals(changes.files);
   const openPath = useWorkspaceUiSelector(workspaceId, activeDiffPath);
 
-  const toggleDir = useCallback((dir: string, open?: boolean) => {
-    setCollapsed((cur) => {
-      const isOpen = !cur.has(dir);
-      if (open !== undefined && open === isOpen) return cur;
-      const next = new Set(cur);
-      if (isOpen) next.add(dir);
-      else next.delete(dir);
-      return next;
-    });
-  }, []);
+  const toggleDir = useCallback(
+    (dir: string, open?: boolean) => {
+      setCollapsed((cur) => {
+        const isOpen = !cur.has(dir);
+        if (open !== undefined && open === isOpen) return cur;
+        const next = new Set(cur);
+        if (isOpen) next.add(dir);
+        else next.delete(dir);
+        return next;
+      });
+    },
+    [setCollapsed],
+  );
 
   const activate = (row: ChangeRow) => {
     if (row.kind === "folder") {

@@ -33,13 +33,14 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
   const setOpen = useCallback(
     (path: string, open: boolean) =>
       setExpanded((cur) => {
-      if (cur.has(path) === open) return cur;
-      const next = new Set(cur);
-      if (open) next.add(path);
-      else next.delete(path);
-      return next;
-    });
-  }, []);
+        if (cur.has(path) === open) return cur;
+        const next = new Set(cur);
+        if (open) next.add(path);
+        else next.delete(path);
+        return next;
+      }),
+    [setExpanded],
+  );
 
   const activate = (row: TreeRow) => {
     if (row.kind === "dir") setOpen(row.path, !row.expanded);
