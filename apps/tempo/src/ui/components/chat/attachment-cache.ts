@@ -4,6 +4,16 @@
  */
 const previews = new Map<string, string>();
 const MAX = 64;
+const uploads = new Map<string, string | undefined>();
+
+export const startAttachmentUpload = (id: string, preview?: string): void => {
+  uploads.set(id, preview);
+};
+export const finishAttachmentUpload = (id: string): void => {
+  uploads.delete(id);
+};
+export const isAttachmentUploading = (id: string): boolean => uploads.has(id);
+export const uploadPreview = (id: string): string | undefined => uploads.get(id);
 
 export const isPreviewable = (mime: string): boolean => /^image\/(png|jpeg|gif|webp|avif|bmp)$/i.test(mime);
 
