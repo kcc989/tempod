@@ -1,8 +1,9 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
-import { newId, type Source, type TempodEvent } from "@tempo/protocol";
+import { TempoError, newId, type Source, type TempodEvent } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { OP_STEPS, STEP_LIMITS, backoffMs } from "../../src/do/workspace/runner.ts";
+import { github } from "../../src/github/provider.ts";
 import {
   DEFAULT_EFFECTIVE,
   FakeTempod,
@@ -264,6 +265,22 @@ const checkpointResult = (p: { checkpointId: string }) => ({
 });
 
 const FRESH_STEPS = ["repo.clone", "repo.applyCheckpoint", "home.restore", "settings.read", "setup.run"];
+
+/** A cached installation token, so GitHub calls go straight to the (spied) provider. */
+const withGithubToken = (w: Ws) =>
+  runInDurableObject(w.stub, (i: WorkspaceDO) => {
+    internals(i).core.ghToken = { token: "ghs_test", expiresAt: Date.now() + HOUR };
+  });
+
+/** Closes the DO's side of the tempod socket the way a DO restart loses it: no close handling runs. */
+const dropSocketSilently = (w: Ws) =>
+  runInDurableObject(w.stub, (i: WorkspaceDO) => {
+    const core = internals(i).core;
+    core.closingTempod = true;
+    core.tempod?.close(1001, "do restart");
+    core.closingTempod = false;
+    core.tempod = null;
+  });
 
 // =====================================================================================
 
@@ -981,12 +998,43 @@ describe("wake op", { timeout: 60_000 }, () => {
   it("on a fresh disk, a branch gone from GitHub sets pushed = 0", async () => {
     const w = await asleep();
     await exec(w.stub, "DELETE FROM snapshots");
-    await exec(w.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?", "9".repeat(40));
+    await exec(w.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?, force_push_lease = 1", "9".repeat(40));
     w.tempod.on("repo.clone", () => ({ headSha: "a".repeat(40), remoteHeadSha: null }));
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
     await driveToState(w.stub, "ready");
     // 03 Restore 2: "If the branch was deleted on GitHub, the next wake recreates it ... and sets pushed = 0."
-    expect((await wsRow(w.stub))["pushed"]).toBe(0);
+    // Nothing is on origin any more, so there is no pushed sha to lease against.
+    expect(await wsRow(w.stub)).toMatchObject({ pushed: 0, last_pushed_sha: null, force_push_lease: 0 });
+  });
+
+  it("a snapshot wake asks GitHub whether a pushed branch still exists; a gone branch sets pushed = 0", async () => {
+    // 03 Restore 2: "If the branch was deleted on GitHub, the next wake ... sets pushed = 0." A snapshot wake skips repo.clone.
+    const exists = vi.spyOn(github, "branchExists");
+    try {
+      const gone = await asleep();
+      await exec(gone.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?, force_push_lease = 1", "9".repeat(40));
+      await withGithubToken(gone);
+      exists.mockResolvedValue(false);
+      expect(codeOf(await gone.stub.wakeWorkspace({}))).toBe("OK");
+      await driveToState(gone.stub, "ready");
+      expect(gone.container.starts.at(-1).containerSnapshot).toEqual({ id: "snap-1" });
+      expect(exists).toHaveBeenCalledWith("ghs_test", { owner: "acme", name: "app" }, gone.branch);
+      expect(await wsRow(gone.stub)).toMatchObject({ pushed: 0, last_pushed_sha: null, force_push_lease: 0 });
+
+      // Still on GitHub: nothing changes. A GitHub error does not stop the wake either.
+      for (const answer of [() => exists.mockResolvedValue(true), () => exists.mockRejectedValue(new TempoError("GITHUB_API_ERROR"))]) {
+        const kept = await asleep();
+        await exec(kept.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?", "9".repeat(40));
+        await withGithubToken(kept);
+        answer();
+        expect(codeOf(await kept.stub.wakeWorkspace({}))).toBe("OK");
+        await driveToState(kept.stub, "ready");
+        await driveOp(kept.stub, "wake", "done");
+        expect(await wsRow(kept.stub)).toMatchObject({ pushed: 1, last_pushed_sha: "9".repeat(40) });
+      }
+    } finally {
+      exists.mockRestore();
+    }
   });
 
   it("on a fresh disk, a failing checkpoint restore and home restore are skipped after 2 attempts each", async () => {
@@ -1128,6 +1176,28 @@ describe("archive and restore ops", { timeout: 60_000 }, () => {
     expect(codeOf(await unpushed.stub.archiveWorkspace({}))).toBe("OK");
     await driveToState(unpushed.stub, "archived");
     expect((await opOf(unpushed.stub, "archive"))!["error_code"]).toBeNull();
+  });
+
+  it("github.deleteBranch that succeeds (or finds no branch) sets pushed = 0, so the next wake and PR know", async () => {
+    // 03 Archive 4 deletes the branch; 03 Restore 2: with the branch gone, "sets pushed = 0".
+    const del = vi.spyOn(github, "deleteBranch");
+    try {
+      for (const outcome of [() => del.mockResolvedValue(undefined), () => del.mockRejectedValue(new TempoError("NOT_FOUND"))]) {
+        const w = await asleep({ effective: settingsWith({ git: { delete_branch_on_archive: true } }) });
+        await exec(w.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?, force_push_lease = 1", "9".repeat(40));
+        await withGithubToken(w);
+        outcome();
+        expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
+        await driveToState(w.stub, "archived");
+        expect(del).toHaveBeenLastCalledWith("ghs_test", { owner: "acme", name: "app" }, w.branch);
+        const op = (await opOf(w.stub, "archive"))!;
+        expect(opState(op).skipped ?? []).not.toContain("github.deleteBranch");
+        expect(await wsRow(w.stub)).toMatchObject({ pushed: 0, last_pushed_sha: null, force_push_lease: 0 });
+        expect((await detail(w.stub)).pushed).toBe(false);
+      }
+    } finally {
+      del.mockRestore();
+    }
   });
 
   it("restore moves archived → sleeping, clears archived_at in the DO and D1", async () => {
@@ -1296,6 +1366,35 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
     expect(row["error_code"]).toBeNull();
   });
 
+  it("reverting to a checkpoint with no turn marks only the turns after the one it holds", async () => {
+    // 03 Revert 4: "Mark every turn with seq greater than the checkpoint's turn as reverted = 1." A pre_sleep or sigterm
+    // checkpoint has no turn_id: it holds the turn that points at it (an unchanged turn_end), else the last turn ended before it.
+    const w = await withHistory();
+    const base = Date.now() - 10 * MIN;
+    for (const [n, id] of w.turnIds.entries()) await exec(w.stub, "UPDATE turns SET ended_at = ? WHERE id = ?", base + (n + 1) * MIN, id);
+    const pointed = newId();
+    await insertCheckpoint(w.stub, pointed, null, "pre_sleep", base + 2 * MIN + 1000);
+    await exec(w.stub, "UPDATE turns SET checkpoint_id = ? WHERE id = ?", pointed, w.turnIds[2]!);
+    const between = newId();
+    await insertCheckpoint(w.stub, between, null, "sigterm", base + 2 * MIN + 2000);
+
+    expect(codeOf(await whileDriving(w.stub, w.stub.revertToCheckpoint({ checkpointId: pointed })))).toBe("OK");
+    expect((await rows(w.stub, "SELECT reverted FROM turns ORDER BY seq")).map((t) => t["reverted"])).toEqual([0, 0, 0]);
+    expect((await sessionOf(w.stub, w.sessionId))!["pending_note"]).toBe(
+      "Note: the user reverted the files to the state after turn 3. Changes made after that point are gone.",
+    );
+
+    expect(codeOf(await whileDriving(w.stub, w.stub.revertToCheckpoint({ checkpointId: between })))).toBe("OK");
+    expect((await rows(w.stub, "SELECT reverted FROM turns ORDER BY seq")).map((t) => t["reverted"])).toEqual([0, 0, 1]);
+    const markers = (await rows(w.stub, "SELECT content_json FROM items WHERE kind = 'revert_marker' ORDER BY rev")).map((r) =>
+      JSON.parse(r["content_json"]),
+    );
+    expect(markers).toEqual([
+      { checkpointId: pointed, toTurnSeq: 3 },
+      { checkpointId: between, toTurnSeq: 2 },
+    ]);
+  });
+
   it("commit_push pushes with --force-with-lease=<last_pushed_sha> when the flag is set, then clears it", async () => {
     const w = await readyWs();
     await exec(w.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?, force_push_lease = 1", "9".repeat(40));
@@ -1407,6 +1506,39 @@ describe("step runner rules", { timeout: 60_000 }, () => {
     expect(await stateOf(w.stub)).toBe("ready");
   });
 
+  it("a step's timing includes the time it waited for its event, whether the event came or the wait timed out", async () => {
+    // 05 Observability: "Each op stores its step timings in ops.state_json". setup.run lasts until script.exited.
+    const w = await seedWs({ effective: settingsWith({ scripts: { setup: "npm ci" } }) });
+    await drive(w.stub, async () => w.tempod.requestsOf("script.start").length === 1, "setup start");
+    await waitFor(async () => opState(await opOf(w.stub, "create")).waiting?.step === "setup.run", 5000, "waiting");
+    await exec(w.stub, "UPDATE ops SET updated_at = ? WHERE kind = 'create'", Date.now() - 5000);
+    await emit(w, { kind: "script.exited", runId: w.tempod.requestsOf("script.start")[0].runId, exitCode: 0, signal: null, timedOut: false });
+    await waitFor(async () => (await opOf(w.stub, "create"))?.["status"] === "done", 5000, "create done");
+    expect(opState(await opOf(w.stub, "create")).timings["setup.run"]).toBeGreaterThanOrEqual(5000);
+
+    const t = await seedWs({ effective: settingsWith({ scripts: { setup: "npm ci" } }) });
+    await drive(t.stub, async () => t.tempod.requestsOf("script.start").length === 1, "setup start");
+    await waitFor(async () => opState(await opOf(t.stub, "create")).waiting?.step === "setup.run", 5000, "waiting");
+    await exec(
+      t.stub,
+      "UPDATE ops SET updated_at = ?, state_json = json_set(state_json, '$.waiting.deadline', 1) WHERE kind = 'create'",
+      Date.now() - 7000,
+    );
+    await runDurableObjectAlarm(t.stub);
+    await waitFor(async () => (await opOf(t.stub, "create"))?.["status"] === "done", 5000, "create done");
+    expect(opState(await opOf(t.stub, "create")).timings["setup.run"]).toBeGreaterThanOrEqual(7000);
+  });
+
+  it("WorkspaceDetail.op is the next pending op, even when the housekeeping op was made first", async () => {
+    // 02 OpProgress: "WorkspaceDetail.op is the running op, else the next pending op, else null." Housekeeping is never shown.
+    const w = await readyWs();
+    expect((await detail(w.stub)).op).toBeNull();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).runner.insert("commit_push", { message: "later" }, Date.now() + HOUR);
+    });
+    expect((await detail(w.stub)).op).toMatchObject({ kind: "commit_push", status: "pending", step: "git.commitAndPush" });
+  });
+
   it("recovery after a DO restart: a running op in backoff becomes due now and reruns its step", async () => {
     let clones = 0;
     const w = await seedWs({
@@ -1430,6 +1562,92 @@ describe("step runner rules", { timeout: 60_000 }, () => {
     await drive(w.stub, async () => (await stateOf(w.stub)) === "ready", "ready", { fast: false });
     expect(clones).toBe(2);
     expect((await opOf(w.stub, "create"))!["status"]).toBe("done");
+  });
+});
+
+describe("tempod reconnect during a create or wake op", { timeout: 60_000 }, () => {
+  const withSetup = () => settingsWith({ scripts: { setup: "npm ci" } });
+  const waitingOnSetup = async (w: Ws) => {
+    await drive(w.stub, async () => w.tempod.requestsOf("script.start").length === 1, "setup start");
+    await waitFor(async () => opState(await opOf(w.stub, "create")).waiting?.step === "setup.run", 5000, "waiting");
+  };
+  const finishSetup = async (w: Ws, n = 0) => {
+    await emit(w, { kind: "script.exited", runId: w.tempod.requestsOf("script.start")[n].runId, exitCode: 0, signal: null, timedOut: false });
+  };
+
+  it("after a DO restart with the socket gone, setup.run runs again, reconnects and still gets script.exited", async () => {
+    // 03 Failure handling: "DO restarts during an op | running op back to pending; its step runs again" and
+    // "The DO reconnects with workspace.tempod_token." script.exited only arrives over the socket.
+    const w = await seedWs({ effective: withSetup() });
+    await waitingOnSetup(w);
+    const token = (await wsRow(w.stub))["tempod_token"];
+    await dropSocketSilently(w);
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).runner.recover());
+    await runDurableObjectAlarm(w.stub);
+    await waitFor(() => w.tempod.hellos.length === 2, 5000, "reconnect hello");
+    expect((await wsRow(w.stub))["tempod_token"]).toBe(token);
+    await waitFor(async () => opState(await opOf(w.stub, "create")).waiting?.step === "setup.run", 5000, "waiting again");
+    expect(w.tempod.requestsOf("script.start")).toHaveLength(1);
+    expect(w.container.starts).toHaveLength(1);
+    await finishSetup(w);
+    await waitFor(async () => (await opOf(w.stub, "create"))?.["status"] === "done", 5000, "create done");
+    expect(await wsRow(w.stub)).toMatchObject({ state: "ready", setup_status: "succeeded" });
+  });
+
+  it("a socket that closes during repo.clone is reconnected by the next attempt instead of failing with CLONE_FAILED", async () => {
+    // 03 Failure handling: "tempod socket closes while the container runs | Reconnect up to 5 times".
+    let clones = 0;
+    const w = await seedWs({
+      prepare: (t) =>
+        t.on("repo.clone", () => {
+          clones++;
+          if (clones === 1) {
+            t.close(1011);
+            return new Promise(() => undefined);
+          }
+          return { headSha: "a".repeat(40), remoteHeadSha: null };
+        }),
+    });
+    await driveToState(w.stub, "ready");
+    await driveOp(w.stub, "create", "done");
+    expect(clones).toBe(2);
+    expect(w.tempod.hellos.length).toBeGreaterThanOrEqual(2);
+    expect(w.container.starts).toHaveLength(1);
+    expect((await wsRow(w.stub))["error_code"]).toBeNull();
+  });
+
+  it("the heartbeat reconnects a lost socket while a create op waits on setup.run", async () => {
+    // 03 Step runner: "Heartbeat ... checks ctx.container.running and that the tempod socket is open."
+    const w = await seedWs({ effective: withSetup() });
+    await waitingOnSetup(w);
+    await dropSocketSilently(w);
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      await (i as unknown as { heartbeat(): Promise<void> }).heartbeat();
+    });
+    await waitFor(() => w.tempod.hellos.length === 2, 5000, "reconnect hello");
+    await waitFor(async () => runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.tempod?.open ?? false), 3000, "socket open");
+    await finishSetup(w);
+    await waitFor(async () => (await opOf(w.stub, "create"))?.["status"] === "done", 5000, "create done");
+    expect(await stateOf(w.stub)).toBe("ready");
+  });
+
+  it("when every reconnect fails, the op waiting on setup.run is cancelled and a wake restarts the container", async () => {
+    // 03 Failure handling: "Reconnect up to 5 times (1, 2, 4, 8, 16 s). Then destroy() and wake."
+    const w = await seedWs({ effective: withSetup() });
+    await waitingOnSetup(w);
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).core.reconnectAttempt = 5;
+    });
+    await runInDurableObject(w.stub, () => w.tempod.close(1011));
+    await waitFor(async () => (await opOf(w.stub, "create"))?.["status"] === "cancelled", 5000, "create cancelled");
+    expect(w.container.destroyed).toBe(1);
+    expect(await opsOf(w.stub, "wake")).toHaveLength(1);
+    await drive(w.stub, async () => w.tempod.requestsOf("script.start").length === 2, "setup runs again after the wake");
+    await waitFor(async () => opState(await opOf(w.stub, "wake")).waiting?.step === "setup.run", 5000, "wake waiting");
+    await finishSetup(w, 1);
+    await waitFor(async () => (await opOf(w.stub, "wake"))?.["status"] === "done", 5000, "wake done");
+    expect(await stateOf(w.stub)).toBe("ready");
+    expect(w.container.starts).toHaveLength(2);
   });
 });
 
@@ -1682,6 +1900,18 @@ describe("idle check and tempod socket loss", { timeout: 60_000 }, () => {
     // 03 Activity: "The setup script or a run script is running."
     expect(await opsOf(w.stub, "sleep")).toHaveLength(0);
     expect(await stateOf(w.stub)).toBe("ready");
+  });
+
+  it("stopScript on a sleeping workspace answers ok and does not wake it", async () => {
+    // 03 Wake triggers: sendPrompt, createSession, a terminal WebSocket, a preview request, wakeWorkspace, rerunSetup,
+    // runScript. stopScript is not one: with no container, nothing runs.
+    const w = await asleep();
+    const starts = w.container.starts.length;
+    expect(codeOf(await w.stub.stopScript({ runId: newId() }))).toBe("OK");
+    await sleep(100);
+    expect(await opsOf(w.stub, "wake")).toHaveLength(0);
+    expect(await stateOf(w.stub)).toBe("sleeping");
+    expect(w.container.starts).toHaveLength(starts);
   });
 
   it("reconnects to tempod when its socket closes while the container runs, without a wake", async () => {

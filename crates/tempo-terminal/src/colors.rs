@@ -1,6 +1,6 @@
 //! Terminal colours. Foreground, background, cursor and selection come from the GPUI Kit
 //! theme; only the 16-colour ANSI palette is literal (07, Window layout).
-use alacritty_terminal::term::color::Colors;
+use alacritty_terminal::term::color::{COUNT, Colors};
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 use gpui_kit::Hsla;
 use gpui_kit::component::ThemeColor;
@@ -143,6 +143,9 @@ impl ColorPalette {
 
     /// For OSC 4, 10, 11 and 12 queries.
     pub fn rgb(&self, index: usize, overrides: &Colors) -> Option<Rgb> {
+        if index >= COUNT {
+            return None;
+        }
         if let Some(rgb) = overrides[index] {
             return Some(rgb);
         }
@@ -272,6 +275,7 @@ mod tests {
             blue
         );
         assert_eq!(palette.rgb(3, &colors), Some(blue));
+        assert_eq!(palette.rgb(COUNT, &colors), None);
         assert_eq!(
             palette.rgb(NamedColor::Foreground as usize, &Colors::default()),
             Some(hsla_to_rgb(theme().foreground))
