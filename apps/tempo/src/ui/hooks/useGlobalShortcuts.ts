@@ -1,12 +1,7 @@
 import { useEffect } from "react";
 import { isEditableTarget, isMacPlatform, isPlainCombo, matchGlobal } from "~/ui/lib/shortcuts";
 import { runAction } from "~/ui/state/actions";
-
-const MODAL = ["dialog-content", "alert-dialog-content", "sheet-content"]
-  .map((slot) => `[data-slot="${slot}"][data-state="open"]`)
-  .join(", ");
-
-const modalOpen = (): boolean => document.querySelector(MODAL) !== null;
+import { modalOpen } from "~/ui/lib/modal";
 
 /**
  * The one window key listener for global actions (04, Keyboard shortcuts). It runs the registered

@@ -1,7 +1,14 @@
 import { and, desc, eq, gt, inArray, isNotNull, lt, lte, ne } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { pickSlug } from "@tempo/cities";
-import { TempoError, revertNote, type CheckpointReason, type OpKind, type Source } from "@tempo/protocol";
+import {
+  TempoError,
+  newId,
+  revertNote,
+  type CheckpointReason,
+  type OpKind,
+  type Source,
+} from "@tempo/protocol";
 import { workspaces } from "../../db/d1.ts";
 import {
   checkpoints,
@@ -9,6 +16,7 @@ import {
   homeBackups,
   egressLog,
   items,
+  ops,
   permissions,
   scriptRuns,
   sessions,
@@ -335,10 +343,24 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
 
     "git.checkpoint": async (sc) => {
       const { core, op, state, signal } = sc;
+      if (typeof state["checkpointId"] === "string") return "next";
       await reconnect(core);
-      if (!containerRunning(core) || !core.tempod?.open) return skip(sc);
+      if (!containerRunning(core) || !core.tempod?.open) {
+        if (op.kind === "revert") throw new TempoError("CONTAINER_NOT_READY");
+        return skip(sc);
+      }
       const reason = CHECKPOINT_REASON[op.kind as OpKind] ?? "pre_sleep";
-      const res = await takeCheckpoint(core, reason, null, signal);
+      const requestId =
+        typeof state["checkpointRequestId"] === "string" ? state["checkpointRequestId"] : newId();
+      state["checkpointRequestId"] = requestId;
+      core.db
+        .update(ops)
+        .set({ stateJson: JSON.stringify(state) })
+        .where(eq(ops.id, op.id))
+        .run();
+      const res = await takeCheckpoint(core, reason, null, signal, requestId);
+      if (op.kind === "revert" && !res.checkpointId)
+        throw new TempoError("INTERNAL", undefined, "Safety checkpoint missing");
       state["checkpointId"] = res.checkpointId;
       state["pendingBundle"] = res.bundle;
       return "next";

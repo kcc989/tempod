@@ -300,3 +300,42 @@ describe("ACP update to items", () => {
     expect(events).toHaveLength(0);
   });
 });
+
+describe("mode config updates", () => {
+  test("refreshes modes and current selection, including grouped choices and replay", () => {
+    const { mapper, of } = setup();
+    const update = {
+      sessionUpdate: "config_option_update",
+      configOptions: [
+        {
+          id: "agent",
+          name: "Agent",
+          category: "mode",
+          type: "select",
+          currentValue: "plan",
+          options: [
+            {
+              group: "modes",
+              name: "Modes",
+              options: [
+                { value: "build", name: "Build" },
+                { value: "plan", name: "Plan" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    mapper.captureState(update);
+    expect(of("session.updated")).toHaveLength(0);
+    expect(mapper.state.modeId).toBe("plan");
+    mapper.handle({ ...update, configOptions: [{ ...update.configOptions[0], currentValue: "build" }] });
+    expect(of("session.updated")[0]?.patch).toMatchObject({
+      modeId: "build",
+      modes: [
+        { id: "build", name: "Build" },
+        { id: "plan", name: "Plan" },
+      ],
+    });
+  });
+});

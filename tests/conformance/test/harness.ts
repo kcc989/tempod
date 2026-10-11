@@ -382,8 +382,25 @@ export const conformanceSuite = (spec: AgentSpec): void => {
       if (!session) throw new Error("session/new did not succeed");
       return session;
     };
-    const modeTarget = (s: NewSessionResponse): string | null =>
-      spec.defaultMode ?? s.modes?.currentModeId ?? null;
+    const modeOption = (s: NewSessionResponse) =>
+      s.configOptions?.find((o) => o.category === "mode" && o.type === "select");
+    const currentMode = (s: NewSessionResponse): string | null => {
+      const option = modeOption(s);
+      return typeof option?.currentValue === "string"
+        ? option.currentValue
+        : (s.modes?.currentModeId ?? null);
+    };
+    const modeTarget = (s: NewSessionResponse): string | null => spec.defaultMode ?? currentMode(s);
+    const setMode = (a: AgentProcess, s: NewSessionResponse, target: string) => {
+      const option = modeOption(s);
+      return option
+        ? a.request("session/set_config_option", {
+            sessionId: s.sessionId,
+            configId: option.id,
+            value: target,
+          })
+        : a.request("session/set_mode", { sessionId: s.sessionId, modeId: target });
+    };
 
     beforeAll(() => {
       repo = makeRepo();
@@ -424,10 +441,14 @@ export const conformanceSuite = (spec: AgentSpec): void => {
         });
         expect(typeof session.sessionId).toBe("string");
         expect(session.sessionId.length).toBeGreaterThan(0);
-        const modes = session.modes?.availableModes.map((m) => m.id) ?? [];
+        const mode = modeOption(session);
+        const modes =
+          mode?.type === "select"
+            ? mode.options.flatMap((o) => ("group" in o ? o.options.map((v) => v.value) : [o.value]))
+            : (session.modes?.availableModes.map((m) => m.id) ?? []);
         const options = session.configOptions ?? [];
         report["modes"] = modes;
-        report["currentModeId"] = session.modes?.currentModeId ?? null;
+        report["currentModeId"] = currentMode(session);
         report["configOptions"] = options.map((o) => ({
           id: o.id,
           type: o.type,
@@ -442,7 +463,7 @@ export const conformanceSuite = (spec: AgentSpec): void => {
     );
 
     test(
-      "session/set_mode to Tempo's default mode",
+      "sets Tempo's default mode through the advertised ACP interface",
       async () => {
         const s = current();
         const target = modeTarget(s);
@@ -451,7 +472,7 @@ export const conformanceSuite = (spec: AgentSpec): void => {
           expect(spec.requiredModes).toHaveLength(0);
           return;
         }
-        await running().request("session/set_mode", { sessionId: s.sessionId, modeId: target });
+        await setMode(running(), s, target);
         report["setMode"] = target;
       },
       STEP_MS,
@@ -478,7 +499,7 @@ export const conformanceSuite = (spec: AgentSpec): void => {
         const s = current();
         await a.conn.agent.notify("session/cancel", { sessionId: s.sessionId });
         const target = modeTarget(s);
-        if (target !== null) await a.request("session/set_mode", { sessionId: s.sessionId, modeId: target });
+        if (target !== null) await setMode(a, s, target);
         else expect((await a.newSession()).sessionId.length).toBeGreaterThan(0);
         expect(a.running).toBe(true);
       },
