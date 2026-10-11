@@ -78,7 +78,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       await waitHealthy(core, signal);
     } catch (e) {
       await destroyContainer(core, "start failed").catch(() => undefined);
-      if (!snap) throw new TempoError("CONTAINER_START_FAILED", undefined, errorText(e));
+      if (!snap) throw new TempoError("CONTAINER_START_FAILED", undefined, e instanceof TempoError ? (e.detail ?? e.message) : errorText(e));
       log("warn", "snapshot start failed; using the image", { workspaceId: core.workspaceId, snapshot: snap.id });
       core.db.update(snapshots).set({ unusable: 1 }).where(eq(snapshots.id, snap.id)).run();
       snap = null;
@@ -305,8 +305,11 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     return "next";
   },
 
-  "branch.check": async ({ core }) => {
+  "branch.check": async (sc) => {
+    const { core } = sc;
     const row = core.ws();
+    // A restore queued behind an archive that failed has nothing to restore.
+    if (row.state !== "archived") return "cancel";
     const live = await drizzleD1(core.env.DB)
       .select({ id: workspaces.id, slug: workspaces.slug, branch: workspaces.branch, archivedAt: workspaces.archivedAt })
       .from(workspaces)
@@ -447,6 +450,7 @@ export const makeHooks = (scheduleHousekeeping: () => void): Record<OpKind, OpHo
   },
   restore: {
     onDone: (core) => {
+      if (core.state !== "archived") return;
       core.updateWs({ archivedAt: null });
       core.setState("sleeping");
       core.publish();

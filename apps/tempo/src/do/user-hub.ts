@@ -65,7 +65,8 @@ export class UserHubDO extends DurableObject<Env> {
 
   private async loadAll(): Promise<WorkspaceSummary[]> {
     let rows = this.db.select().from(summaries).all();
-    if (rows.length === 0) {
+    if (rows.length === 0 && !this.ctx.storage.kv.get("loadedFromD1")) {
+      this.ctx.storage.kv.put("loadedFromD1", true);
       const userId = this.ctx.id.name;
       if (userId) {
         const d1 = drizzleD1(this.env.DB);

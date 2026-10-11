@@ -30,6 +30,7 @@ import {
   turns,
   type ReviewCommentRow,
 } from "../../db/workspace-do.ts";
+import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import { github } from "../../github/provider.ts";
 import { errorText, log } from "../../log.ts";
 import { containerRunning, requireTempod } from "./container.ts";
@@ -196,6 +197,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       }
       await core.ctx.storage.deleteAlarm();
       await core.ctx.storage.deleteAll();
+      // Recreate the empty tables, so later calls on this instance see "not found", not "no such table".
+      await runMigrations(core.db, WORKSPACE_MIGRATIONS);
       return {};
     },
 
@@ -410,8 +413,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         },
       });
       core.broadcastDetailSoon();
-      const s = core.state;
-      if (s === "sleeping" || s === "error") rt.ensureAwake();
+      // A prompt in sleeping, error or stopping (03, sendPrompt step 5): stopping wakes after the sleep op.
+      rt.ensureAwake();
       core.kickQueue();
       return turn;
     },

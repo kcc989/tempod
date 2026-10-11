@@ -49,6 +49,24 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | Commit author | From `GET /user/{TEMPO_OWNER_GITHUB_ID}` with the installation token: name, else login; email `<id>+<login>@users.noreply.github.com` (03). |
 | Base image | `container/pin-base.ts` reads the digest from the Docker Hub registry API. Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to avoid the anonymous rate limit. |
 
+## Spec ambiguities found by the tests
+
+The test agents found these. The code makes the choice shown; none contradicts an explicit rule.
+
+| Spec | Ambiguity | Choice |
+| --- | --- | --- |
+| 01 TempoOutbound, rules 1 and 7 | An `http:` request that carries `tempo-placeholder`: rule 1 skips rules 2 to 7, but rule 7 says never forward the placeholder. | Rule 1 wins: plain HTTP goes to rules 8 to 10 and carries no credentials. The log records the rule that decided (8, 9 or 10). |
+| 01 TempoOutbound, rule 2 | "Path starts with `/<owner>/<repo>`". | Whole path segments: `/acme/app2` does not match repo `app`. |
+| 05 Egress control | Whether `*.example.com` matches `b.a.example.com`. | It does. |
+| 01 Sessions | Review comments for a line range or a whole file. | `<path>:<start>-<end>: <text>` and `<path>:: <text>`. |
+| 02 Item model, Status | Tool calls still open when a turn ends `completed`. | They keep the status the agent last sent. |
+| 02 OpProgress | `WorkspaceDetail.op` and the always-pending housekeeping op. | Housekeeping is never shown. |
+| 03 Step runner | Which errors are transient. | `NOTHING_TO_COMMIT`, `PUSH_REJECTED`, `CHECKPOINT_NOT_FOUND`, `UNKNOWN_OP`, `BRANCH_IN_USE`, `VALIDATION_FAILED` and `NOT_FOUND` end a step at once; everything else retries up to the step's limit. |
+| 03 Step runner and Transitions | A restore that fails: "step fails for good → error", but `archived` cannot go to `error`. | The workspace stays archived and the UI gets an `error` message. A restore queued behind an archive that failed is cancelled. |
+| 05 GitHub App setup | `/setup/*` returns 404 after setup, but GitHub's `setup_url` must keep working. | `/setup/github/installed` always redirects to the app. The manifest also sends `hook_attributes.url` (GitHub requires it) and cuts the name to 34 characters (GitHub's limit). |
+| 02 Credentials | Whether `deleteCredential.key` is a provider name or a secret key. | Both are accepted. |
+| 07 Server changes | 07 cites "02, Native client API", which does not exist. | `/api/v1` follows the table in 07. |
+
 ## Not built
 
 | Item | Status |
