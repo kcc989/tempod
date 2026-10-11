@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run && vitest run -c vitest.ui.config.ts",
     "cf-typegen": "wrangler types --include-env=false ./worker-runtime.d.ts",
     "db:generate": "drizzle-kit generate",
     "auth:generate": "auth generate --config scripts/auth.cli.ts --output src/db/auth-schema.ts -y"
