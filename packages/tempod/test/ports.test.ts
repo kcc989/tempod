@@ -61,7 +61,11 @@ describe("port scanner", () => {
     const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("x") });
     try {
       const seen: number[][] = [];
-      const scanner = new PortScanner({ intervalMs: 60_000, exclude: () => [7070], onChange: (p) => seen.push(p) });
+      const scanner = new PortScanner({
+        intervalMs: 60_000,
+        exclude: () => [7070],
+        onChange: (p) => seen.push(p),
+      });
       scanner.scan();
       if (seen.length > 0 && seen[0]!.length > 0) expect(seen[0]).toContain(server.port!);
     } finally {

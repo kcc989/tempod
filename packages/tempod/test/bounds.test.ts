@@ -4,12 +4,29 @@ import { join } from "node:path";
 import { MAX_MESSAGE_BYTES, TempodEvent, type TempodEventOf } from "@tempo/protocol";
 import { Schema } from "effect";
 import { SessionMapper } from "../src/acp/mapper.ts";
-import { boundContent, capList, jsonBytes, offloadBlobs, splitText, tailLines, TRUNCATED } from "../src/bounds.ts";
+import {
+  boundContent,
+  capList,
+  jsonBytes,
+  offloadBlobs,
+  splitText,
+  tailLines,
+  TRUNCATED,
+} from "../src/bounds.ts";
 import { TempodDb } from "../src/db.ts";
 import { killGroup, run } from "../src/exec.ts";
 import { Outbox, type OutboxSink } from "../src/outbox.ts";
 import { processEnv } from "../src/tempod.ts";
-import { cleanupDirs, DoClient, isAlive, quietLogger, sleep, startTempod, tmpDir, type Harness } from "./helpers.ts";
+import {
+  cleanupDirs,
+  DoClient,
+  isAlive,
+  quietLogger,
+  sleep,
+  startTempod,
+  tmpDir,
+  type Harness,
+} from "./helpers.ts";
 
 afterAll(cleanupDirs);
 
@@ -49,13 +66,19 @@ describe("size helpers", () => {
   test("boundContent cuts long strings with a marker and always fits", () => {
     const small = { text: "short" };
     expect(boundContent(small, 1000)).toBe(small);
-    const big = { title: "t", content: [{ type: "diff", oldText: "a".repeat(200_000), newText: "b".repeat(200_000) }], rawOutput: { o: "c".repeat(300_000) } };
+    const big = {
+      title: "t",
+      content: [{ type: "diff", oldText: "a".repeat(200_000), newText: "b".repeat(200_000) }],
+      rawOutput: { o: "c".repeat(300_000) },
+    };
     const cut = boundContent(big, 100_000);
     expect(jsonBytes(cut)).toBeLessThanOrEqual(100_000);
     const diff = (cut["content"] as Array<Record<string, string>>)[0]!;
     expect(diff["oldText"]!.endsWith(TRUNCATED)).toBe(true);
     expect(cut["title"]).toBe("t");
-    const many = { entries: Array.from({ length: 50_000 }, (_, i) => ({ content: `entry ${i}`, status: "pending" })) };
+    const many = {
+      entries: Array.from({ length: 50_000 }, (_, i) => ({ content: `entry ${i}`, status: "pending" })),
+    };
     const cutMany = boundContent(many, 50_000);
     expect(jsonBytes(cutMany)).toBeLessThanOrEqual(50_000);
     expect(Array.isArray(cutMany["entries"])).toBe(true);
@@ -65,16 +88,30 @@ describe("size helpers", () => {
     const saved: string[] = [];
     const save = (data: string, mime: string | null) => {
       saved.push(`${mime}:${data.length}`);
-      return { uri: `file:///home/tempo/attachments/t1/img${saved.length}.png`, name: `img${saved.length}.png` };
+      return {
+        uri: `file:///home/tempo/attachments/t1/img${saved.length}.png`,
+        name: `img${saved.length}.png`,
+      };
     };
     const value = [
       { type: "content", content: { type: "image", data: "A".repeat(100), mimeType: "image/png" } },
       { type: "content", content: { type: "image", data: "B".repeat(2_000), mimeType: "image/png" } },
-      { type: "content", content: { type: "resource", resource: { uri: "x", blob: "C".repeat(2_000), mimeType: "application/pdf" } } },
+      {
+        type: "content",
+        content: {
+          type: "resource",
+          resource: { uri: "x", blob: "C".repeat(2_000), mimeType: "application/pdf" },
+        },
+      },
     ];
     const out = offloadBlobs(value, save, 1_000) as Array<{ content: Record<string, unknown> }>;
     expect(out[0]!.content).toEqual(value[0]!.content);
-    expect(out[1]!.content).toMatchObject({ type: "resource_link", uri: "file:///home/tempo/attachments/t1/img1.png", mimeType: "image/png", size: 1500 });
+    expect(out[1]!.content).toMatchObject({
+      type: "resource_link",
+      uri: "file:///home/tempo/attachments/t1/img1.png",
+      mimeType: "image/png",
+      size: 1500,
+    });
     expect(out[2]!.content).toMatchObject({ type: "resource_link", mimeType: "application/pdf" });
     expect(saved).toEqual(["image/png:2000", "application/pdf:2000"]);
     const noSave = offloadBlobs(value, () => null, 1_000) as Array<{ content: Record<string, unknown> }>;
@@ -94,7 +131,8 @@ describe("mapper bounds", () => {
       maxBytes: 8 * 1024,
       ...(attachments ? { attachments } : {}),
     });
-    const of = <K extends TempodEvent["kind"]>(k: K) => events.filter((e) => e.kind === k) as Array<TempodEventOf<K>>;
+    const of = <K extends TempodEvent["kind"]>(k: K) =>
+      events.filter((e) => e.kind === k) as Array<TempodEventOf<K>>;
     return { mapper, events, of };
   };
 
@@ -103,7 +141,13 @@ describe("mapper bounds", () => {
     const { mapper, of } = setup(dir);
     mapper.startTurn("01turn");
     const data = Buffer.alloc(300 * 1024, 9).toString("base64");
-    mapper.handle({ sessionUpdate: "tool_call", toolCallId: "tc", title: "Shot", status: "completed", content: [{ type: "content", content: { type: "image", data, mimeType: "image/jpeg" } }] });
+    mapper.handle({
+      sessionUpdate: "tool_call",
+      toolCallId: "tc",
+      title: "Shot",
+      status: "completed",
+      content: [{ type: "content", content: { type: "image", data, mimeType: "image/jpeg" } }],
+    });
     const item = of("item.created")[0]!.item;
     const link = (item.content["content"] as Array<{ content: Record<string, unknown> }>)[0]!.content;
     expect(link["type"]).toBe("resource_link");
@@ -121,10 +165,27 @@ describe("mapper bounds", () => {
   test("every event stays under the limit: big tool updates, big first chunks, big deltas", () => {
     const { mapper, events, of } = setup();
     mapper.startTurn("t1");
-    mapper.handle({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "q".repeat(2_000_000) } });
-    mapper.handle({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "r".repeat(700_000) } });
-    mapper.handle({ sessionUpdate: "tool_call", toolCallId: "tc", title: "Edit", status: "pending", rawInput: { content: "s".repeat(2_000_000) } });
-    mapper.handle({ sessionUpdate: "tool_call_update", toolCallId: "tc", status: "completed", content: [{ type: "diff", path: "/w/x", oldText: "o".repeat(900_000), newText: "n".repeat(900_000) }] });
+    mapper.handle({
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text: "q".repeat(2_000_000) },
+    });
+    mapper.handle({
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text: "r".repeat(700_000) },
+    });
+    mapper.handle({
+      sessionUpdate: "tool_call",
+      toolCallId: "tc",
+      title: "Edit",
+      status: "pending",
+      rawInput: { content: "s".repeat(2_000_000) },
+    });
+    mapper.handle({
+      sessionUpdate: "tool_call_update",
+      toolCallId: "tc",
+      status: "completed",
+      content: [{ type: "diff", path: "/w/x", oldText: "o".repeat(900_000), newText: "n".repeat(900_000) }],
+    });
     mapper.endTurn("completed");
     for (const e of events) expect(jsonBytes(e)).toBeLessThan(MAX_MESSAGE_BYTES - 1024);
     const deltas = of("item.delta");
@@ -154,8 +215,15 @@ describe("outbox and response limits", () => {
     const sink = new Sink();
     outbox.attach(sink);
     outbox.handshake(outbox.incarnation, 0);
-    outbox.append({ kind: "script.output", runId: "r", stream: "stdout", data: "x".repeat(MAX_MESSAGE_BYTES) });
-    const msg = JSON.parse(sink.sent[0]!) as { event: { kind: string; level: string; data: { kind: string; size: number } } };
+    outbox.append({
+      kind: "script.output",
+      runId: "r",
+      stream: "stdout",
+      data: "x".repeat(MAX_MESSAGE_BYTES),
+    });
+    const msg = JSON.parse(sink.sent[0]!) as {
+      event: { kind: string; level: string; data: { kind: string; size: number } };
+    };
     expect(msg.event.kind).toBe("log");
     expect(msg.event.level).toBe("warn");
     expect(msg.event.data.kind).toBe("script.output");
@@ -172,7 +240,10 @@ describe("outbox and response limits", () => {
     handlers["terminal.list"] = async () => ({ terminalIds: ["x".repeat(MAX_MESSAGE_BYTES)] });
     expect(await c.req("terminal.list", {})).toMatchObject({ ok: false, error: { code: "INTERNAL" } });
     handlers["terminal.list"] = () => Promise.reject(new Error("boom"));
-    expect(await c.req("terminal.list", {})).toMatchObject({ ok: false, error: { code: "INTERNAL", message: "boom" } });
+    expect(await c.req("terminal.list", {})).toMatchObject({
+      ok: false,
+      error: { code: "INTERNAL", message: "boom" },
+    });
   });
 
   test("a failing outbox never throws into the caller", async () => {
@@ -190,7 +261,10 @@ describe("exec", () => {
     const dir = tmpDir("exec-");
     const pidFile = join(dir, "bg.pid");
     const t0 = Date.now();
-    const r = await run(["bash", "-c", `sleep 30 & echo $! > ${pidFile}; sleep 30`], { timeoutMs: 300, killGraceMs: 200 });
+    const r = await run(["bash", "-c", `sleep 30 & echo $! > ${pidFile}; sleep 30`], {
+      timeoutMs: 300,
+      killGraceMs: 200,
+    });
     expect(Date.now() - t0).toBeLessThan(3_000);
     expect(r.timedOut).toBe(true);
     const bg = Number(readFileSync(pidFile, "utf8"));

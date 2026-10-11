@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SetCodexAuthIn",
+  "type": "object",
+  "properties": {
+    "authJson": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["authJson"],
+  "additionalProperties": true
+}

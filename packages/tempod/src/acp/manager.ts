@@ -68,7 +68,8 @@ export class SessionManager {
   private async doStart(p: StartParams): Promise<SessionStartResult> {
     const existing = this.sessions.get(p.sessionId);
     if (existing) {
-      const same = existing.agent === p.agent && (!p.acpSessionId || p.acpSessionId === existing.acpSessionId);
+      const same =
+        existing.agent === p.agent && (!p.acpSessionId || p.acpSessionId === existing.acpSessionId);
       if (same && existing.alive && this.ready.has(existing)) return existing.result(false, false);
       if (existing.busy) throw new TempoError("SESSION_BUSY");
       await existing.close("requested", true);
@@ -133,7 +134,9 @@ export class SessionManager {
     }
   }
 
-  prompt(p: { sessionId: string; turnId: string; content: ReadonlyArray<Record<string, unknown>> }): { accepted: true } {
+  prompt(p: { sessionId: string; turnId: string; content: ReadonlyArray<Record<string, unknown>> }): {
+    accepted: true;
+  } {
     if (this.refusePrompts) throw new TempoError("CONTAINER_NOT_READY", "tempod is stopping.");
     this.live(p.sessionId).prompt(p.turnId, p.content);
     return { accepted: true };
@@ -155,7 +158,11 @@ export class SessionManager {
     this.deps.emit({ kind: "session.updated", sessionId: p.sessionId, patch: { modeId: p.modeId } });
   }
 
-  async setConfig(p: { sessionId: string; configId: string; value: string | boolean }): Promise<{ configOptions: ConfigOption[] }> {
+  async setConfig(p: {
+    sessionId: string;
+    configId: string;
+    value: string | boolean;
+  }): Promise<{ configOptions: ConfigOption[] }> {
     const s = this.live(p.sessionId);
     if (s.busy) throw new TempoError("SESSION_BUSY");
     try {

@@ -1,0 +1,56 @@
+{
+  "channel": "hub",
+  "messages": 7,
+  "state": {
+    "ready": true,
+    "workspaces": {
+      "01k7000000000000000000000b": {
+        "archivedAt": null,
+        "attention": "none",
+        "baseBranch": "main",
+        "branch": "tempo/lisbon",
+        "checksState": null,
+        "createdAt": 1791622800000,
+        "defaultAgent": "claude",
+        "id": "01k7000000000000000000000b",
+        "lastActivityAt": 1791709260000,
+        "pinned": false,
+        "prNumber": null,
+        "prState": null,
+        "projectId": "01k70000000000000000000001",
+        "rev": 45,
+        "slug": "lisbon",
+        "state": "sleeping",
+        "title": "Add dark mode toggle"
+      },
+      "01k7000000000000000000000d": {
+        "archivedAt": 1791702000000,
+        "attention": "none",
+        "baseBranch": "main",
+        "branch": "tempo/kyoto",
+        "checksState": "success",
+        "createdAt": 1791622800000,
+        "defaultAgent": "claude",
+        "id": "01k7000000000000000000000d",
+        "lastActivityAt": 1791702000000,
+        "pinned": false,
+        "prNumber": 38,
+        "prState": "merged",
+        "projectId": "01k70000000000000000000001",
+        "rev": 9,
+        "slug": "kyoto",
+        "state": "archived",
+        "title": "Upgrade to React 19"
+      }
+    }
+  },
+  "events": [
+    {
+      "line": 2,
+      "event": {
+        "kind": "finished",
+        "workspaceId": "01k7000000000000000000000b"
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SetSessionConfigIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "configId": {
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    }
+  },
+  "required": ["workspaceId", "sessionId", "configId", "value"],
+  "additionalProperties": true
+}

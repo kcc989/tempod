@@ -19,7 +19,11 @@ const program = (config: Config, log: Logger) =>
       Effect.sync(() => startServer(app, { port: config.port })),
       (s) => Effect.promise(() => Promise.race([s.stop(), Bun.sleep(2_000)])),
     );
-    log.info("tempod listening", { port: server.port, version: VERSION, incarnation: app.outbox.incarnation });
+    log.info("tempod listening", {
+      port: server.port,
+      version: VERSION,
+      incarnation: app.outbox.incarnation,
+    });
     process.on("SIGTERM", () => app.onSigterm());
     process.on("SIGINT", () => app.onSigterm());
     return yield* Deferred.await(exitCode);
@@ -35,8 +39,12 @@ try {
 }
 // Children must not see the token (01, Container config); the config holds the only copy.
 delete process.env["TEMPOD_TOKEN"];
-process.on("unhandledRejection", (e: unknown) => log.local("error", "unhandled rejection", { error: errorText(e) }));
-process.on("uncaughtException", (e: unknown) => log.local("error", "uncaught exception", { error: errorText(e) }));
+process.on("unhandledRejection", (e: unknown) =>
+  log.local("error", "unhandled rejection", { error: errorText(e) }),
+);
+process.on("uncaughtException", (e: unknown) =>
+  log.local("error", "uncaught exception", { error: errorText(e) }),
+);
 Effect.runPromise(program(config, log)).then(
   (code) => process.exit(code),
   (e: unknown) => {

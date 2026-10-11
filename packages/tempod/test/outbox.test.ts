@@ -30,7 +30,10 @@ class FakeSink implements OutboxSink {
   }
 }
 
-const open = (path = join(tmpDir(), "tempod.db"), limits = { maxEvents: 50_000, maxBytes: 200 * 1024 * 1024 }) => {
+const open = (
+  path = join(tmpDir(), "tempod.db"),
+  limits = { maxEvents: 50_000, maxBytes: 200 * 1024 * 1024 },
+) => {
   const db = new TempodDb(path);
   return { db, outbox: new Outbox(db, limits), path };
 };

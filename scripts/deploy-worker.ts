@@ -19,7 +19,9 @@ const versions = JSON.parse(fs.readFileSync(path.join(root, "container/versions.
   base_image_digest: string | null;
   build_args: Record<string, string>;
 };
-const version = (JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { version?: string }).version ?? "0.1.0";
+const version =
+  (JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { version?: string }).version ??
+  "0.1.0";
 
 const run = (cmd: string, args: string[], cwd: string, extraEnv: Record<string, string> = {}) => {
   const r = spawnSync(cmd, args, { cwd, stdio: "inherit", env: { ...process.env, ...extraEnv } });
@@ -32,8 +34,12 @@ run("bun", ["container/check-versions.ts"], root);
 if (!versions.base_image_digest && spawnSync("docker", ["buildx", "version"]).status === 0) {
   run("bun", ["container/pin-base.ts"], root);
 }
-const pinned = JSON.parse(fs.readFileSync(path.join(root, "container/versions.json"), "utf8")) as typeof versions;
-const baseImage = pinned.base_image_digest ? `${pinned.base_image}@${pinned.base_image_digest}` : pinned.base_image;
+const pinned = JSON.parse(
+  fs.readFileSync(path.join(root, "container/versions.json"), "utf8"),
+) as typeof versions;
+const baseImage = pinned.base_image_digest
+  ? `${pinned.base_image}@${pinned.base_image_digest}`
+  : pinned.base_image;
 
 // 2. The deploy config. No `migrations` array: it conflicts with `exports` (01).
 const DO = { type: "durable-object", storage: "sqlite" } as const;
@@ -70,7 +76,9 @@ const config = {
     ],
   },
   exports: { WorkspaceDO: DO, UserHubDO: DO, CredentialDO: DO },
-  d1_databases: [{ binding: "DB", database_name: env("TEMPO_D1_DATABASE_NAME"), database_id: env("TEMPO_D1_DATABASE_ID") }],
+  d1_databases: [
+    { binding: "DB", database_name: env("TEMPO_D1_DATABASE_NAME"), database_id: env("TEMPO_D1_DATABASE_ID") },
+  ],
   r2_buckets: [{ binding: "DATA", bucket_name: env("TEMPO_R2_BUCKET_NAME") }],
   routes: [
     { pattern: env("APP_HOST"), custom_domain: true },
@@ -98,4 +106,6 @@ try {
 } finally {
   fs.rmSync(secretsDir, { recursive: true, force: true });
 }
-console.log(`Open https://${env("APP_HOST")}/setup/github?token=${env("TEMPO_SETUP_TOKEN")} to create the GitHub App.`);
+console.log(
+  `Open https://${env("APP_HOST")}/setup/github?token=${env("TEMPO_SETUP_TOKEN")} to create the GitHub App.`,
+);

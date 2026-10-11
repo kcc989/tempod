@@ -58,7 +58,11 @@ describe("codex auth.json", () => {
     const home = tmpDir("codex-");
     const changes: Array<[string, number]> = [];
     const log = quietLogger();
-    const creds = new CodexCredentials({ codexHome: home, log, onChanged: (content, lastRefresh) => changes.push([content, lastRefresh]) });
+    const creds = new CodexCredentials({
+      codexHome: home,
+      log,
+      onChanged: (content, lastRefresh) => changes.push([content, lastRefresh]),
+    });
     const path = join(home, "auth.json");
     writeFileSync(path, '{"tokens": {"access_tok');
     creds.check();

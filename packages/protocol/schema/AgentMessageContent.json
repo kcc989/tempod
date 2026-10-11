@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentMessageContent",
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string"
+    },
+    "blocks": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "ContentBlock.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["text"],
+  "additionalProperties": true
+}

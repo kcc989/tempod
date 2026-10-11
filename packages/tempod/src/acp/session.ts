@@ -236,7 +236,11 @@ export class AgentSession {
         this.onPermissionRequest(String(m.id), m.params);
       }
     } catch (e) {
-      this.deps.log.local("error", "agent message handling failed", { sessionId: this.sessionId, method: m.method, error: errorText(e) });
+      this.deps.log.local("error", "agent message handling failed", {
+        sessionId: this.sessionId,
+        method: m.method,
+        error: errorText(e),
+      });
       return m.method !== "session/update";
     }
     return true;
@@ -267,7 +271,11 @@ export class AgentSession {
       return;
     }
     const requestId = newId();
-    const { itemId, title, options } = this.mapper.addPermission(requestId, params["toolCall"], params["options"]);
+    const { itemId, title, options } = this.mapper.addPermission(
+      requestId,
+      params["toolCall"],
+      params["options"],
+    );
     const promise = new Promise<RequestPermissionResponse>((resolve) => {
       this.permissions.set(requestId, { turnId: turn.turnId, itemId, options, resolve });
     });
@@ -294,7 +302,11 @@ export class AgentSession {
       throw new TempoError("VALIDATION_FAILED", "Unknown option.");
     }
     this.permissions.delete(requestId);
-    p.resolve(optionId === null ? { outcome: { outcome: "cancelled" } } : { outcome: { outcome: "selected", optionId } });
+    p.resolve(
+      optionId === null
+        ? { outcome: { outcome: "cancelled" } }
+        : { outcome: { outcome: "selected", optionId } },
+    );
     this.mapper.resolvePermission(p.itemId, optionId);
   }
 
@@ -337,13 +349,21 @@ export class AgentSession {
   }
 
   /** Steps 4 to 7 of "Start a session", or the reload path (01, Sessions). */
-  async start(p: { modeId?: string | null; model?: string | null; acpSessionId?: string | null }): Promise<SessionStartResult> {
-    const init = await this.request<{ protocolVersion?: unknown; agentCapabilities?: unknown }>("initialize", {
-      protocolVersion: 1,
-      clientCapabilities: CLIENT_CAPABILITIES,
-      clientInfo: { name: "tempod", version: VERSION },
-    });
-    if (init.protocolVersion !== 1) throw new Error(`unsupported ACP protocol version ${String(init.protocolVersion)}`);
+  async start(p: {
+    modeId?: string | null;
+    model?: string | null;
+    acpSessionId?: string | null;
+  }): Promise<SessionStartResult> {
+    const init = await this.request<{ protocolVersion?: unknown; agentCapabilities?: unknown }>(
+      "initialize",
+      {
+        protocolVersion: 1,
+        clientCapabilities: CLIENT_CAPABILITIES,
+        clientInfo: { name: "tempod", version: VERSION },
+      },
+    );
+    if (init.protocolVersion !== 1)
+      throw new Error(`unsupported ACP protocol version ${String(init.protocolVersion)}`);
     this.capabilities = isObj(init.agentCapabilities) ? structuredClone(init.agentCapabilities) : {};
     let reloaded = false;
     let handoff = false;
@@ -361,7 +381,10 @@ export class AgentSession {
           this.applySessionResponse(res);
           reloaded = true;
         } catch (e) {
-          this.deps.log.warn("session/load failed; handing off", { sessionId: this.sessionId, error: errorText(e) });
+          this.deps.log.warn("session/load failed; handing off", {
+            sessionId: this.sessionId,
+            error: errorText(e),
+          });
           handoff = true;
           this.dropReplayOf = wanted;
         } finally {
@@ -388,7 +411,8 @@ export class AgentSession {
     }
     if (p.model) {
       const option = modelOption(state.configOptions);
-      if (!option) this.deps.log.warn("agent has no model option", { sessionId: this.sessionId, agent: this.agent });
+      if (!option)
+        this.deps.log.warn("agent has no model option", { sessionId: this.sessionId, agent: this.agent });
       else if (option.currentValue !== p.model) {
         try {
           await this.setConfig(option.id, p.model);
@@ -438,7 +462,8 @@ export class AgentSession {
         ? { sessionId: this.acpSessionId, configId, type: "boolean", value }
         : { sessionId: this.acpSessionId, configId, value };
     const res = await this.request<{ configOptions?: unknown }>("session/set_config_option", params, 30_000);
-    if (Array.isArray(res.configOptions)) this.mapper.state.configOptions = toConfigOptions(res.configOptions);
+    if (Array.isArray(res.configOptions))
+      this.mapper.state.configOptions = toConfigOptions(res.configOptions);
     this.lastUsed = Date.now();
     return this.mapper.state.configOptions;
   }
@@ -479,13 +504,15 @@ export class AgentSession {
     if (this.conn.signal.aborted || !this.alive) {
       // The adapter is going away: its exit handler ends the turn.
       await Promise.race([this.exited, Bun.sleep(this.deps.killGraceMs + 1_000)]);
-      if (!turn.ended) this.finishTurn(turn, null, { code: "AGENT_CRASHED", message: "The agent stopped unexpectedly." });
+      if (!turn.ended)
+        this.finishTurn(turn, null, { code: "AGENT_CRASHED", message: "The agent stopped unexpectedly." });
       return;
     }
     const data = e instanceof RequestError && e.data !== undefined ? ` ${JSON.stringify(e.data)}` : "";
     const text = `${errorText(e)}${data}`;
     const credential = CREDENTIAL_ERROR.test(text);
-    if (credential && this.agent === "codex") this.deps.emit({ kind: "credential.invalid", provider: "codex" });
+    if (credential && this.agent === "codex")
+      this.deps.emit({ kind: "credential.invalid", provider: "codex" });
     this.finishTurn(turn, null, {
       code: credential ? "CREDENTIAL_INVALID" : "INTERNAL",
       message: text.length > 2_000 ? text.slice(0, 2_000) : text,
@@ -563,7 +590,13 @@ export class AgentSession {
       return;
     }
     const caps = this.capabilities["sessionCapabilities"];
-    if (graceful && this.acpSessionId !== null && isObj(caps) && isObj(caps["close"]) && !this.conn.signal.aborted) {
+    if (
+      graceful &&
+      this.acpSessionId !== null &&
+      isObj(caps) &&
+      isObj(caps["close"]) &&
+      !this.conn.signal.aborted
+    ) {
       try {
         await this.request("session/close", { sessionId: this.acpSessionId }, CLOSE_REQUEST_MS);
       } catch (e) {
@@ -596,8 +629,19 @@ export class AgentSession {
     setTimeout(() => killGroup(pid, "SIGKILL"), this.deps.killGraceMs);
   }
 
-  private emitExited(code: number | null, signal: string | null, reason: "crashed" | "evicted" | "cancelled"): void {
-    this.deps.emit({ kind: "agent.exited", sessionId: this.sessionId, code, signal, stderrTail: this.stderrTail(), reason });
+  private emitExited(
+    code: number | null,
+    signal: string | null,
+    reason: "crashed" | "evicted" | "cancelled",
+  ): void {
+    this.deps.emit({
+      kind: "agent.exited",
+      sessionId: this.sessionId,
+      code,
+      signal,
+      stderrTail: this.stderrTail(),
+      reason,
+    });
   }
 
   private onExit(code: number | null, signal: string | null): void {

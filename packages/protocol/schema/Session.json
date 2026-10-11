@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Session",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "agent": {
+      "$ref": "AgentId.json"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "$ref": "SessionStatus.json"
+    },
+    "modeId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "modes": {
+      "type": "array",
+      "items": {
+        "$ref": "SessionMode.json"
+      }
+    },
+    "configOptions": {
+      "type": "array",
+      "items": {
+        "$ref": "ConfigOption.json"
+      }
+    },
+    "config": {
+      "type": "object"
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "$ref": "AvailableCommand.json"
+      }
+    },
+    "usage": {
+      "$ref": "Usage.json"
+    },
+    "sortOrder": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "agent",
+    "title",
+    "status",
+    "modeId",
+    "modes",
+    "configOptions",
+    "config",
+    "commands",
+    "usage",
+    "sortOrder"
+  ],
+  "additionalProperties": true
+}

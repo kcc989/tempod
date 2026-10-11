@@ -1,0 +1,2 @@
+{"command":"bun run dev","cwd":".","default":true}
+{"command":"bun test","cwd":"packages/api","default":false}

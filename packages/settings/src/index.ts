@@ -83,7 +83,9 @@ const parseTomlSafe = (file: string, text: string): { value: unknown } | { error
   try {
     return { value: parseToml(text) };
   } catch (e) {
-    return { error: `${file}: ${e instanceof Error ? e.message.split("\n")[0] : "parse error"}; the file was ignored` };
+    return {
+      error: `${file}: ${e instanceof Error ? e.message.split("\n")[0] : "parse error"}; the file was ignored`,
+    };
   }
 };
 
@@ -102,7 +104,8 @@ export const readConductorToml = (text: string): LayerResult => {
   const parsed = parseTomlSafe(file, text);
   if ("error" in parsed) return { layer: null, warnings: [], errors: [parsed.error] };
   const raw = parsed.value;
-  if (!isObj(raw)) return { layer: null, warnings: [], errors: [`${file}: not a table; the file was ignored`] };
+  if (!isObj(raw))
+    return { layer: null, warnings: [], errors: [`${file}: not a table; the file was ignored`] };
   const ignored: string[] = [];
   const out: Obj = {};
   for (const [k, v] of Object.entries(raw)) {
@@ -124,10 +127,12 @@ export const readConductorToml = (text: string): LayerResult => {
             if (isObj(options) && typeof options["cwd"] === "string") entry["cwd"] = options["cwd"];
             if (typeof def["default"] === "boolean") entry["default"] = def["default"];
             for (const dk of Object.keys(def)) {
-              if (!["command", "args", "options", "default"].includes(dk)) ignored.push(`scripts.run.${id}.${dk}`);
+              if (!["command", "args", "options", "default"].includes(dk))
+                ignored.push(`scripts.run.${id}.${dk}`);
             }
             if (isObj(options)) {
-              for (const ok of Object.keys(options)) if (ok !== "cwd") ignored.push(`scripts.run.${id}.options.${ok}`);
+              for (const ok of Object.keys(options))
+                if (ok !== "cwd") ignored.push(`scripts.run.${id}.options.${ok}`);
             }
             run[id] = entry;
           }
@@ -157,7 +162,8 @@ export const readConductorToml = (text: string): LayerResult => {
 
 const stringRecord = (o: Obj): Obj => {
   const out: Obj = {};
-  for (const [k, v] of Object.entries(o)) if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") out[k] = String(v);
+  for (const [k, v] of Object.entries(o))
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") out[k] = String(v);
   return out;
 };
 
@@ -168,16 +174,22 @@ export const readConductorJson = (text: string): LayerResult => {
   try {
     raw = JSON.parse(text);
   } catch (e) {
-    return { layer: null, warnings: [], errors: [`${file}: ${e instanceof Error ? e.message : "parse error"}; the file was ignored`] };
+    return {
+      layer: null,
+      warnings: [],
+      errors: [`${file}: ${e instanceof Error ? e.message : "parse error"}; the file was ignored`],
+    };
   }
-  if (!isObj(raw)) return { layer: null, warnings: [], errors: [`${file}: not an object; the file was ignored`] };
+  if (!isObj(raw))
+    return { layer: null, warnings: [], errors: [`${file}: not an object; the file was ignored`] };
   const ignored: string[] = [];
   const scripts: Obj = {};
   for (const [k, v] of Object.entries(raw)) {
     if (k === "scripts" && isObj(v)) {
       for (const [sk, sv] of Object.entries(v)) {
         if (sk === "setup" || sk === "archive") scripts[sk] = sv;
-        else if (sk === "run" && typeof sv === "string") scripts["run"] = { default: { command: sv, default: true } };
+        else if (sk === "run" && typeof sv === "string")
+          scripts["run"] = { default: { command: sv, default: true } };
         else ignored.push(`scripts.${sk}`);
       }
     } else if (k === "runScriptMode") scripts["run_mode"] = v;
@@ -195,7 +207,9 @@ const setSource = (sources: Sources, path: string, source: SettingsSource) => {
 
 /** Applies `layer` over `base`, recording where each leaf came from. */
 const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sources: Sources): Settings => {
-  const next = structuredClone(base) as { -readonly [K in keyof Settings]: { -readonly [P in keyof Settings[K]]: Settings[K][P] } };
+  const next = structuredClone(base) as {
+    -readonly [K in keyof Settings]: { -readonly [P in keyof Settings[K]]: Settings[K][P] };
+  };
   const leaf = <S extends keyof Settings>(section: S, key: keyof Settings[S] & string, value: unknown) => {
     if (value === undefined) return;
     (next[section] as Record<string, unknown>)[key] = value;
@@ -278,7 +292,9 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
 };
 
 /** Validates UI overrides on their own (updateProjectSettings). */
-export const validateOverrides = (raw: unknown): { ok: true; value: SettingsLayer } | { ok: false; error: string } => {
+export const validateOverrides = (
+  raw: unknown,
+): { ok: true; value: SettingsLayer } | { ok: false; error: string } => {
   const unknown: string[] = [];
   unknownKeys(raw, KNOWN, "", unknown);
   if (unknown.length) return { ok: false, error: `Unknown keys: ${unknown.join(", ")}` };

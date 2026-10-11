@@ -72,7 +72,10 @@ export interface ConfigOverrides {
   readonly limits?: Partial<Limits>;
 }
 
-export const loadConfig = (env: Record<string, string | undefined>, overrides: ConfigOverrides = {}): Config => {
+export const loadConfig = (
+  env: Record<string, string | undefined>,
+  overrides: ConfigOverrides = {},
+): Config => {
   const token = env["TEMPOD_TOKEN"];
   if (!token) throw new ConfigError("TEMPOD_TOKEN is missing");
   const port = Number(env["TEMPOD_PORT"] ?? "7070");

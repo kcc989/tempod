@@ -6,3 +6,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+prettyplease = "=0.3.0"
+schemars = "=0.8.22"
+serde_json = "=1.0.154"
+syn = { version = "=3.0.8", default-features = false, features = ["full", "parsing", "printing"] }
+typify = { version = "=0.8.0", default-features = false }

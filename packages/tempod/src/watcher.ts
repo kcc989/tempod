@@ -132,7 +132,8 @@ export class Watcher {
             const space = line.indexOf(" ");
             const path = space >= 0 ? line.slice(space + 1) : line;
             const rel = relative(this.opts.workspace, path);
-            if (SETTINGS_FILE_PATHS.includes(rel)) this.opts.log.debug("settings file changed", { path: rel });
+            if (SETTINGS_FILE_PATHS.includes(rel))
+              this.opts.log.debug("settings file changed", { path: rel });
             this.schedule();
           }
         }

@@ -128,7 +128,12 @@ export const offloadBlobs = (v: unknown, save: SaveBlob, max = INLINE_BLOB_MAX, 
     return blobLink(data, o["mimeType"], save);
   }
   const resource = o["resource"];
-  if (type === "resource" && isObj(resource) && typeof resource["blob"] === "string" && resource["blob"].length > max) {
+  if (
+    type === "resource" &&
+    isObj(resource) &&
+    typeof resource["blob"] === "string" &&
+    resource["blob"].length > max
+  ) {
     return blobLink(resource["blob"], resource["mimeType"], save);
   }
   const out: Obj = {};

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UpdateProjectSettingsIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "settings": {
+      "type": "object"
+    }
+  },
+  "required": ["projectId", "settings"],
+  "additionalProperties": true
+}

@@ -68,20 +68,43 @@ describe("fs.list, fs.read, fs.search", () => {
     writeFileSync(join(ws, "a.txt"), "héllo\n");
     writeFileSync(join(ws, "bin.dat"), Buffer.from([0, 1, 2, 255]));
     writeFileSync(join(ws, "latin1.txt"), Buffer.from([0x68, 0xe9, 0x6c]));
-    expect(await c.ok<unknown>("fs.read", { path: "a.txt", maxBytes: MiB })).toEqual({ content: "héllo\n", encoding: "utf8", size: 7 });
-    expect(await c.ok<unknown>("fs.read", { path: join(ws, "a.txt"), maxBytes: MiB })).toMatchObject({ encoding: "utf8" });
-    expect(await c.ok<unknown>("fs.read", { path: "bin.dat", maxBytes: MiB })).toEqual({ content: "AAEC/w==", encoding: "base64", size: 4 });
-    expect(await c.ok<unknown>("fs.read", { path: "latin1.txt", maxBytes: MiB })).toEqual({ content: "aOls", encoding: "base64", size: 3 });
+    expect(await c.ok<unknown>("fs.read", { path: "a.txt", maxBytes: MiB })).toEqual({
+      content: "héllo\n",
+      encoding: "utf8",
+      size: 7,
+    });
+    expect(await c.ok<unknown>("fs.read", { path: join(ws, "a.txt"), maxBytes: MiB })).toMatchObject({
+      encoding: "utf8",
+    });
+    expect(await c.ok<unknown>("fs.read", { path: "bin.dat", maxBytes: MiB })).toEqual({
+      content: "AAEC/w==",
+      encoding: "base64",
+      size: 4,
+    });
+    expect(await c.ok<unknown>("fs.read", { path: "latin1.txt", maxBytes: MiB })).toEqual({
+      content: "aOls",
+      encoding: "base64",
+      size: 3,
+    });
   });
 
   test("fs.read: FILE_TOO_LARGE over maxBytes, and when the encoded answer would pass 1 MiB", async () => {
     const { c, ws } = await setup();
     writeFileSync(join(ws, "big.txt"), "x".repeat(2000));
-    expect(await c.req("fs.read", { path: "big.txt", maxBytes: 1000 })).toMatchObject({ ok: false, error: { code: "FILE_TOO_LARGE" } });
+    expect(await c.req("fs.read", { path: "big.txt", maxBytes: 1000 })).toMatchObject({
+      ok: false,
+      error: { code: "FILE_TOO_LARGE" },
+    });
     writeFileSync(join(ws, "blob.bin"), Buffer.alloc(900 * 1024, 0));
-    expect(await c.req("fs.read", { path: "blob.bin", maxBytes: MiB })).toMatchObject({ ok: false, error: { code: "FILE_TOO_LARGE" } });
+    expect(await c.req("fs.read", { path: "blob.bin", maxBytes: MiB })).toMatchObject({
+      ok: false,
+      error: { code: "FILE_TOO_LARGE" },
+    });
     writeFileSync(join(ws, "escapes.txt"), "\u0001".repeat(300 * 1024));
-    expect(await c.req("fs.read", { path: "escapes.txt", maxBytes: MiB })).toMatchObject({ ok: false, error: { code: "FILE_TOO_LARGE" } });
+    expect(await c.req("fs.read", { path: "escapes.txt", maxBytes: MiB })).toMatchObject({
+      ok: false,
+      error: { code: "FILE_TOO_LARGE" },
+    });
     writeFileSync(join(ws, "fits.txt"), "y".repeat(900 * 1024));
     const ok = await c.req("fs.read", { path: "fits.txt", maxBytes: MiB });
     expect(ok.ok).toBe(true);
@@ -95,10 +118,19 @@ describe("fs.list, fs.read, fs.search", () => {
     symlinkSync(join(outside, "nothing-yet.txt"), join(ws, "dangling.txt"));
     mkdirSync(join(ws, "folder"));
     for (const path of ["../x.txt", "/etc/passwd", "link.txt", "dangling.txt", join(outside, "secret.txt")]) {
-      expect(await c.req("fs.read", { path, maxBytes: MiB })).toMatchObject({ ok: false, error: { code: "PATH_OUTSIDE_WORKSPACE" } });
+      expect(await c.req("fs.read", { path, maxBytes: MiB })).toMatchObject({
+        ok: false,
+        error: { code: "PATH_OUTSIDE_WORKSPACE" },
+      });
     }
-    expect(await c.req("fs.read", { path: "missing.txt", maxBytes: MiB })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
-    expect(await c.req("fs.read", { path: "folder", maxBytes: MiB })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(await c.req("fs.read", { path: "missing.txt", maxBytes: MiB })).toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
+    expect(await c.req("fs.read", { path: "folder", maxBytes: MiB })).toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
   });
 
   test("fs.search: literal and regex, capped at maxResults, ignored files skipped", async () => {
@@ -113,16 +145,34 @@ describe("fs.list, fs.read, fs.search", () => {
       maxResults: 50,
     });
     const found = lit.matches.map((m) => `${m.path}:${m.line}:${m.text}`).sort();
-    expect(found).toEqual(["src/a.ts:1:const needle = 1;", "src/a.ts:3:needle();", "src/b.ts:1:// a.b needle"]);
-    const dot = await c.ok<{ matches: unknown[] }>("fs.search", { query: "a.b", regex: false, maxResults: 50 });
+    expect(found).toEqual([
+      "src/a.ts:1:const needle = 1;",
+      "src/a.ts:3:needle();",
+      "src/b.ts:1:// a.b needle",
+    ]);
+    const dot = await c.ok<{ matches: unknown[] }>("fs.search", {
+      query: "a.b",
+      regex: false,
+      maxResults: 50,
+    });
     expect(dot.matches).toHaveLength(1);
-    const re = await c.ok<{ matches: Array<{ path: string }> }>("fs.search", { query: "^const \\w+ = 2", regex: true, maxResults: 50 });
+    const re = await c.ok<{ matches: Array<{ path: string }> }>("fs.search", {
+      query: "^const \\w+ = 2",
+      regex: true,
+      maxResults: 50,
+    });
     expect(re.matches.map((m) => m.path)).toEqual(["src/a.ts"]);
-    const capped = await c.ok<{ matches: unknown[] }>("fs.search", { query: "needle", regex: false, maxResults: 2 });
+    const capped = await c.ok<{ matches: unknown[] }>("fs.search", {
+      query: "needle",
+      regex: false,
+      maxResults: 2,
+    });
     expect(capped.matches).toHaveLength(2);
     const bad = await c.req("fs.search", { query: "(", regex: true, maxResults: 5 });
     expect(bad).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
-    expect(await c.ok<unknown>("fs.search", { query: "", regex: false, maxResults: 5 })).toEqual({ matches: [] });
+    expect(await c.ok<unknown>("fs.search", { query: "", regex: false, maxResults: 5 })).toEqual({
+      matches: [],
+    });
   });
 });
 
@@ -130,11 +180,14 @@ describe("settings.read", () => {
   test("resolves overrides and files; a later file change sends settings.changed", async () => {
     const { c, ws, h } = await setup();
     writeFile(join(ws, ".tempo", "settings.toml"), '[scripts]\nsetup = "bun install"\n');
-    writeFileSync(join(ws, "conductor.json"), JSON.stringify({ scripts: { archive: "echo bye" }, spotlight_testing: true }));
-    const r = await c.ok<{ effective: { scripts: { setup: string; archive: string }; agent: { default: string } }; warnings: string[] }>(
-      "settings.read",
-      { overrides: { agent: { default: "codex" } } },
+    writeFileSync(
+      join(ws, "conductor.json"),
+      JSON.stringify({ scripts: { archive: "echo bye" }, spotlight_testing: true }),
     );
+    const r = await c.ok<{
+      effective: { scripts: { setup: string; archive: string }; agent: { default: string } };
+      warnings: string[];
+    }>("settings.read", { overrides: { agent: { default: "codex" } } });
     expect(r.effective.scripts.setup).toBe("bun install");
     expect(r.effective.scripts.archive).toBe("echo bye");
     expect(r.effective.agent.default).toBe("codex");

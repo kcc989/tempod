@@ -40,9 +40,12 @@ export const setupCa = async (config: Config, log: Logger): Promise<Record<strin
         const r = await run([certutil, "-d", db, "-N", "--empty-password"], { timeoutMs: 30_000 });
         if (r.code !== 0) log.warn("certutil -N failed", { stderr: tail(r.stderr, 500) });
       }
-      const r = await run([certutil, "-d", db, "-A", "-t", "C,,", "-n", "cloudflare-containers", "-i", config.caCert], {
-        timeoutMs: 30_000,
-      });
+      const r = await run(
+        [certutil, "-d", db, "-A", "-t", "C,,", "-n", "cloudflare-containers", "-i", config.caCert],
+        {
+          timeoutMs: 30_000,
+        },
+      );
       if (r.code !== 0) log.warn("certutil -A failed", { stderr: tail(r.stderr, 500) });
     } catch (e) {
       log.warn("certutil failed", { error: String(e) });

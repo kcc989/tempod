@@ -34,7 +34,8 @@ const stateDir = env["FAKE_STATE_DIR"] ?? join(env["HOME"] ?? "/tmp", ".fake-age
 mkdirSync(stateDir, { recursive: true });
 if (env["FAKE_IGNORE_SIGTERM"] === "1") process.on("SIGTERM", () => {});
 
-const record = (line: string): void => appendFileSync(join(stateDir, "calls.log"), `${process.pid} ${line}\n`);
+const record = (line: string): void =>
+  appendFileSync(join(stateDir, "calls.log"), `${process.pid} ${line}\n`);
 process.stderr.write(`fake agent ${process.pid} started\n`);
 record("start");
 
@@ -87,7 +88,11 @@ class FakeAgent implements Agent {
     return this.conn.sessionUpdate({ sessionId, update });
   }
 
-  private text(sessionId: string, text: string, kind: "agent_message_chunk" | "agent_thought_chunk" = "agent_message_chunk") {
+  private text(
+    sessionId: string,
+    text: string,
+    kind: "agent_message_chunk" | "agent_thought_chunk" = "agent_message_chunk",
+  ) {
     return this.update(sessionId, { sessionUpdate: kind, content: { type: "text", text } });
   }
 
@@ -189,7 +194,13 @@ class FakeAgent implements Agent {
         await this.text(sid, "done");
         return { stopReason: "end_turn" };
       case "permission": {
-        await this.update(sid, { sessionUpdate: "tool_call", toolCallId: "tc2", title: "Edit b.txt", kind: "edit", status: "pending" });
+        await this.update(sid, {
+          sessionUpdate: "tool_call",
+          toolCallId: "tc2",
+          title: "Edit b.txt",
+          kind: "edit",
+          status: "pending",
+        });
         const res = await this.conn.requestPermission({
           sessionId: sid,
           toolCall: { toolCallId: "tc2", title: "Edit b.txt" },
@@ -237,7 +248,13 @@ class FakeAgent implements Agent {
         return { stopReason: "end_turn" };
       }
       case "big-text": {
-        await this.update(sid, { sessionUpdate: "tool_call", toolCallId: "tc4", title: "Big", kind: "other", status: "pending" });
+        await this.update(sid, {
+          sessionUpdate: "tool_call",
+          toolCallId: "tc4",
+          title: "Big",
+          kind: "other",
+          status: "pending",
+        });
         const big = "x".repeat(1_500_000);
         await this.update(sid, {
           sessionUpdate: "tool_call_update",
@@ -277,7 +294,9 @@ class FakeAgent implements Agent {
 
 const output = new WritableStream<Uint8Array>({
   write(chunk) {
-    return new Promise<void>((resolve, reject) => process.stdout.write(chunk, (e) => (e ? reject(e) : resolve())));
+    return new Promise<void>((resolve, reject) =>
+      process.stdout.write(chunk, (e) => (e ? reject(e) : resolve())),
+    );
   },
 });
 const input = Bun.stdin.stream() as ReadableStream<Uint8Array>;

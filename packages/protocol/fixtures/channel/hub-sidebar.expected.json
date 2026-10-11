@@ -1,0 +1,103 @@
+{
+  "channel": "hub",
+  "messages": 16,
+  "state": {
+    "ready": true,
+    "workspaces": {
+      "01k7000000000000000000000b": {
+        "archivedAt": null,
+        "attention": "none",
+        "baseBranch": "main",
+        "branch": "tempo/lisbon",
+        "checksState": null,
+        "createdAt": 1791622800000,
+        "defaultAgent": "claude",
+        "id": "01k7000000000000000000000b",
+        "lastActivityAt": 1791709260000,
+        "pinned": true,
+        "prNumber": null,
+        "prState": null,
+        "projectId": "01k70000000000000000000001",
+        "rev": 43,
+        "slug": "lisbon",
+        "state": "ready",
+        "title": "Add dark mode toggle"
+      },
+      "01k7000000000000000000000c": {
+        "archivedAt": null,
+        "attention": "unread",
+        "baseBranch": "main",
+        "branch": "tempo/oslo",
+        "checksState": "success",
+        "createdAt": 1791622800000,
+        "defaultAgent": "claude",
+        "id": "01k7000000000000000000000c",
+        "lastActivityAt": 1791705600000,
+        "pinned": true,
+        "prNumber": 42,
+        "prState": "merged",
+        "projectId": "01k70000000000000000000001",
+        "rev": 22,
+        "slug": "oslo",
+        "state": "ready",
+        "title": "Fix flaky checkout test"
+      },
+      "01k7000000000000000000000e": {
+        "archivedAt": null,
+        "attention": "error",
+        "baseBranch": "main",
+        "branch": "tempo/nairobi",
+        "checksState": null,
+        "createdAt": 1791710100000,
+        "defaultAgent": "claude",
+        "id": "01k7000000000000000000000e",
+        "lastActivityAt": 1791710100000,
+        "pinned": false,
+        "prNumber": null,
+        "prState": null,
+        "projectId": "01k70000000000000000000001",
+        "rev": 3,
+        "slug": "nairobi",
+        "state": "error",
+        "title": ""
+      }
+    }
+  },
+  "events": [
+    {
+      "line": 2,
+      "event": {
+        "kind": "finished",
+        "workspaceId": "01k7000000000000000000000b"
+      }
+    },
+    {
+      "line": 6,
+      "event": {
+        "kind": "finished",
+        "workspaceId": "01k7000000000000000000000c"
+      }
+    },
+    {
+      "line": 8,
+      "event": {
+        "kind": "needs_input",
+        "workspaceId": "01k7000000000000000000000c"
+      }
+    },
+    {
+      "line": 12,
+      "event": {
+        "kind": "error",
+        "workspaceId": "01k7000000000000000000000e"
+      }
+    },
+    {
+      "line": 16,
+      "event": {
+        "kind": "finished",
+        "workspaceId": "01k7000000000000000000000c"
+      }
+    }
+  ]
+}

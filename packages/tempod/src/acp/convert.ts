@@ -10,7 +10,11 @@ export const toModes = (u: unknown): SessionMode[] => {
   for (const m of u) {
     if (!isObj(m) || typeof m["id"] !== "string") continue;
     const description = str(m["description"]);
-    out.push({ id: m["id"], name: str(m["name"]) ?? m["id"], ...(description !== undefined ? { description } : {}) });
+    out.push({
+      id: m["id"],
+      name: str(m["name"]) ?? m["id"],
+      ...(description !== undefined ? { description } : {}),
+    });
   }
   return out;
 };
@@ -29,7 +33,11 @@ const toSelectOptions = (u: unknown): NonNullable<ConfigOption["options"]> => {
       out.push({ group: o["group"], name: str(o["name"]) ?? o["group"], options });
     } else if (typeof o["value"] === "string") {
       const description = str(o["description"]);
-      out.push({ value: o["value"], name: str(o["name"]) ?? o["value"], ...(description !== undefined ? { description } : {}) });
+      out.push({
+        value: o["value"],
+        name: str(o["name"]) ?? o["value"],
+        ...(description !== undefined ? { description } : {}),
+      });
     }
   }
   return out;

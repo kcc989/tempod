@@ -1,0 +1,2 @@
+{"id":"01k700000000000000000000nx","path":"src/app.tsx","lineStart":12,"lineEnd":14,"side":"new","body":"Move the toggle into the header component.","status":"draft","sentTurnId":null,"createdAt":1791709500000}
+{"id":"01k700000000000000000000ny","path":"src/app.tsx","lineStart":null,"lineEnd":null,"side":null,"body":"Move the toggle into the header component.","status":"sent","sentTurnId":"01k70000000000000000000036","createdAt":1791709500000}

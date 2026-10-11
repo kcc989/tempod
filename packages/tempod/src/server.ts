@@ -60,7 +60,8 @@ export const startServer = (app: Tempod, opts: { hostname?: string; port: number
       const target = parseProxyPath(url.pathname, url.search);
       if (target === "bad") return new Response("bad proxy path\n", { status: 400 });
       if (target) {
-        if (!proxyAllowed(target.port, [app.listenPort])) return new Response("forbidden port\n", { status: 403 });
+        if (!proxyAllowed(target.port, [app.listenPort]))
+          return new Response("forbidden port\n", { status: 403 });
         srv.timeout(req, 0);
         if ((req.headers.get("upgrade") ?? "").toLowerCase() === "websocket") {
           return proxyWebSocket(req, target, log, (data, headers) => srv.upgrade(req, { data, headers }));

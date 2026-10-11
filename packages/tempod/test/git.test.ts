@@ -1,10 +1,29 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  truncateSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { ChangedFile, CheckpointResult } from "@tempo/protocol";
 import { TempodDb } from "../src/db.ts";
 import { Git } from "../src/git.ts";
-import { cleanupDirs, DoClient, git, makeOrigin, startTempod, testConfig, tmpDir, writeFile, type Harness } from "./helpers.ts";
+import {
+  cleanupDirs,
+  DoClient,
+  git,
+  makeOrigin,
+  startTempod,
+  testConfig,
+  tmpDir,
+  writeFile,
+  type Harness,
+} from "./helpers.ts";
 
 afterAll(cleanupDirs);
 
@@ -30,7 +49,15 @@ const boot = async (origin?: Origin) => {
   const clone = (extra: Record<string, unknown> = {}) =>
     c.ok<{ headSha: string; remoteHeadSha: string | null }>(
       "repo.clone",
-      { url: o.url, branch: BRANCH, baseBranch: "main", source: { kind: "new" }, author, mode: "create", ...extra },
+      {
+        url: o.url,
+        branch: BRANCH,
+        baseBranch: "main",
+        source: { kind: "new" },
+        author,
+        mode: "create",
+        ...extra,
+      },
       60_000,
     );
   const g = (...args: string[]) => git(ws, ...args);
@@ -38,7 +65,13 @@ const boot = async (origin?: Origin) => {
 };
 
 /** Pushes a commit to `branch` on origin from the seed clone. */
-const pushToOrigin = async (o: Origin, branch: string, file: string, content: string, from = "main"): Promise<string> => {
+const pushToOrigin = async (
+  o: Origin,
+  branch: string,
+  file: string,
+  content: string,
+  from = "main",
+): Promise<string> => {
   await git(o.seed, "fetch", "-q", "origin");
   await git(o.seed, "checkout", "-q", "-B", branch, `origin/${from}`);
   writeFileSync(join(o.seed, file), content);
@@ -67,7 +100,11 @@ describe("repo.clone", () => {
       const again = await clone();
       expect(again.headSha).toBe(mainSha);
       expect(readFileSync(join(ws, "keep.txt"), "utf8")).toBe("work in progress\n");
-      const changed = await c.waitEvent("git.changed", (e) => e.files.some((f) => f.path === "keep.txt"), 10_000);
+      const changed = await c.waitEvent(
+        "git.changed",
+        (e) => e.files.some((f) => f.path === "keep.txt"),
+        10_000,
+      );
       expect(changed.additions).toBe(1);
     },
     T,
@@ -101,7 +138,9 @@ describe("repo.clone", () => {
       const b = await boot(origin);
       const pr = await b.clone({ branch: "feature/x", source: { kind: "pr", number: 7 } });
       expect(pr.remoteHeadSha).toBe(sha);
-      const missing = await (await boot(origin)).c.req("repo.clone", {
+      const missing = await (
+        await boot(origin)
+      ).c.req("repo.clone", {
         url: origin.url,
         branch: "nope",
         baseBranch: "main",
@@ -154,7 +193,13 @@ describe("repo.clone", () => {
       const other = await boot();
       const badUrl = await other.c.req(
         "repo.clone",
-        { url: "file:///nonexistent/repo.git", branch: "tempo/x", baseBranch: "main", source: { kind: "new" }, author },
+        {
+          url: "file:///nonexistent/repo.git",
+          branch: "tempo/x",
+          baseBranch: "main",
+          source: { kind: "new" },
+          author,
+        },
         60_000,
       );
       expect(badUrl).toMatchObject({ ok: false, error: { code: "CLONE_FAILED" } });
@@ -186,7 +231,11 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       const head = await g("rev-parse", "HEAD");
       const indexTree = await g("write-tree");
       const status = await g("status", "--porcelain");
-      const r = await c.ok<CheckpointResult>("git.checkpoint", { checkpointId: "01CKPTA", turnId: "t1", reason: "turn_end" });
+      const r = await c.ok<CheckpointResult>("git.checkpoint", {
+        checkpointId: "01CKPTA",
+        turnId: "t1",
+        reason: "turn_end",
+      });
       if ("unchanged" in r) throw new Error("expected a checkpoint");
       expect(r.parent).toBe(head);
       expect(r.base).toBe(head);
@@ -205,7 +254,11 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       expect(files).not.toContain("ignored/cache.bin");
       expect(await g("show", `${r.commit}:a.txt`)).toBe("one\nTWO\nthree");
       expect(await g("bundle", "verify", r.bundlePath)).toBeDefined();
-      const again = await c.ok("git.checkpoint", { checkpointId: "01CKPTB", turnId: null, reason: "pre_sleep" });
+      const again = await c.ok("git.checkpoint", {
+        checkpointId: "01CKPTB",
+        turnId: null,
+        reason: "pre_sleep",
+      });
       expect(again).toEqual({ unchanged: true });
       const bad = await c.req("git.checkpoint", { checkpointId: "../x", turnId: null, reason: "turn_end" });
       expect(bad).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
@@ -226,7 +279,11 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       truncateSync(staged, 51 * 1024 * 1024);
       await g("add", "staged-big.bin");
       writeFileSync(join(ws, "small.txt"), "small\n");
-      const r = await c.ok<CheckpointResult>("git.checkpoint", { checkpointId: "01BIG", turnId: null, reason: "turn_end" }, 60_000);
+      const r = await c.ok<CheckpointResult>(
+        "git.checkpoint",
+        { checkpointId: "01BIG", turnId: null, reason: "turn_end" },
+        60_000,
+      );
       if ("unchanged" in r) throw new Error("expected a checkpoint");
       const files = (await g("ls-tree", "-r", "--name-only", r.commit)).split("\n");
       expect(files).toContain("small.txt");
@@ -247,7 +304,11 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       writeFileSync(join(a.ws, "README.md"), "uncommitted\n");
       writeFile(join(a.ws, "notes", "todo.md"), "untracked\n");
       rmSync(join(a.ws, "gone.txt"));
-      const r = await a.c.ok<CheckpointResult>("git.checkpoint", { checkpointId: "01APPLY", turnId: "t1", reason: "pre_sleep" });
+      const r = await a.c.ok<CheckpointResult>("git.checkpoint", {
+        checkpointId: "01APPLY",
+        turnId: "t1",
+        reason: "pre_sleep",
+      });
       if ("unchanged" in r) throw new Error("expected a checkpoint");
       const bundle = join(tmpDir("bundle-"), "restore.bundle");
       copyFileSync(r.bundlePath, bundle);
@@ -266,7 +327,10 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       expect(readFileSync(join(b.ws, "notes", "todo.md"), "utf8")).toBe("untracked\n");
       expect(existsSync(join(b.ws, "gone.txt"))).toBe(false);
       expect(await b.g("diff", "--cached", "--name-only")).toBe("");
-      const status = (await b.g("status", "--porcelain")).split("\n").map((l) => l.trim()).sort();
+      const status = (await b.g("status", "--porcelain"))
+        .split("\n")
+        .map((l) => l.trim())
+        .sort();
       expect(status).toEqual(["?? notes/", "D gone.txt", "M README.md"]);
       const again = await b.c.ok<{ headSha: string }>("repo.applyCheckpoint", {
         bundlePath: bundle,
@@ -274,7 +338,11 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
         branch: BRANCH,
       });
       expect(again.headSha).toBe(head);
-      const missing = await b.c.req("repo.applyCheckpoint", { bundlePath: "/nonexistent.bundle", checkpointId: "01X", branch: BRANCH });
+      const missing = await b.c.req("repo.applyCheckpoint", {
+        bundlePath: "/nonexistent.bundle",
+        checkpointId: "01X",
+        branch: BRANCH,
+      });
       expect(missing).toMatchObject({ ok: false, error: { code: "CHECKPOINT_NOT_FOUND" } });
     },
     T,
@@ -290,7 +358,11 @@ describe("git.revert", () => {
       writeFileSync(join(ws, "a.txt"), "turn one\n");
       writeFileSync(join(ws, "u1.txt"), "untracked in turn one\n");
       const head1 = await g("rev-parse", "HEAD");
-      const ck = await c.ok<CheckpointResult>("git.checkpoint", { checkpointId: "01REV1", turnId: "t1", reason: "turn_end" });
+      const ck = await c.ok<CheckpointResult>("git.checkpoint", {
+        checkpointId: "01REV1",
+        turnId: "t1",
+        reason: "turn_end",
+      });
       if ("unchanged" in ck) throw new Error("expected a checkpoint");
       writeFileSync(join(ws, "a.txt"), "turn two\n");
       await g("commit", "-q", "-am", "turn two commit");
@@ -319,10 +391,13 @@ describe("git.changes and git.fileDiff", () => {
       const { c, ws, clone, g, origin } = await boot();
       await clone();
       const base = await git(origin.bare, "rev-parse", "main");
-      const clean = await c.ok<{ files: ChangedFile[]; ahead: number; dirty: boolean; baseSha: string; headSha: string }>(
-        "git.changes",
-        { scope: "branch" },
-      );
+      const clean = await c.ok<{
+        files: ChangedFile[];
+        ahead: number;
+        dirty: boolean;
+        baseSha: string;
+        headSha: string;
+      }>("git.changes", { scope: "branch" });
       expect(clean).toMatchObject({ files: [], ahead: 0, dirty: false, baseSha: base, headSha: base });
 
       writeFileSync(join(ws, "committed.txt"), "c1\nc2\n");
@@ -335,10 +410,13 @@ describe("git.changes and git.fileDiff", () => {
       writeFile(join(ws, "dir", "untracked.txt"), "u1\nu2\nu3\n");
       writeFileSync(join(ws, "debug.log"), "ignored\n");
 
-      const unc = await c.ok<{ files: ChangedFile[]; ahead: number; dirty: boolean; baseSha: string; headSha: string }>(
-        "git.changes",
-        { scope: "uncommitted" },
-      );
+      const unc = await c.ok<{
+        files: ChangedFile[];
+        ahead: number;
+        dirty: boolean;
+        baseSha: string;
+        headSha: string;
+      }>("git.changes", { scope: "uncommitted" });
       expect(unc.baseSha).toBe(head);
       expect(unc.headSha).toBe(head);
       expect(unc.ahead).toBe(1);
@@ -364,10 +442,16 @@ describe("git.changes and git.fileDiff", () => {
       expect(diff.diff).toContain("-two");
       expect(diff.diff).toContain("+TWO");
       expect(diff.diff).toContain("+four");
-      const added = await c.ok<{ diff: string }>("git.fileDiff", { scope: "uncommitted", path: "dir/untracked.txt" });
+      const added = await c.ok<{ diff: string }>("git.fileDiff", {
+        scope: "uncommitted",
+        path: "dir/untracked.txt",
+      });
       expect(added.diff).toContain("+u1");
       expect(added.diff).toContain("new file");
-      const committed = await c.ok<{ diff: string }>("git.fileDiff", { scope: "branch", path: "committed.txt" });
+      const committed = await c.ok<{ diff: string }>("git.fileDiff", {
+        scope: "branch",
+        path: "committed.txt",
+      });
       expect(committed.diff).toContain("+c2");
       const none = await c.ok<{ diff: string }>("git.fileDiff", { scope: "uncommitted", path: "README.md" });
       expect(none.diff).toBe("");
@@ -399,9 +483,14 @@ describe("git.commitAndPush and git.renameBranch", () => {
       expect(nothing).toMatchObject({ ok: false, error: { code: "NOTHING_TO_COMMIT" } });
 
       writeFileSync(join(ws, "feature.txt"), "feature\n");
-      const r = await c.ok<{ commitSha: string }>("git.commitAndPush", { message: "Add feature", branch: BRANCH });
+      const r = await c.ok<{ commitSha: string }>("git.commitAndPush", {
+        message: "Add feature",
+        branch: BRANCH,
+      });
       expect(await git(origin.bare, "rev-parse", BRANCH)).toBe(r.commitSha);
-      expect(await git(origin.bare, "log", "-1", "--format=%s|%an|%ae", BRANCH)).toBe(`Add feature|${author.name}|${author.email}`);
+      expect(await git(origin.bare, "log", "-1", "--format=%s|%an|%ae", BRANCH)).toBe(
+        `Add feature|${author.name}|${author.email}`,
+      );
       expect(await g("rev-parse", "--abbrev-ref", `${BRANCH}@{upstream}`)).toBe(`origin/${BRANCH}`);
       const again = await c.req("git.commitAndPush", { message: "x", branch: BRANCH });
       expect(again).toMatchObject({ ok: false, error: { code: "NOTHING_TO_COMMIT" } });
@@ -411,7 +500,10 @@ describe("git.commitAndPush and git.renameBranch", () => {
       await g("add", "local.txt");
       await g("commit", "-q", "-m", "local only");
       const localHead = await g("rev-parse", "HEAD");
-      const pushed = await c.ok<{ commitSha: string }>("git.commitAndPush", { message: "unused", branch: BRANCH });
+      const pushed = await c.ok<{ commitSha: string }>("git.commitAndPush", {
+        message: "unused",
+        branch: BRANCH,
+      });
       expect(pushed.commitSha).toBe(localHead);
 
       const theirs = await pushToOrigin(origin, BRANCH, "theirs.txt", "someone else\n", BRANCH);
@@ -420,7 +512,11 @@ describe("git.commitAndPush and git.renameBranch", () => {
       expect(rejected).toMatchObject({ ok: false, error: { code: "PUSH_REJECTED" } });
       expect(await git(origin.bare, "rev-parse", BRANCH)).toBe(theirs);
 
-      const stale = await c.req("git.commitAndPush", { message: "x", branch: BRANCH, forceWithLeaseSha: localHead });
+      const stale = await c.req("git.commitAndPush", {
+        message: "x",
+        branch: BRANCH,
+        forceWithLeaseSha: localHead,
+      });
       expect(stale).toMatchObject({ ok: false, error: { code: "PUSH_REJECTED" } });
       await g("fetch", "-q", "origin");
       const forced = await c.ok<{ commitSha: string }>("git.commitAndPush", {
@@ -429,7 +525,11 @@ describe("git.commitAndPush and git.renameBranch", () => {
         forceWithLeaseSha: theirs,
       });
       expect(await git(origin.bare, "rev-parse", BRANCH)).toBe(forced.commitSha);
-      const badLease = await c.req("git.commitAndPush", { message: "x", branch: BRANCH, forceWithLeaseSha: "not-a-sha" });
+      const badLease = await c.req("git.commitAndPush", {
+        message: "x",
+        branch: BRANCH,
+        forceWithLeaseSha: "not-a-sha",
+      });
       expect(badLease).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
     },
     T,
@@ -474,14 +574,23 @@ describe("deadlines", () => {
         opMs: { commitAndPush: 1_500 },
       });
       try {
-        await gitOps.clone({ url: origin.url, branch: BRANCH, baseBranch: "main", source: { kind: "new" }, author, mode: "create" });
+        await gitOps.clone({
+          url: origin.url,
+          branch: BRANCH,
+          baseBranch: "main",
+          source: { kind: "new" },
+          author,
+          mode: "create",
+        });
         const hooks = join(config.workspace, ".git", "hooks");
         mkdirSync(hooks, { recursive: true });
         writeFileSync(join(hooks, "pre-commit"), "#!/bin/sh\nsleep 30 &\nsleep 30\n");
         chmodSync(join(hooks, "pre-commit"), 0o755);
         writeFileSync(join(config.workspace, "x.txt"), "x\n");
         const started = Date.now();
-        await expect(gitOps.commitAndPush({ message: "m", branch: BRANCH }, "main")).rejects.toThrow(/timed out/);
+        await expect(gitOps.commitAndPush({ message: "m", branch: BRANCH }, "main")).rejects.toThrow(
+          /timed out/,
+        );
         expect(Date.now() - started).toBeLessThan(6_000);
         const ck = await gitOps.checkpoint({ checkpointId: "01AFTER", turnId: null }, "main");
         expect("commit" in ck).toBe(true);

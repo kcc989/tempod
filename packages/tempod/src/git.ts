@@ -90,7 +90,8 @@ export class Git {
     const deadline = Date.now() + (this.deps.opMs?.[kind] ?? GIT_OP_MS[kind]);
     const body = () =>
       deadlines.run(deadline, async () => {
-        if (Date.now() >= deadline) throw new TempoError("INTERNAL", "Timed out waiting for another git operation.");
+        if (Date.now() >= deadline)
+          throw new TempoError("INTERNAL", "Timed out waiting for another git operation.");
         return f();
       });
     return lock ? this.locked(body) : body();
@@ -179,7 +180,9 @@ export class Git {
           if (ws !== "/" && ws !== "") {
             for (const entry of readdirSync(ws)) rmSync(join(ws, entry), { recursive: true, force: true });
           }
-          const r = await this.git(["clone", "--filter=blob:none", "--", p.url, ws], { cwd: this.deps.stateDir });
+          const r = await this.git(["clone", "--filter=blob:none", "--", p.url, ws], {
+            cwd: this.deps.stateDir,
+          });
           if (r.code !== 0) throw new ExecError(["git", "clone"], r);
           writeFileSync(this.cloneMarker, `${new Date().toISOString()}\n`);
         }
@@ -193,13 +196,20 @@ export class Git {
       } catch (e) {
         if (e instanceof TempoError && e.code === "CLONE_FAILED") throw e;
         const detail =
-          e instanceof ExecError ? tail(e.result.stderr || e.result.stdout, 2000) : e instanceof Error ? e.message : String(e);
+          e instanceof ExecError
+            ? tail(e.result.stderr || e.result.stdout, 2000)
+            : e instanceof Error
+              ? e.message
+              : String(e);
         throw new TempoError("CLONE_FAILED", detail || "Could not clone the repo.");
       }
     });
   }
 
-  private async checkoutBranch(p: { branch: string; baseBranch: string; source: Source }, mode: CloneMode): Promise<void> {
+  private async checkoutBranch(
+    p: { branch: string; baseBranch: string; source: Source },
+    mode: CloneMode,
+  ): Promise<void> {
     if (await this.revParse(`refs/heads/${p.branch}`)) {
       await this.gitOk(["checkout", p.branch]);
       return;
@@ -217,15 +227,23 @@ export class Git {
     await this.gitOk(["checkout", "-b", p.branch, `origin/${p.baseBranch}`]);
   }
 
-  applyCheckpoint(p: { bundlePath: string; checkpointId: string; branch: string }): Promise<{ headSha: string }> {
+  applyCheckpoint(p: {
+    bundlePath: string;
+    checkpointId: string;
+    branch: string;
+  }): Promise<{ headSha: string }> {
     return this.op("applyCheckpoint", true, async () => {
       if (!SAFE_ID.test(p.checkpointId)) throw new TempoError("VALIDATION_FAILED", "Bad checkpoint id.");
       if (!(await this.validBranch(p.branch))) throw new TempoError("BRANCH_INVALID");
-      if (!existsSync(p.bundlePath)) throw new TempoError("CHECKPOINT_NOT_FOUND", "The bundle file does not exist.");
+      if (!existsSync(p.bundlePath))
+        throw new TempoError("CHECKPOINT_NOT_FOUND", "The bundle file does not exist.");
       const ref = CKPT_REF + p.checkpointId;
       const fetched = await this.git(["fetch", "--no-tags", p.bundlePath, `${ref}:${ref}`]);
       if (fetched.code !== 0) {
-        throw new TempoError("CHECKPOINT_NOT_FOUND", tail(fetched.stderr, 1000) || "Could not read the bundle.");
+        throw new TempoError(
+          "CHECKPOINT_NOT_FOUND",
+          tail(fetched.stderr, 1000) || "Could not read the bundle.",
+        );
       }
       await this.wrap(async () => {
         await this.gitOk(["checkout", "-B", p.branch, `${ref}^1`]);
@@ -240,7 +258,8 @@ export class Git {
     try {
       return await f();
     } catch (e) {
-      if (e instanceof ExecError) throw new TempoError("INTERNAL", tail(e.result.stderr || e.result.stdout, 2000));
+      if (e instanceof ExecError)
+        throw new TempoError("INTERNAL", tail(e.result.stderr || e.result.stdout, 2000));
       throw e;
     }
   }
@@ -262,7 +281,10 @@ export class Git {
   /** Runs `f` with a copy of the index in which untracked files are intent-to-add, so diffs include them. */
   private async withDiffIndex<A>(f: (index: string) => Promise<A>): Promise<A> {
     mkdirSync(this.deps.stateDir, { recursive: true });
-    const index = join(this.deps.stateDir, `diff-${process.pid}-${Math.random().toString(36).slice(2)}.index`);
+    const index = join(
+      this.deps.stateDir,
+      `diff-${process.pid}-${Math.random().toString(36).slice(2)}.index`,
+    );
     try {
       const real = (await this.gitOk(["rev-parse", "--git-path", "index"], { readOnly: true })).trim();
       const realPath = real.startsWith("/") ? real : join(this.deps.workspace, real);
@@ -385,7 +407,10 @@ export class Git {
   }
 
   /** The checkpoint script of 01 (Durability), with its own index file. */
-  checkpoint(p: { checkpointId: string; turnId: string | null }, baseBranch: string): Promise<CheckpointResult> {
+  checkpoint(
+    p: { checkpointId: string; turnId: string | null },
+    baseBranch: string,
+  ): Promise<CheckpointResult> {
     return this.op("checkpoint", true, () =>
       this.wrap(async () => {
         if (!SAFE_ID.test(p.checkpointId)) throw new TempoError("VALIDATION_FAILED", "Bad checkpoint id.");
@@ -397,7 +422,8 @@ export class Git {
         const excludes: string[] = [];
         for (const path of await this.untracked(index)) {
           try {
-            if (statSync(join(this.deps.workspace, path)).size > BIG_FILE_BYTES) excludes.push(`:(exclude,literal)${path}`);
+            if (statSync(join(this.deps.workspace, path)).size > BIG_FILE_BYTES)
+              excludes.push(`:(exclude,literal)${path}`);
           } catch {
             // vanished
           }
@@ -412,7 +438,10 @@ export class Git {
         }
         const msg = `tempo checkpoint ${p.checkpointId} turn ${p.turnId || "none"}`;
         const commit = (
-          await this.gitOk(["commit-tree", tree, "-p", parent, "-m", msg], { index, extraEnv: await this.identityEnv() })
+          await this.gitOk(["commit-tree", tree, "-p", parent, "-m", msg], {
+            index,
+            extraEnv: await this.identityEnv(),
+          })
         ).trim();
         const ref = CKPT_REF + p.checkpointId;
         await this.gitOk(["update-ref", ref, commit]);
@@ -431,7 +460,10 @@ export class Git {
    * merge-base with origin/<base>; else with origin/<current branch>; else the root commit, and the
    * bundle then holds the whole history so it is valid on any clone.
    */
-  private async checkpointBase(parent: string, baseBranch: string): Promise<{ sha: string; exclude: boolean }> {
+  private async checkpointBase(
+    parent: string,
+    baseBranch: string,
+  ): Promise<{ sha: string; exclude: boolean }> {
     const candidates = [`refs/remotes/origin/${baseBranch}`];
     const branch = await this.currentBranch();
     if (branch) candidates.push(`refs/remotes/origin/${branch}`);
@@ -439,7 +471,9 @@ export class Git {
       const r = await this.git(["merge-base", parent, ref], { readOnly: true });
       if (r.code === 0 && r.stdout.trim()) return { sha: r.stdout.trim(), exclude: true };
     }
-    const roots = (await this.gitOk(["rev-list", "--max-parents=0", parent], { readOnly: true })).trim().split("\n");
+    const roots = (await this.gitOk(["rev-list", "--max-parents=0", parent], { readOnly: true }))
+      .trim()
+      .split("\n");
     return { sha: roots[roots.length - 1] ?? parent, exclude: false };
   }
 
@@ -465,7 +499,8 @@ export class Git {
     return this.op("commitAndPush", true, async () => {
       if (!(await this.validBranch(p.branch))) throw new TempoError("BRANCH_INVALID");
       const lease = p.forceWithLeaseSha ?? null;
-      if (lease !== null && !/^[0-9a-f]{4,64}$/i.test(lease)) throw new TempoError("VALIDATION_FAILED", "Bad lease sha.");
+      if (lease !== null && !/^[0-9a-f]{4,64}$/i.test(lease))
+        throw new TempoError("VALIDATION_FAILED", "Bad lease sha.");
       await this.wrap(() => this.gitOk(["add", "-A"]));
       const staged = await this.git(["diff", "--cached", "--quiet"]);
       let committed = false;
@@ -484,7 +519,13 @@ export class Git {
         } else needed = (await this.ahead(baseBranch)) > 0;
         if (!needed) throw new TempoError("NOTHING_TO_COMMIT");
       }
-      const args = ["push", "-u", ...(lease !== null ? [`--force-with-lease=${p.branch}:${lease}`] : []), "origin", p.branch];
+      const args = [
+        "push",
+        "-u",
+        ...(lease !== null ? [`--force-with-lease=${p.branch}:${lease}`] : []),
+        "origin",
+        p.branch,
+      ];
       const r = await this.git(args);
       if (r.code !== 0) {
         const msg = tail(r.stderr || r.stdout, 2000);

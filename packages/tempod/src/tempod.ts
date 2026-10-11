@@ -94,7 +94,8 @@ export class Tempod {
       { maxEvents: config.limits.outboxMaxEvents, maxBytes: config.limits.outboxMaxBytes },
       this.log,
     );
-    this.log.onEvent = (level, msg, data) => this.emit({ kind: "log", level, msg, ...(data ? { data } : {}) });
+    this.log.onEvent = (level, msg, data) =>
+      this.emit({ kind: "log", level, msg, ...(data ? { data } : {}) });
     const emit = (e: TempodEvent) => this.emit(e);
     this.git = new Git({
       workspace: config.workspace,
@@ -141,7 +142,8 @@ export class Tempod {
     this.codex = new CodexCredentials({
       codexHome: config.codexHome,
       log: this.log,
-      onChanged: (content, lastRefresh) => this.emit({ kind: "credential.changed", provider: "codex", content, lastRefresh }),
+      onChanged: (content, lastRefresh) =>
+        this.emit({ kind: "credential.changed", provider: "codex", content, lastRefresh }),
     });
     const saved = this.db.getMeta("settings.overrides");
     let savedLayer: SettingsLayer | null = null;
@@ -307,7 +309,9 @@ export class Tempod {
       },
       "fs.list": async () => ({ paths: await listFiles(ws, this.baseEnv()) }),
       "fs.read": (p) => readWorkspaceFile(ws, p.path, p.maxBytes),
-      "fs.search": async (p) => ({ matches: await searchFiles(ws, this.baseEnv(), p.query, p.regex, p.maxResults) }),
+      "fs.search": async (p) => ({
+        matches: await searchFiles(ws, this.baseEnv(), p.query, p.regex, p.maxResults),
+      }),
       "terminal.list": async () => ({ terminalIds: await this.terminals() }),
       shutdown: async () => {
         await this.shutdown();

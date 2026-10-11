@@ -61,7 +61,10 @@ export const proxyHttp = async (req: Request, target: ProxyTarget, log: Logger):
   try {
     res = await fetch(url, init);
   } catch (e) {
-    log.info("proxy upstream unreachable", { port: target.port, error: e instanceof Error ? e.message : String(e) });
+    log.info("proxy upstream unreachable", {
+      port: target.port,
+      error: e instanceof Error ? e.message : String(e),
+    });
     return new Response(`tempo: nothing answered on port ${target.port}\n`, { status: 502 });
   }
   const headers = new Headers(res.headers);
@@ -77,7 +80,8 @@ export interface ProxySocketData {
   upstreamClosed: { code: number; reason: string } | null;
 }
 
-const safeCode = (code: number): number => (code === 1000 || (code >= 3000 && code <= 4999) ? code : code === 1001 ? 1001 : 1011);
+const safeCode = (code: number): number =>
+  code === 1000 || (code >= 3000 && code <= 4999) ? code : code === 1001 ? 1001 : 1011;
 
 /**
  * Opens the upstream WebSocket first, so the client handshake can echo the subprotocol the dev server
@@ -121,7 +125,9 @@ export const proxyWebSocket = async (
     data.upstreamClosed = { code: ev.code, reason: ev.reason };
     closeClient(data);
   });
-  const responseHeaders: Record<string, string> = upstream.protocol ? { "Sec-WebSocket-Protocol": upstream.protocol } : {};
+  const responseHeaders: Record<string, string> = upstream.protocol
+    ? { "Sec-WebSocket-Protocol": upstream.protocol }
+    : {};
   if (!upgrade(data, responseHeaders)) {
     upstream.close();
     return new Response("upgrade failed\n", { status: 400 });

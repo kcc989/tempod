@@ -1,13 +1,26 @@
 [package]
 name = "tempo-mac"
 version = "0.1.0"
+description = "Tempo for Mac (07): the native client"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+name = "tempo_mac"
+path = "src/lib.rs"
+
 [[bin]]
 name = "Tempo"
 path = "src/main.rs"
+
+[[example]]
+name = "s11_transcript"
+path = "examples/s11_transcript.rs"
+
+[features]
+# Spike S11: GPUI frame-time histograms (draw p99) for the transcript example.
+profiler = ["gpui-kit/profiler"]
 
 [dependencies]
 gpui-kit = { version = "=0.7.1" }

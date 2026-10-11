@@ -100,7 +100,12 @@ export class ProtocolConnection {
     if (size > MAX_MESSAGE_BYTES) {
       const code = op !== undefined && FILE_OPS.has(op) ? "FILE_TOO_LARGE" : "INTERNAL";
       this.log.warn("response over the message size limit", { id: res.id, op, size });
-      text = JSON.stringify({ type: "res", id: res.id, ok: false, error: { code, message: errorMessage(code) } });
+      text = JSON.stringify({
+        type: "res",
+        id: res.id,
+        ok: false,
+        error: { code, message: errorMessage(code) },
+      });
     }
     this.ws.send(text);
   }
@@ -144,7 +149,11 @@ export class ProtocolConnection {
     const { matched } = this.app.outbox.handshake(hello.value.incarnation, hello.value.lastAckedSeq);
     this.app.hello(hello.value);
     this.helloDone = true;
-    this.log.info("hello", { matched, incarnation: this.app.outbox.incarnation, lastAckedSeq: hello.value.lastAckedSeq });
+    this.log.info("hello", {
+      matched,
+      incarnation: this.app.outbox.incarnation,
+      lastAckedSeq: hello.value.lastAckedSeq,
+    });
   }
 
   private onReq(msg: unknown): void {
@@ -152,7 +161,12 @@ export class ProtocolConnection {
     if (req._tag === "Failure") {
       const id = (msg as { id?: unknown }).id;
       if (typeof id === "string") {
-        this.send({ type: "res", id, ok: false, error: { code: "VALIDATION_FAILED", message: "Bad request envelope." } });
+        this.send({
+          type: "res",
+          id,
+          ok: false,
+          error: { code: "VALIDATION_FAILED", message: "Bad request envelope." },
+        });
       } else this.log.warn("request without an id dropped");
       return;
     }
@@ -179,7 +193,13 @@ export class ProtocolConnection {
           answer({ type: "res", id, ok: true, result: outcome.result });
         } else {
           const level = outcome.error.code === "INTERNAL" ? "warn" : "info";
-          this.log.log(level, "request failed", { id, op, ms, code: outcome.error.code, message: outcome.error.message });
+          this.log.log(level, "request failed", {
+            id,
+            op,
+            ms,
+            code: outcome.error.code,
+            message: outcome.error.message,
+          });
           answer({ type: "res", id, ok: false, error: outcome.error });
         }
         if (op === "shutdown" && outcome.ok) void this.app.afterShutdownAnswered();
@@ -187,7 +207,12 @@ export class ProtocolConnection {
       .catch((e: unknown) => {
         this.log.local("error", "request handling failed", { id, op, error: errorText(e) });
         try {
-          answer({ type: "res", id, ok: false, error: { code: "INTERNAL", message: errorMessage("INTERNAL") } });
+          answer({
+            type: "res",
+            id,
+            ok: false,
+            error: { code: "INTERNAL", message: errorMessage("INTERNAL") },
+          });
         } catch {
           this.inflight.delete(id);
         }

@@ -15,6 +15,17 @@ These are places where the spec and the real packages disagree. The code follows
 | S-5 | 06 Tooling | `@cloudflare/vitest-pool-workers` is deprecated and renamed `@cloudflare/vitest-plugin`. Its bundled workerd supports compatibility dates up to 2026-08-22. | The spec's package is kept (0.23.0). `apps/tempo/test/wrangler.test.jsonc` uses 2026-08-22; deploys use 2026-10-10. |
 | S-6 | 01 Worker config | Alchemy notes that Cloudflare may reject a redundant `nodejs_compat` flag after its default-on date (2026-08-04). | The flag is kept as the spec says. If a deploy rejects it, remove it. |
 
+## Open questions for the owner
+
+The spec disagrees with itself here, or the work needs a dependency only you can approve. The code makes the choice shown until you decide.
+
+| # | Spec | Question | What the code does now |
+| --- | --- | --- | --- |
+| Q-1 | 03 Revert, Step runner | "It never deletes data: a safety checkpoint is made first" disagrees with the step table, which says a failed `git.checkpoint` is skipped with a `warn` log. | The table wins: a revert can go ahead without its `pre_revert` checkpoint. The other choice is to fail the revert with `INTERNAL` when the safety checkpoint fails. |
+| Q-2 | 01 Container image | `tempod` is the image's `ENTRYPOINT`, so it runs as PID 1. Bun reaps only its own children, so orphaned grandchildren (from scripts, agents and hooks) stay as zombies. | Nothing reaps them. The options are an init process such as `tini` in `container/Dockerfile` (a new dependency, rule 11) or a spec decision. |
+| Q-3 | 04 Design and front-end rules, 06 Definition of done | React component tests need a DOM library. `apps/tempo/vitest.ui.config.ts` runs in Node with none. | UI tests cover only pure logic (stores, parsers, the shortcut table). Adding `happy-dom` and `@testing-library/react` needs your approval (rule 11). |
+| Q-4 | 01 Browser Run (phase 3, optional) | 02 has no message or field that carries the Browser Run CDP URL to `tempod` or the Live View URL to the UI. | Not built (see **Not built**). |
+
 ## Additive protocol changes
 
 Protocol version 1 allows additive changes only (05). All of these are optional fields or new message types and live in `packages/protocol`.
@@ -31,7 +42,7 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | HTTP | `GET /api/setup/status` → `{configured, installUrl}`, no auth | The sign-in page must know whether the GitHub App exists; the Add project dialog needs the install link. Both facts are public. |
 | tempod | A second `hello` on an open socket updates branch, base branch and env | `setBaseBranch` and `renameBranch` change what tempod uses for checkpoints and changes. |
 | `agent.exited` | `reason`: `crashed`, `evicted` (LRU close) or `cancelled` (killed after a cancel timeout) | 01 sends `agent.exited` only for an unexpected exit, but the DO must still learn that a planned exit ended the process, so the next prompt reloads the session. Only `crashed` makes a crash notice. |
-| `repo.clone` params | `mode`: `create` or `wake` | On create, 03's checkout per source applies (`new` always branches from `origin/<baseBranch>`). On a fresh-disk wake, the branch is tracked from origin when it exists. |
+| `repo.clone` params | `mode`: `create` or `wake` | On create, 03's checkout per source applies (`new` always branches from `origin/<baseBranch>`; a `branch` or `pr` source missing on origin fails with `CLONE_FAILED`). On a fresh-disk wake, the branch is tracked from origin when it exists, else it branches from the base. A `repo.clone` with no `mode` behaves like `wake`. |
 | tempod | Full script logs at `$HOME/.tempod/logs/<runId>.log` | 01 says the DO writes the full log (up to 50 MiB) to R2 at exit. The DO reads this file with `Files` after `script.exited`. |
 
 ## Choices where the spec is silent
@@ -53,6 +64,24 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | ACP client capabilities | 01 says `session.notices: true`; `@agentclientprotocol/sdk` 1.8.0 types it as an object, so tempod sends `notices: {}`. |
 | File watcher | 01's exclude pattern is cut off in the table. tempod excludes `(^|/)(\.git|node_modules)(/|$)`. |
 | Base image | `container/pin-base.ts` reads the digest from the Docker Hub registry API. Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to avoid the anonymous rate limit. |
+| tempod message size | Every message stays under 1 MiB (02). Inline images, audio and resource blobs over 256 KiB of base64 in agent content are saved to `/home/tempo/attachments/<turnId>/` and sent as a `resource_link`. Item content over 512 KiB has long strings cut with `[tempo: truncated]`. Large deltas are split into pieces of 128K characters. An event that still does not fit (over 1 MiB − 1 KiB) is replaced by a `log` warning. A response over 1 MiB becomes `FILE_TOO_LARGE` (`fs.read`, `git.fileDiff`) or `INTERNAL`. `fs.list`, `git.changes` and `git.changed` list only the files that fit (about 960 KiB); `git.changed` totals count all files. |
+| tempod git deadlines | Each git op ends 2 to 15 s before its 02 timeout, and time spent waiting for the repo lock counts. The process group of a timed-out git command (hooks, `git-remote-https`) is killed, so the repo lock is always released. A git timeout returns `INTERNAL`, or `CLONE_FAILED` for `repo.clone`. |
+| `repo.clone` retries | `.git/tempo-cloned` marks a finished clone. A repo without it is a partial clone: `/workspace` is emptied and cloned again. |
+| Planned agent exits | `agent.exited` with `evicted` or `cancelled` is sent when tempod kills the adapter, before `turn.ended`, with `code` and `signal` null. A crashed adapter's whole process group is killed (SIGTERM, then SIGKILL). |
+| Seq numbers, DO ahead of the disk | With a matching incarnation and `lastAckedSeq` above tempod's last seq, events queued since tempod started move to `lastAckedSeq + 1`; older pending rows count as delivered. The outbox handshake runs before `app.hello`. |
+| Child env | Scripts, agents and git never see `TEMPOD_*` vars; tempod deletes `TEMPOD_TOKEN` from its own env after reading it. |
+| stderr tail | `stderrTail` is the last 200 lines (2,000 chars each), dropping older lines if JSON escaping would take it over 512 KiB. |
+| Browser storage | The theme preference is kept per browser in localStorage (`tempo:theme`); 04 lists no server field for Appearance. Panel layout is kept in `tempo:layout:panels`. |
+| Tab title | Pages set no title of their own; the browser tab always reads `(<n>) Tempo`. |
+| First-run step 3 | Any credential that lets an agent run counts, including Anthropic and OpenAI keys. |
+| First-run step 5 | Archived workspaces count, so archiving every workspace does not bring the checklist back. |
+| ⌥J | Opens the right side too when it is hidden, because the bottom panel lives in it. |
+| Shortcuts in modals | While a modal dialog is open, only ⌘K runs. |
+| Center tabs | One tab per file path and one Diff tab; the line or file is a parameter. Tabs are not kept across reloads. |
+| Browser tab iframe | The preview iframe's `sandbox` leaves out `allow-top-navigation`, so a preview cannot navigate the Tempo page away. |
+| UI hooks | `useWorkspace(id)` only reads. `useWorkspaceLifecycle(id)` runs once per shown workspace and calls `markViewed` while the view is visible and focused, and again when a turn ends then. `useReconnectRules()` runs app-wide and reconnects every socket when the browser comes back online or the tab is shown again. |
+| `/device` copy | "Check that this code matches the one in Tempo for Mac.", "Tempo for Mac is signed in. You can close this tab.", "Sign-in denied. You can close this tab.", "That code is not valid. Check it and try again.", "That code has expired. Start again in Tempo for Mac.", "This code was already used." |
+| `/login` copy | Not set up: "Tempo is not set up yet. Open the setup link that the deploy printed." Errors other than `forbidden` show the `INTERNAL` text. |
 
 ## Spec ambiguities found by the tests
 
@@ -71,6 +100,7 @@ The test agents found these. The code makes the choice shown; none contradicts a
 | 05 GitHub App setup | `/setup/*` returns 404 after setup, but GitHub's `setup_url` must keep working. | `/setup/github/installed` always redirects to the app. The manifest also sends `hook_attributes.url` (GitHub requires it) and cuts the name to 34 characters (GitHub's limit). |
 | 02 Credentials | Whether `deleteCredential.key` is a provider name or a secret key. | Both are accepted. |
 | 07 Server changes | 07 cites "02, Native client API", which does not exist. | `/api/v1` follows the table in 07. |
+| 01 Sessions, 03 turn.ended | `agent.exited` with reason `evicted` while a turn is still running. | The DO does not fail the turn on the exit event; the turn ends only with tempod's own `turn.ended`. Only `crashed` (or no reason) fails the turn with `AGENT_CRASHED`. |
 
 ## Not built
 
@@ -80,3 +110,6 @@ The test agents found these. The code makes the choice shown; none contradicts a
 | Spikes S1 to S16 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
 | Acceptance tests AT-1 to AT-37 | Not run, for the same reason. `tests/e2e` holds the plan. |
 | Adapter conformance tests | `tests/conformance` holds the plan; they run inside the image. |
+| tempod tests in the image | Rule 14 says tempod tests run inside the container image. The build machine has no Docker, so `packages/tempod` tests run on the host; they need only the image's tools (git, rg, tmux, bash, coreutils). |
+| Browser Run (01, phase 3, optional) | Not built: 02 has no contract for passing the CDP URL to `tempod` or the Live View URL to the UI (Q-4). |
+| Browser checks of the web UI | 04 asks for every shortcut to be tested in Chrome, Safari and Firefox on macOS. There is no browser on the build machine. |

@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RotatePreviewTokenOut",
+  "type": "object",
+  "properties": {
+    "previewToken": {
+      "type": "string"
+    }
+  },
+  "required": ["previewToken"],
+  "additionalProperties": true
+}

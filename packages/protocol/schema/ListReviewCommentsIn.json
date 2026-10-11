@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ListReviewCommentsIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId"],
+  "additionalProperties": true
+}

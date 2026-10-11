@@ -11,7 +11,8 @@ const MAX_LINE_CHARS = 1_000;
 const FS_CMD_TIMEOUT_MS = 25_000;
 const MAX_LINK_DEPTH = 40;
 
-const isUnder = (root: string, p: string): boolean => p === root || p.startsWith(root.endsWith(sep) ? root : root + sep);
+const isUnder = (root: string, p: string): boolean =>
+  p === root || p.startsWith(root.endsWith(sep) ? root : root + sep);
 
 const realOrSelf = (p: string): string => {
   try {
@@ -123,7 +124,8 @@ export const readWorkspaceFile = async (
   }
   result ??= { content: bytes.toString("base64"), encoding: "base64", size };
   // The encoded answer must fit in one message: base64 adds a third, JSON escapes can add more.
-  if (Buffer.byteLength(JSON.stringify(result.content)) > MESSAGE_BUDGET) throw new TempoError("FILE_TOO_LARGE");
+  if (Buffer.byteLength(JSON.stringify(result.content)) > MESSAGE_BUDGET)
+    throw new TempoError("FILE_TOO_LARGE");
   return result;
 };
 
@@ -163,7 +165,9 @@ export const searchFiles = async (
   const limit = Math.max(0, Math.floor(maxResults));
   if (limit === 0 || query === "") return [];
   const rg = findBinary("rg");
-  return rg ? searchRg(rg, workspace, env, query, regex, limit) : searchGitGrep(workspace, env, query, regex, limit);
+  return rg
+    ? searchRg(rg, workspace, env, query, regex, limit)
+    : searchGitGrep(workspace, env, query, regex, limit);
 };
 
 const searchRg = async (
@@ -174,8 +178,26 @@ const searchRg = async (
   regex: boolean,
   limit: number,
 ): Promise<SearchMatch[]> => {
-  const args = [rg, "--json", "--hidden", "--glob", "!.git", ...(regex ? [] : ["-F"]), "-e", query, "--", "."];
-  const proc = Bun.spawn(args, { cwd: workspace, env, stdout: "pipe", stderr: "pipe", stdin: "ignore", detached: true });
+  const args = [
+    rg,
+    "--json",
+    "--hidden",
+    "--glob",
+    "!.git",
+    ...(regex ? [] : ["-F"]),
+    "-e",
+    query,
+    "--",
+    ".",
+  ];
+  const proc = Bun.spawn(args, {
+    cwd: workspace,
+    env,
+    stdout: "pipe",
+    stderr: "pipe",
+    stdin: "ignore",
+    detached: true,
+  });
   const timer = setTimeout(() => killGroup(proc.pid, "SIGKILL"), FS_CMD_TIMEOUT_MS);
   const stderr = new Response(proc.stderr).text();
   const out: SearchMatch[] = [];

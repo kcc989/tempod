@@ -60,18 +60,26 @@ const noticeLevel = (s: unknown): "info" | "warning" | "error" =>
 
 const toLocations = (u: unknown): Obj[] =>
   Array.isArray(u)
-    ? u.filter(isObj).flatMap((l) =>
-        typeof l["path"] === "string"
-          ? [typeof l["line"] === "number" ? { path: l["path"], line: l["line"] } : { path: l["path"] }]
-          : [],
-      )
+    ? u
+        .filter(isObj)
+        .flatMap((l) =>
+          typeof l["path"] === "string"
+            ? [typeof l["line"] === "number" ? { path: l["path"], line: l["line"] } : { path: l["path"] }]
+            : [],
+        )
     : [];
 
 const toPermissionOptions = (u: unknown): PermissionOption[] =>
   Array.isArray(u)
     ? u.filter(isObj).flatMap((o) =>
         typeof o["optionId"] === "string"
-          ? [{ optionId: o["optionId"], name: typeof o["name"] === "string" ? o["name"] : o["optionId"], kind: String(o["kind"] ?? "") }]
+          ? [
+              {
+                optionId: o["optionId"],
+                name: typeof o["name"] === "string" ? o["name"] : o["optionId"],
+                kind: String(o["kind"] ?? ""),
+              },
+            ]
           : [],
       )
     : [];
@@ -171,7 +179,9 @@ export class SessionMapper {
   }
 
   private updated(item: ItemRec, status?: ItemStatus): void {
-    const patch: { status?: ItemStatus; content: Obj } = { content: boundContent(structuredClone(item.content)) };
+    const patch: { status?: ItemStatus; content: Obj } = {
+      content: boundContent(structuredClone(item.content)),
+    };
     if (status !== undefined && status !== item.status) {
       item.status = status;
       patch.status = status;
@@ -190,7 +200,13 @@ export class SessionMapper {
       kind: "item.created",
       sessionId: this.sessionId,
       turnId: this.turnId,
-      item: { id: item.id, kind, status, content: boundContent(structuredClone(content)), createdAt: this.now() },
+      item: {
+        id: item.id,
+        kind,
+        status,
+        content: boundContent(structuredClone(content)),
+        createdAt: this.now(),
+      },
     });
     return item;
   }
@@ -306,10 +322,13 @@ export class SessionMapper {
     if (!this.needTurn(String(u["sessionUpdate"]))) return;
     const toolCallId = typeof u["toolCallId"] === "string" ? u["toolCallId"] : null;
     if (toolCallId === null) return;
-    const status = TOOL_STATUSES.includes(u["status"] as ItemStatus) ? (u["status"] as ItemStatus) : undefined;
+    const status = TOOL_STATUSES.includes(u["status"] as ItemStatus)
+      ? (u["status"] as ItemStatus)
+      : undefined;
     const existing = this.tools.get(toolCallId);
     if (!existing) {
-      if (!isNew) this.deps.log.debug("tool_call_update for an unknown tool call", { sessionId: this.sessionId });
+      if (!isNew)
+        this.deps.log.debug("tool_call_update for an unknown tool call", { sessionId: this.sessionId });
       const content: Obj = {
         toolCallId,
         title: typeof u["title"] === "string" ? u["title"] : "",
@@ -343,7 +362,8 @@ export class SessionMapper {
           status: String(e["status"] ?? "pending"),
         }))
       : [];
-    const status: ItemStatus = entries.length > 0 && entries.every((e) => e.status === "completed") ? "completed" : "in_progress";
+    const status: ItemStatus =
+      entries.length > 0 && entries.every((e) => e.status === "completed") ? "completed" : "in_progress";
     if (!this.plan) {
       this.plan = this.create("plan", status, { entries });
       return;
@@ -361,12 +381,18 @@ export class SessionMapper {
   }
 
   /** Creates the `permission` item for a `session/request_permission` (01, Permission requests). */
-  addPermission(requestId: string, toolCall: unknown, options: unknown): { itemId: string; title: string; options: PermissionOption[] } {
+  addPermission(
+    requestId: string,
+    toolCall: unknown,
+    options: unknown,
+  ): { itemId: string; title: string; options: PermissionOption[] } {
     const tc = isObj(toolCall) ? toolCall : {};
     const toolCallId = typeof tc["toolCallId"] === "string" ? tc["toolCallId"] : null;
     const known = toolCallId ? this.tools.get(toolCallId) : undefined;
     const title =
-      typeof tc["title"] === "string" && tc["title"] ? tc["title"] : String(known?.content["title"] ?? "Permission");
+      typeof tc["title"] === "string" && tc["title"]
+        ? tc["title"]
+        : String(known?.content["title"] ?? "Permission");
     const opts = toPermissionOptions(options);
     const item = this.create("permission", "pending", { requestId, toolCallId, title, options: opts });
     return { itemId: item.id, title, options: opts };

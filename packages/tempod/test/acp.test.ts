@@ -30,7 +30,12 @@ const setup = async (opts: { maxLiveAgents?: number } = {}) => {
   const cmd = fakeAgentCommand();
   const config = testConfig({
     agentCommands: { claude: cmd, codex: cmd, opencode: cmd, pi: cmd },
-    limits: { cancelGraceMs: 300, killGraceMs: 300, maxLiveAgents: opts.maxLiveAgents ?? 3, deltaMergeMs: 20 },
+    limits: {
+      cancelGraceMs: 300,
+      killGraceMs: 300,
+      maxLiveAgents: opts.maxLiveAgents ?? 3,
+      deltaMergeMs: 20,
+    },
   });
   h = startTempod(config);
   const c = new DoClient(h.base);
@@ -58,7 +63,10 @@ const setup = async (opts: { maxLiveAgents?: number } = {}) => {
 
 const textOf = (c: DoClient, itemId: string): string => {
   const created = c.of("item.created").find((e) => e.item.id === itemId);
-  const deltas = c.of("item.delta").filter((e) => e.itemId === itemId).map((e) => e.append.text);
+  const deltas = c
+    .of("item.delta")
+    .filter((e) => e.itemId === itemId)
+    .map((e) => e.append.text);
   return String(created?.item.content["text"] ?? "") + deltas.join("");
 };
 
@@ -83,7 +91,11 @@ describe("session.start", () => {
       // A second start of a live session is answered from memory.
       const again = await start("s1");
       expect(again.acpSessionId).toBe(r.acpSessionId);
-      expect(calls().split("\n").filter((l) => l.endsWith(" initialize"))).toHaveLength(1);
+      expect(
+        calls()
+          .split("\n")
+          .filter((l) => l.endsWith(" initialize")),
+      ).toHaveLength(1);
     },
     T,
   );
@@ -170,7 +182,10 @@ describe("session.prompt", () => {
       const message = created[1]!.item;
       expect(textOf(c, message.id)).toBe("Hello world");
       expect(c.of("item.delta").filter((e) => e.itemId === message.id).length).toBeLessThanOrEqual(2);
-      const statuses = c.of("item.updated").filter((e) => e.itemId === message.id).map((e) => e.patch.status);
+      const statuses = c
+        .of("item.updated")
+        .filter((e) => e.itemId === message.id)
+        .map((e) => e.patch.status);
       expect(statuses).toContain("completed");
       expect(c.of("session.updated").some((e) => e.patch.title === "Greeting")).toBe(true);
       // The same turn id is not run twice.
@@ -196,7 +211,9 @@ describe("session.prompt", () => {
         rawInput: { path: "a.txt" },
       });
       const upd = c.of("item.updated").find((e) => e.itemId === tool.id && e.patch.status === "completed")!;
-      expect(upd.patch.content?.["content"]).toEqual([{ type: "content", content: { type: "text", text: "one" } }]);
+      expect(upd.patch.content?.["content"]).toEqual([
+        { type: "content", content: { type: "text", text: "one" } },
+      ]);
     },
     T,
   );
@@ -212,7 +229,11 @@ describe("session.prompt", () => {
       expect(req.options.map((o) => o.optionId)).toEqual(["allow", "deny"]);
       const item = c.of("item.created").find((e) => e.item.id === req.itemId)!.item;
       expect(item.kind).toBe("permission");
-      expect(item.content).toMatchObject({ requestId: req.requestId, toolCallId: "tc2", title: "Edit b.txt" });
+      expect(item.content).toMatchObject({
+        requestId: req.requestId,
+        toolCallId: "tc2",
+        title: "Edit b.txt",
+      });
       const bad = await c.req("permission.respond", { requestId: req.requestId, optionId: "nope" });
       expect(bad).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
       await c.ok("permission.respond", { requestId: req.requestId, optionId: "allow" });
@@ -235,7 +256,10 @@ describe("session.prompt", () => {
       await prompt("s1", "t1", "fail401");
       const end = await ended("t1");
       expect(end.error?.code).toBe("CREDENTIAL_INVALID");
-      expect(await c.waitEvent("credential.invalid")).toEqual({ kind: "credential.invalid", provider: "codex" });
+      expect(await c.waitEvent("credential.invalid")).toEqual({
+        kind: "credential.invalid",
+        provider: "codex",
+      });
     },
     T,
   );
@@ -244,7 +268,11 @@ describe("session.prompt", () => {
     "prompts to a session with no live agent fail with NOT_FOUND",
     async () => {
       const { c } = await setup();
-      const res = await c.req("session.prompt", { sessionId: "nope", turnId: "t1", content: [{ type: "text", text: "x" }] });
+      const res = await c.req("session.prompt", {
+        sessionId: "nope",
+        turnId: "t1",
+        content: [{ type: "text", text: "x" }],
+      });
       expect(res).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
     },
     T,
@@ -295,29 +323,43 @@ describe("session.setMode, session.setConfig, session.close", () => {
       await start("s1");
       await c.ok("session.setMode", { sessionId: "s1", modeId: "plan" });
       expect(c.of("session.updated").some((e) => e.patch.modeId === "plan")).toBe(true);
-      const cfg = await c.ok<{ configOptions: Array<{ id: string; currentValue: unknown }> }>("session.setConfig", {
-        sessionId: "s1",
-        configId: "model",
-        value: "m2",
-      });
+      const cfg = await c.ok<{ configOptions: Array<{ id: string; currentValue: unknown }> }>(
+        "session.setConfig",
+        {
+          sessionId: "s1",
+          configId: "model",
+          value: "m2",
+        },
+      );
       expect(cfg.configOptions[0]).toMatchObject({ id: "model", currentValue: "m2" });
       expect(calls()).toContain("mode plan");
       expect(calls()).toContain("config model=m2");
       await prompt("s1", "t1", "slow");
       await c.waitEvent("item.created", (e) => e.turnId === "t1");
-      expect(await c.req("session.setMode", { sessionId: "s1", modeId: "default" })).toMatchObject({ ok: false, error: { code: "SESSION_BUSY" } });
-      expect(await c.req("session.setConfig", { sessionId: "s1", configId: "model", value: "m1" })).toMatchObject({
+      expect(await c.req("session.setMode", { sessionId: "s1", modeId: "default" })).toMatchObject({
         ok: false,
         error: { code: "SESSION_BUSY" },
       });
-      expect(await c.req("session.close", { sessionId: "s1" })).toMatchObject({ ok: false, error: { code: "SESSION_BUSY" } });
+      expect(
+        await c.req("session.setConfig", { sessionId: "s1", configId: "model", value: "m1" }),
+      ).toMatchObject({
+        ok: false,
+        error: { code: "SESSION_BUSY" },
+      });
+      expect(await c.req("session.close", { sessionId: "s1" })).toMatchObject({
+        ok: false,
+        error: { code: "SESSION_BUSY" },
+      });
       await c.ok("session.cancel", { sessionId: "s1", turnId: "t1" }, 20_000);
       await ended("t1");
       expect(await c.ok<unknown>("session.close", { sessionId: "s1" }, 20_000)).toEqual({});
       expect(h.app.agents.liveCount).toBe(0);
       expect(calls()).toContain("close acp-");
       expect(await c.ok<unknown>("session.close", { sessionId: "s1" })).toEqual({});
-      expect(await c.req("session.setMode", { sessionId: "s1", modeId: "plan" })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+      expect(await c.req("session.setMode", { sessionId: "s1", modeId: "plan" })).toMatchObject({
+        ok: false,
+        error: { code: "NOT_FOUND" },
+      });
       await sleep(400);
       expect(c.of("agent.exited")).toHaveLength(0);
     },
@@ -399,8 +441,14 @@ describe("cancel, eviction and crashes", () => {
       expect(exitIdx).toBeLessThan(endIdx);
       expect(kinds[exitIdx]).toMatchObject({ kind: "agent.exited", sessionId: "s1", reason: "cancelled" });
       const opened = c.of("item.created").find((e) => e.turnId === "t1")!.item;
-      expect(c.of("item.updated").some((e) => e.itemId === opened.id && e.patch.status === "cancelled")).toBe(true);
-      const res = await c.req("session.prompt", { sessionId: "s1", turnId: "t2", content: [{ type: "text", text: "x" }] });
+      expect(c.of("item.updated").some((e) => e.itemId === opened.id && e.patch.status === "cancelled")).toBe(
+        true,
+      );
+      const res = await c.req("session.prompt", {
+        sessionId: "s1",
+        turnId: "t2",
+        content: [{ type: "text", text: "x" }],
+      });
       expect(res).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
       const again = await start("s1", { acpSessionId: first.acpSessionId });
       expect(again.reloaded).toBe(true);
@@ -473,7 +521,11 @@ describe("cancel, eviction and crashes", () => {
       const end = await ended("t1");
       expect(end.interrupted).toBe(true);
       await c.waitEvent("tempod.stopping");
-      const res = await c.req("session.prompt", { sessionId: "s1", turnId: "t2", content: [{ type: "text", text: "x" }] });
+      const res = await c.req("session.prompt", {
+        sessionId: "s1",
+        turnId: "t2",
+        content: [{ type: "text", text: "x" }],
+      });
       expect(res).toMatchObject({ ok: false, error: { code: "CONTAINER_NOT_READY" } });
       await c.ok("shutdown", { reason: "test" }, 20_000);
       expect(h.app.agents.liveCount).toBe(0);

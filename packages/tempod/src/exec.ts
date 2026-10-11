@@ -112,7 +112,13 @@ export const run = async (cmd: ReadonlyArray<string>, opts: ExecOptions = {}): P
     Bun.sleep(timedOut ? 100 : PIPE_GRACE_MS).then(() => false),
   ]);
   if (!drained) await Promise.all([out.cancel(), err.cancel()]);
-  return { code: proc.exitCode, signal: proc.signalCode ?? null, stdout: out.text(), stderr: err.text(), timedOut };
+  return {
+    code: proc.exitCode,
+    signal: proc.signalCode ?? null,
+    stdout: out.text(),
+    stderr: err.text(),
+    timedOut,
+  };
 };
 
 /** Like `run`, but throws `ExecError` on a non-zero exit. */

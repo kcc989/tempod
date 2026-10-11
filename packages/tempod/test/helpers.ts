@@ -30,7 +30,9 @@ export const quietLogger = (): Logger & { lines: string[] } => {
   return log;
 };
 
-export const testConfig = (overrides: ConfigOverrides & { home?: string; workspace?: string } = {}): Config => {
+export const testConfig = (
+  overrides: ConfigOverrides & { home?: string; workspace?: string } = {},
+): Config => {
   const root = tmpDir();
   const home = overrides.home ?? join(root, "home");
   const workspace = overrides.workspace ?? join(root, "workspace");
@@ -58,10 +60,7 @@ export interface Harness {
   close(): Promise<void>;
 }
 
-export const startTempod = (
-  config: Config = testConfig(),
-  opts: Partial<TempodOptions> = {},
-): Harness => {
+export const startTempod = (config: Config = testConfig(), opts: Partial<TempodOptions> = {}): Harness => {
   const log = quietLogger();
   const app = new Tempod(config, { log, forcePollingWatcher: true, portFiles: [], exit: () => {}, ...opts });
   const server = startServer(app, { hostname: "127.0.0.1", port: 0 });
@@ -83,7 +82,13 @@ export const hello = (over: Record<string, unknown> = {}) => ({
   v: 1,
   incarnation: null,
   lastAckedSeq: 0,
-  workspace: { id: "01ws", slug: "lisbon", branch: "tempo/lisbon", baseBranch: "main", repo: { owner: "o", name: "r" } },
+  workspace: {
+    id: "01ws",
+    slug: "lisbon",
+    branch: "tempo/lisbon",
+    baseBranch: "main",
+    repo: { owner: "o", name: "r" },
+  },
   env: { TEMPO_WORKSPACE_ID: "01ws", TEMPO_PORT: "3000" },
   ...over,
 });
@@ -116,10 +121,17 @@ export class DoClient {
       this.ws.addEventListener("error", () => reject(new Error("ws error")), { once: true });
     });
     this.ws.addEventListener("message", (ev) => {
-      const msg = JSON.parse(String(ev.data)) as { type: string; id?: string; seq?: number; ts?: number; event?: unknown };
+      const msg = JSON.parse(String(ev.data)) as {
+        type: string;
+        id?: string;
+        seq?: number;
+        ts?: number;
+        event?: unknown;
+      };
       this.raw.push(msg);
       if (msg.type === "res" && msg.id) this.waiters.get(msg.id)?.(msg as unknown as Res);
-      if (msg.type === "event") this.events.push({ seq: msg.seq!, ts: msg.ts!, event: decodeEvent(msg.event) });
+      if (msg.type === "event")
+        this.events.push({ seq: msg.seq!, ts: msg.ts!, event: decodeEvent(msg.event) });
       for (const l of this.listeners) l();
     });
     this.ws.addEventListener("close", (ev) => {

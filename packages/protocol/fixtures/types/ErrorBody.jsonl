@@ -1,0 +1,2 @@
+{"code":"NOT_FOUND","message":"Not found."}
+{"code":"PUSH_REJECTED","message":"Push was rejected. Pull or rebase first.","detail":"non-fast-forward"}

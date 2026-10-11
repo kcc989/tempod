@@ -110,7 +110,10 @@ export class ScriptManager {
       });
     } catch (e) {
       closeSync(logFd);
-      throw new TempoError("INTERNAL", `The script did not start: ${e instanceof Error ? e.message : String(e)}`);
+      throw new TempoError(
+        "INTERNAL",
+        `The script did not start: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
     let resolveDone!: () => void;
     const run: Run = {
@@ -131,7 +134,12 @@ export class ScriptManager {
     };
     this.runs.set(p.runId, run);
     this.deps.db.addProcess(p.runId, "script", proc.pid);
-    this.deps.log.info("script started", { runId: p.runId, kind: p.kind, scriptId: p.scriptId, pid: proc.pid });
+    this.deps.log.info("script started", {
+      runId: p.runId,
+      kind: p.kind,
+      scriptId: p.scriptId,
+      pid: proc.pid,
+    });
     if (p.timeoutMs !== null && p.timeoutMs > 0) {
       run.timeoutTimer = setTimeout(() => {
         run.timedOut = true;
@@ -173,7 +181,10 @@ export class ScriptManager {
         run.logBytes += part.byteLength;
       }
       if (chunk.byteLength > room) {
-        writeSync(run.logFd, (part.byteLength > 0 && part[part.byteLength - 1] !== 10 ? "\n" : "") + TRUNCATED_LINE);
+        writeSync(
+          run.logFd,
+          (part.byteLength > 0 && part[part.byteLength - 1] !== 10 ? "\n" : "") + TRUNCATED_LINE,
+        );
         run.logTruncated = true;
       }
     } catch (e) {
@@ -208,14 +219,18 @@ export class ScriptManager {
       const data = run.buffers[stream];
       if (data === "") continue;
       run.buffers[stream] = "";
-      for (const piece of splitText(data)) this.deps.emit({ kind: "script.output", runId: run.runId, stream, data: piece });
+      for (const piece of splitText(data))
+        this.deps.emit({ kind: "script.output", runId: run.runId, stream, data: piece });
     }
   }
 
   private async finish(run: Run, readers: Promise<void>[]): Promise<void> {
     await run.proc.exited;
     const drained = Promise.all(readers);
-    const timedOut = await Promise.race([drained.then(() => false), Bun.sleep(READ_GRACE_MS).then(() => true)]);
+    const timedOut = await Promise.race([
+      drained.then(() => false),
+      Bun.sleep(READ_GRACE_MS).then(() => true),
+    ]);
     if (timedOut) {
       // A process left in the group still holds the pipes; the run is over for Tempo anyway.
       await Promise.allSettled(run.readers.map((r) => r.cancel()));

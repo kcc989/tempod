@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Settings",
+  "type": "object",
+  "properties": {
+    "agent": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "$ref": "AgentId.json"
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "required": ["default", "model"],
+      "additionalProperties": true
+    },
+    "scripts": {
+      "type": "object",
+      "properties": {
+        "setup": {
+          "type": "string"
+        },
+        "archive": {
+          "type": "string"
+        },
+        "run_mode": {
+          "$ref": "RunMode.json"
+        },
+        "auto_run_after_setup": {
+          "type": "boolean"
+        },
+        "run": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "RunScript.json"
+          }
+        }
+      },
+      "required": ["setup", "archive", "run_mode", "auto_run_after_setup", "run"],
+      "additionalProperties": true
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "instance": {
+          "$ref": "Instance.json"
+        },
+        "sleep_after_idle_minutes": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 5,
+              "maximum": 240
+            }
+          ]
+        },
+        "egress_policy": {
+          "$ref": "EgressPolicy.json"
+        },
+        "egress_allowlist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["instance", "sleep_after_idle_minutes", "egress_policy", "egress_allowlist"],
+      "additionalProperties": true
+    },
+    "environment_variables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "git": {
+      "type": "object",
+      "properties": {
+        "branch_prefix": {
+          "type": "string"
+        },
+        "delete_branch_on_archive": {
+          "type": "boolean"
+        },
+        "archive_on_merge": {
+          "type": "boolean"
+        }
+      },
+      "required": ["branch_prefix", "delete_branch_on_archive", "archive_on_merge"],
+      "additionalProperties": true
+    },
+    "prompts": {
+      "type": "object",
+      "properties": {
+        "general": {
+          "type": "string"
+        }
+      },
+      "required": ["general"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["agent", "scripts", "environment", "environment_variables", "git", "prompts"],
+  "additionalProperties": true
+}

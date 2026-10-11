@@ -1,0 +1,1 @@
+{"id":"01k700000000000000000000jt","kind":"setup","scriptId":null,"command":"bun install","status":"exited","exitCode":0,"signal":null,"startedAt":1791709140000,"endedAt":1791709180000,"logTail":"installed 412 packages in 3.1s\n"}

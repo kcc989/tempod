@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StopScriptIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "runId": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId", "runId"],
+  "additionalProperties": true
+}

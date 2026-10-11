@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ListOpenPullRequestsItem",
+  "type": "object",
+  "properties": {
+    "number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "headBranch": {
+      "type": "string"
+    }
+  },
+  "required": ["number", "title", "headBranch"],
+  "additionalProperties": true
+}

@@ -34,14 +34,18 @@ const migrationsDir = (() => {
   const flat = ".alchemy/d1-migrations";
   fs.rmSync(flat, { recursive: true, force: true });
   fs.mkdirSync(flat, { recursive: true });
-  for (const file of fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
+  for (const file of fs
+    .readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()) {
     fs.copyFileSync(path.join(MIGRATIONS, file), path.join(flat, file));
   }
   return flat;
 })();
 
 const reveal = (r: Redacted.Redacted<string>) => Redacted.value(r);
-const hexToBase64 = (r: Redacted.Redacted<string>) => Redacted.make(Buffer.from(Redacted.value(r), "hex").toString("base64"));
+const hexToBase64 = (r: Redacted.Redacted<string>) =>
+  Redacted.make(Buffer.from(Redacted.value(r), "hex").toString("base64"));
 
 export default Alchemy.Stack(
   "tempo",
@@ -51,7 +55,9 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
-    const db = yield* Cloudflare.D1.Database("DB", { name: "tempo", migrations: migrationsDir }).pipe(RemovalPolicy.retain());
+    const db = yield* Cloudflare.D1.Database("DB", { name: "tempo", migrations: migrationsDir }).pipe(
+      RemovalPolicy.retain(),
+    );
     const data = yield* Cloudflare.R2.Bucket("DATA", { name: "tempo-data" }).pipe(RemovalPolicy.retain());
 
     // Minted on the first deploy, then reused from state.

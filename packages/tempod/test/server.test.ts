@@ -124,7 +124,12 @@ describe("HTTP", () => {
       port: 0,
       fetch(req, srv) {
         const proto = req.headers.get("sec-websocket-protocol");
-        if (srv.upgrade(req, { data: undefined, headers: proto ? { "Sec-WebSocket-Protocol": proto.split(",")[0]!.trim() } : {} })) {
+        if (
+          srv.upgrade(req, {
+            data: undefined,
+            headers: proto ? { "Sec-WebSocket-Protocol": proto.split(",")[0]!.trim() } : {},
+          })
+        ) {
           return undefined;
         }
         return new Response("no", { status: 400 });
@@ -197,7 +202,11 @@ describe("WebSocket protocol", () => {
     expect(terms.ok).toBe(true);
     c.send({ type: "req", op: "fs.list" });
     c.send({ type: "req", id: "bad-envelope" });
-    await c.waitFor(() => c.raw.some((m) => (m as { id?: string }).id === "bad-envelope"), 5_000, "envelope error");
+    await c.waitFor(
+      () => c.raw.some((m) => (m as { id?: string }).id === "bad-envelope"),
+      5_000,
+      "envelope error",
+    );
     c.close();
   });
 
@@ -243,7 +252,13 @@ describe("WebSocket protocol", () => {
         incarnation: h.app.outbox.incarnation,
         lastAckedSeq: 2,
         env: { NEW_VAR: "1" },
-        workspace: { id: "01ws", slug: "porto", branch: "tempo/porto", baseBranch: "develop", repo: { owner: "o", name: "r" } },
+        workspace: {
+          id: "01ws",
+          slug: "porto",
+          branch: "tempo/porto",
+          baseBranch: "develop",
+          repo: { owner: "o", name: "r" },
+        },
       }),
     });
     await c.waitFor(() => c.events.length >= 4);
@@ -260,7 +275,12 @@ describe("WebSocket protocol", () => {
     });
     expect(r.pid).toBeGreaterThan(0);
     await c.waitEvent("script.exited", (e) => e.runId === "01envcheck");
-    expect(c.of("script.output").map((e) => e.data).join("")).toContain("v=1");
+    expect(
+      c
+        .of("script.output")
+        .map((e) => e.data)
+        .join(""),
+    ).toContain("v=1");
     c.close();
   });
 
@@ -269,19 +289,34 @@ describe("WebSocket protocol", () => {
     const c = new DoClient(h.base);
     await c.hello();
     await c.ok("env.set", { env: { ONLY: "yes" } });
-    await Bun.write(`${h.config.workspace}/.tempo/settings.toml`, '[scripts]\nsetup = "bun install"\n[unknown]\nx = 1\n');
-    const s = await c.ok<{ effective: { scripts: { setup: string }; agent: { model: string } }; warnings: string[] }>(
-      "settings.read",
-      { overrides: { agent: { model: "m9" } } },
+    await Bun.write(
+      `${h.config.workspace}/.tempo/settings.toml`,
+      '[scripts]\nsetup = "bun install"\n[unknown]\nx = 1\n',
     );
+    const s = await c.ok<{
+      effective: { scripts: { setup: string }; agent: { model: string } };
+      warnings: string[];
+    }>("settings.read", { overrides: { agent: { model: "m9" } } });
     expect(s.effective.scripts.setup).toBe("bun install");
     expect(s.effective.agent.model).toBe("m9");
     expect(s.warnings.length).toBeGreaterThan(0);
     const bad = await c.req("settings.read", { overrides: { environment: { sleep_after_idle_minutes: 1 } } });
     expect(bad).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
-    await c.ok("script.start", { runId: "01only", kind: "run", scriptId: null, command: 'echo "only=$ONLY tempo=${TEMPO_PORT:-none}"', cwd: "", timeoutMs: null });
+    await c.ok("script.start", {
+      runId: "01only",
+      kind: "run",
+      scriptId: null,
+      command: 'echo "only=$ONLY tempo=${TEMPO_PORT:-none}"',
+      cwd: "",
+      timeoutMs: null,
+    });
     await c.waitEvent("script.exited", (e) => e.runId === "01only");
-    expect(c.of("script.output").map((e) => e.data).join("")).toContain("only=yes tempo=none");
+    expect(
+      c
+        .of("script.output")
+        .map((e) => e.data)
+        .join(""),
+    ).toContain("only=yes tempo=none");
     c.close();
   });
 
@@ -293,7 +328,11 @@ describe("WebSocket protocol", () => {
     h.app.onSigterm();
     const ev = await c.waitEvent("tempod.stopping");
     expect(ev.reason).toBe("sigterm");
-    const prompt = await c.req("session.prompt", { sessionId: "s", turnId: "t", content: [{ type: "text", text: "x" }] });
+    const prompt = await c.req("session.prompt", {
+      sessionId: "s",
+      turnId: "t",
+      content: [{ type: "text", text: "x" }],
+    });
     expect(prompt).toMatchObject({ ok: false, error: { code: "CONTAINER_NOT_READY" } });
     expect(exits).toEqual([]);
     await c.ok("shutdown", { reason: "sigterm" });

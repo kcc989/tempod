@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NewSource",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["new"]
+        },
+        "baseBranch": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "baseBranch"],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["branch"]
+        },
+        "branch": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "branch"],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["pr"]
+        },
+        "number": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        }
+      },
+      "required": ["kind", "number"],
+      "additionalProperties": true
+    }
+  ]
+}

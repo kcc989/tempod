@@ -45,7 +45,9 @@ export class TempodDb {
 
   setMeta(key: string, value: string): void {
     this.db
-      .query("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .query(
+        "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      )
       .run(key, value);
   }
 

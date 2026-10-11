@@ -20,8 +20,17 @@ const setup = async (limits: Record<string, number> = {}) => {
   await c.hello({ env: { TEMPO_WORKSPACE_ID: "01ws", TEMPO_PORT: "3000", PROJECT_VAR: "from-project" } });
   await c.waitEvent("incarnation.changed");
   const start = (runId: string, command: string, extra: Record<string, unknown> = {}) =>
-    c.ok<{ pid: number }>("script.start", { runId, kind: "run", scriptId: "dev", command, cwd: "", timeoutMs: null, ...extra });
-  const exited = (runId: string, timeoutMs = 10_000) => c.waitEvent("script.exited", (e) => e.runId === runId, timeoutMs);
+    c.ok<{ pid: number }>("script.start", {
+      runId,
+      kind: "run",
+      scriptId: "dev",
+      command,
+      cwd: "",
+      timeoutMs: null,
+      ...extra,
+    });
+  const exited = (runId: string, timeoutMs = 10_000) =>
+    c.waitEvent("script.exited", (e) => e.runId === runId, timeoutMs);
   const output = (runId: string, stream?: "stdout" | "stderr") =>
     c
       .of("script.output")
@@ -71,7 +80,10 @@ describe("scripts", () => {
     "output is merged per interval; the full log is on disk before script.exited",
     async () => {
       const { c, start, exited, output, h } = await setup();
-      await start("01merge", "for i in $(seq 1 200); do echo line$i; done; head -c 300000 /dev/zero | tr '\\0' 'x'");
+      await start(
+        "01merge",
+        "for i in $(seq 1 200); do echo line$i; done; head -c 300000 /dev/zero | tr '\\0' 'x'",
+      );
       await exited("01merge");
       const events = c.of("script.output").filter((e) => e.runId === "01merge");
       expect(events.length).toBeLessThanOrEqual(6);
@@ -100,7 +112,9 @@ describe("scripts", () => {
     async () => {
       const { start, exited, output, h } = await setup();
       await start("01logfail", "sleep 0.3; for i in $(seq 1 3); do echo after$i; done");
-      const run = (h.app.scripts as unknown as { runs: Map<string, { logFd: number | null }> }).runs.get("01logfail")!;
+      const run = (h.app.scripts as unknown as { runs: Map<string, { logFd: number | null }> }).runs.get(
+        "01logfail",
+      )!;
       closeSync(run.logFd!);
       const ev = await exited("01logfail");
       expect(ev.exitCode).toBe(0);
@@ -157,11 +171,32 @@ describe("scripts", () => {
       await start("01cwd", "pwd", { cwd: "web" });
       await exited("01cwd");
       expect(output("01cwd")).toBe(`${join(h.config.workspace, "web")}\n`);
-      const missing = await c.req("script.start", { runId: "01x", kind: "run", scriptId: null, command: "true", cwd: "nope", timeoutMs: null });
+      const missing = await c.req("script.start", {
+        runId: "01x",
+        kind: "run",
+        scriptId: null,
+        command: "true",
+        cwd: "nope",
+        timeoutMs: null,
+      });
       expect(missing).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
-      const outside = await c.req("script.start", { runId: "01y", kind: "run", scriptId: null, command: "true", cwd: "../..", timeoutMs: null });
+      const outside = await c.req("script.start", {
+        runId: "01y",
+        kind: "run",
+        scriptId: null,
+        command: "true",
+        cwd: "../..",
+        timeoutMs: null,
+      });
       expect(outside).toMatchObject({ ok: false, error: { code: "PATH_OUTSIDE_WORKSPACE" } });
-      const badId = await c.req("script.start", { runId: "../x", kind: "run", scriptId: null, command: "true", cwd: "", timeoutMs: null });
+      const badId = await c.req("script.start", {
+        runId: "../x",
+        kind: "run",
+        scriptId: null,
+        command: "true",
+        cwd: "",
+        timeoutMs: null,
+      });
       expect(badId).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
       const a = await start("01same", "sleep 0.5");
       const b = await start("01same", "sleep 0.5");

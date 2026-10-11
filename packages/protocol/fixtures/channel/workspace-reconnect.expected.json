@@ -1,0 +1,349 @@
+{
+  "channel": "workspace",
+  "messages": 13,
+  "state": {
+    "backlogDone": true,
+    "changes": null,
+    "changesSeq": 0,
+    "credentialInvalid": [],
+    "items": {
+      "01k700000000000000000000zk": {
+        "content": {
+          "attachments": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Add a dark mode toggle"
+        },
+        "createdAt": 1791709300000,
+        "id": "01k700000000000000000000zk",
+        "kind": "user_message",
+        "rev": 1,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709300000
+      },
+      "01k700000000000000000000zr": {
+        "content": {
+          "text": "I added a toggle to the header."
+        },
+        "createdAt": 1791709350000,
+        "id": "01k700000000000000000000zr",
+        "kind": "agent_message",
+        "rev": 2,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000035",
+        "updatedAt": 1791709350000
+      },
+      "01k700000000000000000000zx": {
+        "content": {
+          "attachments": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Persist the choice in localStorage"
+        },
+        "createdAt": 1791709400000,
+        "id": "01k700000000000000000000zx",
+        "kind": "user_message",
+        "rev": 3,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709400000
+      },
+      "01k700000000000000000000zy": {
+        "content": {
+          "content": [],
+          "locations": [],
+          "title": "Edit src/theme/toggle.tsx",
+          "toolCallId": "toolu_22",
+          "toolKind": "execute"
+        },
+        "createdAt": 1791709410000,
+        "id": "01k700000000000000000000zy",
+        "kind": "tool_call",
+        "rev": 10,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709410000
+      },
+      "01k700000000000000000000zz": {
+        "content": {
+          "text": "Saving the theme in localStorage. Done."
+        },
+        "createdAt": 1791709420000,
+        "id": "01k700000000000000000000zz",
+        "kind": "agent_message",
+        "rev": 12,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709420000
+      },
+      "01k70000000000000000000100": {
+        "content": {
+          "text": "Check the storage key."
+        },
+        "createdAt": 1791709415000,
+        "id": "01k70000000000000000000100",
+        "kind": "agent_thought",
+        "rev": 8,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709415000
+      },
+      "01k70000000000000000000101": {
+        "content": {
+          "text": "Anything else?"
+        },
+        "createdAt": 1791709500000,
+        "id": "01k70000000000000000000101",
+        "kind": "agent_message",
+        "rev": 13,
+        "sessionId": "01k7000000000000000000000n",
+        "status": "completed",
+        "turnId": "01k70000000000000000000036",
+        "updatedAt": 1791709500000
+      }
+    },
+    "itemsRev": 13,
+    "order": {
+      "01k7000000000000000000000n": [
+        "01k700000000000000000000zk",
+        "01k700000000000000000000zr",
+        "01k700000000000000000000zx",
+        "01k700000000000000000000zy",
+        "01k70000000000000000000100",
+        "01k700000000000000000000zz",
+        "01k70000000000000000000101"
+      ]
+    },
+    "permissions": {},
+    "ready": true,
+    "scriptOutput": {},
+    "scriptRuns": {},
+    "sessions": {
+      "01k7000000000000000000000n": {
+        "agent": "claude",
+        "commands": [
+          {
+            "description": "Review the current changes",
+            "name": "review"
+          },
+          {
+            "description": null,
+            "input": {
+              "hint": "what to document"
+            },
+            "name": "init"
+          }
+        ],
+        "config": {
+          "model": "default"
+        },
+        "configOptions": [
+          {
+            "category": "model",
+            "currentValue": "default",
+            "id": "model",
+            "name": "Model",
+            "options": [
+              {
+                "description": "The recommended model",
+                "name": "Default",
+                "value": "default"
+              },
+              {
+                "name": "Opus",
+                "value": "opus"
+              }
+            ],
+            "type": "select"
+          }
+        ],
+        "id": "01k7000000000000000000000n",
+        "modeId": "default",
+        "modes": [
+          {
+            "description": "Ask before editing files",
+            "id": "default",
+            "name": "Default"
+          },
+          {
+            "description": null,
+            "id": "acceptEdits",
+            "name": "Accept Edits"
+          },
+          {
+            "id": "plan",
+            "name": "Plan Mode"
+          }
+        ],
+        "sortOrder": 0,
+        "status": "idle",
+        "title": "Claude",
+        "usage": {
+          "cachedReadTokens": 12000,
+          "inputTokens": 18234,
+          "outputTokens": 2211
+        }
+      }
+    },
+    "turns": {
+      "01k70000000000000000000035": {
+        "checkpointId": "01k7000000000000000000009d",
+        "endedAt": 1791709360000,
+        "errorCode": null,
+        "id": "01k70000000000000000000035",
+        "prompt": {
+          "attachmentIds": [],
+          "mentions": [
+            {
+              "path": "src/app.tsx"
+            }
+          ],
+          "reviewCommentIds": [],
+          "text": "Add a dark mode toggle"
+        },
+        "queuePos": null,
+        "queuedAt": 1791709300000,
+        "reverted": false,
+        "seq": 1,
+        "sessionId": "01k7000000000000000000000n",
+        "startedAt": 1791709301000,
+        "status": "completed",
+        "stopReason": "end_turn"
+      },
+      "01k70000000000000000000036": {
+        "checkpointId": "01k7000000000000000000009e",
+        "endedAt": 1791709490000,
+        "errorCode": null,
+        "id": "01k70000000000000000000036",
+        "prompt": {
+          "attachmentIds": [],
+          "mentions": [],
+          "reviewCommentIds": [],
+          "text": "Persist the choice in localStorage"
+        },
+        "queuePos": null,
+        "queuedAt": 1791709400000,
+        "reverted": false,
+        "seq": 2,
+        "sessionId": "01k7000000000000000000000n",
+        "startedAt": 1791709401000,
+        "status": "completed",
+        "stopReason": "end_turn"
+      }
+    },
+    "workspace": {
+      "archivedAt": null,
+      "attention": "none",
+      "baseBranch": "main",
+      "branch": "tempo/lisbon",
+      "checksState": null,
+      "createdAt": 1791622800000,
+      "defaultAgent": "claude",
+      "errorCode": null,
+      "errorDetail": null,
+      "id": "01k7000000000000000000000b",
+      "imageRef": "registry.cloudflare.com/acme/tempo-workspace:2026-10-10",
+      "lastActivityAt": 1791709260000,
+      "op": null,
+      "pinned": false,
+      "ports": [
+        {
+          "port": 3000,
+          "url": "https://3000-01k7000000000000000000000b-k3j9x2m4q8w7e5r1.example-previews.com"
+        }
+      ],
+      "prNumber": null,
+      "prState": null,
+      "previewToken": "k3j9x2m4q8w7e5r1",
+      "projectId": "01k70000000000000000000001",
+      "pushed": false,
+      "queue": [],
+      "rev": 41,
+      "runningTurnId": "01k70000000000000000000036",
+      "settings": {
+        "agent": {
+          "default": "claude",
+          "model": ""
+        },
+        "environment": {
+          "egress_allowlist": ["registry.npmjs.org", "*.githubusercontent.com"],
+          "egress_policy": "allowlist",
+          "instance": {
+            "diskMb": 12000,
+            "memoryMib": 8192,
+            "vcpu": 2
+          },
+          "sleep_after_idle_minutes": 30
+        },
+        "environment_variables": {
+          "NODE_ENV": "development"
+        },
+        "git": {
+          "archive_on_merge": false,
+          "branch_prefix": "tempo/",
+          "delete_branch_on_archive": false
+        },
+        "prompts": {
+          "general": ""
+        },
+        "scripts": {
+          "archive": "",
+          "auto_run_after_setup": true,
+          "run": {
+            "dev": {
+              "command": "bun run dev",
+              "cwd": ".",
+              "default": true
+            },
+            "test": {
+              "command": "bun test",
+              "cwd": "packages/api",
+              "default": false
+            }
+          },
+          "run_mode": "concurrent",
+          "setup": "bun install"
+        }
+      },
+      "setupStatus": "succeeded",
+      "slug": "lisbon",
+      "state": "working",
+      "title": "Add dark mode toggle"
+    }
+  },
+  "events": [
+    {
+      "line": 12,
+      "event": {
+        "kind": "turnEnded",
+        "turn": {
+          "id": "01k70000000000000000000036",
+          "sessionId": "01k7000000000000000000000n",
+          "seq": 2,
+          "status": "completed",
+          "queuePos": null,
+          "prompt": {
+            "text": "Persist the choice in localStorage",
+            "mentions": [],
+            "attachmentIds": [],
+            "reviewCommentIds": []
+          },
+          "stopReason": "end_turn",
+          "errorCode": null,
+          "checkpointId": "01k7000000000000000000009e",
+          "reverted": false,
+          "queuedAt": 1791709400000,
+          "startedAt": 1791709401000,
+          "endedAt": 1791709490000
+        }
+      }
+    }
+  ]
+}

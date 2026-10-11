@@ -1,0 +1,315 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WorkspaceDetail",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "baseBranch": {
+      "type": "string"
+    },
+    "state": {
+      "$ref": "WorkspaceState.json"
+    },
+    "attention": {
+      "$ref": "Attention.json"
+    },
+    "defaultAgent": {
+      "$ref": "AgentId.json"
+    },
+    "prNumber": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "prState": {
+      "anyOf": [
+        {
+          "$ref": "PrState.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "checksState": {
+      "anyOf": [
+        {
+          "$ref": "ChecksState.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pinned": {
+      "type": "boolean"
+    },
+    "lastActivityAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "archivedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rev": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "errorCode": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorDetail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "setupStatus": {
+      "$ref": "SetupStatus.json"
+    },
+    "pushed": {
+      "type": "boolean"
+    },
+    "previewToken": {
+      "type": "string"
+    },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "port": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["port", "url"],
+        "additionalProperties": true
+      }
+    },
+    "settings": {
+      "$ref": "Settings.json"
+    },
+    "runningTurnId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "queue": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "imageRef": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "op": {
+      "anyOf": [
+        {
+          "$ref": "OpProgress.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "settingsWarnings": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "settingsErrors": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "settingsSources": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "SettingsSource.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "changes": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "$ref": "ChangesSummary.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hasUnpushedCommits": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "projectId",
+    "slug",
+    "title",
+    "branch",
+    "baseBranch",
+    "state",
+    "attention",
+    "defaultAgent",
+    "prNumber",
+    "prState",
+    "checksState",
+    "pinned",
+    "lastActivityAt",
+    "createdAt",
+    "archivedAt",
+    "rev",
+    "errorCode",
+    "errorDetail",
+    "setupStatus",
+    "pushed",
+    "previewToken",
+    "ports",
+    "settings",
+    "runningTurnId",
+    "queue",
+    "imageRef",
+    "op"
+  ],
+  "additionalProperties": true
+}

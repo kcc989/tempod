@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ListInstallationReposItem",
+  "type": "object",
+  "properties": {
+    "repoId": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "owner": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "defaultBranch": {
+      "type": "string"
+    },
+    "private": {
+      "type": "boolean"
+    }
+  },
+  "required": ["repoId", "owner", "name", "defaultBranch", "private"],
+  "additionalProperties": true
+}
