@@ -8,9 +8,9 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 
 - **Continuation is active.** The prior loops stopped at the account usage limit; their interim code is now being checked locally on macOS.
 - **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 713 Worker, 294 UI logic, 14 component, 201 protocol, 109 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
-- **Native baseline:** `cargo test --workspace` (158 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac, including the runtime wiring.
+- **Native baseline:** `cargo test --workspace` (167 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac, including the runtime wiring.
 - **Image verification:** `bun run test:tempod:container` passes on the shared Colima engine: 112 tests, including uid/gid 1000, tini as PID 1, adapter/tool presence and orphan cleanup. The production image is 1,715,652,650 bytes (under 6 GB).
-- **Remote CI and deployment:** GitHub CI passed milestone `408f985` (3m31s). The file-link follow-up is awaiting its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
+- **Remote CI and deployment:** GitHub CI passed `408f985` and the file-link follow-up `fd92d37` (4m13s). The native sign-in follow-up is awaiting its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
 
 ## Continuation changes
 
@@ -23,14 +23,16 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 - Added owner-approved pinned `tini` to launch the daemon and reap orphaned children. Updated 01; image tests check uid, PID 1 and orphan reaping.
 - Added owner-approved pinned `happy-dom` and `@testing-library/react`, with 14 passing component tests for permission keyboard controls, focus, read-only chats, saved answers, safe Markdown and file links.
 - Fixed workspace file links in both clients: decoded filenames work; malformed escapes, invalid UTF-8, controls and invalid path segments are ignored. Spec 04 and 07 now state these rules.
-- Connected the Mac app to the real two-thread I/O runtime. Wake events reconnect its channels; unauthorized and incompatible-client signals reach AppState. Device sign-in and live store/view wiring are still pending.
+- Connected the Mac app to the real two-thread I/O runtime. Wake events reconnect its channels; unauthorized and incompatible-client signals reach AppState. Added native device sign-in, saved-session validation, server sign-out and channel cleanup. The hub channel now feeds the sidebar and Dock count. Workspace channels and views still need wiring.
+
+- Added GPUI Kit headless tests with its existing pinned test-support feature. Eight app tests cover saved-session validation, device approval/denial, cancellation, 401 cleanup, update requirements, server sign-out failure and Enter in the connect form. Tokens use a memory store in tests; real Keychain/browser acceptance remains open.
 
 ## Summary
 
 | Area | Spec | Done | State |
 | --- | --- | --- | --- |
-| Monorepo, tooling, CI | 06 | 85% | Turborepo + Bun, TS 6.0.3, oxlint, oxfmt, CI workflow. Local format check passes; remote CI pending. |
-| `packages/protocol` | 02 | 95% | Effect Schema wire types, 63 API functions, channels, tempod envelopes. JSON Schema and fixtures are generated (Mac loop). 15 files fail oxfmt. |
+| Monorepo, tooling, CI | 06 | 85% | Turborepo + Bun, TS 6.0.3, oxlint, oxfmt, CI workflow. Local format check and published CI pass. |
+| `packages/protocol` | 02 | 95% | Effect Schema wire types, 63 API functions, channels, tempod envelopes. JSON Schema and fixtures are generated and checked; format check passes. |
 | `packages/settings`, `packages/cities` | 01, 03 | 100% | Done and tested. |
 | `tempod` daemon | 01 | 90% | Built; 109 tests pass. |
 | Worker: Durable Objects and ops | 01, 03 | 82% | Interim review fixes pass local Worker tests; live restart validation pending. |
@@ -40,7 +42,7 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 | Native API for the Mac app | 07 | 90–100% | `/api/v1/*`, bearer WebSocket auth, `/downloads/mac`. |
 | Container image and deploy | 01, 05 | 85% | Dockerfile, versions.json, Alchemy + wrangler deploy. |
 | Web UI | 04 | about 30% | Foundation done; most regions are in progress. |
-| Tempo for Mac | 07 | about 20% | Protocol generation done; app skeleton; client in progress. |
+| Tempo for Mac | 07 | about 20% | Protocol generation done; app foundation; device sign-in and hub sidebar wired locally. |
 | Private previews + Browser Run | 00 Q3, 01 | design | Research done; decision brief not written. |
 | Spikes S1–S16, acceptance tests AT-1–AT-37 | 06 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
 
@@ -146,9 +148,9 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] Empty, loading and error states per region, and phone variants (55%).
 
 **Tempo for Mac (07)**
-- [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in and channel/store wiring remain below.
-- [ ] Sign-in and first run (5%).
-- [ ] Live state and reconnects (10%).
+- [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in and the hub store are wired; workspace channel/store wiring remains below.
+- [ ] Sign-in and first run: device flow and saved-token checks are wired and tested headlessly; real browser approval, Keychain and update download acceptance remain.
+- [ ] Live state and reconnects: the hub feeds the sidebar and Dock count; workspace channels, hidden-store timers, reconnect bars and notifications remain.
 - [ ] Window layout and components (15%).
 - [ ] Transcript, composer and permissions (15%).
 - [ ] Changes, diff view and comments (2%).

@@ -156,15 +156,17 @@ The Mac build loop keeps these rows (07). The build machine is Linux x86_64, so 
 
 | Item | Status |
 | --- | --- |
-| `crates/tempo-client` | Runtime, RPC, channels, reconnect, device flow and Rust stores exist and pass local tests. The app now owns the real runtime; sign-in and live store/view wiring are pending. |
+| `crates/tempo-client` | Runtime, RPC, channels, reconnect, device flow and Rust stores exist and pass local tests. The app owns the real runtime. Device sign-in and saved-session validation are wired, and the hub feeds the sidebar and Dock count. Workspace channel/store/view wiring remains. |
 | `crates/tempo-terminal` | Empty: the `gpui-terminal` fork is not made yet. |
 | Views | Main window panes, title bar, sidebar, chat rows, composer context, top bar and Settings (shortcut table) are started; Changes, Diff, Files, Checks, Setup, Run, Terminal, dialogs and the palette are stubs. |
 | macOS integration | Menus, key bindings, `Info.plist` and entitlements are done; Keychain, notifications, Dock badge and wake are std-only stubs. |
 | Local storage, logs, `scripts/mac/release.sh`, update check, `AppIcon.icns`, `tests/mac-e2e/` | Not built. |
-| `#[gpui::test]` view tests | Not written: the current tests are plain Rust. |
+| `#[gpui_kit::test]` app/view tests | Eight headless tests cover auth lifecycle and Enter in the connect form using the existing pinned GPUI Kit test-support feature. Real Keychain, browser approval and UI acceptance remain open. |
 
 ## Continuation verification (2026-10-11)
 
 The continuation runs on macOS. Native tests and Clippy now compile the macOS-specific modules; this does not prove manual UI, Keychain, notification, signing or hosted API behavior. The earlier Linux-only notes above describe the original build environment.
 
 `bun run test:tempod:container` builds the pinned full workspace image, derives `container/Dockerfile.test`, and runs daemon tests as uid 1000. It uses the build arguments from `container/versions.json`. The new main/manual workflow runs the same command. Local image validation passes on the shared Colima engine: 112 tests, including uid/gid, PID 1, adapter/tool presence and orphan cleanup. Production image size is 1,715,652,650 bytes. The earlier host-only daemon-test limitation is closed.
+
+The native continuation implements 07's existing sign-in contract: server/version check, browser device approval, Keychain save, later-launch session validation, 401 cleanup and server sign-out. The hub uses the shared Rust apply rules and project/sort data for the sidebar; resetting auth closes its channel and clears its Dock count. Existing static transcript spike windows still run without a live AppState. The required-update screen is present; authenticated DMG download is not yet connected.

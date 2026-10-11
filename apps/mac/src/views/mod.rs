@@ -12,6 +12,7 @@ pub mod run;
 pub mod settings;
 pub mod setup;
 pub mod sidebar;
+pub mod sign_in;
 pub mod terminal;
 pub mod tokens;
 pub mod top_bar;

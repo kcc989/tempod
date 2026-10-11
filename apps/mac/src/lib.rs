@@ -1,8 +1,12 @@
 //! Tempo for Mac (07). The binary in `main.rs` wires these modules together.
 #![deny(unsafe_code)]
 
+#[cfg(test)]
+extern crate gpui_kit as gpui;
+
 pub mod actions;
 pub mod app;
+pub mod auth;
 pub mod client;
 pub mod image_policy;
 pub mod keymap;

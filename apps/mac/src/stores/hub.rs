@@ -1,21 +1,73 @@
-//! HubStore: the sidebar, fed by `/api/ws/hub` (02, Hub channel; 07, Live state). Stub: it keeps
-//! the connection state only. Its summaries are `tempo_protocol::WorkspaceSummary` values once
-//! crates/tempo-protocol is generated; it then mirrors `applyHubMessage` in `hub-state.ts`
-//! (one summary per id, ignore a summary whose `rev` is not newer).
 use super::Connection;
+use gpui_kit::{Context, Task};
+use tempo_client::{ChannelEvent, ChannelHandle, Client, Status, state::hub::HubState};
+use tempo_protocol::{Project, api::ListProjects};
 
 pub struct HubStore {
     pub connection: Connection,
-    /// True once the first `hello` arrived.
-    pub ready: bool,
+    pub state: HubState,
+    pub projects: Vec<Project>,
+    pub project_error: bool,
+    pub projects_ready: bool,
+    channel: Option<ChannelHandle>,
+    task: Option<Task<()>>,
+    projects_task: Option<Task<()>>,
 }
 
 impl HubStore {
     pub fn new() -> Self {
         Self {
             connection: Connection::Closed,
-            ready: false,
+            state: HubState::new(),
+            projects: Vec::new(),
+            project_error: false,
+            projects_ready: false,
+            channel: None,
+            task: None,
+            projects_task: None,
         }
+    }
+
+    pub fn connect(&mut self, client: &Client, cx: &mut Context<Self>) {
+        let (events, channel) = client.open_hub();
+        self.channel = Some(channel);
+        self.task = Some(cx.spawn(async move |this, cx| {
+            while let Ok(event) = events.recv().await {
+                if this
+                    .update(cx, |hub, cx| {
+                        match event {
+                            ChannelEvent::Message(message) => {
+                                hub.state.apply(message);
+                            }
+                            ChannelEvent::Status(status) => {
+                                hub.connection = match status {
+                                    Status::Open => Connection::Open,
+                                    Status::Down { since } => Connection::Down(since),
+                                    _ => Connection::Closed,
+                                }
+                            }
+                        }
+                        crate::platform::set_badge_count(hub.state.attention_count());
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }));
+        let request = client.call::<ListProjects>(Default::default());
+        self.projects_task = Some(cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |hub, cx| {
+                match result {
+                    Ok(projects) => hub.projects = projects,
+                    Err(_) => hub.project_error = true,
+                }
+                hub.projects_ready = true;
+                cx.notify();
+            });
+        }));
     }
 }
 

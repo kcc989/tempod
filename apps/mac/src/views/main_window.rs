@@ -66,13 +66,16 @@ pub struct MainWindow {
     center_tab: usize,
     review_tab: usize,
     process_tab: usize,
-    sections: Vec<SidebarSection>,
-    active: Option<SharedString>,
     top_bar: Option<TopBar>,
     tabs: Vec<SharedString>,
     transcript: Entity<TranscriptView>,
     composer: Entity<Composer>,
     _appearance: Subscription,
+    _app_state: Option<Subscription>,
+    sign_in: Option<Entity<super::sign_in::SignInView>>,
+    _hub: Option<Subscription>,
+    sections: Vec<SidebarSection>,
+    active: Option<SharedString>,
 }
 
 impl MainWindow {
@@ -87,6 +90,20 @@ impl MainWindow {
         });
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
+        let live_state = crate::app::AppState::try_global(cx);
+        let app_state = live_state.as_ref().map(|state| {
+            cx.observe_in(state, window, |this, state, window, cx| {
+                if matches!(state.read(cx).auth, crate::app::AuthState::SignedIn) {
+                    window.focus(&this.focus, cx);
+                }
+                cx.notify();
+            })
+        });
+        let hub_subscription = live_state.as_ref().map(|state| {
+            let hub = state.read(cx).hub.clone();
+            cx.observe(&hub, |_, _, cx| cx.notify())
+        });
+        let sign_in = live_state.map(|_| cx.new(|cx| super::sign_in::SignInView::new(window, cx)));
         Self {
             focus,
             panes: Panes {
@@ -106,6 +123,9 @@ impl MainWindow {
             transcript: cx.new(|cx| TranscriptView::new(rows, cx)),
             composer: cx.new(|cx| Composer::new(window, cx)),
             _appearance: appearance,
+            _app_state: app_state,
+            sign_in,
+            _hub: hub_subscription,
         }
     }
 
@@ -209,10 +229,81 @@ impl Focusable for MainWindow {
 
 impl Render for MainWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(sign_in) = &self.sign_in
+            && !matches!(
+                crate::app::AppState::global(cx).read(cx).auth,
+                crate::app::AuthState::SignedIn
+            )
+        {
+            return v_flex()
+                .size_full()
+                .bg(color(Token::Background, cx))
+                .text_color(color(Token::Foreground, cx))
+                .child(TitleBar::new().child(crate::APP_NAME))
+                .child(div().flex_1().child(sign_in.clone()))
+                .into_any_element();
+        }
         let width = f32::from(window.viewport_size().width);
         self.narrow = width < RIGHT_COLLAPSE_WIDTH;
         let show_right = right_side_visible(width, self.panes.right, self.panes.right_when_narrow);
-        let sidebar = WorkspaceSidebar::new(self.sections.clone()).active(self.active.clone());
+        let sidebar = if let Some(app_state) = crate::app::AppState::try_global(cx) {
+            let hub = app_state.read(cx).hub.read(cx);
+            if hub.project_error {
+                div()
+                    .p_4()
+                    .child("Could not load projects. Sign out and connect again.")
+                    .into_any_element()
+            } else if !hub.state.ready || !hub.projects_ready {
+                super::skeleton_rows(6).into_any_element()
+            } else {
+                let sections = tempo_client::state::hub::sidebar_sections(
+                    &hub.state.workspaces,
+                    &hub.projects,
+                    match cx.global::<crate::storage::Local>().state().sort {
+                        crate::storage::SortMode::Created => {
+                            tempo_client::state::hub::SortMode::Created
+                        }
+                        _ => tempo_client::state::hub::SortMode::Activity,
+                    },
+                );
+                let sections = sections
+                    .into_iter()
+                    .map(|section| SidebarSection {
+                        label: if let Some(project_id) = section.project_id {
+                            hub.projects
+                                .iter()
+                                .find(|p| p.id == project_id)
+                                .map(|p| p.name.clone())
+                                .unwrap_or_default()
+                                .into()
+                        } else {
+                            "Pinned".into()
+                        },
+                        rows: section
+                            .workspaces
+                            .into_iter()
+                            .map(|w| sidebar::SidebarRow {
+                                id: w.id.into(),
+                                title: w.title.into(),
+                                detail: format!("{} · {}", w.branch, w.slug).into(),
+                            })
+                            .collect(),
+                    })
+                    .collect();
+                WorkspaceSidebar::new(sections)
+                    .active(app_state.read(cx).active_workspace.clone().map(Into::into))
+                    .on_select(|id, _, cx| {
+                        crate::app::AppState::global(cx).update(cx, |state, cx| {
+                            state.show_workspace(id, cx);
+                        });
+                    })
+                    .into_any_element()
+            }
+        } else {
+            WorkspaceSidebar::new(self.sections.clone())
+                .active(self.active.clone())
+                .into_any_element()
+        };
         let center = self.render_center(cx);
         let right = self.render_right(cx);
 
@@ -258,6 +349,7 @@ impl Render for MainWindow {
                         ),
                 ),
             )
+            .into_any_element()
     }
 }
 
