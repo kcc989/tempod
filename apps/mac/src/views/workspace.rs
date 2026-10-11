@@ -179,18 +179,19 @@ impl WorkspaceView {
                         .update_state(|state| state.set_draft(&workspace_id, &session, text));
                 }
                 ComposerEvent::Send(text) => this.send(&session, text, window, cx),
-                ComposerEvent::Steer(text) => this.send_prompt_with_delivery(
-                    &session,
-                    p::TurnPrompt {
-                        text: text.clone(),
-                        mentions: vec![],
-                        attachment_ids: vec![],
-                        review_comment_ids: vec![],
-                    },
-                    Some(p::SendPromptInDelivery::Steer),
-                    window,
-                    cx,
-                ),
+                ComposerEvent::Steer(text) => {
+                    if let Some(chat) = this.chats.get(&session) {
+                        let prompt = chat.composer.read(cx).prompt(text);
+                        this.send_prompt_with_delivery(
+                            &session,
+                            prompt,
+                            Some(p::SendPromptInDelivery::Steer),
+                            window,
+                            cx,
+                        );
+                    }
+                }
+                ComposerEvent::LoadFiles => this.load_files(&session, window, cx),
                 ComposerEvent::Stop => this.stop(&session, cx),
                 ComposerEvent::TogglePlanMode => this.toggle_plan(&session, window, cx),
                 ComposerEvent::SetMode(value) => this.configure(&session, None, value, window, cx),
@@ -309,18 +310,31 @@ impl WorkspaceView {
     }
 
     fn send(&mut self, session_id: &str, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.send_prompt(
-            session_id,
-            p::TurnPrompt {
-                text: text.into(),
-                mentions: Vec::new(),
-                attachment_ids: Vec::new(),
-                review_comment_ids: Vec::new(),
-            },
-            window,
-            cx,
-        );
+        let Some(chat) = self.chats.get(session_id) else {
+            return;
+        };
+        let prompt = chat.composer.read(cx).prompt(text);
+        self.send_prompt(session_id, prompt, window, cx);
     }
+    fn load_files(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let request = self.client.call::<api::ListFiles>(p::ListFilesIn {
+            workspace_id: self.store.read(cx).workspace_id.clone(),
+        });
+        let id = session_id.to_string();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request
+                .await
+                .map(|out| out.paths)
+                .map_err(|e| e.to_string());
+            let _ = this.update_in(cx, |this, _, cx| {
+                if let Some(chat) = this.chats.get(&id) {
+                    chat.composer.update(cx, |c, cx| c.set_files(result, cx));
+                }
+            });
+        })
+        .detach();
+    }
+
     fn send_prompt(
         &mut self,
         session_id: &str,
@@ -353,9 +367,9 @@ impl WorkspaceView {
             workspace_id: self.store.read(cx).workspace_id.clone(),
             session_id: session_id.into(),
             text: prompt.text.clone(),
-            mentions: prompt.mentions,
-            attachment_ids: prompt.attachment_ids,
-            review_comment_ids: prompt.review_comment_ids,
+            mentions: prompt.mentions.clone(),
+            attachment_ids: prompt.attachment_ids.clone(),
+            review_comment_ids: prompt.review_comment_ids.clone(),
             delivery,
         };
         let request = self.client.call::<api::SendPrompt>(input);
@@ -367,7 +381,7 @@ impl WorkspaceView {
                     chat.composer.update(cx, |c, cx| {
                         c.sending = false;
                         if result.is_ok() {
-                            c.clear_sent(&prompt.text, window, cx);
+                            c.clear_sent(&prompt, window, cx);
                         }
                         cx.notify();
                     });
@@ -1570,6 +1584,68 @@ mod tests {
                     .unwrap()
                     .iter()
                     .any(|(path, _)| path.ends_with("/closeSession"))
+            );
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn mentions_reach_queue_and_steering_and_survive_send_failure(cx: &mut TestAppContext) {
+        for (steer, fail) in [(false, false), (true, false), (false, true)] {
+            let mut state = fixture();
+            let id = chat_model::sessions(&state, false)[0].id.clone();
+            state.sessions.get_mut(&id).unwrap().steering = Some(true);
+            let mut turn = state.turns.values().next().unwrap().clone();
+            turn.session_id = id.clone();
+            turn.status = p::TurnStatus::Running;
+            state.turns.clear();
+            state.turns.insert(turn.id.clone(), turn.clone());
+            let server = LocalServer::new(&turn, fail);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            cx.update_window(window, |_, window, cx| {
+                view.update(cx, |view, cx| {
+                    view.chats[&id].composer.update(cx, |c, cx| {
+                        c.set_text("Check this file", window, cx);
+                        c.add_mention("src/main.rs", cx);
+                        cx.emit(if steer {
+                            ComposerEvent::Steer("Check this file".into())
+                        } else {
+                            ComposerEvent::Send("Check this file".into())
+                        });
+                    });
+                });
+            })
+            .unwrap();
+            wait_sent(cx, &view);
+            view.read_with(cx, |view, cx| {
+                let c = view.chats[&id].composer.read(cx);
+                assert_eq!(c.text(cx), if fail { "Check this file" } else { "" });
+                assert_eq!(c.prompt(&c.text(cx)).mentions.len(), usize::from(fail));
+            });
+            let requests = server.requests.lock().unwrap();
+            let input: p::SendPromptIn = serde_json::from_value(
+                requests
+                    .iter()
+                    .find(|(path, _)| path.ends_with("/sendPrompt"))
+                    .unwrap()
+                    .1
+                    .clone(),
+            )
+            .unwrap();
+            assert_eq!(
+                input.mentions,
+                vec![p::Mention {
+                    path: "src/main.rs".into()
+                }]
+            );
+            assert_eq!(
+                input.delivery,
+                steer.then_some(p::SendPromptInDelivery::Steer)
             );
             cx.update_window(window, |_, window, _| window.remove_window())
                 .unwrap();

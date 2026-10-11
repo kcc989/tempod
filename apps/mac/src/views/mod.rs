@@ -7,6 +7,7 @@ pub mod composer;
 pub mod composer_model;
 pub mod dialogs;
 pub mod diff;
+pub mod file_picker;
 pub mod files;
 pub mod main_window;
 pub mod palette;

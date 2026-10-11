@@ -2,6 +2,7 @@
 //! `Composer` key context. Enter sends, ⇧Enter adds a line (the text field's own binding), Esc
 //! stops the turn, ⇧Tab toggles plan mode. Pickers use agent-reported modes and models.
 use super::composer_model::{self, SlashEntry};
+use super::file_picker::{FilePicker, MentionTrigger};
 use crate::actions::{
     DismissComposerChoice, NextComposerChoice, PreviousComposerChoice, Send, StopTurn,
     TogglePlanMode,
@@ -11,12 +12,14 @@ use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
+use gpui_kit::component::list::{List, ListEvent, ListState};
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::v_flex;
 use gpui_kit::component::{Disableable as _, h_flex};
 use gpui_kit::{
-    AppContext as _, Context, Entity, EventEmitter, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    AppContext as _, Context, Entity, EventEmitter, Focusable as _, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
 };
 use tempo_protocol as p;
 
@@ -40,6 +43,7 @@ pub enum ComposerEvent {
     Send(String),
     Steer(String),
     Change(String),
+    LoadFiles,
     Stop,
     TogglePlanMode,
     SetMode(String),
@@ -48,6 +52,13 @@ pub enum ComposerEvent {
 
 pub struct Composer {
     input: Entity<TextareaState>,
+    mentions: Vec<p::Mention>,
+    files: Option<Vec<String>>,
+    files_loading: bool,
+    files_error: Option<String>,
+    files_loaded: Option<std::time::Instant>,
+    file_menu: Entity<ListState<FilePicker>>,
+    _file_events: Subscription,
     pub read_only: bool,
     pub sending: bool,
     pub working: bool,
@@ -80,6 +91,22 @@ impl Composer {
             }
             cx.notify();
         });
+        let file_menu = cx.new(|cx| ListState::new(FilePicker::default(), window, cx));
+        let file_events = cx.subscribe_in(
+            &file_menu,
+            window,
+            |this, _, event: &ListEvent, window, cx| match event {
+                ListEvent::Confirm(index) => this.pick_file(index.row, window, cx),
+                ListEvent::Select(index) => {
+                    this.command_selected = index.row;
+                    cx.notify();
+                }
+                ListEvent::Cancel => {
+                    this.command_dismissed = true;
+                    cx.notify();
+                }
+            },
+        );
         let model =
             cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx).searchable(true));
         let mode = cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx));
@@ -106,6 +133,13 @@ impl Composer {
         });
         Self {
             input,
+            mentions: vec![],
+            files: None,
+            files_loading: false,
+            files_error: None,
+            files_loaded: None,
+            file_menu,
+            _file_events: file_events,
             read_only: false,
             sending: false,
             working: false,
@@ -221,10 +255,104 @@ impl Composer {
             input.set_value(text.to_string(), window, cx)
         });
     }
-    pub fn clear_sent(&self, sent: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if self.text(cx) == sent {
-            self.set_text("", window, cx);
+    pub fn add_mention(&mut self, path: &str, cx: &mut Context<Self>) {
+        if !self.read_only && !self.sending && !self.mentions.iter().any(|m| m.path == path) {
+            self.mentions.push(p::Mention { path: path.into() });
+            cx.notify();
         }
+    }
+    pub fn prompt(&self, text: &str) -> p::TurnPrompt {
+        p::TurnPrompt {
+            text: text.into(),
+            mentions: self.mentions.clone(),
+            attachment_ids: vec![],
+            review_comment_ids: vec![],
+        }
+    }
+    pub fn clear_sent(
+        &mut self,
+        sent: &p::TurnPrompt,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.text(cx) == sent.text && self.mentions == sent.mentions {
+            self.set_text("", window, cx);
+            self.mentions.clear();
+            cx.emit(ComposerEvent::Change(String::new()));
+        }
+    }
+    pub fn set_files(&mut self, result: Result<Vec<String>, String>, cx: &mut Context<Self>) {
+        self.files_loading = false;
+        match result {
+            Ok(paths) => {
+                self.files = Some(paths);
+                self.files_error = None;
+                self.files_loaded = Some(std::time::Instant::now());
+            }
+            Err(error) => self.files_error = Some(error),
+        }
+        cx.notify();
+    }
+    fn load_files(&mut self, cx: &mut Context<Self>) {
+        if self.files_loading {
+            return;
+        }
+        self.files_loading = true;
+        self.files_error = None;
+        cx.emit(ComposerEvent::LoadFiles);
+        cx.notify();
+    }
+    fn file_rows(&self, cx: &gpui_kit::App) -> Vec<String> {
+        let input = self.input.read(cx);
+        composer_model::mention_query(input.value().as_ref(), input.cursor())
+            .map(|(_, query)| {
+                composer_model::file_matches(self.files.as_deref().unwrap_or_default(), query)
+            })
+            .unwrap_or_default()
+    }
+    fn mention_open(&self, cx: &gpui_kit::App) -> bool {
+        let input = self.input.read(cx);
+        !self.read_only
+            && !self.sending
+            && !self.command_dismissed
+            && composer_model::mention_query(input.value().as_ref(), input.cursor()).is_some()
+    }
+    fn picker_count(&self, cx: &gpui_kit::App) -> usize {
+        if self.mention_open(cx) {
+            self.file_rows(cx).len()
+        } else {
+            self.command_rows(cx).len()
+        }
+    }
+    fn pick_file(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.mention_open(cx) {
+            return;
+        }
+        let Some(path) = self.file_rows(cx).get(index).cloned() else {
+            return;
+        };
+        let input = self.input.read(cx);
+        let caret = input.cursor();
+        let text = input.value().to_string();
+        let Some((start, _)) = composer_model::mention_query(&text, caret) else {
+            return;
+        };
+        self.add_mention(&path, cx);
+        let prefix = &text[..start];
+        let line = prefix.chars().filter(|c| *c == '\n').count() as u32;
+        let col = prefix
+            .rsplit('\n')
+            .next()
+            .unwrap_or_default()
+            .chars()
+            .count() as u32;
+        self.set_text(&format!("{prefix}{}", &text[caret..]), window, cx);
+        self.input.update(cx, |i, cx| {
+            i.set_cursor_position(gpui_kit::base::input::Position::new(line, col), window, cx)
+        });
+        self.command_dismissed = true;
+        cx.emit(ComposerEvent::Change(self.text(cx)));
+        cx.notify();
     }
 
     pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -272,6 +400,10 @@ impl Composer {
     }
 
     fn send(&mut self, _: &Send, window: &mut Window, cx: &mut Context<Self>) {
+        if self.mention_open(cx) {
+            self.pick_file(self.command_selected, window, cx);
+            return;
+        }
         if !self.command_rows(cx).is_empty() {
             self.pick_command(self.command_selected, window, cx);
             return;
@@ -291,8 +423,12 @@ impl Composer {
 impl Render for Composer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let input = self.input.read(cx);
-        let query =
-            composer_model::slash_query(input.value().as_ref(), input.cursor()).map(str::to_string);
+        let query = composer_model::slash_query(input.value().as_ref(), input.cursor())
+            .map(|q| format!("slash:{q}"))
+            .or_else(|| {
+                composer_model::mention_query(input.value().as_ref(), input.cursor())
+                    .map(|(start, q)| format!("mention:{start}:{q}"))
+            });
         if query != self.command_query {
             if query.is_none() {
                 self.command_dismissed = false;
@@ -300,8 +436,40 @@ impl Render for Composer {
             self.command_selected = 0;
             self.command_query = query;
         }
+        let mention_open = self.mention_open(cx);
+        if mention_open
+            && !self.files_loading
+            && self.files_error.is_none()
+            && (self.files.is_none()
+                || self
+                    .files_loaded
+                    .is_some_and(|at| at.elapsed().as_secs() >= 30))
+        {
+            self.load_files(cx);
+        }
+        let file_rows = self.file_rows(cx);
+        self.command_selected = self
+            .command_selected
+            .min(self.picker_count(cx).saturating_sub(1));
+        let status = if self.files_loading {
+            "Loading files".to_string()
+        } else if let Some(error) = &self.files_error {
+            error.clone()
+        } else {
+            "No matching files.".into()
+        };
+        self.file_menu.update(cx, |menu, cx| {
+            if menu.delegate().paths != file_rows || menu.delegate().status != status {
+                menu.delegate_mut().paths = file_rows;
+                menu.delegate_mut().status = status;
+                cx.notify();
+            }
+            menu.set_selected_index(Some(IndexPath::new(self.command_selected)), window, cx);
+        });
         let rows = self.command_rows(cx);
-        self.command_selected = self.command_selected.min(rows.len().saturating_sub(1));
+        self.command_selected = self
+            .command_selected
+            .min(self.picker_count(cx).saturating_sub(1));
         self.command_menu.update(cx, |menu, cx| {
             if menu.matched_count() == 0 {
                 return;
@@ -309,14 +477,45 @@ impl Render for Composer {
             menu.set_selected_index(Some(IndexPath::new(self.command_selected)), window, cx)
         });
         let mut field = div();
-        if !rows.is_empty() {
-            field = field.key_context("SlashMenu");
+        if !rows.is_empty() || mention_open {
+            field = field.key_context("ComposerPicker");
         }
         let field = field.child(
             Textarea::new(&self.input)
                 .aria_label("Message")
                 .disabled(self.read_only || self.sending),
         );
+        let list = self.file_menu.clone();
+        let retry = self.files_error.is_some();
+        let weak_picker = cx.weak_entity();
+        let weak_retry = weak_picker.clone();
+        let input_focus = self.input.read(cx).focus_handle(cx);
+        let field = Popover::new("mention-picker")
+            .open(mention_open)
+            .track_focus(&input_focus)
+            .trigger(MentionTrigger(field))
+            .on_open_change(move |open, _, cx| {
+                if !*open {
+                    let _ = weak_picker.update(cx, |this, cx| {
+                        this.command_dismissed = true;
+                        cx.notify();
+                    });
+                }
+            })
+            .content(move |_, _, _| {
+                v_flex()
+                    .w(gpui_kit::px(400.))
+                    .max_h(gpui_kit::px(220.))
+                    .child(List::new(&list).max_h(gpui_kit::px(180.)))
+                    .children(retry.then(|| {
+                        Button::new("retry-files").label("Retry").on_click({
+                            let weak = weak_retry.clone();
+                            move |_, _, cx| {
+                                let _ = weak.update(cx, |this, cx| this.load_files(cx));
+                            }
+                        })
+                    }))
+            });
         let weak = cx.weak_entity();
         let selection = weak.clone();
         let menu = (!rows.is_empty()).then(|| {
@@ -354,14 +553,14 @@ impl Render for Composer {
         v_flex()
             .key_context(COMPOSER)
             .on_action(cx.listener(|this, _: &NextComposerChoice, _, cx| {
-                let len = this.command_rows(cx).len();
+                let len = this.picker_count(cx);
                 if len > 0 {
                     this.command_selected = (this.command_selected + 1) % len;
                     cx.notify();
                 }
             }))
             .on_action(cx.listener(|this, _: &PreviousComposerChoice, _, cx| {
-                let len = this.command_rows(cx).len();
+                let len = this.picker_count(cx);
                 if len > 0 {
                     this.command_selected = (this.command_selected + len - 1) % len;
                     cx.notify();
@@ -378,6 +577,22 @@ impl Render for Composer {
             )
             .p_3()
             .children(menu)
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .children(self.mentions.iter().enumerate().map(|(index, mention)| {
+                        let path = mention.path.clone();
+                        Button::new(("mention", index))
+                            .label(mention.path.clone())
+                            .tooltip("Remove mention")
+                            .disabled(self.read_only || self.sending)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.mentions.retain(|m| m.path != path);
+                                cx.notify();
+                            }))
+                    })),
+            )
             .child(field)
             .child(
                 h_flex()
@@ -437,6 +652,86 @@ mod tests {
     use gpui_kit::{TestAppContext, test::TestWindowExt as _};
     use std::cell::RefCell;
     use std::rc::Rc;
+
+    #[gpui_kit::test]
+    fn mention_picker_loads_once_keeps_suffix_and_retains_failed_prompts(cx: &mut TestAppContext) {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let log = events.clone();
+        let (window, composer, subscription) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::keymap::bind(cx);
+            let (window, composer) = gpui_kit::open_window(Default::default(), cx, |window, cx| {
+                cx.new(|cx| Composer::new(window, cx))
+            })
+            .unwrap();
+            let subscription = cx.subscribe(&composer, move |_, event: &ComposerEvent, _| {
+                log.borrow_mut().push(match event {
+                    ComposerEvent::LoadFiles => "load",
+                    ComposerEvent::Send(_) => "send",
+                    ComposerEvent::Stop => "stop",
+                    _ => "other",
+                });
+            });
+            (window, composer, subscription)
+        });
+        let draft = "Ask é @sr tail";
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                c.set_text(draft, window, cx);
+                c.input.update(cx, |i, cx| {
+                    i.set_cursor_position(gpui_kit::base::input::Position::new(0, 9), window, cx)
+                });
+            });
+            window.render_frame(cx);
+            window.press("enter", cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(events.borrow().iter().filter(|e| **e == "load").count(), 1);
+        assert!(!events.borrow().contains(&"send"));
+        composer.read_with(cx, |c, cx| assert_eq!(c.text(cx), draft));
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                c.set_files(Err("Could not load files".into()), cx);
+            });
+            window.render_frame(cx);
+            composer.update(cx, |c, cx| {
+                assert_eq!(c.files_error.as_deref(), Some("Could not load files"));
+                c.load_files(cx);
+                c.set_files(Ok(vec!["src/main.rs".into(), "README.md".into()]), cx);
+            });
+            window.render_frame(cx);
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        composer.read_with(cx, |c, cx| {
+            assert_eq!(c.text(cx), "Ask é  tail");
+            assert_eq!(
+                c.prompt(&c.text(cx)).mentions,
+                vec![p::Mention {
+                    path: "src/main.rs".into()
+                }]
+            );
+        });
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                c.add_mention("src/main.rs", cx);
+                let sent = c.prompt(&c.text(cx));
+                assert_eq!(sent.mentions.len(), 1);
+                c.set_text("Newer draft", window, cx);
+                c.clear_sent(&sent, window, cx);
+                assert_eq!(c.text(cx), "Newer draft");
+                assert_eq!(c.mentions, sent.mentions);
+                c.clear_sent(&c.prompt("Newer draft"), window, cx);
+                assert!(c.mentions.is_empty());
+                assert!(c.text(cx).is_empty());
+            });
+        })
+        .unwrap();
+        drop(subscription);
+    }
 
     #[gpui_kit::test]
     fn slash_keyboard_selects_before_sending_and_escape_does_not_stop(cx: &mut TestAppContext) {

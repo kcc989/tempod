@@ -56,19 +56,19 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new(
             "down",
             NextComposerChoice,
-            Some("Composer > SlashMenu > Input"),
+            Some("Composer > ComposerPicker > Input"),
         ),
         KeyBinding::new(
             "up",
             PreviousComposerChoice,
-            Some("Composer > SlashMenu > Input"),
+            Some("Composer > ComposerPicker > Input"),
         ),
         KeyBinding::new(
             "escape",
             DismissComposerChoice,
-            Some("Composer > SlashMenu > Input"),
+            Some("Composer > ComposerPicker > Input"),
         ),
-        KeyBinding::new("enter", Send, Some("Composer > SlashMenu > Input")),
+        KeyBinding::new("enter", Send, Some("Composer > ComposerPicker > Input")),
         KeyBinding::new("down", NextFile, Some(DIFF)),
         KeyBinding::new("up", PreviousFile, Some(DIFF)),
         KeyBinding::new("ctrl-v", MarkFileViewed, Some(DIFF)),
@@ -188,7 +188,7 @@ mod tests {
             DIFF,
             TERMINAL,
             "Composer > Input",
-            "Composer > SlashMenu > Input",
+            "Composer > ComposerPicker > Input",
         ];
         for (keys, action, context) in table() {
             assert!(
