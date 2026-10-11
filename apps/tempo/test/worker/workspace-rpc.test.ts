@@ -570,10 +570,10 @@ describe("renameBranch", { timeout: 30_000 }, () => {
     expect((await detail(w.stub)).branch).toBe(w.branch);
   });
 
-  // BUG: isValidBranch (src/do/workspace/rpc.ts:57-58) accepts names git refuses as branch names:
+  // Regression (fixed): isValidBranch (src/do/workspace/rpc.ts:57-58) accepts names git refuses as branch names:
   // a first component that starts with ".", a component that ends in ".lock", a leading "-", and
   // "HEAD". renameBranch returns OK and stores them; git.renameBranch / repo.clone then fail.
-  it.skip("rejects other names git refuses as branch names with BRANCH_INVALID", async () => {
+  it("rejects other names git refuses as branch names with BRANCH_INVALID", async () => {
     const w = await seedHeld();
     for (const bad of [".hidden", "a.lock/b", "-oops", "HEAD"]) {
       expect(codeOf(await w.stub.renameBranch({ branch: bad })), JSON.stringify(bad)).toBe("BRANCH_INVALID");

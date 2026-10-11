@@ -37,7 +37,11 @@ const authorFor = async (env: HandlerCtx["env"], token: string, fallbackName: st
   }
 };
 
-const isUniqueViolation = (e: unknown, index: string) => String(e).includes("UNIQUE") && String(e).includes(index);
+/** Drizzle wraps D1 errors ("Failed query: ..."); the constraint text is on `cause`. */
+const isUniqueViolation = (e: unknown, column: "branch" | "slug") => {
+  const text = String((e as { cause?: unknown } | null)?.cause ?? e);
+  return text.includes("UNIQUE") && text.includes(`workspaces.${column}`);
+};
 
 /** 03, Create a workspace: checks and the D1 insert here; everything after in WorkspaceDO.init. */
 export const createWorkspace = async (

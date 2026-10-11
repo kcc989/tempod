@@ -3,7 +3,6 @@ import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlit
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
   DEFAULT_SETTINGS,
-  Item as ItemSchema,
   Settings as SettingsSchema,
   SettingsLayer,
   TempoError,

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { AgentId, ApiKeyProvider, DiffScope, MergeMethod, ReviewSide } from "./enums.ts";
-import { EnvName, SettingsLayer } from "./settings.ts";
+import { EnvName } from "./settings.ts";
 import {
   ChangedFile,
   CheckRun,
@@ -63,7 +63,12 @@ export const API = {
   ),
   linkProject: fn("POST", Schema.Struct({ installationId: N, repoId: N }), Project),
   listProjects: fn("GET", Empty, Schema.Array(Project)),
-  updateProjectSettings: fn("POST", Schema.Struct({ projectId: S, settings: SettingsLayer }), Project),
+  /** `settings` is checked by the handler, so bad values and unknown keys give SETTINGS_INVALID. */
+  updateProjectSettings: fn(
+    "POST",
+    Schema.Struct({ projectId: S, settings: Schema.Record(Schema.String, Schema.Unknown) }),
+    Project,
+  ),
   unlinkProject: fn("POST", Schema.Struct({ projectId: S }), Empty),
   listBranches: fn("GET", Schema.Struct({ projectId: S, query: opt(S) }), Schema.Array(Schema.Struct({ name: S }))),
   listOpenPullRequests: fn(

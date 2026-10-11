@@ -303,7 +303,7 @@ export class OpRunner {
   private async applyOutcome(op: OpRow, outcome: StepOutcome, state: OpState, limit: StepLimit): Promise<void> {
     const now = Date.now();
     if (outcome === "wait") {
-      state.waiting = { ...(state.waiting ?? {}), step: op.step, deadline: state.waiting?.deadline ?? now + limit.timeoutMs };
+      state.waiting = { ...state.waiting, step: op.step, deadline: state.waiting?.deadline ?? now + limit.timeoutMs };
       this.save(op, {}, state);
       return;
     }
@@ -396,6 +396,16 @@ export class OpRunner {
     if (outcome === "next") await this.applyOutcome(op, "next", state, limitOf(step));
     else await this.handleError({ ...op, attempt: limitOf(step).maxAttempts - 1 }, new TempoError(error?.code ?? "INTERNAL", undefined, error?.detail), state, limitOf(step));
     this.core.scheduleAlarm();
+  }
+
+  /** Ends a pending or running op without its hooks: its work is superseded (for example by a wake). */
+  cancel(opId: string): void {
+    const op = this.core.db.select().from(ops).where(eq(ops.id, opId)).get();
+    if (!op || (op.status !== "pending" && op.status !== "running")) return;
+    const state = this.stateOf(op);
+    delete state.waiting;
+    this.save(op, { status: "cancelled" }, state);
+    this.resolveWaiters(op.id, { ok: false, error: { code: "CONTAINER_NOT_READY", detail: "the container stopped" } });
   }
 
   /** The op that waits on `step`, if any. */

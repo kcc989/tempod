@@ -402,8 +402,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const core = this.core;
     const state = core.state;
     if (!(CONTAINER_STATES as ReadonlyArray<string>).includes(state)) return;
-    if (this.runner.hasPendingOrRunning(["create", "wake", "sleep", "archive"])) return;
+    // During setting_up the create or wake op only waits for script.exited; a stopped container ends that wait.
+    const setupWait = state === "setting_up" && !containerRunning(core) ? this.runner.waitingOn("setup.run") : null;
+    if (!setupWait && this.runner.hasPendingOrRunning(["create", "wake", "sleep", "archive"])) return;
     if (!containerRunning(core)) {
+      if (setupWait) this.runner.cancel(setupWait.id);
       await this.onUnplannedStop("The container stopped unexpectedly.");
       return;
     }

@@ -1124,9 +1124,9 @@ describe("script.output", () => {
     T,
   );
 
-  // BUG: appendLog (src/do/workspace/scripts.ts) trims the tail by UTF-16 code units, not bytes, so non-ASCII
+  // Regression (fixed): appendLog (src/do/workspace/scripts.ts) trims the tail by UTF-16 code units, not bytes, so non-ASCII
   // output keeps up to 2-3 MiB (observed 2,097,149 bytes for 2-byte characters).
-  it.skip(
+  it(
     "keeps at most 1 MiB (bytes) of non-ASCII output",
     async () => {
       // 01 Scripts, Output: "The WorkspaceDO keeps the last 1 MiB of each run in SQLite."

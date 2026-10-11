@@ -15,7 +15,9 @@ export const parsePreviewHost = (host: string, env: Env): { port: number; worksp
   return { port: Number(m[1]), workspaceId: m[2]!, token: m[3]! };
 };
 
-const notFound = () => new Response("Not found", { status: 404 });
+const PRIVACY_HEADERS = { "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } as const;
+
+const notFound = () => new Response("Not found", { status: 404, headers: PRIVACY_HEADERS });
 
 /**
  * Preview request path (01): match the first label, hand the request to the WorkspaceDO, add
@@ -30,7 +32,6 @@ export const handlePreview = async (request: Request, env: Env, url: URL): Promi
   const res = await env.WORKSPACE.getByName(parsed.workspaceId).fetch(new Request(request, { headers }));
   if (res.webSocket) return res;
   const out = new Response(res.body, res);
-  out.headers.set("Referrer-Policy", "no-referrer");
-  out.headers.set("X-Robots-Tag", "noindex, nofollow");
+  for (const [k, v] of Object.entries(PRIVACY_HEADERS)) out.headers.set(k, v);
   return out;
 };

@@ -22,13 +22,13 @@ interface RawSecret {
 const credsFor = (name: string) => env.CREDENTIALS.getByName(name);
 
 const rawSecret = async (stub: DurableObjectStub<CredentialDO>, key: string): Promise<RawSecret | undefined> =>
-  runInDurableObject(stub, (_i: CredentialDO, state: DurableObjectState) => {
+  runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => {
     const rows = state.storage.sql.exec("SELECT * FROM secrets WHERE key = ?", key).toArray();
     return rows[0] as unknown as RawSecret | undefined;
   });
 
 const writeRawSecret = async (stub: DurableObjectStub<CredentialDO>, row: RawSecret): Promise<void> =>
-  runInDurableObject(stub, (_i: CredentialDO, state: DurableObjectState) => {
+  runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => {
     state.storage.sql.exec(
       "INSERT OR REPLACE INTO secrets (key, ciphertext, iv, version, meta_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
       row.key,
@@ -41,7 +41,7 @@ const writeRawSecret = async (stub: DurableObjectStub<CredentialDO>, row: RawSec
   });
 
 const leaseRows = async (stub: DurableObjectStub<CredentialDO>): Promise<string[]> =>
-  runInDurableObject(stub, (_i: CredentialDO, state: DurableObjectState) =>
+  runInDurableObject(stub, (_i: unknown, state: DurableObjectState) =>
     state.storage.sql
       .exec("SELECT workspace_id FROM codex_leases ORDER BY workspace_id")
       .toArray()
@@ -536,7 +536,8 @@ describe("CredentialDO system instance (02, 05 Secrets)", () => {
     // 02: getGithubAppConfig "On the system instance only".
     // Called on the instance: a throwing RPC call is reported by the pool as an unhandled rejection.
     const user = credsFor(`user-${newId()}`);
-    await runInDurableObject(user, async (instance: CredentialDO) => {
+    await runInDurableObject(user, async (i: unknown) => {
+      const instance = i as CredentialDO;
       await expect(instance.getGithubAppConfig()).rejects.toThrow(/system/);
       await expect(instance.putGithubAppConfig(config)).rejects.toThrow(/system/);
     });

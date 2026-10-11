@@ -754,8 +754,8 @@ describe("isValidBranch", () => {
   it("accepts a 250-character name", () => {
     expect(isValidBranch("a".repeat(250))).toBe(true);
   });
-  // BUG: git check-ref-format --branch rejects these, but isValidBranch accepts them (see report).
-  it.skip.each([
+  // Regression (fixed): git check-ref-format --branch rejects these, but isValidBranch accepts them (see report).
+  it.each([
     ["first component starting with a dot", ".hidden"],
     ["component ending in .lock", "foo.lock/bar"],
     ["leading dash", "-foo"],
@@ -1132,8 +1132,8 @@ describe("redact", () => {
     a.self = a;
     expect(() => redact(a)).not.toThrow();
   });
-  // BUG: past depth 8 redact returns the raw nested object, so a deeply nested secret field is not redacted.
-  it.skip("redacts a matching field at any depth", () => {
+  // Regression (fixed): past depth 8 redact returns the raw nested object, so a deeply nested secret field is not redacted.
+  it("redacts a matching field at any depth", () => {
     let v: Record<string, unknown> = { token: "deep-secret" };
     for (let i = 0; i < 12; i++) v = { child: v };
     expect(JSON.stringify(redact(v))).not.toContain("deep-secret");

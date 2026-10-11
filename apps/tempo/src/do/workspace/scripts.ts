@@ -80,7 +80,12 @@ export const appendLog = (core: WorkspaceCore, runId: string, data: string): voi
   const run = scriptRun(core, runId);
   if (!run) return;
   let tail = run.logTail + data;
-  if (tail.length > LOG_TAIL_BYTES) tail = tail.slice(tail.length - LOG_TAIL_BYTES);
+  if (tail.length > LOG_TAIL_BYTES / 4) {
+    const bytes = new TextEncoder().encode(tail);
+    if (bytes.length > LOG_TAIL_BYTES) {
+      tail = new TextDecoder().decode(bytes.subarray(bytes.length - LOG_TAIL_BYTES)).replace(/^\uFFFD+/, "");
+    }
+  }
   core.db.update(scriptRuns).set({ logTail: tail }).where(eq(scriptRuns.id, runId)).run();
 };
 

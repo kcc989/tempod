@@ -54,7 +54,9 @@ export interface RpcRuntime {
   resendHello(): Promise<void>;
 }
 
-const BRANCH_RE = /^(?!\/|.*(?:\/\.|\/\/|\.\.|@\{|\\))[^\x00-\x20~^:?*[\x7f]+(?<![./]|\.lock)$/;
+// Control characters are part of git's rule (check-ref-format), so the class names them.
+// oxlint-disable-next-line no-control-regex
+const BRANCH_RE = /^(?![-./]|HEAD$|.*(?:\/\.|\/\/|\.\.|@\{|\\|\.lock\/))[^\x00-\x20~^:?*[\x7f]+(?<![./]|\.lock)$/;
 export const isValidBranch = (b: string): boolean => b.length > 0 && b.length <= 250 && BRANCH_RE.test(b) && b !== "@";
 
 const reviewToWire = (r: ReviewCommentRow): ReviewComment => ({
