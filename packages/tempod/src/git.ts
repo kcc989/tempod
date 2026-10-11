@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { copyFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -8,6 +9,7 @@ import {
   type DiffScope,
   type Source,
 } from "@tempo/protocol";
+import { MESSAGE_BUDGET } from "./bounds.ts";
 import type { TempodDb } from "./db.ts";
 import { ExecError, run, tail, type ExecResult } from "./exec.ts";
 import { relativeToWorkspace, resolveWorkspacePath } from "./fs.ts";
@@ -16,6 +18,27 @@ export const BIG_FILE_BYTES = 50 * 1024 * 1024;
 const CKPT_REF = "refs/tempo/checkpoints/";
 const SAFE_ID = /^[0-9A-Za-z_-]{1,128}$/;
 const PUSH_REJECTED = /\[rejected\]|\[remote rejected\]|stale info|non-fast-forward|fetch first|rejected/i;
+/** Written into .git once `git clone` finished; without it a repo is a partial clone and is cloned again. */
+const CLONE_MARKER = "tempo-cloned";
+
+/**
+ * Deadline of each git op, a little under its timeout in 02, so tempod answers before the DO gives up.
+ * Every git command of the op is killed (with its process group) when the deadline passes.
+ */
+export const GIT_OP_MS = {
+  clone: 10 * 60_000 - 15_000,
+  applyCheckpoint: 5 * 60_000 - 10_000,
+  checkpoint: 2 * 60_000 - 5_000,
+  revert: 2 * 60_000 - 5_000,
+  commitAndPush: 5 * 60_000 - 10_000,
+  read: 30_000 - 2_000,
+  renameBranch: 30_000 - 2_000,
+} as const;
+const DEFAULT_GIT_MS = 60_000;
+
+const deadlines = new AsyncLocalStorage<number>();
+
+export type CloneMode = "create" | "wake";
 
 export interface GitDeps {
   readonly workspace: string;
@@ -25,6 +48,8 @@ export interface GitDeps {
   readonly db: TempodDb;
   /** Env for git children: process env plus CA vars. */
   readonly env: () => Record<string, string>;
+  /** Tests: shorter op deadlines. */
+  readonly opMs?: Partial<Record<keyof typeof GIT_OP_MS, number>>;
 }
 
 export interface Changes {
@@ -60,6 +85,17 @@ export class Git {
     return next;
   }
 
+  /** Runs one op under its deadline; the deadline starts now, so time spent waiting for the lock counts. */
+  private op<A>(kind: keyof typeof GIT_OP_MS, lock: boolean, f: () => Promise<A>): Promise<A> {
+    const deadline = Date.now() + (this.deps.opMs?.[kind] ?? GIT_OP_MS[kind]);
+    const body = () =>
+      deadlines.run(deadline, async () => {
+        if (Date.now() >= deadline) throw new TempoError("INTERNAL", "Timed out waiting for another git operation.");
+        return f();
+      });
+    return lock ? this.locked(body) : body();
+  }
+
   private env(opts: GitOpts): Record<string, string> {
     const env: Record<string, string> = { ...this.deps.env(), GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" };
     if (opts.index) env["GIT_INDEX_FILE"] = opts.index;
@@ -67,8 +103,18 @@ export class Git {
     return { ...env, ...opts.extraEnv };
   }
 
-  git(args: ReadonlyArray<string>, opts: GitOpts = {}): Promise<ExecResult> {
-    return run(["git", ...args], { cwd: opts.cwd ?? this.deps.workspace, env: this.env(opts), input: opts.input });
+  async git(args: ReadonlyArray<string>, opts: GitOpts = {}): Promise<ExecResult> {
+    const deadline = deadlines.getStore();
+    const timeoutMs = deadline === undefined ? DEFAULT_GIT_MS : deadline - Date.now();
+    if (timeoutMs <= 0) throw new TempoError("INTERNAL", `git ${args[0] ?? ""} timed out`);
+    const r = await run(["git", ...args], {
+      cwd: opts.cwd ?? this.deps.workspace,
+      env: this.env(opts),
+      input: opts.input,
+      timeoutMs,
+    });
+    if (r.timedOut) throw new TempoError("INTERNAL", `git ${args[0] ?? ""} timed out`);
+    return r;
   }
 
   async gitOk(args: ReadonlyArray<string>, opts: GitOpts = {}): Promise<string> {
@@ -98,70 +144,81 @@ export class Git {
     return r.code === 0 && !name.startsWith("-");
   }
 
-  private async isRepo(): Promise<boolean> {
-    if (!existsSync(join(this.deps.workspace, ".git"))) return false;
+  private get cloneMarker(): string {
+    return join(this.deps.workspace, ".git", CLONE_MARKER);
+  }
+
+  /** True when a clone finished here: the marker exists and HEAD resolves. */
+  private async cloned(): Promise<boolean> {
+    if (!existsSync(this.cloneMarker)) return false;
     const r = await this.git(["rev-parse", "--verify", "-q", "HEAD"], { readOnly: true });
     return r.code === 0;
   }
 
+  /**
+   * `repo.clone` (03). A finished clone is kept, so the step can be retried. `create` checks out per
+   * source; `wake` (and no mode) tracks origin/<branch> when it exists, else branches from the base.
+   */
   clone(p: {
     url: string;
     branch: string;
     baseBranch: string;
     source: Source;
     author: { name: string; email: string };
+    mode?: CloneMode | undefined;
   }): Promise<{ headSha: string; remoteHeadSha: string | null }> {
-    return this.locked(async () => {
+    return this.op("clone", true, async () => {
       const ws = this.deps.workspace;
       if (!(await this.validBranch(p.branch)) || !(await this.validBranch(p.baseBranch))) {
         throw new TempoError("VALIDATION_FAILED", "Branch name is not valid.");
       }
-      const fail = (e: unknown): never => {
-        const detail = e instanceof ExecError ? tail(e.result.stderr || e.result.stdout, 2000) : String(e);
-        throw new TempoError("CLONE_FAILED", detail || "Could not clone the repo.");
-      };
-      if (!(await this.isRepo())) {
-        try {
+      try {
+        if (!(await this.cloned())) {
           mkdirSync(this.deps.stateDir, { recursive: true });
           mkdirSync(ws, { recursive: true });
           if (ws !== "/" && ws !== "") {
             for (const entry of readdirSync(ws)) rmSync(join(ws, entry), { recursive: true, force: true });
           }
-        } catch (e) {
-          fail(e);
+          const r = await this.git(["clone", "--filter=blob:none", "--", p.url, ws], { cwd: this.deps.stateDir });
+          if (r.code !== 0) throw new ExecError(["git", "clone"], r);
+          writeFileSync(this.cloneMarker, `${new Date().toISOString()}\n`);
         }
-        const r = await run(["git", "clone", "--filter=blob:none", "--", p.url, ws], {
-          env: this.env({}),
-          cwd: this.deps.stateDir,
-        });
-        if (r.code !== 0) fail(new ExecError(["git", "clone"], r));
-      }
-      try {
         await this.gitOk(["config", "user.name", p.author.name]);
         await this.gitOk(["config", "user.email", p.author.email]);
-        const current = await this.currentBranch();
-        if (current !== p.branch) {
-          if (await this.revParse(`refs/heads/${p.branch}`)) {
-            await this.gitOk(["checkout", p.branch]);
-          } else if (await this.revParse(`refs/remotes/origin/${p.branch}`)) {
-            await this.gitOk(["checkout", "-b", p.branch, "--track", `origin/${p.branch}`]);
-          } else {
-            await this.gitOk(["checkout", "-b", p.branch, `origin/${p.baseBranch}`]);
-          }
-        }
+        if ((await this.currentBranch()) !== p.branch) await this.checkoutBranch(p, p.mode ?? "wake");
         return {
           headSha: await this.headSha(),
           remoteHeadSha: await this.revParse(`refs/remotes/origin/${p.branch}`),
         };
       } catch (e) {
-        if (e instanceof TempoError) throw e;
-        return fail(e);
+        if (e instanceof TempoError && e.code === "CLONE_FAILED") throw e;
+        const detail =
+          e instanceof ExecError ? tail(e.result.stderr || e.result.stdout, 2000) : e instanceof Error ? e.message : String(e);
+        throw new TempoError("CLONE_FAILED", detail || "Could not clone the repo.");
       }
     });
   }
 
+  private async checkoutBranch(p: { branch: string; baseBranch: string; source: Source }, mode: CloneMode): Promise<void> {
+    if (await this.revParse(`refs/heads/${p.branch}`)) {
+      await this.gitOk(["checkout", p.branch]);
+      return;
+    }
+    const remote = await this.revParse(`refs/remotes/origin/${p.branch}`);
+    const track = mode === "create" ? p.source.kind !== "new" : remote !== null;
+    if (track) {
+      if (!remote) throw new TempoError("CLONE_FAILED", `The branch ${p.branch} is not on origin.`);
+      await this.gitOk(["checkout", "-b", p.branch, "--track", `origin/${p.branch}`]);
+      return;
+    }
+    if (!(await this.revParse(`refs/remotes/origin/${p.baseBranch}`))) {
+      throw new TempoError("CLONE_FAILED", `The base branch ${p.baseBranch} is not on origin.`);
+    }
+    await this.gitOk(["checkout", "-b", p.branch, `origin/${p.baseBranch}`]);
+  }
+
   applyCheckpoint(p: { bundlePath: string; checkpointId: string; branch: string }): Promise<{ headSha: string }> {
-    return this.locked(async () => {
+    return this.op("applyCheckpoint", true, async () => {
       if (!SAFE_ID.test(p.checkpointId)) throw new TempoError("VALIDATION_FAILED", "Bad checkpoint id.");
       if (!(await this.validBranch(p.branch))) throw new TempoError("BRANCH_INVALID");
       if (!existsSync(p.bundlePath)) throw new TempoError("CHECKPOINT_NOT_FOUND", "The bundle file does not exist.");
@@ -194,8 +251,11 @@ export class Git {
     return r.code === 0 ? r.stdout.trim() : head;
   }
 
-  private async untracked(): Promise<string[]> {
-    const out = await this.gitOk(["ls-files", "-o", "--exclude-standard", "-z"], { readOnly: true });
+  private async untracked(index?: string): Promise<string[]> {
+    const out = await this.gitOk(["ls-files", "-o", "--exclude-standard", "-z"], {
+      readOnly: true,
+      ...(index ? { index } : {}),
+    });
     return out.split("\0").filter((p) => p !== "");
   }
 
@@ -274,7 +334,11 @@ export class Git {
     return r.code === 0 ? Number(r.stdout.trim()) || 0 : 0;
   }
 
-  async changes(scope: DiffScope, baseBranch: string): Promise<Changes> {
+  changes(scope: DiffScope, baseBranch: string): Promise<Changes> {
+    return this.op("read", false, () => this.readChanges(scope, baseBranch));
+  }
+
+  private async readChanges(scope: DiffScope, baseBranch: string): Promise<Changes> {
     const headSha = await this.headSha();
     const baseSha = scope === "uncommitted" ? headSha : await this.branchBase(baseBranch, headSha);
     const files = await this.withDiffIndex((index) => this.diffFiles(baseSha, index));
@@ -282,7 +346,11 @@ export class Git {
     return { files, baseSha, headSha, ahead: await this.ahead(baseBranch), dirty: status.length > 0 };
   }
 
-  async fileDiff(scope: DiffScope, path: string, baseBranch: string): Promise<{ diff: string }> {
+  fileDiff(scope: DiffScope, path: string, baseBranch: string): Promise<{ diff: string }> {
+    return this.op("read", false, () => this.readFileDiff(scope, path, baseBranch));
+  }
+
+  private async readFileDiff(scope: DiffScope, path: string, baseBranch: string): Promise<{ diff: string }> {
     const abs = resolveWorkspacePath(this.deps.workspace, path);
     const rel = relativeToWorkspace(this.deps.workspace, abs);
     const headSha = await this.headSha();
@@ -300,6 +368,7 @@ export class Git {
         ["--literal-pathspecs", "diff", "-M", "-U3", "--no-color", "--no-ext-diff", base, "--", ...paths],
         { index, readOnly: true },
       );
+      if (Buffer.byteLength(JSON.stringify(diff)) > MESSAGE_BUDGET) throw new TempoError("FILE_TOO_LARGE");
       return { diff };
     });
   }
@@ -316,25 +385,23 @@ export class Git {
   }
 
   /** The checkpoint script of 01 (Durability), with its own index file. */
-  checkpoint(
-    p: { checkpointId: string; turnId: string | null },
-    baseBranch: string,
-  ): Promise<CheckpointResult> {
-    return this.locked(() =>
+  checkpoint(p: { checkpointId: string; turnId: string | null }, baseBranch: string): Promise<CheckpointResult> {
+    return this.op("checkpoint", true, () =>
       this.wrap(async () => {
         if (!SAFE_ID.test(p.checkpointId)) throw new TempoError("VALIDATION_FAILED", "Bad checkpoint id.");
         const index = this.deps.ckptIndex;
         mkdirSync(this.deps.stateDir, { recursive: true });
         await this.headSha();
+        await this.gitOk(["read-tree", "HEAD"], { index });
+        // Untracked relative to the checkpoint index (HEAD), not the user's index.
         const excludes: string[] = [];
-        for (const path of await this.untracked()) {
+        for (const path of await this.untracked(index)) {
           try {
             if (statSync(join(this.deps.workspace, path)).size > BIG_FILE_BYTES) excludes.push(`:(exclude,literal)${path}`);
           } catch {
             // vanished
           }
         }
-        await this.gitOk(["read-tree", "HEAD"], { index });
         await this.gitOk(["add", "-A", "--", ".", ...excludes], { index });
         const tree = (await this.gitOk(["write-tree"], { index })).trim();
         const parent = await this.headSha();
@@ -377,7 +444,7 @@ export class Git {
   }
 
   revert(p: { checkpointId: string }): Promise<{ headSha: string }> {
-    return this.locked(async () => {
+    return this.op("revert", true, async () => {
       if (!SAFE_ID.test(p.checkpointId)) throw new TempoError("CHECKPOINT_NOT_FOUND");
       const ref = CKPT_REF + p.checkpointId;
       if (!(await this.revParse(ref))) throw new TempoError("CHECKPOINT_NOT_FOUND");
@@ -395,7 +462,7 @@ export class Git {
     p: { message: string; branch: string; forceWithLeaseSha?: string | null | undefined },
     baseBranch: string,
   ): Promise<{ commitSha: string }> {
-    return this.locked(async () => {
+    return this.op("commitAndPush", true, async () => {
       if (!(await this.validBranch(p.branch))) throw new TempoError("BRANCH_INVALID");
       const lease = p.forceWithLeaseSha ?? null;
       if (lease !== null && !/^[0-9a-f]{4,64}$/i.test(lease)) throw new TempoError("VALIDATION_FAILED", "Bad lease sha.");
@@ -428,7 +495,7 @@ export class Git {
   }
 
   renameBranch(p: { from: string; to: string }): Promise<Record<string, never>> {
-    return this.locked(async () => {
+    return this.op("renameBranch", true, async () => {
       if (!(await this.validBranch(p.to))) throw new TempoError("BRANCH_INVALID");
       const from = await this.revParse(`refs/heads/${p.from}`);
       const to = await this.revParse(`refs/heads/${p.to}`);

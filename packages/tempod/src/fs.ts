@@ -1,11 +1,15 @@
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { lstatSync, readlinkSync, realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { TempoError } from "@tempo/protocol";
-import { findBinary, run, tail } from "./exec.ts";
+import { MESSAGE_BUDGET } from "./bounds.ts";
+import { findBinary, killGroup, run, tail } from "./exec.ts";
 
 export const MAX_LIST_PATHS = 50_000;
 const MAX_LINE_CHARS = 1_000;
+/** Under the 30 s timeout of fs.list and fs.search (02). */
+const FS_CMD_TIMEOUT_MS = 25_000;
+const MAX_LINK_DEPTH = 40;
 
 const isUnder = (root: string, p: string): boolean => p === root || p.startsWith(root.endsWith(sep) ? root : root + sep);
 
@@ -17,17 +21,31 @@ const realOrSelf = (p: string): string => {
   }
 };
 
-/** Real path of `p`, or of its nearest existing ancestor joined with the rest. */
-const realOfNearest = (p: string): string => {
-  let cur = p;
-  const rest: string[] = [];
-  while (!existsSync(cur)) {
-    const parent = dirname(cur);
-    if (parent === cur) break;
-    rest.unshift(cur.slice(parent.length + (parent.endsWith(sep) ? 0 : 1)));
-    cur = parent;
+/**
+ * Where `p` really points: its real path, or for a missing file the real path of its parent joined with
+ * the name. A dangling symlink resolves to its target, since a write through it creates the target.
+ */
+const realOfNearest = (p: string, depth = 0): string => {
+  let st;
+  try {
+    st = lstatSync(p);
+  } catch {
+    const parent = dirname(p);
+    return parent === p ? p : resolve(realOfNearest(parent, depth), basename(p));
   }
-  return resolve(realOrSelf(cur), ...rest);
+  if (!st.isSymbolicLink()) return realOrSelf(p);
+  try {
+    return realpathSync(p);
+  } catch {
+    let target: string;
+    try {
+      target = readlinkSync(p);
+    } catch {
+      return p;
+    }
+    if (depth >= MAX_LINK_DEPTH) return p;
+    return realOfNearest(resolve(realOfNearest(dirname(p), depth), target), depth + 1);
+  }
 };
 
 /** Absolute path inside one of `roots`, following symlinks, or null if it escapes them. */
@@ -55,12 +73,21 @@ export const relativeToWorkspace = (workspace: string, abs: string): string => {
   return relative(realOrSelf(workspace), realOfNearest(abs));
 };
 
+/** Tracked plus untracked, not ignored: at most 50,000 paths (02), and no more than fit in one message. */
 export const listFiles = async (workspace: string, env: Record<string, string>): Promise<string[]> => {
-  const r = await run(["git", "ls-files", "-co", "--exclude-standard", "-z"], { cwd: workspace, env });
+  const r = await run(["git", "ls-files", "-co", "--exclude-standard", "-z"], {
+    cwd: workspace,
+    env,
+    timeoutMs: FS_CMD_TIMEOUT_MS,
+  });
   if (r.code !== 0) throw new TempoError("INTERNAL", tail(r.stderr, 1000) || "git ls-files failed");
   const out = new Set<string>();
+  let bytes = 2;
   for (const p of r.stdout.split("\0")) {
-    if (p === "") continue;
+    if (p === "" || out.has(p)) continue;
+    const b = Buffer.byteLength(JSON.stringify(p)) + 1;
+    if (bytes + b > MESSAGE_BUDGET) break;
+    bytes += b;
     out.add(p);
     if (out.size >= MAX_LIST_PATHS) break;
   }
@@ -86,14 +113,18 @@ export const readWorkspaceFile = async (
   const bytes = await readFile(abs);
   const size = bytes.byteLength;
   if (size > maxBytes) throw new TempoError("FILE_TOO_LARGE");
+  let result: { content: string; encoding: "utf8" | "base64"; size: number } | null = null;
   if (!bytes.subarray(0, 8000).includes(0)) {
     try {
-      return { content: utf8.decode(bytes), encoding: "utf8", size };
+      result = { content: utf8.decode(bytes), encoding: "utf8", size };
     } catch {
       // not valid UTF-8: fall through to base64
     }
   }
-  return { content: bytes.toString("base64"), encoding: "base64", size };
+  result ??= { content: bytes.toString("base64"), encoding: "base64", size };
+  // The encoded answer must fit in one message: base64 adds a third, JSON escapes can add more.
+  if (Buffer.byteLength(JSON.stringify(result.content)) > MESSAGE_BUDGET) throw new TempoError("FILE_TOO_LARGE");
+  return result;
 };
 
 export interface SearchMatch {
@@ -144,7 +175,8 @@ const searchRg = async (
   limit: number,
 ): Promise<SearchMatch[]> => {
   const args = [rg, "--json", "--hidden", "--glob", "!.git", ...(regex ? [] : ["-F"]), "-e", query, "--", "."];
-  const proc = Bun.spawn(args, { cwd: workspace, env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+  const proc = Bun.spawn(args, { cwd: workspace, env, stdout: "pipe", stderr: "pipe", stdin: "ignore", detached: true });
+  const timer = setTimeout(() => killGroup(proc.pid, "SIGKILL"), FS_CMD_TIMEOUT_MS);
   const stderr = new Response(proc.stderr).text();
   const out: SearchMatch[] = [];
   for await (const line of lines(proc.stdout)) {
@@ -166,6 +198,7 @@ const searchRg = async (
     }
   }
   const code = await proc.exited;
+  clearTimeout(timer);
   if (out.length < limit && code === 2 && out.length === 0) {
     throw new TempoError("VALIDATION_FAILED", tail(await stderr, 500) || "Search failed.");
   }
@@ -182,6 +215,7 @@ const searchGitGrep = async (
   const r = await run(["git", "grep", "-z", "-n", "-I", "--untracked", regex ? "-E" : "-F", "-e", query], {
     cwd: workspace,
     env,
+    timeoutMs: FS_CMD_TIMEOUT_MS,
   });
   if (r.code === 1) return [];
   if (r.code !== 0) throw new TempoError("VALIDATION_FAILED", tail(r.stderr, 500) || "Search failed.");

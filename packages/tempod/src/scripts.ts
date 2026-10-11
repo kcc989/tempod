@@ -2,41 +2,16 @@ import { closeSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeSyn
 import { join } from "node:path";
 import { TempoError, type ScriptKind, type TempodEvent } from "@tempo/protocol";
 import type { Subprocess } from "bun";
+import { MAX_TEXT_CHARS, splitText } from "./bounds.ts";
 import type { TempodDb } from "./db.ts";
+import { killGroup } from "./exec.ts";
 import { resolveWorkspacePath } from "./fs.ts";
 import type { Logger } from "./log.ts";
 
-export const MAX_OUTPUT_CHARS = 128 * 1024;
 const SAFE_RUN_ID = /^[0-9A-Za-z_-]{1,128}$/;
 const READ_GRACE_MS = 500;
 const LOG_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 export const TRUNCATED_LINE = "[tempo: log truncated at 50 MiB]\n";
-
-/** Splits text so each piece stays far below the 1 MiB message limit, even when JSON escapes every char. */
-export const splitOutput = (text: string, max = MAX_OUTPUT_CHARS): string[] => {
-  const out: string[] = [];
-  let i = 0;
-  while (i < text.length) {
-    let end = Math.min(i + max, text.length);
-    if (end < text.length) {
-      const c = text.charCodeAt(end - 1);
-      if (c >= 0xd800 && c <= 0xdbff) end -= 1;
-    }
-    out.push(text.slice(i, end));
-    i = end;
-  }
-  return out;
-};
-
-/** Signals a whole process group; the leader was started with `detached` (setsid), so pgid = pid. */
-export const killGroup = (pid: number, signal: NodeJS.Signals): boolean => {
-  try {
-    process.kill(-pid, signal);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 /** Deletes script logs older than 7 days. */
 export const pruneLogs = (dir: string, now = Date.now()): number => {
@@ -187,24 +162,39 @@ export class ScriptManager {
     }
   }
 
+  /** Appends to the full log. A write error (a full disk) ends the log but never the output stream. */
   private writeLog(run: Run, chunk: Uint8Array): void {
     if (run.logFd === null || run.logTruncated) return;
-    const room = this.deps.logMaxBytes - run.logBytes;
-    const part = chunk.byteLength > room ? chunk.subarray(0, Math.max(0, room)) : chunk;
-    if (part.byteLength > 0) {
-      writeSync(run.logFd, part);
-      run.logBytes += part.byteLength;
-    }
-    if (chunk.byteLength > room) {
-      writeSync(run.logFd, (part.byteLength > 0 && part[part.byteLength - 1] !== 10 ? "\n" : "") + TRUNCATED_LINE);
+    try {
+      const room = this.deps.logMaxBytes - run.logBytes;
+      const part = chunk.byteLength > room ? chunk.subarray(0, Math.max(0, room)) : chunk;
+      if (part.byteLength > 0) {
+        writeSync(run.logFd, part);
+        run.logBytes += part.byteLength;
+      }
+      if (chunk.byteLength > room) {
+        writeSync(run.logFd, (part.byteLength > 0 && part[part.byteLength - 1] !== 10 ? "\n" : "") + TRUNCATED_LINE);
+        run.logTruncated = true;
+      }
+    } catch (e) {
       run.logTruncated = true;
+      try {
+        closeSync(run.logFd);
+      } catch {
+        // already closed
+      }
+      run.logFd = null;
+      this.deps.log.warn("script log write failed; the log is cut here", {
+        runId: run.runId,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
   private buffer(run: Run, stream: Stream, text: string): void {
     if (text === "") return;
     run.buffers[stream] += text;
-    if (run.buffers[stream].length >= MAX_OUTPUT_CHARS) {
+    if (run.buffers[stream].length >= MAX_TEXT_CHARS) {
       this.flush(run);
       return;
     }
@@ -218,7 +208,7 @@ export class ScriptManager {
       const data = run.buffers[stream];
       if (data === "") continue;
       run.buffers[stream] = "";
-      for (const piece of splitOutput(data)) this.deps.emit({ kind: "script.output", runId: run.runId, stream, data: piece });
+      for (const piece of splitText(data)) this.deps.emit({ kind: "script.output", runId: run.runId, stream, data: piece });
     }
   }
 

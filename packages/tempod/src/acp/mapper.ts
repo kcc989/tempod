@@ -8,7 +8,11 @@ import type {
   SessionPatch,
   TempodEvent,
 } from "@tempo/protocol";
-import type { Logger } from "../log.ts";
+import { randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { boundContent, offloadBlobs, splitText, type SaveBlob } from "../bounds.ts";
+import { errorText, type Logger } from "../log.ts";
 import { isObj, stripMeta, toCommands, toConfigOptions } from "./convert.ts";
 
 type Obj = Record<string, unknown>;
@@ -36,7 +40,17 @@ export interface MapperDeps {
   readonly now?: () => number;
   readonly mergeMs: number;
   readonly maxBytes: number;
+  /** Where large inline images go (`/home/tempo/attachments`); without it they are replaced by a marker. */
+  readonly attachments?: string;
 }
+
+const EXTENSIONS: Record<string, string> = { jpeg: "jpg", "svg+xml": "svg", mpeg: "mp3" };
+
+const extensionFor = (mime: string | null): string => {
+  const sub = (mime ?? "").split("/")[1]?.split(";")[0]?.trim().toLowerCase() ?? "";
+  const clean = sub.replace(/[^a-z0-9+.-]/g, "");
+  return EXTENSIONS[clean] ?? (clean.replace(/[^a-z0-9]/g, "") || "bin");
+};
 
 const TOOL_STATUSES: ReadonlyArray<ItemStatus> = ["pending", "in_progress", "completed", "failed"];
 const OPEN: ReadonlyArray<ItemStatus> = ["streaming", "pending", "in_progress"];
@@ -125,7 +139,30 @@ export class SessionMapper {
     const p = this.pending;
     if (!p) return;
     this.pending = null;
-    this.emit({ kind: "item.delta", sessionId: this.sessionId, itemId: p.item.id, append: { text: p.text } });
+    for (const text of splitText(p.text)) {
+      this.emit({ kind: "item.delta", sessionId: this.sessionId, itemId: p.item.id, append: { text } });
+    }
+  }
+
+  /** Saves a large inline blob under attachments/<turnId>/ and returns its link (02: messages stay under 1 MiB). */
+  private readonly saveBlob: SaveBlob = (data, mimeType) => {
+    const root = this.deps.attachments;
+    if (!root) return null;
+    try {
+      const dir = join(root, this.turnId ?? "none");
+      mkdirSync(dir, { recursive: true });
+      const name = `tool-${randomBytes(6).toString("hex")}.${extensionFor(mimeType)}`;
+      const path = join(dir, name);
+      writeFileSync(path, Buffer.from(data, "base64"));
+      return { uri: `file://${path}`, name };
+    } catch (e) {
+      this.deps.log.warn("could not save a large image", { sessionId: this.sessionId, error: errorText(e) });
+      return null;
+    }
+  };
+
+  private offload<A>(value: A): A {
+    return offloadBlobs(value, this.saveBlob) as A;
   }
 
   private setStatus(item: ItemRec, status: ItemStatus): void {
@@ -134,7 +171,7 @@ export class SessionMapper {
   }
 
   private updated(item: ItemRec, status?: ItemStatus): void {
-    const patch: { status?: ItemStatus; content: Obj } = { content: structuredClone(item.content) };
+    const patch: { status?: ItemStatus; content: Obj } = { content: boundContent(structuredClone(item.content)) };
     if (status !== undefined && status !== item.status) {
       item.status = status;
       patch.status = status;
@@ -153,7 +190,7 @@ export class SessionMapper {
       kind: "item.created",
       sessionId: this.sessionId,
       turnId: this.turnId,
-      item: { id: item.id, kind, status, content: structuredClone(content), createdAt: this.now() },
+      item: { id: item.id, kind, status, content: boundContent(structuredClone(content)), createdAt: this.now() },
     });
     return item;
   }
@@ -243,7 +280,7 @@ export class SessionMapper {
       this.deps.log.debug("non-text thought content dropped", { sessionId: this.sessionId });
       return;
     }
-    const content = stripMeta(block);
+    const content = this.offload(stripMeta(block));
     if (!open) {
       this.create(kind, "streaming", { text: "", blocks: [content] });
       return;
@@ -278,7 +315,7 @@ export class SessionMapper {
         title: typeof u["title"] === "string" ? u["title"] : "",
         toolKind: typeof u["kind"] === "string" ? u["kind"] : null,
         locations: toLocations(u["locations"]),
-        content: Array.isArray(u["content"]) ? u["content"] : [],
+        content: Array.isArray(u["content"]) ? this.offload(u["content"]) : [],
       };
       if (u["rawInput"] !== undefined) content["rawInput"] = u["rawInput"];
       if (u["rawOutput"] !== undefined) content["rawOutput"] = u["rawOutput"];
@@ -291,7 +328,7 @@ export class SessionMapper {
     if (typeof u["title"] === "string") c["title"] = u["title"];
     if (typeof u["kind"] === "string") c["toolKind"] = u["kind"];
     if (Array.isArray(u["locations"])) c["locations"] = toLocations(u["locations"]);
-    if (Array.isArray(u["content"])) c["content"] = u["content"];
+    if (Array.isArray(u["content"])) c["content"] = this.offload(u["content"]);
     if (u["rawInput"] !== undefined && u["rawInput"] !== null) c["rawInput"] = u["rawInput"];
     if (u["rawOutput"] !== undefined && u["rawOutput"] !== null) c["rawOutput"] = u["rawOutput"];
     this.updated(existing, status);

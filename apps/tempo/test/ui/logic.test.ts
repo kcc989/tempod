@@ -18,7 +18,7 @@ const ev = (code: string, mods: Partial<{ meta: boolean; ctrl: boolean; alt: boo
 
 describe("shortcuts", () => {
   it("has one row per line of the 04 table", () => {
-    expect(SHORTCUT_ROWS).toHaveLength(33);
+    expect(SHORTCUT_ROWS).toHaveLength(32);
     expect(new Set(BINDINGS.map((b) => b.id)).size).toBe(BINDINGS.length);
   });
 

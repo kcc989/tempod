@@ -86,7 +86,7 @@ export class WorkspaceStore {
     if (!msg) return;
     const { state, events } = applyWorkspaceMessage(this.snapshot, msg);
     if (state !== this.snapshot) this.setSnapshot({ ...state, status: this.snapshot.status });
-    for (const e of events) for (const l of [...this.eventListeners]) l(e);
+    for (const e of events) for (const l of this.eventListeners) l(e);
   }
 
   seedScriptOutput(runId: string, logTail: string): void {
@@ -101,7 +101,7 @@ export class WorkspaceStore {
 
   private setSnapshot(next: WorkspaceSnapshot): void {
     this.snapshot = next;
-    for (const l of [...this.listeners]) l();
+    for (const l of this.listeners) l();
   }
 }
 

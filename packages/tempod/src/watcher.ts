@@ -161,6 +161,7 @@ export class Watcher {
       const r = await run(["git", "status", "--porcelain", "-z"], {
         cwd: ws,
         env: { ...this.opts.env(), GIT_OPTIONAL_LOCKS: "0" },
+        timeoutMs: 20_000,
       });
       if (r.code !== 0) return;
       const paths = statusPaths(r.stdout);

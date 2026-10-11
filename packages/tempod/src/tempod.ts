@@ -10,6 +10,7 @@ import {
 } from "@tempo/protocol";
 import { Schema } from "effect";
 import { SessionManager } from "./acp/manager.ts";
+import { capList, CHANGED_FILES_MAX, MESSAGE_BUDGET } from "./bounds.ts";
 import type { Config } from "./config.ts";
 import { CodexCredentials } from "./credentials.ts";
 import { TempodDb } from "./db.ts";
@@ -41,9 +42,12 @@ export interface TempodOptions {
 
 const decodeOverrides = Schema.decodeUnknownExit(SettingsLayer);
 
-const processEnv = (): Record<string, string> => {
+/** tempod's own env without its TEMPOD_* settings: children must never see TEMPOD_TOKEN (01, Container config). */
+export const processEnv = (): Record<string, string> => {
   const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) if (typeof v === "string") out[k] = v;
+  for (const [k, v] of Object.entries(process.env)) {
+    if (typeof v === "string" && !k.startsWith("TEMPOD_")) out[k] = v;
+  }
   return out;
 };
 
@@ -155,8 +159,13 @@ export class Tempod {
     this.handlers = this.makeHandlers();
   }
 
+  /** Queues an event. A failing outbox (a full disk) is logged to stderr and never breaks the caller. */
   emit(event: TempodEvent): void {
-    this.outbox.append(event);
+    try {
+      this.outbox.append(event);
+    } catch (e) {
+      this.log.local("error", "event not queued", { kind: event.kind, error: errorText(e) });
+    }
   }
 
   /** Env for every child: tempod's own env plus the CA vars. */
@@ -210,7 +219,7 @@ export class Tempod {
         if (this.workspaceInfo) {
           try {
             const changes = await this.git.changes("branch", this.workspaceInfo.baseBranch);
-            const summary = { files: changes.files, ...summarize(changes.files) };
+            const summary = { files: capList(changes.files, CHANGED_FILES_MAX), ...summarize(changes.files) };
             const key = JSON.stringify(summary);
             if (key !== this.lastGitChanged) {
               this.lastGitChanged = key;
@@ -278,7 +287,8 @@ export class Tempod {
       },
       "git.changes": async (p) => {
         const c = await this.git.changes(p.scope, this.baseBranch);
-        return { files: c.files, baseSha: c.baseSha, headSha: c.headSha, ahead: c.ahead, dirty: c.dirty };
+        const files = capList(c.files, MESSAGE_BUDGET);
+        return { files, baseSha: c.baseSha, headSha: c.headSha, ahead: c.ahead, dirty: c.dirty };
       },
       "git.fileDiff": (p) => this.git.fileDiff(p.scope, p.path, this.baseBranch),
       "git.checkpoint": (p) => this.git.checkpoint(p, this.baseBranch),

@@ -24,15 +24,23 @@ export class Logger {
     for (const [level, msg, data] of this.early.splice(0)) sink(level, msg, data);
   }
 
+  /** Writes to stderr only, never as a `log` event (used when the outbox itself fails). */
+  local(level: LogLevel, msg: string, data?: LogData): void {
+    this.writeLine(level, msg, data === undefined ? undefined : (redact(data) as LogData));
+  }
+
+  private writeLine(level: LogLevel, msg: string, clean: LogData | undefined): void {
+    if (ORDER[level] < this.minLevel) return;
+    try {
+      this.write(JSON.stringify({ ts: Date.now(), level, msg, ...clean }));
+    } catch {
+      // stderr closed; nothing else to do
+    }
+  }
+
   log(level: LogLevel, msg: string, data?: LogData): void {
     const clean = data === undefined ? undefined : (redact(data) as LogData);
-    if (ORDER[level] >= this.minLevel) {
-      try {
-        this.write(JSON.stringify({ ts: Date.now(), level, msg, ...clean }));
-      } catch {
-        // stderr closed; nothing else to do
-      }
-    }
+    this.writeLine(level, msg, clean);
     if (ORDER[level] < ORDER.warn) return;
     if (!this.sink) {
       if (this.early.length < 100) this.early.push([level, msg, clean]);

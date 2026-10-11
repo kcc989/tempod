@@ -23,10 +23,11 @@ import {
   type TempodEvent,
 } from "@tempo/protocol";
 import type { Subprocess } from "bun";
+import { ITEM_CONTENT_MAX, tailLines } from "../bounds.ts";
 import { VERSION } from "../config.ts";
+import { killGroup } from "../exec.ts";
 import { insideRoots } from "../fs.ts";
 import { errorText, type Logger } from "../log.ts";
-import { killGroup } from "../scripts.ts";
 import { isObj, toConfigOptions, toModes } from "./convert.ts";
 import { SessionMapper, type TurnOutcome } from "./mapper.ts";
 
@@ -79,6 +80,7 @@ interface PendingPermission {
   readonly resolve: (r: RequestPermissionResponse) => void;
 }
 
+/** Why tempod stopped the adapter itself; null means it exited on its own (a crash). */
 type ExitReason = "requested" | "evicted" | "cancel-timeout";
 
 const withTimeout = <A>(p: Promise<A>, ms: number, what: string): Promise<A> =>
@@ -108,6 +110,8 @@ export class AgentSession {
   lastUsed = Date.now();
   turn: Turn | null = null;
   private loading = false;
+  /** The ACP session id whose `session/load` failed: its late replay messages are dropped. */
+  private dropReplayOf: string | null = null;
   private started = false;
   private exitReason: ExitReason | null = null;
   private readonly permissions = new Map<string, PendingPermission>();
@@ -128,6 +132,7 @@ export class AgentSession {
       newId,
       mergeMs: deps.mergeMs,
       maxBytes: deps.maxBytes,
+      attachments: deps.attachments,
     });
     this.proc = Bun.spawn([...command], {
       cwd: deps.workspace,
@@ -186,9 +191,9 @@ export class AgentSession {
     return this.turn !== null && !this.turn.ended;
   }
 
+  /** The last 200 stderr lines, each cut at 2,000 chars (01, Crashes), within the message size limit. */
   stderrTail(): string {
-    const text = this.stderr.join("\n");
-    return text.length > 64_000 ? text.slice(text.length - 64_000) : text;
+    return tailLines(this.stderr, ITEM_CONTENT_MAX);
   }
 
   private async readStderr(): Promise<void> {
@@ -221,12 +226,18 @@ export class AgentSession {
   private tap(msg: AnyMessage): boolean {
     if (!isObj(msg) || typeof (msg as { method?: unknown }).method !== "string") return true;
     const m = msg as { id?: string | number | null; method: string; params?: unknown };
-    if (m.method === "session/update" && m.id === undefined) {
-      this.onUpdate(m.params);
-      return false;
-    }
-    if (m.method === "session/request_permission" && m.id !== undefined && m.id !== null) {
-      this.onPermissionRequest(String(m.id), m.params);
+    // A throw here would error the stream and end the session, so failures are only logged.
+    try {
+      if (m.method === "session/update" && m.id === undefined) {
+        this.onUpdate(m.params);
+        return false;
+      }
+      if (m.method === "session/request_permission" && m.id !== undefined && m.id !== null) {
+        this.onPermissionRequest(String(m.id), m.params);
+      }
+    } catch (e) {
+      this.deps.log.local("error", "agent message handling failed", { sessionId: this.sessionId, method: m.method, error: errorText(e) });
+      return m.method !== "session/update";
     }
     return true;
   }
@@ -237,7 +248,12 @@ export class AgentSession {
       this.mapper.captureState(params["update"]);
       return;
     }
-    if (this.acpSessionId !== null && params["sessionId"] !== this.acpSessionId) {
+    const sid = params["sessionId"];
+    if (this.dropReplayOf !== null && sid === this.dropReplayOf && sid !== this.acpSessionId) {
+      this.deps.log.debug("replay of a failed session/load dropped", { sessionId: this.sessionId });
+      return;
+    }
+    if (this.acpSessionId !== null && sid !== this.acpSessionId) {
       this.deps.log.warn("session/update for another ACP session dropped", { sessionId: this.sessionId });
       return;
     }
@@ -347,6 +363,7 @@ export class AgentSession {
         } catch (e) {
           this.deps.log.warn("session/load failed; handing off", { sessionId: this.sessionId, error: errorText(e) });
           handoff = true;
+          this.dropReplayOf = wanted;
         } finally {
           this.loading = false;
         }
@@ -517,8 +534,9 @@ export class AgentSession {
       turn.cancelTimer = setTimeout(() => {
         if (turn.ended) return;
         this.deps.log.warn("agent ignored session/cancel; killing it", { sessionId: this.sessionId });
-        this.finishTurn(turn, "cancelled");
+        // agent.exited goes first, so the DO reloads the session before it starts the next queued turn.
         this.kill("cancel-timeout");
+        this.finishTurn(turn, "cancelled");
       }, this.deps.cancelGraceMs);
     }
     await turn.endedPromise;
@@ -556,14 +574,30 @@ export class AgentSession {
     await Promise.race([this.exited, Bun.sleep(this.deps.killGraceMs + 1_000)]);
   }
 
+  /**
+   * SIGTERM to the adapter's process group, SIGKILL after the grace period. A planned exit (eviction,
+   * cancel timeout) is reported at once, so the DO stops treating the session as live.
+   */
   private kill(reason: ExitReason): void {
     if (this.exitReason === null) this.exitReason = reason;
     if (!this.alive) return;
     this.alive = false;
     this.deps.onGone(this);
-    killGroup(this.proc.pid, "SIGTERM");
-    const timer = setTimeout(() => killGroup(this.proc.pid, "SIGKILL"), this.deps.killGraceMs);
-    void this.exited.then(() => clearTimeout(timer));
+    if (this.started && reason !== "requested") {
+      this.emitExited(null, null, reason === "evicted" ? "evicted" : "cancelled");
+    }
+    this.killGroupLater();
+  }
+
+  private killGroupLater(): void {
+    const pid = this.proc.pid;
+    killGroup(pid, "SIGTERM");
+    // The leader may be gone already while its children (claude, Playwright, Chromium) still run.
+    setTimeout(() => killGroup(pid, "SIGKILL"), this.deps.killGraceMs);
+  }
+
+  private emitExited(code: number | null, signal: string | null, reason: "crashed" | "evicted" | "cancelled"): void {
+    this.deps.emit({ kind: "agent.exited", sessionId: this.sessionId, code, signal, stderrTail: this.stderrTail(), reason });
   }
 
   private onExit(code: number | null, signal: string | null): void {
@@ -573,14 +607,15 @@ export class AgentSession {
     this.conn.close();
     this.deps.onProcess(this, null);
     if (wasAlive) this.deps.onGone(this);
+    if (this.exitReason === null) this.killGroupLater();
     const turn = this.turn;
     if (turn && !turn.ended) {
       this.finishTurn(turn, null, { code: "AGENT_CRASHED", message: "The agent stopped unexpectedly." });
     }
     this.cancelPermissions();
-    // A failed start is reported by session.start itself, with the stderr tail.
-    if (this.exitReason === "requested" || !this.started) return;
-    if (this.exitReason === null) this.deps.log.warn("agent exited", { sessionId: this.sessionId, agent: this.agent, code, signal });
-    this.deps.emit({ kind: "agent.exited", sessionId: this.sessionId, code, signal, stderrTail: this.stderrTail() });
+    // Planned exits were reported by kill(); a failed start is reported by session.start with the stderr tail.
+    if (this.exitReason !== null || !this.started) return;
+    this.deps.log.warn("agent exited", { sessionId: this.sessionId, agent: this.agent, code, signal });
+    this.emitExited(code, signal, "crashed");
   }
 }

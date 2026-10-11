@@ -1,5 +1,5 @@
-import { env, runInDurableObject } from "cloudflare:test";
-import { newId, type TempodEvent, type TempodOp } from "@tempo/protocol";
+import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { newId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import type { WorkspaceCore } from "../../src/do/workspace/core.ts";
 import type { OpRunner } from "../../src/do/workspace/runner.ts";
@@ -267,6 +267,41 @@ export const waitFor = async (check: () => boolean | Promise<boolean>, timeoutMs
   }
 };
 
+// ---------- DO helpers ----------
+
+type WorkspaceStub = DurableObjectStub<WorkspaceDO>;
+
+/** Rows from the DO's own SQLite. */
+export const sqlRows = (stub: WorkspaceStub, query: string, ...binds: unknown[]): Promise<Array<Record<string, any>>> =>
+  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => state.storage.sql.exec(query, ...binds).toArray());
+
+/** Sends one tempod event. The fake's socket belongs to the DO's I/O context, so it is sent from inside the DO. */
+export const emitEvent = (stub: WorkspaceStub, tempod: FakeTempod, event: TempodEvent): Promise<number> =>
+  runInDurableObject(stub, () => tempod.emit(event));
+
+/** Waits until the DO has applied the event with this seq of its current incarnation. */
+export const waitApplied = (stub: WorkspaceStub, seq: number, timeoutMs = 5000): Promise<void> =>
+  waitFor(
+    async () => Number((await sqlRows(stub, "SELECT tempod_acked_seq FROM workspace WHERE id = 1"))[0]?.["tempod_acked_seq"]) >= seq,
+    timeoutMs,
+    `event ${seq} applied`,
+  );
+
+/** Runs alarms, with every op backoff due at once, until the workspace state is one of `states`. */
+export const driveToState = async (stub: WorkspaceStub, states: ReadonlyArray<string>, timeoutMs = 20_000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const state = String((await sqlRows(stub, "SELECT state FROM workspace WHERE id = 1"))[0]?.["state"]);
+    if (states.includes(state)) return;
+    if (Date.now() > deadline) throw new Error(`timed out driving to ${states.join("|")} (state ${state})`);
+    await runInDurableObject(stub, (_i: WorkspaceDO, s: DurableObjectState) => {
+      s.storage.sql.exec("UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'");
+    });
+    await runDurableObjectAlarm(stub);
+    await new Promise((r) => setTimeout(r, 20));
+  }
+};
+
 // ---------- D1 seeding ----------
 
 export const OWNER_GITHUB_ID = "4242";
@@ -315,7 +350,7 @@ export const seedProject = async (opts: { settingsJson?: string } = {}): Promise
  */
 export const seedWorkspace = async (
   seeded: Seeded,
-  opts: { prompt?: string; slug?: string; branch?: string; agent?: "claude" | "codex" | "opencode" | "pi" } = {},
+  opts: { prompt?: string; slug?: string; branch?: string; agent?: "claude" | "codex" | "opencode" | "pi"; source?: Source } = {},
 ) => {
   const workspaceId = newId();
   const slug = opts.slug ?? `city${seedCounter}`;
@@ -335,7 +370,7 @@ export const seedWorkspace = async (
     slug,
     branch,
     baseBranch: "main",
-    source: { kind: "new" },
+    source: opts.source ?? { kind: "new" },
     defaultAgent: opts.agent ?? "claude",
     agent: opts.agent ?? "claude",
     prompt: opts.prompt ? { text: opts.prompt } : null,

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TempodEvent, type TempodEventOf } from "@tempo/protocol";
@@ -236,6 +236,16 @@ export const makeOrigin = async (): Promise<{ url: string; bare: string; seed: s
 };
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** True while the process runs. A zombie counts as gone: PID 1 in a test sandbox may never reap it. */
+export const isAlive = (pid: number): boolean => {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    return stat.slice(stat.lastIndexOf(")") + 2, stat.lastIndexOf(")") + 3) !== "Z";
+  } catch {
+    return false;
+  }
+};
 
 export const FAKE_AGENT = join(import.meta.dir, "fixtures", "fake-agent.ts");
 export const fakeAgentCommand = (): string[] => [process.execPath, FAKE_AGENT];

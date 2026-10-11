@@ -18,7 +18,7 @@ export class Store<T> {
     const value = typeof next === "function" ? (next as (prev: T) => T)(this.state) : next;
     if (Object.is(value, this.state)) return;
     this.state = value;
-    for (const l of [...this.listeners]) l();
+    for (const l of this.listeners) l();
   }
 
   update(patch: Partial<T>): void {

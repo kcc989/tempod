@@ -3,6 +3,7 @@ import {
   DoHello,
   DoReq,
   errorMessage,
+  MAX_MESSAGE_BYTES,
   TEMPOD_REQUESTS,
   TempoError,
   type TempodOp,
@@ -32,6 +33,9 @@ const toError = (e: unknown): { code: string; message: string } => {
 };
 
 const isOp = (op: string): op is TempodOp => Object.prototype.hasOwnProperty.call(TEMPOD_REQUESTS, op);
+
+/** Ops whose result size depends on a file: an oversized answer is FILE_TOO_LARGE, not INTERNAL. */
+const FILE_OPS: ReadonlySet<string> = new Set(["fs.read", "git.fileDiff"]);
 
 /** Validates params with the op's schema, runs its handler, and checks the result against the schema. */
 export const dispatch = (handlers: Handlers, op: string, params: unknown): Effect.Effect<Outcome> =>
@@ -85,12 +89,20 @@ export class ProtocolConnection {
     }
   }
 
-  private send(res: TempodRes): void {
+  /** Sends a response; one over the 1 MiB message limit (02) becomes an error response instead. */
+  private send(res: TempodRes, op?: string): void {
     if (this.closed) {
       this.log.info("response dropped: socket closed", { id: res.id, ok: res.ok });
       return;
     }
-    this.ws.send(JSON.stringify(res));
+    let text = JSON.stringify(res);
+    const size = Buffer.byteLength(text);
+    if (size > MAX_MESSAGE_BYTES) {
+      const code = op !== undefined && FILE_OPS.has(op) ? "FILE_TOO_LARGE" : "INTERNAL";
+      this.log.warn("response over the message size limit", { id: res.id, op, size });
+      text = JSON.stringify({ type: "res", id: res.id, ok: false, error: { code, message: errorMessage(code) } });
+    }
+    this.ws.send(text);
   }
 
   onMessage(raw: string | Buffer): void {
@@ -128,8 +140,9 @@ export class ProtocolConnection {
       this.close(4400, "bad hello");
       return;
     }
-    this.app.hello(hello.value);
+    // Before app.hello: the port scanner it starts queues events, which must get seqs after the handshake.
     const { matched } = this.app.outbox.handshake(hello.value.incarnation, hello.value.lastAckedSeq);
+    this.app.hello(hello.value);
     this.helloDone = true;
     this.log.info("hello", { matched, incarnation: this.app.outbox.incarnation, lastAckedSeq: hello.value.lastAckedSeq });
   }
@@ -151,18 +164,33 @@ export class ProtocolConnection {
     if (this.inflight.has(id)) return;
     this.inflight.add(id);
     const started = Date.now();
-    void Effect.runPromise(dispatch(this.app.handlers, op, params)).then((outcome) => {
+    let answered = false;
+    const answer = (res: TempodRes): void => {
+      if (answered) return;
+      this.send(res, op);
+      answered = true;
       this.inflight.delete(id);
-      const ms = Date.now() - started;
-      if (outcome.ok) {
-        this.log.debug("request done", { id, op, ms });
-        this.send({ type: "res", id, ok: true, result: outcome.result });
-      } else {
-        const level = outcome.error.code === "INTERNAL" ? "warn" : "info";
-        this.log.log(level, "request failed", { id, op, ms, code: outcome.error.code, message: outcome.error.message });
-        this.send({ type: "res", id, ok: false, error: outcome.error });
-      }
-      if (op === "shutdown" && outcome.ok) void this.app.afterShutdownAnswered();
-    });
+    };
+    void Effect.runPromise(dispatch(this.app.handlers, op, params))
+      .then((outcome) => {
+        const ms = Date.now() - started;
+        if (outcome.ok) {
+          this.log.debug("request done", { id, op, ms });
+          answer({ type: "res", id, ok: true, result: outcome.result });
+        } else {
+          const level = outcome.error.code === "INTERNAL" ? "warn" : "info";
+          this.log.log(level, "request failed", { id, op, ms, code: outcome.error.code, message: outcome.error.message });
+          answer({ type: "res", id, ok: false, error: outcome.error });
+        }
+        if (op === "shutdown" && outcome.ok) void this.app.afterShutdownAnswered();
+      })
+      .catch((e: unknown) => {
+        this.log.local("error", "request handling failed", { id, op, error: errorText(e) });
+        try {
+          answer({ type: "res", id, ok: false, error: { code: "INTERNAL", message: errorMessage("INTERNAL") } });
+        } catch {
+          this.inflight.delete(id);
+        }
+      });
   }
 }

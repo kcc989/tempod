@@ -263,3 +263,24 @@ export const isEditableTarget = (target: EventTarget | null): boolean => {
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable === true;
 };
+
+/** True when the combo has no ⌘, ⌥ or ⌃. Such keys never fire from a text field unless allowed. */
+export const isPlainCombo = (k: KeyCombo): boolean => !k.mod && !k.alt && !k.ctrl;
+
+/**
+ * The first action among `ids` whose binding the event matches. In a text field, plain keys (J, K,
+ * Enter, ⇧Tab) are skipped unless `allowPlainInEditable` is set.
+ */
+export const matchAction = (
+  e: KeyEventLike,
+  ids: Iterable<ActionId>,
+  mac: boolean,
+  opts: { readonly editable?: boolean; readonly allowPlainInEditable?: boolean } = {},
+): ActionId | undefined => {
+  for (const id of ids) {
+    const key = bindingFor(id).key;
+    if (opts.editable && !opts.allowPlainInEditable && isPlainCombo(key)) continue;
+    if (matchesCombo(e, key, mac)) return id;
+  }
+  return undefined;
+};

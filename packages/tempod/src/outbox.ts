@@ -14,6 +14,8 @@ export interface OutboxLimits {
 
 const HIGH_WATER = 4 * 1024 * 1024;
 const BATCH = 256;
+/** Larger events are never queued (02: max message size 1 MiB); a `log` warning takes their place. */
+export const MAX_EVENT_BYTES = MAX_MESSAGE_BYTES - 1024;
 
 interface Row {
   seq: number;
@@ -33,6 +35,9 @@ export class Outbox {
   private count: number;
   private bytes: number;
   private appending = false;
+  /** First seq appended by this process; rows from here on were never sent before the first hello. */
+  private readonly freshFrom: number;
+  private everLive = false;
   /** Test hook: called with every appended event. */
   onAppend: ((seq: number, event: TempodEvent) => void) | undefined;
 
@@ -49,6 +54,7 @@ export class Outbox {
     this.bytes = agg.b;
     const max = store.db.query<{ m: number | null }, []>("SELECT MAX(seq) AS m FROM outbox").get()!.m;
     if (max !== null && max > this.lastSeq) this.setLastSeq(max);
+    this.freshFrom = this.lastSeq + 1;
   }
 
   get incarnation(): string {
@@ -76,9 +82,17 @@ export class Outbox {
     this.store.setMeta("last_seq", String(seq));
   }
 
-  append(event: TempodEvent): number {
-    const payload = JSON.stringify(event);
-    const size = Buffer.byteLength(payload);
+  append(input: TempodEvent): number {
+    let event = input;
+    let payload = JSON.stringify(event);
+    let size = Buffer.byteLength(payload);
+    if (size > MAX_EVENT_BYTES) {
+      const data = { kind: input.kind, size };
+      this.log?.local("warn", "event over the message size limit dropped", data);
+      event = { kind: "log", level: "warn", msg: "event over the message size limit dropped", data };
+      payload = JSON.stringify(event);
+      size = Buffer.byteLength(payload);
+    }
     const ts = Date.now();
     const seq = this.lastSeq + 1;
     this.store.db.transaction(() => {
@@ -93,7 +107,6 @@ export class Outbox {
     if (!this.appending) {
       this.appending = true;
       try {
-        if (size > MAX_MESSAGE_BYTES - 256) this.log?.warn("event larger than the message limit", { kind: event.kind, size });
         this.enforceCap();
       } finally {
         this.appending = false;
@@ -173,8 +186,10 @@ export class Outbox {
   handshake(incarnation: string | null, lastAckedSeq: number): { matched: boolean } {
     const matched = incarnation === this.incarnation;
     if (matched) {
+      // A disk restored from an older snapshot is behind the DO. Rows made since start were never sent,
+      // so they move above lastAckedSeq; older rows were sent before the snapshot and count as acked.
+      if (!this.everLive && lastAckedSeq >= this.freshFrom) this.moveFreshAbove(lastAckedSeq);
       this.removeUpTo(lastAckedSeq);
-      // A disk restored from an older snapshot can be behind the DO: new events must not reuse its seqs.
       if (lastAckedSeq > this.lastSeq) this.setLastSeq(lastAckedSeq);
       this.sentUpTo = lastAckedSeq;
     } else {
@@ -199,9 +214,21 @@ export class Outbox {
       })();
       this.sentUpTo = 0;
     }
+    this.everLive = true;
     this.live = true;
     this.pump();
     return { matched };
+  }
+
+  private moveFreshAbove(lastAckedSeq: number): void {
+    if (this.lastSeq < this.freshFrom) return;
+    const shift = lastAckedSeq + 1 - this.freshFrom;
+    const db = this.store.db;
+    db.transaction(() => {
+      db.query("UPDATE outbox SET seq = -(seq + ?) WHERE seq >= ?").run(shift, this.freshFrom);
+      db.query("UPDATE outbox SET seq = -seq WHERE seq < 0").run();
+      this.setLastSeq(this.lastSeq + shift);
+    })();
   }
 
   pump(): void {

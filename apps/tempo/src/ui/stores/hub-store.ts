@@ -68,7 +68,7 @@ export class HubStore {
     if (next === this.snapshot) return;
     const events = notifyEvents(this.snapshot, next);
     this.set({ ...next, status: this.snapshot.status });
-    for (const e of events) for (const l of [...this.notifyListeners]) l(e);
+    for (const e of events) for (const l of this.notifyListeners) l(e);
   }
 
   /** Applies a summary returned by a server function (for example createWorkspace). */
@@ -79,7 +79,7 @@ export class HubStore {
 
   private set(next: HubSnapshot): void {
     this.snapshot = next;
-    for (const l of [...this.listeners]) l();
+    for (const l of this.listeners) l();
   }
 }
 

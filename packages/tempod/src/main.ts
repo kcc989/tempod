@@ -33,6 +33,10 @@ try {
   log.error("bad configuration", { error: errorText(e) });
   process.exit(2);
 }
+// Children must not see the token (01, Container config); the config holds the only copy.
+delete process.env["TEMPOD_TOKEN"];
+process.on("unhandledRejection", (e: unknown) => log.local("error", "unhandled rejection", { error: errorText(e) }));
+process.on("uncaughtException", (e: unknown) => log.local("error", "uncaught exception", { error: errorText(e) }));
 Effect.runPromise(program(config, log)).then(
   (code) => process.exit(code),
   (e: unknown) => {

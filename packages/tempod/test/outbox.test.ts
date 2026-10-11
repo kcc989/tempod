@@ -91,16 +91,32 @@ describe("outbox", () => {
     expect(sink.sent.map((s) => s.event.kind)).toEqual(["incarnation.changed"]);
   });
 
-  test("a DO ahead of a restored disk: new events get seqs above lastAckedSeq", () => {
+  test("a DO ahead of a restored disk: events made before hello move above lastAckedSeq", () => {
     const { outbox } = open();
     outbox.append(port(3000));
     const sink = new FakeSink();
     outbox.attach(sink);
     outbox.handshake(outbox.incarnation, 10);
-    expect(sink.sent).toHaveLength(0);
-    expect(outbox.pendingCount).toBe(0);
-    expect(outbox.append(port(3001))).toBe(11);
     expect(sink.seqs()).toEqual([11]);
+    expect(sink.sent[0]!.event).toEqual(port(3000));
+    expect(outbox.append(port(3001))).toBe(12);
+    expect(sink.seqs()).toEqual([11, 12]);
+  });
+
+  test("a DO ahead of a restored disk: rows from before the restart count as delivered", () => {
+    const first = open();
+    first.outbox.append(port(3000));
+    first.outbox.append(port(3001));
+    first.db.close();
+    const second = open(first.path);
+    second.outbox.append(port(3002));
+    const sink = new FakeSink();
+    second.outbox.attach(sink);
+    second.outbox.handshake(second.outbox.incarnation, 10);
+    expect(sink.seqs()).toEqual([11]);
+    expect(sink.sent[0]!.event).toEqual(port(3002));
+    expect(second.outbox.pendingCount).toBe(1);
+    expect(second.outbox.append(port(3003))).toBe(12);
   });
 
   test("incarnation and seq survive a restart; acked rows stay gone", () => {

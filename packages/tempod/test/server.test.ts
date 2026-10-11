@@ -208,19 +208,23 @@ describe("WebSocket protocol", () => {
     const first = await c1.waitEvent("incarnation.changed");
     expect(first.incarnation).toBe(h.app.outbox.incarnation);
     expect(c1.events[0]!.seq).toBe(1);
+    // The port scanner starts with hello and reports the (empty) port set right after the handshake.
+    await c1.waitEvent("ports.changed");
+    expect(c1.events[1]).toMatchObject({ seq: 2, event: { kind: "ports.changed", ports: [] } });
     h.app.emit({ kind: "ports.changed", ports: [3000] });
     h.app.emit({ kind: "ports.changed", ports: [3001] });
-    await c1.waitFor(() => c1.events.length >= 3);
-    expect(c1.events.map((e) => e.seq)).toEqual([1, 2, 3]);
-    c1.ack(2);
+    await c1.waitFor(() => c1.events.length >= 4);
+    expect(c1.events.map((e) => e.seq)).toEqual([1, 2, 3, 4]);
+    c1.ack(3);
     await Bun.sleep(50);
     c1.close();
     await c1.waitFor(() => c1.closed !== null);
     h.app.emit({ kind: "ports.changed", ports: [3002] });
     const c2 = new DoClient(h.base);
-    await c2.hello({ incarnation: h.app.outbox.incarnation, lastAckedSeq: 2 });
+    await c2.hello({ incarnation: h.app.outbox.incarnation, lastAckedSeq: 3 });
     await c2.waitFor(() => c2.events.length >= 2);
-    expect(c2.events.map((e) => e.seq)).toEqual([3, 4]);
+    await Bun.sleep(50);
+    expect(c2.events.map((e) => e.seq)).toEqual([4, 5]);
     expect(c2.of("ports.changed").map((e) => e.ports[0])).toEqual([3001, 3002]);
     c2.close();
   });
@@ -230,19 +234,20 @@ describe("WebSocket protocol", () => {
     const c = new DoClient(h.base);
     await c.hello();
     await c.waitEvent("incarnation.changed");
-    c.ack(1);
+    await c.waitEvent("ports.changed");
+    c.ack(2);
     h.app.emit({ kind: "ports.changed", ports: [3000] });
-    await c.waitFor(() => c.events.length >= 2);
+    await c.waitFor(() => c.events.length >= 3);
     c.send({
       ...(await import("./helpers.ts")).hello({
         incarnation: h.app.outbox.incarnation,
-        lastAckedSeq: 1,
+        lastAckedSeq: 2,
         env: { NEW_VAR: "1" },
         workspace: { id: "01ws", slug: "porto", branch: "tempo/porto", baseBranch: "develop", repo: { owner: "o", name: "r" } },
       }),
     });
-    await c.waitFor(() => c.events.length >= 3);
-    expect(c.events[2]!.seq).toBe(2);
+    await c.waitFor(() => c.events.length >= 4);
+    expect(c.events[3]).toMatchObject({ seq: 3, event: { kind: "ports.changed", ports: [3000] } });
     expect(c.closed).toBeNull();
     expect(h.app.workspaceInfo?.baseBranch).toBe("develop");
     const r = await c.ok<{ pid: number }>("script.start", {
@@ -277,6 +282,35 @@ describe("WebSocket protocol", () => {
     await c.ok("script.start", { runId: "01only", kind: "run", scriptId: null, command: 'echo "only=$ONLY tempo=${TEMPO_PORT:-none}"', cwd: "", timeoutMs: null });
     await c.waitEvent("script.exited", (e) => e.runId === "01only");
     expect(c.of("script.output").map((e) => e.data).join("")).toContain("only=yes tempo=none");
+    c.close();
+  });
+
+  test("SIGTERM mode: tempod.stopping, then exit 0 once shutdown is answered", async () => {
+    const exits: number[] = [];
+    h = startTempod(testConfig(), { exit: (code) => exits.push(code) });
+    const c = new DoClient(h.base);
+    await c.hello();
+    h.app.onSigterm();
+    const ev = await c.waitEvent("tempod.stopping");
+    expect(ev.reason).toBe("sigterm");
+    const prompt = await c.req("session.prompt", { sessionId: "s", turnId: "t", content: [{ type: "text", text: "x" }] });
+    expect(prompt).toMatchObject({ ok: false, error: { code: "CONTAINER_NOT_READY" } });
+    expect(exits).toEqual([]);
+    await c.ok("shutdown", { reason: "sigterm" });
+    await c.waitFor(() => exits.length > 0, 5_000, "exit");
+    expect(exits).toEqual([0]);
+    c.close();
+  });
+
+  test("shutdown outside SIGTERM mode keeps tempod running", async () => {
+    const exits: number[] = [];
+    h = startTempod(testConfig(), { exit: (code) => exits.push(code) });
+    const c = new DoClient(h.base);
+    await c.hello();
+    await c.ok("shutdown", { reason: "sleep" });
+    await Bun.sleep(100);
+    expect(exits).toEqual([]);
+    expect((await c.req("terminal.list", {})).ok).toBe(true);
     c.close();
   });
 
