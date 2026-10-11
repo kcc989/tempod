@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["./worker-runtime.d.ts", "vite/client"],
+    "paths": { "~/*": ["./src/*"] }
+  },
+  "include": ["src", "test", "scripts", "vite.config.ts", "vitest.config.ts", "worker-runtime.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,38 @@
+// Local development config. `bun run deploy` (scripts/deploy-worker.ts) writes the real
+// deploy config from the same shape, with the D1 id and the hostnames filled in (01, Worker config).
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tempo",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "APP_HOST": "localhost:5173",
+    "PREVIEW_DOMAIN": "previews.localhost",
+    "TEMPO_OWNER_GITHUB_ID": "0"
+  },
+  "containers": [
+    {
+      "class_name": "WorkspaceDO",
+      "scheduling_policy": "durable_object",
+      "images": { "workspace": { "dockerfile": "../../container/Dockerfile" } }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
+      { "name": "USER_HUB", "class_name": "UserHubDO" },
+      { "name": "CREDENTIALS", "class_name": "CredentialDO" }
+    ]
+  },
+  "exports": {
+    "WorkspaceDO": { "type": "durable-object", "storage": "sqlite" },
+    "UserHubDO": { "type": "durable-object", "storage": "sqlite" },
+    "CredentialDO": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "tempo", "database_id": "local", "migrations_dir": "src/db/migrations" }
+  ],
+  "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }]
+}
