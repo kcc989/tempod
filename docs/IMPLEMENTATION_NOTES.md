@@ -124,6 +124,12 @@ The Mac build loop keeps these rows (07). The build machine is Linux x86_64, so 
 | --- | --- | --- | --- |
 | M-1 | 07 Transcript, "No remote images" | Spike S11: GPUI uses an element's `ImageCache` only during layout and paint. `MessageScroller` rows and `TextView`'s inline images are laid out during prepaint, so a transcript-level `ImageCache` does not stop them from fetching through GPUI's global HTTP client. GPUI also fetches `data:` and `file:` URIs through that client. | GPUI starts with `image_policy::blocked_http_client()`, which refuses every request, and each transcript row is wrapped in an `ImageCache` whose `load` refuses every URI resource. Proposed 07 text: "Start GPUI with `http_client::BlockedHttpClient`, and wrap each transcript row in an `ImageCache` whose `load` refuses every URI resource." ACP `image` blocks still load from their inline data. |
 
+### Open questions (Mac)
+
+| # | Spec | Question | What the code does now |
+| --- | --- | --- | --- |
+| MQ-1 | 07 Updates | Download "checks the SHA-256 from `meta`", but `ApiMeta` (`packages/protocol/src/api.ts`) is `{protocol, serverVersion, minMacClient, latestMacClient}` and has no hash. The hash is only in R2's `clients/mac/latest.json`, which the app cannot read. | Not decided. Options: an optional `latestMacClientSha256` in `ApiMeta` (additive, 05) that `/api/v1/meta` copies from `latest.json`, or a header on `GET /downloads/mac/<version>`. The Mac update code takes the expected hash as a parameter until you decide. |
+
 ### Spike results (Mac)
 
 | Spike | Status | Result |
