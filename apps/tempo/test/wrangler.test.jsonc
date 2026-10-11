@@ -1,0 +1,23 @@
+// Test config: the deploy shape without containers (Miniflare has no container runtime here).
+// The date is the newest the pool's bundled workerd supports; deploys use 2026-10-10.
+{
+  "name": "tempo-test",
+  "main": "./worker/entry.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_HOST": "tempo.test",
+    "PREVIEW_DOMAIN": "previews.test",
+    "TEMPO_OWNER_GITHUB_ID": "4242"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
+      { "name": "USER_HUB", "class_name": "UserHubDO" },
+      { "name": "CREDENTIALS", "class_name": "CredentialDO" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceDO", "UserHubDO", "CredentialDO"] }],
+  "d1_databases": [{ "binding": "DB", "database_name": "tempo", "database_id": "test", "migrations_dir": "../src/db/migrations" }],
+  "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }]
+}
