@@ -113,3 +113,46 @@ The test agents found these. The code makes the choice shown; none contradicts a
 | tempod tests in the image | Rule 14 says tempod tests run inside the container image. The build machine has no Docker, so `packages/tempod` tests run on the host; they need only the image's tools (git, rg, tmux, bash, coreutils). |
 | Browser Run (01, phase 3, optional) | Not built: 02 has no contract for passing the CDP URL to `tempod` or the Live View URL to the UI (Q-4). |
 | Browser checks of the web UI | 04 asks for every shortcut to be tested in Chrome, Safari and Firefox on macOS. There is no browser on the build machine. |
+
+## Tempo for Mac
+
+The Mac build loop keeps these rows (07). The build machine is Linux x86_64, so macOS-only code sits behind `cfg(target_os = "macos")` with in-memory or no-op fallbacks.
+
+### Spec changes to make (Mac)
+
+| # | Spec | Finding | What the code does |
+| --- | --- | --- | --- |
+| M-1 | 07 Transcript, "No remote images" | Spike S11: GPUI uses an element's `ImageCache` only during layout and paint. `MessageScroller` rows and `TextView`'s inline images are laid out during prepaint, so a transcript-level `ImageCache` does not stop them from fetching through GPUI's global HTTP client. GPUI also fetches `data:` and `file:` URIs through that client. | GPUI starts with `image_policy::blocked_http_client()`, which refuses every request, and each transcript row is wrapped in an `ImageCache` whose `load` refuses every URI resource. Proposed 07 text: "Start GPUI with `http_client::BlockedHttpClient`, and wrap each transcript row in an `ImageCache` whose `load` refuses every URI resource." ACP `image` blocks still load from their inline data. |
+
+### Spike results (Mac)
+
+| Spike | Status | Result |
+| --- | --- | --- |
+| S11 | Partly run (Linux) | `gpui-kit =0.7.1` builds, lints and tests with Rust 1.97.0 (07 asks for 1.92 or later; the highest `rust-version` in the tree is 1.92). `TextView::markdown` renders raw HTML, blocks and inline tags, so 07's fallback applies (M-2). An `ImageCache` alone does not block remote images (M-1). The 10,000-row example is `apps/mac/examples/s11_transcript.rs`; frame time p99 on an M1 is not measured (no Mac). Linux needs `libxkbcommon-dev` and `libxkbcommon-x11-dev`. See `spikes/S11.md`. |
+| S13 | Feasibility checked | `gpui-terminal` 0.1.0 depends on `gpui` 0.2.2, not the GPUI that `gpui-kit` 0.7.1 bundles, so the fork in C8 is required. A scratch port hit 2 one-line API changes (`ShapedLine::paint` takes `TextAlign` and an align width; `Window::focus` takes `cx`) and then type-checked. Selection, clipboard and wheel scrollback are TODOs in the crate. See `spikes/S13.md`. |
+| S16 | Done (Linux) | Every wire type becomes Rust. Two hand-written types, `Item` and `Empty` (M-5). See `spikes/S16.md`. |
+| S12, S14, S15 | Not run | They need a deployed Tempo, a Mac and (S15) a Developer ID. |
+
+### Choices where 07 is silent (Mac)
+
+| # | Area | Choice |
+| --- | --- | --- |
+| M-2 | Raw HTML (05, 07 Transcript) | `markdown::escape_raw_html` turns `<` into `&lt;` outside code before text reaches `TextView::markdown`. It is conservative: where block structure is ambiguous, and in indented code blocks, `&lt;` can show inside code. |
+| M-3 | Schema layout (`bun run protocol:gen`) | One Draft-07 file per wire type, `packages/protocol/schema/<Type>.json`, referencing others as `{"$ref": "<Type>.json"}`, plus `Api.json` with every function (method, input, output). 178 types and 59 functions. tempod's own protocol is left out: the Mac app never sees it. |
+| M-4 | Fixture layout (`bun run protocol:fixtures`) | `fixtures/types/<Type>.jsonl` (one valid sample per line) and `fixtures/channel/<session>.jsonl` with `<session>.expected.json`. The expected end state comes from the web stores in `apps/tempo/src/ui/stores`. `bun run --cwd packages/protocol protocol:check` re-runs both generators and fails on any diff. |
+| M-5 | Rust wire types | Effect's JSON Schema describes the JSON codec, not the plain schema: optional fields come out nullable, `Schema.Number` also allows `"Infinity"`, `"-Infinity"` and `"NaN"`, `Struct({})` comes out as `not: null`, regex patterns are dropped and string lengths are counted in code points. `crates/protocol-gen` corrects the first three before typify (each rule is unit-tested) and drops `additionalProperties: true`. `Item` is hand-written so the seven shared fields sit on one struct; `Empty` is hand-written because typify panics on `not`. |
+| M-6 | Generated Rust shapes | Every `Schema.Number` is `f64`. Fields are snake_case with `serde(rename)`. Channel unions are untagged enums: `WorkspaceServerMessage::Hello` … `Pong` and `HubServerMessage::HubHello`, `HubWorkspace`, `HubWorkspaceRemoved`, `WsPong`. Unknown fields are ignored, so additive fields decode; an unknown message type fails to decode and is dropped, as in the web store. Functions are called through `tempo_protocol::Function` (`api::SendPrompt` and so on). |
+| M-7 | Composer and terminal keys | Enter, Esc and ⇧Tab are bound on `Composer > Input`, so they outrank GPUI Kit's own `Input` bindings. Stop the turn also has ⌘⇧⌫ in `Workspace` (Conductor column). The `Terminal` context unbinds tab, ⇧Tab, ⌃Tab, ⌃⇧Tab and ⌃O so they reach the shell. Permission Enter and ⌫ are handled by the focused card. The Changes list's ↓ and ↑ use the `Diff` context. |
+| M-8 | Links and `tempo://` | `file:///workspace/` links with `..`, `.` or empty segments are ignored. A `tempo://workspace/<id>` id must be 1 to 64 ASCII letters or digits; an unknown id shows `Not found.` as for close code 4404. |
+| M-9 | Dependencies | Pinned in each crate: `gpui-kit =0.7.1`, `async-channel =2.5.0`, `serde =1.0.229`, `serde_json =1.0.154`. `crates/protocol-gen` (a build tool, not shipped) uses `typify =0.8.0` (the newest stable release; 0.10.0-alpha.2 exists), `schemars =0.8.22`, `syn =3.0.8` and `prettyplease =0.3.0`, which typify's output needs. |
+
+### Not built yet (Mac)
+
+| Item | Status |
+| --- | --- |
+| `crates/tempo-client` | Empty: no runtime, RPC, channels, reconnect, device sign-in or Rust stores yet. `apps/mac/src/client.rs` stands in for `Runtime`. |
+| `crates/tempo-terminal` | Empty: the `gpui-terminal` fork is not made yet. |
+| Views | Main window panes, title bar, sidebar, chat rows, composer context, top bar and Settings (shortcut table) are started; Changes, Diff, Files, Checks, Setup, Run, Terminal, dialogs and the palette are stubs. |
+| macOS integration | Menus, key bindings, `Info.plist` and entitlements are done; Keychain, notifications, Dock badge and wake are std-only stubs. |
+| Local storage, logs, `scripts/mac/release.sh`, update check, `AppIcon.icns`, `tests/mac-e2e/` | Not built. |
+| `#[gpui::test]` view tests | Not written: the current tests are plain Rust. |

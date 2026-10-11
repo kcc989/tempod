@@ -50,9 +50,16 @@ mod tests {
         assert_eq!(plist_value(plist, "CFBundleIdentifier"), super::BUNDLE_ID);
         assert_eq!(plist_value(plist, "CFBundleExecutable"), super::APP_NAME);
         assert_eq!(plist_value(plist, "LSMinimumSystemVersion"), "15.0");
-        assert_eq!(plist_value(plist, "CFBundleShortVersionString"), super::VERSION);
+        assert_eq!(
+            plist_value(plist, "CFBundleShortVersionString"),
+            super::VERSION
+        );
         let schemes = plist.split("<key>CFBundleURLSchemes</key>").nth(1).unwrap();
-        assert!(schemes.trim_start().starts_with("<array>\n\t\t\t\t<string>tempo</string>"));
+        assert!(
+            schemes
+                .trim_start()
+                .starts_with("<array>\n\t\t\t\t<string>tempo</string>")
+        );
     }
 
     #[test]

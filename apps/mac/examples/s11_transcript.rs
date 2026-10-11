@@ -137,6 +137,7 @@ fn main() {
 
 #[cfg(feature = "profiler")]
 fn report(handle: gpui_kit::AnyWindowHandle, sent: u64, elapsed: Duration, cx: &mut AsyncApp) {
+    use gpui_kit::AppContext as _;
     let _ = cx.update_window(handle, |_, window, _| {
         let snap = window.frame_duration_snapshot();
         let draw = &snap.draw_duration_histogram;
