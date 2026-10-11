@@ -38,6 +38,7 @@ export function ScriptOutput({
     <pre
       ref={ref}
       role="log"
+      aria-live="off"
       aria-label={label}
       tabIndex={0}
       onScroll={(e) => {

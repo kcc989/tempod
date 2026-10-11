@@ -163,8 +163,11 @@ pub fn sidebar_sections(
         }
     };
     let pick = |f: &dyn Fn(&WorkspaceSummary) -> bool| -> Vec<WorkspaceSummary> {
-        let mut out: Vec<WorkspaceSummary> =
-            listed.iter().filter(|w| f(w)).map(|w| (*w).clone()).collect();
+        let mut out: Vec<WorkspaceSummary> = listed
+            .iter()
+            .filter(|w| f(w))
+            .map(|w| (*w).clone())
+            .collect();
         out.sort_by(cmp);
         out
     };
@@ -178,7 +181,11 @@ pub fn sidebar_sections(
         });
     }
     let mut ordered: Vec<&Project> = projects.iter().collect();
-    ordered.sort_by(|a, b| a.sort_order.partial_cmp(&b.sort_order).unwrap_or(Ordering::Equal));
+    ordered.sort_by(|a, b| {
+        a.sort_order
+            .partial_cmp(&b.sort_order)
+            .unwrap_or(Ordering::Equal)
+    });
     for p in ordered {
         sections.push(SidebarSection {
             key: p.id.clone(),

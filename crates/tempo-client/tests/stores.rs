@@ -117,7 +117,11 @@ fn every_channel_fixture_gives_the_web_end_state_and_events() {
     sessions.sort();
     assert_eq!(sessions.len(), 6, "six channel sessions");
     for path in sessions {
-        let name = path.file_stem().expect("stem").to_string_lossy().to_string();
+        let name = path
+            .file_stem()
+            .expect("stem")
+            .to_string_lossy()
+            .to_string();
         let text = fs::read_to_string(&path).expect("read session");
         let lines: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
         let expected: Value = serde_json::from_str(
@@ -128,7 +132,11 @@ fn every_channel_fixture_gives_the_web_end_state_and_events() {
         let channel = expected["channel"].as_str().expect("channel");
         let got = replay(&lines, channel);
         assert_eq!(got.channel, channel, "{name}");
-        assert_eq!(json!(got.messages), expected["messages"], "{name}: messages");
+        assert_eq!(
+            json!(got.messages),
+            expected["messages"],
+            "{name}: messages"
+        );
 
         let want_state = normalize(expected["state"].clone());
         let got_state = normalize(got.state);
@@ -169,10 +177,80 @@ fn script_output_keeps_the_newest_utf16_units() {
         ws.apply(serde_json::from_value(raw).expect("decodes"));
     }
     ws.apply(
-        serde_json::from_value(json!({"type":"script.output","runId":"r","stream":"stdout","data":"END"}))
-            .expect("decodes"),
+        serde_json::from_value(
+            json!({"type":"script.output","runId":"r","stream":"stdout","data":"END"}),
+        )
+        .expect("decodes"),
     );
     let out = &ws.script_output["r"];
-    assert_eq!(out.encode_utf16().count(), tempo_client::state::MAX_SCRIPT_OUTPUT);
+    assert_eq!(
+        out.encode_utf16().count(),
+        tempo_client::state::MAX_SCRIPT_OUTPUT
+    );
     assert!(out.ends_with("END"));
+}
+
+fn type_samples<T: serde::de::DeserializeOwned>(name: &str) -> Vec<T> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures/types")
+        .join(format!("{name}.jsonl"));
+    fs::read_to_string(path)
+        .expect("fixture")
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| serde_json::from_str(l).expect("sample decodes"))
+        .collect()
+}
+
+#[test]
+fn sidebar_puts_pinned_first_then_projects_newest_activity_first() {
+    use tempo_client::state::{SortMode, sidebar_sections};
+    use tempo_protocol::{Project, WorkspaceSummary};
+
+    let base: WorkspaceSummary = type_samples("WorkspaceSummary").remove(0);
+    let project: Project = type_samples("Project").remove(0);
+    let ws = |id: &str, pinned: bool, activity: f64, archived: bool| WorkspaceSummary {
+        id: id.into(),
+        pinned,
+        last_activity_at: activity,
+        archived_at: archived.then_some(1.0),
+        project_id: project.id.clone(),
+        ..base.clone()
+    };
+    let mut hub = HubState::new();
+    for w in [
+        ws("a", false, 10.0, false),
+        ws("b", false, 30.0, false),
+        ws("c", true, 20.0, false),
+        ws("d", false, 40.0, true),
+    ] {
+        assert!(hub.merge(w));
+    }
+    let sections = sidebar_sections(
+        &hub.workspaces,
+        std::slice::from_ref(&project),
+        SortMode::Activity,
+    );
+    let ids: Vec<(String, Vec<String>)> = sections
+        .iter()
+        .map(|s| {
+            (
+                s.key.clone(),
+                s.workspaces.iter().map(|w| w.id.clone()).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            ("pinned".to_owned(), vec!["c".to_owned()]),
+            (project.id.clone(), vec!["b".to_owned(), "a".to_owned()]),
+        ]
+    );
+    let stale = WorkspaceSummary {
+        rev: base.rev - 1.0,
+        ..ws("a", true, 99.0, false)
+    };
+    assert!(!hub.merge(stale), "an older rev is ignored");
+    assert_eq!(hub.attention_count(), 0);
 }

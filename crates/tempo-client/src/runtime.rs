@@ -143,7 +143,9 @@ mod tests {
         let handle = rt.handle();
         assert_eq!(handle.tokio().metrics().num_workers(), 2);
         let fut = handle.run(async { tokio::runtime::Handle::try_current().is_ok() });
-        let out = std::thread::spawn(move || block_on(fut)).join().expect("joins");
+        let out = std::thread::spawn(move || block_on(fut))
+            .join()
+            .expect("joins");
         assert_eq!(out, Some(true));
     }
 

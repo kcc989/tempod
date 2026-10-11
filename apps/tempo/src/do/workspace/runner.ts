@@ -176,7 +176,12 @@ export class OpRunner {
   active(): OpRow | null {
     return (
       this.core.db.select().from(ops).where(eq(ops.status, "running")).get() ??
-      this.core.db.select().from(ops).where(eq(ops.status, "pending")).orderBy(asc(ops.createdAt)).get() ??
+      this.core.db
+        .select()
+        .from(ops)
+        .where(and(eq(ops.status, "pending"), ne(ops.kind, "housekeeping")))
+        .orderBy(asc(ops.createdAt))
+        .get() ??
       null
     );
   }
@@ -380,10 +385,16 @@ export class OpRunner {
     this.core.kickQueue();
   }
 
+  /** Adds the time a step spent waiting for its event (05: each op stores its step timings). */
+  private addWaitTime(op: OpRow, state: OpState, step: string): void {
+    state.timings[step] = (state.timings[step] ?? 0) + Math.max(0, Date.now() - op.updatedAt);
+  }
+
   private async timeoutWaiting(op: OpRow): Promise<void> {
     const state = this.stateOf(op);
     const step = state.waiting?.step ?? op.step;
     delete state.waiting;
+    this.addWaitTime(op, state, step);
     await this.handleError({ ...op, attempt: limitOf(step).maxAttempts - 1 }, new TempoError("TEMPOD_TIMEOUT", undefined, `${step} timed out`), state, limitOf(step));
   }
 
@@ -393,6 +404,7 @@ export class OpRunner {
     if (!op || op.status !== "running" || op.step !== step) return;
     const state = this.stateOf(op);
     delete state.waiting;
+    this.addWaitTime(op, state, step);
     if (outcome === "next") await this.applyOutcome(op, "next", state, limitOf(step));
     else await this.handleError({ ...op, attempt: limitOf(step).maxAttempts - 1 }, new TempoError(error?.code ?? "INTERNAL", undefined, error?.detail), state, limitOf(step));
     this.core.scheduleAlarm();

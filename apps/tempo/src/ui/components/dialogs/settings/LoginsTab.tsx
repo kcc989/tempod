@@ -215,7 +215,8 @@ function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
       }}
     >
       <label htmlFor={id} className="text-xs text-muted-foreground">
-        Run <CommandLine>codex login</CommandLine>, then upload or paste <CommandLine>~/.codex/auth.json</CommandLine>.
+        Run <CommandLine>codex login</CommandLine>, then upload or paste{" "}
+        <CommandLine>~/.codex/auth.json</CommandLine>.
       </label>
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -238,7 +239,13 @@ function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <FileJsonIcon aria-hidden className="size-3" />
             {file.name} ready to save
-            <Button type="button" size="sm" variant="ghost" className="h-5 px-1" onClick={() => setFile(null)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-5 px-1"
+              onClick={() => setFile(null)}
+            >
               Clear
             </Button>
           </span>
@@ -283,7 +290,8 @@ function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
       onSubmit={() => {
         const problem = checkApiKey(key);
         setError(problem);
-        if (!problem && isApiKeyProvider(row.provider)) save.mutate({ provider: row.provider, key: key.trim() });
+        if (!problem && isApiKeyProvider(row.provider))
+          save.mutate({ provider: row.provider, key: key.trim() });
       }}
     >
       <label htmlFor={id} className="sr-only">

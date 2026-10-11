@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PhoneUnavailable } from "~/ui/components/shell/States";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
@@ -24,12 +24,9 @@ export function BottomPanel({ workspaceId }: BottomPanelProps) {
   const tab = useWorkspaceUiSelector(workspaceId, (s) => s.bottomTab);
   const isPhone = useIsPhone();
   const setupFailed = useWorkspaceSelector(workspaceId, (s) => s.workspace?.setupStatus === "failed");
-  const [terminalOpened, setTerminalOpened] = useState(tab === "terminal");
+  const [terminalOpened, setTerminalOpened] = useState(false);
+  if (tab === "terminal" && !isPhone && !terminalOpened) setTerminalOpened(true);
   useToggleRunAction(workspaceId);
-
-  useEffect(() => {
-    if (tab === "terminal" && !isPhone) setTerminalOpened(true);
-  }, [tab, isPhone]);
 
   return (
     <Tabs
@@ -40,7 +37,12 @@ export function BottomPanel({ workspaceId }: BottomPanelProps) {
       <TabsList variant="line" aria-label="Processes" className="w-full shrink-0 justify-start px-2">
         <TabsTrigger value="setup">
           Setup
-          {setupFailed && <span aria-label="Failed" className="size-1.5 rounded-full bg-destructive" />}
+          {setupFailed && (
+            <>
+              <span aria-hidden className="size-1.5 rounded-full bg-destructive" />
+              <span className="sr-only">(failed)</span>
+            </>
+          )}
         </TabsTrigger>
         <TabsTrigger value="run">Run</TabsTrigger>
         {!isPhone && <TabsTrigger value="terminal">Terminal</TabsTrigger>}
@@ -48,9 +50,15 @@ export function BottomPanel({ workspaceId }: BottomPanelProps) {
       <TabsContent value="setup" className="min-h-0">
         <SetupTab workspaceId={workspaceId} />
       </TabsContent>
-      <TabsContent value="run" className="min-h-0">
-        {isPhone ? <PhoneUnavailable className="h-full" /> : <RunTab workspaceId={workspaceId} />}
-      </TabsContent>
+      {isPhone ? (
+        <TabsContent value="run" className="min-h-0">
+          <PhoneUnavailable className="h-full" />
+        </TabsContent>
+      ) : (
+        <TabsContent value="run" forceMount className="min-h-0 data-[state=inactive]:hidden">
+          <RunTab workspaceId={workspaceId} />
+        </TabsContent>
+      )}
       {isPhone ? (
         <TabsContent value="terminal" className="min-h-0">
           <PhoneUnavailable className="h-full" />

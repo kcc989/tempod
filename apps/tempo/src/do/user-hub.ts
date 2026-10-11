@@ -14,6 +14,7 @@ const MAX_BUFFERED = 4 * 1024 * 1024;
 /** Fans out sidebar updates (02, UserHubDO). One per user, named by the user id. */
 export class UserHubDO extends DurableObject<Env> {
   private readonly db: DrizzleSqliteDODatabase<typeof userHubSchema>;
+  private loading: Promise<void> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -24,11 +25,12 @@ export class UserHubDO extends DurableObject<Env> {
 
   override async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("expected websocket", { status: 426 });
+    await this.loadOnce();
+    // No await from here on: a publish() must not reach the socket before its hello (02, UserHubDO).
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server, ["ui"]);
-    const workspaces = await this.loadAll();
-    this.send(server, { type: "hello", v: 1, workspaces });
+    this.send(server, { type: "hello", v: 1, workspaces: this.stored() });
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -63,27 +65,40 @@ export class UserHubDO extends DurableObject<Env> {
     this.broadcast({ type: "workspace.removed", workspaceId });
   }
 
-  private async loadAll(): Promise<WorkspaceSummary[]> {
-    let rows = this.db.select().from(summaries).all();
-    if (rows.length === 0 && !this.ctx.storage.kv.get("loadedFromD1")) {
-      this.ctx.storage.kv.put("loadedFromD1", true);
-      const userId = this.ctx.id.name;
-      if (userId) {
-        const d1 = drizzleD1(this.env.DB);
-        const list = await d1
-          .select()
-          .from(workspaces)
-          .where(and(eq(workspaces.userId, userId), isNull(workspaces.archivedAt)))
-          .orderBy(desc(workspaces.lastActivityAt))
-          .all();
-        for (const r of list) {
-          const s = summaryFromD1Row(r);
-          this.db.insert(summaries).values({ workspaceId: s.id, summaryJson: JSON.stringify(s), rev: s.rev }).onConflictDoNothing().run();
-        }
-        rows = this.db.select().from(summaries).all();
-      }
+  private stored(): WorkspaceSummary[] {
+    return this.db
+      .select()
+      .from(summaries)
+      .all()
+      .map((r) => JSON.parse(r.summaryJson) as WorkspaceSummary);
+  }
+
+  /** If the table is empty, loads it once from D1. Sockets that open meanwhile wait for the same load. */
+  private loadOnce(): Promise<void> {
+    if (this.loading) return this.loading;
+    if (this.ctx.storage.kv.get("loadedFromD1")) return Promise.resolve();
+    if (this.db.select({ id: summaries.workspaceId }).from(summaries).get()) return Promise.resolve();
+    this.loading ??= this.loadFromD1().finally(() => {
+      this.loading = null;
+    });
+    return this.loading;
+  }
+
+  private async loadFromD1(): Promise<void> {
+    const userId = this.ctx.id.name;
+    if (!userId) return;
+    const list = await drizzleD1(this.env.DB)
+      .select()
+      .from(workspaces)
+      .where(and(eq(workspaces.userId, userId), isNull(workspaces.archivedAt)))
+      .orderBy(desc(workspaces.lastActivityAt))
+      .all();
+    for (const r of list) {
+      const s = summaryFromD1Row(r);
+      // A summary published during the load is newer than D1's copy.
+      this.db.insert(summaries).values({ workspaceId: s.id, summaryJson: JSON.stringify(s), rev: s.rev }).onConflictDoNothing().run();
     }
-    return rows.map((r) => JSON.parse(r.summaryJson) as WorkspaceSummary);
+    this.ctx.storage.kv.put("loadedFromD1", true);
   }
 
   private broadcast(message: HubServerMessage): void {

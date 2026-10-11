@@ -43,7 +43,10 @@ export const checkCodexAuth = (text: string): string | null => {
   } catch {
     return "That is not JSON. Use the auth.json that codex login writes.";
   }
-  const o = parsed as { tokens?: { access_token?: unknown; refresh_token?: unknown }; last_refresh?: unknown };
+  const o = parsed as {
+    tokens?: { access_token?: unknown; refresh_token?: unknown };
+    last_refresh?: unknown;
+  };
   if (
     typeof o?.tokens?.access_token !== "string" ||
     typeof o.tokens.refresh_token !== "string" ||

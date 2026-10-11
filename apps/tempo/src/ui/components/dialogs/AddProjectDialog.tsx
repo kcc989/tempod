@@ -146,7 +146,9 @@ function Repos({
                 <span className="truncate">
                   {r.owner}/{r.name}
                 </span>
-                {r.private && <LockIcon aria-label="Private" className="size-3 shrink-0 text-muted-foreground" />}
+                {r.private && (
+                  <LockIcon aria-label="Private" className="size-3 shrink-0 text-muted-foreground" />
+                )}
                 <span className="truncate font-mono text-xs text-muted-foreground">{r.defaultBranch}</span>
               </span>
               {linked.has(r.repoId) ? (

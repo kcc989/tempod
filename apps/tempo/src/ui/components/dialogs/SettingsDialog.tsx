@@ -1,4 +1,10 @@
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "~/ui/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/ui/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
 import { openDialog, type SettingsTab } from "~/ui/state/workspace-ui";
@@ -47,7 +53,11 @@ export function SettingsDialog() {
         </DialogHeader>
         {open && (
           <Tabs value={tab} onValueChange={(v) => isSettingsTab(v) && go(v)} className="min-h-0 gap-3">
-            <TabsList variant="line" aria-label="Settings" className="w-full shrink-0 justify-start overflow-x-auto">
+            <TabsList
+              variant="line"
+              aria-label="Settings"
+              className="w-full shrink-0 justify-start overflow-x-auto"
+            >
               {TABS.map((t) => (
                 <TabsTrigger key={t.id} value={t.id}>
                   {t.label}

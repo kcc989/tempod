@@ -101,7 +101,10 @@ export function RunTab({ workspaceId }: { workspaceId: string }) {
           <Button
             size="sm"
             disabled={busy || archived}
-            onClick={() => start.mutate({ workspaceId, scriptId: script.id })}
+            onClick={() => {
+              setShownRunId(null);
+              start.mutate({ workspaceId, scriptId: script.id });
+            }}
           >
             <PlayIcon aria-hidden />
             Start
@@ -127,7 +130,10 @@ export function RunTab({ workspaceId }: { workspaceId: string }) {
           </Select>
         )}
       </div>
-      <p className="truncate border-b px-3 py-1 font-mono text-xs text-muted-foreground" title={script.command}>
+      <p
+        className="truncate border-b px-3 py-1 font-mono text-xs text-muted-foreground"
+        title={script.command}
+      >
         {script.cwd ? `${script.cwd}$ ` : "$ "}
         {shown?.command ?? script.command}
       </p>

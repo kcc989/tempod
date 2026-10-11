@@ -39,13 +39,13 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
           <TabsTrigger value="files">All files</TabsTrigger>
           <TabsTrigger value="checks">Checks</TabsTrigger>
         </TabsList>
-        <TabsContent value="changes" className="min-h-0">
+        <TabsContent value="changes" className="flex min-h-0 flex-col">
           <ChangesView workspaceId={workspaceId} />
         </TabsContent>
-        <TabsContent value="files" className="min-h-0">
+        <TabsContent value="files" className="flex min-h-0 flex-col">
           <FilesView workspaceId={workspaceId} />
         </TabsContent>
-        <TabsContent value="checks" className="min-h-0">
+        <TabsContent value="checks" className="flex min-h-0 flex-col">
           <ChecksView workspaceId={workspaceId} />
         </TabsContent>
       </Tabs>

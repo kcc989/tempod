@@ -28,8 +28,7 @@ export const runsOf = (
   runs: ReadonlyArray<ScriptRun>,
   kind: ScriptKind,
   scriptId?: string | null,
-): ScriptRun[] =>
-  runs.filter((r) => r.kind === kind && (scriptId === undefined || r.scriptId === scriptId));
+): ScriptRun[] => runs.filter((r) => r.kind === kind && (scriptId === undefined || r.scriptId === scriptId));
 
 export const newestRun = (
   runs: ReadonlyArray<ScriptRun>,

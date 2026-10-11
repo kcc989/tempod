@@ -79,6 +79,8 @@ export const parseJson = <T>(text: string | null | undefined, fallback: T): T =>
 export class WorkspaceCore {
   readonly db: DB;
   tempod: TempodClient | null = null;
+  /** The connect in flight, shared by every caller (container.ts, connectTempod). */
+  tempodConnecting: Promise<TempodClient> | null = null;
   /** Sessions with a live adapter process in the current container. */
   readonly liveSessions = new Set<string>();
   ghToken: { token: string; expiresAt: number } | null = null;

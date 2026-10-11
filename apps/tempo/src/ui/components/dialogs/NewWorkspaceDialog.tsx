@@ -6,7 +6,14 @@ import { toast } from "sonner";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
 import { Checkbox } from "~/ui/components/ui/checkbox";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "~/ui/components/ui/command";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "~/ui/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +29,12 @@ import { Textarea } from "~/ui/components/ui/textarea";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { useProjects } from "~/ui/hooks/useProjects";
+import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
 import { agentLabel } from "~/ui/lib/agents";
 import { cn } from "~/ui/lib/utils";
 import { getHubStore } from "~/ui/stores/hub-store";
-import { closeDialog, openDialog, type DialogOf } from "~/ui/state/workspace-ui";
+import { closeDialog, openDialog, setPhonePane, type DialogOf } from "~/ui/state/workspace-ui";
 import { BranchPicker } from "./BranchPicker";
 import {
   agentsWithLogin,
@@ -84,6 +92,7 @@ function NewWorkspaceForm({
   projects: ReadonlyArray<Project>;
 }) {
   const navigate = useNavigate();
+  const isPhone = useIsPhone();
   const credentials = useCredentialStatus();
   const [projectId, setProjectId] = useState(
     args.projectId && projects.some((p) => p.id === args.projectId) ? args.projectId : projects[0]!.id,
@@ -96,7 +105,8 @@ function NewWorkspaceForm({
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
   const available = agentsWithLogin(credentials.data);
-  const agent = pickedAgent && available.includes(pickedAgent) ? pickedAgent : initialAgent(available, project);
+  const agent =
+    pickedAgent && available.includes(pickedAgent) ? pickedAgent : initialAgent(available, project);
   const input = createInput(project, source, agent, prompt);
 
   const create = useCallMutation("createWorkspace", {
@@ -111,6 +121,7 @@ function NewWorkspaceForm({
         return;
       }
       closeDialog("newWorkspace");
+      if (isPhone) setPhonePane("chat");
       void navigate({ to: "/w/$workspaceId", params: { workspaceId: summary.id } });
     },
   });
@@ -306,10 +317,15 @@ function PullRequestPicker({
           <CommandGroup>
             {shown.map((p) => (
               <CommandItem key={p.number} value={String(p.number)} onSelect={() => onChange(p.number)}>
-                <CheckIcon aria-hidden className={cn("size-3", p.number === value ? "opacity-100" : "opacity-0")} />
+                <CheckIcon
+                  aria-hidden
+                  className={cn("size-3", p.number === value ? "opacity-100" : "opacity-0")}
+                />
                 <span className="text-muted-foreground">#{p.number}</span>
                 <span className="min-w-0 flex-1 truncate">{p.title}</span>
-                <span className="max-w-32 truncate font-mono text-xs text-muted-foreground">{p.headBranch}</span>
+                <span className="max-w-32 truncate font-mono text-xs text-muted-foreground">
+                  {p.headBranch}
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>

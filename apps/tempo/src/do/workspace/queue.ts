@@ -9,7 +9,7 @@ import {
   type ContentBlock,
   type TurnPrompt,
 } from "@tempo/protocol";
-import { attachments, items, reviewComments, sessions, turns, type SessionRow, type TurnRow } from "../../db/workspace-do.ts";
+import { attachments, items, permissions, reviewComments, sessions, turns, type SessionRow, type TurnRow } from "../../db/workspace-do.ts";
 import { SECRET_KEYS } from "../credential.ts";
 import { errorText, log } from "../../log.ts";
 import { bytesToBase64 } from "../../lib/crypto.ts";
@@ -161,20 +161,27 @@ export const buildHandoffText = (core: WorkspaceCore, sessionId: string, beforeT
 
 const text = (t: string): ContentBlock => ({ type: "text", text: t });
 
-/** Content blocks in the order of 01, Send a prompt. */
-export const buildContent = async (core: WorkspaceCore, session: SessionRow, turn: TurnRow): Promise<ContentBlock[]> => {
+export interface PromptContent {
+  readonly blocks: ContentBlock[];
+  /** Session fields to clear once session.prompt is accepted (01, Send a prompt, blocks 1 and 2). */
+  readonly patch: Partial<SessionRow>;
+  readonly handoff: string | null;
+}
+
+/** Content blocks in the order of 01, Send a prompt. Changes no session field: see `commitContent`. */
+export const buildContent = async (core: WorkspaceCore, session: SessionRow, turn: TurnRow): Promise<PromptContent> => {
   const prompt = parseJson<TurnPrompt>(turn.promptJson, { text: "", mentions: [], attachmentIds: [], reviewCommentIds: [] });
   const blocks: ContentBlock[] = [];
   const settings = core.settings();
   const patch: Partial<SessionRow> = {};
+  let handoff: string | null = null;
   if (session.generalPromptSent === 0) {
     if (settings.prompts.general) blocks.push(text(settings.prompts.general));
     patch.generalPromptSent = 1;
   }
   if (session.handoffPending === 1) {
-    const handoff = buildHandoffText(core, session.id, turn.id);
+    handoff = buildHandoffText(core, session.id, turn.id);
     blocks.push(text(handoff));
-    core.insertItem({ sessionId: session.id, turnId: turn.id, kind: "handoff", status: "completed", content: { text: handoff } });
     patch.handoffPending = 0;
   }
   if (session.pendingNote) {
@@ -214,8 +221,15 @@ export const buildContent = async (core: WorkspaceCore, session: SessionRow, tur
       core.db.update(attachments).set({ containerPath, turnId: turn.id }).where(eq(attachments.id, a.id)).run();
     }
   }
-  if (Object.keys(patch).length > 0) core.updateSession(session.id, patch);
-  return blocks;
+  return { blocks, patch, handoff };
+};
+
+/** After session.prompt is accepted: clear the one-time fields and record the handoff block that was sent. */
+const commitContent = (core: WorkspaceCore, sessionId: string, turnId: string, content: PromptContent, sentAt: number): void => {
+  if (content.handoff !== null) {
+    core.insertItem({ sessionId, turnId, kind: "handoff", status: "completed", content: { text: content.handoff }, createdAt: sentAt });
+  }
+  if (Object.keys(content.patch).length > 0) core.updateSession(sessionId, content.patch);
 };
 
 /**
@@ -229,19 +243,27 @@ export const runQueue = async (core: WorkspaceCore, opsBusy: () => boolean): Pro
   if (core.runningTurn()) return;
   const state = row.state;
   const next = core.queuedTurns()[0];
-  if (!next) {
-    if (state === "working" && !core.turnEndInProgress) core.setState("ready");
+  const canStart =
+    next !== undefined &&
+    (state === "ready" || state === "working") &&
+    ["none", "succeeded", "skipped"].includes(row.setupStatus) &&
+    !opsBusy() &&
+    !core.turnEndInProgress;
+  if (!next || !canStart) {
+    // 03 turn.ended step 6: if no turn starts, the state goes back to ready.
+    backToReady(core);
     return;
   }
-  if (state !== "ready" && state !== "working") return;
-  if (!["none", "succeeded", "skipped"].includes(row.setupStatus)) return;
-  if (opsBusy() || core.turnEndInProgress) return;
   core.queueBusy = true;
   try {
     await startTurn(core, next);
   } finally {
     core.queueBusy = false;
   }
+};
+
+const backToReady = (core: WorkspaceCore): void => {
+  if (core.state === "working" && !core.turnEndInProgress && !core.runningTurn()) core.setState("ready");
 };
 
 const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
@@ -254,7 +276,9 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
     await ensureSessionLive(core, session);
     const fresh = core.sessionRow(session.id);
     const content = await buildContent(core, fresh, turn);
-    await requireTempod(core).request("session.prompt", { sessionId: session.id, turnId: turn.id, content });
+    const sentAt = Date.now();
+    await requireTempod(core).request("session.prompt", { sessionId: session.id, turnId: turn.id, content: content.blocks });
+    commitContent(core, session.id, turn.id, content, sentAt);
     const now = Date.now();
     core.updateTurn(turn.id, { status: "running", startedAt: now, queuePos: null });
     core.updateSession(session.id, { status: "running" });
@@ -264,7 +288,9 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
   } catch (e) {
     const err = e instanceof TempoError ? e : new TempoError("AGENT_START_FAILED", undefined, errorText(e));
     if (err.code === "CONTAINER_NOT_READY" || err.code === "TEMPOD_UNREACHABLE") {
+      // The turn stays queued; connectTempod runs the queue again once tempod is back.
       log("warn", "turn start deferred", { workspaceId: core.workspaceId, code: err.code });
+      backToReady(core);
       return;
     }
     const code = err.code === "CREDENTIAL_MISSING" ? "CREDENTIAL_MISSING" : err.code === "TEMPOD_TIMEOUT" ? "AGENT_START_FAILED" : err.code;
@@ -272,6 +298,7 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
     core.liveSessions.delete(session.id);
     core.updateSession(session.id, { status: "idle" });
     finishTurn(core, turn.id, "failed", { stopReason: null, errorCode: code, errorDetail: err.detail ?? err.message });
+    core.recomputeAttention();
     core.kickQueue();
   }
 };
@@ -286,6 +313,12 @@ export const finishTurn = (
   const turn = core.db.select().from(turns).where(eq(turns.id, turnId)).get();
   if (!turn || (turn.status !== "running" && turn.status !== "queued")) return false;
   core.closeTurnItems(turnId, status === "completed" ? "completed" : "cancelled");
+  // A request of an ended turn can no longer be answered (03 Activity and Attention count only pending ones).
+  core.db
+    .update(permissions)
+    .set({ status: "cancelled", answeredAt: Date.now() })
+    .where(and(eq(permissions.turnId, turnId), eq(permissions.status, "pending")))
+    .run();
   if (status === "failed") {
     core.insertItem({
       sessionId: turn.sessionId,

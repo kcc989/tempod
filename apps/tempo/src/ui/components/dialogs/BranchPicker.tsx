@@ -48,7 +48,9 @@ export function BranchPicker({
           aria-invalid={invalid || undefined}
           className="w-full justify-between font-mono text-xs font-normal"
         >
-          <span className={cn("truncate", !value && "font-sans text-muted-foreground")}>{value ?? placeholder}</span>
+          <span className={cn("truncate", !value && "font-sans text-muted-foreground")}>
+            {value ?? placeholder}
+          </span>
           <ChevronsUpDownIcon aria-hidden className="opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -108,8 +110,16 @@ function BranchList({
             <CommandEmpty>No branches found.</CommandEmpty>
             <CommandGroup>
               {branches.data.map((b) => (
-                <CommandItem key={b.name} value={b.name} onSelect={() => onPick(b.name)} className="font-mono text-xs">
-                  <CheckIcon aria-hidden className={cn("size-3", b.name === value ? "opacity-100" : "opacity-0")} />
+                <CommandItem
+                  key={b.name}
+                  value={b.name}
+                  onSelect={() => onPick(b.name)}
+                  className="font-mono text-xs"
+                >
+                  <CheckIcon
+                    aria-hidden
+                    className={cn("size-3", b.name === value ? "opacity-100" : "opacity-0")}
+                  />
                   <span className="truncate">{b.name}</span>
                 </CommandItem>
               ))}

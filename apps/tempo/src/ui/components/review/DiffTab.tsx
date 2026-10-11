@@ -266,7 +266,7 @@ function DraftsMenu({ workspaceId, drafts }: { workspaceId: string; drafts: Read
           <Badge variant="muted">{drafts.length}</Badge>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 p-1">
+      <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] p-1">
         <ul aria-label="Draft comments" className="flex max-h-80 flex-col overflow-y-auto">
           {drafts.map((c) => (
             <li key={c.id} className="flex items-start gap-1 rounded-sm hover:bg-accent/60">

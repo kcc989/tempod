@@ -31,7 +31,10 @@ export interface SourceDraft {
 
 export const emptySource = (): SourceDraft => ({ tab: "new", baseBranch: "", branch: null, prNumber: null });
 
-export const buildSource = (draft: SourceDraft, project: Pick<Project, "defaultBranch">): NewSource | null => {
+export const buildSource = (
+  draft: SourceDraft,
+  project: Pick<Project, "defaultBranch">,
+): NewSource | null => {
   switch (draft.tab) {
     case "new":
       return { kind: "new", baseBranch: draft.baseBranch.trim() || project.defaultBranch };
@@ -52,7 +55,9 @@ export const initialAgent = (
   project: Pick<Project, "settings"> | undefined,
 ): AgentId | null => {
   const preferred = [project?.settings.agent?.default, DEFAULT_SETTINGS.agent.default];
-  return preferred.find((a): a is AgentId => a !== undefined && available.includes(a)) ?? available[0] ?? null;
+  return (
+    preferred.find((a): a is AgentId => a !== undefined && available.includes(a)) ?? available[0] ?? null
+  );
 };
 
 export const createInput = (
@@ -81,6 +86,8 @@ export const filterPullRequests = <P extends { number: number; title: string; he
   if (!q) return [...prs];
   return prs.filter(
     (p) =>
-      String(p.number).startsWith(q) || p.title.toLowerCase().includes(q) || p.headBranch.toLowerCase().includes(q),
+      String(p.number).startsWith(q) ||
+      p.title.toLowerCase().includes(q) ||
+      p.headBranch.toLowerCase().includes(q),
   );
 };

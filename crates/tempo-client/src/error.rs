@@ -69,7 +69,10 @@ pub enum SignInError {
     /// `access_denied` or `expired_token` while polling.
     Denied,
     /// Any other OAuth or HTTP error, with the OAuth `error` code when there is one.
-    Rejected { status: u16, error: Option<String> },
+    Rejected {
+        status: u16,
+        error: Option<String>,
+    },
     Network(String),
     Decode(String),
     Cancelled,
@@ -90,7 +93,10 @@ impl fmt::Display for SignInError {
                 status,
                 error: Some(e),
             } => write!(f, "HTTP {status}: {e}"),
-            Self::Rejected { status, error: None } => write!(f, "HTTP {status}"),
+            Self::Rejected {
+                status,
+                error: None,
+            } => write!(f, "HTTP {status}"),
             Self::Network(e) => write!(f, "network error: {e}"),
             Self::Decode(e) => write!(f, "unexpected response: {e}"),
             Self::Cancelled => f.write_str("cancelled"),
@@ -102,7 +108,12 @@ impl std::error::Error for SignInError {}
 
 /// A serde_json error without the payload text it may quote.
 pub(crate) fn decode_error(e: &serde_json::Error) -> String {
-    format!("{:?} at line {} column {}", e.classify(), e.line(), e.column())
+    format!(
+        "{:?} at line {} column {}",
+        e.classify(),
+        e.line(),
+        e.column()
+    )
 }
 
 /// A reqwest error without its URL.

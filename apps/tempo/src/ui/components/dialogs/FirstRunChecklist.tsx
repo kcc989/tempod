@@ -30,7 +30,12 @@ export function FirstRunChecklist({ steps, installUrl }: FirstRunChecklistProps)
 
   const recheck = () => {
     void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey });
-    for (const name of ["listInstallations", "getCredentialStatus", "listProjects", "listWorkspaces"] as const) {
+    for (const name of [
+      "listInstallations",
+      "getCredentialStatus",
+      "listProjects",
+      "listWorkspaces",
+    ] as const) {
       void queryClient.invalidateQueries({ queryKey: callKey(name) });
     }
   };
@@ -68,7 +73,10 @@ export function FirstRunChecklist({ steps, installUrl }: FirstRunChecklistProps)
                 ) : (
                   <CircleIcon
                     aria-hidden
-                    className={cn("mt-0.5 size-4 shrink-0", current ? "text-primary" : "text-muted-foreground")}
+                    className={cn(
+                      "mt-0.5 size-4 shrink-0",
+                      current ? "text-primary" : "text-muted-foreground",
+                    )}
                   />
                 )}
                 <span className={cn(s.done || !current ? "text-muted-foreground" : "font-medium")}>

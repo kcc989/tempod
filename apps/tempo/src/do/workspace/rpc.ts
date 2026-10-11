@@ -659,8 +659,9 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     },
 
     stopScript: async ({ runId }) => {
-      rt.requireReady();
-      await requireTempod(core).request("script.stop", { runId });
+      // Not a wake trigger (03): with no container, nothing runs that could be stopped.
+      if (!containerRunning(core) || !core.tempod?.open) return {};
+      await core.tempod.request("script.stop", { runId });
       return {};
     },
 

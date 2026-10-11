@@ -404,7 +404,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     if (!(CONTAINER_STATES as ReadonlyArray<string>).includes(state)) return;
     // During setting_up the create or wake op only waits for script.exited; a stopped container ends that wait.
     const setupWait = state === "setting_up" && !containerRunning(core) ? this.runner.waitingOn("setup.run") : null;
-    if (!setupWait && this.runner.hasPendingOrRunning(["create", "wake", "sleep", "archive"])) return;
+    if (!setupWait && this.runner.hasPendingOrRunning(["create", "wake", "sleep", "archive"])) {
+      // The op owns the container, but a lost socket (a DO restart, a deploy) still needs a reconnect.
+      if (containerRunning(core) && !core.tempod?.open) this.onTempodLost();
+      return;
+    }
     if (!containerRunning(core)) {
       if (setupWait) this.runner.cancel(setupWait.id);
       await this.onUnplannedStop("The container stopped unexpectedly.");
@@ -433,8 +437,16 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const core = this.core;
     const state = core.wsOrNull()?.state;
     if (!state || !(CONTAINER_STATES as ReadonlyArray<string>).includes(state) || !containerRunning(core)) return;
-    if (this.runner.hasPendingOrRunning(["create", "wake"])) return;
+    // Only these two steps connect on their own; every later step needs the socket back.
+    const op = this.runner.find("create") ?? this.runner.find("wake");
+    if (op && (op.step === "container.start" || op.step === "tempod.connect")) return;
     scheduleReconnect(core, this.handlers, async () => {
+      if (!(CONTAINER_STATES as ReadonlyArray<string>).includes(core.wsOrNull()?.state ?? "")) return;
+      // The container is about to go: a create or wake op cannot finish on it, so the wake below replaces it.
+      for (const kind of ["create", "wake"] as const) {
+        const stale = this.runner.find(kind);
+        if (stale) this.runner.cancel(stale.id);
+      }
       await destroyContainer(core, "tempod unreachable").catch(() => undefined);
       await this.onUnplannedStop("Lost contact with the workspace. Restarting it.");
     });

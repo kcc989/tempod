@@ -1,0 +1,11 @@
+tempo-terminal is a fork of gpui-terminal 0.1.0
+(https://github.com/zortax/gpui-terminal, commit 45c63e57181d27c260124a81c7e4b68a6b6e57b0),
+Copyright 2025 Leonard Seibold, licensed under MIT OR Apache-2.0.
+The licence texts are in LICENSE-MIT and LICENSE-APACHE.
+
+Tempo ported it to the GPUI that gpui-kit 0.7.1 bundles, replaced the PTY reader and writer with
+channels, and added scrollback, mouse selection, clipboard, wheel and focus handling. Those changes
+are under the same licences.
+
+It uses alacritty_terminal 0.25.1 (Apache-2.0) for parsing and the grid. No code comes from Zed's
+GPL-3.0 crates.

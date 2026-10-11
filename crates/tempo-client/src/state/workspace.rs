@@ -44,7 +44,7 @@ pub struct WorkspaceState {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum WorkspaceEvent {
-    TurnEnded { turn: Turn },
+    TurnEnded { turn: Box<Turn> },
     Error { code: String, message: String },
     CredentialInvalid { provider: CredentialProvider },
 }
@@ -52,7 +52,10 @@ pub enum WorkspaceEvent {
 pub fn is_turn_ended(status: TurnStatus) -> bool {
     matches!(
         status,
-        TurnStatus::Completed | TurnStatus::Cancelled | TurnStatus::Failed | TurnStatus::Interrupted
+        TurnStatus::Completed
+            | TurnStatus::Cancelled
+            | TurnStatus::Failed
+            | TurnStatus::Interrupted
     )
 }
 
@@ -168,7 +171,9 @@ impl WorkspaceState {
                         .is_none_or(|prev| !is_turn_ended(prev.status));
                 self.turns.insert(m.turn.id.clone(), m.turn.clone());
                 if ended_now {
-                    return vec![WorkspaceEvent::TurnEnded { turn: m.turn }];
+                    return vec![WorkspaceEvent::TurnEnded {
+                        turn: Box::new(m.turn),
+                    }];
                 }
             }
             M::TurnDeleted(m) => {
@@ -395,7 +400,15 @@ impl WorkspaceState {
         });
         turns
             .iter()
-            .map(|t| t.prompt.text.split('\n').next().unwrap_or("").trim().to_owned())
+            .map(|t| {
+                t.prompt
+                    .text
+                    .split('\n')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_owned()
+            })
             .filter(|l| !l.is_empty())
             .take(max)
             .collect()

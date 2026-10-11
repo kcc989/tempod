@@ -56,7 +56,10 @@ export function SetupTab({ workspaceId }: { workspaceId: string }) {
       </div>
       <SettingsIssues workspace={workspace} />
       {hasScript && (
-        <p className="truncate border-b px-3 py-1 font-mono text-xs text-muted-foreground" title={workspace.settings.scripts.setup}>
+        <p
+          className="truncate border-b px-3 py-1 font-mono text-xs text-muted-foreground"
+          title={workspace.settings.scripts.setup}
+        >
           {workspace.settings.scripts.setup}
         </p>
       )}

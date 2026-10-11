@@ -53,7 +53,13 @@ export const logTone = (level: string): Tone =>
   level === "error" ? "bad" : level === "warn" ? "warn" : "muted";
 
 export const opTone = (status: Diagnostics["ops"][number]["status"]): Tone =>
-  status === "failed" ? "bad" : status === "running" || status === "pending" ? "warn" : status === "done" ? "ok" : "muted";
+  status === "failed"
+    ? "bad"
+    : status === "running" || status === "pending"
+      ? "warn"
+      : status === "done"
+        ? "ok"
+        : "muted";
 
 /** Step timings in run order: the order the op recorded them. */
 export const timingRows = (timings: Readonly<Record<string, number>>): Array<{ step: string; ms: number }> =>

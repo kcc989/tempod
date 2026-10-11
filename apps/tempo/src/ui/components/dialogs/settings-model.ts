@@ -19,7 +19,16 @@ import { Schema } from "effect";
  * either inherited (not in the layer) or set here (a Tempo override). Pure, so it is unit-tested.
  */
 
-export type FieldKind = "text" | "multiline" | "select" | "bool" | "number" | "hosts" | "instance" | "run" | "env";
+export type FieldKind =
+  | "text"
+  | "multiline"
+  | "select"
+  | "bool"
+  | "number"
+  | "hosts"
+  | "instance"
+  | "run"
+  | "env";
 
 export interface FieldOption {
   readonly value: string;
@@ -98,7 +107,12 @@ export const FIELDS = [
     hint: "One host per line. *.example.com is allowed.",
   },
   { path: "git.branch_prefix", section: "Git", label: "Branch prefix", kind: "text" },
-  { path: "git.delete_branch_on_archive", section: "Git", label: "Delete the branch on archive", kind: "bool" },
+  {
+    path: "git.delete_branch_on_archive",
+    section: "Git",
+    label: "Delete the branch on archive",
+    kind: "bool",
+  },
   { path: "git.archive_on_merge", section: "Git", label: "Archive on merge", kind: "bool" },
   {
     path: "prompts.general",
@@ -154,7 +168,8 @@ export type FieldErrors = Partial<Record<FieldPath, string>>;
 let rowSeq = 0;
 export const nextRowKey = (): number => ++rowSeq;
 
-const isObj = (u: unknown): u is Record<string, unknown> => typeof u === "object" && u !== null && !Array.isArray(u);
+const isObj = (u: unknown): u is Record<string, unknown> =>
+  typeof u === "object" && u !== null && !Array.isArray(u);
 
 export const getAt = (obj: unknown, path: string): unknown =>
   path.split(".").reduce<unknown>((o, k) => (isObj(o) ? o[k] : undefined), obj);
@@ -252,7 +267,9 @@ export const fromEdit = (def: FieldDef, edit: EditValue): Parsed => {
           .map((l) => l.trim().toLowerCase())
           .filter((l) => l !== "");
         const bad = hosts.find((h) => !isHost(h));
-        return bad === undefined ? { ok: true, value: hosts } : { ok: false, error: `Not a host pattern: ${bad}` };
+        return bad === undefined
+          ? { ok: true, value: hosts }
+          : { ok: false, error: `Not a host pattern: ${bad}` };
       }
       if (def.kind === "select") {
         return def.options?.some((o) => o.value === edit.text)
@@ -273,7 +290,8 @@ export const fromEdit = (def: FieldDef, edit: EditValue): Parsed => {
         ? { ok: true, value }
         : {
             ok: false,
-            error: "Use 1 to 4 vCPU, 4096 to 12288 MiB of memory (3072 MiB per vCPU at least) and 1 to 20000 MB of disk.",
+            error:
+              "Use 1 to 4 vCPU, 4096 to 12288 MiB of memory (3072 MiB per vCPU at least) and 1 to 20000 MB of disk.",
           };
     }
     case "run": {
@@ -343,8 +361,7 @@ export const formSignature = (form: SettingsForm): string =>
     FIELDS.map((d) => {
       const f = form[d.path];
       const v = f.value;
-      const value =
-        v.kind === "run" || v.kind === "env" ? v.rows.map((r) => ({ ...r, key: 0 })) : v;
+      const value = v.kind === "run" || v.kind === "env" ? v.rows.map((r) => ({ ...r, key: 0 })) : v;
       return [f.set, value];
     }),
   );

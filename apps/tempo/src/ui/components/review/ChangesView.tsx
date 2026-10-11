@@ -84,7 +84,7 @@ export function ChangesView({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       {phone && (
         <div className="flex shrink-0 items-center border-b p-2 empty:hidden">
           <PrimaryActionButton workspaceId={workspaceId} className="h-8 w-full" />

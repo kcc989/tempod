@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNotNull, lt, ne } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, lt, lte, ne } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { pickSlug } from "@tempo/cities";
 import { TempoError, revertNote, type CheckpointReason, type OpKind, type Source } from "@tempo/protocol";
@@ -14,6 +14,7 @@ import {
   sessions,
   snapshots,
   turns,
+  type CheckpointRow,
 } from "../../db/workspace-do.ts";
 import { github } from "../../github/provider.ts";
 import { errorText, log } from "../../log.ts";
@@ -21,8 +22,8 @@ import {
   connectTempod,
   containerRunning,
   destroyContainer,
-  requireTempod,
   startContainer,
+  tempodFor,
   usableSnapshot,
   waitHealthy,
   type ConnectHandlers,
@@ -57,7 +58,33 @@ const CHECKPOINT_REASON: Partial<Record<OpKind, CheckpointReason>> = {
   revert: "pre_revert",
 };
 
-export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => ({
+/** 03 Restore 2: the branch is gone from GitHub, so nothing is pushed any more. */
+const markBranchGone = (core: WorkspaceCore): void => {
+  core.updateWs({ pushed: 0, lastPushedSha: null, forcePushLease: 0 });
+  core.broadcastDetailSoon();
+};
+
+/** A snapshot wake skips repo.clone, so it asks GitHub whether a pushed branch still exists. */
+const checkPushedBranch = async (core: WorkspaceCore): Promise<void> => {
+  const row = core.ws();
+  if (row.pushed !== 1) return;
+  try {
+    const project = await core.project();
+    const exists = await github.branchExists(await getGithubToken(core), { owner: project.owner, name: project.name }, row.branch);
+    if (!exists) markBranchGone(core);
+  } catch (e) {
+    log("warn", "branch check failed", { workspaceId: core.workspaceId, error: errorText(e) });
+  }
+};
+
+export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => {
+  /** Best effort: steps that only skip without tempod reconnect first, after a DO restart. */
+  const reconnect = (core: WorkspaceCore): Promise<void> =>
+    tempodFor(core, handlers).then(
+      () => undefined,
+      () => undefined,
+    );
+  return {
   "container.start": async (sc) => {
     const { core, op, state, signal } = sc;
     const row = core.ws();
@@ -104,11 +131,14 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
 
   "repo.clone": async (sc) => {
     const { core, op, signal } = sc;
-    if (!fresh(sc)) return skip(sc);
+    if (!fresh(sc)) {
+      if (op.kind === "wake") await checkPushedBranch(core);
+      return skip(sc);
+    }
     const row = core.ws();
     const project = await core.project();
     const source = parseJson<Source>(row.sourceJson, { kind: "new" });
-    const res = await requireTempod(core).request(
+    const res = await (await tempodFor(core, handlers)).request(
       "repo.clone",
       {
         url: `https://github.com/${project.owner}/${project.name}.git`,
@@ -123,7 +153,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     if (op.kind === "create" && source.kind !== "new" && res.remoteHeadSha) {
       core.updateWs({ pushed: 1, lastPushedSha: res.remoteHeadSha });
     } else if (op.kind === "wake" && row.pushed === 1 && !res.remoteHeadSha) {
-      core.updateWs({ pushed: 0 });
+      markBranchGone(core);
     }
     return "next";
   },
@@ -133,8 +163,9 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     if (!fresh(sc) || op.kind !== "wake") return skip(sc);
     const ckpt = newestUploadedCheckpoint(core);
     if (!ckpt) return skip(sc);
+    const tempod = await tempodFor(core, handlers);
     await copyBundleIn(core, ckpt);
-    await requireTempod(core).request(
+    await tempod.request(
       "repo.applyCheckpoint",
       { bundlePath: RESTORE_BUNDLE_PATH, checkpointId: ckpt.id, branch: core.ws().branch },
       { signal },
@@ -152,7 +183,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     const { core, op } = sc;
     if (op.kind === "wake" && !fresh(sc)) return skip(sc);
     const project = await core.project(true);
-    const res = await requireTempod(core).request("settings.read", { overrides: project.overrides });
+    const res = await (await tempodFor(core, handlers)).request("settings.read", { overrides: project.overrides });
     core.updateWs({ settingsJson: JSON.stringify(res.effective) });
     core.setKv("settingsIssues", { warnings: res.warnings, errors: res.errors, sources: res.sources ?? {} });
     await sendEnv(core);
@@ -163,6 +194,9 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
   "setup.run": async (sc) => {
     const { core, op, state } = sc;
     if (op.kind === "wake" && !fresh(sc)) return skip(sc);
+    // script.exited arrives only over the socket, so a step that runs again after a DO restart reconnects
+    // before it waits. If that fails, the heartbeat reconnects (or restarts the container).
+    await reconnect(core);
     const existing = typeof state["setupRunId"] === "string" ? scriptRun(core, state["setupRunId"]) : null;
     if (existing) return existing.status === "running" ? "wait" : "next";
     const command = core.settings().scripts.setup;
@@ -198,6 +232,8 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
   },
 
   "turns.cancel": async ({ core }) => {
+    // Read before finishTurn, which marks the running turn's requests cancelled without telling tempod.
+    const pending = core.db.select().from(permissions).where(eq(permissions.status, "pending")).all();
     const running = core.runningTurn();
     if (running) {
       await core.tempod?.request("session.cancel", { sessionId: running.sessionId, turnId: running.id }).catch(() => undefined);
@@ -208,7 +244,6 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       core.db.delete(turns).where(eq(turns.id, t.id)).run();
       core.broadcast({ type: "turn.deleted", turnId: t.id });
     }
-    const pending = core.db.select().from(permissions).where(eq(permissions.status, "pending")).all();
     for (const p of pending) {
       await core.tempod?.request("permission.respond", { requestId: p.requestId, optionId: null }).catch(() => undefined);
       core.db.update(permissions).set({ status: "cancelled", answeredAt: Date.now() }).where(eq(permissions.requestId, p.requestId)).run();
@@ -219,6 +254,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
 
   "script.archive": async (sc) => {
     const { core, state } = sc;
+    await reconnect(core);
     if (!containerRunning(core) || !core.tempod?.open) return skip(sc);
     const existing = typeof state["archiveRunId"] === "string" ? scriptRun(core, state["archiveRunId"]) : null;
     if (existing) return existing.status === "running" ? "wait" : "next";
@@ -236,6 +272,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
 
   "git.checkpoint": async (sc) => {
     const { core, op, state, signal } = sc;
+    await reconnect(core);
     if (!containerRunning(core) || !core.tempod?.open) return skip(sc);
     const reason = CHECKPOINT_REASON[op.kind as OpKind] ?? "pre_sleep";
     const res = await takeCheckpoint(core, reason, null, signal);
@@ -259,6 +296,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
   },
 
   "tempod.shutdown": async (sc) => {
+    await reconnect(sc.core);
     if (!sc.core.tempod?.open) return skip(sc);
     await sc.core.tempod.request("shutdown", { reason: sc.op.kind });
     return "next";
@@ -303,6 +341,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     } catch (e) {
       if (!(e instanceof TempoError && e.code === "NOT_FOUND")) throw e;
     }
+    markBranchGone(core);
     return "next";
   },
 
@@ -327,7 +366,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
   "git.revert": async (sc) => {
     const { core, input, state, signal } = sc;
     const checkpointId = String(input["checkpointId"]);
-    const res = await requireTempod(core).request("git.revert", { checkpointId }, { signal });
+    const res = await (await tempodFor(core, handlers)).request("git.revert", { checkpointId }, { signal });
     state["headSha"] = res.headSha;
     return "next";
   },
@@ -336,8 +375,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     const { core, input, state } = sc;
     const checkpointId = String(input["checkpointId"]);
     const ckpt = core.db.select().from(checkpoints).where(eq(checkpoints.id, checkpointId)).get();
-    const turn = ckpt?.turnId ? core.db.select().from(turns).where(eq(turns.id, ckpt.turnId)).get() : null;
-    const seq = turn?.seq ?? 0;
+    const seq = ckpt ? checkpointTurnSeq(core, ckpt) : 0;
     for (const t of core.db.select().from(turns).where(gt(turns.seq, seq)).all()) {
       if (t.reverted === 0 && t.status !== "queued") core.updateTurn(t.id, { reverted: 1 });
     }
@@ -357,7 +395,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
   "git.commitAndPush": async (sc) => {
     const { core, input, state, signal } = sc;
     const row = core.ws();
-    const res = await requireTempod(core).request(
+    const res = await (await tempodFor(core, handlers)).request(
       "git.commitAndPush",
       {
         message: String(input["message"] ?? ""),
@@ -413,7 +451,28 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     if (cutoff) core.db.delete(egressLog).where(lt(egressLog.id, cutoff.id + 1)).run();
     return "next";
   },
-});
+  };
+};
+
+/**
+ * The turn whose end a checkpoint holds (03 Revert 4). A checkpoint with no turn (pre_sleep, sigterm, ...)
+ * holds the turn that points at it with an unchanged turn_end, else the newest turn that ended before it.
+ */
+export const checkpointTurnSeq = (core: WorkspaceCore, ckpt: CheckpointRow): number => {
+  if (ckpt.turnId) {
+    const own = core.db.select({ s: turns.seq }).from(turns).where(eq(turns.id, ckpt.turnId)).get();
+    if (own) return own.s;
+  }
+  const pointing = core.db.select({ s: turns.seq }).from(turns).where(eq(turns.checkpointId, ckpt.id)).orderBy(desc(turns.seq)).get();
+  if (pointing) return pointing.s;
+  const before = core.db
+    .select({ s: turns.seq })
+    .from(turns)
+    .where(and(isNotNull(turns.endedAt), lte(turns.endedAt, ckpt.createdAt)))
+    .orderBy(desc(turns.seq))
+    .get();
+  return before?.s ?? 0;
+};
 
 const toReady = (core: WorkspaceCore) => {
   const state = core.state;

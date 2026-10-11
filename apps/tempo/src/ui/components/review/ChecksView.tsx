@@ -78,7 +78,7 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
   const url = project ? githubPullUrl(project.owner, project.name, prNumber) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-col gap-1.5 border-b px-3 py-2">
         <div className="flex items-center gap-2">
           {url ? (

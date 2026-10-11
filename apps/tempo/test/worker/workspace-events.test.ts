@@ -988,6 +988,44 @@ describe("permission.requested", () => {
       await endTurn(ctx, ctx.sessionId, ctx.turnId, { stopReason: "cancelled" });
       // 02 Status: the open permission item of the cancelled turn becomes cancelled.
       expect((await itemRow(ctx.stub, itemId))!.status).toBe("cancelled");
+      // 03 Attention: "needs_input: a permission request is pending." The ended turn's request no longer is.
+      expect((await sql(ctx.stub, "SELECT status FROM permissions WHERE request_id = ?", requestId))[0]!.status).toBe("cancelled");
+      await waitReady(ctx);
+      await waitFor(async () => (await wsRow(ctx.stub)).attention !== "needs_input", 3000, "attention recomputed");
+      expect((await wsRow(ctx.stub)).attention).toBe("unread");
+      await waitFor(async () => (await d1Workspace(ctx.workspaceId))?.attention === "unread", 3000, "D1 unread");
+      // 03 Activity: "A permission request is pending" no longer keeps the workspace awake.
+      expect(await runInDurableObject(ctx.stub, (i: WorkspaceDO) => internals(i).core.isActive(0))).toBe(false);
+    },
+    T,
+  );
+
+  it(
+    "a turn that fails while a permission is pending (the agent crashed) shows error, not needs_input",
+    async () => {
+      // 03 Failure handling: "Adapter exits during a turn | Turn failed / AGENT_CRASHED". 03 Attention: needs_input needs a
+      // pending request; then "error: ... the newest turn ended failed".
+      const ctx = await runningTurn();
+      const itemId = newId();
+      const requestId = `req-${newId()}`;
+      const options = [{ optionId: "allow", name: "Allow", kind: "allow_once" }];
+      await emit(
+        ctx,
+        itemCreated(ctx.sessionId, ctx.turnId, { id: itemId, kind: "permission", status: "pending", content: { requestId, toolCallId: "c", title: "x", options } }),
+      );
+      await applied(
+        ctx.stub,
+        await emit(ctx, { kind: "permission.requested", requestId, sessionId: ctx.sessionId, turnId: ctx.turnId, itemId, title: "x", options }),
+      );
+      expect((await wsRow(ctx.stub)).attention).toBe("needs_input");
+      await applied(
+        ctx.stub,
+        await emit(ctx, { kind: "agent.exited", sessionId: ctx.sessionId, code: 1, signal: null, stderrTail: "boom", reason: "crashed" } as TempodEvent),
+      );
+      expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("failed");
+      expect((await sql(ctx.stub, "SELECT status FROM permissions WHERE request_id = ?", requestId))[0]!.status).toBe("cancelled");
+      await waitFor(async () => (await wsRow(ctx.stub)).attention === "error", 3000, "attention error");
+      await waitFor(async () => (await d1Workspace(ctx.workspaceId))?.attention === "error", 3000, "D1 error");
     },
     T,
   );
@@ -1625,6 +1663,79 @@ describe("prompt content blocks", () => {
     },
     T,
   );
+
+  /** A session after a handoff (only its first session.start hands off), with a pending note. */
+  const handoffSession = async () => {
+    const ctx = await readyWorkspace({
+      effective: withGeneral,
+      configure: (t) => {
+        const start = t.handlers.get("session.start")!;
+        let starts = 0;
+        t.on("session.start", async (params, op) => ({ ...((await start(params, op)) as object), handoff: ++starts === 1 }));
+      },
+    });
+    const session = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+    await waitFor(async () => (await sessionRow(ctx.stub, session.id))?.handoff_pending === 1, 3000, "handoff pending");
+    await waitFor(async () => (await sessionRow(ctx.stub, session.id))?.status === "idle", 3000, "session idle");
+    const note = revertNote(2);
+    await sql(ctx.stub, "UPDATE sessions SET pending_note = ? WHERE id = ?", note, session.id);
+    return { ctx, sessionId: session.id, note };
+  };
+
+  it(
+    "a deferred session.prompt keeps the general prompt, handoff and note for the retry",
+    async () => {
+      // 01 Send a prompt, blocks 1-2: the handoff block, "then clear handoff_pending"; the note, "then clear it".
+      // Nothing is cleared until the prompt is sent; a turn deferred while tempod is away sends them when it starts.
+      const { ctx, sessionId, note } = await handoffSession();
+      ctx.tempod.fail("session.prompt", "TEMPOD_UNREACHABLE", "socket closed");
+      const turn = await prompt(ctx, sessionId, "Do it");
+      await waitFor(() => ctx.tempod.requestsOf("session.prompt").length >= 1, 3000, "first attempt");
+      await settle(100);
+      expect((await turnRow(ctx.stub, turn))!.status).toBe("queued");
+      expect(await sessionRow(ctx.stub, sessionId)).toMatchObject({ handoff_pending: 1, pending_note: note, general_prompt_sent: 0 });
+      expect(await sql(ctx.stub, "SELECT id FROM items WHERE kind = 'handoff'")).toHaveLength(0);
+
+      ctx.tempod.failures.delete("session.prompt");
+      await runInDurableObject(ctx.stub, (i: WorkspaceDO) => internals(i).core.kickQueue());
+      await waitFor(async () => (await turnRow(ctx.stub, turn))?.status === "running", 5000, "turn running");
+      expect(ctx.tempod.requestsOf("session.prompt").at(-1).content).toEqual([
+        { type: "text", text: GENERAL },
+        { type: "text", text: HANDOFF_FIRST_LINE },
+        { type: "text", text: note },
+        { type: "text", text: "Do it" },
+      ]);
+      expect(await sessionRow(ctx.stub, sessionId)).toMatchObject({ handoff_pending: 0, pending_note: null, general_prompt_sent: 1 });
+      const handoffs = await sql(ctx.stub, "SELECT turn_id, content_json FROM items WHERE kind = 'handoff'");
+      expect(handoffs).toEqual([{ turn_id: turn, content_json: JSON.stringify({ text: HANDOFF_FIRST_LINE }) }]);
+    },
+    T,
+  );
+
+  it(
+    "a failed session.prompt keeps the general prompt, handoff and note for the next prompt",
+    async () => {
+      // 01 Send a prompt, blocks 1-2. The failed turn never reached the agent, so the next prompt still carries them.
+      const { ctx, sessionId, note } = await handoffSession();
+      ctx.tempod.fail("session.prompt", "INTERNAL", "adapter refused");
+      const t1 = await prompt(ctx, sessionId, "First try");
+      await waitFor(async () => (await turnRow(ctx.stub, t1))?.status === "failed", 5000, "turn failed");
+      expect(await sessionRow(ctx.stub, sessionId)).toMatchObject({ handoff_pending: 1, pending_note: note, general_prompt_sent: 0 });
+      expect(await sql(ctx.stub, "SELECT id FROM items WHERE kind = 'handoff'")).toHaveLength(0);
+
+      ctx.tempod.failures.delete("session.prompt");
+      const t2 = await prompt(ctx, sessionId, "Second try");
+      expect((await waitPrompt(ctx, t2)).content).toEqual([
+        { type: "text", text: GENERAL },
+        { type: "text", text: [HANDOFF_FIRST_LINE, "User: First try"].join("\n") },
+        { type: "text", text: note },
+        { type: "text", text: "Second try" },
+      ]);
+      expect(await sessionRow(ctx.stub, sessionId)).toMatchObject({ handoff_pending: 0, pending_note: null, general_prompt_sent: 1 });
+      expect((await sql(ctx.stub, "SELECT turn_id FROM items WHERE kind = 'handoff'")).map((r) => r.turn_id)).toEqual([t2]);
+    },
+    T,
+  );
 });
 
 describe("queue runner scheduling", () => {
@@ -1689,10 +1800,55 @@ describe("queue runner scheduling", () => {
       expect(errors.map((e) => JSON.parse(e.content_json).code)).toEqual(["AGENT_START_FAILED"]);
       expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(0);
       expect((await wsRow(ctx.stub)).state).toBe("ready");
+      // 03 Attention: "Recompute it after every change"; the newest turn ended failed.
+      await waitFor(async () => (await wsRow(ctx.stub)).attention === "error", 3000, "attention error");
+      await waitFor(async () => (await d1Workspace(ctx.workspaceId))?.attention === "error", 3000, "D1 attention error");
 
       ctx.tempod.failures.delete("session.start");
       const t2 = await prompt(ctx, first.session_id, "Now start");
       await waitPrompt(ctx, t2);
+    },
+    T,
+  );
+
+  it(
+    "a turn deferred while the tempod socket is down starts once tempod reconnects",
+    async () => {
+      // 03 Queue runner: "It runs after any change to state, turns, sessions or setup_status"; tempod coming back is
+      // what the deferred turn waited for. 03 Failure handling: the socket closes, the DO reconnects.
+      const ctx = await readyWorkspace();
+      const session = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+      await waitFor(async () => (await sessionRow(ctx.stub, session.id))?.status === "idle", 3000, "session idle");
+      await closeTempod(ctx);
+      await waitFor(async () => !(await runInDurableObject(ctx.stub, (i: WorkspaceDO) => internals(i).core.tempod?.open ?? false)), 3000, "socket closed");
+      const turn = await prompt(ctx, session.id, "While away");
+      await settle(100);
+      expect((await turnRow(ctx.stub, turn))!.status).toBe("queued");
+      // The reconnect is scheduled 1 s after the close.
+      await waitPrompt(ctx, turn);
+      expect(ctx.tempod.hellos).toHaveLength(2);
+      expect((await wsRow(ctx.stub)).state).toBe("working");
+    },
+    T,
+  );
+
+  it(
+    "after a turn ends, the state goes back to ready when the next queued turn cannot start yet",
+    async () => {
+      // 03 turn.ended step 6: "Run the queue runner. If no turn starts, the state goes back to ready."
+      // 03 Queue runner: setup_status must be none, succeeded or skipped.
+      const ctx = await runningTurn();
+      const t2 = await prompt(ctx, ctx.sessionId, "Waits for setup");
+      await sql(ctx.stub, "UPDATE workspace SET setup_status = 'running'");
+      await endTurn(ctx, ctx.sessionId, ctx.turnId);
+      await waitReady(ctx);
+      expect((await turnRow(ctx.stub, t2))!.status).toBe("queued");
+      expect((await detail(ctx.stub)).runningTurnId).toBeNull();
+
+      await sql(ctx.stub, "UPDATE workspace SET setup_status = 'succeeded'");
+      await runInDurableObject(ctx.stub, (i: WorkspaceDO) => internals(i).core.kickQueue());
+      await waitPrompt(ctx, t2);
+      expect((await wsRow(ctx.stub)).state).toBe("working");
     },
     T,
   );

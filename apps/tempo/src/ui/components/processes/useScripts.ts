@@ -43,10 +43,10 @@ export function useScriptRuns(workspaceId: string): {
 export function useScriptMutations(workspaceId: string) {
   const queryClient = useQueryClient();
   const addRun = (run: ScriptRun) =>
-    queryClient.setQueryData<ReadonlyArray<ScriptRunWithLog>>(callKey("listScriptRuns", { workspaceId }), (old) => [
-      { ...run, logTail: "" },
-      ...(old ?? []).filter((r) => r.id !== run.id),
-    ]);
+    queryClient.setQueryData<ReadonlyArray<ScriptRunWithLog>>(
+      callKey("listScriptRuns", { workspaceId }),
+      (old) => [{ ...run, logTail: "" }, ...(old ?? []).filter((r) => r.id !== run.id)],
+    );
   const start = useCallMutation("runScript", { onSuccess: addRun });
   const stop = useCallMutation("stopScript");
   const rerunSetup = useCallMutation("rerunSetup", { onSuccess: addRun });

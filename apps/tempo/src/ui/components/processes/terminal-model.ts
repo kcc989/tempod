@@ -33,7 +33,12 @@ export const nextTerminalId = (tabs: ReadonlyArray<string>): TerminalId | null =
 const clamp = (n: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Number.isFinite(n) ? Math.floor(n) : min));
 
-export const terminalPath = (workspaceId: string, terminalId: TerminalId, cols: number, rows: number): string =>
+export const terminalPath = (
+  workspaceId: string,
+  terminalId: TerminalId,
+  cols: number,
+  rows: number,
+): string =>
   `/api/ws/terminal/${encodeURIComponent(workspaceId)}/${terminalId}?cols=${clamp(cols, 10, 500)}&rows=${clamp(rows, 5, 200)}`;
 
 export const resizeFrame = (cols: number, rows: number): string =>

@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::fmt;
 use std::future::Future;
+use std::io;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,6 +11,8 @@ use reqwest::{RequestBuilder, Response, Url};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use tempo_protocol::{ApiMeta, ErrorBody, Function, PROTOCOL_VERSION};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::TcpStream;
 use tokio::sync::watch;
 
 use crate::channel::CloseReason;
@@ -31,6 +35,23 @@ const DEFAULT_POLL_INTERVAL: u64 = 5;
 
 pub(crate) const CLIENT_HEADER: HeaderName = HeaderName::from_static("x-tempo-client");
 
+pub(crate) trait Io: AsyncRead + AsyncWrite + Send + Unpin {}
+impl<T: AsyncRead + AsyncWrite + Send + Unpin> Io for T {}
+pub(crate) type IoStream = Box<dyn Io>;
+type DialFuture = Pin<Box<dyn Future<Output = io::Result<IoStream>> + Send>>;
+/// Opens the byte stream a channel upgrade runs on: TCP, or an in-memory pipe in tests.
+type Dialer = Arc<dyn Fn(String, u16) -> DialFuture + Send + Sync>;
+
+fn tcp_dialer() -> Dialer {
+    Arc::new(|host, port| {
+        Box::pin(async move {
+            let stream = TcpStream::connect((host.trim_matches(['[', ']']), port)).await?;
+            stream.set_nodelay(true)?;
+            Ok(Box::new(stream) as IoStream)
+        })
+    })
+}
+
 /// One Tempo deployment, before or after sign-in: its URL, the app version and the HTTP client.
 #[derive(Clone)]
 pub struct Server {
@@ -44,6 +65,7 @@ struct ServerInner {
     client_header: HeaderValue,
     http: reqwest::Client,
     ws_tls: Arc<rustls::ClientConfig>,
+    dialer: Dialer,
 }
 
 impl fmt::Debug for Server {
@@ -126,8 +148,37 @@ impl Server {
                 client_header,
                 http,
                 ws_tls,
+                dialer: tcp_dialer(),
             }),
         })
+    }
+
+    /// Channels open their byte stream with `dial(host, port)` instead of TCP. For tests that need
+    /// a deterministic transport under tokio's paused clock.
+    #[doc(hidden)]
+    pub fn with_dialer<F, Fut, S>(self, dial: F) -> Self
+    where
+        F: Fn(String, u16) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = io::Result<S>> + Send + 'static,
+        S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    {
+        let dial = Arc::new(dial);
+        let dialer: Dialer = Arc::new(move |host, port| {
+            let fut = dial(host, port);
+            Box::pin(async move { Ok(Box::new(fut.await?) as IoStream) })
+        });
+        let inner = &self.inner;
+        Self {
+            inner: Arc::new(ServerInner {
+                rt: inner.rt.clone(),
+                origin: inner.origin.clone(),
+                app_version: inner.app_version.clone(),
+                client_header: inner.client_header.clone(),
+                http: inner.http.clone(),
+                ws_tls: inner.ws_tls.clone(),
+                dialer,
+            }),
+        }
     }
 
     /// `scheme://host[:port]`, with no trailing slash.
@@ -169,6 +220,10 @@ impl Server {
         self.inner.ws_tls.clone()
     }
 
+    pub(crate) async fn dial(&self, host: String, port: u16) -> io::Result<IoStream> {
+        (self.inner.dialer)(host, port).await
+    }
+
     /// A signed-in client for this server.
     pub fn client(&self, token: Token) -> Client {
         Client {
@@ -195,7 +250,9 @@ impl Server {
 
     /// Sign-in step 2: `meta` must answer with `protocol` 1, and the app must not be older than
     /// `minMacClient`.
-    pub fn check_server(&self) -> impl Future<Output = Result<ApiMeta, SignInError>> + Send + 'static {
+    pub fn check_server(
+        &self,
+    ) -> impl Future<Output = Result<ApiMeta, SignInError>> + Send + 'static {
         let meta = self.meta();
         let app_version = self.inner.app_version.clone();
         async move {
@@ -309,7 +366,10 @@ impl Server {
 
     /// Sign out (07): `POST /api/auth/sign-out` with the token. The app deletes the token even if
     /// this fails.
-    pub fn sign_out(&self, token: &Token) -> impl Future<Output = Result<(), SignInError>> + Send + 'static {
+    pub fn sign_out(
+        &self,
+        token: &Token,
+    ) -> impl Future<Output = Result<(), SignInError>> + Send + 'static {
         let request = with_bearer(
             self.http().post(self.url(&["api", "auth", "sign-out"])),
             token,
@@ -394,7 +454,9 @@ impl Client {
     ) -> impl Future<Output = Result<F::Output, ApiError>> + Send + 'static {
         let body = serde_json::to_vec(&input);
         let request = with_bearer(
-            self.server.http().post(self.server.url(&["api", "v1", "rpc", F::NAME])),
+            self.server
+                .http()
+                .post(self.server.url(&["api", "v1", "rpc", F::NAME])),
             &self.token,
         )
         .header(CONTENT_TYPE, "application/json");

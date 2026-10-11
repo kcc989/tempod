@@ -17,7 +17,11 @@ import { toastError } from "~/ui/lib/toast";
 const DEVICES_KEY = ["auth", "devices"] as const;
 
 const deviceIcon = (label: string) =>
-  /iOS|Android/.test(label) ? SmartphoneIcon : /Tempo for Mac|macOS|Windows|Linux/.test(label) ? LaptopIcon : MonitorIcon;
+  /iOS|Android/.test(label)
+    ? SmartphoneIcon
+    : /Tempo for Mac|macOS|Windows|Linux/.test(label)
+      ? LaptopIcon
+      : MonitorIcon;
 
 /** Settings → Devices (07): every sign-in session, including Tempo for Mac, with Revoke. */
 export function DevicesTab() {

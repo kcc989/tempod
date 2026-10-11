@@ -19,7 +19,13 @@ import {
 } from "./terminal-model";
 import { terminalFont, terminalTheme } from "./terminal-theme";
 
-type Status = "loading" | "connecting" | "ready" | "reconnecting" | "failed" | Exclude<TerminalClose, "reconnect">;
+type Status =
+  | "loading"
+  | "connecting"
+  | "ready"
+  | "reconnecting"
+  | "failed"
+  | Exclude<TerminalClose, "reconnect">;
 
 const RESIZE_DEBOUNCE_MS = 100;
 
@@ -167,7 +173,8 @@ export function TerminalView({
     if (active && focusSeq > 0) term.current?.focus();
   }, [active, focusSeq]);
 
-  const ended = status === "exited" || status === "replaced" || status === "notFound" || status === "badVersion";
+  const ended =
+    status === "exited" || status === "replaced" || status === "notFound" || status === "badVersion";
   return (
     <div className="relative h-full w-full bg-background">
       <div
@@ -177,7 +184,10 @@ export function TerminalView({
       />
       {(status === "loading" || status === "connecting" || status === "reconnecting") && (
         <div className="pointer-events-none absolute top-1 right-2 rounded-md bg-background/90 px-2 py-0.5">
-          <LoadingText label={status === "reconnecting" ? "Reconnecting…" : "Connecting…"} className="text-xs" />
+          <LoadingText
+            label={status === "reconnecting" ? "Reconnecting…" : "Connecting…"}
+            className="text-xs"
+          />
         </div>
       )}
       {(ended || status === "failed") && (
@@ -185,7 +195,11 @@ export function TerminalView({
           role="status"
           className="absolute inset-x-0 bottom-0 flex items-center gap-2 border-t bg-background/95 px-3 py-1.5 text-sm"
         >
-          <span>{status === "failed" ? "The terminal could not load." : TERMINAL_CLOSE_TEXT[status as keyof typeof TERMINAL_CLOSE_TEXT]}</span>
+          <span>
+            {status === "failed"
+              ? "The terminal could not load."
+              : TERMINAL_CLOSE_TEXT[status as keyof typeof TERMINAL_CLOSE_TEXT]}
+          </span>
           {status === "badVersion" ? (
             <Button size="sm" variant="outline" onClick={() => globalThis.location?.reload()}>
               Reload

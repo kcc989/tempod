@@ -124,9 +124,19 @@ export interface ConnectHandlers {
   readonly onLost: () => void;
 }
 
-/** Opens the tempod WebSocket and sends `hello` with the stored incarnation and acked seq (03, Wake). */
-export const connectTempod = async (core: WorkspaceCore, handlers: ConnectHandlers): Promise<TempodClient> => {
-  if (core.tempod?.open) return core.tempod;
+/**
+ * Opens the tempod WebSocket and sends `hello` with the stored incarnation and acked seq (03, Wake).
+ * Concurrent callers share one attempt, so a step and the reconnect timer never open two sockets.
+ */
+export const connectTempod = (core: WorkspaceCore, handlers: ConnectHandlers): Promise<TempodClient> => {
+  if (core.tempod?.open) return Promise.resolve(core.tempod);
+  core.tempodConnecting ??= openAndHello(core, handlers).finally(() => {
+    core.tempodConnecting = null;
+  });
+  return core.tempodConnecting;
+};
+
+const openAndHello = async (core: WorkspaceCore, handlers: ConnectHandlers): Promise<TempodClient> => {
   const socket = await openTempodSocket(core);
   const client = new TempodClient(core, socket, handlers.onEvent, (c, code) => {
     if (core.tempod === c) core.tempod = null;
@@ -151,7 +161,18 @@ export const connectTempod = async (core: WorkspaceCore, handlers: ConnectHandle
   client.sendHello(hello);
   core.tempod = client;
   core.reconnectAttempt = 0;
+  // A turn deferred while tempod was away can start now (03, Queue runner).
+  core.kickQueue();
   return client;
+};
+
+/**
+ * tempod for an op step: reconnects first when the container runs but the socket is gone, as after
+ * a DO restart or a deploy (03, Failure handling: "The DO reconnects with workspace.tempod_token").
+ */
+export const tempodFor = async (core: WorkspaceCore, handlers: ConnectHandlers): Promise<TempodClient> => {
+  if (!core.tempod?.open && containerRunning(core) && core.ws().tempodToken) await connectTempod(core, handlers);
+  return requireTempod(core);
 };
 
 /**

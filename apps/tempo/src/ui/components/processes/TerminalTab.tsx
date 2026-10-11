@@ -1,5 +1,5 @@
 import { MoonIcon, PlusIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { EmptyState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
@@ -15,7 +15,10 @@ import {
 } from "./terminal-model";
 import { TerminalView } from "./TerminalView";
 
-/** 04, Bottom panel: tabs t1 to t9, a `+` button, and xterm. Every open terminal stays connected. */
+/**
+ * 04, Bottom panel: tabs t1 to t9, a `+` button, and xterm. A terminal connects when its tab is
+ * first shown and stays connected while the panel is open.
+ */
 export function TerminalTab({ workspaceId, visible }: { workspaceId: string; visible: boolean }) {
   const state = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state ?? null);
   const availability = terminalAvailability(state);
@@ -24,13 +27,14 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
   const [opened, setOpened] = useState<ReadonlyArray<TerminalId>>([]);
   const [picked, setPicked] = useState<TerminalId | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
+  const [visited, setVisited] = useState<ReadonlySet<TerminalId>>(() => new Set());
 
-  const tabs = terminalTabs((listed.data ?? []).map((t) => t.terminalId), opened);
+  const known = terminalTabs(
+    (listed.data ?? []).map((t) => t.terminalId),
+    opened,
+  );
   const settled = listed.isSuccess || listed.isError;
-
-  useEffect(() => {
-    if (availability === "connect" && settled && tabs.length === 0) setOpened(["t1"]);
-  }, [availability, settled, tabs.length]);
+  const tabs: ReadonlyArray<TerminalId> = known.length === 0 && settled ? ["t1"] : known;
 
   if (availability === "sleeping") {
     return (
@@ -50,6 +54,7 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
   if (availability === "loading" || tabs.length === 0) return <SkeletonRows rows={3} />;
 
   const current = picked !== null && tabs.includes(picked) ? picked : tabs[0]!;
+  if (!visited.has(current)) setVisited(new Set([...visited, current]));
   const next = nextTerminalId(tabs);
   const show = (id: TerminalId) => {
     setPicked(id);
@@ -57,11 +62,7 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
   };
 
   return (
-    <Tabs
-      value={current}
-      onValueChange={(v) => isTerminalId(v) && show(v)}
-      className="h-full min-h-0 gap-0"
-    >
+    <Tabs value={current} onValueChange={(v) => isTerminalId(v) && show(v)} className="h-full min-h-0 gap-0">
       <div className="flex items-center gap-1 border-b px-2">
         <TabsList variant="line" aria-label="Terminals" className="h-7 border-b-0">
           {tabs.map((id) => (
@@ -78,7 +79,7 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
             disabled={next === null}
             onClick={() => {
               if (!next) return;
-              setOpened((o) => [...o, next]);
+              setOpened((o) => [...new Set([...o, ...tabs, next])]);
               show(next);
             }}
           >
@@ -88,12 +89,14 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
       </div>
       {tabs.map((id) => (
         <TabsContent key={id} value={id} forceMount className="relative min-h-0 data-[state=inactive]:hidden">
-          <TerminalView
-            workspaceId={workspaceId}
-            terminalId={id}
-            active={visible && id === current}
-            focusSeq={focusSeq}
-          />
+          {visited.has(id) && (
+            <TerminalView
+              workspaceId={workspaceId}
+              terminalId={id}
+              active={visible && id === current}
+              focusSeq={focusSeq}
+            />
+          )}
         </TabsContent>
       ))}
     </Tabs>
