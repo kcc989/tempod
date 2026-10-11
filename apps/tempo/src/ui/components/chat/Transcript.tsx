@@ -219,14 +219,16 @@ function useAnnouncement(
   backlogDone: boolean,
 ): string {
   const seen = useRef<Set<string> | null>(null);
+  const initialized = useRef(false);
   const [text, setText] = useState("");
   useEffect(() => {
-    if (seen.current === null || !backlogDone) {
+    if (!backlogDone || !initialized.current) {
       seen.current ??= new Set();
       messagesToAnnounce(seen.current, order, items);
+      initialized.current = backlogDone;
       return;
     }
-    const ids = messagesToAnnounce(seen.current, order, items);
+    const ids = messagesToAnnounce(seen.current!, order, items);
     const last = ids[ids.length - 1];
     const item = last ? items[last] : undefined;
     if (item?.kind === "agent_message") setText(announceText(item.content.text));

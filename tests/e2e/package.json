@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test:web": "playwright test -c playwright.web.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",
-    "@tempo/protocol": "workspace:*"
+    "@tempo/protocol": "workspace:*",
+    "effect": "4.0.3"
   }
 }

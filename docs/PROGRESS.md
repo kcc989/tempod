@@ -2,9 +2,14 @@
 
 Status of the Tempo build against the spec (tabs 00 to 07). Continuation started 2026-10-11 on `claude/great-franklin-xc39l8` ([PR #1](https://github.com/kcc989/tempod/pull/1)), from `dadd62d`.
 
-Percentages below are the previous build loops' estimates, not new acceptance measurements. Deviations and open questions are in `IMPLEMENTATION_NOTES.md`.
+Percentages below are the previous build loops' estimates, not new acceptance measurements. Deviations and open questions are in `IMPLEMENTATION_NOTES.md`. The web continuation now has a separate [acceptance record](WEB_ACCEPTANCE.md).
 
 ## Current state
+
+- **Web continuation (2026-10-11):** all four web regions are implemented in the existing source. Added local Playwright acceptance with production components, protocol-checked RPC fixtures and intercepted client WebSockets. CI now runs desktop Chromium, Firefox and WebKit, dark Chromium and phone Chromium. This is local browser evidence; hosted gates remain open.
+- **Web verification:** 59 local browser cases pass; 6 device-specific cases skip intentionally. Root typecheck, lint, unit tests, format check, version check and production build pass in this Linux workspace.
+- **Web fixes:** per-session pending sends cannot submit twice through Enter or after switching tabs; failed sends restore the draft even after the composer unmounts; unsent mention/attachment/review chips survive tab switches; initial transcript backlog does not announce as new activity. Added a matching native pending-send regression (formatted with pinned Rust 1.97; not executed in this Linux workspace).
+- **Hosted test project:** inspected `kcc989/keeled` at `ffee1fa`. It needs a `pull_request` CI workflow for AT-17. Cloudflare credentials are configured, but the environment denies the configured app host. No first deployment, real login or hosted gate was started.
 
 - **Continuation is active.** The prior loops stopped at the account usage limit; their interim code is now being checked locally on macOS.
 - **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 717 Worker, 294 UI logic, 16 component, 201 protocol, 111 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
@@ -44,7 +49,7 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 | Auth and GitHub App setup | 05 | 92% | Built; not checked against real GitHub. |
 | Native API for the Mac app | 07 | 90–100% | `/api/v1/*`, bearer WebSocket auth, `/downloads/mac`. |
 | Container image and deploy | 01, 05 | 85% | Dockerfile, versions.json, Alchemy + wrangler deploy. |
-| Web UI | 04 | about 30% | Foundation done; most regions are in progress. |
+| Web UI | 04 | implemented | Regions are present; local browser acceptance added. Hosted agent/browser gates and macOS shortcut verification remain. |
 | Tempo for Mac | 07 | partial | Device sign-in, hub/workspace channels and chat/queue/steering actions wired locally. Native review/process panels and acceptance remain. |
 | Private previews + Browser Run | 00 Q3, 01 | design | Research done; decision brief not written. |
 | Spikes S1–S16, acceptance tests AT-1–AT-37 | 06 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
@@ -136,19 +141,11 @@ All 18 review findings are fixed, and 109 tests pass.
 - [x] Run daemon tests inside the full container image (112 pass, rule 14).
 
 **Web UI (04)**
-- [ ] Sidebar (15%): indicators, hover card, context menu, sort, sections, workspace actions.
-- [ ] Top bar (10%): primary action table, pill, port links, base-branch picker, overflow menu, commit/PR/merge/archive.
-- [ ] Center (10%):
-  - the agent menu and closed chats;
-  - the transcript for every item kind;
-  - the composer: pickers, attachments, mentions, queue, drafts;
-  - the banners.
-- [ ] Right panel (5%): Changes, Diff with comments and viewed marks, All files, ⌘P and ⌘⇧F, Checks, Browser tab.
-- [ ] Bottom panel (5%): Setup, Run, Terminal t1–t9 with xterm.
-- [ ] Dialogs (30%): New workspace, Add project, Settings (Logins, Project, Notifications, Devices), Diagnostics, First-run checklist.
-- [ ] Indicators and browser notifications (15%).
-- [ ] Region actions in the shortcut registry (55%).
-- [ ] Empty, loading and error states per region, and phone variants (55%).
+- [x] Implemented region components: Sidebar, TopBar, ChatTabs/Transcript/Composer, RightPanel and BottomPanel. Prior percentages described an older foundation snapshot.
+- [x] Implemented dialogs, indicators, notifications, action registry and phone variants; existing UI model/component tests pass.
+- [x] Add rendered local browser acceptance and run it in CI. Coverage and boundaries are in `WEB_ACCEPTANCE.md`.
+- [ ] Complete deployed gates B–D with real agent sessions and keeled, including PR checks, previews, restart durability and credential grep.
+- [ ] Verify every shortcut in shipped Chrome, Safari and Firefox on macOS.
 
 **Tempo for Mac (07)**
 - [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in, hub and workspace stores are wired. Manual and hosted acceptance remain.

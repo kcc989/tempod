@@ -1,4 +1,4 @@
-import { isErrorBody, TempoError, type ConfigOption, type Mention, type Session } from "@tempo/protocol";
+import { isErrorBody, TempoError, type ConfigOption, type Session } from "@tempo/protocol";
 import { ArchiveRestoreIcon, ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ import { getWorkspaceUi, takeInsertions, workspaceUiStore } from "~/ui/state/wor
 import { reorderedQueue, runningPlan } from "~/ui/stores/workspace-state";
 import { isPreviewable, rememberAttachment } from "./attachment-cache";
 import { runningTurnOf } from "./chat-tabs-model";
+import { useDraftChips } from "./composer-draft";
 import {
   applyInsertions,
   canSend,
@@ -132,9 +133,17 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const focusSeq = useWorkspaceUiSelector(workspaceId, (s) => s.composerFocusSeq);
 
   const [draft, setDraft] = useLocalStorage(draftKey(workspaceId, sessionId), "", isDraft);
-  const [mentions, setMentions] = useState<ReadonlyArray<Mention>>([]);
-  const [reviewCommentIds, setReviewCommentIds] = useState<ReadonlyArray<string>>([]);
-  const [attachments, setAttachments] = useState<ReadonlyArray<PendingAttachment>>([]);
+  const {
+    mentions,
+    setMentions,
+    reviewCommentIds,
+    setReviewCommentIds,
+    attachments,
+    setAttachments,
+    sending,
+    beginSend,
+    finishSend,
+  } = useDraftChips(workspaceId, sessionId);
   const [caret, setCaret] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [active, setActive] = useState({ key: "", index: 0 });
@@ -300,10 +309,10 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   };
 
   const submit = (delivery: "queue" | "steer" = "queue") => {
-    if (!sendable) return;
+    if (!sendable || !beginSend()) return;
     const backup = { draft, mentions, reviewCommentIds, attachments };
-    send.mutate(
-      {
+    void send
+      .mutateAsync({
         workspaceId,
         sessionId,
         text: draft.trim(),
@@ -311,16 +320,14 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         attachmentIds: ready.map((a) => a.attachmentId!),
         reviewCommentIds: [...reviewCommentIds],
         delivery,
-      },
-      {
-        onError: () => {
-          setDraft((cur) => (cur === "" ? backup.draft : cur));
-          setMentions((cur) => (cur.length === 0 ? backup.mentions : cur));
-          setReviewCommentIds((cur) => (cur.length === 0 ? backup.reviewCommentIds : cur));
-          setAttachments((cur) => (cur.length === 0 ? backup.attachments : cur));
-        },
-      },
-    );
+      })
+      .catch(() => {
+        setDraft((cur) => (cur === "" ? backup.draft : cur));
+        setMentions((cur) => (cur.length === 0 ? backup.mentions : cur));
+        setReviewCommentIds((cur) => (cur.length === 0 ? backup.reviewCommentIds : cur));
+        setAttachments((cur) => (cur.length === 0 ? backup.attachments : cur));
+      })
+      .finally(finishSend);
     setDraft("");
     setMentions([]);
     setReviewCommentIds([]);
@@ -593,7 +600,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                 size="icon-sm"
                 aria-label={workspaceBusy ? "Queue" : "Send"}
                 onClick={() => submit()}
-                disabled={!sendable || send.isPending}
+                disabled={!sendable || sending}
               >
                 <ArrowUpIcon />
               </Button>
@@ -602,7 +609,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   size="sm"
                   variant="outline"
                   onClick={() => submit("steer")}
-                  disabled={!sendable || send.isPending}
+                  disabled={!sendable || sending}
                 >
                   Send now
                 </Button>
