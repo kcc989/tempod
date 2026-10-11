@@ -1,30 +1,37 @@
 //! Keychain, generic password: service `dev.tempo.mac`, account = the Tempo host (07, Local
-//! storage). Stub: kept in memory until M1 calls `security_framework::passwords`
-//! (`set_generic_password`, `get_generic_password`, `delete_generic_password`).
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+//! storage). Errors carry the OSStatus code only.
+use crate::logging;
+use security_framework::passwords::{
+    PasswordOptions, delete_generic_password, generic_password, set_generic_password,
+};
+use serde_json::json;
 
-pub const SERVICE: &str = "dev.tempo.mac";
+pub const SERVICE: &str = crate::BUNDLE_ID;
 
-fn items() -> &'static Mutex<HashMap<String, String>> {
-    static ITEMS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
-    ITEMS.get_or_init(Default::default)
-}
+const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 pub fn get(account: &str) -> Option<String> {
-    items().lock().ok()?.get(account).cloned()
+    match generic_password(PasswordOptions::new_generic_password(SERVICE, account)) {
+        Ok(bytes) => String::from_utf8(bytes).ok(),
+        Err(e) => {
+            if e.code() != ERR_SEC_ITEM_NOT_FOUND {
+                logging::warn("keychain", "read failed", json!({"status": e.code()}));
+            }
+            None
+        }
+    }
 }
 
+/// Adds the item, or replaces the one already there.
 pub fn set(account: &str, password: &str) -> Result<(), String> {
-    let mut items = items()
-        .lock()
-        .map_err(|_| "keychain stub poisoned".to_string())?;
-    items.insert(account.to_string(), password.to_string());
-    Ok(())
+    set_generic_password(SERVICE, account, password.as_bytes())
+        .map_err(|e| format!("Keychain error {}", e.code()))
 }
 
 pub fn delete(account: &str) {
-    if let Ok(mut items) = items().lock() {
-        items.remove(account);
+    if let Err(e) = delete_generic_password(SERVICE, account)
+        && e.code() != ERR_SEC_ITEM_NOT_FOUND
+    {
+        logging::warn("keychain", "delete failed", json!({"status": e.code()}));
     }
 }

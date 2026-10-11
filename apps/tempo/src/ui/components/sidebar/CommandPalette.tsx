@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { defaultFilter } from "cmdk";
 import {
   CommandDialog,
   CommandEmpty,
@@ -9,60 +10,92 @@ import {
   CommandShortcut,
 } from "~/ui/components/ui/command";
 import { useAvailableActions } from "~/ui/hooks/useActions";
-import { useHub } from "~/ui/hooks/useHub";
+import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
-import { isListed } from "~/ui/stores/hub-state";
 import { formatCombo, isMacPlatform } from "~/ui/lib/shortcuts";
 import { runAction } from "~/ui/state/actions";
-import { closeDialog } from "~/ui/state/workspace-ui";
+import { closeDialog, setPhonePane } from "~/ui/state/workspace-ui";
+import { StatusIcon } from "./indicators";
+import { useSidebarOrder } from "./navigation";
 
-/** REGION A placeholder: ⌘K palette (04, Command palette). Opens on dialog kind "palette". */
+/** Items carry an internal id as their value; only the keywords are searched. */
+const paletteFilter = (value: string, search: string, keywords?: string[]): number =>
+  defaultFilter(keywords?.length ? keywords.join(" ") : value, search);
+
+/**
+ * 04, Command palette (⌘K): jump to any workspace by title, branch or slug; run any action that
+ * has a shortcut.
+ */
 export function CommandPalette() {
   const { open, onOpenChange } = useDialog("palette");
-  const hub = useHub();
+  return (
+    <CommandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Command palette"
+      description="Jump to a workspace or run an action."
+      commandProps={{ filter: paletteFilter }}
+    >
+      {open && <PaletteBody />}
+    </CommandDialog>
+  );
+}
+
+function PaletteBody() {
+  const order = useSidebarOrder();
   const actions = useAvailableActions();
   const navigate = useNavigate();
+  const isPhone = useIsPhone();
   const mac = isMacPlatform();
-  const workspaces = Object.values(hub.workspaces).filter(isListed);
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
+    <>
       <CommandInput placeholder="Jump to a workspace or run an action" />
-      <CommandList>
+      <CommandList className="max-h-[min(400px,60dvh)]">
         <CommandEmpty>No results.</CommandEmpty>
-        <CommandGroup heading="Workspaces">
-          {workspaces.map((w) => (
-            <CommandItem
-              key={w.id}
-              value={`${w.title} ${w.branch} ${w.slug} ${w.id}`}
-              onSelect={() => {
-                closeDialog("palette");
-                void navigate({ to: "/w/$workspaceId", params: { workspaceId: w.id } });
-              }}
-            >
-              <span className="truncate">{w.title}</span>
-              <span className="truncate text-xs text-muted-foreground">{w.branch}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-        <CommandGroup heading="Actions">
-          {actions
-            .filter((a) => a.id !== "palette")
-            .map((a) => (
+        {order.all.length > 0 && (
+          <CommandGroup heading="Workspaces">
+            {order.all.map((w) => (
               <CommandItem
-                key={a.id}
-                value={a.label}
+                key={w.id}
+                value={`workspace:${w.id}`}
+                keywords={[w.title, w.branch, w.slug]}
                 onSelect={() => {
                   closeDialog("palette");
-                  runAction(a.id);
+                  if (isPhone) setPhonePane("chat");
+                  void navigate({ to: "/w/$workspaceId", params: { workspaceId: w.id } });
                 }}
               >
-                {a.label}
-                <CommandShortcut>{formatCombo(a.key, mac)}</CommandShortcut>
+                <StatusIcon workspace={w} />
+                <span className="min-w-0 truncate">{w.title}</span>
+                <span className="ml-auto min-w-0 truncate font-mono text-xs text-muted-foreground">
+                  {w.branch} · {w.slug}
+                </span>
               </CommandItem>
             ))}
-        </CommandGroup>
+          </CommandGroup>
+        )}
+        {actions.some((a) => a.id !== "palette") && (
+          <CommandGroup heading="Actions">
+            {actions
+              .filter((a) => a.id !== "palette")
+              .map((a) => (
+                <CommandItem
+                  key={a.id}
+                  value={`action:${a.id}`}
+                  keywords={[a.label]}
+                  onSelect={() => {
+                    closeDialog("palette");
+                    runAction(a.id);
+                  }}
+                >
+                  {a.label}
+                  <CommandShortcut>{formatCombo(a.key, mac)}</CommandShortcut>
+                </CommandItem>
+              ))}
+          </CommandGroup>
+        )}
       </CommandList>
-    </CommandDialog>
+    </>
   );
 }

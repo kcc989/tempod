@@ -7,10 +7,13 @@ pub mod client;
 pub mod image_policy;
 pub mod keymap;
 pub mod links;
+pub mod logging;
 pub mod markdown;
 pub mod menus;
 pub mod platform;
+pub mod storage;
 pub mod stores;
+pub mod update;
 pub mod url_scheme;
 pub mod views;
 

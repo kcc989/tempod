@@ -1,12 +1,13 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/ui/components/ui/dialog";
-import { Label } from "~/ui/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "~/ui/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
-import { useTheme } from "~/ui/hooks/useTheme";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
-import { isMacPlatform, formatRow, SHORTCUT_ROWS } from "~/ui/lib/shortcuts";
-import { isThemePreference } from "~/ui/lib/theme";
 import { openDialog, type SettingsTab } from "~/ui/state/workspace-ui";
+import { AppearanceTab } from "./settings/AppearanceTab";
+import { DevicesTab } from "./settings/DevicesTab";
+import { LoginsTab } from "./settings/LoginsTab";
+import { NotificationsTab } from "./settings/NotificationsTab";
+import { ProjectTab } from "./settings/ProjectTab";
+import { ShortcutsTab } from "./settings/ShortcutsTab";
 
 const TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
   { id: "logins", label: "Logins" },
@@ -17,76 +18,65 @@ const TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
   { id: "devices", label: "Devices" },
 ];
 
-/** REGION D placeholder: Settings (⌥,). Args: tab and projectId. */
+const isSettingsTab = (v: string): v is SettingsTab => TABS.some((t) => t.id === v);
+
+/** ⌘Enter submits the form that holds the focus (each tab has its own forms). */
+const submitFocusedForm = () => {
+  const el = globalThis.document?.activeElement;
+  const form = el instanceof HTMLElement ? el.closest("form") : null;
+  form?.requestSubmit();
+};
+
+/** 04, Settings (⌥,). Args: the tab and the project for the Project tab. */
 export function SettingsDialog() {
   const { open, args, onOpenChange } = useDialog("settings");
   const tab = args?.tab ?? "logins";
+  const projectId = args?.projectId;
+  const go = (next: SettingsTab, nextProject: string | undefined = projectId) =>
+    openDialog({ kind: "settings", tab: next, ...(nextProject ? { projectId: nextProject } : {}) });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl" aria-describedby={undefined}>
+      <DialogContent
+        className="h-[min(44rem,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)] sm:max-w-3xl"
+        onSubmitShortcut={submitFocusedForm}
+      >
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
+          <DialogDescription className="sr-only">Logins, project settings and preferences.</DialogDescription>
         </DialogHeader>
-        <Tabs
-          value={tab}
-          onValueChange={(v) =>
-            openDialog({
-              kind: "settings",
-              tab: v as SettingsTab,
-              ...(args?.projectId ? { projectId: args.projectId } : {}),
-            })
-          }
-        >
-          <TabsList variant="line" className="w-full justify-start">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.id} value={t.id}>
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value="appearance">
-            <Appearance />
-          </TabsContent>
-          <TabsContent value="shortcuts">
-            <Shortcuts />
-          </TabsContent>
-        </Tabs>
+        {open && (
+          <Tabs value={tab} onValueChange={(v) => isSettingsTab(v) && go(v)} className="min-h-0 gap-3">
+            <TabsList variant="line" aria-label="Settings" className="w-full shrink-0 justify-start overflow-x-auto">
+              {TABS.map((t) => (
+                <TabsTrigger key={t.id} value={t.id}>
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <TabsContent value="logins">
+                <LoginsTab />
+              </TabsContent>
+              <TabsContent value="project">
+                <ProjectTab projectId={projectId} onProjectChange={(id) => go("project", id)} />
+              </TabsContent>
+              <TabsContent value="appearance">
+                <AppearanceTab />
+              </TabsContent>
+              <TabsContent value="notifications">
+                <NotificationsTab />
+              </TabsContent>
+              <TabsContent value="shortcuts">
+                <ShortcutsTab />
+              </TabsContent>
+              <TabsContent value="devices">
+                <DevicesTab />
+              </TabsContent>
+            </div>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Appearance() {
-  const { preference, setPreference } = useTheme();
-  return (
-    <div className="flex items-center gap-3">
-      <Label htmlFor="theme">Theme</Label>
-      <Select value={preference} onValueChange={(v) => isThemePreference(v) && setPreference(v)}>
-        <SelectTrigger id="theme">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="system">System</SelectItem>
-          <SelectItem value="light">Light</SelectItem>
-          <SelectItem value="dark">Dark</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-function Shortcuts() {
-  const mac = isMacPlatform();
-  return (
-    <table className="w-full text-sm">
-      <tbody>
-        {SHORTCUT_ROWS.map((r) => (
-          <tr key={r.action} className="border-b last:border-0">
-            <td className="py-1">{r.action}</td>
-            <td className="py-1 text-right font-mono text-xs text-muted-foreground">{formatRow(r, mac)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

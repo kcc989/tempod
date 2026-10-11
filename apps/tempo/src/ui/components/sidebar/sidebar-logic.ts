@@ -104,9 +104,6 @@ export const CHECKS_LABELS: Record<ChecksState, string> = {
   failure: "Checks failed",
 };
 
-export const prText = (w: Pick<WorkspaceSummary, "prNumber" | "prState">): string =>
-  w.prNumber === null ? "None" : `#${w.prNumber}${w.prState ? ` ${PR_STATE_LABELS[w.prState]}` : ""}`;
-
 export const isBold = (w: Pick<WorkspaceSummary, "attention">): boolean =>
   w.attention === "unread" || w.attention === "needs_input";
 
