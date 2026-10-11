@@ -33,6 +33,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Sidebar, hover card, right-click menu, History | Same |  |
 | New workspace dialog | Same | First prompt is text only, as on the web |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
+| Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model and mode pickers | Same |  |
 | Attachments, @-mentions, `/` commands | Same | Also accepts files dragged from Finder |
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |

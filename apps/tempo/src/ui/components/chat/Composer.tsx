@@ -299,7 +299,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     }
   };
 
-  const submit = () => {
+  const submit = (delivery: "queue" | "steer" = "queue") => {
     if (!sendable) return;
     const backup = { draft, mentions, reviewCommentIds, attachments };
     send.mutate(
@@ -310,6 +310,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         mentions: [...mentions],
         attachmentIds: ready.map((a) => a.attachmentId!),
         reviewCommentIds: [...reviewCommentIds],
+        delivery,
       },
       {
         onError: () => {
@@ -591,11 +592,21 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
               <Button
                 size="icon-sm"
                 aria-label={workspaceBusy ? "Queue" : "Send"}
-                onClick={submit}
+                onClick={() => submit()}
                 disabled={!sendable || send.isPending}
               >
                 <ArrowUpIcon />
               </Button>
+              {running && session.steering === true && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => submit("steer")}
+                  disabled={!sendable || send.isPending}
+                >
+                  Send now
+                </Button>
+              )}
             </div>
           </div>
         </div>

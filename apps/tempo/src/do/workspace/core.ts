@@ -416,6 +416,7 @@ export class WorkspaceCore {
       commands: parseJson(r.commandsJson, []),
       usage: parseJson(r.usageJson, {}),
       sortOrder: r.sortOrder,
+      steering: parseJson<Record<string, unknown>>(r.capabilitiesJson, {})["steering"] === true,
     };
   }
 
@@ -443,6 +444,7 @@ export class WorkspaceCore {
       seq: r.seq,
       status: r.status as Turn["status"],
       queuePos: r.queuePos,
+      steeringPending: r.steeringPending === 1,
       prompt: parseJson<TurnPrompt>(r.promptJson, {
         text: "",
         mentions: [],
@@ -471,7 +473,12 @@ export class WorkspaceCore {
   }
 
   queuedTurns(): TurnRow[] {
-    return this.db.select().from(turns).where(eq(turns.status, "queued")).orderBy(asc(turns.queuePos)).all();
+    return this.db
+      .select()
+      .from(turns)
+      .where(and(eq(turns.status, "queued"), eq(turns.steeringPending, 0)))
+      .orderBy(asc(turns.queuePos))
+      .all();
   }
 
   nextTurnSeq(): number {
@@ -549,7 +556,7 @@ export class WorkspaceCore {
     return item;
   }
 
-  updateItem(id: string, patch: { status?: ItemStatus; content?: unknown }): Item | null {
+  updateItem(id: string, patch: { status?: ItemStatus; content?: unknown; turnId?: string }): Item | null {
     const row = this.ctx.storage.transactionSync(() => {
       const existing = this.itemRow(id);
       if (!existing) return null;
@@ -559,6 +566,7 @@ export class WorkspaceCore {
         .set({
           ...(patch.status ? { status: patch.status } : {}),
           ...(patch.content !== undefined ? { contentJson: JSON.stringify(patch.content) } : {}),
+          ...(patch.turnId !== undefined ? { turnId: patch.turnId } : {}),
           rev,
           updatedAt: Date.now(),
         })

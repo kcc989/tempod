@@ -1,6 +1,7 @@
 //! Views (07, Window layout and components). Regions follow 04.
 pub mod changes;
 pub mod chat;
+pub mod chat_model;
 pub mod checks;
 pub mod composer;
 pub mod dialogs;
@@ -16,6 +17,7 @@ pub mod sign_in;
 pub mod terminal;
 pub mod tokens;
 pub mod top_bar;
+pub mod workspace;
 
 use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::v_flex;

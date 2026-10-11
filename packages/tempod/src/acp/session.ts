@@ -354,17 +354,20 @@ export class AgentSession {
     model?: string | null;
     acpSessionId?: string | null;
   }): Promise<SessionStartResult> {
-    const init = await this.request<{ protocolVersion?: unknown; agentCapabilities?: unknown }>(
-      "initialize",
-      {
-        protocolVersion: 1,
-        clientCapabilities: CLIENT_CAPABILITIES,
-        clientInfo: { name: "tempod", version: VERSION },
-      },
-    );
+    const init = await this.request<{
+      protocolVersion?: unknown;
+      agentCapabilities?: unknown;
+      _meta?: unknown;
+    }>("initialize", {
+      protocolVersion: 1,
+      clientCapabilities: CLIENT_CAPABILITIES,
+      clientInfo: { name: "tempod", version: VERSION },
+    });
     if (init.protocolVersion !== 1)
       throw new Error(`unsupported ACP protocol version ${String(init.protocolVersion)}`);
     this.capabilities = isObj(init.agentCapabilities) ? structuredClone(init.agentCapabilities) : {};
+    const steering = isObj(init._meta) ? init._meta["steering"] : undefined;
+    this.capabilities["steering"] = isObj(steering) && steering["supported"] === true;
     let reloaded = false;
     let handoff = false;
     const wanted = p.acpSessionId ?? null;
@@ -497,6 +500,36 @@ export class AgentSession {
         (e: unknown) => void this.onPromptError(turn, e),
       );
     return true;
+  }
+
+  private steering = new Map<string, Promise<{ outcome: "injected" | "promptRequired" | "unsupported" }>>();
+
+  steer(
+    turnId: string,
+    messageId: string,
+    content: ReadonlyArray<Record<string, unknown>>,
+  ): Promise<{ outcome: "injected" | "promptRequired" | "unsupported" }> {
+    const previous = this.steering.get(messageId);
+    if (previous) return previous;
+    if (this.capabilities["steering"] !== true) return Promise.resolve({ outcome: "unsupported" });
+    if (!this.turn || this.turn.ended || this.turn.turnId !== turnId)
+      return Promise.resolve({ outcome: "promptRequired" });
+    const request = this.request<{ outcome?: unknown }>(
+      "_session/steering",
+      {
+        sessionId: this.acpSessionId,
+        prompt: content,
+        _meta: { steering: { idleBehavior: "promptRequired" } },
+      },
+      30_000,
+    ).then((result) => {
+      if (result.outcome !== "injected" && result.outcome !== "promptRequired")
+        throw new TempoError("INTERNAL", "The agent returned an invalid steering result.");
+      return { outcome: result.outcome } as { outcome: "injected" | "promptRequired" };
+    });
+    this.steering.set(messageId, request);
+    if (this.steering.size > 50) this.steering.delete(this.steering.keys().next().value!);
+    return request;
   }
 
   private async onPromptError(turn: Turn, e: unknown): Promise<void> {

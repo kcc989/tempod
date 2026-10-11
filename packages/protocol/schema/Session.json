@@ -59,6 +59,16 @@
           "enum": ["Infinity", "-Infinity", "NaN"]
         }
       ]
+    },
+    "steering": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

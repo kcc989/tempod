@@ -315,6 +315,62 @@ describe("session.prompt", () => {
   );
 });
 
+describe("session.steer", () => {
+  test(
+    "injects once into the active turn, preserves the prompt lifecycle and rejects stale targets",
+    async () => {
+      const { c, start, prompt, ended, calls } = await setup();
+      const result = await start("s1", {}, { FAKE_STEERING: "1" });
+      expect(result.capabilities["steering"]).toBe(true);
+      await prompt("s1", "t1", "slow");
+      const input = {
+        sessionId: "s1",
+        turnId: "t1",
+        messageId: "m1",
+        content: [{ type: "text", text: "Use the smaller change" }],
+      };
+      expect(await c.ok<{ outcome: string }>("session.steer", input)).toEqual({ outcome: "injected" });
+      expect(await c.ok<{ outcome: string }>("session.steer", input)).toEqual({ outcome: "injected" });
+      expect(
+        calls()
+          .split("\n")
+          .filter((l) => l.includes(" steer ")),
+      ).toHaveLength(1);
+      expect(c.of("turn.ended")).toHaveLength(0);
+      expect(
+        await c.ok<{ outcome: string }>("session.steer", { ...input, turnId: "old", messageId: "m2" }),
+      ).toEqual({ outcome: "promptRequired" });
+      await c.ok("session.cancel", { sessionId: "s1", turnId: "t1" });
+      expect((await ended("t1")).stopReason).toBe("cancelled");
+    },
+    T,
+  );
+
+  test(
+    "does not call an unsupported adapter and uses host-owned fallback when the adapter settles",
+    async () => {
+      const { c, start, prompt, calls } = await setup();
+      await start("s1");
+      await prompt("s1", "t1", "slow");
+      const input = {
+        sessionId: "s1",
+        turnId: "t1",
+        messageId: "m1",
+        content: [{ type: "text", text: "Follow up" }],
+      };
+      expect(await c.ok<{ outcome: string }>("session.steer", input)).toEqual({ outcome: "unsupported" });
+      expect(calls()).not.toContain(" steer ");
+      await start("s2", {}, { FAKE_STEERING: "1", FAKE_STEERING_IDLE: "1" });
+      await prompt("s2", "t2", "slow");
+      expect(
+        await c.ok<{ outcome: string }>("session.steer", { ...input, sessionId: "s2", turnId: "t2" }),
+      ).toEqual({ outcome: "promptRequired" });
+      expect(calls()).toContain('"idleBehavior":"promptRequired"');
+    },
+    T,
+  );
+});
+
 describe("session.setMode, session.setConfig, session.close", () => {
   test(
     "mode and config go to the agent; both refuse a busy session; close ends the agent quietly",

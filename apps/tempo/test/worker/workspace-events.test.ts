@@ -2,6 +2,7 @@ import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test"
 import { HANDOFF_FIRST_LINE, HANDOFF_MAX_CHARS, newId, revertNote, type TempodEvent } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
+import { recoverSteering } from "../../src/do/workspace/queue.ts";
 import {
   DEFAULT_EFFECTIVE,
   FakeTempod,
@@ -137,6 +138,100 @@ const endTurn = async (
 
 const waitReady = (ctx: Ctx) =>
   waitFor(async () => (await wsRow(ctx.stub)).state === "ready", 5000, "state ready");
+
+describe("live steering", () => {
+  const send = (ctx: RunningCtx) =>
+    ctx.stub.sendPrompt({
+      sessionId: ctx.sessionId,
+      text: "Use the smaller change",
+      mentions: [],
+      attachmentIds: [],
+      reviewCommentIds: [],
+      delivery: "steer",
+    });
+  const enable = (ctx: RunningCtx) =>
+    sql(
+      ctx.stub,
+      "UPDATE sessions SET capabilities_json = ? WHERE id = ?",
+      JSON.stringify({ steering: true }),
+      ctx.sessionId,
+    );
+
+  it(
+    "delivers to the running turn and moves its durable user message without cancelling",
+    async () => {
+      const ctx = await runningTurn();
+      await enable(ctx);
+      ctx.tempod.on("session.steer", () => ({ outcome: "injected" }));
+      const result = unwrap(await send(ctx));
+      expect(result.id).toBe(ctx.turnId);
+      expect(ctx.tempod.requestsOf("session.cancel")).toHaveLength(0);
+      expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(1);
+      expect(ctx.tempod.requestsOf("session.steer")[0].turnId).toBe(ctx.turnId);
+      const messages = await sql(ctx.stub, "SELECT * FROM items WHERE kind = 'user_message' ORDER BY rev");
+      expect(messages).toHaveLength(2);
+      expect(messages[1]!.turn_id).toBe(ctx.turnId);
+      expect((await detail(ctx.stub)).queue).toEqual([]);
+    },
+    T,
+  );
+
+  it(
+    "keeps unsupported and settled steering messages queued",
+    async () => {
+      const ctx = await runningTurn();
+      const unsupported = unwrap(await send(ctx));
+      expect(unsupported.status).toBe("queued");
+      expect(ctx.tempod.requestsOf("session.steer")).toHaveLength(0);
+      await enable(ctx);
+      ctx.tempod.on("session.steer", () => ({ outcome: "promptRequired" }));
+      const settled = unwrap(await send(ctx));
+      expect(settled.status).toBe("queued");
+      expect((await turnRow(ctx.stub, settled.id))!.steering_pending).toBe(0);
+      expect((await detail(ctx.stub)).queue).toEqual([unsupported.id, settled.id]);
+    },
+    T,
+  );
+
+  it(
+    "does not replay a message when steering acknowledgement fails",
+    async () => {
+      const ctx = await runningTurn();
+      await enable(ctx);
+      ctx.tempod.on("session.steer", () => {
+        throw new Error("lost acknowledgement");
+      });
+      expect((await send(ctx)).ok).toBe(false);
+      const failed = (await sql(ctx.stub, "SELECT * FROM turns WHERE status = 'failed'"))[0]!;
+      expect(failed.error_detail).toContain("could not be confirmed");
+      expect((await detail(ctx.stub)).queue).toEqual([]);
+      expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(1);
+    },
+    T,
+  );
+
+  it(
+    "recovers an interrupted steering attempt as uncertain rather than replaying it",
+    async () => {
+      const ctx = await runningTurn();
+      const queued = unwrap(await send(ctx));
+      await sql(ctx.stub, "UPDATE turns SET steering_pending = 1 WHERE id = ?", queued.id);
+      await runInDurableObject(ctx.stub, (instance: WorkspaceDO) =>
+        recoverSteering(internals(instance).core),
+      );
+      const recovered = (await turnRow(ctx.stub, queued.id))!;
+      expect(recovered.status).toBe("failed");
+      expect(recovered.steering_pending).toBe(0);
+      expect(recovered.error_detail).toContain("could not be confirmed");
+      const notice = (
+        await sql(ctx.stub, "SELECT * FROM items WHERE turn_id = ? AND kind = 'notice'", queued.id)
+      )[0]!;
+      expect(notice.content_json).toContain("could not be confirmed");
+      expect((await detail(ctx.stub)).queue).toEqual([]);
+    },
+    T,
+  );
+});
 
 /** Sends a prompt and waits until tempod receives it. Returns the turn id. */
 const prompt = async (

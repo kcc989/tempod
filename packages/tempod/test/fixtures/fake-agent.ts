@@ -100,6 +100,7 @@ class FakeAgent implements Agent {
     record("initialize");
     return {
       protocolVersion: 1,
+      _meta: { steering: { supported: env["FAKE_STEERING"] === "1" } },
       agentCapabilities: {
         loadSession: env["FAKE_LOAD"] !== "0",
         promptCapabilities: { image: true },
@@ -110,6 +111,16 @@ class FakeAgent implements Agent {
 
   authenticate(): AuthenticateResponse {
     return {};
+  }
+
+  async extMethod(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (method !== "_session/steering" || env["FAKE_STEERING"] !== "1")
+      throw RequestError.methodNotFound(method);
+    record(`steer ${JSON.stringify(params)}`);
+    const sessionId = params["sessionId"] as string;
+    const prompt = params["prompt"] as Array<{ text?: string }>;
+    await this.text(sessionId, `Steered: ${prompt.map((p) => p.text ?? "").join("")}`);
+    return { outcome: env["FAKE_STEERING_IDLE"] === "1" ? "promptRequired" : "injected" };
   }
 
   newSession(): NewSessionResponse {

@@ -102,6 +102,7 @@ describe("contract", () => {
         "script.stop",
         "session.start",
         "session.prompt",
+        "session.steer",
         "session.cancel",
         "session.setMode",
         "session.setConfig",

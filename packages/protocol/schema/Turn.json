@@ -41,6 +41,16 @@
         }
       ]
     },
+    "steeringPending": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "prompt": {
       "$ref": "TurnPrompt.json"
     },

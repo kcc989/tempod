@@ -7,10 +7,11 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 ## Current state
 
 - **Continuation is active.** The prior loops stopped at the account usage limit; their interim code is now being checked locally on macOS.
-- **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 713 Worker, 294 UI logic, 14 component, 201 protocol, 109 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
-- **Native baseline:** `cargo test --workspace` (167 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac, including the runtime wiring.
-- **Image verification:** `bun run test:tempod:container` passes on the shared Colima engine: 112 tests, including uid/gid 1000, tini as PID 1, adapter/tool presence and orphan cleanup. The production image is 1,715,652,650 bytes (under 6 GB).
-- **Remote CI and deployment:** GitHub CI passed `408f985` and the file-link follow-up `fd92d37` (4m13s). The native sign-in follow-up is awaiting its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
+- **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 717 Worker, 294 UI logic, 16 component, 201 protocol, 111 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
+- **Native baseline:** `cargo test --workspace` (176 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac. Workspace channel/cache/reconnect fixtures and headless chat, queue, steering and permission tests are included.
+- **Image verification:** the prior full image run passed 112 tests, including uid/gid 1000, tini as PID 1, adapter/tool presence and orphan cleanup. The final daemon production image builds at 1,715,653,040 bytes (under 6 GB). Current Linux test evidence is recorded below.
+- **Steering image tests:** 114 tests pass in the full derived Linux image with current daemon/protocol source and tests mounted read-only. The first image run captured older test fixtures while edits continued and failed the two new steering tests; the final run uses the corrected fixtures. This is local fixture evidence, not authenticated adapter acceptance.
+- **Remote CI and deployment:** GitHub CI passed `408f985`, `fd92d37` and native sign-in `d59b273` (4m10s). The workspace/steering follow-up needs its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
 
 ## Continuation changes
 
@@ -23,7 +24,9 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 - Added owner-approved pinned `tini` to launch the daemon and reap orphaned children. Updated 01; image tests check uid, PID 1 and orphan reaping.
 - Added owner-approved pinned `happy-dom` and `@testing-library/react`, with 14 passing component tests for permission keyboard controls, focus, read-only chats, saved answers, safe Markdown and file links.
 - Fixed workspace file links in both clients: decoded filenames work; malformed escapes, invalid UTF-8, controls and invalid path segments are ignored. Spec 04 and 07 now state these rules.
-- Connected the Mac app to the real two-thread I/O runtime. Wake events reconnect its channels; unauthorized and incompatible-client signals reach AppState. Added native device sign-in, saved-session validation, server sign-out and channel cleanup. The hub channel now feeds the sidebar and Dock count. Workspace channels and views still need wiring.
+- Connected the Mac app to the real two-thread I/O runtime. Wake events reconnect its channels; unauthorized and incompatible-client signals reach AppState. Added native device sign-in, saved-session validation, server sign-out and channel cleanup. The hub channel now feeds the sidebar and Dock count.
+- Connected native workspace channels, revision resume, 60-second hidden-store cleanup, chat tabs, draft persistence, prompt/Stop/plan-mode/permission RPCs and rich transcript rows. Static transcript spike windows still work. Headless tests cover successful and failed sends, queued edits/deletion/reordering, steering dispatch and permission keyboard replies.
+- Added owner-requested live steering in web and Mac: Enter queues; supported running chats also offer Send now. The ACP v1 extension is capability-gated and uses host-owned idle fallback. A durable reservation prevents automatic duplicate delivery after an uncertain acknowledgement or DO restart. Specs 01–04 and 07 describe the new fields and behavior.
 
 - Added GPUI Kit headless tests with its existing pinned test-support feature. Eight app tests cover saved-session validation, device approval/denial, cancellation, 401 cleanup, update requirements, server sign-out failure and Enter in the connect form. Tokens use a memory store in tests; real Keychain/browser acceptance remains open.
 
@@ -42,7 +45,7 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 | Native API for the Mac app | 07 | 90–100% | `/api/v1/*`, bearer WebSocket auth, `/downloads/mac`. |
 | Container image and deploy | 01, 05 | 85% | Dockerfile, versions.json, Alchemy + wrangler deploy. |
 | Web UI | 04 | about 30% | Foundation done; most regions are in progress. |
-| Tempo for Mac | 07 | about 20% | Protocol generation done; app foundation; device sign-in and hub sidebar wired locally. |
+| Tempo for Mac | 07 | partial | Device sign-in, hub/workspace channels and chat/queue/steering actions wired locally. Native review/process panels and acceptance remain. |
 | Private previews + Browser Run | 00 Q3, 01 | design | Research done; decision brief not written. |
 | Spikes S1–S16, acceptance tests AT-1–AT-37 | 06 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
 
@@ -148,11 +151,11 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] Empty, loading and error states per region, and phone variants (55%).
 
 **Tempo for Mac (07)**
-- [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in and the hub store are wired; workspace channel/store wiring remains below.
+- [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in, hub and workspace stores are wired. Manual and hosted acceptance remain.
 - [ ] Sign-in and first run: device flow and saved-token checks are wired and tested headlessly; real browser approval, Keychain and update download acceptance remain.
-- [ ] Live state and reconnects: the hub feeds the sidebar and Dock count; workspace channels, hidden-store timers, reconnect bars and notifications remain.
+- [ ] Live state and reconnects: hub and workspace channels, revision resume, hidden-store timers and reconnect bars are wired and tested locally. Notifications and manual acceptance remain.
 - [ ] Window layout and components (15%).
-- [ ] Transcript, composer and permissions (15%).
+- [ ] Transcript, composer and permissions: chat tabs, rich text/tool/permission rows, drafts, Send/Queue/Send now/Stop, queued edit/delete/drag, plan mode and permission replies are wired. Model pickers, attachment/mention/slash input, full tool content, close-chat confirmation, transcript shortcuts, performance and manual acceptance remain.
 - [ ] Changes, diff view and comments (2%).
 - [ ] `tempo-terminal`, a fork of gpui-terminal (5%); scripts and previews.
 - [ ] macOS integration (35%): notifications, Dock badge, URL scheme, window state.

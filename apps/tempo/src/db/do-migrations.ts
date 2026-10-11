@@ -234,6 +234,13 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
 )`,
     ],
   },
+  {
+    tag: "0001_steering_pending",
+    when: 1791748800000,
+    statements: [
+      "ALTER TABLE turns ADD COLUMN steering_pending INTEGER NOT NULL DEFAULT 0 CHECK (steering_pending IN (0, 1))",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

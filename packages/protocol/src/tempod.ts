@@ -265,6 +265,16 @@ export const TEMPOD_REQUESTS = {
     30_000,
   ),
   "session.cancel": req(Schema.Struct({ sessionId: Schema.String, turnId: Schema.String }), Empty, 20_000),
+  "session.steer": req(
+    Schema.Struct({
+      sessionId: Schema.String,
+      turnId: Schema.String,
+      messageId: Schema.String,
+      content: Schema.Array(ContentBlock),
+    }),
+    Schema.Struct({ outcome: Schema.Literals(["injected", "promptRequired", "unsupported"]) }),
+    30_000,
+  ),
   "session.setMode": req(Schema.Struct({ sessionId: Schema.String, modeId: Schema.String }), Empty, 30_000),
   "session.setConfig": req(
     Schema.Struct({

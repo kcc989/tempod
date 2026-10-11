@@ -147,6 +147,19 @@ export class SessionManager {
     if (s) await s.cancel(p.turnId);
   }
 
+  steer(p: {
+    sessionId: string;
+    turnId: string;
+    messageId: string;
+    content: ReadonlyArray<Record<string, unknown>>;
+  }) {
+    if (this.refusePrompts) throw new TempoError("CONTAINER_NOT_READY", "tempod is stopping.");
+    const session = this.sessions.get(p.sessionId);
+    return session
+      ? session.steer(p.turnId, p.messageId, p.content)
+      : Promise.resolve({ outcome: "promptRequired" as const });
+  }
+
   async setMode(p: { sessionId: string; modeId: string }): Promise<void> {
     const s = this.live(p.sessionId);
     if (s.busy) throw new TempoError("SESSION_BUSY");

@@ -52,6 +52,10 @@ impl AppState {
             .map(|state| state.0.clone())
     }
 
+    pub fn client(&self) -> Option<tempo_client::Client> {
+        self.session.as_ref().map(|session| session.client.clone())
+    }
+
     pub fn runtime(&self) -> &ClientRuntime {
         &self.runtime
     }
@@ -78,11 +82,14 @@ impl AppState {
                 .retain(|w| w.read(cx).workspace_id != evicted);
         }
         for other in &self.workspaces {
-            other.update(cx, |w, _| {
-                w.hidden_since.get_or_insert_with(std::time::Instant::now);
-            });
+            other.update(cx, |w, cx| w.hide(cx));
         }
-        store.update(cx, |w, _| w.hidden_since = None);
+        if let Some(client) = self.client() {
+            store.update(cx, |w, cx| w.show(&client, cx));
+        }
+        let workspace_id = id.to_string();
+        cx.global_mut::<crate::storage::Local>()
+            .update_state(|state| state.last_workspace = Some(workspace_id));
         self.workspaces.insert(0, store.clone());
         self.active_workspace = Some(id.to_string());
         cx.notify();
@@ -158,6 +165,14 @@ impl AppState {
                             .update(cx, |hub, cx| hub.connect(&session.client, cx));
                         state.session = Some(session);
                         state.auth = AuthState::SignedIn;
+                        if let Some(id) = cx
+                            .global::<crate::storage::Local>()
+                            .state()
+                            .last_workspace
+                            .clone()
+                        {
+                            state.show_workspace(&id, cx);
+                        }
                     }
                     cx.notify();
                 }
@@ -322,14 +337,22 @@ mod auth_tests {
                         std::thread::sleep(Duration::from_millis(2));
                         continue;
                     };
+                    stream.set_nonblocking(false).unwrap();
                     stream
                         .set_read_timeout(Some(Duration::from_secs(2)))
                         .unwrap();
                     let mut head = Vec::new();
                     loop {
                         let mut bytes = [0; 4096];
-                        let Ok(n) = stream.read(&mut bytes) else {
-                            break;
+                        let n = match stream.read(&mut bytes) {
+                            Ok(n) => n,
+                            Err(error) => {
+                                requests
+                                    .lock()
+                                    .unwrap()
+                                    .push(format!("read-error:{:?}", error.kind()));
+                                break;
+                            }
                         };
                         if n == 0 {
                             break;
@@ -384,7 +407,12 @@ mod auth_tests {
                         "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                         body.len()
                     );
-                    let _ = stream.write_all(reply.as_bytes());
+                    if let Err(error) = stream.write_all(reply.as_bytes()) {
+                        requests
+                            .lock()
+                            .unwrap()
+                            .push(format!("write-error:{:?}", error.kind()));
+                    }
                 }
             });
             Self {
@@ -543,7 +571,9 @@ mod auth_tests {
         state.read_with(cx, |state, _| {
             assert_eq!(
                 state.auth,
-                error_state(Some(server.url.clone()), &tempo_client::SignInError::Denied)
+                error_state(Some(server.url.clone()), &tempo_client::SignInError::Denied),
+                "requests: {:?}",
+                server.paths.lock().unwrap()
             )
         });
     }

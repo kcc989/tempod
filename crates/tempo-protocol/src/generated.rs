@@ -3296,6 +3296,8 @@ pub struct SearchFilesItem {
 pub struct SendPromptIn {
     #[serde(rename = "attachmentIds")]
     pub attachment_ids: ::std::vec::Vec<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub delivery: ::std::option::Option<SendPromptInDelivery>,
     pub mentions: ::std::vec::Vec<Mention>,
     #[serde(rename = "reviewCommentIds")]
     pub review_comment_ids: ::std::vec::Vec<::std::string::String>,
@@ -3304,6 +3306,57 @@ pub struct SendPromptIn {
     pub text: ::std::string::String,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`SendPromptInDelivery`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum SendPromptInDelivery {
+    #[serde(rename = "queue")]
+    Queue,
+    #[serde(rename = "steer")]
+    Steer,
+}
+impl ::std::fmt::Display for SendPromptInDelivery {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Queue => f.write_str("queue"),
+            Self::Steer => f.write_str("steer"),
+        }
+    }
+}
+impl ::std::str::FromStr for SendPromptInDelivery {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "queue" => Ok(Self::Queue),
+            "steer" => Ok(Self::Steer),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for SendPromptInDelivery {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for SendPromptInDelivery {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`Session`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3323,6 +3376,8 @@ pub struct Session {
     #[serde(rename = "sortOrder")]
     pub sort_order: f64,
     pub status: SessionStatus,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub steering: ::std::option::Option<bool>,
     pub title: ::std::string::String,
     pub usage: Usage,
 }
@@ -4132,6 +4187,11 @@ pub struct Turn {
     )]
     pub started_at: ::std::option::Option<f64>,
     pub status: TurnStatus,
+    #[serde(
+        rename = "steeringPending",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub steering_pending: ::std::option::Option<bool>,
     #[serde(
         rename = "stopReason",
         deserialize_with = "::std::option::Option::deserialize"

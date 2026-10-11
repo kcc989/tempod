@@ -30,7 +30,7 @@ import { applyTempodEvent } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { previewFetch } from "./preview.ts";
-import { finishTurn, runQueue } from "./queue.ts";
+import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
 import { makeMethods, type MethodInput, type Methods } from "./rpc.ts";
 import { OpRunner } from "./runner.ts";
 import { closeOpenRuns } from "./scripts.ts";
@@ -102,6 +102,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     void ctx.blockConcurrencyWhile(async () => {
       await runMigrations(core.db, WORKSPACE_MIGRATIONS);
       if (core.wsOrNull()) {
+        recoverSteering(core);
         this.runner.recover();
         await this.armAlarm();
       }

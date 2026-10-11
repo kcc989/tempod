@@ -83,6 +83,7 @@ export const turns = sqliteTable("turns", {
   sessionId: text("session_id").notNull(),
   seq: integer("seq").notNull(),
   queuePos: integer("queue_pos"),
+  steeringPending: integer("steering_pending").notNull().default(0),
   status: text("status").notNull(),
   promptJson: text("prompt_json").notNull(),
   stopReason: text("stop_reason"),

@@ -29,6 +29,17 @@
       "items": {
         "type": "string"
       }
+    },
+    "delivery": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["queue", "steer"]
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["workspaceId", "sessionId", "text", "mentions", "attachmentIds", "reviewCommentIds"],

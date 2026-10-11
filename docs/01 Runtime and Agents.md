@@ -354,7 +354,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 1. The WorkspaceDO inserts the session row with status `starting`.
 2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, acpSessionId: null}`.
 3. `tempod` spawns the adapter as user `tempo` with cwd `/workspace` and the given env.
-4. `tempod` sends `initialize`. It checks `agentCapabilities` and stores them.
+4. `tempod` sends `initialize`. It checks `agentCapabilities` and stores them. It also reads top-level `_meta.steering.supported`, normalizes it to the boolean `capabilities.steering`, and exposes that flag as `Session.steering`. Missing support means false. Steering uses the ACP v1 `_session/steering` extension, not a concurrent `session/prompt`.
 5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright]}` and stores the returned ACP session id, modes and config options.
 6. If the requested mode differs from the current one, `tempod` sends `session/set_mode`. If a model is set, it sends `session/set_config_option` for the `model` option.
 7. `tempod` returns the `session.start` result: `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded: false, handoff: false}`.

@@ -270,6 +270,7 @@ export class Tempod {
         await this.agents.cancel(p);
         return {};
       },
+      "session.steer": (p) => this.agents.steer(p),
       "session.setMode": async (p) => {
         await this.agents.setMode(p);
         return {};

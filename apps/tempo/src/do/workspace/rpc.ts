@@ -43,6 +43,7 @@ import {
   ensureSessionLive,
   finishTurn,
   requireCredential,
+  steerQueued,
 } from "./queue.ts";
 import type { OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
@@ -89,6 +90,14 @@ const notArchived = (core: WorkspaceCore) => {
 const sessionBusy = (core: WorkspaceCore, sessionId: string) => {
   const running = core.runningTurn();
   if (running && running.sessionId === sessionId) throw new TempoError("SESSION_BUSY");
+  if (
+    core.db
+      .select()
+      .from(turns)
+      .where(and(eq(turns.sessionId, sessionId), eq(turns.steeringPending, 1)))
+      .get()
+  )
+    throw new TempoError("SESSION_BUSY");
 };
 
 const branchInUse = async (core: WorkspaceCore, branch: string): Promise<boolean> => {
@@ -379,7 +388,14 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       return {};
     },
 
-    sendPrompt: async ({ sessionId, text, mentions, attachmentIds, reviewCommentIds }): Promise<Turn> => {
+    sendPrompt: async ({
+      sessionId,
+      text,
+      mentions,
+      attachmentIds,
+      reviewCommentIds,
+      delivery,
+    }): Promise<Turn> => {
       notArchived(core);
       const session = core.sessionRow(sessionId);
       if (session.status === "closed")
@@ -454,6 +470,10 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         },
       });
       core.broadcastDetailSoon();
+      if (delivery === "steer") {
+        const running = await steerQueued(core, core.turnRow(turnId));
+        if (running) return running;
+      }
       // A prompt in sleeping, error or stopping (03, sendPrompt step 5): stopping wakes after the sleep op.
       rt.ensureAwake();
       core.kickQueue();
@@ -462,6 +482,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
 
     cancelTurn: async ({ turnId }) => {
       const turn = core.turnRow(turnId);
+      if (turn.steeringPending) throw new TempoError("TURN_NOT_ACTIVE");
       if (turn.status === "queued") {
         finishTurn(core, turnId, "cancelled", { stopReason: "cancelled" });
         core.broadcastDetailSoon();
@@ -478,7 +499,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
 
     editQueuedTurn: async ({ turnId, text }): Promise<Turn> => {
       const turn = core.turnRow(turnId);
-      if (turn.status !== "queued") throw new TempoError("TURN_NOT_QUEUED");
+      if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
       const prompt = { ...parseJson<Record<string, unknown>>(turn.promptJson, {}), text };
       const updated = core.updateTurn(turnId, { promptJson: JSON.stringify(prompt) });
       const item = core.db
@@ -495,7 +516,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
 
     deleteQueuedTurn: async ({ turnId }) => {
       const turn = core.turnRow(turnId);
-      if (turn.status !== "queued") throw new TempoError("TURN_NOT_QUEUED");
+      if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
       core.ctx.storage.transactionSync(() => {
         core.db.delete(items).where(eq(items.turnId, turnId)).run();
         core.db.delete(turns).where(eq(turns.id, turnId)).run();

@@ -124,6 +124,7 @@ export const API = {
       mentions: Schema.Array(Mention),
       attachmentIds: Schema.Array(S),
       reviewCommentIds: Schema.Array(S),
+      delivery: Schema.optional(Schema.Literals(["queue", "steer"])),
     }),
     Turn,
   ),

@@ -157,6 +157,13 @@ export function QueuedChip({
   onDrop: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  if (turn.steeringPending) {
+    return (
+      <span role="status" className="rounded-md border bg-muted/50 px-1.5 py-1 text-xs">
+        Sending now: {turn.prompt.text}
+      </span>
+    );
+  }
   const save = () => {
     if (editing !== null && editing.trim() !== "" && editing !== turn.prompt.text) onSave(editing);
     setEditing(null);

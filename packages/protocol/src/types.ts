@@ -132,6 +132,7 @@ export const Session = Schema.Struct({
   commands: Schema.Array(AvailableCommand),
   usage: Usage,
   sortOrder: Schema.Number,
+  steering: Schema.optional(Schema.Boolean),
 });
 export type Session = typeof Session.Type;
 
@@ -152,6 +153,7 @@ export const Turn = Schema.Struct({
   seq: Schema.Number,
   status: TurnStatus,
   queuePos: N(Schema.Number),
+  steeringPending: Schema.optional(Schema.Boolean),
   prompt: TurnPrompt,
   stopReason: N(Schema.String),
   errorCode: N(Schema.String),

@@ -76,6 +76,7 @@ pub struct MainWindow {
     _hub: Option<Subscription>,
     sections: Vec<SidebarSection>,
     active: Option<SharedString>,
+    live_workspaces: Vec<Entity<super::workspace::WorkspaceView>>,
 }
 
 impl MainWindow {
@@ -118,6 +119,7 @@ impl MainWindow {
             process_tab: 0,
             sections: content.sections,
             active: content.active,
+            live_workspaces: Vec::new(),
             top_bar,
             tabs,
             transcript: cx.new(|cx| TranscriptView::new(rows, cx)),
@@ -146,7 +148,23 @@ impl MainWindow {
         cx.notify();
     }
 
-    fn cycle_tab(&mut self, forward: bool, cx: &mut Context<Self>) {
+    fn live_active(&self, cx: &gpui_kit::App) -> Option<Entity<super::workspace::WorkspaceView>> {
+        let id = crate::app::AppState::try_global(cx)?
+            .read(cx)
+            .active_workspace
+            .clone()?;
+        self.live_workspaces
+            .iter()
+            .find(|v| v.read(cx).store.read(cx).workspace_id == id)
+            .cloned()
+    }
+
+    fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(view) = self.live_active(cx) {
+            view.update(cx, |view, cx| view.cycle_tab(forward, window, cx));
+            return;
+        }
+
         let n = self.tabs.len().max(1);
         self.center_tab = if forward {
             (self.center_tab + 1) % n
@@ -156,7 +174,43 @@ impl MainWindow {
         cx.notify();
     }
 
-    fn render_center(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_center(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(app) = crate::app::AppState::try_global(cx) {
+            let cached: Vec<_> = app
+                .read(cx)
+                .workspaces
+                .iter()
+                .map(|w| w.read(cx).workspace_id.clone())
+                .collect();
+            self.live_workspaces
+                .retain(|v| cached.contains(&v.read(cx).store.read(cx).workspace_id));
+            if let Some(active) = app.read(cx).active_workspace.clone() {
+                if let Some(view) = self
+                    .live_workspaces
+                    .iter()
+                    .find(|v| v.read(cx).store.read(cx).workspace_id == active)
+                {
+                    return div().size_full().child(view.clone()).into_any_element();
+                }
+                let store = app
+                    .read(cx)
+                    .workspaces
+                    .iter()
+                    .find(|w| w.read(cx).workspace_id == active)
+                    .cloned();
+                if let (Some(store), Some(client)) = (store, app.read(cx).client()) {
+                    let view = cx
+                        .new(|cx| super::workspace::WorkspaceView::new(store, client, window, cx));
+                    self.live_workspaces.push(view.clone());
+                    return div().size_full().child(view).into_any_element();
+                }
+            }
+            return div()
+                .p_4()
+                .child("Select a workspace to continue.")
+                .into_any_element();
+        }
+
         let Some(top_bar) = self.top_bar.clone() else {
             return div().size_full().into_any_element();
         };
@@ -235,6 +289,7 @@ impl Render for MainWindow {
                 crate::app::AuthState::SignedIn
             )
         {
+            self.live_workspaces.clear();
             return v_flex()
                 .size_full()
                 .bg(color(Token::Background, cx))
@@ -304,7 +359,7 @@ impl Render for MainWindow {
                 .active(self.active.clone())
                 .into_any_element()
         };
-        let center = self.render_center(cx);
+        let center = self.render_center(window, cx);
         let right = self.render_right(cx);
 
         v_flex()
@@ -322,10 +377,18 @@ impl Render for MainWindow {
                 this.panes.bottom = !this.panes.bottom;
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &NextTab, _, cx| this.cycle_tab(true, cx)))
-            .on_action(cx.listener(|this, _: &PreviousTab, _, cx| this.cycle_tab(false, cx)))
+            .on_action(
+                cx.listener(|this, _: &NextTab, window, cx| this.cycle_tab(true, window, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &PreviousTab, window, cx| this.cycle_tab(false, window, cx)),
+            )
             .on_action(cx.listener(|this, _: &FocusComposer, window, cx| {
-                this.composer.update(cx, |c, cx| c.focus(window, cx));
+                if let Some(view) = this.live_active(cx) {
+                    view.update(cx, |view, cx| view.focus_composer(window, cx));
+                } else {
+                    this.composer.update(cx, |c, cx| c.focus(window, cx));
+                }
             }))
             .on_action(|_: &Minimize, window, _| window.minimize_window())
             .on_action(|_: &Zoom, window, _| window.zoom_window())

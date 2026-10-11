@@ -275,6 +275,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     },
 
     "turns.cancel": async ({ core }) => {
+      if (core.queueBusy) throw new TempoError("WORKSPACE_BUSY");
       // Read before finishTurn, which marks the running turn's requests cancelled without telling tempod.
       const pending = core.db.select().from(permissions).where(eq(permissions.status, "pending")).all();
       const running = core.runningTurn();

@@ -8,6 +8,7 @@ import {
   type AgentId,
   type ContentBlock,
   type TurnPrompt,
+  type Turn,
 } from "@tempo/protocol";
 import {
   attachments,
@@ -310,6 +311,86 @@ const commitContent = (
  * The queue runner (03): starts the lowest queue_pos turn when the workspace is ready, setup is
  * fine, no turn runs, and no op other than housekeeping is pending or running.
  */
+export const recoverSteering = (core: WorkspaceCore): void => {
+  for (const turn of core.db.select().from(turns).where(eq(turns.steeringPending, 1)).all()) {
+    core.updateTurn(turn.id, {
+      steeringPending: 0,
+      status: "failed",
+      queuePos: null,
+      endedAt: Date.now(),
+      errorCode: "INTERNAL",
+      errorDetail: "Steering delivery could not be confirmed. Check the agent response before retrying.",
+    });
+    core.notice(
+      "warning",
+      "Steering delivery could not be confirmed. Check the agent response before retrying.",
+      turn.sessionId,
+      turn.id,
+    );
+  }
+};
+
+export const steerQueued = async (core: WorkspaceCore, queued: TurnRow): Promise<Turn | null> => {
+  const running = core.runningTurn();
+  if (!running || running.sessionId !== queued.sessionId || core.queueBusy) return null;
+  const session = core.sessionRow(queued.sessionId);
+  const capabilities = parseJson<Record<string, unknown>>(session.capabilitiesJson, {});
+  if (capabilities["steering"] !== true) return null;
+  core.queueBusy = true;
+  core.updateTurn(queued.id, { steeringPending: 1 });
+  try {
+    const content = await buildContent(core, session, queued);
+    const result = await requireTempod(core).request("session.steer", {
+      sessionId: session.id,
+      turnId: running.id,
+      messageId: queued.id,
+      content: content.blocks,
+    });
+    if (result.outcome !== "injected") {
+      core.updateTurn(queued.id, { steeringPending: 0 });
+      return null;
+    }
+    commitContent(core, session.id, running.id, content, Date.now());
+    for (const item of core.db.select().from(items).where(eq(items.turnId, queued.id)).all()) {
+      core.updateItem(item.id, { turnId: running.id });
+    }
+    core.db.update(attachments).set({ turnId: running.id }).where(eq(attachments.turnId, queued.id)).run();
+    core.db
+      .update(reviewComments)
+      .set({ sentTurnId: running.id })
+      .where(eq(reviewComments.sentTurnId, queued.id))
+      .run();
+    core.db.delete(turns).where(eq(turns.id, queued.id)).run();
+    core.broadcast({ type: "turn.deleted", turnId: queued.id });
+    core.broadcastDetailSoon();
+    return core.turnToWire(core.turnRow(running.id));
+  } catch (error) {
+    // An ambiguous acknowledgement must never trigger an automatic duplicate prompt.
+    const err = error instanceof TempoError ? error : new TempoError("INTERNAL");
+    core.updateTurn(queued.id, {
+      steeringPending: 0,
+      status: "failed",
+      queuePos: null,
+      endedAt: Date.now(),
+      errorCode: err.code,
+      errorDetail: "Steering delivery could not be confirmed. Check the agent response before retrying.",
+    });
+    core.notice(
+      "warning",
+      "Steering delivery could not be confirmed. Check the agent response before retrying.",
+      queued.sessionId,
+      queued.id,
+    );
+    throw new TempoError(
+      err.code,
+      "Steering delivery could not be confirmed. Check the agent response before retrying.",
+    );
+  } finally {
+    core.queueBusy = false;
+    core.kickQueue();
+  }
+};
+
 export const runQueue = async (core: WorkspaceCore, opsBusy: () => boolean): Promise<void> => {
   if (core.queueBusy) return;
   const row = core.wsOrNull();
