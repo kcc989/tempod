@@ -268,14 +268,14 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     if (!containerRunning(core)) return skip(sc);
     const n = core.db.select({ id: snapshots.id }).from(snapshots).all().length + 1;
     const name = `${core.workspaceId}-${n}`;
-    const snap = await core.ctx.container!.snapshotContainer({ name });
+    const snap = await core.container!.snapshotContainer({ name });
     core.db
       .insert(snapshots)
       .values({
         id: snap.id,
         name,
         sizeBytes: snap.size,
-        imageRef: core.ctx.container!.images["workspace"] ?? core.ws().imageRef ?? "",
+        imageRef: core.container!.images["workspace"] ?? core.ws().imageRef ?? "",
         createdAt: Date.now(),
         lastRestoredAt: null,
         unusable: 0,

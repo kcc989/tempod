@@ -12,3 +12,4 @@ dist/
 .dev.vars
 coverage/
 apps/tempo/src/routeTree.gen.ts.bak
+apps/tempo/wrangler.deploy.jsonc

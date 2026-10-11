@@ -209,7 +209,7 @@ export class TempodClient {
 }
 
 export const tempodFetch = (core: WorkspaceCore, path: string, init: RequestInit = {}): Promise<Response> => {
-  const container = core.ctx.container;
+  const container = core.container;
   if (!container) throw new TempoError("CONTAINER_NOT_READY");
   const token = core.ws().tempodToken;
   if (!token) throw new TempoError("CONTAINER_NOT_READY");

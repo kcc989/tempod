@@ -46,7 +46,7 @@ export const openTerminal = (
       await waitReady(Date.now() + READY_WAIT_MS);
       if (closed) return;
       const env = { TERM: "xterm-256color", HOME: "/home/tempo", ...(await core.scriptEnv()) };
-      const proc = await core.ctx.container!.exec(["tmux", "new-session", "-A", "-s", terminalId, "-c", "/workspace"], {
+      const proc = await core.container!.exec(["tmux", "new-session", "-A", "-s", terminalId, "-c", "/workspace"], {
         pty: { cols: clamp(cols, 10, 500), rows: clamp(rows, 5, 200) },
         stdin: "pipe",
         user: "1000:1000",

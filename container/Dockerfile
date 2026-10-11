@@ -1,7 +1,7 @@
 # The `workspace` image (01, Container image). Versions live in container/versions.json;
 # `bun run check:versions` fails when this file and versions.json disagree.
 # BASE_IMAGE is pinned by digest at build time (container/pin-base.ts writes the digest).
-ARG BASE_IMAGE=node:24-trixie-slim
+ARG BASE_IMAGE=node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66
 FROM ${BASE_IMAGE}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -127,11 +127,15 @@ export class WorkspaceCore {
     }, 50);
   }
 
+  /** The container API (ctx.container). A field, so tests can put a fake in its place. */
+  container: Container | undefined;
+
   constructor(
     readonly ctx: DurableObjectState,
     readonly env: Env,
   ) {
     this.db = drizzle(ctx.storage, { schema: workspaceSchema });
+    this.container = ctx.container;
   }
 
   // ---------- workspace row ----------

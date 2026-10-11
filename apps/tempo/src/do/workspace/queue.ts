@@ -196,7 +196,7 @@ export const buildContent = async (core: WorkspaceCore, session: SessionRow, tur
   if (prompt.attachmentIds.length > 0) {
     const caps = parseJson<{ promptCapabilities?: { image?: boolean } }>(session.capabilitiesJson, {});
     const rows = core.db.select().from(attachments).where(inArray(attachments.id, [...prompt.attachmentIds])).all();
-    const files = new Files(core.ctx.container!);
+    const files = new Files(core.container!);
     for (const a of rows) {
       const obj = await core.env.DATA.get(a.r2Key);
       if (!obj) continue;

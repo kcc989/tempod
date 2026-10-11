@@ -27,16 +27,16 @@ const MAX_INACTIVITY_MS = 21_600_000;
 const decodeHealth = Schema.decodeUnknownOption(HealthResponse);
 
 export const homeBackup = (core: WorkspaceCore): DirectoryBackup =>
-  new DirectoryBackup(core.ctx.container!, core.ctx.exports.DirectoryBackupGateway, {
+  new DirectoryBackup(core.container!, core.ctx.exports.DirectoryBackupGateway, {
     binding: "DATA",
     prefix: `homes/${core.workspaceId}/`,
   });
 
-export const containerRunning = (core: WorkspaceCore): boolean => core.ctx.container?.running ?? false;
+export const containerRunning = (core: WorkspaceCore): boolean => core.container?.running ?? false;
 
 /** A snapshot is usable if it came from the current image and is younger than 29 days (01). */
 export const usableSnapshot = (core: WorkspaceCore): SnapshotRow | null => {
-  const image = core.ctx.container?.images["workspace"] ?? null;
+  const image = core.container?.images["workspace"] ?? null;
   if (!image) return null;
   const now = Date.now();
   const rows = core.db
@@ -55,7 +55,7 @@ const instanceOf = (core: WorkspaceCore): Instance => core.settings().environmen
  * registered after every start: the backup gateway first, then the catch-all egress handler.
  */
 export const startContainer = async (core: WorkspaceCore, snapshot: SnapshotRow | null): Promise<void> => {
-  const container = core.ctx.container;
+  const container = core.container;
   if (!container) throw new TempoError("CONTAINER_START_FAILED", undefined, "no container binding");
   const row = core.ws();
   const token = randomToken(32);
@@ -113,7 +113,7 @@ export const destroyContainer = async (core: WorkspaceCore, reason: string): Pro
   core.tempod?.close(1000, reason);
   core.tempod = null;
   core.closeTerminals(1001, "container stopped");
-  if (containerRunning(core)) await core.ctx.container!.destroy();
+  if (containerRunning(core)) await core.container!.destroy();
   core.updateWs({ tempodToken: null });
   core.liveSessions.clear();
   core.closingTempod = false;

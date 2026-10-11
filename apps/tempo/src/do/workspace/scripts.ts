@@ -87,7 +87,7 @@ export const appendLog = (core: WorkspaceCore, runId: string, data: string): voi
 /** Copies the full log (tempod wrote it before script.exited) to R2 (01, Output). */
 export const uploadLog = async (core: WorkspaceCore, runId: string): Promise<void> => {
   try {
-    const res = await new Files(core.ctx.container!).readFile(scriptLogPath(runId));
+    const res = await new Files(core.container!).readFile(scriptLogPath(runId));
     const key = scriptLogKey(core.workspaceId, runId);
     const buf = await res.arrayBuffer();
     await core.env.DATA.put(key, buf, { httpMetadata: { contentType: "text/plain; charset=utf-8" } });

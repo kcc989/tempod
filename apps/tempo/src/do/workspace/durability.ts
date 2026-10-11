@@ -72,7 +72,7 @@ export const uploadBundle = async (core: WorkspaceCore, bundle: PendingBundle): 
     return;
   }
   const key = bundleKey(core.workspaceId, bundle.checkpointId);
-  const res = await new Files(core.ctx.container!).readFile(bundle.bundlePath);
+  const res = await new Files(core.container!).readFile(bundle.bundlePath);
   if (!res.body) throw new TempoError("INTERNAL", undefined, "empty bundle");
   const body = res.body.pipeThrough(new FixedLengthStream(bundle.bundleBytes));
   await core.env.DATA.put(key, body);
@@ -148,5 +148,5 @@ export const copyBundleIn = async (core: WorkspaceCore, ckpt: CheckpointRow, pat
   if (!ckpt.r2Key) throw new TempoError("CHECKPOINT_NOT_FOUND");
   const obj = await core.env.DATA.get(ckpt.r2Key);
   if (!obj) throw new TempoError("CHECKPOINT_NOT_FOUND", undefined, "bundle missing from R2");
-  await new Files(core.ctx.container!).writeFile(path, obj.body, { user: "1000:1000" });
+  await new Files(core.container!).writeFile(path, obj.body, { user: "1000:1000" });
 };
