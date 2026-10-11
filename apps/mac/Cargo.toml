@@ -10,3 +10,4 @@ name = "Tempo"
 path = "src/main.rs"
 
 [dependencies]
+gpui-kit = { version = "=0.7.1" }

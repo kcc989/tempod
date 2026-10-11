@@ -15,7 +15,7 @@ import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useReconnectRules } from "~/ui/hooks/useReconnectRules";
 import { useLayout } from "~/ui/hooks/useWorkspaceUi";
 import { readJson, writeJson } from "~/ui/lib/storage";
-import { onUnauthenticated } from "~/ui/lib/toast";
+import { errorCode, onUnauthenticated, toastError } from "~/ui/lib/toast";
 import {
   closeDialog,
   dialogStore,
@@ -61,6 +61,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         });
       }),
     [navigate, queryClient],
+  );
+  // Queries do not toast, but a lost session on any of them must still lead to sign-in.
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.type !== "updated" || event.action.type !== "error") return;
+        if (errorCode(event.action.error) === "UNAUTHENTICATED") toastError(event.action.error);
+      }),
+    [queryClient],
   );
 
   const desktop = { enabled: !isPhone, fallback: true };
