@@ -4,6 +4,7 @@ type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Resp
 export const preflightDeployment = async (
   env: Record<string, string | undefined>,
   request: Fetch,
+  pendingBootstrap = false,
 ): Promise<boolean> => {
   const account = env.CLOUDFLARE_ACCOUNT_ID;
   const token = env.CLOUDFLARE_API_TOKEN;
@@ -20,6 +21,10 @@ export const preflightDeployment = async (
   };
   const scripts = (await api("workers/scripts")) as Array<{ id: string }>;
   if (!scripts.some((script) => script.id === "alchemy-state-store")) return false;
+  if (pendingBootstrap)
+    throw new Error(
+      "An existing Alchemy state store has an unfinished local bootstrap. Preserve its files and recover the original state before resuming; do not replay generated secrets.",
+    );
   const { subdomain } = (await api("workers/subdomain")) as { subdomain?: string };
   if (!subdomain)
     throw new Error("Existing Alchemy state store has no workers.dev subdomain. Stop before bootstrap.");

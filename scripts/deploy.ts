@@ -1,9 +1,14 @@
+import { existsSync, readdirSync } from "node:fs";
 import { preflightDeployment } from "./deployment-preflight.ts";
 
 let existingStore = false;
 if (!process.argv.includes("--help") && !process.argv.includes("-h")) {
   try {
-    existingStore = await preflightDeployment(process.env, fetch);
+    const localState = ".alchemy/state/CloudflareStateStore";
+    const pendingBootstrap =
+      existsSync(localState) &&
+      readdirSync(localState, { recursive: true }).some((file) => String(file).endsWith(".json"));
+    existingStore = await preflightDeployment(process.env, fetch, pendingBootstrap);
   } catch (error) {
     console.error(error instanceof Error ? error.message : "Deployment preflight failed.");
     process.exit(1);

@@ -28,6 +28,11 @@ describe("deployment preflight", () => {
     };
     await expect(preflightDeployment(env, fake)).rejects.toThrow("do not bootstrap or rotate secrets");
   });
+  it("refuses to replay an unfinished bootstrap over an existing store", async () => {
+    await expect(
+      preflightDeployment(env, async () => api([{ id: "alchemy-state-store" }]), true),
+    ).rejects.toThrow("do not replay generated secrets");
+  });
   it("permits a reachable existing store and a confirmed first deployment", async () => {
     for (const exists of [true, false]) {
       const fake = async (url: string | URL | Request) => {
