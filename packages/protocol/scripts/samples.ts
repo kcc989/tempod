@@ -169,6 +169,13 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ApiMeta: [
     { protocol: 1, serverVersion: "0.1.0", minMacClient: "0.1.0", latestMacClient: null },
     { protocol: 1, serverVersion: "0.2.0", minMacClient: "0.1.0", latestMacClient: "0.2.1" },
+    {
+      protocol: 1,
+      serverVersion: "0.2.0",
+      minMacClient: "0.1.0",
+      latestMacClient: "0.2.1",
+      latestMacClientSha256: "a".repeat(64),
+    },
   ],
 };
 

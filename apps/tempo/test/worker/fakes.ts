@@ -88,6 +88,11 @@ export class FakeTempod {
     return this.socket !== null;
   }
 
+  resume(incarnation: string, seq: number): void {
+    this.incarnation = incarnation;
+    this.seq = seq;
+  }
+
   /** Sends one event with the next seq. */
   emit(event: TempodEvent): number {
     const seq = ++this.seq;
@@ -272,7 +277,7 @@ export class FakeContainer {
 export interface Internals {
   readonly core: WorkspaceCore;
   readonly runner: OpRunner;
-  readonly handlers: { onEvent: (e: TempodEvent) => Promise<void> };
+  readonly handlers: { onEvent: (e: TempodEvent) => Promise<void> | void };
 }
 
 export const internals = (instance: WorkspaceDO): Internals => instance as unknown as Internals;

@@ -1277,6 +1277,35 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     }
   });
 
+  it("publishes the signed DMG hash from the same release as latestMacClient", async () => {
+    const sha256 = "a".repeat(64);
+    await env.DATA.put("clients/mac/latest.json", JSON.stringify({ version: "0.4.2", sha256 }));
+    try {
+      const meta = await (await v1("/api/v1/meta")).json();
+      expect(meta).toMatchObject({ latestMacClient: "0.4.2", latestMacClientSha256: sha256 });
+      expect(conforms(ApiMeta, meta)).toBe(true);
+    } finally {
+      await env.DATA.delete("clients/mac/latest.json");
+    }
+  });
+
+  it("omits invalid download hashes and rejects malformed release versions", async () => {
+    for (const release of [
+      { version: "0.4.2", sha256: "invalid" },
+      { version: 42, sha256: "a".repeat(64) },
+    ]) {
+      await env.DATA.put("clients/mac/latest.json", JSON.stringify(release));
+      try {
+        const meta = (await (await v1("/api/v1/meta")).json()) as Row;
+        expect(meta["latestMacClientSha256"]).toBeUndefined();
+        expect(meta["latestMacClient"]).toBe(typeof release.version === "string" ? release.version : null);
+        expect(conforms(ApiMeta, meta)).toBe(true);
+      } finally {
+        await env.DATA.delete("clients/mac/latest.json");
+      }
+    }
+  });
+
   it("POST /api/v1/rpc/<function> accepts a bearer token (AT-24)", async () => {
     const o = await owner();
     const res = await v1("/api/v1/rpc/listProjects", {
