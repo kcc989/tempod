@@ -4,6 +4,7 @@ pub mod chat;
 pub mod chat_model;
 pub mod checks;
 pub mod composer;
+pub mod composer_model;
 pub mod dialogs;
 pub mod diff;
 pub mod files;

@@ -8,10 +8,10 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 
 - **Continuation is active.** The prior loops stopped at the account usage limit; their interim code is now being checked locally on macOS.
 - **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 717 Worker, 294 UI logic, 16 component, 201 protocol, 111 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
-- **Native baseline:** `cargo test --workspace` (182 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac. Workspace channel/cache/reconnect fixtures and headless chat, queue, steering, permission, picker and close-control tests are included.
+- **Native baseline:** `cargo test --workspace` (185 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac. Workspace channel/cache/reconnect fixtures and headless chat, queue, steering, permission, picker, close-control and slash-menu tests are included.
 - **Image verification:** the prior full image run passed 112 tests, including uid/gid 1000, tini as PID 1, adapter/tool presence and orphan cleanup. The final daemon production image builds at 1,715,653,040 bytes (under 6 GB). Current Linux test evidence is recorded below.
 - **Steering image tests:** 114 tests pass in the full derived Linux image with current daemon/protocol source and tests mounted read-only. The first image run captured older test fixtures while edits continued and failed the two new steering tests; the final run uses the corrected fixtures. This is local fixture evidence, not authenticated adapter acceptance.
-- **Remote CI and deployment:** GitHub CI passed `408f985`, `fd92d37` and native sign-in `d59b273` (4m10s). The workspace/steering milestone `63761de` also passed (3m47s). The native chat-controls follow-up needs its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
+- **Remote CI and deployment:** GitHub CI passed `408f985`, `fd92d37` and native sign-in `d59b273` (4m10s). The workspace/steering milestone `63761de` also passed (3m47s). Native chat-controls commit `55d0c36` passed (4m12s). The slash-menu follow-up needs its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
 
 ## Continuation changes
 
@@ -29,6 +29,7 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 - Added owner-requested live steering in web and Mac: Enter queues; supported running chats also offer Send now. The ACP v1 extension is capability-gated and uses host-owned idle fallback. A durable reservation prevents automatic duplicate delivery after an uncertain acknowledgement or DO restart. Specs 01–04 and 07 describe the new fields and behavior.
 
 - Added native agent-reported model and mode pickers, grouped model labels, chat close buttons and confirmation, and chat/model/tool shortcuts. A running chat waits for its turn to stop before closing; cancellation failures and a 30-second timeout leave it open. Failed configuration restores the saved selection. Pickers stay disabled while starting, working or awaiting a configuration response. Six new headless tests cover these controls and failures; manual UI acceptance remains open.
+- Added native `/` command selection with fuzzy filtering, agent descriptions, keyboard navigation and Tempo plan mode. Selection keeps the text after the caret; Escape dismisses the menu without stopping the agent. Three new tests cover UTF-8 boundaries, command identity and keyboard behavior. Specs 04 and 07 now state menu keyboard priority.
 
 - Added GPUI Kit headless tests with its existing pinned test-support feature. Eight app tests cover saved-session validation, device approval/denial, cancellation, 401 cleanup, update requirements, server sign-out failure and Enter in the connect form. Tokens use a memory store in tests; real Keychain/browser acceptance remains open.
 
@@ -157,7 +158,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] Sign-in and first run: device flow and saved-token checks are wired and tested headlessly; real browser approval, Keychain and update download acceptance remain.
 - [ ] Live state and reconnects: hub and workspace channels, revision resume, hidden-store timers and reconnect bars are wired and tested locally. Notifications and manual acceptance remain.
 - [ ] Window layout and components (15%).
-- [ ] Transcript, composer and permissions: chat tabs, rich text/tool/permission rows, drafts, Send/Queue/Send now/Stop, queued edit/delete/drag, model/mode pickers, plan mode, permission replies, close confirmation and chat/tool shortcuts are wired. Attachment/mention/slash input, full tool content, remaining transcript actions, performance and manual acceptance remain.
+- [ ] Transcript, composer and permissions: chat tabs, rich text/tool/permission rows, drafts, Send/Queue/Send now/Stop, queued edit/delete/drag, model/mode pickers, plan mode, permission replies, close confirmation and chat/tool shortcuts are wired. Attachment/mention input, full tool content, remaining transcript actions, performance and manual acceptance remain.
 - [ ] Changes, diff view and comments (2%).
 - [ ] `tempo-terminal`, a fork of gpui-terminal (5%); scripts and previews.
 - [ ] macOS integration (35%): notifications, Dock badge, URL scheme, window state.

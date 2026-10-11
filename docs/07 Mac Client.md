@@ -183,6 +183,7 @@ Behavior follows 04, Center. These rules are for the Mac app only.
 - **Streaming.** On `item.delta`, append the text to the item and call `remeasure_items` for that row only.
 - **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control. Each chat tab keeps its own scroll position.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
+- **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `SlashMenu` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
 - **Attachments.** Paste an image, drag files from Finder, or press ⌘U. Each file is at most 10 MiB and is sent to `POST /api/workspaces/<workspaceId>/attachments` with the bearer token.
 - **Permissions.** A new card takes focus if the composer is empty. Enter picks the first `allow` option; ⌫ picks the first `reject` option.
 - **Copy.** ⌘C copies selected text. Each code block has a copy button.

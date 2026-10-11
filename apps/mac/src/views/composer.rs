@@ -1,16 +1,22 @@
 //! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 1 to 12 rows, in the
 //! `Composer` key context. Enter sends, ⇧Enter adds a line (the text field's own binding), Esc
 //! stops the turn, ⇧Tab toggles plan mode. Pickers use agent-reported modes and models.
-use crate::actions::{Send, StopTurn, TogglePlanMode};
+use super::composer_model::{self, SlashEntry};
+use crate::actions::{
+    DismissComposerChoice, NextComposerChoice, PreviousComposerChoice, Send, StopTurn,
+    TogglePlanMode,
+};
 use crate::keymap::COMPOSER;
+use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::v_flex;
 use gpui_kit::component::{Disableable as _, h_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, EventEmitter, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window,
+    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
 };
 use tempo_protocol as p;
 
@@ -47,6 +53,12 @@ pub struct Composer {
     pub working: bool,
     pub starting: bool,
     pub steering: bool,
+    commands: Vec<p::AvailableCommand>,
+    plan_available: bool,
+    command_menu: Entity<CommandState>,
+    command_dismissed: bool,
+    command_query: Option<String>,
+    command_selected: usize,
     model: Entity<Picker>,
     mode: Entity<Picker>,
     model_config: Option<String>,
@@ -99,6 +111,12 @@ impl Composer {
             working: false,
             starting: false,
             steering: false,
+            commands: vec![],
+            plan_available: false,
+            command_menu: cx.new(|cx| CommandState::new(window, cx)),
+            command_dismissed: false,
+            command_query: None,
+            command_selected: 0,
             model,
             mode,
             model_config: None,
@@ -116,6 +134,8 @@ impl Composer {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.commands = session.commands.clone();
+        self.plan_available = super::chat_model::plan_target(session, None).is_some();
         self.starting = session.status == p::SessionStatus::Starting;
         let config = session
             .config_options
@@ -211,7 +231,55 @@ impl Composer {
         self.input.update(cx, |input, cx| input.focus(window, cx));
     }
 
-    fn send(&mut self, _: &Send, _: &mut Window, cx: &mut Context<Self>) {
+    fn command_rows(&self, cx: &gpui_kit::App) -> Vec<SlashEntry> {
+        if self.read_only || self.sending || self.command_dismissed {
+            return vec![];
+        }
+        let input = self.input.read(cx);
+        composer_model::slash_query(input.value().as_ref(), input.cursor())
+            .map(|query| {
+                composer_model::slash_entries(
+                    &self.commands,
+                    self.plan_available && !self.working && !self.starting && !self.configuring,
+                    query,
+                )
+            })
+            .unwrap_or_default()
+    }
+
+    fn pick_command(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(entry) = self.command_rows(cx).get(index).cloned() else {
+            return;
+        };
+        let input = self.input.read(cx);
+        let suffix = input.value().as_ref()[input.cursor()..].to_string();
+        let insert = if entry.plan {
+            String::new()
+        } else {
+            format!("/{} ", entry.name)
+        };
+        let caret = insert.chars().count() as u32;
+        self.set_text(&format!("{insert}{suffix}"), window, cx);
+        self.input.update(cx, |input, cx| {
+            input.set_cursor_position(gpui_kit::base::input::Position::new(0, caret), window, cx)
+        });
+        self.command_dismissed = true;
+        cx.emit(ComposerEvent::Change(self.text(cx)));
+        if entry.plan {
+            cx.emit(ComposerEvent::TogglePlanMode);
+        }
+        cx.notify();
+    }
+
+    fn send(&mut self, _: &Send, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.command_rows(cx).is_empty() {
+            self.pick_command(self.command_selected, window, cx);
+            return;
+        }
+        self.submit(window, cx);
+    }
+
+    fn submit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let text = self.input.read(cx).value().to_string();
         if self.read_only || self.sending || text.trim().is_empty() {
             return;
@@ -221,20 +289,96 @@ impl Composer {
 }
 
 impl Render for Composer {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let input = self.input.read(cx);
+        let query =
+            composer_model::slash_query(input.value().as_ref(), input.cursor()).map(str::to_string);
+        if query != self.command_query {
+            if query.is_none() {
+                self.command_dismissed = false;
+            }
+            self.command_selected = 0;
+            self.command_query = query;
+        }
+        let rows = self.command_rows(cx);
+        self.command_selected = self.command_selected.min(rows.len().saturating_sub(1));
+        self.command_menu.update(cx, |menu, cx| {
+            if menu.matched_count() == 0 {
+                return;
+            }
+            menu.set_selected_index(Some(IndexPath::new(self.command_selected)), window, cx)
+        });
+        let mut field = div();
+        if !rows.is_empty() {
+            field = field.key_context("SlashMenu");
+        }
+        let field = field.child(
+            Textarea::new(&self.input)
+                .aria_label("Message")
+                .disabled(self.read_only || self.sending),
+        );
+        let weak = cx.weak_entity();
+        let selection = weak.clone();
+        let menu = (!rows.is_empty()).then(|| {
+            Command::new(&self.command_menu)
+                .searchable(false)
+                .filterable(false)
+                .max_h(gpui_kit::px(220.))
+                .items(rows.into_iter().map(|entry| {
+                    CommandItem::new()
+                        .label(format!("/{}", entry.name))
+                        .child(move |_, cx| {
+                            v_flex().child(format!("/{}", entry.name)).child(
+                                div()
+                                    .text_sm()
+                                    .text_color(super::tokens::color(
+                                        super::tokens::Token::MutedForeground,
+                                        cx,
+                                    ))
+                                    .child(entry.description.clone()),
+                            )
+                        })
+                }))
+                .on_select(move |index, _, cx| {
+                    let _ = selection.update(cx, |this, cx| {
+                        if this.command_selected != index.row && !this.command_rows(cx).is_empty() {
+                            this.command_selected = index.row;
+                            cx.notify();
+                        }
+                    });
+                })
+                .on_confirm(move |index, window, cx| {
+                    let _ = weak.update(cx, |this, cx| this.pick_command(index.row, window, cx));
+                })
+        });
         v_flex()
             .key_context(COMPOSER)
+            .on_action(cx.listener(|this, _: &NextComposerChoice, _, cx| {
+                let len = this.command_rows(cx).len();
+                if len > 0 {
+                    this.command_selected = (this.command_selected + 1) % len;
+                    cx.notify();
+                }
+            }))
+            .on_action(cx.listener(|this, _: &PreviousComposerChoice, _, cx| {
+                let len = this.command_rows(cx).len();
+                if len > 0 {
+                    this.command_selected = (this.command_selected + len - 1) % len;
+                    cx.notify();
+                }
+            }))
+            .on_action(cx.listener(|this, _: &DismissComposerChoice, _, cx| {
+                this.command_dismissed = true;
+                cx.notify();
+            }))
             .on_action(cx.listener(Self::send))
             .on_action(cx.listener(|_, _: &StopTurn, _, cx| cx.emit(ComposerEvent::Stop)))
             .on_action(
                 cx.listener(|_, _: &TogglePlanMode, _, cx| cx.emit(ComposerEvent::TogglePlanMode)),
             )
             .p_3()
-            .child(
-                Textarea::new(&self.input)
-                    .aria_label("Message")
-                    .disabled(self.read_only || self.sending),
-            )
+            .children(menu)
+            .child(field)
             .child(
                 h_flex()
                     .gap_2()
@@ -261,9 +405,7 @@ impl Render for Composer {
                             .disabled(
                                 self.read_only || self.sending || self.text(cx).trim().is_empty(),
                             )
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.send(&Send, window, cx)),
-                            ),
+                            .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
                     )
                     .children(self.working.then(|| {
                         Button::new("stop-turn")
@@ -292,9 +434,100 @@ impl Render for Composer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui_kit::TestAppContext;
+    use gpui_kit::{TestAppContext, test::TestWindowExt as _};
     use std::cell::RefCell;
     use std::rc::Rc;
+
+    #[gpui_kit::test]
+    fn slash_keyboard_selects_before_sending_and_escape_does_not_stop(cx: &mut TestAppContext) {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let log = events.clone();
+        let (window, composer, subscription) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::keymap::bind(cx);
+            let (window, composer) = gpui_kit::open_window(Default::default(), cx, |window, cx| {
+                cx.new(|cx| Composer::new(window, cx))
+            })
+            .unwrap();
+            let subscription = cx.subscribe(&composer, move |_, event: &ComposerEvent, _| {
+                log.borrow_mut().push(match event {
+                    ComposerEvent::Send(_) => "send",
+                    ComposerEvent::Stop => "stop",
+                    ComposerEvent::TogglePlanMode => "plan",
+                    _ => "other",
+                });
+            });
+            (window, composer, subscription)
+        });
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                c.commands = ["compact", "review"]
+                    .into_iter()
+                    .map(|name| p::AvailableCommand {
+                        name: name.into(),
+                        description: None,
+                        input: None,
+                    })
+                    .collect();
+                c.set_text("/ later", window, cx);
+                c.input.update(cx, |i, cx| {
+                    i.set_cursor_position(gpui_kit::base::input::Position::new(0, 1), window, cx)
+                });
+            });
+            window.render_frame(cx);
+            window.press("down", cx);
+            window.render_frame(cx);
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        composer.read_with(cx, |c, cx| assert_eq!(c.text(cx), "/review  later"));
+        assert!(!events.borrow().contains(&"send"));
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(events.borrow().contains(&"send"));
+        events.borrow_mut().clear();
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                c.set_text("/", window, cx);
+                c.input.update(cx, |i, cx| {
+                    i.set_cursor_position(gpui_kit::base::input::Position::new(0, 1), window, cx)
+                });
+            });
+            window.render_frame(cx);
+            window.press("escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(!events.borrow().contains(&"stop"));
+        composer.read_with(cx, |c, cx| {
+            assert!(c.command_dismissed);
+            assert_eq!(c.text(cx), "/");
+        });
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                c.command_dismissed = false;
+                c.plan_available = true;
+                c.pick_command(0, window, cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        composer.read_with(cx, |c, cx| assert_eq!(c.text(cx), ""));
+        assert!(events.borrow().contains(&"plan"));
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.press("escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(events.borrow().contains(&"stop"));
+        drop(subscription);
+    }
 
     #[gpui_kit::test]
     fn grouped_model_choices_keep_ids_and_busy_controls_cannot_emit_changes(
