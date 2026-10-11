@@ -4,7 +4,6 @@ import { setRightTab, type RightTab } from "~/ui/state/workspace-ui";
 import { ChangesView } from "./ChangesView";
 import { ChecksView } from "./ChecksView";
 import { FilesView } from "./FilesView";
-import { ReviewDialogs } from "./ReviewDialogs";
 
 export interface RightPanelProps {
   readonly workspaceId: string;
@@ -21,7 +20,6 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
     return (
       <>
         <ChangesView workspaceId={workspaceId} variant="phone" />
-        <ReviewDialogs workspaceId={workspaceId} />
       </>
     );
   }
@@ -49,7 +47,6 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
           <ChecksView workspaceId={workspaceId} />
         </TabsContent>
       </Tabs>
-      <ReviewDialogs workspaceId={workspaceId} />
     </>
   );
 }

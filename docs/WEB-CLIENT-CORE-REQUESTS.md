@@ -1,0 +1,16 @@
+# Browser contract requirements for core
+
+Starting commit: `b1ba351bfdbfad66215bbc3e9ea6e6a6c7e3ba0a` on `main`. PR #1 was merged, and the old integration branch no longer exists. The web branch is `codex/complete-web-client`. No server implementation, shared protocol, lockfile, native file, or existing progress document is changed by this branch.
+
+The available Codex tools can inspect the parallel core and Mac chats, but expose no cross-chat send capability. This file records the exact coordination requests; no external message was sent.
+
+| Requirement | Reproduction and existing evidence | Required core contract |
+| --- | --- | --- |
+| Token usage under each turn (04, Transcript) | `Turn` has timestamps and prompt but no usage. `Session.usage` is overwritten by each `usage_update`; `TurnFooter` therefore shows duration/outcome only. End two turns with different usage, reload, and inspect both footers. | Persist turn-scoped usage, expose it in shared `Turn` or a documented transcript item, and send it over backlog/live channels. Define the counts/units, rather than inferring them from the last session usage. Web will render the shared result; Mac needs the same additive contract. |
+| PR title for closed/merged PRs (04, Checks) | ChecksView obtains titles from `listOpenPullRequests`. On a fresh load of a workspace with a closed/merged PR, that query is disabled and no title is available. `WorkspaceDetail`, `refreshPullRequest` and `listCheckRuns` carry no PR title. | Add an optional PR title to the shared detail/refresh contract, or a shared function that reads the workspace's PR regardless of state. Do not use a browser GitHub token or scrape GitHub pages. |
+| Transcript attachment thumbnails after reload (04, user_message) | The wire item has attachment IDs/name/MIME but no authenticated retrieval URL or inline bytes. `attachment-cache.ts` retains up to 64 object URLs only in the uploading browser. Reload or open another browser: attachment names remain, thumbnails do not. | An owner-authenticated same-origin attachment read route, with the shared/documented response contract and content-type/size rules. Do not expose object-storage credentials or use agent-provided remote image URLs. |
+| Real acceptance environment | The current runtime has no deployment/test bindings. The owner replied “Make one” to the test-environment authorization request. Existing deployment resource names are fixed. | Agree the starting integration commit, dedicated test account or configurable resource names, app host, preview zone, disposable GitHub repo, scoped credentials and a single suite reservation. Provide the real browser owner state and authorized agent logins securely. |
+
+Private-preview and optional Browser Run decisions remain as documented in the [implementation notes](https://github.com/kcc989/tempod/blob/b1ba351bfdbfad66215bbc3e9ea6e6a6c7e3ba0a/docs/IMPLEMENTATION_NOTES.md). This branch does not introduce either design or private wire types.
+
+The Mac goal should check draft/chip recovery, pending-send handling when switching chats, per-chat scrolling and batched announcements against 04/07. These fixes restore existing requirements; the web spec has not changed.

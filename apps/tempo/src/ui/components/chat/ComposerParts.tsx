@@ -135,7 +135,10 @@ export function AttachmentChip({ a, onRemove }: { a: PendingAttachment; onRemove
       removeLabel={`Remove ${a.name}`}
       className={cn(a.status === "failed" && "border-destructive/60 text-destructive")}
     >
-      <span title={`${a.name}, ${formatBytes(a.size)}`}>{a.name}</span>
+      <span title={`${a.name}, ${formatBytes(a.size)}`}>
+        {a.name}
+        {a.status === "failed" && " · Upload failed; attach again"}
+      </span>
     </Chip>
   );
 }
@@ -463,6 +466,7 @@ export function PickerList({
   status,
   onPick,
   listRef,
+  onRetry,
 }: {
   id: string;
   rows: ReadonlyArray<PickerRow>;
@@ -470,6 +474,7 @@ export function PickerList({
   status: string | null;
   onPick: (index: number) => void;
   listRef?: Ref<HTMLDivElement>;
+  onRetry?: () => void;
 }) {
   return (
     <div
@@ -480,6 +485,11 @@ export function PickerList({
       className="absolute right-0 bottom-full left-0 z-20 mb-1 max-h-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
     >
       {status && <p className="px-2 py-1 text-xs text-muted-foreground">{status}</p>}
+      {onRetry && (
+        <Button size="sm" variant="outline" onClick={onRetry}>
+          Retry
+        </Button>
+      )}
       {rows.map((row, i) => (
         <div
           key={row.key}

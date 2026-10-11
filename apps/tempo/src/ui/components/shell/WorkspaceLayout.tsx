@@ -4,6 +4,8 @@ import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
 import { BottomPanel } from "~/ui/components/processes/BottomPanel";
+import { useToggleRunAction } from "~/ui/components/processes/useScripts";
+import { ReviewDialogs } from "~/ui/components/review/ReviewDialogs";
 import { RightPanel } from "~/ui/components/review/RightPanel";
 import { CenteredLoading, NotFoundState } from "~/ui/components/shell/States";
 import { TopBar } from "~/ui/components/topbar/TopBar";
@@ -34,6 +36,7 @@ export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
   const ready = useWorkspaceSelector(workspaceId, (s) => s.ready);
   const summary = useHubWorkspace(workspaceId);
   useWorkspaceLifecycle(workspaceId);
+  useToggleRunAction(workspaceId, !isPhone);
   useWorkspaceActions(workspaceId, summary?.projectId);
   useEffect(() => setLayout({ lastWorkspaceId: workspaceId }), [workspaceId]);
 
@@ -50,10 +53,15 @@ export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
     );
   }
   if (!ready && !summary) return <CenteredLoading label="Loading workspace" />;
-  return isPhone ? (
-    <PhoneWorkspace workspaceId={workspaceId} />
-  ) : (
-    <DesktopWorkspace workspaceId={workspaceId} />
+  return (
+    <>
+      {isPhone ? (
+        <PhoneWorkspace workspaceId={workspaceId} />
+      ) : (
+        <DesktopWorkspace workspaceId={workspaceId} />
+      )}
+      <ReviewDialogs workspaceId={workspaceId} />
+    </>
   );
 }
 

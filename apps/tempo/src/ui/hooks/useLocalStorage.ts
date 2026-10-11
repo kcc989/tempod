@@ -2,6 +2,16 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { readString, writeJson } from "~/ui/lib/storage";
 
 const listeners = new Set<() => void>();
+const volatile = new Map<string, { raw: string; stored: string | null }>();
+
+const read = (key: string): string | null => {
+  const stored = readString(key);
+  const pending = volatile.get(key);
+  if (!pending) return stored;
+  if (stored === pending.stored) return pending.raw;
+  volatile.delete(key);
+  return stored;
+};
 
 const subscribe = (listener: () => void): (() => void) => {
   listeners.add(listener);
@@ -35,15 +45,20 @@ export function useLocalStorage<T>(
 ): [T, (next: T | ((prev: T) => T)) => void] {
   const raw = useSyncExternalStore(
     subscribe,
-    () => readString(key),
+    () => read(key),
     () => null,
   );
   const value = useMemo(() => parse(raw, fallback, guard), [raw, fallback, guard]);
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {
-      const prev = parse(readString(key), fallback, guard);
+      const prev = parse(read(key), fallback, guard);
       const v = typeof next === "function" ? (next as (p: T) => T)(prev) : next;
       writeJson(key, v);
+      const raw = JSON.stringify(v);
+      const stored = readString(key);
+      // A blocked or full storage area must not make the controlled composer discard typing.
+      if (stored !== raw) volatile.set(key, { raw, stored });
+      else volatile.delete(key);
       for (const l of listeners) l();
     },
     [key, fallback, guard],
