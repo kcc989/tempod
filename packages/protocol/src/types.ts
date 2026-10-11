@@ -104,6 +104,7 @@ export const WorkspaceDetail = Schema.Struct({
   errorDetail: N(Schema.String),
   setupStatus: SetupStatus,
   pushed: Schema.Boolean,
+  prTitle: Schema.optional(N(Schema.String)),
   previewToken: Schema.String,
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
   settings: Settings,
@@ -166,6 +167,14 @@ export const Turn = Schema.Struct({
 export type Turn = typeof Turn.Type;
 
 // Item content per kind (02, Item model).
+export const Attachment = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  mime: Schema.String,
+  size: Schema.Number,
+});
+export type Attachment = typeof Attachment.Type;
+
 export const UserMessageContent = Schema.Struct({
   text: Schema.String,
   mentions: Schema.Array(Mention),

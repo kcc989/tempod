@@ -34,6 +34,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { type: "resource_link", uri: "file:///workspace/src/app.tsx", name: "app.tsx" },
   ],
   Usage: [{}, w.claudeSession.usage],
+  Attachment: [{ id: uid(201), name: "shot.png", mime: "image/png", size: 8 }],
   Capabilities: [{}, { loadSession: true, promptCapabilities: { image: true } }],
 
   RunScript: Object.values(w.settings.scripts.run),
@@ -369,6 +370,7 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   CommitAndPushOut: [{ commitSha: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d" }],
   CreatePullRequestOut: [{ number: 43, url: "https://github.com/acme/webapp/pull/43" }],
   RefreshPullRequestOut: [
+    { prNumber: 12, prState: "merged", checksState: "success", prTitle: "Keep the merged title" },
     { prNumber: 42, prState: "open", checksState: "pending" },
     { prNumber: null, prState: null, checksState: null },
   ],

@@ -42,10 +42,17 @@ const transport = (stub: Stub, handler?: EventHandler) =>
   });
 const isolated = async () => {
   const w = await seedWorkspace(await seedProject());
-  await runInDurableObject(w.stub, (instance: WorkspaceDO, state: DurableObjectState) => {
+  await waitFor(async () => {
+    await runDurableObjectAlarm(w.stub);
+    const detail = await w.stub.getWorkspace({});
+    return detail.ok && detail.value.state === "ready";
+  });
+  await runInDurableObject(w.stub, async (instance: WorkspaceDO, state: DurableObjectState) => {
     const { core } = internals(instance);
     core.closingTempod = true;
-    core.tempod?.close();
+    const client = core.tempod;
+    client?.close();
+    await client?.drained();
     core.tempod = null;
     state.storage.sql.exec("UPDATE ops SET status = 'cancelled'");
     state.storage.sql.exec("DELETE FROM events");

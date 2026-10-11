@@ -256,6 +256,14 @@ pub struct ArchiveWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`Attachment`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct Attachment {
+    pub id: ::std::string::String,
+    pub mime: ::std::string::String,
+    pub name: ::std::string::String,
+    pub size: f64,
+}
 ///`Attention`
 #[derive(
     ::serde::Deserialize,
@@ -2725,6 +2733,11 @@ pub struct RefreshPullRequestOut {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub pr_state: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "prTitle",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub pr_title: ::std::option::Option<::std::string::String>,
 }
 ///`RenameBranchIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4395,6 +4408,11 @@ pub struct WorkspaceDetail {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub pr_state: ::std::option::Option<PrState>,
+    #[serde(
+        rename = "prTitle",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub pr_title: ::std::option::Option<::std::string::String>,
     #[serde(rename = "previewToken")]
     pub preview_token: ::std::string::String,
     #[serde(rename = "projectId")]
@@ -6251,6 +6269,7 @@ pub mod wire {
         "ApiKeyProvider",
         "ApiMeta",
         "ArchiveWorkspaceIn",
+        "Attachment",
         "Attention",
         "AvailableCommand",
         "CancelTurnIn",
@@ -6437,6 +6456,7 @@ pub mod wire {
             "ApiKeyProvider" => crate::roundtrip::<crate::ApiKeyProvider>(text),
             "ApiMeta" => crate::roundtrip::<crate::ApiMeta>(text),
             "ArchiveWorkspaceIn" => crate::roundtrip::<crate::ArchiveWorkspaceIn>(text),
+            "Attachment" => crate::roundtrip::<crate::Attachment>(text),
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
