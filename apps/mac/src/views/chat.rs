@@ -143,6 +143,33 @@ impl TranscriptView {
         self.rows.len()
     }
 
+    pub fn toggle_tools(&mut self, cx: &mut Context<Self>) {
+        let tools: Vec<_> = self
+            .rows
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, row)| match &row.native {
+                Some(RowContent::Item { item, .. })
+                    if matches!(item.content, ItemContent::ToolCall(_)) =>
+                {
+                    Some((ix, row.id.to_string()))
+                }
+                _ => None,
+            })
+            .collect();
+        let collapse = !tools.is_empty() && tools.iter().all(|(_, id)| self.expanded.contains(id));
+        for (ix, id) in tools {
+            if collapse {
+                self.expanded.remove(&id);
+            } else {
+                self.expanded.insert(id);
+            }
+            self.scroller
+                .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+        }
+        cx.notify();
+    }
+
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
@@ -491,5 +518,36 @@ mod tests {
             row.rendered().as_ref(),
             "Hello &lt;img src=https://x.test/p.png> and `Vec<u8>`"
         );
+    }
+
+    #[gpui_kit::test]
+    fn expand_all_toggles_only_tool_rows(cx: &mut gpui_kit::TestAppContext) {
+        let mut state = tempo_client::state::workspace::WorkspaceState::new();
+        for line in include_str!(
+            "../../../../packages/protocol/fixtures/channel/workspace-first-load.jsonl"
+        )
+        .lines()
+        {
+            state.apply(serde_json::from_str(line).unwrap());
+        }
+        let rows: Vec<_> = state
+            .items
+            .values()
+            .filter(|item| matches!(item.content, ItemContent::ToolCall(_)))
+            .cloned()
+            .map(|item| {
+                TranscriptRow::from_native(RowContent::Item {
+                    item: Box::new(item),
+                    dim: false,
+                })
+            })
+            .collect();
+        assert!(!rows.is_empty());
+        let count = rows.len();
+        let view = cx.new(|cx| TranscriptView::new(rows, cx));
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| assert_eq!(view.expanded.len(), count));
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| assert!(view.expanded.is_empty()));
     }
 }

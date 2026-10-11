@@ -391,6 +391,26 @@ impl Render for MainWindow {
                 }
             }))
             .on_action(|_: &Minimize, window, _| window.minimize_window())
+            .on_action(cx.listener(|this, _: &NewChat, window, cx| {
+                if let Some(view) = this.live_active(cx) {
+                    view.update(cx, |view, cx| view.open_new_chat(window, cx));
+                }
+            }))
+            .on_action(cx.listener(|this, _: &CloseTab, window, cx| {
+                if let Some(view) = this.live_active(cx) {
+                    view.update(cx, |view, cx| view.close_active(window, cx));
+                }
+            }))
+            .on_action(cx.listener(|this, _: &ModelPicker, window, cx| {
+                if let Some(view) = this.live_active(cx) {
+                    view.update(cx, |view, cx| view.focus_model(window, cx));
+                }
+            }))
+            .on_action(cx.listener(|this, _: &ExpandAllToolCalls, _, cx| {
+                if let Some(view) = this.live_active(cx) {
+                    view.update(cx, |view, cx| view.expand_tools(cx));
+                }
+            }))
             .on_action(|_: &Zoom, window, _| window.zoom_window())
             .child(TitleBar::new().child(div().text_sm().child(crate::APP_NAME)))
             .child(
