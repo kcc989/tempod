@@ -328,7 +328,11 @@ export class OpRunner {
   private async runStep(op: OpRow): Promise<void> {
     const step = op.step;
     const fn = this.steps[step];
-    const limit = limitOf(step);
+    const configured = limitOf(step);
+    const limit: StepLimit =
+      op.kind === "revert" && step === "git.checkpoint"
+        ? { ...configured, onPermanent: { kind: "fail", code: "INTERNAL" } }
+        : configured;
     const state = this.stateOf(op);
     const input = parseJson<Record<string, unknown>>(op.inputJson, {});
     this.save(op, { status: "running" });

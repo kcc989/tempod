@@ -12,6 +12,9 @@ const pressMod = async (page: Page, key: string) => {
 test.beforeEach(async ({ page, fixture }) => {
   expect(fixture.workspace.id).toBe("w1");
   await page.goto("/w/w1");
+  await expect(page.locator("#root > div").first()).toHaveCSS("height", `${page.viewportSize()!.height}px`, {
+    timeout: 15_000,
+  });
 });
 
 test("renders live workspace state and keeps chat drafts across tabs and reloads", async ({
@@ -42,6 +45,7 @@ test("sends, queues, edits queued prompts and stops through the real composer", 
   await message.press("Enter");
   await expect.poll(() => fixture.inputs("sendPrompt").length).toBe(1);
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+  await expect(message).toHaveValue("");
   await message.fill("Next prompt");
   await message.press("Enter");
   await expect(page.getByText("Next prompt", { exact: true })).toBeVisible();

@@ -87,6 +87,10 @@ const config = {
 };
 const configPath = path.join(app, "wrangler.deploy.jsonc");
 fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+if (process.argv.includes("--prepare")) {
+  console.log("Prepared apps/tempo/wrangler.deploy.jsonc; no cloud resources were changed.");
+  process.exit(0);
+}
 
 // 3. Build and deploy. The Vite plugin writes .wrangler/deploy/config.json under apps/tempo.
 const secretsDir = fs.mkdtempSync(path.join(os.tmpdir(), "tempo-"));

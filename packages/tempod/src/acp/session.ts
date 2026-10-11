@@ -28,7 +28,7 @@ import { VERSION } from "../config.ts";
 import { killGroup } from "../exec.ts";
 import { insideRoots } from "../fs.ts";
 import { errorText, type Logger } from "../log.ts";
-import { isObj, toConfigOptions, toModes } from "./convert.ts";
+import { isObj, modeConfig, toConfigOptions, toModes } from "./convert.ts";
 import { SessionMapper, type TurnOutcome } from "./mapper.ts";
 
 const STDERR_LINES = 200;
@@ -409,7 +409,7 @@ export class AgentSession {
       try {
         await this.setMode(p.modeId);
       } catch (e) {
-        this.deps.log.warn("session/set_mode failed", { sessionId: this.sessionId, error: errorText(e) });
+        this.deps.log.warn("setting the mode failed", { sessionId: this.sessionId, error: errorText(e) });
       }
     }
     if (p.model) {
@@ -451,11 +451,16 @@ export class AgentSession {
       if (typeof modes["currentModeId"] === "string") state.modeId = modes["currentModeId"];
     }
     if (Array.isArray(res["configOptions"])) state.configOptions = toConfigOptions(res["configOptions"]);
+    this.mapper.syncModeConfig();
   }
 
   async setMode(modeId: string): Promise<void> {
-    await this.request("session/set_mode", { sessionId: this.acpSessionId, modeId }, 30_000);
-    this.mapper.state.modeId = modeId;
+    const option = modeConfig(this.mapper.state.configOptions);
+    if (option) await this.setConfig(option.id, modeId);
+    else {
+      await this.request("session/set_mode", { sessionId: this.acpSessionId, modeId }, 30_000);
+      this.mapper.state.modeId = modeId;
+    }
     this.lastUsed = Date.now();
   }
 
@@ -467,6 +472,17 @@ export class AgentSession {
     const res = await this.request<{ configOptions?: unknown }>("session/set_config_option", params, 30_000);
     if (Array.isArray(res.configOptions))
       this.mapper.state.configOptions = toConfigOptions(res.configOptions);
+    this.mapper.syncModeConfig();
+    this.deps.emit({
+      kind: "session.updated",
+      sessionId: this.sessionId,
+      patch: {
+        configOptions: this.mapper.state.configOptions,
+        ...(modeConfig(this.mapper.state.configOptions)
+          ? { modes: this.mapper.state.modes, modeId: this.mapper.state.modeId }
+          : {}),
+      },
+    });
     this.lastUsed = Date.now();
     return this.mapper.state.configOptions;
   }

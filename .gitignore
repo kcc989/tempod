@@ -12,6 +12,7 @@ dist/
 .dev.vars
 coverage/
 tests/e2e/test-results/
+tests/e2e/web-test-results/
 tests/e2e/playwright-report/
 apps/tempo/src/routeTree.gen.ts.bak
 apps/tempo/wrangler.deploy.jsonc

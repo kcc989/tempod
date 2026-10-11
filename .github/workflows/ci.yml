@@ -39,8 +39,12 @@ jobs:
         run: ./tests/e2e/node_modules/.bin/playwright install --with-deps chromium firefox webkit
       - name: Web client acceptance with local protocol fixtures
         run: bun run test:web
+      - name: Existing workspace browser regressions
+        run: bun run --cwd tests/e2e test:browser
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: web-acceptance-traces
-          path: tests/e2e/test-results/
+          path: |
+            tests/e2e/test-results/
+            tests/e2e/web-test-results/

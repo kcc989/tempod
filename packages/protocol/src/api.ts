@@ -236,5 +236,6 @@ export const ApiMeta = Schema.Struct({
   serverVersion: S,
   minMacClient: S,
   latestMacClient: Schema.NullOr(S),
+  latestMacClientSha256: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 });
 export type ApiMeta = typeof ApiMeta.Type;

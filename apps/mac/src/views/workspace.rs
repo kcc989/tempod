@@ -4,14 +4,16 @@ use super::composer::{Composer, ComposerEvent};
 use super::tokens::{Token, color};
 use crate::actions::*;
 use crate::stores::workspace::WorkspaceStore;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariant};
 use gpui_kit::component::input::{Textarea, TextareaState};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Disableable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
-    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, div,
+    AppContext as _, Context, DismissEvent, Entity, Focusable as _, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, Task, Window, div,
 };
 use std::collections::{HashMap, HashSet};
 use tempo_client::Client;
@@ -54,6 +56,11 @@ pub struct WorkspaceView {
     error: Option<String>,
     queue_editor: Option<QueueEditor>,
     queue_pending: bool,
+    closing: Option<String>,
+    close_request: bool,
+    close_timeout: Option<Task<()>>,
+    new_chat_menu: Option<Entity<PopupMenu>>,
+    new_chat_dismiss: Option<Subscription>,
     _store_changed: Subscription,
 }
 
@@ -66,10 +73,13 @@ impl WorkspaceView {
     ) -> Self {
         let changed = cx.observe_in(&store, window, |this, _, window, cx| this.sync(window, cx));
         let request = client.call::<api::GetCredentialStatus>(Default::default());
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             if let Ok(status) = request.await {
-                let _ = this.update(cx, |this, cx| {
+                let _ = this.update_in(cx, |this, window, cx| {
                     this.credentials = Some(status);
+                    if this.new_chat_menu.is_some() {
+                        this.open_new_chat(window, cx);
+                    }
                     cx.notify();
                 });
             }
@@ -88,6 +98,11 @@ impl WorkspaceView {
             error: None,
             queue_editor: None,
             queue_pending: false,
+            closing: None,
+            close_request: false,
+            close_timeout: None,
+            new_chat_menu: None,
+            new_chat_dismiss: None,
             _store_changed: changed,
         };
         view.sync(window, cx);
@@ -164,20 +179,25 @@ impl WorkspaceView {
                         .update_state(|state| state.set_draft(&workspace_id, &session, text));
                 }
                 ComposerEvent::Send(text) => this.send(&session, text, window, cx),
-                ComposerEvent::Steer(text) => this.send_prompt_with_delivery(
-                    &session,
-                    p::TurnPrompt {
-                        text: text.clone(),
-                        mentions: vec![],
-                        attachment_ids: vec![],
-                        review_comment_ids: vec![],
-                    },
-                    Some(p::SendPromptInDelivery::Steer),
-                    window,
-                    cx,
-                ),
+                ComposerEvent::Steer(text) => {
+                    if let Some(chat) = this.chats.get(&session) {
+                        let prompt = chat.composer.read(cx).prompt(text);
+                        this.send_prompt_with_delivery(
+                            &session,
+                            prompt,
+                            Some(p::SendPromptInDelivery::Steer),
+                            window,
+                            cx,
+                        );
+                    }
+                }
+                ComposerEvent::LoadFiles => this.load_files(&session, window, cx),
                 ComposerEvent::Stop => this.stop(&session, cx),
-                ComposerEvent::TogglePlanMode => this.toggle_plan(&session, cx),
+                ComposerEvent::TogglePlanMode => this.toggle_plan(&session, window, cx),
+                ComposerEvent::SetMode(value) => this.configure(&session, None, value, window, cx),
+                ComposerEvent::SetModel { config_id, value } => {
+                    this.configure(&session, Some(config_id), value, window, cx)
+                }
             },
         );
         let session = session_id.to_string();
@@ -214,6 +234,12 @@ impl WorkspaceView {
     }
 
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(id) = self.closing.clone()
+            && !self.close_request
+            && chat_model::running_turn(&self.store.read(cx).state, &id).is_none()
+        {
+            self.finish_close(&id, window, cx);
+        }
         let ids = self.tab_ids(cx);
         if self.active.as_ref().is_none_or(|id| !ids.contains(id)) {
             self.active = ids.first().cloned();
@@ -242,6 +268,7 @@ impl WorkspaceView {
                 .sessions
                 .get(id)
                 .is_some_and(|s| s.steering == Some(true));
+            let session = state.sessions.get(id).cloned();
             chat.transcript.update(cx, |t, cx| {
                 t.read_only = read_only;
                 t.sync(rows, cx);
@@ -250,6 +277,9 @@ impl WorkspaceView {
                 c.read_only = read_only;
                 c.working = working;
                 c.steering = steering;
+                if let Some(session) = &session {
+                    c.sync_session(session, window, cx);
+                }
                 cx.notify();
             });
         }
@@ -280,18 +310,31 @@ impl WorkspaceView {
     }
 
     fn send(&mut self, session_id: &str, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.send_prompt(
-            session_id,
-            p::TurnPrompt {
-                text: text.into(),
-                mentions: Vec::new(),
-                attachment_ids: Vec::new(),
-                review_comment_ids: Vec::new(),
-            },
-            window,
-            cx,
-        );
+        let Some(chat) = self.chats.get(session_id) else {
+            return;
+        };
+        let prompt = chat.composer.read(cx).prompt(text);
+        self.send_prompt(session_id, prompt, window, cx);
     }
+    fn load_files(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let request = self.client.call::<api::ListFiles>(p::ListFilesIn {
+            workspace_id: self.store.read(cx).workspace_id.clone(),
+        });
+        let id = session_id.to_string();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request
+                .await
+                .map(|out| out.paths)
+                .map_err(|e| e.to_string());
+            let _ = this.update_in(cx, |this, _, cx| {
+                if let Some(chat) = this.chats.get(&id) {
+                    chat.composer.update(cx, |c, cx| c.set_files(result, cx));
+                }
+            });
+        })
+        .detach();
+    }
+
     fn send_prompt(
         &mut self,
         session_id: &str,
@@ -324,9 +367,9 @@ impl WorkspaceView {
             workspace_id: self.store.read(cx).workspace_id.clone(),
             session_id: session_id.into(),
             text: prompt.text.clone(),
-            mentions: prompt.mentions,
-            attachment_ids: prompt.attachment_ids,
-            review_comment_ids: prompt.review_comment_ids,
+            mentions: prompt.mentions.clone(),
+            attachment_ids: prompt.attachment_ids.clone(),
+            review_comment_ids: prompt.review_comment_ids.clone(),
             delivery,
         };
         let request = self.client.call::<api::SendPrompt>(input);
@@ -338,7 +381,7 @@ impl WorkspaceView {
                     chat.composer.update(cx, |c, cx| {
                         c.sending = false;
                         if result.is_ok() {
-                            c.clear_sent(&prompt.text, window, cx);
+                            c.clear_sent(&prompt, window, cx);
                         }
                         cx.notify();
                     });
@@ -547,13 +590,15 @@ impl WorkspaceView {
         .detach();
     }
 
-    fn toggle_plan(&mut self, session_id: &str, cx: &mut Context<Self>) {
+    fn toggle_plan(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
         let state = &self.store.read(cx).state;
         let Some(session) = state.sessions.get(session_id) else {
             return;
         };
-        if session.status == p::SessionStatus::Closed
-            || chat_model::running_turn(state, session_id).is_some()
+        if matches!(
+            session.status,
+            p::SessionStatus::Closed | p::SessionStatus::Starting
+        ) || chat_model::running_turn(state, session_id).is_some()
         {
             return;
         }
@@ -567,22 +612,176 @@ impl WorkspaceView {
             self.previous_mode
                 .insert(session_id.into(), previous.clone());
         }
-        let request = self
-            .client
-            .call::<api::SetSessionMode>(p::SetSessionModeIn {
-                workspace_id: self.store.read(cx).workspace_id.clone(),
-                session_id: session_id.into(),
-                mode_id,
-            });
-        cx.spawn(async move |this, cx| {
-            if let Err(error) = request.await {
-                let _ = this.update(cx, |this, cx| {
+        self.configure(session_id, None, &mode_id, window, cx);
+    }
+
+    fn configure(
+        &mut self,
+        session_id: &str,
+        config_id: Option<&String>,
+        value: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(chat) = self.chats.get(session_id) else {
+            return;
+        };
+        let composer = chat.composer.read(cx);
+        if composer.read_only || composer.working || composer.starting || composer.configuring {
+            return;
+        }
+        chat.composer.update(cx, |c, cx| {
+            c.configuring = true;
+            cx.notify();
+        });
+        let client = self.client.clone();
+        let workspace_id = self.store.read(cx).workspace_id.clone();
+        let session_id = session_id.to_string();
+        let config_id = config_id.cloned();
+        let value = value.to_string();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = if let Some(config_id) = config_id {
+                client
+                    .call::<api::SetSessionConfig>(p::SetSessionConfigIn {
+                        workspace_id,
+                        session_id: session_id.clone(),
+                        config_id,
+                        value: p::SetSessionConfigInValue::String(value),
+                    })
+                    .await
+            } else {
+                client
+                    .call::<api::SetSessionMode>(p::SetSessionModeIn {
+                        workspace_id,
+                        session_id: session_id.clone(),
+                        mode_id: value,
+                    })
+                    .await
+            };
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Some(chat) = this.chats.get(&session_id) {
+                    chat.composer.update(cx, |c, _| c.configuring = false);
+                }
+                if let Err(error) = result {
                     this.error = Some(error.to_string());
-                    cx.notify();
-                });
-            }
+                }
+                this.sync(window, cx);
+            });
         })
         .detach();
+    }
+
+    pub fn close_chat(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.closing.is_some() {
+            return;
+        }
+        let Some(session) = self.store.read(cx).state.sessions.get(session_id) else {
+            return;
+        };
+        if session.status == p::SessionStatus::Closed {
+            self.viewing_closed.retain(|id| id != session_id);
+            self.sync(window, cx);
+            return;
+        }
+        if chat_model::running_turn(&self.store.read(cx).state, session_id).is_some() {
+            let weak = cx.weak_entity();
+            let session_id = session_id.to_string();
+            window.open_alert_dialog(cx, move |alert, _, _| {
+                let weak = weak.clone();
+                let id = session_id.clone();
+                alert
+                    .title("Stop the agent and close this chat?")
+                    .confirm()
+                    .ok_text("Stop and close")
+                    .ok_variant(ButtonVariant::Danger)
+                    .on_ok(move |_, window, cx| {
+                        let _ = weak.update(cx, |this, cx| this.confirm_close(&id, window, cx));
+                        true
+                    })
+            });
+        } else {
+            self.finish_close(session_id, window, cx);
+        }
+    }
+
+    fn confirm_close(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(turn) = chat_model::running_turn(&self.store.read(cx).state, session_id) else {
+            self.finish_close(session_id, window, cx);
+            return;
+        };
+        if self.closing.is_some() {
+            return;
+        }
+        let request = self.client.call::<api::CancelTurn>(p::CancelTurnIn {
+            workspace_id: self.store.read(cx).workspace_id.clone(),
+            turn_id: turn.id.clone(),
+        });
+        self.closing = Some(session_id.into());
+        self.close_request = true;
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.close_request = false;
+                if let Err(error) = result
+                    && error.code() != Some(p::ErrorCode::TurnNotActive)
+                {
+                    this.closing = None;
+                    this.error = Some(error.to_string());
+                    cx.notify();
+                    return;
+                }
+                this.close_timeout = Some(cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_secs(30))
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        this.closing = None;
+                        this.error =
+                            Some("The agent is still stopping. Try closing the chat again.".into());
+                        cx.notify();
+                    });
+                }));
+                this.sync(window, cx);
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn finish_close(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_timeout = None;
+        self.closing = Some(session_id.into());
+        self.close_request = true;
+        let id = session_id.to_string();
+        let request = self.client.call::<api::CloseSession>(p::CloseSessionIn {
+            workspace_id: self.store.read(cx).workspace_id.clone(),
+            session_id: id.clone(),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.closing = None;
+                this.close_request = false;
+                match result {
+                    Ok(_) => this.store.update(cx, |store, cx| {
+                        if let Some(session) = store.state.sessions.get_mut(&id) {
+                            session.status = p::SessionStatus::Closed;
+                        }
+                        cx.notify();
+                    }),
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                this.sync(window, cx);
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub fn expand_tools(&self, cx: &mut Context<Self>) {
+        if let Some(chat) = self.active.as_ref().and_then(|id| self.chats.get(id)) {
+            chat.transcript.update(cx, |t, cx| t.toggle_tools(cx));
+        }
     }
 
     fn respond_permission(&mut self, request_id: &str, option_id: &str, cx: &mut Context<Self>) {
@@ -627,7 +826,78 @@ impl WorkspaceView {
         .detach();
     }
 
+    pub fn open_new_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .is_some_and(|w| {
+                matches!(
+                    w.state,
+                    p::WorkspaceState::Archived | p::WorkspaceState::Archiving
+                )
+            })
+        {
+            return;
+        }
+        let credentials = self.credentials.clone();
+        let weak = cx.weak_entity();
+        let menu = PopupMenu::build(window, cx, move |menu, _, _| {
+            chat_model::AGENTS.iter().fold(menu, |menu, agent| {
+                let agent = *agent;
+                let enabled = credentials
+                    .as_ref()
+                    .is_some_and(|c| chat_model::has_login(agent, c));
+                let weak = weak.clone();
+                menu.item(
+                    PopupMenuItem::new(if enabled {
+                        chat_model::agent_label(agent).to_string()
+                    } else {
+                        format!(
+                            "{} · {}",
+                            chat_model::agent_label(agent),
+                            if credentials.is_none() {
+                                "Loading logins…"
+                            } else {
+                                "Add login in Settings"
+                            }
+                        )
+                    })
+                    .disabled(!enabled)
+                    .on_click(move |_, window, cx| {
+                        let _ = weak.update(cx, |this, cx| this.create_chat(agent, window, cx));
+                    }),
+                )
+            })
+        });
+        self.new_chat_dismiss =
+            Some(
+                cx.subscribe_in(&menu, window, |this, _, _: &DismissEvent, _, cx| {
+                    this.new_chat_menu = None;
+                    cx.notify();
+                }),
+            );
+        menu.read(cx).focus_handle(cx).focus(window, cx);
+        self.new_chat_menu = Some(menu);
+        cx.notify();
+    }
+
+    pub fn close_active(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(id) = self.active.clone() {
+            self.close_chat(&id, window, cx);
+        }
+    }
+
+    pub fn focus_model(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(chat) = self.active.as_ref().and_then(|id| self.chats.get(id)) {
+            chat.composer.update(cx, |c, cx| c.focus_model(window, cx));
+        }
+    }
+
     fn create_chat(&mut self, agent: p::AgentId, window: &mut Window, cx: &mut Context<Self>) {
+        self.new_chat_menu = None;
         let request = self.client.call::<api::CreateSession>(p::CreateSessionIn {
             workspace_id: self.store.read(cx).workspace_id.clone(),
             agent,
@@ -700,29 +970,26 @@ impl Render for WorkspaceView {
                 p::WorkspaceState::Archived | p::WorkspaceState::Archiving
             )
         });
-        let credentials = self.credentials.clone();
-        let weak = cx.weak_entity();
-        let new_chat = Button::new("new-chat-menu")
-            .label("New chat")
-            .dropdown_menu(move |menu, _, _| {
-                chat_model::AGENTS.iter().fold(menu, |menu, agent| {
-                    let agent = *agent;
-                    let weak = weak.clone();
-                    let enabled = credentials
-                        .as_ref()
-                        .is_none_or(|c| chat_model::has_login(agent, c));
-                    menu.item(
-                        PopupMenuItem::new(if enabled {
-                            chat_model::agent_label(agent).to_string()
-                        } else {
-                            format!("{} · Add login in Settings", chat_model::agent_label(agent))
-                        })
-                        .disabled(!enabled)
-                        .on_click(move |_, window, cx| {
-                            let _ = weak.update(cx, |this, cx| this.create_chat(agent, window, cx));
-                        }),
-                    )
-                })
+        let menu = self.new_chat_menu.clone();
+        let new_chat = Popover::new("new-chat-popover")
+            .open(menu.is_some())
+            .trigger(
+                Button::new("new-chat-menu")
+                    .label("New chat")
+                    .disabled(archived),
+            )
+            .on_open_change(cx.listener(|this, open: &bool, window, cx| {
+                if *open {
+                    this.open_new_chat(window, cx);
+                } else {
+                    this.new_chat_menu = None;
+                    cx.notify();
+                }
+            }))
+            .content(move |_, _, _| {
+                menu.clone()
+                    .map(|m| m.into_any_element())
+                    .unwrap_or_else(|| div().into_any_element())
             });
         let weak = cx.weak_entity();
         let closed_menu = Button::new("closed-chat-menu")
@@ -852,7 +1119,9 @@ impl Render for WorkspaceView {
                 .into_any_element()
         };
         let _ = window;
+        let tab_ids = ids.clone();
         v_flex()
+            .key_context(crate::keymap::WORKSPACE)
             .size_full()
             .children(heading.map(|heading| {
                 div()
@@ -876,6 +1145,12 @@ impl Render for WorkspaceView {
                     this.stop(&id, cx);
                 }
             }))
+            .on_action(cx.listener(|this, _: &CloseTab, window, cx| this.close_active(window, cx)))
+            .on_action(cx.listener(|this, _: &NewChat, window, cx| this.open_new_chat(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &ModelPicker, window, cx| this.focus_model(window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &ExpandAllToolCalls, _, cx| this.expand_tools(cx)))
             .children(reconnecting.then(|| {
                 div()
                     .px_3()
@@ -901,11 +1176,20 @@ impl Render for WorkspaceView {
                                     this.sync(window, cx);
                                 }
                             }))
-                            .children(
-                                titles
-                                    .into_iter()
-                                    .map(|t| Tab::new().label(SharedString::from(t))),
-                            ),
+                            .children(titles.into_iter().zip(tab_ids).map(|(title, id)| {
+                                let button_id = SharedString::from(format!("close-chat-{id}"));
+                                Tab::new().label(SharedString::from(title)).suffix(
+                                    Button::new(button_id)
+                                        .icon(gpui_kit::assets::IconName::X)
+                                        .accessibility_label("Close chat")
+                                        .tooltip("Close chat")
+                                        .disabled(self.closing.is_some())
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            cx.stop_propagation();
+                                            this.close_chat(&id, window, cx);
+                                        })),
+                                )
+                            })),
                     )
                     .child(new_chat)
                     .child(closed_menu),
@@ -989,7 +1273,21 @@ mod tests {
                     let input = serde_json::from_slice(&bytes[head_end..])
                         .unwrap_or(serde_json::Value::Null);
                     log.lock().unwrap().push((path.clone(), input.clone()));
-                    let (status, body) = if path.ends_with("/editQueuedTurn") {
+                    let (status, body) = if fail
+                        && [
+                            "/setSessionMode",
+                            "/setSessionConfig",
+                            "/closeSession",
+                            "/cancelTurn",
+                        ]
+                        .iter()
+                        .any(|name| path.ends_with(name))
+                    {
+                        (
+                            500,
+                            r#"{"code":"INTERNAL","message":"Could not update the chat."}"#.into(),
+                        )
+                    } else if path.ends_with("/editQueuedTurn") {
                         let mut turn: serde_json::Value = serde_json::from_str(&response).unwrap();
                         turn["prompt"]["text"] = input["text"].clone();
                         (200, turn.to_string())
@@ -1086,6 +1384,271 @@ mod tests {
             }
             assert!(Instant::now() < deadline, "queue update did not finish");
             std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    fn wait_until(
+        cx: &mut TestAppContext,
+        view: &Entity<WorkspaceView>,
+        done: impl Fn(&WorkspaceView, &gpui_kit::App) -> bool,
+    ) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            if view.read_with(cx, |view, cx| done(view, cx)) {
+                return;
+            }
+            assert!(Instant::now() < deadline, "chat action did not finish");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[gpui_kit::test]
+    fn closing_a_running_chat_confirms_and_waits_for_turn_end(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        let id = chat_model::sessions(&state, false)[0].id.clone();
+        let mut turn = state.turns.values().next().unwrap().clone();
+        turn.session_id = id.clone();
+        turn.status = p::TurnStatus::Running;
+        state.turns.clear();
+        state.turns.insert(turn.id.clone(), turn.clone());
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.focus_composer(window, cx))
+        })
+        .unwrap();
+        cx.update_window(window, |_, window, cx| window.press("cmd-w", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(
+            cx.update_window(window, |_, window, cx| window.has_active_dialog(cx))
+                .unwrap()
+        );
+        assert!(
+            !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/cancelTurn") || path.ends_with("/closeSession"))
+        );
+        cx.update_window(window, |_, window, cx| {
+            window.close_dialog(cx);
+            view.update(cx, |view, cx| view.confirm_close(&id, window, cx));
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, _| !view.close_request);
+        assert!(
+            !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/closeSession"))
+        );
+        turn.status = p::TurnStatus::Cancelled;
+        view.update(cx, |view, cx| {
+            view.store.update(cx, |store, cx| {
+                store
+                    .state
+                    .apply(p::WorkspaceServerMessage::Turn(p::WsTurn {
+                        type_: p::WsTurnType::Turn,
+                        turn,
+                    }));
+                cx.notify();
+            })
+        });
+        wait_until(cx, &view, |view, _| view.closing.is_none());
+        view.read_with(cx, |view, cx| {
+            assert_eq!(
+                view.store.read(cx).state.sessions[&id].status,
+                p::SessionStatus::Closed
+            )
+        });
+        let requests = server.requests.lock().unwrap();
+        let paths: Vec<_> = requests
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .filter(|p| p.ends_with("/cancelTurn") || p.ends_with("/closeSession"))
+            .collect();
+        assert_eq!(
+            paths,
+            ["/api/v1/rpc/cancelTurn", "/api/v1/rpc/closeSession"]
+        );
+    }
+
+    #[gpui_kit::test]
+    fn failed_close_keeps_the_chat_and_failed_config_keeps_the_saved_mode(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        let id = chat_model::sessions(&state, false)[0].id.clone();
+        state.turns.clear();
+        let turn = fixture().turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, true);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let old_mode = state.sessions[&id].mode_id.clone();
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.configure(&id, None, "plan", window, cx))
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| {
+            !view.chats[&id].composer.read(cx).configuring
+        });
+        view.read_with(cx, |view, cx| {
+            assert!(view.error.is_some());
+            assert_eq!(view.store.read(cx).state.sessions[&id].mode_id, old_mode);
+        });
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.close_chat(&id, window, cx))
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, _| view.closing.is_none());
+        view.read_with(cx, |view, cx| {
+            assert_ne!(
+                view.store.read(cx).state.sessions[&id].status,
+                p::SessionStatus::Closed
+            )
+        });
+    }
+
+    #[gpui_kit::test]
+    fn chat_keyboard_shortcut_opens_the_agent_menu(cx: &mut TestAppContext) {
+        let state = fixture();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.focus_composer(window, cx))
+        })
+        .unwrap();
+        cx.update_window(window, |_, window, cx| window.press("cmd-t", cx))
+            .unwrap();
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| assert!(view.new_chat_menu.is_some()));
+        cx.update_window(window, |_, window, cx| window.press("escape", cx))
+            .unwrap();
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| assert!(view.new_chat_menu.is_none()));
+    }
+
+    #[gpui_kit::test]
+    fn stopping_timeout_and_cancel_failure_keep_the_chat_open(cx: &mut TestAppContext) {
+        for failure in [false, true] {
+            let mut state = fixture();
+            let id = chat_model::sessions(&state, false)[0].id.clone();
+            let mut turn = state.turns.values().next().unwrap().clone();
+            turn.session_id = id.clone();
+            turn.status = p::TurnStatus::Running;
+            state.turns.clear();
+            state.turns.insert(turn.id.clone(), turn.clone());
+            let server = LocalServer::new(&turn, failure);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            cx.update_window(window, |_, window, cx| {
+                view.update(cx, |view, cx| view.confirm_close(&id, window, cx))
+            })
+            .unwrap();
+            wait_until(cx, &view, |view, _| !view.close_request);
+            if !failure {
+                cx.background_executor
+                    .advance_clock(Duration::from_secs(30));
+                cx.run_until_parked();
+            }
+            view.read_with(cx, |view, cx| {
+                assert!(view.closing.is_none());
+                assert!(view.error.is_some());
+                assert_ne!(
+                    view.store.read(cx).state.sessions[&id].status,
+                    p::SessionStatus::Closed
+                );
+            });
+            assert!(
+                !server
+                    .requests
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|(path, _)| path.ends_with("/closeSession"))
+            );
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn mentions_reach_queue_and_steering_and_survive_send_failure(cx: &mut TestAppContext) {
+        for (steer, fail) in [(false, false), (true, false), (false, true)] {
+            let mut state = fixture();
+            let id = chat_model::sessions(&state, false)[0].id.clone();
+            state.sessions.get_mut(&id).unwrap().steering = Some(true);
+            let mut turn = state.turns.values().next().unwrap().clone();
+            turn.session_id = id.clone();
+            turn.status = p::TurnStatus::Running;
+            state.turns.clear();
+            state.turns.insert(turn.id.clone(), turn.clone());
+            let server = LocalServer::new(&turn, fail);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            cx.update_window(window, |_, window, cx| {
+                view.update(cx, |view, cx| {
+                    view.chats[&id].composer.update(cx, |c, cx| {
+                        c.set_text("Check this file", window, cx);
+                        c.add_mention("src/main.rs", cx);
+                        cx.emit(if steer {
+                            ComposerEvent::Steer("Check this file".into())
+                        } else {
+                            ComposerEvent::Send("Check this file".into())
+                        });
+                    });
+                });
+            })
+            .unwrap();
+            wait_sent(cx, &view);
+            view.read_with(cx, |view, cx| {
+                let c = view.chats[&id].composer.read(cx);
+                assert_eq!(c.text(cx), if fail { "Check this file" } else { "" });
+                assert_eq!(c.prompt(&c.text(cx)).mentions.len(), usize::from(fail));
+            });
+            let requests = server.requests.lock().unwrap();
+            let input: p::SendPromptIn = serde_json::from_value(
+                requests
+                    .iter()
+                    .find(|(path, _)| path.ends_with("/sendPrompt"))
+                    .unwrap()
+                    .1
+                    .clone(),
+            )
+            .unwrap();
+            assert_eq!(
+                input.mentions,
+                vec![p::Mention {
+                    path: "src/main.rs".into()
+                }]
+            );
+            assert_eq!(
+                input.delivery,
+                steer.then_some(p::SendPromptInDelivery::Steer)
+            );
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
         }
     }
 

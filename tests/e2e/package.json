@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "test:browser": "playwright test -c playwright.browser.config.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test:web": "playwright test -c playwright.web.config.ts"
   },

@@ -700,7 +700,8 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 **Rules**
 
 - `tempod` MUST answer every request exactly once.
-- The DO MUST apply events in `seq` order and drop any `(incarnation, seq)` it has already stored.
+- `turn.started` is durable proof that the queued prompt was accepted. A later prompt acknowledgement MUST NOT resurrect a turn that already ended.
+- The DO MUST apply events in `seq` order and drop any `(incarnation, seq)` it has already stored. Local event mutations, their deduplication receipt and the applied sequence cursor commit in one SQLite transaction. If application fails, close the daemon socket and replay from the last committed cursor before applying later events. Credential refreshes are accepted by CredentialDO before their payload-free receipt and cursor commit.
 - `credential.changed` carries a secret. The DO MUST NOT store it in `events`; it goes straight to CredentialDO. The same applies to `credential.put` and to `env` in `hello` and `session.start`: never logged, never stored outside CredentialDO.
 
 ## Error codes
