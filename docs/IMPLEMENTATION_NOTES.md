@@ -76,7 +76,7 @@ The test agents found these. The code makes the choice shown; none contradicts a
 
 | Item | Status |
 | --- | --- |
-| Tempo for Mac (07, Rust on GPUI Kit) | Not built. The requested stack is TypeScript. The server side of milestone M0 is built: `/api/v1/rpc/<function>`, `/api/v1/meta`, the bearer and device-authorization plugins, bearer WebSocket upgrades, the `/device` page, Settings → Devices and `/downloads/mac/<version>`. `protocol:gen` and the shared fixtures are not built. |
+| Tempo for Mac (07, Rust on GPUI Kit) | In scope (the owner approved it on 2026-10-11). Built after the server side of M0 in its own build loop: `crates/tempo-protocol`, `crates/tempo-client`, `crates/tempo-terminal`, `crates/protocol-gen`, `apps/mac`. The build machine runs Linux, so macOS-only parts (Keychain, notifications, Dock badge, URL scheme, signing, notarization) sit behind `cfg(target_os = "macos")` and cannot be run here; everything else compiles and is tested here. Rust is pinned to 1.97.0 in `rust-toolchain.toml`. |
 | Spikes S1 to S16 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
 | Acceptance tests AT-1 to AT-37 | Not run, for the same reason. `tests/e2e` holds the plan. |
 | Adapter conformance tests | `tests/conformance` holds the plan; they run inside the image. |
