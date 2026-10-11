@@ -31,11 +31,12 @@ describe("regressions", () => {
   it("a prompt sent while the workspace is stopping queues a wake (03, sendPrompt step 5)", async () => {
     const seeded = await seedProject();
     await seedCredentials(seeded.userId);
-    const { stub } = await seedWorkspace(seeded);
+    const { stub, tempod } = await seedWorkspace(seeded);
     await driveToReady(stub);
     const created = await stub.createSession({ agent: "claude" });
     const sessionId = (created as unknown as { value?: { id: string } }).value?.id ?? "";
     expect(sessionId).not.toBe("");
+    await waitFor(() => tempod.requestsOf("session.start").length === 1, 5000, "session start");
     await runInDurableObject(stub, (instance: unknown) => {
       internals(instance as WorkspaceDO).core.setState("stopping");
     });
@@ -43,6 +44,7 @@ describe("regressions", () => {
     expect(turn.ok).toBe(true);
     const ops = await opRows(stub);
     expect(ops.some((o) => o.kind === "wake" && (o.status === "pending" || o.status === "running"))).toBe(true);
+    await runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => state.storage.deleteAlarm());
   });
 
   it("keeps the health detail when the container never becomes healthy", async () => {
