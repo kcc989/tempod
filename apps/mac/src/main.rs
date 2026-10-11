@@ -13,14 +13,29 @@ fn main() {
     }
     logging::info("app", "starting", json!({"version": tempo_mac::VERSION}));
     let local = storage::Local::load(storage::support_dir());
-    let runtime = ClientRuntime::start();
+    let runtime = match ClientRuntime::start() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            logging::error(
+                "app",
+                "I/O runtime did not start",
+                json!({"kind": format!("{:?}", err.kind())}),
+            );
+            eprintln!("Tempo could not start its network runtime: {}", err.kind());
+            return;
+        }
+    };
     let (url_tx, url_rx) = async_channel::unbounded::<Vec<String>>();
 
     let clicks = url_tx.clone();
     platform::on_notification_click(move |workspace_id| {
         let _ = clicks.try_send(vec![format!("tempo://workspace/{workspace_id}")]);
     });
-    platform::observe_wake(|| logging::info("app", "woke from sleep", json!({})));
+    let handle = runtime.handle();
+    platform::observe_wake(move || {
+        handle.reconnect_all();
+        logging::info("app", "woke from sleep", json!({}));
+    });
 
     let application = gpui_kit::application().with_http_client(image_policy::blocked_http_client());
     application.on_open_urls(move |urls| {

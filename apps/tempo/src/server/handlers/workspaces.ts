@@ -62,7 +62,8 @@ export const createWorkspace = async (
     wsSource = { kind: "new" };
     branch = "";
   } else if (source.kind === "branch") {
-    if (!(await github.branchExists(token, repo, source.branch))) throw new TempoError("NOT_FOUND", undefined, "branch not on origin");
+    if (!(await github.branchExists(token, repo, source.branch)))
+      throw new TempoError("NOT_FOUND", undefined, "branch not on origin");
     branch = source.branch;
     baseBranch = p.defaultBranch;
     wsSource = { kind: "branch" };
@@ -134,9 +135,14 @@ export const createWorkspace = async (
   throw new TempoError("INTERNAL", undefined, "could not pick a slug");
 };
 
-export const listWorkspaces = async ({ env, user }: HandlerCtx, { includeArchived }: FnInput<"listWorkspaces">): Promise<FnOutput<"listWorkspaces">> => {
+export const listWorkspaces = async (
+  { env, user }: HandlerCtx,
+  { includeArchived }: FnInput<"listWorkspaces">,
+): Promise<FnOutput<"listWorkspaces">> => {
   const db = d1(env);
-  const where = includeArchived ? eq(workspaces.userId, user.id) : and(eq(workspaces.userId, user.id), isNull(workspaces.archivedAt));
+  const where = includeArchived
+    ? eq(workspaces.userId, user.id)
+    : and(eq(workspaces.userId, user.id), isNull(workspaces.archivedAt));
   const rows = await db.select().from(workspaces).where(where).orderBy(desc(workspaces.lastActivityAt)).all();
   return rows.map(summaryFromD1Row);
 };
@@ -150,6 +156,9 @@ export const viaWorkspace =
   async ({ env, user }, input) => {
     const { workspaceId, ...rest } = input as FnInput<K> & { workspaceId: string };
     if (!(await getOwnedWorkspace(env, user.id, workspaceId))) throw new TempoError("NOT_FOUND");
-    const stub = env.WORKSPACE.getByName(workspaceId) as unknown as Record<K, (i: unknown) => Promise<import("@tempo/protocol").Result<FnOutput<K>>>>;
+    const stub = env.WORKSPACE.getByName(workspaceId) as unknown as Record<
+      K,
+      (i: unknown) => Promise<import("@tempo/protocol").Result<FnOutput<K>>>
+    >;
     return unwrap(await stub[name](rest));
   };

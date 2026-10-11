@@ -241,4 +241,3 @@ export type ScriptRunRow = typeof scriptRuns.$inferSelect;
 export type ReviewCommentRow = typeof reviewComments.$inferSelect;
 export type PermissionRow = typeof permissions.$inferSelect;
 export type AttachmentRow = typeof attachments.$inferSelect;
-

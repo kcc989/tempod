@@ -33,7 +33,11 @@ export const safeJson = (text: string): unknown => {
   }
 };
 
-export const requireProject = async (env: Env, userId: string, projectId: string): Promise<schema.ProjectRow> => {
+export const requireProject = async (
+  env: Env,
+  userId: string,
+  projectId: string,
+): Promise<schema.ProjectRow> => {
   const row = await d1(env)
     .select()
     .from(schema.projects)
@@ -43,11 +47,20 @@ export const requireProject = async (env: Env, userId: string, projectId: string
   return row;
 };
 
-export const requireInstallation = async (env: Env, userId: string, installationId: number): Promise<schema.InstallationRow> => {
+export const requireInstallation = async (
+  env: Env,
+  userId: string,
+  installationId: number,
+): Promise<schema.InstallationRow> => {
   const row = await d1(env)
     .select()
     .from(schema.githubInstallations)
-    .where(and(eq(schema.githubInstallations.installationId, installationId), eq(schema.githubInstallations.userId, userId)))
+    .where(
+      and(
+        eq(schema.githubInstallations.installationId, installationId),
+        eq(schema.githubInstallations.userId, userId),
+      ),
+    )
     .get();
   if (!row) throw new TempoError("NOT_FOUND", undefined, "installation not found");
   return row;
@@ -56,14 +69,23 @@ export const requireInstallation = async (env: Env, userId: string, installation
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
 /** Installation token for the Worker's own GitHub calls, scoped to one repo when given. */
-export const installationToken = async (env: Env, installationId: number, repoId?: number): Promise<string> => {
+export const installationToken = async (
+  env: Env,
+  installationId: number,
+  repoId?: number,
+): Promise<string> => {
   const key = `${installationId}:${repoId ?? "*"}`;
   const hit = tokenCache.get(key);
   if (hit && hit.expiresAt - 5 * 60_000 > Date.now()) return hit.token;
-  const token = await mintInstallationToken(await requireGithubAppConfig(env), installationId, repoId ? [repoId] : undefined);
+  const token = await mintInstallationToken(
+    await requireGithubAppConfig(env),
+    installationId,
+    repoId ? [repoId] : undefined,
+  );
   tokenCache.set(key, token);
   return token.token;
 };
 
-export const projectToken = (env: Env, p: schema.ProjectRow) => installationToken(env, p.installationId, p.repoId);
+export const projectToken = (env: Env, p: schema.ProjectRow) =>
+  installationToken(env, p.installationId, p.repoId);
 export const repoOf = (p: schema.ProjectRow) => ({ owner: p.repoOwner, name: p.repoName });

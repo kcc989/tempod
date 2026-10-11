@@ -1,5 +1,6 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { newId } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { internals, seedCredentials, seedProject, seedWorkspace, waitFor } from "./fakes.ts";
 
@@ -19,12 +20,16 @@ const driveToReady = async (stub: Stub) => {
 };
 
 const opRows = (stub: Stub) =>
-  runInDurableObject(stub, (_i: unknown, state: DurableObjectState) =>
-    state.storage.sql.exec("SELECT kind, status, error_detail FROM ops ORDER BY created_at, rowid").toArray() as Array<{
-      kind: string;
-      status: string;
-      error_detail: string | null;
-    }>,
+  runInDurableObject(
+    stub,
+    (_i: unknown, state: DurableObjectState) =>
+      state.storage.sql
+        .exec("SELECT kind, status, error_detail FROM ops ORDER BY created_at, rowid")
+        .toArray() as Array<{
+        kind: string;
+        status: string;
+        error_detail: string | null;
+      }>,
   );
 
 describe("regressions", () => {
@@ -40,10 +45,18 @@ describe("regressions", () => {
     await runInDurableObject(stub, (instance: unknown) => {
       internals(instance as WorkspaceDO).core.setState("stopping");
     });
-    const turn = await stub.sendPrompt({ sessionId, text: "hi", mentions: [], attachmentIds: [], reviewCommentIds: [] });
+    const turn = await stub.sendPrompt({
+      sessionId,
+      text: "hi",
+      mentions: [],
+      attachmentIds: [],
+      reviewCommentIds: [],
+    });
     expect(turn.ok).toBe(true);
     const ops = await opRows(stub);
-    expect(ops.some((o) => o.kind === "wake" && (o.status === "pending" || o.status === "running"))).toBe(true);
+    expect(ops.some((o) => o.kind === "wake" && (o.status === "pending" || o.status === "running"))).toBe(
+      true,
+    );
     await runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => state.storage.deleteAlarm());
   });
 
@@ -93,7 +106,12 @@ describe("regressions", () => {
 
   it("UserHubDO loads summaries from D1 only once", async () => {
     const seeded = await seedProject();
-    const { workspaceId } = await seedWorkspace(seeded);
+    const workspaceId = newId();
+    await env.DB.prepare(
+      "INSERT INTO workspaces (id, project_id, user_id, slug, title, branch, base_branch, state, attention, default_agent, pinned, last_activity_at, created_at, summary_rev) VALUES (?, ?, ?, 'lisbon', 'lisbon', 'tempo/lisbon', 'main', 'sleeping', 'none', 'claude', 0, 1, 1, 0)",
+    )
+      .bind(workspaceId, seeded.projectId, seeded.userId)
+      .run();
     const hub = env.USER_HUB.getByName(seeded.userId);
     const open = async () => {
       const res = await hub.fetch("https://tempo.test/api/ws/hub", { headers: { Upgrade: "websocket" } });
@@ -103,6 +121,7 @@ describe("regressions", () => {
       );
       ws.accept();
       const hello = await first;
+      expect(hello.type).toBe("hello");
       ws.close();
       return hello;
     };

@@ -88,7 +88,10 @@ export class WorkspaceCore {
   lastHomeBackupAt = 0;
   tempodVersion: string | null = null;
   private projectCache: { info: ProjectInfo; at: number } | null = null;
-  readonly opWaiters = new Map<string, Array<{ resolve: (v: unknown) => void; reject: (e: unknown) => void }>>();
+  readonly opWaiters = new Map<
+    string,
+    Array<{ resolve: (v: unknown) => void; reject: (e: unknown) => void }>
+  >();
   /** Set by index.ts: runs the queue runner after any change to state, turns, sessions or setup. */
   kickQueue: () => void = () => undefined;
   /** Set by index.ts: re-arms the single alarm. */
@@ -207,8 +210,13 @@ export class WorkspaceCore {
   }
 
   async project(fresh = false): Promise<ProjectInfo> {
-    if (!fresh && this.projectCache && Date.now() - this.projectCache.at < 30_000) return this.projectCache.info;
-    const row = await drizzleD1(this.env.DB).select().from(projects).where(eq(projects.id, this.ws().projectId)).get();
+    if (!fresh && this.projectCache && Date.now() - this.projectCache.at < 30_000)
+      return this.projectCache.info;
+    const row = await drizzleD1(this.env.DB)
+      .select()
+      .from(projects)
+      .where(eq(projects.id, this.ws().projectId))
+      .get();
     if (!row) throw new TempoError("NOT_FOUND", undefined, "project not found");
     const overrides = decodeLayer(parseJson(row.settingsJson, {}));
     const info: ProjectInfo = {
@@ -256,9 +264,19 @@ export class WorkspaceCore {
 
   computeAttention(): Attention {
     const row = this.ws();
-    const pending = this.db.select({ id: permissions.requestId }).from(permissions).where(eq(permissions.status, "pending")).get();
+    const pending = this.db
+      .select({ id: permissions.requestId })
+      .from(permissions)
+      .where(eq(permissions.status, "pending"))
+      .get();
     if (pending) return "needs_input";
-    const newest = this.db.select().from(turns).where(isNotNull(turns.endedAt)).orderBy(desc(turns.endedAt)).limit(1).get();
+    const newest = this.db
+      .select()
+      .from(turns)
+      .where(isNotNull(turns.endedAt))
+      .orderBy(desc(turns.endedAt))
+      .limit(1)
+      .get();
     if (row.state === "error" || row.setupStatus === "failed" || newest?.status === "failed") return "error";
     if (newest?.endedAt && (row.lastViewedAt === null || newest.endedAt > row.lastViewedAt)) return "unread";
     return "none";
@@ -425,7 +443,12 @@ export class WorkspaceCore {
       seq: r.seq,
       status: r.status as Turn["status"],
       queuePos: r.queuePos,
-      prompt: parseJson<TurnPrompt>(r.promptJson, { text: "", mentions: [], attachmentIds: [], reviewCommentIds: [] }),
+      prompt: parseJson<TurnPrompt>(r.promptJson, {
+        text: "",
+        mentions: [],
+        attachmentIds: [],
+        reviewCommentIds: [],
+      }),
       stopReason: r.stopReason,
       errorCode: r.errorCode,
       checkpointId: r.checkpointId,
@@ -452,12 +475,18 @@ export class WorkspaceCore {
   }
 
   nextTurnSeq(): number {
-    const row = this.db.select({ max: sql<number>`coalesce(max(${turns.seq}), 0)` }).from(turns).get();
+    const row = this.db
+      .select({ max: sql<number>`coalesce(max(${turns.seq}), 0)` })
+      .from(turns)
+      .get();
     return (row?.max ?? 0) + 1;
   }
 
   nextQueuePos(): number {
-    const row = this.db.select({ max: sql<number>`coalesce(max(${turns.queuePos}), 0)` }).from(turns).get();
+    const row = this.db
+      .select({ max: sql<number>`coalesce(max(${turns.queuePos}), 0)` })
+      .from(turns)
+      .get();
     return (row?.max ?? 0) + 1;
   }
 
@@ -569,7 +598,12 @@ export class WorkspaceCore {
       .where(and(eq(items.turnId, turnId), inArray(items.status, ["streaming", "pending", "in_progress"])))
       .all();
     for (const it of open) {
-      const status = outcome === "completed" && it.status === "streaming" ? "completed" : outcome === "cancelled" ? "cancelled" : it.status;
+      const status =
+        outcome === "completed" && it.status === "streaming"
+          ? "completed"
+          : outcome === "cancelled"
+            ? "cancelled"
+            : it.status;
       if (status !== it.status) this.updateItem(it.id, { status: status as ItemStatus });
     }
   }
@@ -586,15 +620,33 @@ export class WorkspaceCore {
   }
 
   /** A notice in the transcript of the given (or newest) session. */
-  notice(level: "info" | "warning" | "error", text: string, sessionId?: string | null, turnId?: string | null): void {
+  notice(
+    level: "info" | "warning" | "error",
+    text: string,
+    sessionId?: string | null,
+    turnId?: string | null,
+  ): void {
     const sid =
       sessionId ??
-      this.db.select({ id: sessions.id }).from(sessions).where(ne(sessions.status, "closed")).orderBy(desc(sessions.updatedAt)).get()?.id;
+      this.db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(ne(sessions.status, "closed"))
+        .orderBy(desc(sessions.updatedAt))
+        .get()?.id;
     if (!sid) {
-      log(level === "error" ? "error" : level === "warning" ? "warn" : "info", text, { workspaceId: this.wsOrNull()?.workspaceId });
+      log(level === "error" ? "error" : level === "warning" ? "warn" : "info", text, {
+        workspaceId: this.wsOrNull()?.workspaceId,
+      });
       return;
     }
-    this.insertItem({ sessionId: sid, turnId: turnId ?? null, kind: "notice", status: "completed", content: { level, text } });
+    this.insertItem({
+      sessionId: sid,
+      turnId: turnId ?? null,
+      kind: "notice",
+      status: "completed",
+      content: { level, text },
+    });
   }
 
   // ---------- sockets ----------
@@ -632,14 +684,23 @@ export class WorkspaceCore {
   /** 03, Activity. Open UI sockets do not count. */
   isActive(terminalsOpen: number): boolean {
     if (this.runningTurn() || this.queuedTurns().length > 0) return true;
-    if (this.db.select({ id: permissions.requestId }).from(permissions).where(eq(permissions.status, "pending")).get()) return true;
+    if (
+      this.db
+        .select({ id: permissions.requestId })
+        .from(permissions)
+        .where(eq(permissions.status, "pending"))
+        .get()
+    )
+      return true;
     if (terminalsOpen > 0) return true;
     if (Date.now() - this.lastPreviewAt < 5 * 60_000) return true;
     return this.hasRunningScripts();
   }
 
   hasRunningScripts(): boolean {
-    const row = this.ctx.storage.sql.exec("SELECT 1 FROM script_runs WHERE status = 'running' AND kind IN ('setup','run') LIMIT 1").toArray();
+    const row = this.ctx.storage.sql
+      .exec("SELECT 1 FROM script_runs WHERE status = 'running' AND kind IN ('setup','run') LIMIT 1")
+      .toArray();
     return row.length > 0;
   }
 

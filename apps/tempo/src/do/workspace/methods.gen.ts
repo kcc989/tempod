@@ -5,7 +5,10 @@ import type { Env } from "../../env.ts";
 import type { MethodInput } from "./rpc.ts";
 
 export abstract class WorkspaceRpcBase extends DurableObject<Env> {
-  protected abstract rpc<K extends WorkspaceFnName>(name: K, input: MethodInput<K>): Promise<Result<FnOutput<K>>>;
+  protected abstract rpc<K extends WorkspaceFnName>(
+    name: K,
+    input: MethodInput<K>,
+  ): Promise<Result<FnOutput<K>>>;
 
   getWorkspace(input: MethodInput<"getWorkspace">): Promise<Result<FnOutput<"getWorkspace">>> {
     return this.rpc("getWorkspace", input);
@@ -47,7 +50,9 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("deleteWorkspace", input);
   }
 
-  rotatePreviewToken(input: MethodInput<"rotatePreviewToken">): Promise<Result<FnOutput<"rotatePreviewToken">>> {
+  rotatePreviewToken(
+    input: MethodInput<"rotatePreviewToken">,
+  ): Promise<Result<FnOutput<"rotatePreviewToken">>> {
     return this.rpc("rotatePreviewToken", input);
   }
 
@@ -115,11 +120,15 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("addReviewComment", input);
   }
 
-  deleteReviewComment(input: MethodInput<"deleteReviewComment">): Promise<Result<FnOutput<"deleteReviewComment">>> {
+  deleteReviewComment(
+    input: MethodInput<"deleteReviewComment">,
+  ): Promise<Result<FnOutput<"deleteReviewComment">>> {
     return this.rpc("deleteReviewComment", input);
   }
 
-  listReviewComments(input: MethodInput<"listReviewComments">): Promise<Result<FnOutput<"listReviewComments">>> {
+  listReviewComments(
+    input: MethodInput<"listReviewComments">,
+  ): Promise<Result<FnOutput<"listReviewComments">>> {
     return this.rpc("listReviewComments", input);
   }
 
@@ -127,7 +136,9 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("listCheckpoints", input);
   }
 
-  revertToCheckpoint(input: MethodInput<"revertToCheckpoint">): Promise<Result<FnOutput<"revertToCheckpoint">>> {
+  revertToCheckpoint(
+    input: MethodInput<"revertToCheckpoint">,
+  ): Promise<Result<FnOutput<"revertToCheckpoint">>> {
     return this.rpc("revertToCheckpoint", input);
   }
 
@@ -143,7 +154,9 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("mergePullRequest", input);
   }
 
-  refreshPullRequest(input: MethodInput<"refreshPullRequest">): Promise<Result<FnOutput<"refreshPullRequest">>> {
+  refreshPullRequest(
+    input: MethodInput<"refreshPullRequest">,
+  ): Promise<Result<FnOutput<"refreshPullRequest">>> {
     return this.rpc("refreshPullRequest", input);
   }
 
@@ -175,7 +188,9 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("rerunSetup", input);
   }
 
-  continueAfterSetupFailure(input: MethodInput<"continueAfterSetupFailure">): Promise<Result<FnOutput<"continueAfterSetupFailure">>> {
+  continueAfterSetupFailure(
+    input: MethodInput<"continueAfterSetupFailure">,
+  ): Promise<Result<FnOutput<"continueAfterSetupFailure">>> {
     return this.rpc("continueAfterSetupFailure", input);
   }
 
@@ -186,5 +201,4 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
   listScriptRuns(input: MethodInput<"listScriptRuns">): Promise<Result<FnOutput<"listScriptRuns">>> {
     return this.rpc("listScriptRuns", input);
   }
-
 }

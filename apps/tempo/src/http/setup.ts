@@ -23,13 +23,23 @@ export const handleSetup = async (request: Request, env: Env, url: URL): Promise
     if (!code) return html("<h1>Missing code</h1>", 400);
     const res = await fetch(`https://api.github.com/app-manifests/${encodeURIComponent(code)}/conversions`, {
       method: "POST",
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "tempo", "X-GitHub-Api-Version": "2022-11-28" },
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "tempo",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
     });
     if (!res.ok) {
       log("warn", "github manifest conversion failed", { status: res.status });
       return html(`<h1>GitHub returned ${res.status}</h1><p>Start again from the setup link.</p>`, 502);
     }
-    const app = (await res.json()) as { id: number; slug: string; pem: string; client_id: string; client_secret: string };
+    const app = (await res.json()) as {
+      id: number;
+      slug: string;
+      pem: string;
+      client_id: string;
+      client_secret: string;
+    };
     await env.CREDENTIALS.getByName(SYSTEM_CREDENTIALS).putGithubAppConfig({
       appId: String(app.id),
       slug: app.slug,

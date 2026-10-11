@@ -22,7 +22,8 @@ export const handleRequest = async (request: Request, env: Env, ctx: ExecutionCo
   try {
     const path = url.pathname;
     if (path.startsWith("/api/auth/")) return (await getAuth(env)).handler(request);
-    if (path.startsWith("/api/ws/")) return (await handleChannel(request, env, url)) ?? new Response("Not found", { status: 404 });
+    if (path.startsWith("/api/ws/"))
+      return (await handleChannel(request, env, url)) ?? new Response("Not found", { status: 404 });
     if (path === "/api/setup/status") return handleSetupStatus(env);
     if (path.startsWith("/api/v1/")) return handleApiV1(request, env, url);
     const att = ATTACHMENTS.exec(path);

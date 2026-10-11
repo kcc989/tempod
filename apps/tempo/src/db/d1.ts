@@ -79,8 +79,12 @@ export const workspaces = sqliteTable(
     check("workspaces_default_agent", sql`${t.defaultAgent} IN ('claude','codex','opencode','pi')`),
     check("workspaces_pr_state", sql`${t.prState} IN ('open','draft','merged','closed')`),
     check("workspaces_checks_state", sql`${t.checksState} IN ('pending','success','failure')`),
-    uniqueIndex("workspaces_active_slug").on(t.projectId, t.slug).where(sql`archived_at IS NULL`),
-    uniqueIndex("workspaces_active_branch").on(t.projectId, t.branch).where(sql`archived_at IS NULL`),
+    uniqueIndex("workspaces_active_slug")
+      .on(t.projectId, t.slug)
+      .where(sql`archived_at IS NULL`),
+    uniqueIndex("workspaces_active_branch")
+      .on(t.projectId, t.branch)
+      .where(sql`archived_at IS NULL`),
     index("workspaces_by_activity").on(t.userId, t.archivedAt, sql`last_activity_at DESC`),
   ],
 );

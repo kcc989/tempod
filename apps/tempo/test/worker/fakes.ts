@@ -55,7 +55,13 @@ export class FakeTempod {
     this.on("session.close", ok);
     this.on("permission.respond", ok);
     this.on("credential.put", ok);
-    this.on("git.changes", () => ({ files: [], baseSha: "c".repeat(40), headSha: "d".repeat(40), ahead: 0, dirty: false }));
+    this.on("git.changes", () => ({
+      files: [],
+      baseSha: "c".repeat(40),
+      headSha: "d".repeat(40),
+      ahead: 0,
+      dirty: false,
+    }));
     this.on("git.fileDiff", () => ({ diff: "" }));
     this.on("git.checkpoint", () => ({ unchanged: true }));
     this.on("git.revert", () => ({ headSha: "e".repeat(40) }));
@@ -109,13 +115,15 @@ export class FakeTempod {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const req = new Request(input, init);
         const url = new URL(req.url);
-        if (req.headers.get("Authorization") !== `Bearer ${token()}`) return new Response("unauthorized", { status: 401 });
+        if (req.headers.get("Authorization") !== `Bearer ${token()}`)
+          return new Response("unauthorized", { status: 401 });
         if (url.pathname === "/v1/health") {
           if (!this.healthy) return new Response("starting", { status: 503 });
           return Response.json({ ok: true, version: this.version, incarnation: this.incarnation });
         }
         if (url.pathname === "/v1/connect") return this.accept();
-        if (url.pathname.startsWith("/v1/proxy/")) return new Response(`proxied ${url.pathname}${url.search}`, { status: 200 });
+        if (url.pathname.startsWith("/v1/proxy/"))
+          return new Response(`proxied ${url.pathname}${url.search}`, { status: 200 });
         return new Response("not found", { status: 404 });
       },
       connect: () => {
@@ -160,14 +168,28 @@ export class FakeTempod {
       }
       const handler = this.handlers.get(msg.op);
       if (!handler) {
-        ws.send(JSON.stringify({ type: "res", id: msg.id, ok: false, error: { code: "UNKNOWN_OP", message: msg.op } }));
+        ws.send(
+          JSON.stringify({
+            type: "res",
+            id: msg.id,
+            ok: false,
+            error: { code: "UNKNOWN_OP", message: msg.op },
+          }),
+        );
         return;
       }
       try {
         const result = await handler(msg.params, msg.op);
         ws.send(JSON.stringify({ type: "res", id: msg.id, ok: true, result }));
       } catch (e) {
-        ws.send(JSON.stringify({ type: "res", id: msg.id, ok: false, error: { code: "INTERNAL", message: String(e) } }));
+        ws.send(
+          JSON.stringify({
+            type: "res",
+            id: msg.id,
+            ok: false,
+            error: { code: "INTERNAL", message: String(e) },
+          }),
+        );
       }
     }
   }
@@ -176,7 +198,12 @@ export class FakeTempod {
 export const DEFAULT_EFFECTIVE = {
   agent: { default: "claude", model: "" },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
-  environment: { instance: "standard-3", sleep_after_idle_minutes: 15, egress_policy: "open", egress_allowlist: [] },
+  environment: {
+    instance: "standard-3",
+    sleep_after_idle_minutes: 15,
+    egress_policy: "open",
+    egress_allowlist: [],
+  },
   environment_variables: {},
   git: { branch_prefix: "tempo/", delete_branch_on_archive: false, archive_on_merge: false },
   prompts: { general: "" },
@@ -193,7 +220,10 @@ export class FakeContainer {
   snapshotFails = false;
   readonly images: Record<string, string> = { workspace: "registry.example/workspace@sha256:1111" };
 
-  constructor(readonly tempod: FakeTempod, private readonly token: () => string | null) {}
+  constructor(
+    readonly tempod: FakeTempod,
+    private readonly token: () => string | null,
+  ) {}
 
   start(options: any): void {
     this.starts.push(options);
@@ -222,7 +252,11 @@ export class FakeContainer {
   }
   async snapshotContainer(options?: { name?: string }): Promise<{ id: string; size: number; name?: string }> {
     if (this.snapshotFails) throw new Error("snapshot failed");
-    const snap = { id: `snap-${this.snapshots.length + 1}`, size: 1024, ...(options?.name ? { name: options.name } : {}) };
+    const snap = {
+      id: `snap-${this.snapshots.length + 1}`,
+      size: 1024,
+      ...(options?.name ? { name: options.name } : {}),
+    };
     this.snapshots.push(snap);
     return snap;
   }
@@ -258,7 +292,11 @@ export const installFakes = async (
 };
 
 /** Polls until `check` holds (DO work runs on alarms and microtasks). */
-export const waitFor = async (check: () => boolean | Promise<boolean>, timeoutMs = 5000, label = "condition"): Promise<void> => {
+export const waitFor = async (
+  check: () => boolean | Promise<boolean>,
+  timeoutMs = 5000,
+  label = "condition",
+): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     if (await check()) return;
@@ -272,8 +310,14 @@ export const waitFor = async (check: () => boolean | Promise<boolean>, timeoutMs
 type WorkspaceStub = DurableObjectStub<WorkspaceDO>;
 
 /** Rows from the DO's own SQLite. */
-export const sqlRows = (stub: WorkspaceStub, query: string, ...binds: unknown[]): Promise<Array<Record<string, any>>> =>
-  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => state.storage.sql.exec(query, ...binds).toArray());
+export const sqlRows = (
+  stub: WorkspaceStub,
+  query: string,
+  ...binds: unknown[]
+): Promise<Array<Record<string, any>>> =>
+  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) =>
+    state.storage.sql.exec(query, ...binds).toArray(),
+  );
 
 /** Sends one tempod event. The fake's socket belongs to the DO's I/O context, so it is sent from inside the DO. */
 export const emitEvent = (stub: WorkspaceStub, tempod: FakeTempod, event: TempodEvent): Promise<number> =>
@@ -282,20 +326,29 @@ export const emitEvent = (stub: WorkspaceStub, tempod: FakeTempod, event: Tempod
 /** Waits until the DO has applied the event with this seq of its current incarnation. */
 export const waitApplied = (stub: WorkspaceStub, seq: number, timeoutMs = 5000): Promise<void> =>
   waitFor(
-    async () => Number((await sqlRows(stub, "SELECT tempod_acked_seq FROM workspace WHERE id = 1"))[0]?.["tempod_acked_seq"]) >= seq,
+    async () =>
+      Number(
+        (await sqlRows(stub, "SELECT tempod_acked_seq FROM workspace WHERE id = 1"))[0]?.["tempod_acked_seq"],
+      ) >= seq,
     timeoutMs,
     `event ${seq} applied`,
   );
 
 /** Runs alarms, with every op backoff due at once, until the workspace state is one of `states`. */
-export const driveToState = async (stub: WorkspaceStub, states: ReadonlyArray<string>, timeoutMs = 20_000): Promise<void> => {
+export const driveToState = async (
+  stub: WorkspaceStub,
+  states: ReadonlyArray<string>,
+  timeoutMs = 20_000,
+): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const state = String((await sqlRows(stub, "SELECT state FROM workspace WHERE id = 1"))[0]?.["state"]);
     if (states.includes(state)) return;
     if (Date.now() > deadline) throw new Error(`timed out driving to ${states.join("|")} (state ${state})`);
     await runInDurableObject(stub, (_i: WorkspaceDO, s: DurableObjectState) => {
-      s.storage.sql.exec("UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'");
+      s.storage.sql.exec(
+        "UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'",
+      );
     });
     await runDurableObjectAlarm(stub);
     await new Promise((r) => setTimeout(r, 20));
@@ -324,13 +377,9 @@ export const seedProject = async (opts: { settingsJson?: string } = {}): Promise
   const projectId = newId();
   const now = Date.now();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)").bind(
-      userId,
-      "Owner",
-      `${userId}@example.com`,
-      now,
-      now,
-    ),
+    env.DB.prepare(
+      "INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+    ).bind(userId, "Owner", `${userId}@example.com`, now, now),
     env.DB.prepare(
       "INSERT INTO account (id, account_id, provider_id, user_id, created_at, updated_at) VALUES (?, ?, 'github', ?, ?, ?)",
     ).bind(`acc-${userId}`, OWNER_GITHUB_ID, userId, now, now),
@@ -350,7 +399,13 @@ export const seedProject = async (opts: { settingsJson?: string } = {}): Promise
  */
 export const seedWorkspace = async (
   seeded: Seeded,
-  opts: { prompt?: string; slug?: string; branch?: string; agent?: "claude" | "codex" | "opencode" | "pi"; source?: Source } = {},
+  opts: {
+    prompt?: string;
+    slug?: string;
+    branch?: string;
+    agent?: "claude" | "codex" | "opencode" | "pi";
+    source?: Source;
+  } = {},
 ) => {
   const workspaceId = newId();
   const slug = opts.slug ?? `city${seedCounter}`;

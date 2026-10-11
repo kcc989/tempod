@@ -8,16 +8,23 @@
   "vars": {
     "APP_HOST": "tempo.test",
     "PREVIEW_DOMAIN": "previews.test",
-    "TEMPO_OWNER_GITHUB_ID": "4242"
+    "TEMPO_OWNER_GITHUB_ID": "4242",
   },
   "durable_objects": {
     "bindings": [
       { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
       { "name": "USER_HUB", "class_name": "UserHubDO" },
-      { "name": "CREDENTIALS", "class_name": "CredentialDO" }
-    ]
+      { "name": "CREDENTIALS", "class_name": "CredentialDO" },
+    ],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceDO", "UserHubDO", "CredentialDO"] }],
-  "d1_databases": [{ "binding": "DB", "database_name": "tempo", "database_id": "test", "migrations_dir": "../src/db/migrations" }],
-  "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }]
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tempo",
+      "database_id": "test",
+      "migrations_dir": "../src/db/migrations",
+    },
+  ],
+  "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }],
 }

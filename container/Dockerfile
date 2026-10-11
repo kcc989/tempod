@@ -2,11 +2,12 @@
 # `bun run check:versions` fails when this file and versions.json disagree.
 # BASE_IMAGE is pinned by digest at build time (container/pin-base.ts writes the digest).
 ARG BASE_IMAGE=node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS workspace
 
+ARG TINI_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates git ripgrep fd-find tmux inotify-tools curl jq unzip zstd \
-    procps iproute2 python3 python3-venv build-essential libnss3-tools \
+    tini=${TINI_VERSION} procps iproute2 python3 python3-venv build-essential libnss3-tools \
  && rm -rf /var/lib/apt/lists/*
 
 # gh and bun: versions from versions.json, passed as build args
@@ -39,7 +40,8 @@ COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
 
-RUN useradd -m -u 1000 -s /bin/bash tempo \
+RUN groupmod -n tempo node \
+ && usermod -l tempo -d /home/tempo -s /bin/bash node \
  && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
@@ -61,4 +63,4 @@ ENV HOME=/home/tempo \
 
 USER tempo
 WORKDIR /workspace
-ENTRYPOINT ["/usr/local/bin/tempod"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]

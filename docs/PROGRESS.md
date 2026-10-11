@@ -1,24 +1,38 @@
 # Progress
 
-Status of the Tempo build against the spec (tabs 00 to 07). Last updated 2026-10-11 20:45 UTC, at commit `49fffd8` on `claude/great-franklin-xc39l8` ([PR #1](https://github.com/kcc989/tempod/pull/1)).
+Status of the Tempo build against the spec (tabs 00 to 07). Continuation started 2026-10-11 on `claude/great-franklin-xc39l8` ([PR #1](https://github.com/kcc989/tempod/pull/1)), from `dadd62d`.
 
-Percentages are the estimates of the build loops' progress checkers. Deviations from the spec and open questions are in `IMPLEMENTATION_NOTES.md`.
+Percentages below are the previous build loops' estimates, not new acceptance measurements. Deviations and open questions are in `IMPLEMENTATION_NOTES.md`.
 
 ## Current state
 
-- **Build loops stopped at 20:40 UTC.** All three workflows hit the account's session usage limit, which resets at 23:30 UTC. Agents that were mid-round were cut off, so the newest interim commits hold unfinished UI and Mac code that no checker has verified.
-- **Last verified points:** web loop round 1 (`3676dce`) and Mac loop round 1 (`42a8645`, `a97321b`).
-- **CI:** `format:check` fails on about 78 files. One Worker test fails sometimes (see Worker).
+- **Continuation is active.** The prior loops stopped at the account usage limit; their interim code is now being checked locally on macOS.
+- **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 713 Worker, 294 UI logic, 201 protocol, 109 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
+- **Native baseline:** `cargo test --workspace` (157 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac, including the runtime wiring.
+- **Image verification:** `bun run test:tempod:container` is building on the shared Colima engine. No Linux image test result yet.
+- **Remote CI and deployment:** not verified by this continuation. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
+
+## Continuation changes
+
+- Fixed formatting in 67 source/config files; excluded generated `worker-runtime.d.ts` from Oxfmt, as with the generated route tree. Kept the Turborepo-managed agent guidance block.
+- Fixed the daemon test helpers on macOS: canonical temporary paths and process-state checks through `ps` (Linux still uses `/proc`). All 109 daemon tests pass on the host.
+- Isolated the intermittent UserHubDO load-once regression from the live WorkspaceDO startup publisher. The fixture is now D1-only and asserts that the first message is `hello`.
+- Fixed the daemon build output glob to cache the root `dist/tempod` binary.
+- Fixed the container uid conflict: the pinned Node base already owns uid/gid 1000, so the image renames that account to `tempo` rather than trying to create it again. Updated 01's Dockerfile example.
+- Added a test image derived from the complete workspace image, a pinned-arguments test command, a secrets/cache-excluding Docker context, and a main/manual image-test workflow. Production still uses `container/Dockerfile`.
+- Added owner-approved pinned `tini` to launch the daemon and reap orphaned children. Updated 01; image tests check uid, PID 1 and orphan reaping.
+- Added owner-approved pinned `happy-dom` and `@testing-library/react`, with 9 passing component tests for permission keyboard controls, focus, read-only chats, saved answers, safe Markdown and file links.
+- Connected the Mac app to the real two-thread I/O runtime. Wake events reconnect its channels; unauthorized and incompatible-client signals reach AppState. Device sign-in and live store/view wiring are still pending.
 
 ## Summary
 
 | Area | Spec | Done | State |
 | --- | --- | --- | --- |
-| Monorepo, tooling, CI | 06 | 85% | Turborepo + Bun, TS 6.0.3, oxlint, oxfmt, CI workflow. Format check is red. |
+| Monorepo, tooling, CI | 06 | 85% | Turborepo + Bun, TS 6.0.3, oxlint, oxfmt, CI workflow. Local format check passes; remote CI pending. |
 | `packages/protocol` | 02 | 95% | Effect Schema wire types, 63 API functions, channels, tempod envelopes. JSON Schema and fixtures are generated (Mac loop). 15 files fail oxfmt. |
 | `packages/settings`, `packages/cities` | 01, 03 | 100% | Done and tested. |
 | `tempod` daemon | 01 | 90% | Built; 109 tests pass. |
-| Worker: Durable Objects and ops | 01, 03 | 82% | Built; 12 review findings open (2 high). |
+| Worker: Durable Objects and ops | 01, 03 | 82% | Interim review fixes pass local Worker tests; live restart validation pending. |
 | Server functions | 02 | 95% | All 59 functions from 02 exist. |
 | Egress (`TempoOutbound`) | 01, 05 | 95% | Rules 0 to 10 built and tested. |
 | Auth and GitHub App setup | 05 | 92% | Built; not checked against real GitHub. |
@@ -95,24 +109,24 @@ All 18 review findings are fixed, and 109 tests pass.
 ## Left to do
 
 **CI and quality**
-- [ ] Fix `format:check` (about 78 files).
-- [ ] Fix the sometimes-failing test `regressions.test.ts:109` (UserHubDO sends `hello` after a workspace message).
-- [ ] `apps/tempo/wrangler.jsonc` sets `GH_VERSION` 2.62.0, but `container/versions.json` says 2.102.0 (rule 12).
-- [ ] The turbo `outputs` warning for `@tempo/tempod#build`.
+- [x] Fix `format:check` (67 source/config files, generated declarations excluded).
+- [x] Fix the intermittent load-once test: use D1-only data and assert hello-first delivery.
+- [x] Confirm `GH_VERSION` is 2.102.0 in both Wrangler and versions.json (already corrected in the interim branch).
+- [x] Correct the Turbo output glob for `@tempo/tempod#build`.
 
 **Worker review findings (from round 1)**
-- [ ] HIGH: a pending permission is not cleared when its turn ends, so the workspace never sleeps (`queue.ts` finishTurn).
-- [ ] HIGH: no tempod reconnect during a create or wake op (`index.ts`, `steps.ts`).
-- [ ] The handoff text and `pending_note` are lost when `session.prompt` fails.
-- [ ] A deferred turn never restarts, and the state can stay `working`.
-- [ ] A deleted branch keeps `pushed=1` after archive and restore.
-- [ ] A revert to a checkpoint that has no turn marks every turn reverted.
-- [ ] Attention is not recomputed when a turn fails to start; step timings miss the wait; housekeeping hides `WorkspaceDetail.op`.
+- [x] HIGH: a pending permission is not cleared when its turn ends, so the workspace never sleeps (`queue.ts` finishTurn). Interim fix checked by the local Worker suite.
+- [x] HIGH: no tempod reconnect during a create or wake op (`index.ts`, `steps.ts`). Interim fix checked by the local Worker suite.
+- [x] The handoff text and `pending_note` are lost when `session.prompt` fails. Interim fix checked by the local Worker suite.
+- [x] A deferred turn never restarts, and the state can stay `working`. Interim fix checked by the local Worker suite.
+- [x] A deleted branch keeps `pushed=1` after archive and restore. Interim fix checked by the local Worker suite.
+- [x] A revert to a checkpoint that has no turn marks every turn reverted. Interim fix checked by the local Worker suite.
+- [x] Attention is not recomputed when a turn fails to start; step timings miss the wait; housekeeping hides `WorkspaceDetail.op`. Interim fix checked by the local Worker suite.
 - [ ] A test for a real DO restart with the tempod socket closed.
 
 **tempod**
 - [ ] A fresh spec review after the 18 fixes.
-- [ ] Zombie reaping (Q-2).
+- [x] Implement zombie reaping (Q-2, owner approved). Linux image verification pending.
 - [ ] Run its tests inside the container image (rule 14).
 
 **Web UI (04)**
@@ -131,7 +145,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] Empty, loading and error states per region, and phone variants (55%).
 
 **Tempo for Mac (07)**
-- [ ] `tempo-client` (5%): runtime, RPC, channels, reconnects, close codes, device sign-in, store apply rules.
+- [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in and channel/store wiring remain below.
 - [ ] Sign-in and first run (5%).
 - [ ] Live state and reconnects (10%).
 - [ ] Window layout and components (15%).
@@ -142,7 +156,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] Local storage and logging (8%).
 - [ ] Build, signing and updates (20%): `scripts/mac/release.sh`, update check.
 - [ ] 07 testing table (18%), and the manual checklist `tests/mac-e2e/CHECKLIST.md`.
-- [ ] macOS-only code cannot run here (Linux). It sits behind `cfg(target_os = "macos")` and needs a check on a Mac.
+- [x] Compile, test and lint macOS code on this Mac. Manual UI, notification, Keychain and signing checks remain.
 
 **Private previews and Browser Run (owner request, 2026-10-11)**
 - [x] Research: Browser Run, Protected Quick Tunnels, Cloudflare Access, code integration points.

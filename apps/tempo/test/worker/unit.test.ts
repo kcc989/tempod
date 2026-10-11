@@ -16,7 +16,15 @@ import { AGENT_HOSTS, decide, hostMatches, isRepoPath, type EgressConfig } from 
 import { IllegalTransition, assertTransition, canTransition } from "../../src/do/workspace/transitions.ts";
 import { checksStateOf, prStateOf } from "../../src/github/provider.ts";
 import { appJwt, pkcs1ToPkcs8 } from "../../src/github/app.ts";
-import { base64ToBytes, bytesToBase64, deriveKey, open, seal, sha256Hex, timingSafeEqual } from "../../src/lib/crypto.ts";
+import {
+  base64ToBytes,
+  bytesToBase64,
+  deriveKey,
+  open,
+  seal,
+  sha256Hex,
+  timingSafeEqual,
+} from "../../src/lib/crypto.ts";
 import { isValidBranch } from "../../src/do/workspace/rpc.ts";
 import { parseCodexAuth } from "../../src/server/handlers/credentials.ts";
 import { OP_STEPS, backoffMs, limitOf } from "../../src/do/workspace/runner.ts";
@@ -34,7 +42,12 @@ afterEach(() => {
 describe("egress decide()", () => {
   const APP = "tempo.test";
   const open_: EgressConfig = { owner: "acme", repo: "app", policy: "open", allowlist: [] };
-  const allow: EgressConfig = { owner: "acme", repo: "app", policy: "allowlist", allowlist: ["pypi.org", "*.example.com"] };
+  const allow: EgressConfig = {
+    owner: "acme",
+    repo: "app",
+    policy: "allowlist",
+    allowlist: ["pypi.org", "*.example.com"],
+  };
   const d = (url: string, headers: Record<string, string> = {}, config: EgressConfig = open_) =>
     decide(new URL(url), new Headers(headers), APP, config);
 
@@ -141,7 +154,9 @@ describe("egress decide()", () => {
   describe("rules 4 to 6: placeholder key swaps", () => {
     // 01: rule 4 "Host openrouter.ai, header Authorization: Bearer tempo-placeholder"
     it("rule 4 swaps the OpenRouter key", () => {
-      expect(d("https://openrouter.ai/api/v1/chat/completions", { Authorization: "Bearer tempo-placeholder" })).toEqual({
+      expect(
+        d("https://openrouter.ai/api/v1/chat/completions", { Authorization: "Bearer tempo-placeholder" }),
+      ).toEqual({
         rule: 4,
         action: "forward",
         set: { name: "authorization", value: "openrouter" },
@@ -157,27 +172,39 @@ describe("egress decide()", () => {
     });
     // 01: rule 6 "Host api.openai.com, header Authorization: Bearer tempo-placeholder"
     it("rule 6 swaps the OpenAI key", () => {
-      expect(d("https://api.openai.com/v1/responses", { authorization: "Bearer tempo-placeholder" })).toEqual({
-        rule: 6,
-        action: "forward",
-        set: { name: "authorization", value: "openai" },
-      });
+      expect(d("https://api.openai.com/v1/responses", { authorization: "Bearer tempo-placeholder" })).toEqual(
+        {
+          rule: 6,
+          action: "forward",
+          set: { name: "authorization", value: "openai" },
+        },
+      );
     });
     it("passes a real key to openrouter.ai unchanged (rule 8)", () => {
-      expect(d("https://openrouter.ai/api/v1/models", { authorization: "Bearer sk-or-real" })).toEqual({ rule: 8, action: "forward" });
+      expect(d("https://openrouter.ai/api/v1/models", { authorization: "Bearer sk-or-real" })).toEqual({
+        rule: 8,
+        action: "forward",
+      });
     });
     it("does not apply rule 5's swap to the Authorization header on api.anthropic.com (falls to rule 7)", () => {
-      expect(d("https://api.anthropic.com/v1/messages", { authorization: `Bearer ${PLACEHOLDER}` })).toMatchObject({
+      expect(
+        d("https://api.anthropic.com/v1/messages", { authorization: `Bearer ${PLACEHOLDER}` }),
+      ).toMatchObject({
         rule: 7,
         action: "block",
         status: 403,
       });
     });
     it("does not apply rule 6's header to openrouter.ai keyed by x-api-key (falls to rule 7)", () => {
-      expect(d("https://openrouter.ai/api/v1/chat", { "x-api-key": PLACEHOLDER })).toMatchObject({ rule: 7, status: 403 });
+      expect(d("https://openrouter.ai/api/v1/chat", { "x-api-key": PLACEHOLDER })).toMatchObject({
+        rule: 7,
+        status: 403,
+      });
     });
     it("does not swap the OpenAI key for a different host", () => {
-      expect(d("https://api.openai.com.evil.test/v1", { authorization: `Bearer ${PLACEHOLDER}` })).toMatchObject({
+      expect(
+        d("https://api.openai.com.evil.test/v1", { authorization: `Bearer ${PLACEHOLDER}` }),
+      ).toMatchObject({
         rule: 7,
         action: "block",
       });
@@ -194,19 +221,33 @@ describe("egress decide()", () => {
       ["x-api-key", `prefix-${PLACEHOLDER}-suffix`],
     ])("blocks header %s: %s", (name, value) => {
       const r = d("https://example.org/upload", { [name]: value });
-      expect(r).toEqual({ rule: 7, action: "block", status: 403, body: "tempo: placeholder credential refused" });
+      expect(r).toEqual({
+        rule: 7,
+        action: "block",
+        status: 403,
+        body: "tempo: placeholder credential refused",
+      });
     });
     it("blocks the placeholder in an unrelated header on a key-swap host", () => {
-      expect(d("https://api.openai.com/v1/models", { "x-other": PLACEHOLDER })).toMatchObject({ rule: 7, status: 403 });
+      expect(d("https://api.openai.com/v1/models", { "x-other": PLACEHOLDER })).toMatchObject({
+        rule: 7,
+        status: 403,
+      });
     });
     it("blocks the placeholder before the allowlist check", () => {
-      expect(d("https://pypi.org/simple/", { "x-token": PLACEHOLDER }, allow)).toMatchObject({ rule: 7, status: 403 });
+      expect(d("https://pypi.org/simple/", { "x-token": PLACEHOLDER }, allow)).toMatchObject({
+        rule: 7,
+        status: 403,
+      });
     });
     it("blocks the placeholder carried in the URL", () => {
       expect(d(`https://example.org/?key=${PLACEHOLDER}`)).toMatchObject({ rule: 7, status: 403 });
     });
     it("does not block when no header carries the placeholder", () => {
-      expect(d("https://example.org/", { "x-custom": "tempo-placeholde" })).toEqual({ rule: 8, action: "forward" });
+      expect(d("https://example.org/", { "x-custom": "tempo-placeholde" })).toEqual({
+        rule: 8,
+        action: "forward",
+      });
     });
   });
 
@@ -301,18 +342,30 @@ describe("hostMatches", () => {
 
 describe("isRepoPath", () => {
   // 01 rule 2: "path starts with /<owner>/<repo> of this project (case-insensitive, optional .git)"
-  it.each(["/acme/app", "/acme/app.git", "/acme/app/", "/acme/app/info/refs", "/acme/app.git/info/refs", "/ACME/APP", "/Acme/App.Git/x"])(
-    "accepts %s",
-    (p) => {
-      expect(isRepoPath(p, "acme", "app")).toBe(true);
-    },
-  );
-  it.each(["/acme", "/acme/", "/acme/apps", "/acme/app2/info/refs", "/acme/app.gitx", "/other/app", "/x/acme/app", "acme/app", ""])(
-    "rejects %s",
-    (p) => {
-      expect(isRepoPath(p, "acme", "app")).toBe(false);
-    },
-  );
+  it.each([
+    "/acme/app",
+    "/acme/app.git",
+    "/acme/app/",
+    "/acme/app/info/refs",
+    "/acme/app.git/info/refs",
+    "/ACME/APP",
+    "/Acme/App.Git/x",
+  ])("accepts %s", (p) => {
+    expect(isRepoPath(p, "acme", "app")).toBe(true);
+  });
+  it.each([
+    "/acme",
+    "/acme/",
+    "/acme/apps",
+    "/acme/app2/info/refs",
+    "/acme/app.gitx",
+    "/other/app",
+    "/x/acme/app",
+    "acme/app",
+    "",
+  ])("rejects %s", (p) => {
+    expect(isRepoPath(p, "acme", "app")).toBe(false);
+  });
   it("compares owner and repo given in mixed case", () => {
     expect(isRepoPath("/acme/app.git", "Acme", "App")).toBe(true);
   });
@@ -347,7 +400,9 @@ describe("canTransition", () => {
     ["setting_up", "starting"],
   ];
   // "Any state except archived | A step fails for good | error"
-  const TO_ERROR: ReadonlyArray<WorkspaceState> = WORKSPACE_STATES.filter((s) => s !== "archived" && s !== "error");
+  const TO_ERROR: ReadonlyArray<WorkspaceState> = WORKSPACE_STATES.filter(
+    (s) => s !== "archived" && s !== "error",
+  );
 
   it.each(ROWS)("allows %s -> %s", (from, to) => {
     expect(canTransition(from, to)).toBe(true);
@@ -384,7 +439,9 @@ describe("canTransition", () => {
     expect(canTransition(from, to)).toBe(false);
   });
   it("matches the 03 table for every ordered pair of distinct states", () => {
-    const allowed = new Set([...ROWS, ...TO_ERROR.map((s) => [s, "error"] as const)].map(([f, t]) => `${f}->${t}`));
+    const allowed = new Set(
+      [...ROWS, ...TO_ERROR.map((s) => [s, "error"] as const)].map(([f, t]) => `${f}->${t}`),
+    );
     const mismatches: string[] = [];
     for (const from of WORKSPACE_STATES) {
       for (const to of WORKSPACE_STATES) {
@@ -412,13 +469,19 @@ describe("canTransition", () => {
 describe("prStateOf", () => {
   // 03: "merged if merged, else closed if state = closed, else draft if draft, else open."
   it("is merged when merged, even if closed and draft", () => {
-    expect(prStateOf({ merged: true, merged_at: "2026-01-01T00:00:00Z", state: "closed", draft: true } as never)).toBe("merged");
+    expect(
+      prStateOf({ merged: true, merged_at: "2026-01-01T00:00:00Z", state: "closed", draft: true } as never),
+    ).toBe("merged");
   });
   it("is closed when closed and not merged", () => {
-    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: false } as never)).toBe("closed");
+    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: false } as never)).toBe(
+      "closed",
+    );
   });
   it("is closed, not draft, when a draft PR is closed", () => {
-    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: true } as never)).toBe("closed");
+    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: true } as never)).toBe(
+      "closed",
+    );
   });
   it("is draft when open and draft", () => {
     expect(prStateOf({ merged: false, merged_at: null, state: "open", draft: true } as never)).toBe("draft");
@@ -442,9 +505,12 @@ describe("checksStateOf", () => {
     expect(checksStateOf([run("completed", "failure"), run("in_progress")])).toBe("pending");
   });
   // 03: "else failure if any conclusion is failure, cancelled, timed_out or action_required"
-  it.each(["failure", "cancelled", "timed_out", "action_required"])("is failure when a conclusion is %s", (c) => {
-    expect(checksStateOf([run("completed", "success"), run("completed", c)])).toBe("failure");
-  });
+  it.each(["failure", "cancelled", "timed_out", "action_required"])(
+    "is failure when a conclusion is %s",
+    (c) => {
+      expect(checksStateOf([run("completed", "success"), run("completed", c)])).toBe("failure");
+    },
+  );
   // 03: "else success"
   it.each(["success", "neutral", "skipped", "stale"])("is success when every conclusion is %s", (c) => {
     expect(checksStateOf([run("completed", c), run("completed", "success")])).toBe("success");
@@ -484,11 +550,17 @@ const pem = (label: string, der: Uint8Array) => {
   return `-----BEGIN ${label}-----\n${b64.match(/.{1,64}/g)!.join("\n")}\n-----END ${label}-----\n`;
 };
 
-const b64urlDecode = (s: string): Uint8Array => base64ToBytes(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4));
+const b64urlDecode = (s: string): Uint8Array =>
+  base64ToBytes(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4));
 
 const rsaKeys = (async () => {
   const pair = (await crypto.subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
     true,
     ["sign", "verify"],
   )) as CryptoKeyPair;
@@ -498,7 +570,12 @@ const rsaKeys = (async () => {
 
 const verifyJwt = async (jwt: string, publicKey: CryptoKey) => {
   const [h, p, s] = jwt.split(".");
-  const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, b64urlDecode(s!) as never, new TextEncoder().encode(`${h}.${p}`));
+  const ok = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    publicKey,
+    b64urlDecode(s!) as never,
+    new TextEncoder().encode(`${h}.${p}`),
+  );
   const header = JSON.parse(new TextDecoder().decode(b64urlDecode(h!)));
   const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(p!)));
   return { ok, header, payload, parts: [h!, p!, s!] };
@@ -512,7 +589,13 @@ describe("pkcs1ToPkcs8", () => {
   });
   it("produces bytes WebCrypto imports as a signing key", async () => {
     const { pkcs1 } = await rsaKeys;
-    const key = await crypto.subtle.importKey("pkcs8", pkcs1ToPkcs8(pkcs1), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+    const key = await crypto.subtle.importKey(
+      "pkcs8",
+      pkcs1ToPkcs8(pkcs1),
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
     expect(key.type).toBe("private");
   });
   it("encodes short and long DER lengths", () => {
@@ -525,13 +608,25 @@ describe("pkcs1ToPkcs8", () => {
   });
   it("yields a key WebCrypto refuses when the input is not an RSAPrivateKey", async () => {
     await expect(
-      crypto.subtle.importKey("pkcs8", pkcs1ToPkcs8(new Uint8Array([1, 2, 3])), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]),
+      crypto.subtle.importKey(
+        "pkcs8",
+        pkcs1ToPkcs8(new Uint8Array([1, 2, 3])),
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["sign"],
+      ),
     ).rejects.toThrow();
   });
 });
 
 describe("appJwt", () => {
-  const config = (privateKey: string) => ({ appId: "123456", slug: "tempo-test", privateKey, clientId: "Iv1.x", clientSecret: "s" });
+  const config = (privateKey: string) => ({
+    appId: "123456",
+    slug: "tempo-test",
+    privateKey,
+    clientId: "Iv1.x",
+    clientSecret: "s",
+  });
 
   it("signs an RS256 JWT with a PKCS#1 key (GitHub's format) and sets iss, iat, exp", async () => {
     const { pair, pkcs1 } = await rsaKeys;
@@ -563,7 +658,12 @@ describe("appJwt", () => {
   it("does not verify against a different public key", async () => {
     const { pkcs8 } = await rsaKeys;
     const other = (await crypto.subtle.generateKey(
-      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256",
+      },
       true,
       ["sign", "verify"],
     )) as CryptoKeyPair;
@@ -572,7 +672,9 @@ describe("appJwt", () => {
   });
 
   it("rejects a malformed private key", async () => {
-    await expect(appJwt(config("-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----\n"))).rejects.toThrow();
+    await expect(
+      appJwt(config("-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----\n")),
+    ).rejects.toThrow();
   });
 });
 
@@ -645,11 +747,21 @@ describe("crypto", () => {
   it("derives exactly HKDF-SHA256(master, salt = user id, info = tempo-secrets-v1)", async () => {
     const enc = new TextEncoder();
     const ikm = await crypto.subtle.importKey("raw", base64ToBytes(master), "HKDF", false, ["deriveBits"]);
-    const bits = await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt: enc.encode("user-9"), info: enc.encode("tempo-secrets-v1") }, ikm, 256);
+    const bits = await crypto.subtle.deriveBits(
+      { name: "HKDF", hash: "SHA-256", salt: enc.encode("user-9"), info: enc.encode("tempo-secrets-v1") },
+      ikm,
+      256,
+    );
     const reference = await crypto.subtle.importKey("raw", bits, "AES-GCM", false, ["encrypt"]);
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode("x.key") }, reference, enc.encode("hello"));
-    expect(await open(await deriveKey(master, "user-9"), "x.key", { ciphertext, iv: iv.buffer })).toBe("hello");
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv, additionalData: enc.encode("x.key") },
+      reference,
+      enc.encode("hello"),
+    );
+    expect(await open(await deriveKey(master, "user-9"), "x.key", { ciphertext, iv: iv.buffer })).toBe(
+      "hello",
+    );
   });
 
   // 05: "TEMPO_ENCRYPTION_KEY | Worker secret | Deploy (32 random bytes, base64)"
@@ -660,7 +772,9 @@ describe("crypto", () => {
 
   it("accepts the deployment's TEMPO_ENCRYPTION_KEY binding", async () => {
     const key = await deriveKey(env.TEMPO_ENCRYPTION_KEY, "system");
-    expect(await open(key, "github_app.private_key", await seal(key, "github_app.private_key", "pem"))).toBe("pem");
+    expect(await open(key, "github_app.private_key", await seal(key, "github_app.private_key", "pem"))).toBe(
+      "pem",
+    );
   });
 });
 
@@ -718,12 +832,19 @@ describe("base64 helpers", () => {
 // ---------------------------------------------------------------------------------------------
 
 describe("isValidBranch", () => {
-  it.each(["main", "feature/login", "tempo/add-readme", "fix-123", "a@b", "release/v1.2.3", "ü-branch", "foo/bar.lock.x", "UPPER/case"])(
-    "accepts %s",
-    (b) => {
-      expect(isValidBranch(b)).toBe(true);
-    },
-  );
+  it.each([
+    "main",
+    "feature/login",
+    "tempo/add-readme",
+    "fix-123",
+    "a@b",
+    "release/v1.2.3",
+    "ü-branch",
+    "foo/bar.lock.x",
+    "UPPER/case",
+  ])("accepts %s", (b) => {
+    expect(isValidBranch(b)).toBe(true);
+  });
   // git check-ref-format rules.
   it.each([
     ["empty", ""],
@@ -807,15 +928,21 @@ describe("parseCodexAuth", () => {
     expect(codeOf(() => parseCodexAuth(JSON.stringify(rest)))).toBe("VALIDATION_FAILED");
   });
   it("rejects a file without tokens", () => {
-    expect(codeOf(() => parseCodexAuth(JSON.stringify({ last_refresh: valid.last_refresh })))).toBe("VALIDATION_FAILED");
-    expect(codeOf(() => parseCodexAuth(JSON.stringify({ ...valid, tokens: null })))).toBe("VALIDATION_FAILED");
+    expect(codeOf(() => parseCodexAuth(JSON.stringify({ last_refresh: valid.last_refresh })))).toBe(
+      "VALIDATION_FAILED",
+    );
+    expect(codeOf(() => parseCodexAuth(JSON.stringify({ ...valid, tokens: null })))).toBe(
+      "VALIDATION_FAILED",
+    );
   });
   it("rejects tokens at the top level instead of under tokens", () => {
     const flat = { access_token: "a", refresh_token: "r", last_refresh: valid.last_refresh };
     expect(codeOf(() => parseCodexAuth(JSON.stringify(flat)))).toBe("VALIDATION_FAILED");
   });
   it("rejects a last_refresh that is not a date", () => {
-    expect(codeOf(() => parseCodexAuth(JSON.stringify({ ...valid, last_refresh: "yesterday" })))).toBe("VALIDATION_FAILED");
+    expect(codeOf(() => parseCodexAuth(JSON.stringify({ ...valid, last_refresh: "yesterday" })))).toBe(
+      "VALIDATION_FAILED",
+    );
   });
   // 05 Secrets: "MUST NOT ... put one in an error message"
   it("does not echo token values in the error", () => {
@@ -838,13 +965,18 @@ describe("backoffMs", () => {
   // 03: "next_run_at = now + min(1 s × 2^(attempt − 1), 60 s) with ±20% jitter"
   const base = (attempt: number) => Math.min(1000 * 2 ** (attempt - 1), 60_000);
 
-  it.each([1, 2, 3, 4, 5, 6, 7, 8, 20])("attempt %i with no jitter is min(1 s × 2^(attempt − 1), 60 s)", (attempt) => {
-    vi.spyOn(Math, "random").mockReturnValue(0.5);
-    expect(backoffMs(attempt)).toBe(base(attempt));
-  });
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 20])(
+    "attempt %i with no jitter is min(1 s × 2^(attempt − 1), 60 s)",
+    (attempt) => {
+      vi.spyOn(Math, "random").mockReturnValue(0.5);
+      expect(backoffMs(attempt)).toBe(base(attempt));
+    },
+  );
   it("gives 1 s, 2 s, 4 s ... and caps at 60 s", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.5);
-    expect([1, 2, 3, 4, 5, 6, 7, 8].map(backoffMs)).toEqual([1000, 2000, 4000, 8000, 16000, 32000, 60000, 60000]);
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map(backoffMs)).toEqual([
+      1000, 2000, 4000, 8000, 16000, 32000, 60000, 60000,
+    ]);
   });
   it("applies at most -20% jitter", () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
@@ -885,7 +1017,15 @@ describe("OP_STEPS", () => {
       "setup.run",
       "sessions.markReload",
     ],
-    sleep: ["turns.check", "git.checkpoint", "bundle.upload", "home.backup", "tempod.shutdown", "container.snapshot", "container.destroy"],
+    sleep: [
+      "turns.check",
+      "git.checkpoint",
+      "bundle.upload",
+      "home.backup",
+      "tempod.shutdown",
+      "container.snapshot",
+      "container.destroy",
+    ],
     archive: [
       "turns.cancel",
       "script.archive",
@@ -961,10 +1101,17 @@ describe("limitOf (03 Step limits)", () => {
   });
   it("uses 30 s, 3 attempts, INTERNAL for any other step", () => {
     const l = limitOf("events.prune");
-    expect(l).toMatchObject({ timeoutMs: 30_000, maxAttempts: 3, onPermanent: { kind: "fail", code: "INTERNAL" } });
+    expect(l).toMatchObject({
+      timeoutMs: 30_000,
+      maxAttempts: 3,
+      onPermanent: { kind: "fail", code: "INTERNAL" },
+    });
   });
   it("git.revert and git.commitAndPush get one attempt and fail", () => {
-    expect(limitOf("git.revert")).toMatchObject({ maxAttempts: 1, onPermanent: { kind: "fail", code: "INTERNAL" } });
+    expect(limitOf("git.revert")).toMatchObject({
+      maxAttempts: 1,
+      onPermanent: { kind: "fail", code: "INTERNAL" },
+    });
     expect(limitOf("git.commitAndPush")).toMatchObject({ maxAttempts: 1, onPermanent: { kind: "fail" } });
   });
 });
@@ -980,13 +1127,21 @@ describe("parsePreviewHost", () => {
   const token = newPreviewToken();
 
   it("parses port, workspace id and token", () => {
-    expect(parsePreviewHost(`3000-${ws}-${token}.previews.test`, penv)).toEqual({ port: 3000, workspaceId: ws, token });
+    expect(parsePreviewHost(`3000-${ws}-${token}.previews.test`, penv)).toEqual({
+      port: 3000,
+      workspaceId: ws,
+      token,
+    });
   });
   it("parses a 5-digit port", () => {
     expect(parsePreviewHost(`65535-${ws}-${token}.previews.test`, penv)).toMatchObject({ port: 65535 });
   });
   it("parses a host in upper case (DNS is case-insensitive)", () => {
-    expect(parsePreviewHost(`5173-${ws}-${token}.previews.test`.toUpperCase(), penv)).toEqual({ port: 5173, workspaceId: ws, token });
+    expect(parsePreviewHost(`5173-${ws}-${token}.previews.test`.toUpperCase(), penv)).toEqual({
+      port: 5173,
+      workspaceId: ws,
+      token,
+    });
   });
   it("uses the real PREVIEW_DOMAIN binding", () => {
     expect(parsePreviewHost(`8080-${ws}-${token}.previews.test`, env as never)).toMatchObject({ port: 8080 });
@@ -1060,11 +1215,14 @@ describe("sanitizeName", () => {
     expect(sanitizeName("screenshot 2026-10-11.png")).toBe("screenshot 2026-10-11.png");
     expect(sanitizeName("résumé.pdf")).toBe("résumé.pdf");
   });
-  it.each(["../../etc/passwd", "a/b.txt", "a\\b.txt", "..\\..\\x", "a\0b"])("removes path separators and NUL from %j", (name) => {
-    const out = sanitizeName(name);
-    expect(out).not.toMatch(/[/\\\0]/);
-    expect(out.startsWith(".")).toBe(false);
-  });
+  it.each(["../../etc/passwd", "a/b.txt", "a\\b.txt", "..\\..\\x", "a\0b"])(
+    "removes path separators and NUL from %j",
+    (name) => {
+      const out = sanitizeName(name);
+      expect(out).not.toMatch(/[/\\\0]/);
+      expect(out.startsWith(".")).toBe(false);
+    },
+  );
   it("replaces leading dots so the name cannot be . or .. or hidden", () => {
     expect(sanitizeName(".")).not.toBe(".");
     expect(sanitizeName("..")).not.toBe("..");
@@ -1104,14 +1262,28 @@ describe("redact", () => {
     expect(redact({ [field]: "v" })).toEqual({ [field]: REDACTED });
   });
   it("keeps fields that do not match", () => {
-    const entry = { ts: 1, method: "GET", host: "api.github.com", path: "/x", status: 200, ms: 3, rule: 3, workspaceId: "w" };
+    const entry = {
+      ts: 1,
+      method: "GET",
+      host: "api.github.com",
+      path: "/x",
+      status: 200,
+      ms: 3,
+      rule: 3,
+      workspaceId: "w",
+    };
     expect(redact(entry)).toEqual(entry);
   });
   it("redacts the whole value of a matching field, even an object", () => {
     expect(redact({ auth: 1, auth_json: { tokens: { a: 1 } } })).toEqual({ auth: 1, auth_json: REDACTED });
   });
   it("redacts nested objects and arrays", () => {
-    expect(redact({ req: { headers: { authorization: "Bearer x", accept: "*/*" } }, list: [{ apiKey: "k", n: 1 }] })).toEqual({
+    expect(
+      redact({
+        req: { headers: { authorization: "Bearer x", accept: "*/*" } },
+        list: [{ apiKey: "k", n: 1 }],
+      }),
+    ).toEqual({
       req: { headers: { authorization: REDACTED, accept: "*/*" } },
       list: [{ apiKey: REDACTED, n: 1 }],
     });
@@ -1144,7 +1316,9 @@ describe("reconnectDelay", () => {
   // 02: "Client reconnect: 0.5 s, then double up to 10 s, with 20% jitter."
   const mid = () => 0.5;
   it("starts at 0.5 s and doubles up to 10 s", () => {
-    expect([0, 1, 2, 3, 4, 5, 6, 20].map((a) => reconnectDelay(a, mid))).toEqual([500, 1000, 2000, 4000, 8000, 10_000, 10_000, 10_000]);
+    expect([0, 1, 2, 3, 4, 5, 6, 20].map((a) => reconnectDelay(a, mid))).toEqual([
+      500, 1000, 2000, 4000, 8000, 10_000, 10_000, 10_000,
+    ]);
   });
   it("applies at most 20% jitter either way", () => {
     expect(reconnectDelay(0, () => 0)).toBe(400);

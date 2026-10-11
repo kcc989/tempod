@@ -29,10 +29,17 @@ export const previewFetch = async (
   if (row.state === "archived" || row.state === "archiving") return notFound();
   core.lastPreviewAt = Date.now();
   core.touchActivity();
-  if (!containerRunning(core) || !core.tempod?.open || !["ready", "working", "setting_up"].includes(row.state)) {
+  if (
+    !containerRunning(core) ||
+    !core.tempod?.open ||
+    !["ready", "working", "setting_up"].includes(row.state)
+  ) {
     ensureAwake();
     if (isHtmlGet(request)) {
-      return new Response(WAKING_PAGE, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+      return new Response(WAKING_PAGE, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      });
     }
     return new Response("Workspace is waking", { status: 503, headers: { "Retry-After": "5" } });
   }

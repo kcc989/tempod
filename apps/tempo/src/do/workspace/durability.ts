@@ -21,7 +21,8 @@ export const HOME_EXCLUDES = [
   ".claude/.credentials.json",
 ] as const;
 
-export const bundleKey = (workspaceId: string, checkpointId: string) => `checkpoints/${workspaceId}/${checkpointId}.bundle`;
+export const bundleKey = (workspaceId: string, checkpointId: string) =>
+  `checkpoints/${workspaceId}/${checkpointId}.bundle`;
 
 export interface PendingBundle {
   readonly checkpointId: string;
@@ -41,7 +42,11 @@ export const takeCheckpoint = async (
 ): Promise<{ checkpointId: string | null; bundle: PendingBundle | null }> => {
   const tempod = requireTempod(core);
   const checkpointId = newId();
-  const res = await tempod.request("git.checkpoint", { checkpointId, turnId, reason }, signal ? { signal } : {});
+  const res = await tempod.request(
+    "git.checkpoint",
+    { checkpointId, turnId, reason },
+    signal ? { signal } : {},
+  );
   if ("unchanged" in res) {
     const newest = core.db.select().from(checkpoints).orderBy(desc(checkpoints.createdAt)).get();
     return { checkpointId: newest?.id ?? null, bundle: null };
@@ -76,7 +81,11 @@ export const uploadBundle = async (core: WorkspaceCore, bundle: PendingBundle): 
   if (!res.body) throw new TempoError("INTERNAL", undefined, "empty bundle");
   const body = res.body.pipeThrough(new FixedLengthStream(bundle.bundleBytes));
   await core.env.DATA.put(key, body);
-  core.db.update(checkpoints).set({ r2Key: key, localOnly: 0 }).where(eq(checkpoints.id, bundle.checkpointId)).run();
+  core.db
+    .update(checkpoints)
+    .set({ r2Key: key, localOnly: 0 })
+    .where(eq(checkpoints.id, bundle.checkpointId))
+    .run();
 };
 
 export const markLocalOnly = (core: WorkspaceCore, checkpointId: string): void => {
@@ -100,7 +109,11 @@ export const uploadBundleWithRetry = async (core: WorkspaceCore, bundle: Pending
 /** Backs up /home/tempo, keeps the newest 3 (01, Back up the home directory). */
 export const backupHome = async (core: WorkspaceCore, signal?: AbortSignal): Promise<void> => {
   const backup = homeBackup(core);
-  const rec = await backup.backup({ dir: "/home/tempo", exclude: [...HOME_EXCLUDES], ...(signal ? { signal } : {}) });
+  const rec = await backup.backup({
+    dir: "/home/tempo",
+    exclude: [...HOME_EXCLUDES],
+    ...(signal ? { signal } : {}),
+  });
   core.db
     .insert(homeBackups)
     .values({ id: rec.id, recordJson: JSON.stringify(rec), sizeBytes: rec.size, createdAt: Date.now() })
@@ -131,7 +144,9 @@ export const backupHomeIfDue = async (core: WorkspaceCore): Promise<void> => {
 export const restoreHome = async (core: WorkspaceCore, signal: AbortSignal): Promise<boolean> => {
   const newest = core.db.select().from(homeBackups).orderBy(desc(homeBackups.createdAt)).get();
   if (!newest) return false;
-  await homeBackup(core).restore(parseJson<DirectoryBackupRecord>(newest.recordJson, null as never), { signal });
+  await homeBackup(core).restore(parseJson<DirectoryBackupRecord>(newest.recordJson, null as never), {
+    signal,
+  });
   return true;
 };
 
@@ -144,7 +159,11 @@ export const newestUploadedCheckpoint = (core: WorkspaceCore): CheckpointRow | n
     .get() ?? null;
 
 /** Copies a checkpoint bundle from R2 into the container. */
-export const copyBundleIn = async (core: WorkspaceCore, ckpt: CheckpointRow, path = RESTORE_BUNDLE_PATH): Promise<void> => {
+export const copyBundleIn = async (
+  core: WorkspaceCore,
+  ckpt: CheckpointRow,
+  path = RESTORE_BUNDLE_PATH,
+): Promise<void> => {
   if (!ckpt.r2Key) throw new TempoError("CHECKPOINT_NOT_FOUND");
   const obj = await core.env.DATA.get(ckpt.r2Key);
   if (!obj) throw new TempoError("CHECKPOINT_NOT_FOUND", undefined, "bundle missing from R2");

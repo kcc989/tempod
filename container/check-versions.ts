@@ -32,6 +32,10 @@ for (const arg of Object.keys(versions.build_args)) {
   if (!new RegExp(`^ARG ${arg}$`, "m").test(dockerfile))
     errors.push(`ARG ${arg} is missing from the Dockerfile`);
 }
+if (!dockerfile.includes("tini=${TINI_VERSION}"))
+  errors.push("tini must use TINI_VERSION from versions.json");
+if (!dockerfile.includes('ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]'))
+  errors.push("tini must launch tempod as the workspace entrypoint");
 const shim = /COPY --from=(\S+) \/usr\/local\/bin\/sandbox-shim/.exec(dockerfile)?.[1];
 if (shim !== versions.sandbox_shim)
   errors.push(`sandbox shim is ${shim}, versions.json says ${versions.sandbox_shim}`);

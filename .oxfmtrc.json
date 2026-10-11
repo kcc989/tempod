@@ -3,5 +3,5 @@
   "semi": true,
   "singleQuote": false,
   "trailingComma": "all",
-  "ignorePatterns": ["docs/**", "**/routeTree.gen.ts", "**/migrations/**"]
+  "ignorePatterns": ["docs/**", "**/routeTree.gen.ts", "**/migrations/**", "**/worker-runtime.d.ts"]
 }

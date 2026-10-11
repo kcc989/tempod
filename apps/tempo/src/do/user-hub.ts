@@ -24,7 +24,8 @@ export class UserHubDO extends DurableObject<Env> {
   }
 
   override async fetch(request: Request): Promise<Response> {
-    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("expected websocket", { status: 426 });
+    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket")
+      return new Response("expected websocket", { status: 426 });
     await this.loadOnce();
     // No await from here on: a publish() must not reach the socket before its hello (02, UserHubDO).
     const pair = new WebSocketPair();
@@ -96,7 +97,11 @@ export class UserHubDO extends DurableObject<Env> {
     for (const r of list) {
       const s = summaryFromD1Row(r);
       // A summary published during the load is newer than D1's copy.
-      this.db.insert(summaries).values({ workspaceId: s.id, summaryJson: JSON.stringify(s), rev: s.rev }).onConflictDoNothing().run();
+      this.db
+        .insert(summaries)
+        .values({ workspaceId: s.id, summaryJson: JSON.stringify(s), rev: s.rev })
+        .onConflictDoNothing()
+        .run();
     }
     this.ctx.storage.kv.put("loadedFromD1", true);
   }

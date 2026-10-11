@@ -33,22 +33,31 @@ interface RunningCtx extends Ctx {
   readonly turnId: string;
 }
 
-const unwrap = <A>(res: { ok: true; value: A } | { ok: false; error: { code: string; message: string } }): A => {
+const unwrap = <A>(
+  res: { ok: true; value: A } | { ok: false; error: { code: string; message: string } },
+): A => {
   if (!res.ok) throw new Error(`RPC failed: ${res.error.code} ${res.error.message}`);
   return res.value;
 };
 
-const wsRow = async (stub: Stub): Promise<Row> => (await sqlRows(stub, "SELECT * FROM workspace WHERE id = 1"))[0]!;
-const turnRow = async (stub: Stub, id: string): Promise<Row | undefined> => (await sqlRows(stub, "SELECT * FROM turns WHERE id = ?", id))[0];
+const wsRow = async (stub: Stub): Promise<Row> =>
+  (await sqlRows(stub, "SELECT * FROM workspace WHERE id = 1"))[0]!;
+const turnRow = async (stub: Stub, id: string): Promise<Row | undefined> =>
+  (await sqlRows(stub, "SELECT * FROM turns WHERE id = ?", id))[0];
 const sessionRow = async (stub: Stub, id: string): Promise<Row | undefined> =>
   (await sqlRows(stub, "SELECT * FROM sessions WHERE id = ?", id))[0];
 const notices = async (stub: Stub): Promise<Array<{ level: string; text: string }>> =>
-  (await sqlRows(stub, "SELECT content_json FROM items WHERE kind = 'notice' ORDER BY rev")).map((r) => JSON.parse(r.content_json));
-const errorItems = (stub: Stub, turnId: string) => sqlRows(stub, "SELECT * FROM items WHERE turn_id = ? AND kind = 'error'", turnId);
+  (await sqlRows(stub, "SELECT content_json FROM items WHERE kind = 'notice' ORDER BY rev")).map((r) =>
+    JSON.parse(r.content_json),
+  );
+const errorItems = (stub: Stub, turnId: string) =>
+  sqlRows(stub, "SELECT * FROM items WHERE turn_id = ? AND kind = 'error'", turnId);
 const isLive = (stub: Stub, sessionId: string): Promise<boolean> =>
   runInDurableObject(stub, (i: WorkspaceDO) => internals(i).core.liveSessions.has(sessionId));
 const eventSeqs = async (stub: Stub, incarnation: string): Promise<number[]> =>
-  (await sqlRows(stub, "SELECT seq FROM events WHERE incarnation = ? ORDER BY seq", incarnation)).map((r) => Number(r.seq));
+  (await sqlRows(stub, "SELECT seq FROM events WHERE incarnation = ? ORDER BY seq", incarnation)).map((r) =>
+    Number(r.seq),
+  );
 
 const emit = (ctx: Ctx, event: TempodEvent): Promise<number> => emitEvent(ctx.stub, ctx.tempod, event);
 const closeTempod = (ctx: Ctx): Promise<void> => runInDurableObject(ctx.stub, () => ctx.tempod.close(1011));
@@ -72,16 +81,39 @@ const runningTurn = async (): Promise<RunningCtx> => {
 };
 
 const endTurn = async (ctx: RunningCtx): Promise<void> => {
-  await waitApplied(ctx.stub, await emit(ctx, { kind: "turn.ended", sessionId: ctx.sessionId, turnId: ctx.turnId, stopReason: "end_turn" }));
+  await waitApplied(
+    ctx.stub,
+    await emit(ctx, {
+      kind: "turn.ended",
+      sessionId: ctx.sessionId,
+      turnId: ctx.turnId,
+      stopReason: "end_turn",
+    }),
+  );
   await waitFor(async () => (await wsRow(ctx.stub)).state === "ready", 5000, "state ready");
 };
 
 const sendPrompt = async (ctx: RunningCtx, text: string): Promise<string> =>
-  (unwrap((await ctx.stub.sendPrompt({ sessionId: ctx.sessionId, text, mentions: [], attachmentIds: [], reviewCommentIds: [] })) as never) as { id: string }).id;
+  (
+    unwrap(
+      (await ctx.stub.sendPrompt({
+        sessionId: ctx.sessionId,
+        text,
+        mentions: [],
+        attachmentIds: [],
+        reviewCommentIds: [],
+      })) as never,
+    ) as { id: string }
+  ).id;
 
-const promptFor = (tempod: FakeTempod, turnId: string) => tempod.requestsOf("session.prompt").find((p) => p.turnId === turnId);
+const promptFor = (tempod: FakeTempod, turnId: string) =>
+  tempod.requestsOf("session.prompt").find((p) => p.turnId === turnId);
 
-const exited = (sessionId: string, reason?: "crashed" | "evicted" | "cancelled", stderrTail = ""): TempodEvent => ({
+const exited = (
+  sessionId: string,
+  reason?: "crashed" | "evicted" | "cancelled",
+  stderrTail = "",
+): TempodEvent => ({
   kind: "agent.exited",
   sessionId,
   code: reason === "crashed" || reason === undefined ? 1 : null,
@@ -150,19 +182,38 @@ describe("agent.exited reason", () => {
       const queued = await sendPrompt(ctx, "Then this");
       expect((await turnRow(ctx.stub, queued))!.status).toBe("queued");
       unwrap((await ctx.stub.cancelTurn({ turnId: ctx.turnId })) as never);
-      expect(ctx.tempod.requestsOf("session.cancel")).toEqual([{ sessionId: ctx.sessionId, turnId: ctx.turnId }]);
+      expect(ctx.tempod.requestsOf("session.cancel")).toEqual([
+        { sessionId: ctx.sessionId, turnId: ctx.turnId },
+      ]);
 
-      await waitApplied(ctx.stub, await emit(ctx, exited(ctx.sessionId, "cancelled", "ignored session/cancel")));
+      await waitApplied(
+        ctx.stub,
+        await emit(ctx, exited(ctx.sessionId, "cancelled", "ignored session/cancel")),
+      );
       expect(await isLive(ctx.stub, ctx.sessionId)).toBe(false);
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("running");
 
-      await waitApplied(ctx.stub, await emit(ctx, { kind: "turn.ended", sessionId: ctx.sessionId, turnId: ctx.turnId, stopReason: "cancelled" }));
-      await waitFor(async () => (await turnRow(ctx.stub, ctx.turnId))?.status !== "running", 5000, "turn ended");
+      await waitApplied(
+        ctx.stub,
+        await emit(ctx, {
+          kind: "turn.ended",
+          sessionId: ctx.sessionId,
+          turnId: ctx.turnId,
+          stopReason: "cancelled",
+        }),
+      );
+      await waitFor(
+        async () => (await turnRow(ctx.stub, ctx.turnId))?.status !== "running",
+        5000,
+        "turn ended",
+      );
       const turn = (await turnRow(ctx.stub, ctx.turnId))!;
       expect(turn.status).toBe("cancelled");
       expect(turn.error_code).toBeNull();
       expect(await errorItems(ctx.stub, ctx.turnId)).toHaveLength(0);
-      expect((await notices(ctx.stub)).some((n) => n.level === "error" || n.text.includes("stopped unexpectedly"))).toBe(false);
+      expect(
+        (await notices(ctx.stub)).some((n) => n.level === "error" || n.text.includes("stopped unexpectedly")),
+      ).toBe(false);
 
       await waitFor(() => promptFor(ctx.tempod, queued) !== undefined, 5000, "queued prompt");
       const ops = ctx.tempod.requests.map((r) => r.op);
@@ -181,7 +232,11 @@ describe("agent.exited reason", () => {
         // 03 Failure handling: "Adapter exits during a turn | agent.exited | Turn failed / AGENT_CRASHED; notice with stderrTail".
         const ctx = await runningTurn();
         await waitApplied(ctx.stub, await emit(ctx, exited(ctx.sessionId, reason, "Error: adapter blew up")));
-        await waitFor(async () => (await turnRow(ctx.stub, ctx.turnId))?.status === "failed", 5000, "turn failed");
+        await waitFor(
+          async () => (await turnRow(ctx.stub, ctx.turnId))?.status === "failed",
+          5000,
+          "turn failed",
+        );
         expect((await turnRow(ctx.stub, ctx.turnId))!.error_code).toBe("AGENT_CRASHED");
         const errors = await errorItems(ctx.stub, ctx.turnId);
         expect(errors).toHaveLength(1);
@@ -270,7 +325,11 @@ describe("incarnation.changed", () => {
       // The disk comes back from an older snapshot: incarnation A again, seq restarts at 1.
       ctx.tempod.incarnation = a;
       await closeTempod(ctx);
-      await waitFor(async () => (await wsRow(ctx.stub)).tempod_incarnation === a, 8000, "incarnation A again");
+      await waitFor(
+        async () => (await wsRow(ctx.stub)).tempod_incarnation === a,
+        8000,
+        "incarnation A again",
+      );
       expect(ctx.tempod.hellos.at(-1)).toMatchObject({ incarnation: b, lastAckedSeq: seqsB.at(-1) });
       expect(Number((await wsRow(ctx.stub)).tempod_acked_seq)).toBe(1);
       expect(await eventSeqs(ctx.stub, a)).toEqual([]);

@@ -37,7 +37,13 @@ import { containerRunning, requireTempod } from "./container.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
 import { sendEnv } from "./events.ts";
 import { defaultPrBody, getGithubToken, refreshPullRequest, requirePushed } from "./git.ts";
-import { DEFAULT_MODE, dropQueuedTurnsOf, ensureSessionLive, finishTurn, requireCredential } from "./queue.ts";
+import {
+  DEFAULT_MODE,
+  dropQueuedTurnsOf,
+  ensureSessionLive,
+  finishTurn,
+  requireCredential,
+} from "./queue.ts";
 import type { OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
 
@@ -56,9 +62,12 @@ export interface RpcRuntime {
 }
 
 // Control characters are part of git's rule (check-ref-format), so the class names them.
-// oxlint-disable-next-line no-control-regex
-const BRANCH_RE = /^(?![-./]|HEAD$|.*(?:\/\.|\/\/|\.\.|@\{|\\|\.lock\/))[^\x00-\x20~^:?*[\x7f]+(?<![./]|\.lock)$/;
-export const isValidBranch = (b: string): boolean => b.length > 0 && b.length <= 250 && BRANCH_RE.test(b) && b !== "@";
+// oxlint-disable no-control-regex
+const BRANCH_RE =
+  /^(?![-./]|HEAD$|.*(?:\/\.|\/\/|\.\.|@\{|\\|\.lock\/))[^\x00-\x20~^:?*[\x7f]+(?<![./]|\.lock)$/;
+// oxlint-enable no-control-regex
+export const isValidBranch = (b: string): boolean =>
+  b.length > 0 && b.length <= 250 && BRANCH_RE.test(b) && b !== "@";
 
 const reviewToWire = (r: ReviewCommentRow): ReviewComment => ({
   id: r.id,
@@ -87,7 +96,13 @@ const branchInUse = async (core: WorkspaceCore, branch: string): Promise<boolean
   const hit = await drizzleD1(core.env.DB)
     .select({ id: workspaces.id, archivedAt: workspaces.archivedAt })
     .from(workspaces)
-    .where(and(eq(workspaces.projectId, row.projectId), eq(workspaces.branch, branch), ne(workspaces.id, row.workspaceId)))
+    .where(
+      and(
+        eq(workspaces.projectId, row.projectId),
+        eq(workspaces.branch, branch),
+        ne(workspaces.id, row.workspaceId),
+      ),
+    )
     .all();
   return hit.some((w) => w.archivedAt === null);
 };
@@ -169,7 +184,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const s = core.state;
       if (s !== "archived" && s !== "archiving") return {};
       if (runner.find("restore")) return {};
-      if (s === "archived" && (await branchInUse(core, core.ws().branch))) throw new TempoError("BRANCH_IN_USE");
+      if (s === "archived" && (await branchInUse(core, core.ws().branch)))
+        throw new TempoError("BRANCH_IN_USE");
       runner.insert("restore");
       return {};
     },
@@ -180,7 +196,10 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       for (const prefix of ["checkpoints", "homes", "attachments", "logs"]) {
         let cursor: string | undefined;
         do {
-          const list = await core.env.DATA.list({ prefix: `${prefix}/${row.workspaceId}/`, ...(cursor ? { cursor } : {}) });
+          const list = await core.env.DATA.list({
+            prefix: `${prefix}/${row.workspaceId}/`,
+            ...(cursor ? { cursor } : {}),
+          });
           if (list.objects.length) await core.env.DATA.delete(list.objects.map((o) => o.key));
           cursor = list.truncated ? list.cursor : undefined;
         } while (cursor);
@@ -213,7 +232,11 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const row = core.ws();
       if (row.prNumber !== null) throw new TempoError("PR_EXISTS");
       const project = await core.project();
-      const exists = await github.branchExists(await getGithubToken(core), { owner: project.owner, name: project.name }, baseBranch);
+      const exists = await github.branchExists(
+        await getGithubToken(core),
+        { owner: project.owner, name: project.name },
+        baseBranch,
+      );
       if (!exists) throw new TempoError("NOT_FOUND", undefined, "branch not on origin");
       core.updateWs({ baseBranch });
       core.publish();
@@ -296,7 +319,9 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       await requireCredential(core, agent);
       const now = Date.now();
       const id = newId();
-      const order = core.db.select({ o: sessions.sortOrder }).from(sessions).orderBy(desc(sessions.sortOrder)).get()?.o ?? 0;
+      const order =
+        core.db.select({ o: sessions.sortOrder }).from(sessions).orderBy(desc(sessions.sortOrder)).get()?.o ??
+        0;
       core.db
         .insert(sessions)
         .values({
@@ -357,18 +382,29 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     sendPrompt: async ({ sessionId, text, mentions, attachmentIds, reviewCommentIds }): Promise<Turn> => {
       notArchived(core);
       const session = core.sessionRow(sessionId);
-      if (session.status === "closed") throw new TempoError("VALIDATION_FAILED", undefined, "the chat is closed");
+      if (session.status === "closed")
+        throw new TempoError("VALIDATION_FAILED", undefined, "the chat is closed");
       if (!text.trim() && attachmentIds.length === 0 && reviewCommentIds.length === 0) {
         throw new TempoError("VALIDATION_FAILED", undefined, "the message is empty");
       }
       await requireCredential(core, session.agent as AgentId);
       const atts = attachmentIds.length
-        ? core.db.select().from(attachments).where(inArray(attachments.id, [...attachmentIds])).all()
+        ? core.db
+            .select()
+            .from(attachments)
+            .where(inArray(attachments.id, [...attachmentIds]))
+            .all()
         : [];
-      if (atts.length !== new Set(attachmentIds).size) throw new TempoError("VALIDATION_FAILED", undefined, "unknown attachment");
+      if (atts.length !== new Set(attachmentIds).size)
+        throw new TempoError("VALIDATION_FAILED", undefined, "unknown attachment");
       const now = Date.now();
       const turnId = newId();
-      const prompt = { text, mentions: [...mentions], attachmentIds: [...attachmentIds], reviewCommentIds: [...reviewCommentIds] };
+      const prompt = {
+        text,
+        mentions: [...mentions],
+        attachmentIds: [...attachmentIds],
+        reviewCommentIds: [...reviewCommentIds],
+      };
       core.ctx.storage.transactionSync(() => {
         core.db
           .insert(turns)
@@ -396,7 +432,12 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             .where(and(inArray(reviewComments.id, [...reviewCommentIds]), eq(reviewComments.status, "draft")))
             .run();
         }
-        if (atts.length) core.db.update(attachments).set({ turnId }).where(inArray(attachments.id, [...attachmentIds])).run();
+        if (atts.length)
+          core.db
+            .update(attachments)
+            .set({ turnId })
+            .where(inArray(attachments.id, [...attachmentIds]))
+            .run();
       });
       const turn = core.turnToWire(core.turnRow(turnId));
       core.broadcast({ type: "turn", turn });
@@ -445,7 +486,10 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         .from(items)
         .where(and(eq(items.turnId, turnId), eq(items.kind, "user_message")))
         .get();
-      if (item) core.updateItem(item.id, { content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), text } });
+      if (item)
+        core.updateItem(item.id, {
+          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), text },
+        });
       return updated;
     },
 
@@ -468,7 +512,11 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
 
     reorderQueue: async ({ turnIds }) => {
       const queued = core.queuedTurns().map((t) => t.id);
-      if (queued.length !== turnIds.length || new Set(turnIds).size !== turnIds.length || !turnIds.every((id) => queued.includes(id))) {
+      if (
+        queued.length !== turnIds.length ||
+        new Set(turnIds).size !== turnIds.length ||
+        !turnIds.every((id) => queued.includes(id))
+      ) {
         throw new TempoError("VALIDATION_FAILED", undefined, "turnIds must list every queued turn once");
       }
       turnIds.forEach((id, i) => core.updateTurn(id, { queuePos: i + 1 }));
@@ -479,7 +527,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     setSessionMode: async ({ sessionId, modeId }) => {
       core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
-      if (core.liveSessions.has(sessionId)) await requireTempod(core).request("session.setMode", { sessionId, modeId });
+      if (core.liveSessions.has(sessionId))
+        await requireTempod(core).request("session.setMode", { sessionId, modeId });
       core.updateSession(sessionId, { modeId });
       return {};
     },
@@ -493,7 +542,10 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       if (isModel && typeof value === "string") config["model"] = value;
       if (core.liveSessions.has(sessionId)) {
         const res = await requireTempod(core).request("session.setConfig", { sessionId, configId, value });
-        core.updateSession(sessionId, { configJson: JSON.stringify(config), configOptionsJson: JSON.stringify(res.configOptions) });
+        core.updateSession(sessionId, {
+          configJson: JSON.stringify(config),
+          configOptionsJson: JSON.stringify(res.configOptions),
+        });
       } else core.updateSession(sessionId, { configJson: JSON.stringify(config) });
       return {};
     },
@@ -502,7 +554,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const p = core.db.select().from(permissions).where(eq(permissions.requestId, requestId)).get();
       if (!p || p.status !== "pending") throw new TempoError("NOT_FOUND");
       const options = parseJson<Array<{ optionId: string }>>(p.optionsJson, []);
-      if (!options.some((o) => o.optionId === optionId)) throw new TempoError("VALIDATION_FAILED", undefined, "unknown option");
+      if (!options.some((o) => o.optionId === optionId))
+        throw new TempoError("VALIDATION_FAILED", undefined, "unknown option");
       await requireTempod(core).request("permission.respond", { requestId, optionId });
       core.db
         .update(permissions)
@@ -510,7 +563,10 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         .where(eq(permissions.requestId, requestId))
         .run();
       const item = core.itemRow(p.itemId);
-      if (item) core.updateItem(item.id, { content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), chosenOptionId: optionId } });
+      if (item)
+        core.updateItem(item.id, {
+          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), chosenOptionId: optionId },
+        });
       core.recomputeAttention();
       return {};
     },
@@ -551,7 +607,13 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       core.db.select().from(reviewComments).orderBy(asc(reviewComments.createdAt)).all().map(reviewToWire),
 
     listCheckpoints: async (): Promise<CheckpointInfo[]> => {
-      const seqs = new Map(core.db.select({ id: turns.id, seq: turns.seq }).from(turns).all().map((t) => [t.id, t.seq]));
+      const seqs = new Map(
+        core.db
+          .select({ id: turns.id, seq: turns.seq })
+          .from(turns)
+          .all()
+          .map((t) => [t.id, t.seq]),
+      );
       return core.db
         .select()
         .from(checkpoints)
@@ -567,10 +629,17 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     },
 
     revertToCheckpoint: async ({ checkpointId }) => {
-      if (!core.db.select({ id: checkpoints.id }).from(checkpoints).where(eq(checkpoints.id, checkpointId)).get()) {
+      if (
+        !core.db
+          .select({ id: checkpoints.id })
+          .from(checkpoints)
+          .where(eq(checkpoints.id, checkpointId))
+          .get()
+      ) {
         throw new TempoError("CHECKPOINT_NOT_FOUND");
       }
-      if (core.runningTurn() || core.queuedTurns().length > 0 || runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
+      if (core.runningTurn() || core.queuedTurns().length > 0 || runner.hasPendingOrRunning())
+        throw new TempoError("WORKSPACE_BUSY");
       rt.requireReady();
       await awaitOp("revert", { checkpointId });
       return {};
@@ -587,15 +656,20 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     createPullRequest: async ({ title, body, draft }) => {
       const row = core.ws();
       requirePushed(core);
-      if (row.prNumber !== null && (row.prState === "open" || row.prState === "draft")) throw new TempoError("PR_EXISTS");
+      if (row.prNumber !== null && (row.prState === "open" || row.prState === "draft"))
+        throw new TempoError("PR_EXISTS");
       const project = await core.project();
-      const pr = await github.createPullRequest(await getGithubToken(core), { owner: project.owner, name: project.name }, {
-        title: title.trim() || row.title || row.branch,
-        head: row.branch,
-        base: row.baseBranch,
-        body: body.trim() || defaultPrBody(core),
-        draft,
-      });
+      const pr = await github.createPullRequest(
+        await getGithubToken(core),
+        { owner: project.owner, name: project.name },
+        {
+          title: title.trim() || row.title || row.branch,
+          head: row.branch,
+          base: row.baseBranch,
+          body: body.trim() || defaultPrBody(core),
+          draft,
+        },
+      );
       core.updateWs({ prNumber: pr.number, prState: pr.state, checksState: null });
       core.publish();
       core.scheduleAlarm();
@@ -606,10 +680,18 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const row = core.ws();
       if (row.prNumber === null) throw new TempoError("PR_NOT_MERGEABLE");
       const project = await core.project();
-      await github.mergePullRequest(await getGithubToken(core), { owner: project.owner, name: project.name }, row.prNumber, method);
+      await github.mergePullRequest(
+        await getGithubToken(core),
+        { owner: project.owner, name: project.name },
+        row.prNumber,
+        method,
+      );
       core.updateWs({ prState: "merged" });
       core.publish();
-      if (core.settings().git.archive_on_merge && ["ready", "working", "sleeping", "error"].includes(core.state)) {
+      if (
+        core.settings().git.archive_on_merge &&
+        ["ready", "working", "sleeping", "error"].includes(core.state)
+      ) {
         core.setState("archiving");
         runner.insert("archive");
       }
@@ -640,7 +722,11 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
 
     searchFiles: async ({ query, regex }) => {
       rt.requireReady();
-      const res = await requireTempod(core).request("fs.search", { query, regex: regex ?? false, maxResults: 500 });
+      const res = await requireTempod(core).request("fs.search", {
+        query,
+        regex: regex ?? false,
+        maxResults: 500,
+      });
       return res.matches;
     },
 
@@ -652,10 +738,18 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       rt.requireReady();
       if (settings.scripts.run_mode === "nonconcurrent") {
         for (const r of runningRuns(core, "run")) {
-          await requireTempod(core).request("script.stop", { runId: r.id }).catch(() => undefined);
+          await requireTempod(core)
+            .request("script.stop", { runId: r.id })
+            .catch(() => undefined);
         }
       }
-      return startScript(core, { kind: "run", scriptId, command: def.command, cwd: def.cwd, timeoutMs: null });
+      return startScript(core, {
+        kind: "run",
+        scriptId,
+        command: def.command,
+        cwd: def.cwd,
+        timeoutMs: null,
+      });
     },
 
     stopScript: async ({ runId }) => {
@@ -668,7 +762,11 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     rerunSetup: async () => {
       notArchived(core);
       const row = core.ws();
-      if (row.setupStatus === "running" || runningRuns(core, "setup").length > 0 || runner.hasPendingOrRunning()) {
+      if (
+        row.setupStatus === "running" ||
+        runningRuns(core, "setup").length > 0 ||
+        runner.hasPendingOrRunning()
+      ) {
         throw new TempoError("WORKSPACE_BUSY");
       }
       rt.requireReady();
@@ -676,7 +774,13 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       core.updateWs({ setupStatus: command.trim() ? "running" : "none" });
       core.publish();
       if (!command.trim()) throw new TempoError("NOT_FOUND", undefined, "no setup script");
-      const run = await startScript(core, { kind: "setup", scriptId: null, command, cwd: "", timeoutMs: SETUP_TIMEOUT_MS });
+      const run = await startScript(core, {
+        kind: "setup",
+        scriptId: null,
+        command,
+        cwd: "",
+        timeoutMs: SETUP_TIMEOUT_MS,
+      });
       if (run.status === "failed_to_start") {
         core.updateWs({ setupStatus: "failed" });
         core.recomputeAttention();

@@ -129,4 +129,6 @@ export const SettingsReadResult = Schema.Struct({
 export type SettingsReadResult = typeof SettingsReadResult.Type;
 
 export const instanceLabel = (instance: Instance): string =>
-  typeof instance === "string" ? instance : `${instance.vcpu} vCPU, ${Math.round(instance.memoryMib / 1024)} GiB`;
+  typeof instance === "string"
+    ? instance
+    : `${instance.vcpu} vCPU, ${Math.round(instance.memoryMib / 1024)} GiB`;

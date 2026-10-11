@@ -43,7 +43,9 @@ export const refreshChanges = async (core: WorkspaceCore): Promise<void> => {
 };
 
 /** 03, Status polling: PR state, then check runs for the PR head. */
-export const refreshPullRequest = async (core: WorkspaceCore): Promise<{ prNumber: number | null; prState: string | null; checksState: string | null }> => {
+export const refreshPullRequest = async (
+  core: WorkspaceCore,
+): Promise<{ prNumber: number | null; prState: string | null; checksState: string | null }> => {
   const row = core.ws();
   if (row.prNumber === null) return { prNumber: null, prState: null, checksState: null };
   const project = await core.project();

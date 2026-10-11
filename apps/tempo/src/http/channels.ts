@@ -13,12 +13,16 @@ const TERMINAL_ID = /^t[1-9]$/;
 export const handleChannel = async (request: Request, env: Env, url: URL): Promise<Response | null> => {
   const parts = url.pathname.split("/").filter(Boolean); // api ws <kind> ...
   if (parts[0] !== "api" || parts[1] !== "ws") return null;
-  if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("expected websocket", { status: 426 });
+  if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket")
+    return new Response("expected websocket", { status: 426 });
   const origin = request.headers.get("Origin");
   const bearer = request.headers.get("Authorization")?.toLowerCase().startsWith("bearer ") ?? false;
   if (origin !== null && origin !== appOrigin(env)) return new Response("forbidden origin", { status: 403 });
   if (origin === null && !bearer) return new Response("forbidden origin", { status: 403 });
-  const user = await getSessionUser(env, request.headers, { allowCookie: origin !== null, allowBearer: true });
+  const user = await getSessionUser(env, request.headers, {
+    allowCookie: origin !== null,
+    allowBearer: true,
+  });
   if (!user) return new Response("unauthenticated", { status: 401 });
   if (!(await isOwner(env, user.id))) return new Response("forbidden", { status: 403 });
 

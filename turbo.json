@@ -16,6 +16,9 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "@tempo/tempod#build": {
+      "outputs": ["$TURBO_ROOT$/dist/tempod"]
     }
   }
 }

@@ -345,7 +345,12 @@ export const Diagnostics = Schema.Struct({
     incarnation: N(Schema.String),
   }),
   logs: Schema.Array(
-    Schema.Struct({ ts: Ms, level: Schema.String, msg: Schema.String, data: Schema.optional(Schema.Unknown) }),
+    Schema.Struct({
+      ts: Ms,
+      level: Schema.String,
+      msg: Schema.String,
+      data: Schema.optional(Schema.Unknown),
+    }),
   ),
   egress: Schema.Array(
     Schema.Struct({

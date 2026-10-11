@@ -68,7 +68,10 @@ export const PlanEntry = Schema.Struct({
 });
 export type PlanEntry = typeof PlanEntry.Type;
 
-export const ToolLocation = Schema.Struct({ path: Schema.String, line: Schema.optional(Schema.NullOr(Schema.Number)) });
+export const ToolLocation = Schema.Struct({
+  path: Schema.String,
+  line: Schema.optional(Schema.NullOr(Schema.Number)),
+});
 export type ToolLocation = typeof ToolLocation.Type;
 
 export const Usage = Schema.Record(Schema.String, Schema.Unknown);

@@ -36,7 +36,9 @@ export const hostMatches = (host: string, pattern: string): boolean => {
 export const isRepoPath = (path: string, owner: string, repo: string): boolean => {
   const prefix = `/${owner}/${repo}`.toLowerCase();
   const p = path.toLowerCase();
-  return p === prefix || p === `${prefix}.git` || p.startsWith(`${prefix}/`) || p.startsWith(`${prefix}.git/`);
+  return (
+    p === prefix || p === `${prefix}.git` || p.startsWith(`${prefix}/`) || p.startsWith(`${prefix}.git/`)
+  );
 };
 
 export const carriesPlaceholder = (headers: Headers): boolean => {
@@ -49,7 +51,10 @@ export type Decision =
   | {
       readonly rule: number;
       readonly action: "forward";
-      readonly set?: { readonly name: string; readonly value: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai" };
+      readonly set?: {
+        readonly name: string;
+        readonly value: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai";
+      };
     };
 
 /**
@@ -58,9 +63,13 @@ export type Decision =
  */
 export const decide = (url: URL, headers: Headers, appHost: string, config: EgressConfig): Decision => {
   const host = url.hostname.toLowerCase();
-  if (host === appHost.toLowerCase()) return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
+  if (host === appHost.toLowerCase())
+    return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
   if (url.protocol === "http:") return policy(8, host, config);
-  if ((host === "github.com" || host === "codeload.github.com") && isRepoPath(url.pathname, config.owner, config.repo)) {
+  if (
+    (host === "github.com" || host === "codeload.github.com") &&
+    isRepoPath(url.pathname, config.owner, config.repo)
+  ) {
     return { rule: 2, action: "forward", set: { name: "authorization", value: "github-basic" } };
   }
   if (host === "api.github.com" || host === "uploads.github.com") {
@@ -83,6 +92,7 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
 
 const policy = (_from: number, host: string, config: EgressConfig): Decision => {
   if (config.policy === "open") return { rule: 8, action: "forward" };
-  if ([...AGENT_HOSTS, ...config.allowlist].some((p) => hostMatches(host, p))) return { rule: 9, action: "forward" };
+  if ([...AGENT_HOSTS, ...config.allowlist].some((p) => hostMatches(host, p)))
+    return { rule: 9, action: "forward" };
   return { rule: 10, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
 };

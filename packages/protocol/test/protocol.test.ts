@@ -46,9 +46,15 @@ describe("errors", () => {
     const res = await capture(() => {
       throw new TempoError("PUSH_REJECTED", undefined, "remote said no");
     });
-    expect(res).toEqual({ ok: false, error: { code: "PUSH_REJECTED", message: ERROR_MESSAGES.PUSH_REJECTED, detail: "remote said no" } });
+    expect(res).toEqual({
+      ok: false,
+      error: { code: "PUSH_REJECTED", message: ERROR_MESSAGES.PUSH_REJECTED, detail: "remote said no" },
+    });
     expect(() => unwrap(res)).toThrowError(TempoError);
-    expect(toErrorBody(new Error("secret token sk-1"))).toEqual({ code: "INTERNAL", message: "Something went wrong." });
+    expect(toErrorBody(new Error("secret token sk-1"))).toEqual({
+      code: "INTERNAL",
+      message: "Something went wrong.",
+    });
   });
 });
 
@@ -65,7 +71,16 @@ describe("contract", () => {
   it("validates sendPrompt input", () => {
     const decode = Schema.decodeUnknownSync(API.sendPrompt.input);
     expect(() => decode({ workspaceId: "w", sessionId: "s", text: "hi" })).toThrow();
-    expect(decode({ workspaceId: "w", sessionId: "s", text: "hi", mentions: [], attachmentIds: [], reviewCommentIds: [] }).text).toBe("hi");
+    expect(
+      decode({
+        workspaceId: "w",
+        sessionId: "s",
+        text: "hi",
+        mentions: [],
+        attachmentIds: [],
+        reviewCommentIds: [],
+      }).text,
+    ).toBe("hi");
   });
   it("checks setClaudeToken: no spaces, 20 to 4096 chars (02, Credentials)", () => {
     const decode = Schema.decodeUnknownExit(API.setClaudeToken.input);
@@ -79,10 +94,31 @@ describe("contract", () => {
     expect(TEMPOD_REQUESTS.shutdown.timeoutMs).toBe(45_000);
     expect(Object.keys(TEMPOD_REQUESTS).sort()).toEqual(
       [
-        "repo.clone", "repo.applyCheckpoint", "settings.read", "env.set", "script.start", "script.stop",
-        "session.start", "session.prompt", "session.cancel", "session.setMode", "session.setConfig", "session.close",
-        "permission.respond", "credential.put", "git.changes", "git.fileDiff", "git.checkpoint", "git.revert",
-        "git.commitAndPush", "git.renameBranch", "fs.list", "fs.read", "fs.search", "terminal.list", "shutdown",
+        "repo.clone",
+        "repo.applyCheckpoint",
+        "settings.read",
+        "env.set",
+        "script.start",
+        "script.stop",
+        "session.start",
+        "session.prompt",
+        "session.cancel",
+        "session.setMode",
+        "session.setConfig",
+        "session.close",
+        "permission.respond",
+        "credential.put",
+        "git.changes",
+        "git.fileDiff",
+        "git.checkpoint",
+        "git.revert",
+        "git.commitAndPush",
+        "git.renameBranch",
+        "fs.list",
+        "fs.read",
+        "fs.search",
+        "terminal.list",
+        "shutdown",
       ].sort(),
     );
   });
@@ -104,7 +140,10 @@ describe("wire messages", () => {
     expect(item.kind).toBe("plan");
   });
   it("decodes tempod events and channel messages", () => {
-    expect(Schema.decodeUnknownSync(TempodEvent)({ kind: "ports.changed", ports: [3000] })).toEqual({ kind: "ports.changed", ports: [3000] });
+    expect(Schema.decodeUnknownSync(TempodEvent)({ kind: "ports.changed", ports: [3000] })).toEqual({
+      kind: "ports.changed",
+      ports: [3000],
+    });
     expect(Schema.decodeUnknownSync(WorkspaceServerMessage)({ type: "pong" })).toEqual({ type: "pong" });
     expect(Schema.decodeUnknownExit(TempodEvent)({ kind: "nope" })._tag).toBe("Failure");
   });
@@ -112,7 +151,9 @@ describe("wire messages", () => {
 
 describe("helpers", () => {
   it("redacts secret-looking fields (05, Secrets)", () => {
-    expect(redact({ token: "a", nested: { apiKey: "b", Authorization: "c", ok: 1 }, list: [{ cookie: "d" }] })).toEqual({
+    expect(
+      redact({ token: "a", nested: { apiKey: "b", Authorization: "c", ok: 1 }, list: [{ cookie: "d" }] }),
+    ).toEqual({
       token: "[redacted]",
       nested: { apiKey: "[redacted]", Authorization: "[redacted]", ok: 1 },
       list: [{ cookie: "[redacted]" }],
@@ -125,6 +166,8 @@ describe("helpers", () => {
     expect(reconnectDelay(0, () => 0)).toBe(400);
   });
   it("writes the revert note exactly (03, Revert)", () => {
-    expect(revertNote(3)).toBe("Note: the user reverted the files to the state after turn 3. Changes made after that point are gone.");
+    expect(revertNote(3)).toBe(
+      "Note: the user reverted the files to the state after turn 3. Changes made after that point are gone.",
+    );
   });
 });

@@ -26,7 +26,9 @@ export const mintInstallationToken = async (
     method: "POST",
     path: `/app/installations/${installationId}/access_tokens`,
     token: await appJwt(config),
-    body: repoIds ? { repository_ids: repoIds, permissions: TOKEN_PERMISSIONS } : { permissions: TOKEN_PERMISSIONS },
+    body: repoIds
+      ? { repository_ids: repoIds, permissions: TOKEN_PERMISSIONS }
+      : { permissions: TOKEN_PERMISSIONS },
   });
   return { token: res.token, expiresAt: Date.parse(res.expires_at) };
 };
@@ -55,7 +57,8 @@ export const listInstallationRepos = async (token: string): Promise<GhRepo[]> =>
     (page) => (page as { repositories: GhRepo[] }).repositories,
   );
 
-export const getRepoById = (token: string, repoId: number) => githubFetch<GhRepo>({ path: `/repositories/${repoId}`, token });
+export const getRepoById = (token: string, repoId: number) =>
+  githubFetch<GhRepo>({ path: `/repositories/${repoId}`, token });
 
 export const getUserById = (token: string, id: string) =>
   githubFetch<{ login: string; name: string | null; id: number }>({ path: `/user/${id}`, token });
@@ -68,6 +71,10 @@ export interface GhPull {
   readonly merged: boolean;
   readonly merged_at: string | null;
   readonly html_url: string;
-  readonly head: { readonly ref: string; readonly sha: string; readonly repo: { readonly id: number } | null };
+  readonly head: {
+    readonly ref: string;
+    readonly sha: string;
+    readonly repo: { readonly id: number } | null;
+  };
   readonly base: { readonly ref: string };
 }

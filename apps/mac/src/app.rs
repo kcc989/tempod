@@ -127,6 +127,7 @@ pub fn host_of(url: &str) -> Option<&str> {
 
 /// Sets up the AppState global, the app-level actions and `tempo://` handling.
 pub fn init(runtime: ClientRuntime, urls: async_channel::Receiver<Vec<String>>, cx: &mut App) {
+    let signals = runtime.handle().signals();
     let state = cx.new(|cx| AppState::new(runtime, cx));
     cx.set_global(GlobalAppState(state));
 
@@ -141,6 +142,23 @@ pub fn init(runtime: ClientRuntime, urls: async_channel::Receiver<Vec<String>>, 
             cx.open_url(&url);
         }
     });
+
+    cx.spawn(async move |cx| {
+        while let Ok(signal) = signals.recv().await {
+            cx.update(|cx| {
+                AppState::global(cx).update(cx, |state, cx| match signal {
+                    tempo_client::Signal::Unauthorized => state.sign_out(cx),
+                    tempo_client::Signal::UpdateRequired => {
+                        state.workspaces.clear();
+                        state.active_workspace = None;
+                        state.auth = AuthState::UpdateRequired;
+                        cx.notify();
+                    }
+                });
+            });
+        }
+    })
+    .detach();
 
     cx.spawn(async move |cx| {
         while let Ok(batch) = urls.recv().await {

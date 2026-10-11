@@ -58,7 +58,11 @@ export const API = {
     "GET",
     Empty,
     Schema.Array(
-      Schema.Struct({ installationId: N, accountLogin: S, accountType: Schema.Literals(["User", "Organization"]) }),
+      Schema.Struct({
+        installationId: N,
+        accountLogin: S,
+        accountType: Schema.Literals(["User", "Organization"]),
+      }),
     ),
   ),
   linkProject: fn("POST", Schema.Struct({ installationId: N, repoId: N }), Project),
@@ -70,7 +74,11 @@ export const API = {
     Project,
   ),
   unlinkProject: fn("POST", Schema.Struct({ projectId: S }), Empty),
-  listBranches: fn("GET", Schema.Struct({ projectId: S, query: opt(S) }), Schema.Array(Schema.Struct({ name: S }))),
+  listBranches: fn(
+    "GET",
+    Schema.Struct({ projectId: S, query: opt(S) }),
+    Schema.Array(Schema.Struct({ name: S })),
+  ),
   listOpenPullRequests: fn(
     "GET",
     Schema.Struct({ projectId: S }),
@@ -104,11 +112,7 @@ export const API = {
   getDiagnostics: fn("GET", Schema.Struct(W), Diagnostics),
 
   // Sessions and turns
-  createSession: fn(
-    "POST",
-    Schema.Struct({ ...W, agent: AgentId, model: opt(S), modeId: opt(S) }),
-    Session,
-  ),
+  createSession: fn("POST", Schema.Struct({ ...W, agent: AgentId, model: opt(S), modeId: opt(S) }), Session),
   closeSession: fn("POST", Schema.Struct({ ...W, sessionId: S }), Empty),
   renameSession: fn("POST", Schema.Struct({ ...W, sessionId: S, title: S }), Empty),
   sendPrompt: fn(
@@ -206,7 +210,11 @@ export const API = {
   deleteCredential: fn("POST", Schema.Struct({ key: S }), Empty),
   setProjectSecret: fn("POST", Schema.Struct({ projectId: S, name: EnvName, value: S }), Empty),
   deleteProjectSecret: fn("POST", Schema.Struct({ projectId: S, name: S }), Empty),
-  listProjectSecretNames: fn("GET", Schema.Struct({ projectId: S }), Schema.Struct({ names: Schema.Array(S) })),
+  listProjectSecretNames: fn(
+    "GET",
+    Schema.Struct({ projectId: S }),
+    Schema.Struct({ names: Schema.Array(S) }),
+  ),
 } as const;
 
 export type Api = typeof API;

@@ -77,17 +77,34 @@ export class CredentialDO extends DurableObject<Env> {
     }
   }
 
-  async putSecret(key: string, value: string, meta: Record<string, unknown> = {}): Promise<{ version: number }> {
+  async putSecret(
+    key: string,
+    value: string,
+    meta: Record<string, unknown> = {},
+  ): Promise<{ version: number }> {
     const sealed = await seal(await this.key(), key, value);
     const now = Date.now();
     const prev = this.db.select({ version: secrets.version }).from(secrets).where(eq(secrets.key, key)).get();
     const version = (prev?.version ?? 0) + 1;
     this.db
       .insert(secrets)
-      .values({ key, ciphertext: sealed.ciphertext, iv: sealed.iv, version, metaJson: JSON.stringify(meta), updatedAt: now })
+      .values({
+        key,
+        ciphertext: sealed.ciphertext,
+        iv: sealed.iv,
+        version,
+        metaJson: JSON.stringify(meta),
+        updatedAt: now,
+      })
       .onConflictDoUpdate({
         target: secrets.key,
-        set: { ciphertext: sealed.ciphertext, iv: sealed.iv, version, metaJson: JSON.stringify(meta), updatedAt: now },
+        set: {
+          ciphertext: sealed.ciphertext,
+          iv: sealed.iv,
+          version,
+          metaJson: JSON.stringify(meta),
+          updatedAt: now,
+        },
       })
       .run();
     return { version };
@@ -102,12 +119,20 @@ export class CredentialDO extends DurableObject<Env> {
       .select({ key: secrets.key, updatedAt: secrets.updatedAt, metaJson: secrets.metaJson })
       .from(secrets)
       .all()
-      .map((r) => ({ key: r.key, updatedAt: r.updatedAt, meta: JSON.parse(r.metaJson) as { lastRefresh?: number } }));
+      .map((r) => ({
+        key: r.key,
+        updatedAt: r.updatedAt,
+        meta: JSON.parse(r.metaJson) as { lastRefresh?: number },
+      }));
   }
 
   async listProjectEnv(projectId: string): Promise<Record<string, string>> {
     const prefix = `project.${projectId}.env.`;
-    const rows = this.db.select({ key: secrets.key }).from(secrets).where(like(secrets.key, `${prefix}%`)).all();
+    const rows = this.db
+      .select({ key: secrets.key })
+      .from(secrets)
+      .where(like(secrets.key, `${prefix}%`))
+      .all();
     const out: Record<string, string> = {};
     for (const r of rows) {
       const value = await this.getSecret(r.key);
@@ -128,7 +153,10 @@ export class CredentialDO extends DurableObject<Env> {
   }
 
   async deleteProjectEnv(projectId: string): Promise<void> {
-    this.db.delete(secrets).where(like(secrets.key, `project.${projectId}.env.%`)).run();
+    this.db
+      .delete(secrets)
+      .where(like(secrets.key, `project.${projectId}.env.%`))
+      .run();
   }
 
   /** Stores a Codex auth.json only if it is newer, then pushes it to every other lease holder (01). */
@@ -138,7 +166,7 @@ export class CredentialDO extends DurableObject<Env> {
     fromWorkspaceId: string | null,
   ): Promise<{ accepted: boolean; version: number }> {
     const row = this.db.select().from(secrets).where(eq(secrets.key, SECRET_KEYS.codex)).get();
-    const current = row ? (JSON.parse(row.metaJson) as { lastRefresh?: number }).lastRefresh ?? 0 : -1;
+    const current = row ? ((JSON.parse(row.metaJson) as { lastRefresh?: number }).lastRefresh ?? 0) : -1;
     if (row && !(lastRefresh > current)) return { accepted: false, version: row.version };
     const { version } = await this.putSecret(SECRET_KEYS.codex, content, { lastRefresh });
     const leases = this.db.select().from(codexLeases).all();
@@ -184,7 +212,8 @@ export class CredentialDO extends DurableObject<Env> {
   }
 
   async getGithubAppConfig(): Promise<GithubAppConfig | null> {
-    if (this.name !== SYSTEM_CREDENTIALS) throw new Error("getGithubAppConfig is for the system instance only");
+    if (this.name !== SYSTEM_CREDENTIALS)
+      throw new Error("getGithubAppConfig is for the system instance only");
     const [appId, slug, privateKey, clientId, clientSecret] = await Promise.all([
       this.getSecret(GITHUB_APP_KEYS.id),
       this.getSecret(GITHUB_APP_KEYS.slug),
@@ -197,7 +226,8 @@ export class CredentialDO extends DurableObject<Env> {
   }
 
   async putGithubAppConfig(config: GithubAppConfig): Promise<void> {
-    if (this.name !== SYSTEM_CREDENTIALS) throw new Error("putGithubAppConfig is for the system instance only");
+    if (this.name !== SYSTEM_CREDENTIALS)
+      throw new Error("putGithubAppConfig is for the system instance only");
     await this.putSecret(GITHUB_APP_KEYS.id, config.appId);
     await this.putSecret(GITHUB_APP_KEYS.slug, config.slug);
     await this.putSecret(GITHUB_APP_KEYS.privateKey, config.privateKey);

@@ -31,7 +31,11 @@ export const WsHello = msg("hello", {
   turns: Schema.Array(Turn),
   itemsRev: Schema.Number,
 });
-export const WsItems = msg("items", { items: Schema.Array(Item), itemsRev: Schema.Number, done: Schema.Boolean });
+export const WsItems = msg("items", {
+  items: Schema.Array(Item),
+  itemsRev: Schema.Number,
+  done: Schema.Boolean,
+});
 export const WsItemUpsert = msg("item.upsert", { item: Item, itemsRev: Schema.Number });
 export const WsItemDelta = msg("item.delta", {
   itemId: Schema.String,

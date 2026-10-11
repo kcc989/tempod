@@ -10,7 +10,7 @@ export const MIN_MAC_CLIENT = "0.1.0";
 export const handleApiV1 = async (request: Request, env: Env, url: URL): Promise<Response> => {
   if (url.pathname === "/api/v1/meta" && request.method === "GET") {
     const latest = await env.DATA.get("clients/mac/latest.json");
-    const latestVersion = latest ? ((await latest.json()) as { version?: string }).version ?? null : null;
+    const latestVersion = latest ? (((await latest.json()) as { version?: string }).version ?? null) : null;
     const meta: ApiMeta = {
       protocol: 1,
       serverVersion: env.TEMPO_VERSION ?? "0.1.0",

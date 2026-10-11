@@ -13,7 +13,9 @@ export default defineConfig({
           TEMPO_ENCRYPTION_KEY: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
           BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-test",
           TEMPO_SETUP_TOKEN: "setup-token-setup-token-setup-tok",
-          TEST_MIGRATIONS: await readD1Migrations(fileURLToPath(new URL("./src/db/migrations", import.meta.url))),
+          TEST_MIGRATIONS: await readD1Migrations(
+            fileURLToPath(new URL("./src/db/migrations", import.meta.url)),
+          ),
         },
       },
     })),

@@ -22,8 +22,8 @@ The spec disagrees with itself here, or the work needs a dependency only you can
 | # | Spec | Question | What the code does now |
 | --- | --- | --- | --- |
 | Q-1 | 03 Revert, Step runner | "It never deletes data: a safety checkpoint is made first" disagrees with the step table, which says a failed `git.checkpoint` is skipped with a `warn` log. | The table wins: a revert can go ahead without its `pre_revert` checkpoint. The other choice is to fail the revert with `INTERNAL` when the safety checkpoint fails. |
-| Q-2 | 01 Container image | `tempod` is the image's `ENTRYPOINT`, so it runs as PID 1. Bun reaps only its own children, so orphaned grandchildren (from scripts, agents and hooks) stay as zombies. | Nothing reaps them. The options are an init process such as `tini` in `container/Dockerfile` (a new dependency, rule 11) or a spec decision. |
-| Q-3 | 04 Design and front-end rules, 06 Definition of done | React component tests need a DOM library. `apps/tempo/vitest.ui.config.ts` runs in Node with none. | UI tests cover only pure logic (stores, parsers, the shortcut table). Adding `happy-dom` and `@testing-library/react` needs your approval (rule 11). |
+| Q-2 (resolved 2026-10-11) | 01 Container image | Orphaned agent and script processes need reaping. | Owner approved pinned `tini`. It runs as PID 1, forwards signals to `tempod`, and reaps orphaned children. 01 is updated. |
+| Q-3 (resolved 2026-10-11) | 04 Design and front-end rules, 06 Definition of done | React component tests need a DOM library. | Owner approved pinned `happy-dom` and `@testing-library/react`. Component tests are being added alongside the existing Node logic tests. |
 | Q-4 | 01 Browser Run (phase 3, optional) | 02 has no message or field that carries the Browser Run CDP URL to `tempod` or the Live View URL to the UI. | Not built (see **Not built**). |
 
 ## Additive protocol changes
@@ -156,9 +156,15 @@ The Mac build loop keeps these rows (07). The build machine is Linux x86_64, so 
 
 | Item | Status |
 | --- | --- |
-| `crates/tempo-client` | Empty: no runtime, RPC, channels, reconnect, device sign-in or Rust stores yet. `apps/mac/src/client.rs` stands in for `Runtime`. |
+| `crates/tempo-client` | Runtime, RPC, channels, reconnect, device flow and Rust stores exist and pass local tests. The app now owns the real runtime; sign-in and live store/view wiring are pending. |
 | `crates/tempo-terminal` | Empty: the `gpui-terminal` fork is not made yet. |
 | Views | Main window panes, title bar, sidebar, chat rows, composer context, top bar and Settings (shortcut table) are started; Changes, Diff, Files, Checks, Setup, Run, Terminal, dialogs and the palette are stubs. |
 | macOS integration | Menus, key bindings, `Info.plist` and entitlements are done; Keychain, notifications, Dock badge and wake are std-only stubs. |
 | Local storage, logs, `scripts/mac/release.sh`, update check, `AppIcon.icns`, `tests/mac-e2e/` | Not built. |
 | `#[gpui::test]` view tests | Not written: the current tests are plain Rust. |
+
+## Continuation verification (2026-10-11)
+
+The continuation runs on macOS. Native tests and Clippy now compile the macOS-specific modules; this does not prove manual UI, Keychain, notification, signing or hosted API behavior. The earlier Linux-only notes above describe the original build environment.
+
+`bun run test:tempod:container` builds the pinned full workspace image, derives `container/Dockerfile.test`, and runs daemon tests as uid 1000. It uses the build arguments from `container/versions.json`. The new main/manual workflow runs the same command. Local image validation is building on the shared Colima engine; the earlier host-only limitation is not yet closed.

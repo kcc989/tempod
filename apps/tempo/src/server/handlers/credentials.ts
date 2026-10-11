@@ -25,7 +25,10 @@ export const getCredentialStatus = async (c: HandlerCtx): Promise<FnOutput<"getC
   };
 };
 
-export const setClaudeToken = async (c: HandlerCtx, { token }: FnInput<"setClaudeToken">): Promise<FnOutput<"setClaudeToken">> => {
+export const setClaudeToken = async (
+  c: HandlerCtx,
+  { token }: FnInput<"setClaudeToken">,
+): Promise<FnOutput<"setClaudeToken">> => {
   await creds(c).putSecret(SECRET_KEYS.claude, token.trim());
   return {};
 };
@@ -38,22 +41,40 @@ export const parseCodexAuth = (authJson: string): { lastRefresh: number } => {
   } catch {
     throw new TempoError("VALIDATION_FAILED", undefined, "auth.json is not JSON");
   }
-  const o = parsed as { tokens?: { access_token?: unknown; refresh_token?: unknown }; last_refresh?: unknown };
-  if (typeof o?.tokens?.access_token !== "string" || typeof o.tokens.refresh_token !== "string" || typeof o.last_refresh !== "string") {
-    throw new TempoError("VALIDATION_FAILED", undefined, "auth.json needs tokens.access_token, tokens.refresh_token and last_refresh");
+  const o = parsed as {
+    tokens?: { access_token?: unknown; refresh_token?: unknown };
+    last_refresh?: unknown;
+  };
+  if (
+    typeof o?.tokens?.access_token !== "string" ||
+    typeof o.tokens.refresh_token !== "string" ||
+    typeof o.last_refresh !== "string"
+  ) {
+    throw new TempoError(
+      "VALIDATION_FAILED",
+      undefined,
+      "auth.json needs tokens.access_token, tokens.refresh_token and last_refresh",
+    );
   }
   const lastRefresh = Date.parse(o.last_refresh);
-  if (Number.isNaN(lastRefresh)) throw new TempoError("VALIDATION_FAILED", undefined, "last_refresh is not a date");
+  if (Number.isNaN(lastRefresh))
+    throw new TempoError("VALIDATION_FAILED", undefined, "last_refresh is not a date");
   return { lastRefresh };
 };
 
-export const setCodexAuth = async (c: HandlerCtx, { authJson }: FnInput<"setCodexAuth">): Promise<FnOutput<"setCodexAuth">> => {
+export const setCodexAuth = async (
+  c: HandlerCtx,
+  { authJson }: FnInput<"setCodexAuth">,
+): Promise<FnOutput<"setCodexAuth">> => {
   const { lastRefresh } = parseCodexAuth(authJson);
   await creds(c).replaceCodexAuth(authJson, lastRefresh);
   return {};
 };
 
-export const setApiKey = async (c: HandlerCtx, { provider, key }: FnInput<"setApiKey">): Promise<FnOutput<"setApiKey">> => {
+export const setApiKey = async (
+  c: HandlerCtx,
+  { provider, key }: FnInput<"setApiKey">,
+): Promise<FnOutput<"setApiKey">> => {
   if (/\s/.test(key.trim())) throw new TempoError("VALIDATION_FAILED", undefined, "keys have no spaces");
   await creds(c).putSecret(SECRET_KEYS[provider], key.trim());
   return {};
@@ -61,7 +82,10 @@ export const setApiKey = async (c: HandlerCtx, { provider, key }: FnInput<"setAp
 
 const DELETABLE = new Set<string>(Object.values(SECRET_KEYS));
 
-export const deleteCredential = async (c: HandlerCtx, { key }: FnInput<"deleteCredential">): Promise<FnOutput<"deleteCredential">> => {
+export const deleteCredential = async (
+  c: HandlerCtx,
+  { key }: FnInput<"deleteCredential">,
+): Promise<FnOutput<"deleteCredential">> => {
   const full = key in SECRET_KEYS ? SECRET_KEYS[key as keyof typeof SECRET_KEYS] : key;
   if (!DELETABLE.has(full)) throw new TempoError("VALIDATION_FAILED", undefined, "unknown credential");
   await creds(c).deleteSecret(full);
@@ -74,25 +98,40 @@ const refreshProjectEnv = async (c: HandlerCtx, projectId: string) => {
     .from(workspaces)
     .where(and(eq(workspaces.projectId, projectId), isNull(workspaces.archivedAt)))
     .all();
-  const work = Promise.all(ids.map((w) => c.env.WORKSPACE.getByName(w.id).refreshEnv().catch(() => undefined)));
+  const work = Promise.all(
+    ids.map((w) =>
+      c.env.WORKSPACE.getByName(w.id)
+        .refreshEnv()
+        .catch(() => undefined),
+    ),
+  );
   waitUntil(work);
 };
 
-export const setProjectSecret = async (c: HandlerCtx, { projectId, name, value }: FnInput<"setProjectSecret">): Promise<FnOutput<"setProjectSecret">> => {
+export const setProjectSecret = async (
+  c: HandlerCtx,
+  { projectId, name, value }: FnInput<"setProjectSecret">,
+): Promise<FnOutput<"setProjectSecret">> => {
   await requireProject(c.env, c.user.id, projectId);
   await creds(c).putSecret(projectEnvKey(projectId, name), value);
   await refreshProjectEnv(c, projectId);
   return {};
 };
 
-export const deleteProjectSecret = async (c: HandlerCtx, { projectId, name }: FnInput<"deleteProjectSecret">): Promise<FnOutput<"deleteProjectSecret">> => {
+export const deleteProjectSecret = async (
+  c: HandlerCtx,
+  { projectId, name }: FnInput<"deleteProjectSecret">,
+): Promise<FnOutput<"deleteProjectSecret">> => {
   await requireProject(c.env, c.user.id, projectId);
   await creds(c).deleteSecret(projectEnvKey(projectId, name));
   await refreshProjectEnv(c, projectId);
   return {};
 };
 
-export const listProjectSecretNames = async (c: HandlerCtx, { projectId }: FnInput<"listProjectSecretNames">): Promise<FnOutput<"listProjectSecretNames">> => {
+export const listProjectSecretNames = async (
+  c: HandlerCtx,
+  { projectId }: FnInput<"listProjectSecretNames">,
+): Promise<FnOutput<"listProjectSecretNames">> => {
   await requireProject(c.env, c.user.id, projectId);
   return { names: await creds(c).listProjectEnvNames(projectId) };
 };

@@ -113,7 +113,13 @@ export class TempodClient {
 
   private onMessage(data: unknown): void {
     if (typeof data !== "string") return;
-    let msg: { type?: string; id?: string; ok?: boolean; result?: unknown; error?: { code?: string; message?: string } };
+    let msg: {
+      type?: string;
+      id?: string;
+      ok?: boolean;
+      result?: unknown;
+      error?: { code?: string; message?: string };
+    };
     try {
       msg = JSON.parse(data);
     } catch {
@@ -126,20 +132,29 @@ export class TempodClient {
       clearTimeout(p.timer);
       this.pending.delete(msg.id);
       if (msg.ok) {
-        const decoded = Schema.decodeUnknownExit(TEMPOD_REQUESTS[p.op].result as unknown as Schema.Decoder<unknown>)(msg.result);
+        const decoded = Schema.decodeUnknownExit(
+          TEMPOD_REQUESTS[p.op].result as unknown as Schema.Decoder<unknown>,
+        )(msg.result);
         if (decoded._tag === "Success") p.resolve(decoded.value);
         else p.reject(new TempoError("INTERNAL", undefined, `tempod sent an invalid ${p.op} result`));
       } else {
-        const code = ERROR_CODES.includes(msg.error?.code as ErrorCode) ? (msg.error!.code as ErrorCode) : "INTERNAL";
+        const code = ERROR_CODES.includes(msg.error?.code as ErrorCode)
+          ? (msg.error!.code as ErrorCode)
+          : "INTERNAL";
         p.reject(new TempoError(code, undefined, msg.error?.message?.slice(0, 2000)));
       }
       return;
     }
     if (msg.type === "event") {
       const envelope = msg as unknown as TempodEventEnvelope;
-      this.chain = this.chain.then(() => this.applyEvent(envelope)).catch((e) => {
-        log("error", "tempod event failed", { workspaceId: this.core.wsOrNull()?.workspaceId, error: String(e) });
-      });
+      this.chain = this.chain
+        .then(() => this.applyEvent(envelope))
+        .catch((e) => {
+          log("error", "tempod event failed", {
+            workspaceId: this.core.wsOrNull()?.workspaceId,
+            error: String(e),
+          });
+        });
     }
   }
 
@@ -160,7 +175,13 @@ export class TempodClient {
       const payload = SECRET_EVENT_KINDS.has(event.kind) ? "{}" : JSON.stringify(event);
       const inserted = this.core.db
         .insert(events)
-        .values({ incarnation, seq: envelope.seq, kind: event.kind, payloadJson: payload, receivedAt: Date.now() })
+        .values({
+          incarnation,
+          seq: envelope.seq,
+          kind: event.kind,
+          payloadJson: payload,
+          receivedAt: Date.now(),
+        })
         .onConflictDoNothing()
         .returning({ id: events.id })
         .all();
@@ -227,7 +248,8 @@ export const tempodFetch = (core: WorkspaceCore, path: string, init: RequestInit
 export const openTempodSocket = async (core: WorkspaceCore): Promise<WebSocket> => {
   const res = await tempodFetch(core, "/v1/connect", { headers: { Upgrade: "websocket" } });
   const ws = res.webSocket;
-  if (res.status !== 101 || !ws) throw new TempoError("TEMPOD_UNREACHABLE", undefined, `connect returned ${res.status}`);
+  if (res.status !== 101 || !ws)
+    throw new TempoError("TEMPOD_UNREACHABLE", undefined, `connect returned ${res.status}`);
   ws.accept();
   return ws;
 };

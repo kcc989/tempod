@@ -21,7 +21,10 @@ interface RawSecret {
 
 const credsFor = (name: string) => env.CREDENTIALS.getByName(name);
 
-const rawSecret = async (stub: DurableObjectStub<CredentialDO>, key: string): Promise<RawSecret | undefined> =>
+const rawSecret = async (
+  stub: DurableObjectStub<CredentialDO>,
+  key: string,
+): Promise<RawSecret | undefined> =>
   runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => {
     const rows = state.storage.sql.exec("SELECT * FROM secrets WHERE key = ?", key).toArray();
     return rows[0] as unknown as RawSecret | undefined;
@@ -73,7 +76,10 @@ const specOpen = async (salt: string, aad: string, row: RawSecret): Promise<stri
   );
 
 const codexAuth = (lastRefreshIso: string, access = `at-${newId()}`) =>
-  JSON.stringify({ tokens: { access_token: access, refresh_token: `rt-${newId()}` }, last_refresh: lastRefreshIso });
+  JSON.stringify({
+    tokens: { access_token: access, refresh_token: `rt-${newId()}` },
+    last_refresh: lastRefreshIso,
+  });
 
 const summary = (over: Partial<WorkspaceSummary> = {}): WorkspaceSummary => ({
   id: newId(),
@@ -104,7 +110,9 @@ interface HubSocket {
 }
 
 const openHub = async (userId: string): Promise<HubSocket> => {
-  const res = await env.USER_HUB.getByName(userId).fetch("https://tempo.test/api/ws/hub", { headers: { Upgrade: "websocket" } });
+  const res = await env.USER_HUB.getByName(userId).fetch("https://tempo.test/api/ws/hub", {
+    headers: { Upgrade: "websocket" },
+  });
   const ws = res.webSocket;
   if (!ws) throw new Error(`no websocket (status ${res.status})`);
   const messages: any[] = [];
@@ -128,7 +136,14 @@ const openHub = async (userId: string): Promise<HubSocket> => {
 
 const insertD1Workspace = async (
   seeded: Seeded,
-  opts: { slug: string; rev: number; lastActivityAt: number; archivedAt?: number | null; state?: string; userId?: string },
+  opts: {
+    slug: string;
+    rev: number;
+    lastActivityAt: number;
+    archivedAt?: number | null;
+    state?: string;
+    userId?: string;
+  },
 ): Promise<string> => {
   const id = newId();
   await env.DB.prepare(
@@ -225,18 +240,28 @@ describe("CredentialDO secrets", () => {
     const before = Date.now();
     await creds.putSecret("claude.oauth_token", "sk-ant-oat01-status-secret");
     await creds.putSecret("openrouter.api_key", "sk-or-status-secret");
-    await creds.offerCodexAuth(codexAuth("2026-01-01T00:00:00Z", "codex-status-secret"), 1_767_225_600_000, null);
+    await creds.offerCodexAuth(
+      codexAuth("2026-01-01T00:00:00Z", "codex-status-secret"),
+      1_767_225_600_000,
+      null,
+    );
     const status = await creds.status();
     const text = JSON.stringify(status);
     expect(text).not.toContain("sk-ant-oat01-status-secret");
     expect(text).not.toContain("sk-or-status-secret");
     expect(text).not.toContain("codex-status-secret");
-    expect(status.map((s: SecretStatus) => s.key).sort()).toEqual(["claude.oauth_token", "codex.auth_json", "openrouter.api_key"]);
+    expect(status.map((s: SecretStatus) => s.key).sort()).toEqual([
+      "claude.oauth_token",
+      "codex.auth_json",
+      "openrouter.api_key",
+    ]);
     for (const s of status) {
       expect(Object.keys(s).sort()).toEqual(["key", "meta", "updatedAt"]);
       expect(s.updatedAt).toBeGreaterThanOrEqual(before);
     }
-    expect(status.find((s: SecretStatus) => s.key === "codex.auth_json")!.meta).toEqual({ lastRefresh: 1_767_225_600_000 });
+    expect(status.find((s: SecretStatus) => s.key === "codex.auth_json")!.meta).toEqual({
+      lastRefresh: 1_767_225_600_000,
+    });
     expect(status.find((s: SecretStatus) => s.key === "claude.oauth_token")!.meta).toEqual({});
   });
 
@@ -394,7 +419,9 @@ describe("CredentialDO Codex auth.json", () => {
     expect(await creds.offerCodexAuth(newer, 2_000, "ws-x")).toEqual({ accepted: true, version: 2 });
     expect(await creds.getCodexAuth()).toEqual({ content: newer, version: 2, lastRefresh: 2_000 });
     const status = await creds.status();
-    expect(status.find((s: SecretStatus) => s.key === "codex.auth_json")!.meta).toEqual({ lastRefresh: 2_000 });
+    expect(status.find((s: SecretStatus) => s.key === "codex.auth_json")!.meta).toEqual({
+      lastRefresh: 2_000,
+    });
     // The stored auth.json is encrypted like every other secret.
     const row = (await rawSecret(creds, "codex.auth_json"))!;
     expect(dec.decode(row.ciphertext)).not.toContain("access_token");
@@ -429,7 +456,10 @@ describe("CredentialDO Codex auth.json", () => {
     const creds = credsFor(`user-${newId()}`);
     await creds.addCodexLease(newId());
     await creds.addCodexLease(newId());
-    expect(await creds.offerCodexAuth(codexAuth("2026-05-01T00:00:00Z"), 10, null)).toEqual({ accepted: true, version: 1 });
+    expect(await creds.offerCodexAuth(codexAuth("2026-05-01T00:00:00Z"), 10, null)).toEqual({
+      accepted: true,
+      version: 1,
+    });
     expect(await creds.replaceCodexAuth(codexAuth("2026-05-02T00:00:00Z"), 20)).toEqual({ version: 2 });
   });
 
@@ -444,7 +474,11 @@ describe("CredentialDO Codex auth.json", () => {
     await driveToReady(a.stub);
     await driveToReady(b.stub);
     await driveToReady(c.stub);
-    await waitFor(() => a.tempod.connected && b.tempod.connected && c.tempod.connected, 5000, "tempod connections");
+    await waitFor(
+      () => a.tempod.connected && b.tempod.connected && c.tempod.connected,
+      5000,
+      "tempod connections",
+    );
     expect(a.tempod.requestsOf("credential.put")).toHaveLength(0);
     expect(b.tempod.requestsOf("credential.put")).toHaveLength(0);
 
@@ -463,18 +497,30 @@ describe("CredentialDO Codex auth.json", () => {
     expect(b.tempod.requestsOf("credential.put")[0]).toEqual({ provider: "codex", content, version: 1 });
 
     // A rejected (older) offer pushes nothing.
-    expect((await creds.offerCodexAuth(codexAuth("2026-05-01T00:00:00Z"), 500, b.workspaceId)).accepted).toBe(false);
+    expect((await creds.offerCodexAuth(codexAuth("2026-05-01T00:00:00Z"), 500, b.workspaceId)).accepted).toBe(
+      false,
+    );
 
     // The owner's upload goes to every lease holder, the former sender included.
     const upload = codexAuth("2026-07-01T00:00:00Z");
     expect(await creds.replaceCodexAuth(upload, 2_000)).toEqual({ version: 2 });
     await waitFor(
-      () => a.tempod.requestsOf("credential.put").length === 1 && b.tempod.requestsOf("credential.put").length === 2,
+      () =>
+        a.tempod.requestsOf("credential.put").length === 1 &&
+        b.tempod.requestsOf("credential.put").length === 2,
       5000,
       "push of the upload",
     );
-    expect(a.tempod.requestsOf("credential.put")[0]).toEqual({ provider: "codex", content: upload, version: 2 });
-    expect(b.tempod.requestsOf("credential.put")[1]).toEqual({ provider: "codex", content: upload, version: 2 });
+    expect(a.tempod.requestsOf("credential.put")[0]).toEqual({
+      provider: "codex",
+      content: upload,
+      version: 2,
+    });
+    expect(b.tempod.requestsOf("credential.put")[1]).toEqual({
+      provider: "codex",
+      content: upload,
+      version: 2,
+    });
     // The sender never got its own offer back, the old offer was not pushed, and the dropped lease got nothing.
     expect(a.tempod.requestsOf("credential.put")).toHaveLength(1);
     expect(b.tempod.requestsOf("credential.put")).toHaveLength(2);
@@ -484,12 +530,22 @@ describe("CredentialDO Codex auth.json", () => {
     const fresh = codexAuth("2026-08-01T00:00:00Z");
     expect(await creds.offerCodexAuth(fresh, 3_000, null)).toEqual({ accepted: true, version: 3 });
     await waitFor(
-      () => a.tempod.requestsOf("credential.put").length === 2 && b.tempod.requestsOf("credential.put").length === 3,
+      () =>
+        a.tempod.requestsOf("credential.put").length === 2 &&
+        b.tempod.requestsOf("credential.put").length === 3,
       5000,
       "push of a sender-less offer",
     );
-    expect(a.tempod.requestsOf("credential.put")[1]).toEqual({ provider: "codex", content: fresh, version: 3 });
-    expect(b.tempod.requestsOf("credential.put")[2]).toEqual({ provider: "codex", content: fresh, version: 3 });
+    expect(a.tempod.requestsOf("credential.put")[1]).toEqual({
+      provider: "codex",
+      content: fresh,
+      version: 3,
+    });
+    expect(b.tempod.requestsOf("credential.put")[2]).toEqual({
+      provider: "codex",
+      content: fresh,
+      version: 3,
+    });
     expect(c.tempod.requestsOf("credential.put")).toHaveLength(0);
   });
 });
@@ -683,7 +739,12 @@ describe("UserHubDO", () => {
     const seeded = await seedProject();
     const otherUser = await seedProject();
     const w1 = await insertD1Workspace(seeded, { slug: "tokyo", rev: 4, lastActivityAt: 2_000 });
-    const w2 = await insertD1Workspace(seeded, { slug: "seoul", rev: 7, lastActivityAt: 3_000, state: "sleeping" });
+    const w2 = await insertD1Workspace(seeded, {
+      slug: "seoul",
+      rev: 7,
+      lastActivityAt: 3_000,
+      state: "sleeping",
+    });
     await insertD1Workspace(otherUser, { slug: "lagos", rev: 1, lastActivityAt: 4_000 });
 
     const first = await openHub(seeded.userId);
@@ -721,7 +782,9 @@ describe("UserHubDO", () => {
     await waitFor(() => second.messages.length >= 1, 3000, "hello");
     const ids = (second.messages[0].workspaces as WorkspaceSummary[]).map((w) => w.id).sort();
     expect(ids).toEqual([w1, w2].sort());
-    expect((second.messages[0].workspaces as WorkspaceSummary[]).find((w) => w.id === w1)!.title).toBe("tokyo");
+    expect((second.messages[0].workspaces as WorkspaceSummary[]).find((w) => w.id === w1)!.title).toBe(
+      "tokyo",
+    );
     // The stale publish was not broadcast.
     expect(first.messages).toHaveLength(1);
     first.close();
@@ -733,7 +796,13 @@ describe("UserHubDO", () => {
     // workspaces are not in the sidebar.
     const seeded = await seedProject();
     const live = await insertD1Workspace(seeded, { slug: "cairo", rev: 1, lastActivityAt: 1_000 });
-    await insertD1Workspace(seeded, { slug: "dakar", rev: 2, lastActivityAt: 2_000, archivedAt: 3_000, state: "archived" });
+    await insertD1Workspace(seeded, {
+      slug: "dakar",
+      rev: 2,
+      lastActivityAt: 2_000,
+      archivedAt: 3_000,
+      state: "archived",
+    });
     const sock = await openHub(seeded.userId);
     await waitFor(() => sock.messages.length >= 1, 3000, "hello");
     expect((sock.messages[0].workspaces as WorkspaceSummary[]).map((w) => w.id)).toEqual([live]);

@@ -83,8 +83,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       onEvent: (event) => applyTempodEvent({ core, runner: this.runner }, event),
       onLost: () => this.onTempodLost(),
     };
-    this.runner = new OpRunner(core, makeSteps(this.handlers), makeHooks(() => this.scheduleHousekeeping()), (step, state) =>
-      afterSkipWithState(core, step, state),
+    this.runner = new OpRunner(
+      core,
+      makeSteps(this.handlers),
+      makeHooks(() => this.scheduleHousekeeping()),
+      (step, state) => afterSkipWithState(core, step, state),
     );
     core.kickQueue = () => this.kickQueue();
     core.scheduleAlarm = () => this.scheduleAlarm();
@@ -199,7 +202,12 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               seq: 1,
               queuePos: 1,
               status: "queued",
-              promptJson: JSON.stringify({ text: input.prompt.text, mentions: [], attachmentIds: [], reviewCommentIds: [] }),
+              promptJson: JSON.stringify({
+                text: input.prompt.text,
+                mentions: [],
+                attachmentIds: [],
+                reviewCommentIds: [],
+              }),
               stopReason: null,
               errorCode: null,
               errorDetail: null,
@@ -245,10 +253,23 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   async getEgressConfig(): Promise<EgressConfig> {
     const project = await this.core.project();
     const env = this.core.settings().environment;
-    return { owner: project.owner, repo: project.name, policy: env.egress_policy, allowlist: env.egress_allowlist };
+    return {
+      owner: project.owner,
+      repo: project.name,
+      policy: env.egress_policy,
+      allowlist: env.egress_allowlist,
+    };
   }
 
-  async logEgress(row: { ts: number; method: string; host: string; path: string; status: number; ms: number; rule: number }): Promise<void> {
+  async logEgress(row: {
+    ts: number;
+    method: string;
+    host: string;
+    path: string;
+    status: number;
+    ms: number;
+    rule: number;
+  }): Promise<void> {
     if (!this.core.wsOrNull()) return;
     this.core.db.insert(egressLog).values(row).run();
   }
@@ -258,11 +279,26 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     await this.core.tempod.request("credential.put", { provider: "codex", content, version });
   }
 
-  async registerAttachment(a: { id: string; name: string; mime: string; size: number; r2Key: string }): Promise<void> {
+  async registerAttachment(a: {
+    id: string;
+    name: string;
+    mime: string;
+    size: number;
+    r2Key: string;
+  }): Promise<void> {
     this.core.ws();
     this.core.db
       .insert(attachments)
-      .values({ id: a.id, turnId: null, name: a.name, mime: a.mime, sizeBytes: a.size, r2Key: a.r2Key, containerPath: null, createdAt: Date.now() })
+      .values({
+        id: a.id,
+        turnId: null,
+        name: a.name,
+        mime: a.mime,
+        sizeBytes: a.size,
+        r2Key: a.r2Key,
+        containerPath: null,
+        createdAt: Date.now(),
+      })
       .run();
   }
 
@@ -274,7 +310,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       const project = await core.project(true);
       const res = await core.tempod.request("settings.read", { overrides: project.overrides });
       core.updateWs({ settingsJson: JSON.stringify(res.effective) });
-      core.setKv("settingsIssues", { warnings: res.warnings, errors: res.errors, sources: res.sources ?? {} });
+      core.setKv("settingsIssues", {
+        warnings: res.warnings,
+        errors: res.errors,
+        sources: res.sources ?? {},
+      });
       core.broadcastDetailSoon();
       await core.tempod.request("env.set", { env: await core.scriptEnv() });
     } catch (e) {
@@ -306,7 +346,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     if (term) {
       const row = this.core.wsOrNull();
       if (!row) return new Response("Not found", { status: 404 });
-      if (row.state === "archived" || row.state === "archiving") return new Response("Workspace archived", { status: 409 });
+      if (row.state === "archived" || row.state === "archiving")
+        return new Response("Workspace archived", { status: 409 });
       this.tryEnsureAwake();
       const cols = Number(url.searchParams.get("cols") ?? "80");
       const rows = Number(url.searchParams.get("rows") ?? "24");
@@ -342,7 +383,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       this.lastIdleCheck = now;
       this.idleCheck();
     }
-    if (core.uiSockets().length > 0 && core.ws().prNumber !== null && now - this.lastPrPoll >= PR_POLL_MS - 500) {
+    if (
+      core.uiSockets().length > 0 &&
+      core.ws().prNumber !== null &&
+      now - this.lastPrPoll >= PR_POLL_MS - 500
+    ) {
       this.lastPrPoll = now;
       await pollPullRequestSafe(core);
     }
@@ -362,7 +407,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     if (due !== null) candidates.push(due);
     if (this.containerExpected()) candidates.push(this.lastHeartbeat + HEARTBEAT_MS);
     if (containerRunning(core)) candidates.push(this.lastIdleCheck + IDLE_CHECK_MS);
-    if (core.uiSockets().length > 0 && core.ws().prNumber !== null) candidates.push(this.lastPrPoll + PR_POLL_MS);
+    if (core.uiSockets().length > 0 && core.ws().prNumber !== null)
+      candidates.push(this.lastPrPoll + PR_POLL_MS);
     if (candidates.length === 0) {
       await core.ctx.storage.deleteAlarm();
       return;
@@ -382,7 +428,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   }
 
   private scheduleHousekeeping(): void {
-    if (!this.runner.find("housekeeping")) this.runner.insert("housekeeping", {}, Date.now() + HOUSEKEEPING_MS);
+    if (!this.runner.find("housekeeping"))
+      this.runner.insert("housekeeping", {}, Date.now() + HOUSEKEEPING_MS);
   }
 
   private kickQueue(): void {
@@ -403,7 +450,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const state = core.state;
     if (!(CONTAINER_STATES as ReadonlyArray<string>).includes(state)) return;
     // During setting_up the create or wake op only waits for script.exited; a stopped container ends that wait.
-    const setupWait = state === "setting_up" && !containerRunning(core) ? this.runner.waitingOn("setup.run") : null;
+    const setupWait =
+      state === "setting_up" && !containerRunning(core) ? this.runner.waitingOn("setup.run") : null;
     if (!setupWait && this.runner.hasPendingOrRunning(["create", "wake", "sleep", "archive"])) {
       // The op owns the container, but a lost socket (a DO restart, a deploy) still needs a reconnect.
       if (containerRunning(core) && !core.tempod?.open) this.onTempodLost();
@@ -436,7 +484,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   private onTempodLost(): void {
     const core = this.core;
     const state = core.wsOrNull()?.state;
-    if (!state || !(CONTAINER_STATES as ReadonlyArray<string>).includes(state) || !containerRunning(core)) return;
+    if (!state || !(CONTAINER_STATES as ReadonlyArray<string>).includes(state) || !containerRunning(core))
+      return;
     // Only these two steps connect on their own; every later step needs the socket back.
     const op = this.runner.find("create") ?? this.runner.find("wake");
     if (op && (op.step === "container.start" || op.step === "tempod.connect")) return;
@@ -470,7 +519,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const recent = parseJson<number[]>(core.ws().autoRestartsJson, []).filter((t) => now - t < 60 * 60_000);
     if (recent.length >= RESTARTS_PER_HOUR) {
       core.updateWs({ autoRestartsJson: JSON.stringify(recent) });
-      core.setState("error", { code: "CONTAINER_START_FAILED", detail: "The container stopped 3 times in an hour." });
+      core.setState("error", {
+        code: "CONTAINER_START_FAILED",
+        detail: "The container stopped 3 times in an hour.",
+      });
       return;
     }
     core.updateWs({ autoRestartsJson: JSON.stringify([...recent, now]) });
@@ -501,7 +553,12 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   private requireReady(): void {
     const core = this.core;
     const state = core.state;
-    if ((state === "ready" || state === "working" || state === "setting_up") && core.tempod?.open && containerRunning(core)) return;
+    if (
+      (state === "ready" || state === "working" || state === "setting_up") &&
+      core.tempod?.open &&
+      containerRunning(core)
+    )
+      return;
     this.ensureAwake();
     throw new TempoError("CONTAINER_NOT_READY");
   }
@@ -510,7 +567,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     while (Date.now() < deadline) {
       const state = this.core.wsOrNull()?.state;
       if (!state || state === "archived" || state === "archiving" || state === "error") break;
-      if ((state === "ready" || state === "working" || state === "setting_up") && this.core.tempod?.open) return;
+      if ((state === "ready" || state === "working" || state === "setting_up") && this.core.tempod?.open)
+        return;
       await new Promise((r) => setTimeout(r, 500));
     }
     throw new TempoError("CONTAINER_NOT_READY");
@@ -548,4 +606,3 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     return this.core.db.select({ kind: ops.kind, status: ops.status, step: ops.step }).from(ops).all();
   }
 }
-

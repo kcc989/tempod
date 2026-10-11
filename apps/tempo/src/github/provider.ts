@@ -14,7 +14,10 @@ export interface Repo {
 export interface GitProvider {
   listBranches(token: string, repo: Repo, query?: string): Promise<{ name: string }[]>;
   branchExists(token: string, repo: Repo, branch: string): Promise<boolean>;
-  listOpenPullRequests(token: string, repo: Repo): Promise<{ number: number; title: string; headBranch: string }[]>;
+  listOpenPullRequests(
+    token: string,
+    repo: Repo,
+  ): Promise<{ number: number; title: string; headBranch: string }[]>;
   getPullRequest(token: string, repo: Repo, number: number): Promise<GhPull>;
   createPullRequest(
     token: string,
@@ -22,7 +25,11 @@ export interface GitProvider {
     input: { title: string; head: string; base: string; body: string; draft: boolean },
   ): Promise<{ number: number; url: string; state: PrState }>;
   mergePullRequest(token: string, repo: Repo, number: number, method: MergeMethod): Promise<void>;
-  listCheckRuns(token: string, repo: Repo, sha: string): Promise<{ name: string; status: string; conclusion: string | null; url: string }[]>;
+  listCheckRuns(
+    token: string,
+    repo: Repo,
+    sha: string,
+  ): Promise<{ name: string; status: string; conclusion: string | null; url: string }[]>;
   deleteBranch(token: string, repo: Repo, branch: string): Promise<void>;
 }
 
@@ -32,10 +39,13 @@ export const prStateOf = (pr: Pick<GhPull, "merged" | "merged_at" | "state" | "d
   pr.merged || pr.merged_at ? "merged" : pr.state === "closed" ? "closed" : pr.draft ? "draft" : "open";
 
 /** 03, Status polling. `null` when there are no check runs. */
-export const checksStateOf = (runs: ReadonlyArray<{ status: string; conclusion: string | null }>): ChecksState | null => {
+export const checksStateOf = (
+  runs: ReadonlyArray<{ status: string; conclusion: string | null }>,
+): ChecksState | null => {
   if (runs.length === 0) return null;
   if (runs.some((x) => x.status === "queued" || x.status === "in_progress")) return "pending";
-  if (runs.some((x) => ["failure", "cancelled", "timed_out", "action_required"].includes(x.conclusion ?? ""))) return "failure";
+  if (runs.some((x) => ["failure", "cancelled", "timed_out", "action_required"].includes(x.conclusion ?? "")))
+    return "failure";
   return "success";
 };
 
@@ -43,7 +53,10 @@ export const github: GitProvider = {
   async listBranches(token, repo, query) {
     const all = await githubPaginate<{ name: string }>({ path: `${r(repo)}/branches`, token }, 2000);
     const q = query?.toLowerCase() ?? "";
-    return all.filter((b) => b.name.toLowerCase().includes(q)).slice(0, 100).map((b) => ({ name: b.name }));
+    return all
+      .filter((b) => b.name.toLowerCase().includes(q))
+      .slice(0, 100)
+      .map((b) => ({ name: b.name }));
   },
   async branchExists(token, repo, branch) {
     try {
@@ -55,11 +68,18 @@ export const github: GitProvider = {
     }
   },
   async listOpenPullRequests(token, repo) {
-    const pulls = await githubPaginate<GhPull>({ path: `${r(repo)}/pulls`, token, query: { state: "open" } }, 300);
+    const pulls = await githubPaginate<GhPull>(
+      { path: `${r(repo)}/pulls`, token, query: { state: "open" } },
+      300,
+    );
     return pulls.map((p) => ({ number: p.number, title: p.title, headBranch: p.head.ref }));
   },
   getPullRequest(token, repo, number) {
-    return githubFetch<GhPull>({ path: `${r(repo)}/pulls/${number}`, token, mapError: (s) => (s === 404 ? "NOT_FOUND" : undefined) });
+    return githubFetch<GhPull>({
+      path: `${r(repo)}/pulls/${number}`,
+      token,
+      mapError: (s) => (s === 404 ? "NOT_FOUND" : undefined),
+    });
   },
   async createPullRequest(token, repo, input) {
     const pr = await githubFetch<GhPull>({
@@ -68,7 +88,9 @@ export const github: GitProvider = {
       token,
       body: input,
       mapError: (status, body) =>
-        status === 422 && JSON.stringify(body).toLowerCase().includes("already exists") ? "PR_EXISTS" : undefined,
+        status === 422 && JSON.stringify(body).toLowerCase().includes("already exists")
+          ? "PR_EXISTS"
+          : undefined,
     });
     return { number: pr.number, url: pr.html_url, state: prStateOf(pr) };
   },
@@ -82,7 +104,12 @@ export const github: GitProvider = {
     });
   },
   async listCheckRuns(token, repo, sha) {
-    const runs = await githubPaginate<{ name: string; status: string; conclusion: string | null; html_url: string }>(
+    const runs = await githubPaginate<{
+      name: string;
+      status: string;
+      conclusion: string | null;
+      html_url: string;
+    }>(
       { path: `${r(repo)}/commits/${sha}/check-runs`, token },
       500,
       (page) => (page as { check_runs: never[] }).check_runs,

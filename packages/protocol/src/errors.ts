@@ -84,7 +84,9 @@ export class TempoError extends Error {
 }
 
 /** Result envelope used where thrown errors would lose their code (DO RPC, server functions). */
-export type Result<A> = { readonly ok: true; readonly value: A } | { readonly ok: false; readonly error: ErrorBody };
+export type Result<A> =
+  | { readonly ok: true; readonly value: A }
+  | { readonly ok: false; readonly error: ErrorBody };
 
 export const ok = <A>(value: A): Result<A> => ({ ok: true, value });
 export const err = (error: ErrorBody): Result<never> => ({ ok: false, error });

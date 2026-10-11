@@ -21,7 +21,9 @@ describe("create op with fakes", () => {
     expect(prompt.content.at(-1)).toEqual({ type: "text", text: "Add a README" });
     const d = await stub.getWorkspace({});
     expect(d.ok && d.value.state).toBe("working");
-    const row = await env.DB.prepare("SELECT state, summary_rev FROM workspaces WHERE id = ?").bind(d.ok ? d.value.id : "").first();
+    const row = await env.DB.prepare("SELECT state, summary_rev FROM workspaces WHERE id = ?")
+      .bind(d.ok ? d.value.id : "")
+      .first();
     expect(row?.state).toBe("working");
     await runInDurableObject(stub, (instance) => {
       expect(internals(instance as never).core.liveSessions.size).toBe(1);

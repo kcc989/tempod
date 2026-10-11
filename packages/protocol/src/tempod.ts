@@ -1,5 +1,12 @@
 import { Schema } from "effect";
-import { AvailableCommand, Capabilities, ConfigOption, ContentBlock, PermissionOption, SessionMode } from "./acp.ts";
+import {
+  AvailableCommand,
+  Capabilities,
+  ConfigOption,
+  ContentBlock,
+  PermissionOption,
+  SessionMode,
+} from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
 import { ChangedFile } from "./types.ts";
 import { Settings, SettingsLayer, SettingsReadResult } from "./settings.ts";
@@ -43,8 +50,18 @@ export type DoToTempod = typeof DoToTempod.Type;
 
 export const ResError = Schema.Struct({ code: Schema.String, message: Schema.String });
 export const TempodRes = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("res"), id: Schema.String, ok: Schema.Literal(true), result: Schema.Unknown }),
-  Schema.Struct({ type: Schema.Literal("res"), id: Schema.String, ok: Schema.Literal(false), error: ResError }),
+  Schema.Struct({
+    type: Schema.Literal("res"),
+    id: Schema.String,
+    ok: Schema.Literal(true),
+    result: Schema.Unknown,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("res"),
+    id: Schema.String,
+    ok: Schema.Literal(false),
+    error: ResError,
+  }),
 ]);
 export type TempodRes = typeof TempodRes.Type;
 
@@ -81,7 +98,11 @@ export const ScriptStream = Schema.Literals(["stdout", "stderr"]);
 
 export const TempodEvent = Schema.Union([
   ev("item.created", { sessionId: Schema.String, turnId: Schema.NullOr(Schema.String), item: TempodItem }),
-  ev("item.delta", { sessionId: Schema.String, itemId: Schema.String, append: Schema.Struct({ text: Schema.String }) }),
+  ev("item.delta", {
+    sessionId: Schema.String,
+    itemId: Schema.String,
+    append: Schema.Struct({ text: Schema.String }),
+  }),
   ev("item.updated", { sessionId: Schema.String, itemId: Schema.String, patch: ItemPatch }),
   ev("session.updated", { sessionId: Schema.String, patch: SessionPatch }),
   ev("turn.started", { sessionId: Schema.String, turnId: Schema.String }),
@@ -123,8 +144,14 @@ export const TempodEvent = Schema.Union([
     errors: Schema.Array(Schema.String),
     sources: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   }),
-  ev("credential.changed", { provider: Schema.Literal("codex"), content: Schema.String, lastRefresh: Schema.Number }),
-  ev("credential.invalid", { provider: Schema.Literals(["claude", "codex", "openrouter", "anthropic", "openai"]) }),
+  ev("credential.changed", {
+    provider: Schema.Literal("codex"),
+    content: Schema.String,
+    lastRefresh: Schema.Number,
+  }),
+  ev("credential.invalid", {
+    provider: Schema.Literals(["claude", "codex", "openrouter", "anthropic", "openai"]),
+  }),
   ev("incarnation.changed", { incarnation: Schema.String }),
   ev("outbox.overflow", { dropped: Schema.Number }),
   ev("tempod.stopping", { reason: Schema.String }),
@@ -240,7 +267,11 @@ export const TEMPOD_REQUESTS = {
   "session.cancel": req(Schema.Struct({ sessionId: Schema.String, turnId: Schema.String }), Empty, 20_000),
   "session.setMode": req(Schema.Struct({ sessionId: Schema.String, modeId: Schema.String }), Empty, 30_000),
   "session.setConfig": req(
-    Schema.Struct({ sessionId: Schema.String, configId: Schema.String, value: Schema.Union([Schema.String, Schema.Boolean]) }),
+    Schema.Struct({
+      sessionId: Schema.String,
+      configId: Schema.String,
+      value: Schema.Union([Schema.String, Schema.Boolean]),
+    }),
     Schema.Struct({ configOptions: Schema.Array(ConfigOption) }),
     30_000,
   ),
@@ -267,13 +298,25 @@ export const TEMPOD_REQUESTS = {
     }),
     30_000,
   ),
-  "git.fileDiff": req(Schema.Struct({ scope: DiffScope, path: Schema.String }), Schema.Struct({ diff: Schema.String }), 30_000),
+  "git.fileDiff": req(
+    Schema.Struct({ scope: DiffScope, path: Schema.String }),
+    Schema.Struct({ diff: Schema.String }),
+    30_000,
+  ),
   "git.checkpoint": req(
-    Schema.Struct({ checkpointId: Schema.String, turnId: Schema.NullOr(Schema.String), reason: CheckpointReason }),
+    Schema.Struct({
+      checkpointId: Schema.String,
+      turnId: Schema.NullOr(Schema.String),
+      reason: CheckpointReason,
+    }),
     CheckpointResult,
     2 * 60_000,
   ),
-  "git.revert": req(Schema.Struct({ checkpointId: Schema.String }), Schema.Struct({ headSha: Schema.String }), 2 * 60_000),
+  "git.revert": req(
+    Schema.Struct({ checkpointId: Schema.String }),
+    Schema.Struct({ headSha: Schema.String }),
+    2 * 60_000,
+  ),
   "git.commitAndPush": req(
     Schema.Struct({
       message: Schema.String,
@@ -287,7 +330,11 @@ export const TEMPOD_REQUESTS = {
   "fs.list": req(Empty, Schema.Struct({ paths: Schema.Array(Schema.String) }), 30_000),
   "fs.read": req(
     Schema.Struct({ path: Schema.String, maxBytes: Schema.Number }),
-    Schema.Struct({ content: Schema.String, encoding: Schema.Literals(["utf8", "base64"]), size: Schema.Number }),
+    Schema.Struct({
+      content: Schema.String,
+      encoding: Schema.Literals(["utf8", "base64"]),
+      size: Schema.Number,
+    }),
     10_000,
   ),
   "fs.search": req(

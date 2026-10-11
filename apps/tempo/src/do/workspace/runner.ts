@@ -1,5 +1,12 @@
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
-import { TempoError, newId, type ErrorCode, type OpKind, type OpProgress, toErrorBody } from "@tempo/protocol";
+import {
+  TempoError,
+  newId,
+  type ErrorCode,
+  type OpKind,
+  type OpProgress,
+  toErrorBody,
+} from "@tempo/protocol";
 import { ops, type OpRow } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
@@ -43,7 +50,9 @@ export const OP_STEPS: Record<OpKind, ReadonlyArray<string>> = {
   housekeeping: ["events.prune", "r2.retention", "egress.trim"],
 };
 
-type OnPermanent = { readonly kind: "fail"; readonly code: ErrorCode; readonly passthrough?: boolean } | { readonly kind: "skip" };
+type OnPermanent =
+  | { readonly kind: "fail"; readonly code: ErrorCode; readonly passthrough?: boolean }
+  | { readonly kind: "skip" };
 
 interface StepLimit {
   readonly timeoutMs: number;
@@ -54,9 +63,21 @@ interface StepLimit {
 /** 03, Step limits. */
 export const STEP_LIMITS: Record<string, StepLimit> = {
   // 60 s to healthy, plus room for one snapshot fallback within the same attempt.
-  "container.start": { timeoutMs: 150_000, maxAttempts: 3, onPermanent: { kind: "fail", code: "CONTAINER_START_FAILED" } },
-  "tempod.connect": { timeoutMs: 10_000, maxAttempts: 5, onPermanent: { kind: "fail", code: "TEMPOD_UNREACHABLE" } },
-  "repo.clone": { timeoutMs: 10 * 60_000, maxAttempts: 3, onPermanent: { kind: "fail", code: "CLONE_FAILED" } },
+  "container.start": {
+    timeoutMs: 150_000,
+    maxAttempts: 3,
+    onPermanent: { kind: "fail", code: "CONTAINER_START_FAILED" },
+  },
+  "tempod.connect": {
+    timeoutMs: 10_000,
+    maxAttempts: 5,
+    onPermanent: { kind: "fail", code: "TEMPOD_UNREACHABLE" },
+  },
+  "repo.clone": {
+    timeoutMs: 10 * 60_000,
+    maxAttempts: 3,
+    onPermanent: { kind: "fail", code: "CLONE_FAILED" },
+  },
   "repo.applyCheckpoint": { timeoutMs: 5 * 60_000, maxAttempts: 2, onPermanent: { kind: "skip" } },
   "home.restore": { timeoutMs: 5 * 60_000, maxAttempts: 2, onPermanent: { kind: "skip" } },
   "settings.read": { timeoutMs: 10_000, maxAttempts: 3, onPermanent: { kind: "skip" } },
@@ -68,17 +89,29 @@ export const STEP_LIMITS: Record<string, StepLimit> = {
   "tempod.shutdown": { timeoutMs: 45_000, maxAttempts: 1, onPermanent: { kind: "skip" } },
   "container.snapshot": { timeoutMs: 5 * 60_000, maxAttempts: 2, onPermanent: { kind: "skip" } },
   "container.destroy": { timeoutMs: 30_000, maxAttempts: 3, onPermanent: { kind: "fail", code: "INTERNAL" } },
-  "git.revert": { timeoutMs: 2 * 60_000, maxAttempts: 1, onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true } },
+  "git.revert": {
+    timeoutMs: 2 * 60_000,
+    maxAttempts: 1,
+    onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true },
+  },
   "git.commitAndPush": {
     timeoutMs: 5 * 60_000,
     maxAttempts: 1,
     onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true },
   },
   "github.deleteBranch": { timeoutMs: 30_000, maxAttempts: 3, onPermanent: { kind: "skip" } },
-  "branch.check": { timeoutMs: 30_000, maxAttempts: 3, onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true } },
+  "branch.check": {
+    timeoutMs: 30_000,
+    maxAttempts: 3,
+    onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true },
+  },
 };
 
-const DEFAULT_LIMIT: StepLimit = { timeoutMs: 30_000, maxAttempts: 3, onPermanent: { kind: "fail", code: "INTERNAL" } };
+const DEFAULT_LIMIT: StepLimit = {
+  timeoutMs: 30_000,
+  maxAttempts: 3,
+  onPermanent: { kind: "fail", code: "INTERNAL" },
+};
 export const limitOf = (step: string): StepLimit => STEP_LIMITS[step] ?? DEFAULT_LIMIT;
 
 /** Errors that no retry can fix. */
@@ -114,7 +147,11 @@ export type StepFn = (sc: StepCtx) => Promise<StepOutcome>;
 
 export interface OpHooks {
   onDone(core: WorkspaceCore, op: OpRow, state: OpState): Promise<void> | void;
-  onFailed(core: WorkspaceCore, op: OpRow, error: { code: ErrorCode; detail: string | null }): Promise<void> | void;
+  onFailed(
+    core: WorkspaceCore,
+    op: OpRow,
+    error: { code: ErrorCode; detail: string | null },
+  ): Promise<void> | void;
   onCancelled?(core: WorkspaceCore, op: OpRow): Promise<void> | void;
 }
 
@@ -192,7 +229,10 @@ export class OpRunner {
       .from(ops)
       .where(inArray(ops.status, ["pending", "running"]))
       .all();
-    return rows.some((r) => (!exceptHousekeeping || r.kind !== "housekeeping") && (!kinds || kinds.includes(r.kind as OpKind)));
+    return rows.some(
+      (r) =>
+        (!exceptHousekeeping || r.kind !== "housekeeping") && (!kinds || kinds.includes(r.kind as OpKind)),
+    );
   }
 
   find(kind: OpKind): OpRow | null {
@@ -219,7 +259,11 @@ export class OpRunner {
       .orderBy(asc(ops.createdAt))
       .get();
     if (pending) return pending.nextRunAt;
-    const hk = this.core.db.select().from(ops).where(and(eq(ops.status, "pending"), eq(ops.kind, "housekeeping"))).get();
+    const hk = this.core.db
+      .select()
+      .from(ops)
+      .where(and(eq(ops.status, "pending"), eq(ops.kind, "housekeeping")))
+      .get();
     return hk?.nextRunAt ?? null;
   }
 
@@ -261,7 +305,11 @@ export class OpRunner {
       .all();
     const due = nonHk.find((o) => o.nextRunAt <= now) ?? null;
     if (nonHk.length > 0) return due && due.id === nonHk[0]!.id ? due : null;
-    const hk = this.core.db.select().from(ops).where(and(eq(ops.status, "pending"), eq(ops.kind, "housekeeping"))).get();
+    const hk = this.core.db
+      .select()
+      .from(ops)
+      .where(and(eq(ops.status, "pending"), eq(ops.kind, "housekeeping")))
+      .get();
     return hk && hk.nextRunAt <= now ? hk : null;
   }
 
@@ -285,14 +333,24 @@ export class OpRunner {
     const input = parseJson<Record<string, unknown>>(op.inputJson, {});
     this.save(op, { status: "running" });
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(new TempoError("TEMPOD_TIMEOUT", undefined, `${step} timed out`)), limit.timeoutMs);
+    const timer = setTimeout(
+      () => ctl.abort(new TempoError("TEMPOD_TIMEOUT", undefined, `${step} timed out`)),
+      limit.timeoutMs,
+    );
     const t0 = Date.now();
-    log("info", "op step", { workspaceId: this.core.wsOrNull()?.workspaceId, opId: op.id, step, attempt: op.attempt });
+    log("info", "op step", {
+      workspaceId: this.core.wsOrNull()?.workspaceId,
+      opId: op.id,
+      step,
+      attempt: op.attempt,
+    });
     try {
       if (!fn) throw new TempoError("INTERNAL", undefined, `unknown step ${step}`);
       const outcome = await Promise.race([
         fn({ core: this.core, op, input, state, signal: ctl.signal, attempt: op.attempt }),
-        new Promise<never>((_, reject) => ctl.signal.addEventListener("abort", () => reject(ctl.signal.reason))),
+        new Promise<never>((_, reject) =>
+          ctl.signal.addEventListener("abort", () => reject(ctl.signal.reason)),
+        ),
       ]);
       state.timings[step] = (state.timings[step] ?? 0) + (Date.now() - t0);
       await this.applyOutcome(op, outcome, state, limit);
@@ -305,10 +363,19 @@ export class OpRunner {
     }
   }
 
-  private async applyOutcome(op: OpRow, outcome: StepOutcome, state: OpState, limit: StepLimit): Promise<void> {
+  private async applyOutcome(
+    op: OpRow,
+    outcome: StepOutcome,
+    state: OpState,
+    limit: StepLimit,
+  ): Promise<void> {
     const now = Date.now();
     if (outcome === "wait") {
-      state.waiting = { ...state.waiting, step: op.step, deadline: state.waiting?.deadline ?? now + limit.timeoutMs };
+      state.waiting = {
+        ...state.waiting,
+        step: op.step,
+        deadline: state.waiting?.deadline ?? now + limit.timeoutMs,
+      };
       this.save(op, {}, state);
       return;
     }
@@ -349,7 +416,16 @@ export class OpRunner {
       error: detail.slice(0, 500),
     });
     if (!permanent) {
-      this.save(op, { attempt, nextRunAt: Date.now() + backoffMs(attempt), errorCode: body.code, errorDetail: detail.slice(0, 2000) }, state);
+      this.save(
+        op,
+        {
+          attempt,
+          nextRunAt: Date.now() + backoffMs(attempt),
+          errorCode: body.code,
+          errorDetail: detail.slice(0, 2000),
+        },
+        state,
+      );
       return;
     }
     if (limit.onPermanent.kind === "skip") {
@@ -360,17 +436,27 @@ export class OpRunner {
       await this.applyOutcome({ ...op, attempt }, "next", state, limit);
       return;
     }
-    const code = limit.onPermanent.passthrough && body.code !== "INTERNAL" ? body.code : limit.onPermanent.code;
+    const code =
+      limit.onPermanent.passthrough && body.code !== "INTERNAL" ? body.code : limit.onPermanent.code;
     await this.fail(op, code, detail, state);
   }
 
   /** Permanent failures that the spec turns into "continue": log, and for some steps tell the user. */
   private async afterSkip(op: OpRow, code: ErrorCode, detail: string): Promise<void> {
-    log("warn", "op step skipped", { workspaceId: this.core.wsOrNull()?.workspaceId, opId: op.id, step: op.step, code });
-    if (op.step === "script.archive") this.core.notice("warning", `The archive script failed: ${detail.slice(0, 300)}`);
+    log("warn", "op step skipped", {
+      workspaceId: this.core.wsOrNull()?.workspaceId,
+      opId: op.id,
+      step: op.step,
+      code,
+    });
+    if (op.step === "script.archive")
+      this.core.notice("warning", `The archive script failed: ${detail.slice(0, 300)}`);
     if (op.step === "settings.read") {
       const issues = this.core.settingsIssues();
-      this.core.setKv("settingsIssues", { ...issues, errors: [...issues.errors, `Settings could not be read: ${detail.slice(0, 300)}`] });
+      this.core.setKv("settingsIssues", {
+        ...issues,
+        errors: [...issues.errors, `Settings could not be read: ${detail.slice(0, 300)}`],
+      });
     }
   }
 
@@ -395,18 +481,34 @@ export class OpRunner {
     const step = state.waiting?.step ?? op.step;
     delete state.waiting;
     this.addWaitTime(op, state, step);
-    await this.handleError({ ...op, attempt: limitOf(step).maxAttempts - 1 }, new TempoError("TEMPOD_TIMEOUT", undefined, `${step} timed out`), state, limitOf(step));
+    await this.handleError(
+      { ...op, attempt: limitOf(step).maxAttempts - 1 },
+      new TempoError("TEMPOD_TIMEOUT", undefined, `${step} timed out`),
+      state,
+      limitOf(step),
+    );
   }
 
   /** Called by event handlers to finish a waiting step. */
-  async completeWaiting(opId: string, step: string, outcome: "next" | "failed", error?: { code: ErrorCode; detail: string }): Promise<void> {
+  async completeWaiting(
+    opId: string,
+    step: string,
+    outcome: "next" | "failed",
+    error?: { code: ErrorCode; detail: string },
+  ): Promise<void> {
     const op = this.core.db.select().from(ops).where(eq(ops.id, opId)).get();
     if (!op || op.status !== "running" || op.step !== step) return;
     const state = this.stateOf(op);
     delete state.waiting;
     this.addWaitTime(op, state, step);
     if (outcome === "next") await this.applyOutcome(op, "next", state, limitOf(step));
-    else await this.handleError({ ...op, attempt: limitOf(step).maxAttempts - 1 }, new TempoError(error?.code ?? "INTERNAL", undefined, error?.detail), state, limitOf(step));
+    else
+      await this.handleError(
+        { ...op, attempt: limitOf(step).maxAttempts - 1 },
+        new TempoError(error?.code ?? "INTERNAL", undefined, error?.detail),
+        state,
+        limitOf(step),
+      );
     this.core.scheduleAlarm();
   }
 
@@ -417,12 +519,19 @@ export class OpRunner {
     const state = this.stateOf(op);
     delete state.waiting;
     this.save(op, { status: "cancelled" }, state);
-    this.resolveWaiters(op.id, { ok: false, error: { code: "CONTAINER_NOT_READY", detail: "the container stopped" } });
+    this.resolveWaiters(op.id, {
+      ok: false,
+      error: { code: "CONTAINER_NOT_READY", detail: "the container stopped" },
+    });
   }
 
   /** The op that waits on `step`, if any. */
   waitingOn(step: string): OpRow | null {
-    const op = this.core.db.select().from(ops).where(and(eq(ops.status, "running"), eq(ops.step, step))).get();
+    const op = this.core.db
+      .select()
+      .from(ops)
+      .where(and(eq(ops.status, "running"), eq(ops.step, step)))
+      .get();
     return op ?? null;
   }
 
@@ -434,7 +543,10 @@ export class OpRunner {
     });
   }
 
-  private resolveWaiters(opId: string, result: { ok: true; value: unknown } | { ok: false; error: { code: ErrorCode; detail: string | null } }): void {
+  private resolveWaiters(
+    opId: string,
+    result: { ok: true; value: unknown } | { ok: false; error: { code: ErrorCode; detail: string | null } },
+  ): void {
     const list = this.core.opWaiters.get(opId);
     if (!list) return;
     this.core.opWaiters.delete(opId);

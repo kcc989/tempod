@@ -38,7 +38,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export const githubFetch = async <T>(req: GithubRequest): Promise<T> => {
   const url = new URL(API + req.path);
-  for (const [k, v] of Object.entries(req.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
+  for (const [k, v] of Object.entries(req.query ?? {}))
+    if (v !== undefined) url.searchParams.set(k, String(v));
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await sleep(500 * 2 ** (attempt - 1));
@@ -85,7 +86,11 @@ const safeJson = async (res: Response): Promise<GithubErrorBody> => {
 };
 
 /** Follows `page` until a short page. GitHub caps per_page at 100. */
-export const githubPaginate = async <T>(req: GithubRequest, limit: number, pick?: (page: unknown) => T[]): Promise<T[]> => {
+export const githubPaginate = async <T>(
+  req: GithubRequest,
+  limit: number,
+  pick?: (page: unknown) => T[],
+): Promise<T[]> => {
   const out: T[] = [];
   for (let page = 1; out.length < limit && page <= 50; page++) {
     const res = await githubFetch<unknown>({ ...req, query: { ...req.query, per_page: 100, page } });

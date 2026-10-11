@@ -1,13 +1,13 @@
 {
   "name": "tempo",
+  "version": "0.1.0",
   "private": true,
-  "type": "module",
-  "packageManager": "bun@1.4.2",
   "workspaces": [
     "apps/*",
     "packages/*",
     "tests/*"
   ],
+  "type": "module",
   "scripts": {
     "dev": "turbo run dev --filter=@tempo/app",
     "build": "turbo run build",
@@ -25,18 +25,19 @@
     "protocol:fixtures": "bun packages/protocol/scripts/gen-fixtures.ts",
     "mac:dev": "cargo run -p tempo-mac",
     "mac:test": "cargo test --workspace",
-    "mac:release": "bash scripts/mac/release.sh"
+    "mac:release": "bash scripts/mac/release.sh",
+    "test:tempod:container": "bun scripts/test-tempod-container.ts"
   },
   "devDependencies": {
+    "@effect/platform-bun": "4.0.3",
     "@types/bun": "1.4.2",
+    "@types/node": "22.20.5",
     "alchemy": "2.0.0-beta.81",
+    "effect": "4.0.3",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "turbo": "2.11.7",
-    "typescript": "6.0.3",
-    "@effect/platform-bun": "4.0.3",
-    "effect": "4.0.3",
-    "@types/node": "22.20.5"
+    "typescript": "6.0.3"
   },
-  "version": "0.1.0"
+  "packageManager": "bun@1.4.2"
 }

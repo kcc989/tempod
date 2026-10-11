@@ -19,9 +19,15 @@ export const errorResponse = (body: ErrorBody): Response =>
   Response.json(body, { status: STATUS_BY_CODE[body.code] ?? 409 });
 
 export const errorOf = (code: ErrorCode, detail?: string): Response =>
-  errorResponse(detail ? { code, message: errorMessage(code), detail } : { code, message: errorMessage(code) });
+  errorResponse(
+    detail ? { code, message: errorMessage(code), detail } : { code, message: errorMessage(code) },
+  );
 
-export const getOwnedWorkspace = async (env: Env, userId: string, workspaceId: string): Promise<WorkspaceRow | null> =>
+export const getOwnedWorkspace = async (
+  env: Env,
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceRow | null> =>
   (await drizzle(env.DB)
     .select()
     .from(workspaces)
@@ -40,10 +46,17 @@ export const closeWith = (code: number, reason: string): Response => {
 };
 
 export const html = (body: string, status = 200): Response =>
-  new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tempo setup</title><style>body{font:14px system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 16px;color:#111;background:#fff}@media(prefers-color-scheme:dark){body{color:#eee;background:#111}}input,button,select{font:inherit;padding:6px 10px}code{font-family:ui-monospace,monospace}</style></head><body>${body}</body></html>`, {
-    status,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" },
-  });
+  new Response(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tempo setup</title><style>body{font:14px system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 16px;color:#111;background:#fff}@media(prefers-color-scheme:dark){body{color:#eee;background:#111}}input,button,select{font:inherit;padding:6px 10px}code{font-family:ui-monospace,monospace}</style></head><body>${body}</body></html>`,
+    {
+      status,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+      },
+    },
+  );
 
 export const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

@@ -4,7 +4,7 @@ This tab defines everything inside and around one container: the image, `tempod`
 
 ## Container image
 
-One image, named `workspace`, holds all four agents, Chromium and the dev tools. It runs as user `tempo` (uid 1000) with `tempod` as the entrypoint.
+One image, named `workspace`, holds all four agents, Chromium and the dev tools. It runs as user `tempo` (uid 1000) with `tini` as PID 1 launching `tempod`. `tini` forwards signals to the daemon and reaps orphaned child processes.
 
 **Rules**
 
@@ -34,9 +34,10 @@ One image, named `workspace`, holds all four agents, Chromium and the dev tools.
 ```dockerfile
 FROM node:24-trixie-slim@sha256:<pinned>
 
+ARG TINI_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates git ripgrep fd-find tmux inotify-tools curl jq unzip zstd \
-    procps iproute2 python3 python3-venv build-essential libnss3-tools \
+    tini=${TINI_VERSION} procps iproute2 python3 python3-venv build-essential libnss3-tools \
  && rm -rf /var/lib/apt/lists/*
 
 # gh and bun: versions from versions.json, passed as build args
@@ -64,7 +65,8 @@ COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
 
-RUN useradd -m -u 1000 -s /bin/bash tempo \
+RUN groupmod -n tempo node \
+ && usermod -l tempo -d /home/tempo -s /bin/bash node \
  && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
@@ -86,7 +88,7 @@ ENV HOME=/home/tempo \
 
 USER tempo
 WORKDIR /workspace
-ENTRYPOINT ["/usr/local/bin/tempod"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]
 ```
 
 **Files baked into `/home/tempo`** (from `container/home/`)
@@ -98,6 +100,10 @@ ENTRYPOINT ["/usr/local/bin/tempod"]
 | `.gitconfig` | `init.defaultBranch = main`, `pull.rebase = false`, `safe.directory = /workspace` |
 
 `IS_SANDBOX=1` is set even though agents run as uid 1000. Claude Code hides `bypassPermissions` for root unless `IS_SANDBOX` is `1`. The flag is undocumented, so spike S3 MUST confirm the mode list.
+
+`TINI_VERSION` is pinned in `container/versions.json` to Debian trixie’s [amd64 package version](https://packages.debian.org/trixie/tini), currently `0.19.0-3+b8`.
+
+The Node base image already has user and group `node` at uid/gid 1000. Rename them to `tempo`; creating a second user at uid 1000 fails. `bun run test:tempod:container` builds `container/Dockerfile.test` from the workspace image and runs the daemon tests as `tempo`.
 
 **Size budget.** The image MUST stay under 6 GB so it fits the 16 GB disk of `standard-3` with room for repos and dependencies.
 

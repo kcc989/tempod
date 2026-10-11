@@ -46,13 +46,16 @@ export const openTerminal = (
       await waitReady(Date.now() + READY_WAIT_MS);
       if (closed) return;
       const env = { TERM: "xterm-256color", HOME: "/home/tempo", ...(await core.scriptEnv()) };
-      const proc = await core.container!.exec(["tmux", "new-session", "-A", "-s", terminalId, "-c", "/workspace"], {
-        pty: { cols: clamp(cols, 10, 500), rows: clamp(rows, 5, 200) },
-        stdin: "pipe",
-        user: "1000:1000",
-        cwd: "/workspace",
-        env,
-      });
+      const proc = await core.container!.exec(
+        ["tmux", "new-session", "-A", "-s", terminalId, "-c", "/workspace"],
+        {
+          pty: { cols: clamp(cols, 10, 500), rows: clamp(rows, 5, 200) },
+          stdin: "pipe",
+          user: "1000:1000",
+          cwd: "/workspace",
+          env,
+        },
+      );
       entry.proc = proc;
       if (closed) return close();
       const writer = proc.stdin?.getWriter();
@@ -83,7 +86,11 @@ export const openTerminal = (
       }
       close();
     } catch (e) {
-      log("warn", "terminal failed", { workspaceId: core.wsOrNull()?.workspaceId, terminalId, error: errorText(e) });
+      log("warn", "terminal failed", {
+        workspaceId: core.wsOrNull()?.workspaceId,
+        terminalId,
+        error: errorText(e),
+      });
       try {
         server.close(1011, containerRunning(core) ? "terminal failed" : "container not ready");
       } catch {

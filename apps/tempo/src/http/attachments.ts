@@ -6,7 +6,11 @@ import { appOrigin, errorOf, errorResponse, getOwnedWorkspace } from "./common.t
 const MAX_BYTES = 10 * 1024 * 1024;
 
 /** POST /api/workspaces/<workspaceId>/attachments: multipart, one file, at most 10 MiB (02). */
-export const handleAttachment = async (request: Request, env: Env, workspaceId: string): Promise<Response> => {
+export const handleAttachment = async (
+  request: Request,
+  env: Env,
+  workspaceId: string,
+): Promise<Response> => {
   try {
     const origin = request.headers.get("Origin");
     const bearer = request.headers.get("Authorization")?.toLowerCase().startsWith("bearer ") ?? false;
@@ -29,7 +33,13 @@ export const handleAttachment = async (request: Request, env: Env, workspaceId: 
     const attachmentId = newId();
     const r2Key = `attachments/${workspaceId}/${attachmentId}/${name}`;
     await env.DATA.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
-    await env.WORKSPACE.getByName(workspaceId).registerAttachment({ id: attachmentId, name, mime, size: file.size, r2Key });
+    await env.WORKSPACE.getByName(workspaceId).registerAttachment({
+      id: attachmentId,
+      name,
+      mime,
+      size: file.size,
+      r2Key,
+    });
     return Response.json({ attachmentId, name, mime, size: file.size });
   } catch (e) {
     return errorResponse(toErrorBody(e));
@@ -37,4 +47,7 @@ export const handleAttachment = async (request: Request, env: Env, workspaceId: 
 };
 
 export const sanitizeName = (name: string): string =>
-  name.replace(/[/\\\0]/g, "_").replace(/^\.+/, "_").slice(0, 200) || "file";
+  name
+    .replace(/[/\\\0]/g, "_")
+    .replace(/^\.+/, "_")
+    .slice(0, 200) || "file";

@@ -23,7 +23,11 @@ export type Handler<K extends FnName> = (c: HandlerCtx, input: FnInput<K>) => Pr
 export const decodeInput = <K extends FnName>(name: K, raw: unknown): FnInput<K> => {
   const exit = Schema.decodeUnknownExit(API[name].input as unknown as Schema.Decoder<unknown>)(raw ?? {});
   if (exit._tag === "Failure") {
-    throw new TempoError("VALIDATION_FAILED", undefined, String(exit.cause).split("\n").slice(0, 8).join(" ").slice(0, 800));
+    throw new TempoError(
+      "VALIDATION_FAILED",
+      undefined,
+      String(exit.cause).split("\n").slice(0, 8).join(" ").slice(0, 800),
+    );
   }
   return exit.value as FnInput<K>;
 };

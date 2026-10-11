@@ -21,8 +21,18 @@ export const openUiChannel = (core: WorkspaceCore, request: Request): Response =
     type: "hello",
     v: 1,
     workspace: core.detail(),
-    sessions: core.db.select().from(sessions).orderBy(asc(sessions.sortOrder)).all().map((s) => core.sessionToWire(s)),
-    turns: core.db.select().from(turns).orderBy(asc(turns.seq)).all().map((t) => core.turnToWire(t)),
+    sessions: core.db
+      .select()
+      .from(sessions)
+      .orderBy(asc(sessions.sortOrder))
+      .all()
+      .map((s) => core.sessionToWire(s)),
+    turns: core.db
+      .select()
+      .from(turns)
+      .orderBy(asc(turns.seq))
+      .all()
+      .map((t) => core.turnToWire(t)),
     itemsRev: row.itemsRev,
   });
   let after = sinceRev;

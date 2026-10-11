@@ -7,7 +7,10 @@ const LABEL = /^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})-([a-z0-9]{16})$/;
 export const isPreviewHost = (host: string, env: Env): boolean =>
   host.toLowerCase().endsWith(`.${env.PREVIEW_DOMAIN.toLowerCase()}`);
 
-export const parsePreviewHost = (host: string, env: Env): { port: number; workspaceId: string; token: string } | null => {
+export const parsePreviewHost = (
+  host: string,
+  env: Env,
+): { port: number; workspaceId: string; token: string } | null => {
   const suffix = `.${env.PREVIEW_DOMAIN.toLowerCase()}`;
   const label = host.toLowerCase().slice(0, -suffix.length);
   const m = LABEL.exec(label);

@@ -56,7 +56,14 @@ export const SESSION_STATUSES = ["starting", "idle", "running", "closed", "broke
 export const SessionStatus = Schema.Literals(SESSION_STATUSES);
 export type SessionStatus = typeof SessionStatus.Type;
 
-export const TURN_STATUSES = ["queued", "running", "completed", "cancelled", "failed", "interrupted"] as const;
+export const TURN_STATUSES = [
+  "queued",
+  "running",
+  "completed",
+  "cancelled",
+  "failed",
+  "interrupted",
+] as const;
 export const TurnStatus = Schema.Literals(TURN_STATUSES);
 export type TurnStatus = typeof TurnStatus.Type;
 
@@ -75,7 +82,14 @@ export const ITEM_KINDS = [
 export const ItemKind = Schema.Literals(ITEM_KINDS);
 export type ItemKind = typeof ItemKind.Type;
 
-export const ITEM_STATUSES = ["streaming", "pending", "in_progress", "completed", "failed", "cancelled"] as const;
+export const ITEM_STATUSES = [
+  "streaming",
+  "pending",
+  "in_progress",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
 export const ItemStatus = Schema.Literals(ITEM_STATUSES);
 export type ItemStatus = typeof ItemStatus.Type;
 

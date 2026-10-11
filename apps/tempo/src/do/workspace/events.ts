@@ -102,7 +102,13 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
       core.notice("error", `The agent stopped unexpectedly.${tail ? `\n${tail}` : ""}`, event.sessionId);
       const running = core.runningTurn();
       if (running && running.sessionId === event.sessionId) {
-        if (finishTurn(core, running.id, "failed", { stopReason: null, errorCode: "AGENT_CRASHED", errorDetail: tail })) {
+        if (
+          finishTurn(core, running.id, "failed", {
+            stopReason: null,
+            errorCode: "AGENT_CRASHED",
+            errorDetail: tail,
+          })
+        ) {
           void afterTurnEnded(core, running.id);
         }
       }
@@ -121,20 +127,30 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
       const now = Date.now();
       const next = new Set(event.ports.filter((p) => p >= 1024 && p <= 65535 && p !== 7070));
       const current = core.db.select().from(ports).all();
-      for (const p of current) if (!next.has(p.port)) core.db.delete(ports).where(eq(ports.port, p.port)).run();
-      for (const p of next) core.db.insert(ports).values({ port: p, firstSeenAt: now }).onConflictDoNothing().run();
+      for (const p of current)
+        if (!next.has(p.port)) core.db.delete(ports).where(eq(ports.port, p.port)).run();
+      for (const p of next)
+        core.db.insert(ports).values({ port: p, firstSeenAt: now }).onConflictDoNothing().run();
       core.broadcastDetailSoon();
       return;
     }
     case "settings.changed":
       core.updateWs({ settingsJson: JSON.stringify(event.effective) });
-      core.setKv("settingsIssues", { warnings: event.warnings, errors: event.errors, sources: event.sources ?? {} });
+      core.setKv("settingsIssues", {
+        warnings: event.warnings,
+        errors: event.errors,
+        sources: event.sources ?? {},
+      });
       core.broadcastDetailSoon();
       core.ctx.waitUntil(sendEnv(core));
       return;
     case "credential.changed": {
       const res = await core.credentials().offerCodexAuth(event.content, event.lastRefresh, core.workspaceId);
-      log("info", "codex auth offered", { workspaceId: core.workspaceId, accepted: res.accepted, version: res.version });
+      log("info", "codex auth offered", {
+        workspaceId: core.workspaceId,
+        accepted: res.accepted,
+        version: res.version,
+      });
       return;
     }
     case "credential.invalid":
@@ -150,9 +166,13 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
       core.ctx.waitUntil(onSigterm(core));
       return;
     case "log":
-      log(event.level === "error" ? "error" : event.level === "warn" ? "warn" : "info", `tempod: ${event.msg}`, {
-        workspaceId: core.workspaceId,
-      });
+      log(
+        event.level === "error" ? "error" : event.level === "warn" ? "warn" : "info",
+        `tempod: ${event.msg}`,
+        {
+          workspaceId: core.workspaceId,
+        },
+      );
       return;
   }
 };
@@ -209,7 +229,13 @@ const onScriptExited = async (rt: EventRuntime, event: TempodEventOf<"script.exi
       const id = defaultRunScriptId(core.settings());
       const def = id ? core.settings().scripts.run[id] : undefined;
       if (id && def) {
-        await startScript(core, { kind: "run", scriptId: id, command: def.command, cwd: def.cwd, timeoutMs: null }).catch((e) =>
+        await startScript(core, {
+          kind: "run",
+          scriptId: id,
+          command: def.command,
+          cwd: def.cwd,
+          timeoutMs: null,
+        }).catch((e) =>
           log("warn", "auto run failed", { workspaceId: core.workspaceId, error: errorText(e) }),
         );
       }
@@ -220,7 +246,8 @@ const onScriptExited = async (rt: EventRuntime, event: TempodEventOf<"script.exi
     return;
   }
   if (run.kind === "archive") {
-    if (!ok) core.notice("warning", `The archive script failed (exit ${event.exitCode ?? event.signal ?? "?"}).`);
+    if (!ok)
+      core.notice("warning", `The archive script failed (exit ${event.exitCode ?? event.signal ?? "?"}).`);
     const op = runner.waitingOn("script.archive");
     if (op) await runner.completeWaiting(op.id, "script.archive", "next");
   }
@@ -249,4 +276,9 @@ export const sendEnv = async (core: WorkspaceCore): Promise<void> => {
 };
 
 export const pendingPermissionsOf = (core: WorkspaceCore, turnId: string) =>
-  core.db.select().from(permissions).where(eq(permissions.turnId, turnId)).all().filter((p) => p.status === "pending");
+  core.db
+    .select()
+    .from(permissions)
+    .where(eq(permissions.turnId, turnId))
+    .all()
+    .filter((p) => p.status === "pending");

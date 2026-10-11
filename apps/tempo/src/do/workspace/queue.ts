@@ -9,7 +9,16 @@ import {
   type ContentBlock,
   type TurnPrompt,
 } from "@tempo/protocol";
-import { attachments, items, permissions, reviewComments, sessions, turns, type SessionRow, type TurnRow } from "../../db/workspace-do.ts";
+import {
+  attachments,
+  items,
+  permissions,
+  reviewComments,
+  sessions,
+  turns,
+  type SessionRow,
+  type TurnRow,
+} from "../../db/workspace-do.ts";
 import { SECRET_KEYS } from "../credential.ts";
 import { errorText, log } from "../../log.ts";
 import { bytesToBase64 } from "../../lib/crypto.ts";
@@ -26,7 +35,12 @@ export const DEFAULT_MODE: Record<AgentId, string | null> = {
   pi: null,
 };
 
-export const PLAN_MODE: Record<AgentId, string | null> = { claude: "plan", codex: "read-only", opencode: "plan", pi: null };
+export const PLAN_MODE: Record<AgentId, string | null> = {
+  claude: "plan",
+  codex: "read-only",
+  opencode: "plan",
+  pi: null,
+};
 
 /** Inline images above this size go as resource links: tempod messages are capped at 1 MiB. */
 const MAX_INLINE_IMAGE_BYTES = 512 * 1024;
@@ -50,7 +64,8 @@ export const hasCredential = (agent: AgentId, keys: CredentialKeys): boolean => 
 };
 
 export const requireCredential = async (core: WorkspaceCore, agent: AgentId): Promise<void> => {
-  if (!hasCredential(agent, await credentialKeys(core))) throw new TempoError("CREDENTIAL_MISSING", undefined, agent);
+  if (!hasCredential(agent, await credentialKeys(core)))
+    throw new TempoError("CREDENTIAL_MISSING", undefined, agent);
 };
 
 /**
@@ -69,7 +84,11 @@ export const agentEnv = async (core: WorkspaceCore, agent: AgentId): Promise<Rec
     case "codex": {
       const auth = await creds.getCodexAuth();
       if (auth) {
-        await requireTempod(core).request("credential.put", { provider: "codex", content: auth.content, version: auth.version });
+        await requireTempod(core).request("credential.put", {
+          provider: "codex",
+          content: auth.content,
+          version: auth.version,
+        });
         await creds.addCodexLease(core.workspaceId);
         core.setKv("codexLease", true);
         return {};
@@ -121,7 +140,11 @@ export const ensureSessionLive = async (core: WorkspaceCore, session: SessionRow
   for (const [configId, value] of Object.entries(config)) {
     if (configId === "model") continue;
     const option = res.configOptions.find((o) => o.id === configId);
-    if (option && option.currentValue !== value && (typeof value === "string" || typeof value === "boolean")) {
+    if (
+      option &&
+      option.currentValue !== value &&
+      (typeof value === "string" || typeof value === "boolean")
+    ) {
       const r = await tempod.request("session.setConfig", { sessionId: session.id, configId, value });
       core.updateSession(session.id, { configOptionsJson: JSON.stringify(r.configOptions) });
     }
@@ -133,7 +156,12 @@ export const buildHandoffText = (core: WorkspaceCore, sessionId: string, beforeT
   const rows = core.db
     .select()
     .from(items)
-    .where(and(eq(items.sessionId, sessionId), inArray(items.kind, ["user_message", "agent_message", "tool_call"])))
+    .where(
+      and(
+        eq(items.sessionId, sessionId),
+        inArray(items.kind, ["user_message", "agent_message", "tool_call"]),
+      ),
+    )
     .orderBy(asc(items.createdAt))
     .all()
     .filter((r) => r.turnId !== beforeTurnId);
@@ -169,8 +197,17 @@ export interface PromptContent {
 }
 
 /** Content blocks in the order of 01, Send a prompt. Changes no session field: see `commitContent`. */
-export const buildContent = async (core: WorkspaceCore, session: SessionRow, turn: TurnRow): Promise<PromptContent> => {
-  const prompt = parseJson<TurnPrompt>(turn.promptJson, { text: "", mentions: [], attachmentIds: [], reviewCommentIds: [] });
+export const buildContent = async (
+  core: WorkspaceCore,
+  session: SessionRow,
+  turn: TurnRow,
+): Promise<PromptContent> => {
+  const prompt = parseJson<TurnPrompt>(turn.promptJson, {
+    text: "",
+    mentions: [],
+    attachmentIds: [],
+    reviewCommentIds: [],
+  });
   const blocks: ContentBlock[] = [];
   const settings = core.settings();
   const patch: Partial<SessionRow> = {};
@@ -189,20 +226,35 @@ export const buildContent = async (core: WorkspaceCore, session: SessionRow, tur
     patch.pendingNote = null;
   }
   if (prompt.reviewCommentIds.length > 0) {
-    const comments = core.db.select().from(reviewComments).where(inArray(reviewComments.id, [...prompt.reviewCommentIds])).all();
+    const comments = core.db
+      .select()
+      .from(reviewComments)
+      .where(inArray(reviewComments.id, [...prompt.reviewCommentIds]))
+      .all();
     if (comments.length > 0) {
-      const lines = comments.map((c) => `${c.path}:${c.lineStart === null ? "" : c.lineEnd && c.lineEnd !== c.lineStart ? `${c.lineStart}-${c.lineEnd}` : c.lineStart}: ${c.body}`);
+      const lines = comments.map(
+        (c) =>
+          `${c.path}:${c.lineStart === null ? "" : c.lineEnd && c.lineEnd !== c.lineStart ? `${c.lineStart}-${c.lineEnd}` : c.lineStart}: ${c.body}`,
+      );
       blocks.push(text(["Review comments:", ...lines].join("\n")));
     }
   }
   if (prompt.text) blocks.push(text(prompt.text));
   for (const m of prompt.mentions) {
     const path = m.path.replace(/^\/+/, "");
-    blocks.push({ type: "resource_link", uri: `file:///workspace/${path}`, name: path.split("/").pop() ?? path });
+    blocks.push({
+      type: "resource_link",
+      uri: `file:///workspace/${path}`,
+      name: path.split("/").pop() ?? path,
+    });
   }
   if (prompt.attachmentIds.length > 0) {
     const caps = parseJson<{ promptCapabilities?: { image?: boolean } }>(session.capabilitiesJson, {});
-    const rows = core.db.select().from(attachments).where(inArray(attachments.id, [...prompt.attachmentIds])).all();
+    const rows = core.db
+      .select()
+      .from(attachments)
+      .where(inArray(attachments.id, [...prompt.attachmentIds]))
+      .all();
     const files = new Files(core.container!);
     for (const a of rows) {
       const obj = await core.env.DATA.get(a.r2Key);
@@ -216,18 +268,40 @@ export const buildContent = async (core: WorkspaceCore, session: SessionRow, tur
       } else {
         await files.mkdir(`/home/tempo/attachments/${turn.id}`, { recursive: true, user: "1000:1000" });
         await files.writeFile(containerPath, obj.body, { user: "1000:1000" });
-        blocks.push({ type: "resource_link", uri: `file://${containerPath}`, name: a.name, mimeType: a.mime });
+        blocks.push({
+          type: "resource_link",
+          uri: `file://${containerPath}`,
+          name: a.name,
+          mimeType: a.mime,
+        });
       }
-      core.db.update(attachments).set({ containerPath, turnId: turn.id }).where(eq(attachments.id, a.id)).run();
+      core.db
+        .update(attachments)
+        .set({ containerPath, turnId: turn.id })
+        .where(eq(attachments.id, a.id))
+        .run();
     }
   }
   return { blocks, patch, handoff };
 };
 
 /** After session.prompt is accepted: clear the one-time fields and record the handoff block that was sent. */
-const commitContent = (core: WorkspaceCore, sessionId: string, turnId: string, content: PromptContent, sentAt: number): void => {
+const commitContent = (
+  core: WorkspaceCore,
+  sessionId: string,
+  turnId: string,
+  content: PromptContent,
+  sentAt: number,
+): void => {
   if (content.handoff !== null) {
-    core.insertItem({ sessionId, turnId, kind: "handoff", status: "completed", content: { text: content.handoff }, createdAt: sentAt });
+    core.insertItem({
+      sessionId,
+      turnId,
+      kind: "handoff",
+      status: "completed",
+      content: { text: content.handoff },
+      createdAt: sentAt,
+    });
   }
   if (Object.keys(content.patch).length > 0) core.updateSession(sessionId, content.patch);
 };
@@ -277,7 +351,11 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
     const fresh = core.sessionRow(session.id);
     const content = await buildContent(core, fresh, turn);
     const sentAt = Date.now();
-    await requireTempod(core).request("session.prompt", { sessionId: session.id, turnId: turn.id, content: content.blocks });
+    await requireTempod(core).request("session.prompt", {
+      sessionId: session.id,
+      turnId: turn.id,
+      content: content.blocks,
+    });
     commitContent(core, session.id, turn.id, content, sentAt);
     const now = Date.now();
     core.updateTurn(turn.id, { status: "running", startedAt: now, queuePos: null });
@@ -293,11 +371,24 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
       backToReady(core);
       return;
     }
-    const code = err.code === "CREDENTIAL_MISSING" ? "CREDENTIAL_MISSING" : err.code === "TEMPOD_TIMEOUT" ? "AGENT_START_FAILED" : err.code;
-    log("warn", "turn start failed", { workspaceId: core.workspaceId, code, error: err.detail ?? err.message });
+    const code =
+      err.code === "CREDENTIAL_MISSING"
+        ? "CREDENTIAL_MISSING"
+        : err.code === "TEMPOD_TIMEOUT"
+          ? "AGENT_START_FAILED"
+          : err.code;
+    log("warn", "turn start failed", {
+      workspaceId: core.workspaceId,
+      code,
+      error: err.detail ?? err.message,
+    });
     core.liveSessions.delete(session.id);
     core.updateSession(session.id, { status: "idle" });
-    finishTurn(core, turn.id, "failed", { stopReason: null, errorCode: code, errorDetail: err.detail ?? err.message });
+    finishTurn(core, turn.id, "failed", {
+      stopReason: null,
+      errorCode: code,
+      errorDetail: err.detail ?? err.message,
+    });
     core.recomputeAttention();
     core.kickQueue();
   }
@@ -378,4 +469,3 @@ export const dropQueuedTurnsOf = (core: WorkspaceCore, sessionId: string): void 
     .all();
   for (const t of queued) core.updateTurn(t.id, { status: "cancelled", queuePos: null, endedAt: Date.now() });
 };
-

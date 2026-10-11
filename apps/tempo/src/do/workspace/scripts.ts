@@ -30,7 +30,13 @@ export const scriptRun = (core: WorkspaceCore, runId: string): ScriptRunRow | nu
 /** Starts a script in tempod and records the run. A refused start becomes `failed_to_start`. */
 export const startScript = async (
   core: WorkspaceCore,
-  input: { kind: ScriptKind; scriptId: string | null; command: string; cwd: string; timeoutMs: number | null },
+  input: {
+    kind: ScriptKind;
+    scriptId: string | null;
+    command: string;
+    cwd: string;
+    timeoutMs: number | null;
+  },
 ): Promise<ScriptRun> => {
   const runId = newId();
   const now = Date.now();
@@ -67,7 +73,8 @@ export const startScript = async (
       .run();
     const run = runToWire(scriptRun(core, runId)!);
     core.broadcast({ type: "script.run", run });
-    if (e instanceof TempoError && (e.code === "CONTAINER_NOT_READY" || e.code === "TEMPOD_UNREACHABLE")) throw e;
+    if (e instanceof TempoError && (e.code === "CONTAINER_NOT_READY" || e.code === "TEMPOD_UNREACHABLE"))
+      throw e;
     return run;
   }
   const run = runToWire(scriptRun(core, runId)!);
@@ -113,7 +120,11 @@ export const runningRuns = (core: WorkspaceCore, kind?: ScriptKind): ScriptRunRo
 /** After the container stops, nothing runs: close every open run as killed. */
 export const closeOpenRuns = (core: WorkspaceCore): void => {
   for (const r of runningRuns(core)) {
-    core.db.update(scriptRuns).set({ status: "killed", endedAt: Date.now() }).where(eq(scriptRuns.id, r.id)).run();
+    core.db
+      .update(scriptRuns)
+      .set({ status: "killed", endedAt: Date.now() })
+      .where(eq(scriptRuns.id, r.id))
+      .run();
     core.broadcast({ type: "script.run", run: runToWire(scriptRun(core, r.id)!) });
   }
 };

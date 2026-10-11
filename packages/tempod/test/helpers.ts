@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TempodEvent, type TempodEventOf } from "@tempo/protocol";
@@ -14,7 +15,7 @@ export const TOKEN = "test-token-0123456789";
 const dirs: string[] = [];
 
 export const tmpDir = (prefix = "tempod-"): string => {
-  const d = mkdtempSync(join(tmpdir(), prefix));
+  const d = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
   dirs.push(d);
   return d;
 };
@@ -252,6 +253,11 @@ export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeou
 /** True while the process runs. A zombie counts as gone: PID 1 in a test sandbox may never reap it. */
 export const isAlive = (pid: number): boolean => {
   try {
+    if (process.platform !== "linux") {
+      return !execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })
+        .trim()
+        .startsWith("Z");
+    }
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
     return stat.slice(stat.lastIndexOf(")") + 2, stat.lastIndexOf(")") + 3) !== "Z";
   } catch {

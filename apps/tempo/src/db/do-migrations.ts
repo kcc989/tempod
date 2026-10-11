@@ -5,12 +5,19 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
  * DO migrations (02, Conventions): run in the DO constructor inside blockConcurrencyWhile.
  * Forward only (05). Each migration is a list of statements; the DDL is the spec's, verbatim.
  */
-type Migrations = ReadonlyArray<{ readonly tag: string; readonly when: number; readonly statements: ReadonlyArray<string> }>;
+type Migrations = ReadonlyArray<{
+  readonly tag: string;
+  readonly when: number;
+  readonly statements: ReadonlyArray<string>;
+}>;
 
 const toConfig = (list: Migrations) => ({
   journal: { entries: list.map((m, idx) => ({ idx, when: m.when, tag: m.tag, breakpoints: true })) },
   migrations: Object.fromEntries(
-    list.map((m, idx) => [`m${idx.toString().padStart(4, "0")}`, m.statements.join("\n--> statement-breakpoint\n")]),
+    list.map((m, idx) => [
+      `m${idx.toString().padStart(4, "0")}`,
+      m.statements.join("\n--> statement-breakpoint\n"),
+    ]),
   ),
 });
 
