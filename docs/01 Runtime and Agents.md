@@ -105,6 +105,8 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]
 
 The Node base image already has user and group `node` at uid/gid 1000. Rename them to `tempo`; creating a second user at uid 1000 fails. `bun run test:tempod:container` builds `container/Dockerfile.test` from the workspace image and runs the daemon tests as `tempo`.
 
+For builds behind a TLS proxy, supply a combined public CA bundle as BuildKit secret `proxy_ca` (`TEMPO_BUILD_CA=<path> bun run test:tempod:container`). Networked steps mount it temporarily and keep TLS verification enabled; the CA is not copied into image layers. Set `TEMPO_TEST_MOUNT_SOURCE=1` on Linux to mount the source and already installed frozen-lockfile dependencies read-only into the complete workspace image instead of building a second test image. Both modes run as uid 1000 with tini as PID 1.
+
 **Size budget.** The image MUST stay under 6 GB so it fits the 16 GB disk of `standard-3` with room for repos and dependencies.
 
 ## Container config and start
@@ -282,7 +284,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 
 Spike S7 MUST confirm the bin name `mcp-server-playwright` and these flags for the pinned `@playwright/mcp` version.
 
-**ACP version.** Use ACP v1 (stable) through `@agentclientprotocol/sdk` 1.8.0. MUST NOT use v2; it is still a draft. ACP v1 has no `session/set_model`. Set the model with `session/set_config_option` on the option whose category is `model`.
+**ACP version.** Use ACP v1 (stable) through `@agentclientprotocol/sdk` 1.8.0. MUST NOT use v2; it is still a draft. ACP v1 mode config options (category `mode`, type `select`) define the available modes and current selection when advertised. Flatten grouped choices into Tempo’s `modes` and copy `currentValue` into `modeId`; refresh both on config updates. Use `session/set_config_option` to change that mode. Agents exposing the ACP session modes interface use `session/set_mode`. ACP v1 has no `session/set_model`. Set the model with `session/set_config_option` on the option whose category is `model`.
 
 ## Credentials and egress
 
@@ -356,7 +358,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 3. `tempod` spawns the adapter as user `tempo` with cwd `/workspace` and the given env.
 4. `tempod` sends `initialize`. It checks `agentCapabilities` and stores them. It also reads top-level `_meta.steering.supported`, normalizes it to the boolean `capabilities.steering`, and exposes that flag as `Session.steering`. Missing support means false. Steering uses the ACP v1 `_session/steering` extension, not a concurrent `session/prompt`.
 5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright]}` and stores the returned ACP session id, modes and config options.
-6. If the requested mode differs from the current one, `tempod` sends `session/set_mode`. If a model is set, it sends `session/set_config_option` for the `model` option.
+6. If the requested mode differs from the current one, `tempod` sets the advertised `mode` config option with `session/set_config_option`, or uses `session/set_mode` for agents exposing session modes. If a model is set, it sends `session/set_config_option` for the `model` option.
 7. `tempod` returns the `session.start` result: `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded: false, handoff: false}`.
 
 **Send a prompt**
@@ -385,7 +387,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 
 **Handoff text.** Exactly this first line: `This conversation continues an earlier session that was lost. Here is the transcript so far, oldest first:`. Then one line per item, `User: <text>`, `Agent: <text>` or `Tool: <title>`. Cut from the oldest end so the block is at most 24,000 characters.
 
-**Process limits.** At most 3 adapter processes run at once. To start a fourth, close the least recently used session that has no running turn: send `session/close` if the agent supports it, then SIGTERM. Its status in Tempo stays `idle`.
+**Process limits.** At most 3 adapter processes run at once. Concurrent session starts are serialized so admission and eviction cannot race. If every slot is busy, return `AGENT_START_FAILED` and preserve the running turns. To start a fourth, close the least recently used session that has no running turn: send `session/close` if the agent supports it, then SIGTERM. Its status in Tempo stays `idle`.
 
 **Crashes.** `tempod` keeps the last 200 stderr lines of each adapter. If an adapter exits unexpectedly, it sends `agent.exited {sessionId, code, signal, stderrTail}`. A running turn ends as `failed`.
 
@@ -509,6 +511,7 @@ BASE=$(git merge-base "$PARENT" "origin/$BASE_BRANCH")
 git bundle create /home/tempo/.tempod/ckpt.bundle "refs/tempo/checkpoints/$CHECKPOINT_ID" "^$BASE"
 ```
 
+- Repeating `git.checkpoint` with the same checkpoint id returns that ref’s original tree and regenerates its bundle. It MUST NOT overwrite an existing checkpoint ref with later edits.
 - This MUST NOT change the branch, `HEAD`, or the user's index. It uses its own index file.
 - `.gitignore` applies, so `node_modules` and `.env` files are not in checkpoints. Project secrets come back through env vars; dependencies come back through the setup script.
 - The WorkspaceDO starts every checkpoint with the request `git.checkpoint {checkpointId, turnId, reason}` (02). `tempod` answers `{commit, tree, parent, base, bundlePath, bundleBytes}` or `{unchanged: true}`.
@@ -521,12 +524,12 @@ const backup = new DirectoryBackup(this.ctx.container, this.ctx.exports.Director
   { binding: "DATA", prefix: "homes/" + workspaceId + "/" });
 const rec = await backup.backup({
   dir: "/home/tempo",
-  exclude: [".cache/", ".npm/", "node_modules/", ".tempod/ckpt.bundle",
+  exclude: [".cache/", ".npm/", "node_modules/", ".tempod/",
             ".codex/auth.json", ".claude/.credentials.json"],
 });
 ```
 
-- Credentials MUST be excluded from backups. They come back from CredentialDO.
+- Credentials MUST be excluded from backups. They come back from CredentialDO. Exclude the entire `.tempod/` directory: its SQLite outbox can contain unacknowledged `credential.changed` payloads, and a home restore MUST NOT overwrite the running daemon’s database. A fresh disk starts a new incarnation; snapshots retain the daemon database.
 - Keep the 3 newest backups per workspace. Delete older ones with `backup.delete(rec)`.
 
 **Snapshot.** Call `ctx.container.snapshotContainer({ name: snapshotName })`, where `snapshotName` is `<workspaceId>-<n>`. Store `{id, size, imageRef, createdAt}`. `imageRef` is `ctx.container.images.workspace` at that time.

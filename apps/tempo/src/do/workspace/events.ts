@@ -25,7 +25,7 @@ const toCode = (code: string | undefined, fallback: ErrorCode): ErrorCode =>
   code && (ERROR_CODES as ReadonlyArray<string>).includes(code) ? (code as ErrorCode) : fallback;
 
 /** Applies one tempod event (02, Events; 03, While it runs). Events arrive in seq order. */
-export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Promise<void> => {
+export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<void> | void => {
   const { core } = rt;
   switch (event.kind) {
     case "item.created":
@@ -60,8 +60,14 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
       });
       return;
     }
-    case "turn.started":
+    case "turn.started": {
+      const turn = core.db.select().from(turns).where(eq(turns.id, event.turnId)).get();
+      if (!turn || turn.sessionId !== event.sessionId || turn.status !== "queued") return;
+      core.updateTurn(turn.id, { status: "running", startedAt: Date.now(), queuePos: null });
+      core.updateSession(turn.sessionId, { status: "running" });
+      if (core.state === "ready") core.setState("working");
       return;
+    }
     case "turn.ended":
       return onTurnEnded(rt, event);
     case "permission.requested": {
@@ -145,13 +151,16 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
       core.ctx.waitUntil(sendEnv(core));
       return;
     case "credential.changed": {
-      const res = await core.credentials().offerCodexAuth(event.content, event.lastRefresh, core.workspaceId);
-      log("info", "codex auth offered", {
-        workspaceId: core.workspaceId,
-        accepted: res.accepted,
-        version: res.version,
-      });
-      return;
+      return core
+        .credentials()
+        .offerCodexAuth(event.content, event.lastRefresh, core.workspaceId)
+        .then((res) => {
+          log("info", "codex auth offered", {
+            workspaceId: core.workspaceId,
+            accepted: res.accepted,
+            version: res.version,
+          });
+        });
     }
     case "credential.invalid":
       core.broadcast({ type: "credential.invalid", provider: event.provider });
@@ -208,7 +217,7 @@ const onTurnEnded = (rt: EventRuntime, event: TempodEventOf<"turn.ended">): void
   void afterTurnEnded(core, turn.id);
 };
 
-const onScriptExited = async (rt: EventRuntime, event: TempodEventOf<"script.exited">): Promise<void> => {
+const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">): void => {
   const { core, runner } = rt;
   const run = scriptRun(core, event.runId);
   if (!run || run.status !== "running") return;
@@ -229,19 +238,21 @@ const onScriptExited = async (rt: EventRuntime, event: TempodEventOf<"script.exi
       const id = defaultRunScriptId(core.settings());
       const def = id ? core.settings().scripts.run[id] : undefined;
       if (id && def) {
-        await startScript(core, {
-          kind: "run",
-          scriptId: id,
-          command: def.command,
-          cwd: def.cwd,
-          timeoutMs: null,
-        }).catch((e) =>
-          log("warn", "auto run failed", { workspaceId: core.workspaceId, error: errorText(e) }),
+        core.ctx.waitUntil(
+          startScript(core, {
+            kind: "run",
+            scriptId: id,
+            command: def.command,
+            cwd: def.cwd,
+            timeoutMs: null,
+          }).catch((e) =>
+            log("warn", "auto run failed", { workspaceId: core.workspaceId, error: errorText(e) }),
+          ),
         );
       }
     }
     const op = runner.waitingOn("setup.run");
-    if (op) await runner.completeWaiting(op.id, "setup.run", "next");
+    if (op) core.ctx.waitUntil(runner.completeWaiting(op.id, "setup.run", "next"));
     core.kickQueue();
     return;
   }
@@ -249,7 +260,7 @@ const onScriptExited = async (rt: EventRuntime, event: TempodEventOf<"script.exi
     if (!ok)
       core.notice("warning", `The archive script failed (exit ${event.exitCode ?? event.signal ?? "?"}).`);
     const op = runner.waitingOn("script.archive");
-    if (op) await runner.completeWaiting(op.id, "script.archive", "next");
+    if (op) core.ctx.waitUntil(runner.completeWaiting(op.id, "script.archive", "next"));
   }
 };
 

@@ -21,10 +21,14 @@ The spec disagrees with itself here, or the work needs a dependency only you can
 
 | # | Spec | Question | What the code does now |
 | --- | --- | --- | --- |
-| Q-1 | 03 Revert, Step runner | "It never deletes data: a safety checkpoint is made first" disagrees with the step table, which says a failed `git.checkpoint` is skipped with a `warn` log. | The table wins: a revert can go ahead without its `pre_revert` checkpoint. The other choice is to fail the revert with `INTERNAL` when the safety checkpoint fails. |
+| Q-1 (resolved 2026-10-11) | 03 Revert, Step runner | Owner requires a successful safety checkpoint before reverting. | Revert fails with `INTERNAL` after three failed safety-checkpoint attempts and leaves files and transcript intact. Other checkpoint operations remain best effort. 03 is updated. |
 | Q-2 (resolved 2026-10-11) | 01 Container image | Orphaned agent and script processes need reaping. | Owner approved pinned `tini`. It runs as PID 1, forwards signals to `tempod`, and reaps orphaned children. 01 is updated. |
 | Q-3 (resolved 2026-10-11) | 04 Design and front-end rules, 06 Definition of done | React component tests need a DOM library. | Owner approved pinned `happy-dom` and `@testing-library/react`. Component tests are being added alongside the existing Node logic tests. |
 | Q-4 | 01 Browser Run (phase 3, optional) | 02 has no message or field that carries the Browser Run CDP URL to `tempod` or the Live View URL to the UI. | Not built (see **Not built**). |
+
+## ACP mode contract (resolved 2026-10-11)
+
+The owner approved using ACP v1’s advertised mode config option directly. OpenCode 1.18.35 and the evaluated experimental `0.0.0-tui-v2-202606261840` snapshot both expose category `mode` through `configOptions`. Tempo derives its session `modes`/`modeId` from that option and uses `session/set_config_option`; agents exposing session modes use their advertised `session/set_mode` interface. Config updates and reloads refresh the normalized fields. The experimental snapshot provided no protocol advantage and was not adopted. No deployed-client compatibility shim or new dependency was introduced.
 
 ## Additive protocol changes
 
@@ -128,7 +132,7 @@ The Mac build loop keeps these rows (07). The build machine is Linux x86_64, so 
 
 | # | Spec | Question | What the code does now |
 | --- | --- | --- | --- |
-| MQ-1 | 07 Updates | Download "checks the SHA-256 from `meta`", but `ApiMeta` (`packages/protocol/src/api.ts`) is `{protocol, serverVersion, minMacClient, latestMacClient}` and has no hash. The hash is only in R2's `clients/mac/latest.json`, which the app cannot read. | Not decided. Options: an optional `latestMacClientSha256` in `ApiMeta` (additive, 05) that `/api/v1/meta` copies from `latest.json`, or a header on `GET /downloads/mac/<version>`. The Mac update code takes the expected hash as a parameter until you decide. |
+| MQ-1 (resolved 2026-10-11) | 07 Updates | Owner approved an optional `latestMacClientSha256` in `ApiMeta`. | `/api/v1/meta` copies a valid lowercase SHA-256 from the same `latest.json` record as the version. TypeScript/Rust contracts and fixtures are regenerated. Mac clients must refuse an unverified download if the hash is absent. |
 
 ### Spike results (Mac)
 

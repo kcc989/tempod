@@ -16,7 +16,7 @@ export const HOME_EXCLUDES = [
   ".cache/",
   ".npm/",
   "node_modules/",
-  ".tempod/ckpt.bundle",
+  ".tempod/",
   ".codex/auth.json",
   ".claude/.credentials.json",
 ] as const;
@@ -39,9 +39,9 @@ export const takeCheckpoint = async (
   reason: CheckpointReason,
   turnId: string | null,
   signal?: AbortSignal,
+  checkpointId = newId(),
 ): Promise<{ checkpointId: string | null; bundle: PendingBundle | null }> => {
   const tempod = requireTempod(core);
-  const checkpointId = newId();
   const res = await tempod.request(
     "git.checkpoint",
     { checkpointId, turnId, reason },
@@ -66,6 +66,7 @@ export const takeCheckpoint = async (
       localOnly: 0,
       createdAt: Date.now(),
     })
+    .onConflictDoNothing()
     .run();
   return { checkpointId, bundle: { checkpointId, bundlePath: res.bundlePath, bundleBytes: res.bundleBytes } };
 };

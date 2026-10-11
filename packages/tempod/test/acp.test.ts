@@ -72,6 +72,36 @@ const textOf = (c: DoClient, itemId: string): string => {
 
 describe("session.start", () => {
   test(
+    "ACP mode config drives modes, setters and reload without session/set_mode",
+    async () => {
+      const { start, calls, c } = await setup();
+      const result = await start("mode-config", { modeId: "plan", model: "m2" }, { FAKE_MODE_CONFIG: "1" });
+      expect(result.modes).toEqual([
+        { id: "default", name: "Default" },
+        { id: "plan", name: "Plan", description: "Plan only" },
+      ]);
+      expect(result.modeId).toBe("plan");
+      expect(calls()).toContain("config agent-mode=plan");
+      expect(calls()).not.toContain(" mode plan");
+      await c.ok("session.setConfig", { sessionId: "mode-config", configId: "agent-mode", value: "default" });
+      expect((await start("mode-config")).modeId).toBe("default");
+      const failed = await c.req("session.setMode", { sessionId: "mode-config", modeId: "unknown" });
+      expect(failed.ok).toBe(false);
+      expect((await start("mode-config")).modeId).toBe("default");
+      await c.ok("session.close", { sessionId: "mode-config" });
+      const loaded = await start(
+        "mode-config",
+        { acpSessionId: result.acpSessionId },
+        { FAKE_MODE_CONFIG: "1" },
+      );
+      expect(loaded.reloaded).toBe(true);
+      expect(loaded.modeId).toBe("default");
+      expect(loaded.configOptions.find((o) => o.category === "model")?.currentValue).toBe("m2");
+    },
+    T,
+  );
+
+  test(
     "new session: initialize, session/new, then mode and model; the result carries the agent's state",
     async () => {
       const { start, calls } = await setup();
@@ -530,6 +560,34 @@ describe("cancel, eviction and crashes", () => {
       expect(h.app.agents.get("a")).toBeUndefined();
       await sleep(400);
       expect(c.of("agent.exited")).toHaveLength(1);
+    },
+    T,
+  );
+
+  test(
+    "concurrent session starts never exceed the process limit",
+    async () => {
+      const { start, h } = await setup({ maxLiveAgents: 2 });
+      await Promise.all(["a", "b", "c", "d", "e"].map((id) => start(id)));
+      expect(h.app.agents.liveCount).toBe(2);
+      expect(h.app.agents.get("d")).toBeDefined();
+      expect(h.app.agents.get("e")).toBeDefined();
+    },
+    T,
+  );
+
+  test(
+    "a full manager preserves its active turn instead of starting beyond its limit",
+    async () => {
+      const { c, start, prompt, h } = await setup({ maxLiveAgents: 1 });
+      await start("a");
+      await prompt("a", "ta", "slow");
+      await c.waitEvent("item.created", (e) => e.turnId === "ta");
+      const result = await c.req("session.start", { sessionId: "b", agent: "claude", env: {} });
+      expect(result).toMatchObject({ ok: false, error: { code: "AGENT_START_FAILED" } });
+      expect(h.app.agents.liveCount).toBe(1);
+      expect(h.app.agents.get("a")?.busy).toBe(true);
+      expect(h.app.agents.get("b")).toBeUndefined();
     },
     T,
   );

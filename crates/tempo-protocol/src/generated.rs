@@ -205,6 +205,11 @@ pub struct ApiMeta {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub latest_mac_client: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "latestMacClientSha256",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub latest_mac_client_sha256: ::std::option::Option<::std::string::String>,
     #[serde(rename = "minMacClient")]
     pub min_mac_client: ::std::string::String,
     pub protocol: ApiMetaProtocol,

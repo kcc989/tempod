@@ -1,0 +1,48 @@
+{
+  "agent": "opencode",
+  "bin": "/usr/local/bin/opencode",
+  "live": false,
+  "agentInfo": {
+    "name": "OpenCode",
+    "version": "1.18.35"
+  },
+  "agentCapabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "promptCapabilities": {
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "close": {},
+      "fork": {},
+      "list": {},
+      "resume": {}
+    }
+  },
+  "authMethods": [
+    "opencode-login"
+  ],
+  "modes": [],
+  "currentModeId": null,
+  "configOptions": [
+    {
+      "id": "model",
+      "type": "select",
+      "category": "model"
+    },
+    {
+      "id": "mode",
+      "type": "select",
+      "category": "mode"
+    }
+  ],
+  "setMode": "the agent reports no modes",
+  "loadBeforeAnyTurn": {
+    "ok": true,
+    "replayedUpdates": 0
+  }
+}

@@ -189,3 +189,9 @@ See `IMPLEMENTATION_NOTES.md`:
 - **M-1:** remote-image blocking in the Mac app.
 - **00 Q1 to Q5 and 07 Q7:** open questions in the spec.
 - **Private previews:** the design choice, once the brief is ready.
+
+## Core cloud implementation audit (2026-10-11)
+
+Core continues on `codex/complete-tempo-core`, based on published `b1ba351` (the original cloud checkout was `1984b89`; the named integration branch was deleted after PR #1 merged). The cloud change adds atomic daemon-event application and replay after failures, accepts fast turn lifecycle events before prompt acknowledgements, persists checkpoint request identities and regenerates immutable checkpoint bundles, excludes daemon SQLite/outbox files from home backups, and fixes aborted requests and health probes. Concurrent adapter starts now preserve the process limit. ACP v1 mode config options drive the mode choices, selection and setters when advertised; the evaluated TUI-v2 snapshot provided no protocol advantage, so OpenCode remains pinned at 1.18.35. A native DO abort/reacquisition test verifies recovery of waiting setup without rerunning its script. The owner resolved Q-1 (a safety checkpoint is required before revert) and MQ-1 (optional `latestMacClientSha256` in version 1 metadata); specs, generated TypeScript/Rust contracts and fixtures are updated.
+
+Deployment tooling has a local `--prepare` mode and a review configuration under `docs/deployment/`. Cloud image builds use temporary CA mounts with TLS verification; Linux runners can mount source/dependencies read-only into the full image for daemon tests. This section does not close hosted gates or replace their real-account evidence. Exact commands, results, SHAs and remaining inputs are in `CORE-RESULTS.md`.

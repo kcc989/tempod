@@ -31,6 +31,8 @@ import { OP_STEPS, backoffMs, limitOf } from "../../src/do/workspace/runner.ts";
 import { handlePreview, isPreviewHost, parsePreviewHost } from "../../src/http/preview.ts";
 import { sanitizeName } from "../../src/http/attachments.ts";
 
+import { HOME_EXCLUDES } from "../../src/do/workspace/durability.ts";
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -1331,6 +1333,36 @@ describe("reconnectDelay", () => {
       const v = reconnectDelay(3);
       expect(v).toBeGreaterThanOrEqual(3200);
       expect(v).toBeLessThanOrEqual(4800);
+    }
+  });
+});
+
+describe("home backup credential boundary", () => {
+  it("excludes credentials and all daemon state, including SQLite outbox journals", () => {
+    for (const path of [
+      ".codex/auth.json",
+      ".claude/.credentials.json",
+      ".tempod/tempod.db",
+      ".tempod/tempod.db-wal",
+      ".tempod/tempod.db-shm",
+      ".tempod/ckpt.bundle",
+    ]) {
+      expect(
+        HOME_EXCLUDES.some((excluded) =>
+          excluded.endsWith("/") ? path.startsWith(excluded) : path === excluded,
+        ),
+      ).toBe(true);
+    }
+    for (const path of [
+      ".claude/projects/-workspace/session.jsonl",
+      ".codex/sessions/session.jsonl",
+      ".pi/pi-acp/session-map.json",
+    ]) {
+      expect(
+        HOME_EXCLUDES.some((excluded) =>
+          excluded.endsWith("/") ? path.startsWith(excluded) : path === excluded,
+        ),
+      ).toBe(false);
     }
   });
 });
