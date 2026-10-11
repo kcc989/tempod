@@ -267,6 +267,7 @@ pub enum DownloadError {
     /// The expected hash is not 64 hex digits.
     BadExpectedHash,
     HashMismatch,
+    SizeMismatch,
     Write(std::io::Error),
 }
 
@@ -274,6 +275,7 @@ impl fmt::Display for DownloadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BadExpectedHash => f.write_str("the expected SHA-256 is not valid"),
+            Self::SizeMismatch => f.write_str("the download does not match its size"),
             Self::HashMismatch => f.write_str("the download does not match its SHA-256"),
             Self::Write(e) => write!(f, "the download could not be saved: {}", e.kind()),
         }
@@ -306,6 +308,19 @@ pub fn save_dmg(
     let path = dmg_path(downloads, version);
     crate::storage::write_atomic(&path, bytes).map_err(DownloadError::Write)?;
     Ok(path)
+}
+
+pub fn save_verified_dmg(
+    downloads: &Path,
+    version: &Version,
+    bytes: &[u8],
+    expected_sha256: &str,
+    expected_size: u64,
+) -> Result<PathBuf, DownloadError> {
+    if bytes.len() as u64 != expected_size {
+        return Err(DownloadError::SizeMismatch);
+    }
+    save_dmg(downloads, version, bytes, expected_sha256)
 }
 
 #[cfg(test)]
@@ -472,6 +487,16 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn incomplete_release_is_not_written_even_if_its_bytes_have_a_valid_hash() {
+        let dir = std::env::temp_dir().join(format!("tempo-release-size-{}", std::process::id()));
+        let version = v("0.2.0");
+        assert!(matches!(
+            save_verified_dmg(&dir, &version, b"partial", &sha256_hex(b"partial"), 100),
+            Err(DownloadError::SizeMismatch)
+        ));
+        assert!(!dmg_path(&dir, &version).exists());
+    }
     #[test]
     fn save_dmg_writes_only_verified_bytes() {
         let dir = std::env::temp_dir().join(format!("tempo-mac-update-{}", std::process::id()));

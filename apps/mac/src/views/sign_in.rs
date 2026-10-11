@@ -80,6 +80,7 @@ impl Render for SignInView {
                         .on_click(cx.listener(|this, _, _, cx| this.connect(cx))),
                 )
                 .into_any_element(),
+            AuthState::ClearingSession=>div().child("Returning to sign-in…").into_any_element(),
             AuthState::Connecting => div().child("Connecting to Tempo…").into_any_element(),
             AuthState::AwaitingApproval {
                 user_code,
@@ -100,6 +101,7 @@ impl Render for SignInView {
                 .gap_3()
                 .child(div().text_xl().child("Update Tempo"))
                 .child("This server requires a newer version of Tempo for Mac.")
+                .child("The server must supply verified download information before Tempo can download the update.")
                 .into_any_element(),
             AuthState::SignedIn => div().into_any_element(),
         };

@@ -4,8 +4,8 @@ use super::tokens::{Token, color};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{TitleBar, h_flex, v_flex};
 use gpui_kit::{
-    App, AppContext as _, Context, IntoElement, ParentElement as _, Render, Styled as _, Window,
-    WindowOptions, div, px, size,
+    App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Styled as _, Window, WindowOptions, div, px, size,
 };
 
 pub const TABS: [&str; 5] = [
@@ -54,6 +54,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
 
 pub struct SettingsWindow {
     tab: usize,
+    form: Entity<super::settings_form::SettingsForm>,
 }
 
 impl Render for SettingsWindow {
@@ -70,9 +71,13 @@ impl Render for SettingsWindow {
                 }))
                 .into_any_element()
         } else {
-            super::skeleton_rows(6).into_any_element()
+            self.form.clone().into_any_element()
         };
         v_flex()
+            .key_context(crate::keymap::WORKSPACE)
+            .on_action(
+                cx.listener(|_, _: &crate::actions::CloseTab, window, _| window.remove_window()),
+            )
             .size_full()
             .child(TitleBar::new().child("Settings"))
             .child(
@@ -80,6 +85,10 @@ impl Render for SettingsWindow {
                     .selected_index(self.tab)
                     .on_click(cx.listener(|this, ix: &usize, _, cx| {
                         this.tab = *ix;
+                        this.form.update(cx, |f, cx| {
+                            f.tab = *ix;
+                            cx.notify();
+                        });
                         cx.notify();
                     }))
                     .children(TABS.map(|t| Tab::new().label(t))),
@@ -89,9 +98,27 @@ impl Render for SettingsWindow {
 }
 
 pub fn open(cx: &mut App) {
+    if let Some(handle) =
+        crate::app::AppState::try_global(cx).and_then(|a| a.read(cx).settings_window)
+        && handle
+            .update(cx, |_, window, _| window.activate_window())
+            .is_ok()
+    {
+        return;
+    }
     let options = WindowOptions {
         window_min_size: Some(size(px(560.), px(420.))),
         ..TitleBar::window_options()
     };
-    let _ = gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| SettingsWindow { tab: 0 }));
+    let opened = gpui_kit::open_window(options, cx, |window, cx| {
+        cx.new(|cx| SettingsWindow {
+            tab: 0,
+            form: cx.new(|cx| super::settings_form::SettingsForm::new(window, cx)),
+        })
+    });
+    if let Ok((handle, _)) = opened
+        && let Some(app) = crate::app::AppState::try_global(cx)
+    {
+        app.update(cx, |a, _| a.settings_window = Some(handle));
+    }
 }

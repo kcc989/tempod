@@ -1,22 +1,17 @@
 //! The main window (04, Layout; 07, Window layout): `Root` (from `gpui_kit::open_window`) with a
 //! `TitleBar`, then `Resizable` panes: sidebar | center | right side, the right side split into
 //! review (Changes, All files, Checks) over processes (Setup, Run, Terminal).
-use super::changes::ChangesPanel;
 use super::chat::{TranscriptRow, TranscriptView};
-use super::checks::ChecksPanel;
 use super::composer::Composer;
-use super::files::FilesPanel;
-use super::run::RunPanel;
-use super::setup::SetupPanel;
 use super::sidebar::{self, SidebarSection, WorkspaceSidebar};
-use super::terminal::TerminalPanel;
 use super::tokens::{Token, color};
 use super::top_bar::TopBar;
 use crate::actions::*;
 use crate::keymap::WORKSPACE;
+use gpui_kit::component::button::Button;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel, v_resizable};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Theme, TitleBar, v_flex};
+use gpui_kit::component::{Theme, TitleBar, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     AnyElement, AnyWindowHandle, App, AppContext as _, Context, Entity, FocusHandle, Focusable,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
@@ -61,6 +56,8 @@ struct Panes {
 
 pub struct MainWindow {
     focus: FocusHandle,
+    dialogs: Entity<super::dialogs::Dialogs>,
+    _bounds: Subscription,
     panes: Panes,
     narrow: bool,
     center_tab: usize,
@@ -71,7 +68,9 @@ pub struct MainWindow {
     transcript: Entity<TranscriptView>,
     composer: Entity<Composer>,
     _appearance: Subscription,
+    _activation: Subscription,
     _app_state: Option<Subscription>,
+    signed_in: bool,
     sign_in: Option<Entity<super::sign_in::SignInView>>,
     _hub: Option<Subscription>,
     sections: Vec<SidebarSection>,
@@ -85,18 +84,37 @@ impl MainWindow {
             Some(w) => (Some(w.top_bar), w.tabs, w.rows),
             None => (None, Vec::new(), Vec::new()),
         };
-        Theme::sync_system_appearance(Some(window), cx);
+        match cx.global::<crate::storage::Local>().config().theme {
+            crate::storage::Theme::System => Theme::sync_system_appearance(Some(window), cx),
+            crate::storage::Theme::Light => {
+                Theme::change(gpui_kit::component::ThemeMode::Light, Some(window), cx)
+            }
+            crate::storage::Theme::Dark => {
+                Theme::change(gpui_kit::component::ThemeMode::Dark, Some(window), cx)
+            }
+        }
         let appearance = cx.observe_window_appearance(window, |_, window, cx| {
-            Theme::sync_system_appearance(Some(window), cx);
+            if cx.global::<crate::storage::Local>().config().theme == crate::storage::Theme::System
+            {
+                Theme::sync_system_appearance(Some(window), cx);
+            }
         });
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         let live_state = crate::app::AppState::try_global(cx);
         let app_state = live_state.as_ref().map(|state| {
             cx.observe_in(state, window, |this, state, window, cx| {
-                if matches!(state.read(cx).auth, crate::app::AuthState::SignedIn) {
+                let signed_in = matches!(state.read(cx).auth, crate::app::AuthState::SignedIn);
+                if signed_in && !this.signed_in {
                     window.focus(&this.focus, cx);
+                } else if !signed_in {
+                    window.close_all_dialogs(cx);
+                    this.dialogs.update(cx, |d, cx| {
+                        d.kind = None;
+                        cx.notify();
+                    });
                 }
+                this.signed_in = signed_in;
                 cx.notify();
             })
         });
@@ -104,14 +122,53 @@ impl MainWindow {
             let hub = state.read(cx).hub.clone();
             cx.observe(&hub, |_, _, cx| cx.notify())
         });
+        let signed_in = live_state
+            .as_ref()
+            .is_some_and(|s| matches!(s.read(cx).auth, crate::app::AuthState::SignedIn));
         let sign_in = live_state.map(|_| cx.new(|cx| super::sign_in::SignInView::new(window, cx)));
+        let bounds = cx.observe_window_bounds(window, |_, window, cx| {
+            if let WindowBounds::Windowed(bounds) = window.window_bounds() {
+                cx.global_mut::<crate::storage::Local>().update_state(|s| {
+                    s.window = Some(crate::storage::WindowFrame {
+                        x: f32::from(bounds.origin.x),
+                        y: f32::from(bounds.origin.y),
+                        width: f32::from(bounds.size.width),
+                        height: f32::from(bounds.size.height),
+                    })
+                });
+            }
+        });
+        let dialogs = cx.new(|cx| super::dialogs::Dialogs::new(window, cx));
+        let activation = cx.observe_window_activation(window, |_, window, cx| {
+            if let Some(app) = crate::app::AppState::try_global(cx) {
+                app.update(cx, |a, cx| {
+                    a.workspace_focused = window.is_window_active();
+                    if a.workspace_focused
+                        && let (Some(client), Some(id)) = (a.client(), a.active_workspace.clone())
+                    {
+                        let viewed = client.call::<tempo_protocol::api::MarkViewed>(
+                            tempo_protocol::MarkViewedIn { workspace_id: id },
+                        );
+                        cx.spawn(async move |_, _| {
+                            let _ = viewed.await;
+                        })
+                        .detach();
+                    }
+                });
+            }
+        });
+        let saved = cx.global::<crate::storage::Local>().state().panels;
         Self {
+            signed_in,
+            _activation: activation,
             focus,
+            dialogs,
+            _bounds: bounds,
             panes: Panes {
-                sidebar: true,
-                right: true,
-                right_when_narrow: false,
-                bottom: true,
+                sidebar: saved.sidebar,
+                right: saved.right,
+                right_when_narrow: saved.right_when_narrow,
+                bottom: saved.bottom,
             },
             narrow: false,
             center_tab: 0,
@@ -139,6 +196,86 @@ impl MainWindow {
         &self.composer
     }
 
+    fn workspace_ids(&self, cx: &App) -> Vec<String> {
+        let Some(app) = crate::app::AppState::try_global(cx) else {
+            return vec![];
+        };
+        let hub = app.read(cx).hub.read(cx);
+        tempo_client::state::hub::sidebar_sections(
+            &hub.state.workspaces,
+            &hub.projects,
+            tempo_client::state::hub::SortMode::Activity,
+        )
+        .into_iter()
+        .flat_map(|s| s.workspaces.into_iter().map(|w| w.id))
+        .collect()
+    }
+    fn switch_workspace(&mut self, delta: i32, position: Option<usize>, cx: &mut Context<Self>) {
+        let ids = self.workspace_ids(cx);
+        if ids.is_empty() {
+            return;
+        }
+        let app = crate::app::AppState::global(cx);
+        let current = app
+            .read(cx)
+            .active_workspace
+            .as_ref()
+            .and_then(|id| ids.iter().position(|s| s == id))
+            .unwrap_or(0);
+        let ix = position
+            .map(|p| p.saturating_sub(1))
+            .unwrap_or_else(|| (current as i32 + delta).rem_euclid(ids.len() as i32) as usize);
+        if let Some(id) = ids.get(ix) {
+            app.update(cx, |a, cx| {
+                a.show_workspace(id, cx);
+            });
+        }
+    }
+    fn next_attention(&mut self, cx: &mut Context<Self>) {
+        let ids = self.workspace_ids(cx);
+        let app = crate::app::AppState::global(cx);
+        let hub = app.read(cx).hub.read(cx);
+        let current = app
+            .read(cx)
+            .active_workspace
+            .as_ref()
+            .and_then(|id| ids.iter().position(|s| s == id))
+            .unwrap_or(0);
+        let next = (1..=ids.len())
+            .map(|n| &ids[(current + n) % ids.len()])
+            .find(|id| {
+                hub.state.workspaces.get(*id).is_some_and(|w| {
+                    matches!(
+                        w.attention,
+                        tempo_protocol::Attention::NeedsInput
+                            | tempo_protocol::Attention::Error
+                            | tempo_protocol::Attention::Unread
+                    )
+                })
+            })
+            .cloned();
+        if let Some(id) = next {
+            app.update(cx, |a, cx| {
+                a.show_workspace(&id, cx);
+            });
+        }
+    }
+
+    fn route<A: gpui_kit::Action>(
+        &mut self,
+        action: &A,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if action.name() == "tempo::OpenFile" || action.name() == "tempo::SearchFiles" {
+            self.panes.right = true;
+            self.panes.right_when_narrow = true;
+            cx.notify();
+        }
+        if let Some(view) = self.live_active(cx) {
+            view.update(cx, |view, cx| view.handle_action(action, window, cx));
+        }
+    }
     fn toggle_right(&mut self, cx: &mut Context<Self>) {
         if self.narrow {
             self.panes.right_when_narrow = !self.panes.right_when_narrow;
@@ -232,6 +369,28 @@ impl MainWindow {
     }
 
     fn render_right(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        if crate::app::AppState::try_global(cx).is_some() && self.live_active(cx).is_none() {
+            return div().p_4().child("Select a workspace.").into_any_element();
+        }
+        if let Some(view) = self.live_active(cx) {
+            let view = view.read(cx);
+            let bottom = cx.global::<crate::storage::Local>().state().panes.bottom;
+            return v_resizable("live-right-side")
+                .on_resize(|state, _, cx| {
+                    let bottom = state.read(cx).sizes().get(1).map(|s| f32::from(*s));
+                    cx.global_mut::<crate::storage::Local>()
+                        .update_state(|s| s.panes.bottom = bottom);
+                })
+                .child(resizable_panel().child(view.review.clone()))
+                .child(
+                    resizable_panel()
+                        .size(px(bottom.unwrap_or(300.)))
+                        .visible(self.panes.bottom)
+                        .child(view.processes.clone()),
+                )
+                .into_any_element();
+        }
+        let live_review: Option<Entity<super::review::ReviewPanel>> = None;
         let review = v_flex()
             .size_full()
             .child(
@@ -243,11 +402,16 @@ impl MainWindow {
                     }))
                     .children(REVIEW_TABS.map(|t| Tab::new().label(t))),
             )
-            .child(match self.review_tab {
-                0 => ChangesPanel.into_any_element(),
-                1 => FilesPanel.into_any_element(),
-                _ => ChecksPanel.into_any_element(),
+            .child(if let Some(review) = live_review {
+                div().size_full().child(review).into_any_element()
+            } else {
+                match self.review_tab {
+                    0 => div().p_3().child("No changes.").into_any_element(),
+                    1 => div().p_3().child("No files.").into_any_element(),
+                    _ => div().p_3().child("No checks.").into_any_element(),
+                }
             });
+        let live_processes: Option<Entity<super::processes::ProcessPanel>> = None;
         let processes = v_flex()
             .size_full()
             .child(
@@ -259,16 +423,33 @@ impl MainWindow {
                     }))
                     .children(PROCESS_TABS.map(|t| Tab::new().label(t))),
             )
-            .child(match self.process_tab {
-                0 => SetupPanel.into_any_element(),
-                1 => RunPanel.into_any_element(),
-                _ => TerminalPanel.into_any_element(),
+            .child(if let Some(processes) = live_processes {
+                div().size_full().child(processes).into_any_element()
+            } else {
+                match self.process_tab {
+                    0 => div().p_3().child("Setup has not run.").into_any_element(),
+                    1 => div()
+                        .p_3()
+                        .child("No run script is active.")
+                        .into_any_element(),
+                    _ => div()
+                        .p_3()
+                        .child("Open a workspace to use the terminal.")
+                        .into_any_element(),
+                }
             });
+        let bottom = cx.global::<crate::storage::Local>().state().panes.bottom;
         v_resizable("right-side")
+            .on_resize(|state, _, cx| {
+                let bottom = state.read(cx).sizes().get(1).map(|s| f32::from(*s));
+                cx.global_mut::<crate::storage::Local>()
+                    .update_state(|s| s.panes.bottom = bottom);
+            })
             .child(resizable_panel().child(review))
             .child(
                 resizable_panel()
                     .visible(self.panes.bottom)
+                    .size(px(bottom.unwrap_or(300.)))
                     .child(processes),
             )
             .into_any_element()
@@ -298,8 +479,17 @@ impl Render for MainWindow {
                 .child(div().flex_1().child(sign_in.clone()))
                 .into_any_element();
         }
+        let panels = crate::storage::Panels {
+            sidebar: self.panes.sidebar,
+            right: self.panes.right,
+            right_when_narrow: self.panes.right_when_narrow,
+            bottom: self.panes.bottom,
+        };
+        cx.global_mut::<crate::storage::Local>()
+            .update_state(|s| s.panels = panels);
         let width = f32::from(window.viewport_size().width);
         self.narrow = width < RIGHT_COLLAPSE_WIDTH;
+        let pane_sizes = cx.global::<crate::storage::Local>().state().panes;
         let show_right = right_side_visible(width, self.panes.right, self.panes.right_when_narrow);
         let sidebar = if let Some(app_state) = crate::app::AppState::try_global(cx) {
             let hub = app_state.read(cx).hub.read(cx);
@@ -328,7 +518,7 @@ impl Render for MainWindow {
                             hub.projects
                                 .iter()
                                 .find(|p| p.id == project_id)
-                                .map(|p| p.name.clone())
+                                .map(|p| format!("{}/{}", p.owner, p.name))
                                 .unwrap_or_default()
                                 .into()
                         } else {
@@ -338,6 +528,7 @@ impl Render for MainWindow {
                             .workspaces
                             .into_iter()
                             .map(|w| sidebar::SidebarRow {
+                                summary: Some(w.clone()),
                                 id: w.id.into(),
                                 title: w.title.into(),
                                 detail: format!("{} · {}", w.branch, w.slug).into(),
@@ -363,11 +554,68 @@ impl Render for MainWindow {
         let right = self.render_right(cx);
 
         v_flex()
-            .size_full()
+            .size_full().text_size(px(13.))
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
             .bg(color(Token::Background, cx))
             .text_color(color(Token::Foreground, cx))
+            .on_action(cx.listener(|this, _: &RenameWorkspace, window, cx| {
+                this.dialogs
+                    .update(cx, |d, cx| d.show("Rename workspace", window, cx))
+            }))
+            .on_action(cx.listener(Self::route::<NewChat>))
+            .on_action(cx.listener(Self::route::<CloseTab>))
+            .on_action(cx.listener(Self::route::<CreatePr>))
+            .on_action(cx.listener(Self::route::<Merge>))
+            .on_action(cx.listener(Self::route::<Archive>))
+            .on_action(cx.listener(Self::route::<CommitAndPush>))
+            .on_action(cx.listener(Self::route::<ToggleRun>))
+            .on_action(cx.listener(Self::route::<OpenFile>))
+            .on_action(cx.listener(Self::route::<SearchFiles>))
+            .on_action(cx.listener(Self::route::<ShowDiff>))
+            .on_action(cx.listener(Self::route::<ToggleDiffScope>))
+            .on_action(cx.listener(Self::route::<NextFile>))
+            .on_action(cx.listener(Self::route::<PreviousFile>))
+            .on_action(cx.listener(Self::route::<MarkFileViewed>))
+            .on_action(cx.listener(Self::route::<AttachFile>))
+            .on_action(cx.listener(Self::route::<ModelPicker>))
+            .on_action(cx.listener(Self::route::<ExpandAllToolCalls>))
+            .on_action(cx.listener(Self::route::<StopTurn>))
+            .on_action(cx.listener(|this, _: &AddProject, window, cx| {
+                this.dialogs
+                    .update(cx, |d, cx| d.show("Add project", window, cx))
+            }))
+            .on_action(cx.listener(|this, _: &ShowHistory, window, cx| {
+                this.dialogs
+                    .update(cx, |d, cx| d.show("History", window, cx))
+            }))
+            .on_action(cx.listener(|this, action: &NewWorkspaceForProject, window, cx| {
+                this.dialogs.update(cx, |d,cx| { d.show("New workspace",window,cx); d.select_project(action.0.clone(),window,cx); });
+            }))
+            .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| {
+                this.dialogs
+                    .update(cx, |d, cx| d.show("New workspace", window, cx))
+            }))
+            .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
+                this.dialogs
+                    .update(cx, |d, cx| d.show("Command palette", window, cx))
+            }))
+            .on_action(
+                cx.listener(|this, _: &NextWorkspace, _, cx| this.switch_workspace(1, None, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &PreviousWorkspace, _, cx| {
+                    this.switch_workspace(-1, None, cx)
+                }),
+            )
+            .on_action(cx.listener(|this, action: &SwitchToWorkspace, _, cx| {
+                this.switch_workspace(0, Some(action.0), cx)
+            }))
+            .on_action(
+                cx.listener(|this, _: &NextWorkspaceNeedingYou, _, cx| this.next_attention(cx)),
+            )
+            .children(crate::app::AppState::try_global(cx).and_then(|a|a.read(cx).available_update.clone()).map(|version|h_flex().p_2().gap_2().child(format!("Tempo {version} is available.")).child(Button::new("download-update").label("Download").on_click(|_,window,cx|window.push_notification(gpui_kit::component::notification::Notification::error("The server has not supplied verified download information."),cx)))))
+
             .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
                 this.panes.sidebar = !this.panes.sidebar;
                 cx.notify();
@@ -416,9 +664,18 @@ impl Render for MainWindow {
             .child(
                 div().flex_1().min_h_0().child(
                     h_resizable("main-panes")
+                        .on_resize(|state, _, cx| {
+                            let sizes = state.read(cx).sizes();
+                            let sidebar = sizes.first().map(|s| f32::from(*s));
+                            let right = sizes.get(2).map(|s| f32::from(*s));
+                            cx.global_mut::<crate::storage::Local>().update_state(|s| {
+                                s.panes.sidebar = sidebar;
+                                s.panes.right = right;
+                            });
+                        })
                         .child(
                             resizable_panel()
-                                .size(px(sidebar::DEFAULT_WIDTH))
+                                .size(px(pane_sizes.sidebar.unwrap_or(sidebar::DEFAULT_WIDTH)))
                                 .size_range(px(sidebar::MIN_WIDTH)..px(sidebar::MAX_WIDTH))
                                 .visible(self.panes.sidebar)
                                 .child(sidebar),
@@ -426,7 +683,7 @@ impl Render for MainWindow {
                         .child(resizable_panel().child(center))
                         .child(
                             resizable_panel()
-                                .size(px(380.))
+                                .size(px(pane_sizes.right.unwrap_or(380.)))
                                 .visible(show_right)
                                 .child(right),
                         ),
@@ -437,8 +694,20 @@ impl Render for MainWindow {
 }
 
 pub fn window_options(cx: &App) -> WindowOptions {
+    let bounds = cx
+        .global::<crate::storage::Local>()
+        .state()
+        .window
+        .and_then(|f| f.clamped(MIN_SIZE))
+        .map(|f| {
+            WindowBounds::Windowed(gpui_kit::Bounds {
+                origin: gpui_kit::point(px(f.x), px(f.y)),
+                size: size(px(f.width), px(f.height)),
+            })
+        })
+        .unwrap_or_else(|| WindowBounds::centered(size(px(1280.), px(800.)), cx));
     WindowOptions {
-        window_bounds: Some(WindowBounds::centered(size(px(1280.), px(800.)), cx)),
+        window_bounds: Some(bounds),
         window_min_size: Some(size(px(MIN_SIZE.0), px(MIN_SIZE.1))),
         ..TitleBar::window_options()
     }

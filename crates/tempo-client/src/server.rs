@@ -136,6 +136,8 @@ impl Server {
         let http = reqwest::Client::builder()
             .tls_backend_preconfigured(tls::client_config(&[b"http/1.1"]).map_err(tls_error)?)
             .default_headers(headers)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| SignInError::Network(network_error(e)))?;
@@ -310,32 +312,17 @@ impl Server {
             n => n,
         };
         let run = self.inner.rt.run(async move {
-            let mut interval = Duration::from_secs(seconds);
-            loop {
-                tokio::time::sleep(interval).await;
-                let response = http
+            poll_device_token(seconds, || {
+                let request = http
                     .post(url.clone())
                     .header(CONTENT_TYPE, "application/json")
-                    .body(body.clone())
-                    .send()
-                    .await
-                    .map_err(sign_in_network)?;
-                match read_auth::<TokenResponse>(response).await {
-                    Ok(t) => return Ok(Token::new(t.access_token)),
-                    Err(SignInError::Rejected {
-                        error: Some(code), ..
-                    }) if code == "authorization_pending" => {}
-                    Err(SignInError::Rejected {
-                        error: Some(code), ..
-                    }) if code == "slow_down" => interval += SLOW_DOWN_STEP,
-                    Err(SignInError::Rejected {
-                        error: Some(code), ..
-                    }) if code == "access_denied" || code == "expired_token" => {
-                        return Err(SignInError::Denied);
-                    }
-                    Err(e) => return Err(e),
+                    .body(body.clone());
+                async move {
+                    let response = request.send().await.map_err(sign_in_network)?;
+                    read_auth::<TokenResponse>(response).await
                 }
-            }
+            })
+            .await
         });
         async move { run.await.unwrap_or(Err(SignInError::Cancelled)) }
     }
@@ -348,7 +335,8 @@ impl Server {
         let request = with_bearer(
             self.http().get(self.url(&["api", "auth", "get-session"])),
             token,
-        );
+        )
+        .timeout(Duration::from_secs(10));
         let run = self.inner.rt.run(async move {
             let response = request.send().await.map_err(sign_in_network)?;
             if response.status().as_u16() == 401 {
@@ -425,6 +413,9 @@ impl Client {
     }
 
     /// Closes every channel of this client (sign out). Their receivers get `Closed(Stopped)`.
+    pub fn invalidate_session(&self) {
+        self.unauthorized();
+    }
     pub fn close_channels(&self) {
         self.shared.stop.send_if_modified(|s| {
             let first = s.is_none();
@@ -460,6 +451,11 @@ impl Client {
             &self.token,
         )
         .header(CONTENT_TYPE, "application/json");
+        let request = if matches!(F::NAME, "commitAndPush" | "revertToCheckpoint") {
+            request.timeout(Duration::from_secs(360))
+        } else {
+            request
+        };
         self.send(async move {
             let body = body.map_err(|e| ApiError::Decode(decode_error(&e)))?;
             let response = request
@@ -510,12 +506,69 @@ impl Client {
         })
     }
 
+    pub fn download_mac(
+        &self,
+        version: &str,
+        expected_size: u64,
+    ) -> impl Future<Output = Result<Vec<u8>, ApiError>> + Send + 'static {
+        let valid = crate::parse_version(version).is_some() && expected_size > 0;
+        let request = with_bearer(
+            self.server
+                .http()
+                .get(self.server.url(&["downloads", "mac", version])),
+            &self.token,
+        )
+        .timeout(Duration::from_secs(600));
+        self.send(async move {
+            if !valid {
+                return Err(ApiError::Decode("Invalid release information".into()));
+            }
+            let mut response = request
+                .send()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?;
+            if response.status().as_u16() != 200 {
+                return Err(ApiError::Http {
+                    status: response.status().as_u16(),
+                });
+            }
+            if response
+                .content_length()
+                .is_some_and(|size| size != expected_size)
+            {
+                return Err(ApiError::Decode(
+                    "The download size does not match the release".into(),
+                ));
+            }
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?
+            {
+                if bytes.len() as u64 + chunk.len() as u64 > expected_size {
+                    return Err(ApiError::Decode(
+                        "The download is larger than the release".into(),
+                    ));
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            if bytes.len() as u64 != expected_size {
+                return Err(ApiError::Decode("The download is incomplete".into()));
+            }
+            Ok(bytes)
+        })
+    }
+
     fn send<T: Send + 'static>(
         &self,
         fut: impl Future<Output = Result<T, ApiError>> + Send + 'static,
     ) -> impl Future<Output = Result<T, ApiError>> + Send + 'static {
         let this = self.clone();
         let run = self.server.inner.rt.run(async move {
+            if this.is_unauthorized() {
+                return Err(ApiError::Http { status: 401 });
+            }
             let result = fut.await;
             if matches!(&result, Err(e) if e.is_unauthorized()) {
                 this.unauthorized();
@@ -523,6 +576,32 @@ impl Client {
             result
         });
         async move { run.await.unwrap_or(Err(ApiError::Cancelled)) }
+    }
+}
+
+async fn poll_device_token<F, Fut>(seconds: u64, mut exchange: F) -> Result<Token, SignInError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<TokenResponse, SignInError>>,
+{
+    let mut interval = Duration::from_secs(seconds);
+    loop {
+        tokio::time::sleep(interval).await;
+        match exchange().await {
+            Ok(token) => return Ok(Token::new(token.access_token)),
+            Err(SignInError::Rejected {
+                error: Some(code), ..
+            }) if code == "authorization_pending" => {}
+            Err(SignInError::Rejected {
+                error: Some(code), ..
+            }) if code == "slow_down" => interval += SLOW_DOWN_STEP,
+            Err(SignInError::Rejected {
+                error: Some(code), ..
+            }) if code == "access_denied" || code == "expired_token" => {
+                return Err(SignInError::Denied);
+            }
+            Err(error) => return Err(error),
+        }
     }
 }
 
@@ -623,5 +702,42 @@ mod tests {
         let debug = format!("{auth:?}");
         assert!(!debug.contains("secret-device-code"));
         assert!(debug.contains("ABCD1234"));
+    }
+}
+
+#[cfg(test)]
+mod polling_tests {
+    use super::*;
+    #[tokio::test(start_paused = true)]
+    async fn polling_clock_excludes_transport_latency_and_slow_down_adds_five_seconds() {
+        let start = tokio::time::Instant::now();
+        let mut calls = vec![];
+        let token = poll_device_token(5, || {
+            calls.push(tokio::time::Instant::now());
+            let result = match calls.len() {
+                1 | 3 => Err(SignInError::Rejected {
+                    status: 400,
+                    error: Some("authorization_pending".into()),
+                }),
+                2 => Err(SignInError::Rejected {
+                    status: 400,
+                    error: Some("slow_down".into()),
+                }),
+                _ => Ok(TokenResponse {
+                    access_token: "test-token".into(),
+                }),
+            };
+            std::future::ready(result)
+        })
+        .await
+        .unwrap();
+        assert_eq!(token.expose(), "test-token");
+        let gaps: Vec<_> = std::iter::once(start)
+            .chain(calls)
+            .collect::<Vec<_>>()
+            .windows(2)
+            .map(|w| w[1] - w[0])
+            .collect();
+        assert_eq!(gaps, [5, 5, 10, 10].map(Duration::from_secs));
     }
 }

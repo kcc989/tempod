@@ -270,9 +270,11 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 | `bun run mac:test` | `cargo test --workspace` |
 | `bun run protocol:gen` | Writes `packages/protocol/schema/*.json` (JSON Schema Draft-07) and `crates/tempo-protocol/src/generated.rs` |
 | `bun run protocol:fixtures` | Writes `packages/protocol/fixtures/` from the TypeScript schema tests |
-| `bun run mac:release` | Builds, bundles, signs, notarizes and uploads the app (below) |
+| `bun run mac:release -- --adhoc` | Builds a local ad-hoc bundle and DMG (default mode) |
+| `bun run mac:release -- --release` | Builds, signs and notarizes a release without uploading |
+| `bun run mac:release -- --publish` | Runs the signed release checks and publishes with `latest.json` last |
 
-**`mac:release`** (`scripts/mac/release.sh`). It MUST stop at the first failed step.
+**`mac:release`** (`scripts/mac/release.sh`). It MUST stop at the first failed step. The default ad-hoc mode performs local bundling only. The owner explicitly selects signed release or publication; the steps below apply to signed publication. Both signed modes first verify that the version is newer than the owner's existing manifest. The release script reads the uploaded DMG back and compares its bytes before publishing `latest.json`.
 
 1. Read the version from `apps/mac/Cargo.toml`. It MUST be newer than `clients/mac/latest.json`.
 2. `cargo build --release -p tempo-mac --target aarch64-apple-darwin`.

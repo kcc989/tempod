@@ -88,8 +88,28 @@ impl WorkspaceStore {
                     self.error = None;
                 }
                 for event in self.state.apply(message) {
-                    if let WorkspaceEvent::Error { message, .. } = event {
-                        self.error = Some(message);
+                    match event {
+                        WorkspaceEvent::Error { message, .. } => self.error = Some(message),
+                        WorkspaceEvent::TurnEnded { .. }
+                            if self.hidden_since.is_none()
+                                && crate::app::AppState::try_global(cx)
+                                    .is_some_and(|a| a.read(cx).workspace_focused) =>
+                        {
+                            if let Some(client) = crate::app::AppState::try_global(cx)
+                                .and_then(|a| a.read(cx).client())
+                            {
+                                let request = client.call::<tempo_protocol::api::MarkViewed>(
+                                    tempo_protocol::MarkViewedIn {
+                                        workspace_id: self.workspace_id.clone(),
+                                    },
+                                );
+                                cx.spawn(async move |_, _| {
+                                    let _ = request.await;
+                                })
+                                .detach();
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 if let Some(channel) = &self.channel {

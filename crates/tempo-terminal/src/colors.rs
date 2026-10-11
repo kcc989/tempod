@@ -228,7 +228,14 @@ mod tests {
         let palette = ColorPalette::new(theme());
         let colors = Colors::default();
         let red = palette.resolve(Color::Named(NamedColor::Red), &colors);
-        assert_eq!(hsla_to_rgb(red), Rgb { r: 0xcc, g: 0, b: 0 });
+        assert_eq!(
+            hsla_to_rgb(red),
+            Rgb {
+                r: 0xcc,
+                g: 0,
+                b: 0
+            }
+        );
         assert_eq!(palette.resolve(Color::Indexed(1), &colors), red);
         let cube = palette.resolve(Color::Indexed(16 + 36 * 5 + 6 + 2), &colors);
         assert_eq!(

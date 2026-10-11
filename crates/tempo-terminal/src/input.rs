@@ -10,9 +10,8 @@ pub fn is_app_shortcut(keystroke: &Keystroke) -> bool {
 
 /// The xterm modifier parameter: 1 + shift 1 + alt 2 + control 4. `None` with no modifier.
 fn modifier_param(modifiers: &Modifiers) -> Option<u8> {
-    let bits = u8::from(modifiers.shift)
-        + 2 * u8::from(modifiers.alt)
-        + 4 * u8::from(modifiers.control);
+    let bits =
+        u8::from(modifiers.shift) + 2 * u8::from(modifiers.alt) + 4 * u8::from(modifiers.control);
     (bits > 0).then_some(bits + 1)
 }
 
@@ -107,7 +106,9 @@ pub fn keystroke_to_bytes(
 
 fn function_key_code(key: &str) -> Option<u8> {
     let n: u8 = key.strip_prefix('f')?.parse().ok()?;
-    const CODES: [u8; 16] = [15, 17, 18, 19, 20, 21, 23, 24, 25, 26, 28, 29, 31, 32, 33, 34];
+    const CODES: [u8; 16] = [
+        15, 17, 18, 19, 20, 21, 23, 24, 25, 26, 28, 29, 31, 32, 33, 34,
+    ];
     CODES.get(usize::from(n.checked_sub(5)?)).copied()
 }
 
@@ -271,7 +272,11 @@ mod tests {
             ("f20", 34),
         ];
         for (name, code) in tilde {
-            assert_eq!(key(name).unwrap(), format!("\x1b[{code}~").as_bytes(), "{name}");
+            assert_eq!(
+                key(name).unwrap(),
+                format!("\x1b[{code}~").as_bytes(),
+                "{name}"
+            );
         }
         assert_eq!(key("ctrl-f5").unwrap(), b"\x1b[15;5~");
         assert_eq!(key("f21"), None);
@@ -323,7 +328,14 @@ mod tests {
 
     #[test]
     fn command_shortcuts_send_nothing() {
-        for source in ["cmd-c", "cmd-v", "cmd-k", "cmd-shift-d", "cmd-alt-up", "cmd-1"] {
+        for source in [
+            "cmd-c",
+            "cmd-v",
+            "cmd-k",
+            "cmd-shift-d",
+            "cmd-alt-up",
+            "cmd-1",
+        ] {
             let keystroke = Keystroke::parse(source).unwrap();
             assert!(is_app_shortcut(&keystroke), "{source}");
             assert_eq!(key(source), None, "{source}");

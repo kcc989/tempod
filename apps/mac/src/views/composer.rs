@@ -41,8 +41,11 @@ type Picker = SelectState<Vec<Choice>>;
 
 pub enum ComposerEvent {
     Send(String),
+    Attach(Vec<std::path::PathBuf>),
+    AttachImage(gpui_kit::Image),
     Steer(String),
     Change(String),
+    ClearReview,
     LoadFiles,
     Stop,
     TogglePlanMode,
@@ -53,6 +56,9 @@ pub enum ComposerEvent {
 pub struct Composer {
     input: Entity<TextareaState>,
     mentions: Vec<p::Mention>,
+    attachments: Vec<(String, String)>,
+    pub uploading: bool,
+    pub review_count: usize,
     files: Option<Vec<String>>,
     files_loading: bool,
     files_error: Option<String>,
@@ -65,6 +71,7 @@ pub struct Composer {
     pub starting: bool,
     pub steering: bool,
     commands: Vec<p::AvailableCommand>,
+    usage: Option<(f64, f64)>,
     plan_available: bool,
     command_menu: Entity<CommandState>,
     command_dismissed: bool,
@@ -134,6 +141,9 @@ impl Composer {
         Self {
             input,
             mentions: vec![],
+            attachments: vec![],
+            uploading: false,
+            review_count: 0,
             files: None,
             files_loading: false,
             files_error: None,
@@ -146,6 +156,7 @@ impl Composer {
             starting: false,
             steering: false,
             commands: vec![],
+            usage: None,
             plan_available: false,
             command_menu: cx.new(|cx| CommandState::new(window, cx)),
             command_dismissed: false,
@@ -169,6 +180,15 @@ impl Composer {
         cx: &mut Context<Self>,
     ) {
         self.commands = session.commands.clone();
+        self.usage = session
+            .usage
+            .0
+            .get("used")
+            .and_then(|u| u.as_f64())
+            .zip(session.usage.0.get("size").and_then(|u| u.as_f64()))
+            .filter(|(used, size)| {
+                used.is_finite() && size.is_finite() && *used >= 0. && *size > 0.
+            });
         self.plan_available = super::chat_model::plan_target(session, None).is_some();
         self.starting = session.status == p::SessionStatus::Starting;
         let config = session
@@ -261,11 +281,18 @@ impl Composer {
             cx.notify();
         }
     }
+    pub fn add_attachment(&mut self, id: String, name: String, cx: &mut Context<Self>) {
+        self.attachments.push((id, name));
+        cx.notify();
+    }
+    fn has_content(&self, cx: &Context<Self>) -> bool {
+        !self.text(cx).trim().is_empty() || !self.attachments.is_empty() || self.review_count > 0
+    }
     pub fn prompt(&self, text: &str) -> p::TurnPrompt {
         p::TurnPrompt {
             text: text.into(),
             mentions: self.mentions.clone(),
-            attachment_ids: vec![],
+            attachment_ids: self.attachments.iter().map(|(id, _)| id.clone()).collect(),
             review_comment_ids: vec![],
         }
     }
@@ -278,6 +305,8 @@ impl Composer {
         if self.text(cx) == sent.text && self.mentions == sent.mentions {
             self.set_text("", window, cx);
             self.mentions.clear();
+            self.attachments
+                .retain(|(id, _)| !sent.attachment_ids.contains(id));
             cx.emit(ComposerEvent::Change(String::new()));
         }
     }
@@ -413,7 +442,7 @@ impl Composer {
 
     fn submit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let text = self.input.read(cx).value().to_string();
-        if self.read_only || self.sending || text.trim().is_empty() {
+        if self.read_only || self.sending || self.uploading || !self.has_content(cx) {
             return;
         }
         cx.emit(ComposerEvent::Send(text));
@@ -482,6 +511,34 @@ impl Render for Composer {
         }
         let field = field.child(
             Textarea::new(&self.input)
+                .on_paste({
+                    let weak = cx.weak_entity();
+                    move |item, _, cx| {
+                        let paths: Vec<_> = item
+                            .entries()
+                            .iter()
+                            .flat_map(|entry| match entry {
+                                gpui_kit::ClipboardEntry::ExternalPaths(p) => p.0.to_vec(),
+                                _ => vec![],
+                            })
+                            .collect();
+                        if paths.is_empty() {
+                            if let Some(image) = item.entries().iter().find_map(|e| match e {
+                                gpui_kit::ClipboardEntry::Image(i) => Some(i.clone()),
+                                _ => None,
+                            }) {
+                                let _ = weak
+                                    .update(cx, |_, cx| cx.emit(ComposerEvent::AttachImage(image)));
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            let _ = weak.update(cx, |_, cx| cx.emit(ComposerEvent::Attach(paths)));
+                            true
+                        }
+                    }
+                })
                 .aria_label("Message")
                 .disabled(self.read_only || self.sending),
         );
@@ -552,6 +609,12 @@ impl Render for Composer {
         });
         v_flex()
             .key_context(COMPOSER)
+            .on_action(cx.listener(|_, _: &crate::actions::AttachFile, _, cx| {
+                cx.emit(ComposerEvent::Attach(vec![]))
+            }))
+            .on_drop(cx.listener(|_, paths: &gpui_kit::ExternalPaths, _, cx| {
+                cx.emit(ComposerEvent::Attach(paths.0.to_vec()))
+            }))
             .on_action(cx.listener(|this, _: &NextComposerChoice, _, cx| {
                 let len = this.picker_count(cx);
                 if len > 0 {
@@ -576,6 +639,30 @@ impl Render for Composer {
                 cx.listener(|_, _: &TogglePlanMode, _, cx| cx.emit(ComposerEvent::TogglePlanMode)),
             )
             .p_3()
+            .children(self.attachments.iter().enumerate().map(|(ix, (id, name))| {
+                let id = id.clone();
+                Button::new(("attachment", ix))
+                    .label(name.clone())
+                    .tooltip("Remove attachment")
+                    .disabled(self.sending)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.attachments.retain(|(a, _)| a != &id);
+                        cx.notify();
+                    }))
+            }))
+            .children((self.review_count > 0).then(|| {
+                Button::new("review-context")
+                    .label(format!("{} review comments · Remove", self.review_count))
+                    .disabled(self.sending)
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::ClearReview)))
+            }))
+            .children(self.uploading.then(|| div().child("Uploading attachment…")))
+            .child(
+                Button::new("attach-file")
+                    .label("Attach file")
+                    .disabled(self.read_only || self.uploading || self.sending)
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![])))),
+            )
             .children(menu)
             .child(
                 h_flex()
@@ -593,6 +680,12 @@ impl Render for Composer {
                             }))
                     })),
             )
+            .children(self.usage.map(|(used, size)| {
+                div().text_sm().child(format!(
+                    "◔ {used:.0} / {size:.0} tokens · {:.0}% context",
+                    (used / size).min(1.) * 100.
+                ))
+            }))
             .child(field)
             .child(
                 h_flex()
@@ -618,7 +711,10 @@ impl Render for Composer {
                             .primary()
                             .label(if self.working { "Queue" } else { "Send" })
                             .disabled(
-                                self.read_only || self.sending || self.text(cx).trim().is_empty(),
+                                self.read_only
+                                    || self.sending
+                                    || self.uploading
+                                    || !self.has_content(cx),
                             )
                             .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
                     )
@@ -631,12 +727,15 @@ impl Render for Composer {
                         Button::new("steer-prompt")
                             .label("Send now")
                             .disabled(
-                                self.read_only || self.sending || self.text(cx).trim().is_empty(),
+                                self.read_only
+                                    || self.sending
+                                    || self.uploading
+                                    || !self.has_content(cx),
                             )
                             .on_click(cx.listener(|this, _, _, cx| {
                                 if !this.read_only && !this.sending {
                                     let text = this.text(cx);
-                                    if !text.trim().is_empty() {
+                                    if !this.uploading && this.has_content(cx) {
                                         cx.emit(ComposerEvent::Steer(text));
                                     }
                                 }
@@ -894,5 +993,52 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(events.borrow().len(), 1);
         drop(subscription);
+    }
+}
+
+#[cfg(test)]
+mod attachment_tests {
+    use super::*;
+    use gpui_kit::TestAppContext;
+    use std::{cell::RefCell, rc::Rc};
+
+    #[gpui_kit::test]
+    fn attachment_and_review_only_prompts_wait_for_upload_and_keep_failed_context(
+        cx: &mut TestAppContext,
+    ) {
+        let sends = Rc::new(RefCell::new(vec![]));
+        let log = sends.clone();
+        let (window, composer, _subscription) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            let (window, composer) = gpui_kit::open_window(Default::default(), cx, |window, cx| {
+                cx.new(|cx| Composer::new(window, cx))
+            })
+            .unwrap();
+            let subscription = cx.subscribe(&composer, move |_, event: &ComposerEvent, _| {
+                if let ComposerEvent::Send(text) = event {
+                    log.borrow_mut().push(text.clone());
+                }
+            });
+            (window, composer, subscription)
+        });
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                c.submit(window, cx);
+                c.add_attachment("a1".into(), "image.png".into(), cx);
+                c.uploading = true;
+                c.submit(window, cx);
+                c.uploading = false;
+                c.submit(window, cx);
+                assert_eq!(c.prompt("").attachment_ids, ["a1"]);
+                c.clear_sent(&c.prompt(""), window, cx);
+                c.review_count = 2;
+                c.submit(window, cx);
+                c.read_only = true;
+                c.submit(window, cx);
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(*sends.borrow(), vec![String::new(), String::new()]);
     }
 }

@@ -255,3 +255,31 @@ fn block_on<F: std::future::Future>(fut: F) -> F::Output {
         std::thread::park();
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn release_download_is_authenticated_size_bound_and_revocation_closes_the_client() {
+    let server = fake_http(|_, _| (200, "dmg bytes".into())).await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    assert_eq!(c.download_mac("0.2.0", 9).await.unwrap(), b"dmg bytes");
+    assert!(matches!(
+        c.download_mac("0.2.0", 8).await,
+        Err(ApiError::Decode(_))
+    ));
+    let reqs = server.requests();
+    assert_eq!(reqs[0].path, "/downloads/mac/0.2.0");
+    assert_eq!(
+        reqs[0].header("authorization"),
+        Some("Bearer test-session-token")
+    );
+    assert_eq!(reqs[0].header("origin"), None);
+    let denied = fake_http(|_, _| (401, "Denied".into())).await;
+    let c = client(&rt, &denied.base);
+    assert!(
+        c.download_mac("0.2.0", 9)
+            .await
+            .unwrap_err()
+            .is_unauthorized()
+    );
+    assert!(c.is_unauthorized());
+}

@@ -24,6 +24,12 @@ use tempo_protocol::{ItemContent, ItemStatus, NoticeLevel};
 #[derive(Clone, PartialEq, Eq, Debug, Action)]
 #[action(namespace = tempo, no_json)]
 pub struct OpenWorkspaceFile(pub SharedString);
+#[derive(Clone, PartialEq, Eq, Debug, Action)]
+#[action(namespace = tempo,no_json)]
+pub struct OpenWorkspaceFileAt {
+    pub path: SharedString,
+    pub line: u32,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TranscriptRow {
@@ -71,6 +77,9 @@ pub enum TranscriptEvent {
     Retry {
         turn_id: String,
     },
+    Revert {
+        turn_id: String,
+    },
 }
 
 impl EventEmitter<TranscriptEvent> for TranscriptView {}
@@ -80,6 +89,8 @@ pub struct TranscriptView {
     scroller: Entity<MessageScrollerState>,
     images: Entity<LocalImageCache>,
     expanded: HashSet<String>,
+    inline_images: HashMap<String, std::sync::Arc<gpui_kit::Image>>,
+    media_pending: HashSet<String>,
     permission_focus: HashMap<String, FocusHandle>,
     pub read_only: bool,
 }
@@ -92,6 +103,8 @@ impl TranscriptView {
             scroller: cx.new(|cx| MessageScrollerState::new(count, cx)),
             images: LocalImageCache::new(cx),
             expanded: HashSet::new(),
+            inline_images: HashMap::new(),
+            media_pending: HashSet::new(),
             permission_focus: HashMap::new(),
             read_only: false,
         }
@@ -105,6 +118,46 @@ impl TranscriptView {
                 self.permission_focus
                     .entry(p.request_id.clone())
                     .or_insert_with(|| cx.focus_handle());
+            }
+        }
+        for row in &rows {
+            if let Some(RowContent::Item { item, .. }) = &row.native
+                && let ItemContent::ToolCall(tool) = &item.content
+            {
+                for (index, block) in tool.content.iter().enumerate() {
+                    let key = format!("{}:block:{index}", row.id);
+                    if self.inline_images.contains_key(&key) || self.media_pending.contains(&key) {
+                        continue;
+                    }
+                    let block = serde_json::Value::Object(block.0.clone());
+                    let inner = if block["type"] == "content" {
+                        &block["content"]
+                    } else {
+                        &block
+                    };
+                    if inner["type"] != "image" {
+                        continue;
+                    }
+                    self.media_pending.insert(key.clone());
+                    let row_id = row.id.clone();
+                    cx.spawn(async move |this, cx| {
+                        let image = cx
+                            .background_executor()
+                            .spawn(async move { crate::inline_media::image(&block) })
+                            .await;
+                        let _ = this.update(cx, |this, cx| {
+                            if let Some(image) = image {
+                                this.inline_images.insert(key, image);
+                            }
+                            if let Some(ix) = this.rows.iter().position(|r| r.id == row_id) {
+                                this.scroller
+                                    .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                            }
+                            cx.notify();
+                        });
+                    })
+                    .detach();
+                }
             }
         }
         let common = self
@@ -225,11 +278,32 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         .py_2()
         .child(
             TextView::markdown(id, text)
+                .code_block_actions(|block, _, _| {
+                    let code = block.code();
+                    Button::new("copy-code")
+                        .label("Copy")
+                        .accessibility_label("Copy code block")
+                        .on_click(move |_, _, cx| {
+                            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                code.to_string(),
+                            ))
+                        })
+                })
                 .selectable(true)
                 .on_link_click(|url, _, window, cx| match links::classify(url) {
                     LinkTarget::Browser(url) => cx.open_url(&url),
                     LinkTarget::FileTab(path) => {
-                        window.dispatch_action(Box::new(OpenWorkspaceFile(path.into())), cx)
+                        if let Some(line) = links::line_number(url) {
+                            window.dispatch_action(
+                                Box::new(OpenWorkspaceFileAt {
+                                    path: path.into(),
+                                    line,
+                                }),
+                                cx,
+                            )
+                        } else {
+                            window.dispatch_action(Box::new(OpenWorkspaceFile(path.into())), cx)
+                        }
                     }
                     LinkTarget::Ignore => {}
                 }),
@@ -294,6 +368,24 @@ fn render_native_row(
                             .iter()
                             .map(|a| div().px_4().text_sm().child(a.name.clone())),
                     )
+                    .child({
+                        let turn = item.turn_id.clone();
+                        let view = view.clone();
+                        Button::new(SharedString::from(format!("revert-{}", item.id)))
+                            .label("Revert to here")
+                            .disabled(turn.is_none())
+                            .on_click(move |_, _, cx| {
+                                let _ = view.update(cx, |this, cx| {
+                                    if !this.read_only
+                                        && let Some(turn) = &turn
+                                    {
+                                        cx.emit(TranscriptEvent::Revert {
+                                            turn_id: turn.clone(),
+                                        });
+                                    }
+                                });
+                            })
+                    })
                     .into_any_element(),
                 ItemContent::AgentThought(c) => disclosure(
                     id.clone(),
@@ -313,29 +405,107 @@ fn render_native_row(
                 ),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
-                        let text = block
-                            .0
-                            .get("text")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("");
-                        markdown(format!("{}:block:{index}", id).into(), text)
+                        let key: SharedString = format!("{}:block:{index}", id).into();
+                        if let Some(image) = view
+                            .update(cx, |this, _| this.inline_images.get(key.as_ref()).cloned())
+                            .ok()
+                            .flatten()
+                        {
+                            return gpui_kit::img(image)
+                                .max_w(gpui_kit::px(320.))
+                                .max_h(gpui_kit::px(240.))
+                                .into_any_element();
+                        }
+                        let value = serde_json::Value::Object(block.0.clone());
+                        if value["type"] == "diff" {
+                            let path = value["path"].as_str().unwrap_or("");
+                            let old = value["oldText"].as_str().unwrap_or("");
+                            let new = value["newText"].as_str().unwrap_or("");
+                            let lines = old.lines().count() + new.lines().count();
+                            if lines > super::diff_model::MAX_DIFF_LINES {
+                                return div()
+                                    .child("This diff is too large to show.")
+                                    .into_any_element();
+                            }
+                            let text = format!(
+                                "--- {path}\n+++ {path}\n{}{}",
+                                old.lines().map(|l| format!("-{l}\n")).collect::<String>(),
+                                new.lines().map(|l| format!("+{l}\n")).collect::<String>()
+                            );
+                            return div()
+                                .font_family("monospace")
+                                .child(text)
+                                .into_any_element();
+                        }
+                        if value["type"] == "terminal" {
+                            return div()
+                                .font_family("monospace")
+                                .child(format!(
+                                    "Terminal {}",
+                                    value["terminalId"].as_str().unwrap_or("")
+                                ))
+                                .into_any_element();
+                        }
+                        let inner = if value["type"] == "content" {
+                            &value["content"]
+                        } else {
+                            &value
+                        };
+                        markdown(key, inner["text"].as_str().unwrap_or("Inline media"))
                     });
-                    let details =
-                        v_flex()
-                            .children(blocks)
-                            .children(c.locations.iter().map(|loc| {
-                                markdown(
-                                    format!("{}:{}", id, loc.path).into(),
-                                    &format!(
-                                        "[{}](file:///workspace/{})",
-                                        loc.path,
-                                        loc.path.trim_start_matches("/workspace/")
-                                    ),
-                                )
-                            }));
+                    let details = v_flex()
+                        .children(blocks)
+                        .children(c.raw_input.as_ref().map(|v| {
+                            div()
+                                .font_family("monospace")
+                                .child(serde_json::to_string_pretty(v).unwrap_or_default())
+                        }))
+                        .children(c.raw_output.as_ref().map(|v| {
+                            div()
+                                .font_family("monospace")
+                                .child(serde_json::to_string_pretty(v).unwrap_or_default())
+                        }))
+                        .children(c.locations.iter().enumerate().map(|(ix, loc)| {
+                            let path = links::workspace_path(&loc.path).map(str::to_string);
+                            let line = loc
+                                .line
+                                .filter(|n| n.is_finite() && *n >= 1. && *n <= u32::MAX as f64)
+                                .map(|n| n as u32);
+                            Button::new(("tool-location", ix))
+                                .label(format!(
+                                    "{}{}",
+                                    loc.path,
+                                    line.map(|n| format!(":{n}")).unwrap_or_default()
+                                ))
+                                .disabled(path.is_none())
+                                .on_click(move |_, window, cx| {
+                                    if let Some(path) = &path {
+                                        if let Some(line) = line {
+                                            window.dispatch_action(
+                                                Box::new(OpenWorkspaceFileAt {
+                                                    path: path.clone().into(),
+                                                    line,
+                                                }),
+                                                cx,
+                                            );
+                                        } else {
+                                            window.dispatch_action(
+                                                Box::new(OpenWorkspaceFile(path.clone().into())),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                })
+                        }));
                     disclosure(
                         id.clone(),
-                        format!("{} · {}", c.title, item.status).into(),
+                        format!(
+                            "{} {} · {}",
+                            tool_icon(c.tool_kind.as_deref()),
+                            c.title,
+                            item.status
+                        )
+                        .into(),
                         details.into_any_element(),
                         ix,
                         view.clone(),
@@ -503,6 +673,18 @@ fn disclosure(
         )
         .content(content)
         .into_any_element()
+}
+
+fn tool_icon(kind: Option<&str>) -> &'static str {
+    match kind {
+        Some("read") => "⌕",
+        Some("edit") => "✎",
+        Some("execute") => ">_",
+        Some("search") => "⌕",
+        Some("delete") => "−",
+        Some("fetch") => "↗",
+        _ => "◇",
+    }
 }
 
 #[cfg(test)]

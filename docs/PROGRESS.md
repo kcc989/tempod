@@ -50,7 +50,7 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 | Native API for the Mac app | 07 | 90–100% | `/api/v1/*`, bearer WebSocket auth, `/downloads/mac`. |
 | Container image and deploy | 01, 05 | 85% | Dockerfile, versions.json, Alchemy + wrangler deploy. |
 | Web UI | 04 | about 30% | Foundation done; most regions are in progress. |
-| Tempo for Mac | 07 | partial | Device sign-in, hub/workspace channels and chat/queue/steering actions wired locally. Native review/process panels and acceptance remain. |
+| Tempo for Mac | 07 | integrated source; native acceptance open | Review, file tabs, processes/remote terminal, settings, diagnostics, shell actions and local release helpers are wired. Trusted update metadata and native/hosted acceptance remain. |
 | Private previews + Browser Run | 00 Q3, 01 | design | Research done; decision brief not written. |
 | Spikes S1–S16, acceptance tests AT-1–AT-37 | 06 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
 
@@ -155,19 +155,14 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] Region actions in the shortcut registry (55%).
 - [ ] Empty, loading and error states per region, and phone variants (55%).
 
-**Tempo for Mac (07)**
-- [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in, hub and workspace stores are wired. Manual and hosted acceptance remain.
-- [ ] Sign-in and first run: device flow and saved-token checks are wired and tested headlessly; real browser approval, Keychain and update download acceptance remain.
-- [ ] Live state and reconnects: hub and workspace channels, revision resume, hidden-store timers and reconnect bars are wired and tested locally. Notifications and manual acceptance remain.
-- [ ] Window layout and components (15%).
-- [ ] Transcript, composer and permissions: chat tabs, rich text/tool/permission rows, drafts, Send/Queue/Send now/Stop, queued edit/delete/drag, model/mode pickers, plan mode, permission replies, close confirmation and chat/tool shortcuts are wired. Attachment input, full tool content, remaining transcript actions, performance and manual acceptance remain.
-- [ ] Changes, diff view and comments (2%).
-- [ ] `tempo-terminal`, a fork of gpui-terminal (5%); scripts and previews.
-- [ ] macOS integration (35%): notifications, Dock badge, URL scheme, window state.
-- [ ] Local storage and logging (8%).
-- [ ] Build, signing and updates (20%): `scripts/mac/release.sh`, update check.
-- [ ] 07 testing table (18%), and the manual checklist `tests/mac-e2e/CHECKLIST.md`.
-- [x] Compile, test and lint macOS code on this Mac. Manual UI, notification, Keychain and signing checks remain.
+**Tempo for Mac (07), cloud implementation continuation**
+- [x] Native source integration: lifecycle/Keychain tasks, shared stores and cache, shell/sidebar/dialogs, rich transcript, attachments, queue/steering, model/mode, review/files/checks, git/workspace operations, scripts/remote terminal, Settings and Diagnostics.
+- [x] Linux verification: Rust workspace tests, formatting and strict Clippy; required root Bun checks. Native acceptance remains a separate result.
+- [x] Release helpers: local ad-hoc bundle, explicit signed/notarized release and publish modes, final-artifact metadata and publish-last checks. No Mac bundle or release was produced by the cloud task.
+- [ ] Complete update Download once core provides trusted SHA-256 and size (MQ-1). Attachment thumbnail retrieval and absent display metadata are recorded in IMPLEMENTATION_NOTES.
+- [ ] Run Gate E, native shortcut/focus/rendering/performance, Keychain, notifications, deep links, real logins, interactive terminal and clean-Mac installation locally. See `tests/mac-e2e/CHECKLIST.md`.
+
+The owner elected to test locally. These source milestones do not claim an M1–M5 or Gate E acceptance pass. Earlier Mac baseline evidence above remains historical; this continuation ran on Debian 13 x86_64.
 
 **Private previews and Browser Run (owner request, 2026-10-11)**
 - [x] Research: Browser Run, Protected Quick Tunnels, Cloudflare Access, code integration points.
