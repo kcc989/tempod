@@ -1,5 +1,13 @@
 import { Schema } from "effect";
 import { AgentId, ApiKeyProvider, DiffScope, EgressStatusFilter, MergeMethod, ReviewSide } from "./enums.ts";
+import { EgressPolicy } from "./enums.ts";
+import {
+  EgressAllowlist,
+  Environment,
+  EnvironmentName,
+  InjectorInputs,
+  SecretBindings,
+} from "./environments.ts";
 import { McpServer, McpServerInput } from "./mcp.ts";
 import { EnvName } from "./settings.ts";
 import {
@@ -86,6 +94,30 @@ export const API = {
     Schema.Struct({ projectId: S }),
     Schema.Array(Schema.Struct({ number: N, title: S, headBranch: S })),
   ),
+  setProjectEnvironment: fn(
+    "POST",
+    Schema.Struct({ projectId: S, environmentId: Schema.NullOr(S) }),
+    Project,
+  ),
+
+  // Environments (01, Environments)
+  listEnvironments: fn("GET", Empty, Schema.Array(Environment)),
+  createEnvironment: fn("POST", Schema.Struct({ name: EnvironmentName }), Environment),
+  updateEnvironment: fn(
+    "POST",
+    Schema.Struct({
+      environmentId: S,
+      name: opt(EnvironmentName),
+      egressPolicy: opt(EgressPolicy),
+      egressAllowlist: opt(EgressAllowlist),
+      secrets: opt(SecretBindings),
+      injectors: opt(InjectorInputs),
+    }),
+    Environment,
+  ),
+  deleteEnvironment: fn("POST", Schema.Struct({ environmentId: S }), Empty),
+  setEnvironmentSecret: fn("POST", Schema.Struct({ environmentId: S, name: EnvName, value: S }), Empty),
+  deleteEnvironmentSecret: fn("POST", Schema.Struct({ environmentId: S, name: S }), Empty),
 
   // Workspaces
   createWorkspace: fn(
@@ -121,6 +153,12 @@ export const API = {
     "GET",
     Schema.Struct({ ...W, egressHost: opt(S), egressStatus: opt(EgressStatusFilter) }),
     Diagnostics,
+  ),
+  setWorkspaceEnvironment: fn("POST", Schema.Struct({ ...W, environmentId: Schema.NullOr(S) }), Empty),
+  resolveEnvironmentProposal: fn(
+    "POST",
+    Schema.Struct({ ...W, proposalId: S, status: Schema.Literals(["applied", "dismissed"]) }),
+    Empty,
   ),
 
   // Sessions and turns

@@ -4,6 +4,7 @@ import type { McpServer } from "@agentclientprotocol/sdk";
 import {
   BROWSER_RUN_CDP_ENDPOINT,
   PLAYWRIGHT_MCP_SERVER,
+  TEMPO_MCP_SERVER,
   type BrowserMode,
   type McpServerSpec,
 } from "@tempo/protocol";
@@ -24,6 +25,14 @@ export const playwrightServer = (browser: BrowserMode = "local"): Stdio => ({
   command: PLAYWRIGHT_MCP_SERVER.command,
   args: browser === "run" ? ["--cdp-endpoint", BROWSER_RUN_CDP_ENDPOINT] : [...PLAYWRIGHT_MCP_SERVER.args],
   env: PLAYWRIGHT_MCP_SERVER.env.map((e) => ({ ...e })),
+});
+
+/** The agent's `tempo` server: environment status and proposals (01, Environments). */
+export const tempoServer = (): Stdio => ({
+  name: TEMPO_MCP_SERVER.name,
+  command: TEMPO_MCP_SERVER.command,
+  args: [...TEMPO_MCP_SERVER.args],
+  env: [],
 });
 
 export const bridgeServer = (spec: Remote, bridge: Bridge): Stdio => {
@@ -50,7 +59,7 @@ export const mcpTransports = (capabilities: Record<string, unknown>): { http: bo
   return { http: isObj(mcp) && mcp["http"] === true, sse: isObj(mcp) && mcp["sse"] === true };
 };
 
-/** The `mcpServers` of `session/new` and `session/load`: Playwright, then the user's servers (01). */
+/** The `mcpServers` of `session/new` and `session/load`: Playwright, tempo, then the user's servers (01). */
 export const acpMcpServers = (
   specs: ReadonlyArray<McpServerSpec>,
   capabilities: Record<string, unknown>,
@@ -60,6 +69,7 @@ export const acpMcpServers = (
   const supports = mcpTransports(capabilities);
   return [
     playwrightServer(browser),
+    tempoServer(),
     ...specs.map((spec): McpServer => {
       if (spec.transport === "stdio")
         return {
@@ -102,6 +112,7 @@ export const piMcpConfig = (
   const servers: Record<string, PiEntry> = {};
   const playwright = playwrightServer(browser);
   servers[playwright.name] = stdioEntry(playwright);
+  servers[TEMPO_MCP_SERVER.name] = stdioEntry(tempoServer());
   for (const spec of specs) {
     if (spec.transport === "stdio") servers[spec.name] = stdioEntry(spec);
     else if (spec.transport === "http")

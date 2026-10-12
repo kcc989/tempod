@@ -39,6 +39,20 @@ The owner answered Q-4 to Q-10. The spec now says:
 | Q-9 Egress rows | Store 10,000; Diagnostics shows the newest 500 matches, filtered on the server. | 02 `getDiagnostics`, 05 |
 | Q-10 Previews | Owner-only: no secret in the hostname; a one-time link from `openPreview` sets a `__Host-tempo_preview` cookie. Protected Quick Tunnels were rejected: containers can reach only ports 80 and 443 through `TempoOutbound`, and the tunnel needs port 7844. | 01, 02, 03, 04, 05, 06, 07 |
 
+## Named environments (2026-10-12)
+
+The owner asked for reusable named environments, proxied secrets, Dynamic Worker injectors, a workspace override, and agent-assisted setup. 01 (Environments; Credentials and egress), 02, 04, 05 and 07 are updated in the same change. Choices the request left open:
+
+| Choice | What the spec now says |
+| --- | --- |
+| Placeholder form | `tempo-secret-<NAME>`: only URL-safe characters, so SDKs and URL encoding keep it intact. |
+| Swap locations | URL and header values, including inside `Authorization: Basic`. Never the body, because bodies stream. |
+| Rule numbers | New rules are 13 (injector) and 14 (secret swap). They run after rule 12 (MCP secret headers) and before rule 7, so existing `egress_log` rule numbers keep their meaning. Rule 11 is Browser Run. |
+| No environment | The project's Tempo egress overrides still apply, so existing projects keep working. |
+| Injector secrets | Injectors get HMACs through `env.SECRETS.hmac`, and placeholders that rule 14 swaps on their subrequests; never raw values. |
+| Agent setup | A `tempo` MCP server in `tempod` with two tools. Proposals only add or replace; the owner applies them in the UI and types secret values there. |
+| Dependencies | No new library. The MCP server is a small hand-written JSON-RPC loop. Dynamic Workers use the built-in `worker_loaders` binding, which the owner approved. |
+
 ## ACP mode contract (resolved 2026-10-11)
 
 The owner approved using ACP v1’s advertised mode config option directly. OpenCode 1.18.35 and the evaluated experimental `0.0.0-tui-v2-202606261840` snapshot both expose category `mode` through `configOptions`. Tempo derives its session `modes`/`modeId` from that option and uses `session/set_config_option`; agents exposing session modes use their advertised `session/set_mode` interface. Config updates and reloads refresh the normalized fields. The experimental snapshot provided no protocol advantage and was not adopted. No deployed-client compatibility shim or new dependency was introduced.

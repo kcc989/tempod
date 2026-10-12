@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import {
+  type EnvironmentSummary,
   SettingsLayer,
   TempoError,
   type DoHello,
@@ -18,6 +19,7 @@ import { findBinary, run } from "./exec.ts";
 import { listFiles, readWorkspaceFile, searchFiles } from "./fs.ts";
 import { Git, summarize } from "./git.ts";
 import { errorText, Logger } from "./log.ts";
+import { startMcpSocket } from "./tempo-mcp.ts";
 import { Outbox } from "./outbox.ts";
 import { PortScanner } from "./ports.ts";
 import { pruneLogs, ScriptManager } from "./scripts.ts";
@@ -67,6 +69,8 @@ export class Tempod {
   readonly handlers: Handlers;
   private readonly caEnv: Record<string, string>;
   private scriptEnv: Record<string, string> = {};
+  environmentSummary: EnvironmentSummary | null = null;
+  private mcpSocket: { stop: () => void } | null = null;
   workspaceInfo: DoHello["workspace"] | null = null;
   private background = false;
   sigterm = false;
@@ -195,10 +199,20 @@ export class Tempod {
     this.settings.prime();
     this.watcher.start();
     this.codex.start();
+    try {
+      this.mcpSocket = startMcpSocket(this.config.mcpSocket, {
+        summary: () => this.environmentSummary,
+        propose: (proposal) => this.emit({ kind: "environment.proposed", proposal }),
+      });
+    } catch (e) {
+      this.log.warn("tempo MCP socket failed", { error: errorText(e) });
+    }
   }
 
   private stopBackground(): void {
     this.background = false;
+    this.mcpSocket?.stop();
+    this.mcpSocket = null;
     this.ports.stop();
     this.watcher.stop();
     this.codex.stop();
@@ -255,6 +269,10 @@ export class Tempod {
       "settings.read": async (p) => this.settings.read(p.overrides),
       "env.set": async (p) => {
         this.scriptEnv = { ...p.env };
+        return {};
+      },
+      "environment.set": async (p) => {
+        this.environmentSummary = p.summary;
         return {};
       },
       "script.start": async (p) => this.scripts.start(p),

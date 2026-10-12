@@ -3,6 +3,9 @@ import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlit
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
   DEFAULT_SETTINGS,
+  secretPlaceholder,
+  type EnvironmentSummary,
+  type PendingEnvironmentProposal,
   TempoError,
   type AgentId,
   type Attention,
@@ -24,9 +27,12 @@ import {
   newId,
 } from "@tempo/protocol";
 import { resolveSettings } from "@tempo/settings";
-import { mcpServers, projects, workspaces, type McpServerRow } from "../../db/d1.ts";
+import { environments, mcpServers, projects, workspaces, type McpServerRow } from "../../db/d1.ts";
 import { EMPTY_PROMPT, json, readItemContent, validItemContent, type ItemContent } from "../../db/json.ts";
+import { parseEnvironment, type EnvironmentConfig } from "../../lib/environments.ts";
 import {
+  egressLog,
+  environmentProposals,
   items,
   permissions,
   ports,
@@ -55,6 +61,7 @@ export interface ProjectInfo {
   readonly name: string;
   readonly defaultBranch: string;
   readonly overrides: SettingsLayer;
+  readonly environmentId: string | null;
 }
 
 export interface Author {
@@ -259,6 +266,7 @@ export class WorkspaceCore {
       name: row.repoName,
       defaultBranch: row.defaultBranch,
       overrides: json.projectSettings.read(row.settingsJson, {}),
+      environmentId: row.environmentId,
     };
     this.projectCache = { info, at: Date.now() };
     return info;
@@ -284,10 +292,81 @@ export class WorkspaceCore {
     return this.env.CREDENTIALS.getByName(userId);
   }
 
+  /** The workspace override, else the project's environment, else none (01, Environments). */
+  async environment(fresh = false): Promise<EnvironmentConfig | null> {
+    const project = await this.project(fresh);
+    const row = this.ws();
+    for (const id of [row.environmentId, project.environmentId]) {
+      if (!id) continue;
+      const env = await drizzleD1(this.env.DB)
+        .select()
+        .from(environments)
+        .where(and(eq(environments.id, id), eq(environments.userId, row.userId)))
+        .get();
+      if (env) return parseEnvironment(env);
+    }
+    return null;
+  }
+
+  /** Environment secrets for the container: placeholders when bound to hosts, else values (01). */
+  private async environmentEnv(env: EnvironmentConfig | null): Promise<Record<string, string>> {
+    if (!env || env.secrets.length === 0) return {};
+    const values = await this.credentials().listEnvironmentSecrets(env.id);
+    const out: Record<string, string> = {};
+    for (const s of env.secrets) {
+      if (s.hosts.length > 0) out[s.name] = secretPlaceholder(s.name);
+      else if (values[s.name] !== undefined) out[s.name] = values[s.name]!;
+    }
+    return out;
+  }
+
+  /** What the agent may see (01, Environments): no secret values. */
+  async environmentSummary(): Promise<EnvironmentSummary> {
+    const env = await this.environment();
+    const settings = this.settings().environment;
+    const set = env
+      ? new Set(await this.credentials().listEnvironmentSecretNames(env.id))
+      : new Set<string>();
+    return {
+      name: env?.name ?? null,
+      egressPolicy: env?.egressPolicy ?? settings.egress_policy,
+      egressAllowlist: [...(env?.egressAllowlist ?? settings.egress_allowlist)],
+      secrets: (env?.secrets ?? []).map((s) => ({ name: s.name, hosts: [...s.hosts], set: set.has(s.name) })),
+      injectors: (env?.injectors ?? []).map((i) => ({ name: i.name, hosts: [...i.hosts] })),
+      blockedHosts: this.blockedHosts(),
+    };
+  }
+
+  /** Distinct hosts blocked by rule 7 or 10 in the last 24 h, newest first, at most 50 (02). */
+  blockedHosts(): string[] {
+    const rows = this.db
+      .select({ host: egressLog.host })
+      .from(egressLog)
+      .where(and(inArray(egressLog.rule, [7, 10]), gt(egressLog.ts, Date.now() - 24 * 3600_000)))
+      .orderBy(desc(egressLog.id))
+      .limit(2000)
+      .all();
+    return [...new Set(rows.map((r) => r.host))].slice(0, 50);
+  }
+
+  pendingProposals(): PendingEnvironmentProposal[] {
+    return this.db
+      .select()
+      .from(environmentProposals)
+      .where(eq(environmentProposals.status, "pending"))
+      .orderBy(asc(environmentProposals.createdAt), asc(environmentProposals.id))
+      .all()
+      .flatMap((r) => {
+        const proposal = json.environmentProposal.read(r.proposalJson, null);
+        return proposal ? [{ id: r.id, createdAt: r.createdAt, proposal }] : [];
+      });
+  }
+
   /** Script env (01, Scripts): TEMPO_* and CONDUCTOR_* vars plus the project's env vars and secrets. */
   async scriptEnv(): Promise<Record<string, string>> {
     const row = this.ws();
     const settings = this.settings();
+    const envSecrets = await this.environmentEnv(await this.environment());
     const secrets = await this.credentials().listProjectEnv(row.projectId);
     const base = {
       TEMPO_WORKSPACE_ID: row.workspaceId,
@@ -301,7 +380,7 @@ export class WorkspaceCore {
       CONDUCTOR_DEFAULT_BRANCH: row.baseBranch,
       CONDUCTOR_PORT: "3000",
     };
-    return { ...settings.environment_variables, ...secrets, ...base };
+    return { ...settings.environment_variables, ...envSecrets, ...secrets, ...base };
   }
 
   // ---------- attention, summary, detail ----------
@@ -400,6 +479,8 @@ export class WorkspaceCore {
       settingsSources: issues.sources,
       changes: this.kv<ChangesSummary>("changes") ?? null,
       hasUnpushedCommits: this.kv<boolean>("hasUnpushedCommits") ?? false,
+      environmentId: row.environmentId,
+      environmentProposals: this.pendingProposals(),
     };
   }
 

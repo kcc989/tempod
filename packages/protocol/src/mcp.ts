@@ -92,7 +92,7 @@ export const mcpInputProblem = (
 ): string | null => {
   if (!MCP_NAME_PATTERN.test(input.name))
     return "Name uses a to z, 0 to 9, - and _, starts with a letter or digit, and has at most 32 characters.";
-  if (input.name === "playwright") return "The name playwright is reserved.";
+  if (input.name === "playwright" || input.name === "tempo") return `The name ${input.name} is reserved.`;
   if (input.transport === "stdio") {
     const command = input.command?.trim() ?? "";
     if (command.length === 0 || command.length > 1024) return "A stdio server needs a command.";

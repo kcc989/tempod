@@ -5,6 +5,7 @@ import {
   KeyboardIcon,
   KeyRoundIcon,
   MonitorIcon,
+  NetworkIcon,
   PaletteIcon,
   SearchIcon,
   ServerIcon,
@@ -13,6 +14,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SECTIONS, sectionPage } from "~/ui/components/dialogs/settings-model";
 import { AppearanceTab } from "~/ui/components/dialogs/settings/AppearanceTab";
 import { DevicesTab } from "~/ui/components/dialogs/settings/DevicesTab";
+import { EnvironmentsTab } from "~/ui/components/dialogs/settings/EnvironmentsTab";
 import { LoginsTab } from "~/ui/components/dialogs/settings/LoginsTab";
 import { McpServersTab } from "~/ui/components/dialogs/settings/McpServersTab";
 import { NotificationsTab } from "~/ui/components/dialogs/settings/NotificationsTab";
@@ -34,6 +36,12 @@ const PERSONAL = [
     icon: BellIcon,
   },
   { id: "logins", label: "Logins", description: "Manage agent logins and API keys.", icon: KeyRoundIcon },
+  {
+    id: "environments",
+    label: "Environments",
+    description: "Egress rules, secrets and injectors that projects can share.",
+    icon: NetworkIcon,
+  },
   {
     id: "mcp",
     label: "MCP servers",
@@ -210,6 +218,7 @@ export function SettingsPage() {
           </p>
           {tab === "general" && <NotificationsTab />}
           {tab === "logins" && <LoginsTab />}
+          {tab === "environments" && <EnvironmentsTab />}
           {tab === "mcp" && <McpServersTab />}
           {tab === "appearance" && <AppearanceTab />}
           {tab === "shortcuts" && <ShortcutsTab />}

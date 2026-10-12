@@ -140,6 +140,7 @@ The WorkspaceDO class owns the container through `this.ctx.container`, under the
   },
   "d1_databases": [{ "binding": "DB", "database_name": "tempo", "database_id": "<id>" }],
   "r2_buckets":   [{ "binding": "DATA", "bucket_name": "tempo-data" }],
+  "worker_loaders": [{ "binding": "LOADER" }],
   "routes": [
     { "pattern": "<APP_HOST>", "custom_domain": true },
     { "pattern": "*.<PREVIEW_DOMAIN>/*", "zone_name": "<PREVIEW_DOMAIN>" }
@@ -271,7 +272,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 - The placeholder string is exactly `tempo-placeholder`. `TempoOutbound` swaps it for the real key (see below).
 - `tempod` sends `initialize` with `protocolVersion: 1` and these client capabilities: `fs.readTextFile: true`, `fs.writeTextFile: true`, `terminal: false`, and session.notices: true. Agents run commands with their own shell tools.
 - `tempod` serves `fs/read_text_file` and `fs/write_text_file` only for absolute paths under `/workspace` or `/home/tempo/attachments`. Any other path returns a JSON-RPC error.
-- Every `session/new` and `session/load` passes one MCP server, Playwright:
+- Every `session/new` and `session/load` passes Playwright, below, then `tempo` (Environments), then the user's servers (User MCP servers).
 
 ```json
 {
@@ -284,7 +285,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 
 Spike S7 MUST confirm the bin name `mcp-server-playwright` and these flags for the pinned `@playwright/mcp` version.
 
-**User MCP servers.** The owner adds MCP servers in Settings → MCP servers (02, `mcp_servers`). Each `session/new` and `session/load` passes Playwright first, then every enabled user server. The WorkspaceDO reads the user's enabled servers from D1 at session start and sends them in `session.start` as `mcpServers: McpServerSpec[]`:
+**User MCP servers.** The owner adds MCP servers in Settings → MCP servers (02, `mcp_servers`). Each `session/new` and `session/load` passes Playwright first, then `tempo` (Environments), then every enabled user server. The names `playwright` and `tempo` are reserved. The WorkspaceDO reads the user's enabled servers from D1 at session start and sends them in `session.start` as `mcpServers: McpServerSpec[]`:
 
 - `{name, transport: "stdio", command, args, env: [{name, value}]}`
 - `{name, transport: "http" | "sse", url, headers: [{name, value}]}`
@@ -309,7 +310,7 @@ The bridge is `tempod` itself: `command` is `/usr/local/bin/tempod`, `args` are 
 
 ## Credentials and egress
 
-Every request out of a container goes through `TempoOutbound`. It adds GitHub and API-key credentials, logs the host, and enforces the project's egress policy.
+Every request out of a container goes through `TempoOutbound`. It adds GitHub and API-key credentials, swaps environment secrets, runs injectors, logs the host, and enforces the egress policy of the workspace's environment (Environments, below).
 
 **Where each credential lives**
 
@@ -318,6 +319,8 @@ Every request out of a container goes through `TempoOutbound`. It adds GitHub an
 | GitHub installation token | Minted on demand; cached in WorkspaceDO memory until 5 min before expiry | No | `TempoOutbound` adds it |
 | OpenRouter key | CredentialDO | No | `TempoOutbound` swaps the placeholder |
 | Anthropic or OpenAI API key (API-key mode) | CredentialDO | No | `TempoOutbound` swaps the placeholder |
+| Environment secret with `hosts` | CredentialDO | No | `TempoOutbound` swaps `tempo-secret-<NAME>` (rule 14) or an injector uses it (rule 13) |
+| Environment secret with no `hosts`, project secret | CredentialDO | Yes, as an env var | Scripts and agents read it |
 | Claude OAuth token | CredentialDO | Yes, as env of the adapter process only | The `claude` binary sends it |
 | Codex `auth.json` | CredentialDO | Yes, as a 0600 file | Codex reads and refreshes it |
 
@@ -329,9 +332,9 @@ export class TempoOutbound extends WorkerEntrypoint<Env, { workspaceId: string; 
 }
 ```
 
-Rules, checked in this order. The first match wins.
+Rules, checked in the order of the table. The first match wins. Rules 12, 13 and 14 come after 6 and before 7, in that order; their numbers are labels in `egress_log`, not the order.
 
-Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, policy, allowlist, mcp}` and caches it for 60 s. `mcp` lists the owner's enabled `http` and `sse` servers as `{serverId, host, secretHeaders}`; `secretHeaders` are the lowercase names of their secret headers. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 and 12 get keys from the user's CredentialDO with `getSecret`.
+Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` and caches it for 60 s. `mcp` lists the owner's enabled `http` and `sse` servers as `{serverId, host, secretHeaders}`; `secretHeaders` are the lowercase names of their secret headers. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 and 12 get keys from the user's CredentialDO with `getSecret`.
 
 **Rule 0** runs before all of these: a request whose host is `APP_HOST` returns 403 (05, Egress control).
 
@@ -346,16 +349,18 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 | 5 | Host `api.anthropic.com`, header `x-api-key: tempo-placeholder` | Replace with the real Anthropic key |
 | 6 | Host `api.openai.com`, header `Authorization: Bearer tempo-placeholder` | Replace with the real OpenAI key |
 | 12 | Checked after rule 6. Host equals the `host` of a server in `mcp`, and a header named in that server's `secretHeaders` has exactly the value `tempo-placeholder:mcp:<serverId>:<name>` | Replace each such header with the value of `mcp.<serverId>.header.<name>`. If one is not set, return 403, body `tempo: credential not set`. |
-| 7 | Any request that still carries `tempo-placeholder` | Return 403. MUST NOT forward the placeholder. |
+| 13 | Host matches the `hosts` of an injector of the environment (first match in list order) | Run the injector (Environments, below) and return its response |
+| 14 | The request carries `tempo-secret-<NAME>`, every such name is a secret of the environment with a stored value, and the host matches the `hosts` of each | Replace each placeholder with its value and forward |
+| 7 | Any request that still carries `tempo-placeholder` or `tempo-secret-` | Return 403. MUST NOT forward the placeholder. |
 | 8 | Egress policy `open` | Pass through unchanged |
-| 9 | Egress policy `allowlist`, host matches a project pattern, the built-in agent list, or the `host` of a server in `mcp` | Pass through unchanged |
+| 9 | Egress policy `allowlist`, host matches an environment pattern, the built-in agent list, or the `host` of a server in `mcp` | Pass through unchanged |
 | 10 | Anything else | Return 403, body `tempo: egress blocked for <host>` |
 
 - Return the upstream `Response` as is. MUST NOT buffer bodies; model responses stream.
 - After each request, log `{ts, method, host, path, status, ms, rule}` to the WorkspaceDO `egress_log` with `ctx.waitUntil`. Path without the query string. MUST NOT log headers or bodies.
 - The token is minted with `repository_ids: [<repo id>]` and permissions `contents: write`, `pull_requests: write`, `metadata: read`, `checks: read`, `actions: read`, `issues: read`. A token for one repo cannot touch another.
 - Built-in agent hosts for `allowlist`: `api.anthropic.com`, `claude.ai`, `console.anthropic.com`, `chatgpt.com`, `auth.openai.com`, `api.openai.com`, `openrouter.ai`, `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `cdn.playwright.dev`, `storage.googleapis.com`. Spike S3 and S4 MUST confirm the full list each agent needs.
-- The default policy is `open`.
+- The default policy is `allowlist`.
 
 **Codex device-code login**
 
@@ -427,11 +432,65 @@ A session is one ACP session in one adapter process. The adapter process may die
 
 **Crashes.** `tempod` keeps the last 200 stderr lines of each adapter. If an adapter exits unexpectedly, it sends `agent.exited {sessionId, code, signal, stderrTail}`. A running turn ends as `failed`.
 
+## Environments
+
+An environment is a named, reusable set of egress rules and secrets. The owner makes environments in Settings and picks one per project. A workspace can override its project's choice. The agent never sees the value of a secret that has `hosts`.
+
+**Fields** (D1 `environments`, 02)
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Unique per owner. 1 to 64 characters. |
+| `egressPolicy` | `open` or `allowlist`. Default `allowlist`. |
+| `egressAllowlist` | Host patterns, as in 05. At most 200. |
+| `secrets` | `[{name, hosts}]`. `name` matches `^[A-Z_][A-Z0-9_]*$`. `hosts` are host patterns, at most 20. At most 50 secrets. Values live in CredentialDO under `environment.<environmentId>.secret.<NAME>`. |
+| `injectors` | `[{name, hosts, code, sha256}]`. `name` matches `^[a-z][a-z0-9-]{0,31}$`. `hosts` are host patterns, 1 to 20. `code` is at most 64 KiB. `sha256` is the hex SHA-256 of `code`, set by the server. At most 10 injectors. |
+
+**Which environment applies.** The workspace's override, else the project's `environment_id`, else none. An id that no longer exists is skipped: a deleted override falls back to the project's environment. With none, the project's `environment.egress_policy` and `environment.egress_allowlist` settings apply (Tempo overrides only), with no environment secrets and no injectors.
+
+Browser Run (below) is on only when the egress policy that applies, the environment's or else the project's, is `open`. The `browser.run` settings warning sees only the project's settings.
+
+**Secrets in the container.** `tempod` gets every environment secret in `env` (02, tempod protocol):
+
+- A secret with `hosts` is the string `tempo-secret-<NAME>`, for example `STRIPE_KEY=tempo-secret-STRIPE_KEY`. Its value never enters the container.
+- A secret with no `hosts` is its plain value. The UI marks it "visible to the agent".
+- Precedence for a name that is set twice, highest first: the `TEMPO_` and `CONDUCTOR_` vars, project secrets, environment secrets, `environment_variables`.
+
+**Rule 14, secret swap.**
+
+- Find every match of `tempo-secret-([A-Z_][A-Z0-9_]*)` in the URL (path and query) and in each header value. For `Authorization: Basic <b64>`, also look inside the decoded `user:password` and encode again after the swap.
+- All matches MUST name a secret of the environment that has a stored value and whose `hosts` match the request host. Otherwise rule 14 does not match, and rule 7 returns 403.
+- MUST NOT look in or change the body. Bodies stream.
+- Rule 14 forwards without the policy check (rules 8 to 10), as rules 2 to 6 do. It sends the request with `redirect: "manual"`, so a redirect cannot carry a value to another host; the container follows the redirect with a new request.
+- A secret value that is not stored makes the request fail with rule 7.
+
+**Rule 13, injectors.** An injector is code the owner approved. It handles auth schemes that a swap cannot do, for example AWS SigV4 or HMAC request signing.
+
+- `TempoOutbound` runs the injector as a Dynamic Worker through the Worker Loader binding `LOADER`: `env.LOADER.get("injector-<sha256>-<workspaceId>-<environmentId>-<name>", ...)`, so a cached isolate never serves another workspace or changed code, with `mainModule: "injector.js"`, `compatibilityDate: "2026-08-01"`.
+- `code` is an ES module whose default export has `fetch(request, env)`. It gets the container's request unchanged and returns the response for the container.
+- `env.SECRETS` is an RPC binding with one method: `hmac(name, data, {hash, prefix?})`. `name` is a secret of the environment; `hash` is `SHA-1`, `SHA-256` or `SHA-512`; `data` is a string (UTF-8) or `ArrayBuffer`; the key is `prefix + value` as UTF-8. It returns the MAC as an `ArrayBuffer`. A missing secret throws. The injector never gets a raw value.
+- `globalOutbound` is `TempoOutbound` with the props `{workspaceId, userId, injector: <name>}`. For such a request, rule 0 and rule 1 apply, then only hosts that match the injector's `hosts` pass, then rule 14, then rule 7. Anything else returns 403. Rule 13 never runs again, so an injector cannot call another.
+- `egress_log` records the container request and each injector subrequest with rule 13.
+- An injector that throws returns 502, body `tempo: injector <name> failed`. MUST NOT log the error text; it can hold request data.
+
+**Who may change an environment.** Only the owner, through server functions. Repo files cannot pick or change an environment (05). The agent can only propose changes (Agent proposals, below).
+
+**After a change.** `updateEnvironment`, `setEnvironmentSecret`, `deleteEnvironmentSecret`, `deleteEnvironment`, `setProjectEnvironment` and `setWorkspaceEnvironment` call `refreshEnv()` on every live workspace that the change can touch. `refreshEnv()` sends `env.set` and `environment.set` (02). `TempoOutbound` picks up new rules within its 60 s cache.
+
+**Agent proposals.** The agent can ask for changes, but cannot make them.
+
+- `tempod` serves an MCP server named `tempo` to every agent session: `{"name": "tempo", "command": "/usr/local/bin/tempod", "args": ["mcp"], "env": []}`. It is passed next to Playwright in every `session/new` and `session/load`.
+- `tempod mcp` speaks MCP over stdio (JSON-RPC 2.0, protocol version `2025-06-18`, methods `initialize`, `tools/list`, `tools/call`, `ping`). It talks to the `tempod` daemon over the Unix socket `/home/tempo/.tempod/mcp.sock`. The socket accepts only the two tools below.
+- Tool `environment_status`, no input: returns the summary from the last `environment.set`: environment name or null, policy, allowlist, secrets as `{name, hosts, set}`, injectors as `{name, hosts}`, and `blockedHosts`. Never a secret value.
+- Tool `propose_environment_change`, input `EnvironmentProposal` (02): `tempod` sends the event `environment.proposed`. The tool returns "Sent to the owner for review." The agent MUST NOT ask the user to paste secret values in chat; the tool description says so.
+- The DO stores each proposal in `environment_proposals` (02) as `pending`, at most 20 pending; a new one over the limit replaces the oldest. The UI shows pending proposals (04). Applying is done by the owner's client with the environment server functions; then it calls `resolveEnvironmentProposal`.
+- A proposal only adds or replaces. It never removes allowlist patterns, secrets or injectors.
+
 ## Scripts, ports and previews
 
 Scripts work as in Conductor: one setup script, any number of run scripts, one archive script. Every container has its own network, so every workspace uses the same port numbers.
 
-**Script env.** `tempod` gives every script and every agent these vars, plus the project's `environment_variables` and secrets:
+**Script env.** `tempod` gives every script and every agent these vars, plus the project's `environment_variables` and secrets, and the environment secrets (Environments, above):
 
 | Var | Value |
 | --- | --- |
@@ -625,8 +684,8 @@ default = true
 [environment]
 instance = "standard-3"         # standard-2 | standard-3 | standard-4
 sleep_after_idle_minutes = 15   # 5 to 240
-egress_policy = "open"          # open | allowlist
-egress_allowlist = []           # host patterns; "*.example.com" is allowed
+egress_policy = "allowlist"     # open | allowlist; Tempo UI only, ignored in repo files
+egress_allowlist = []           # host patterns; "*.example.com" is allowed; Tempo UI only
 
 [environment_variables]
 NODE_ENV = "development"

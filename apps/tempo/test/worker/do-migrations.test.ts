@@ -31,6 +31,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0003_preview_access",
       "0004_drop_unused_statuses",
       "0005_browser_run",
+      "0006_environments",
     ]);
   });
 });

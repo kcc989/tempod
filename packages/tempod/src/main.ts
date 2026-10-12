@@ -1,8 +1,10 @@
+import { TEMPO_MCP_SOCKET } from "@tempo/protocol";
 import { Deferred, Effect } from "effect";
 import { setupCa } from "./ca.ts";
 import { loadConfig, VERSION, type Config } from "./config.ts";
 import { errorText, Logger } from "./log.ts";
 import { bridgeMain } from "./mcp-bridge.ts";
+import { runMcpStdio } from "./tempo-mcp.ts";
 import { startServer } from "./server.ts";
 import { Tempod } from "./tempod.ts";
 
@@ -30,7 +32,13 @@ const program = (config: Config, log: Logger) =>
     return yield* Deferred.await(exitCode);
   }).pipe(Effect.scoped);
 
-if (process.argv[2] === "mcp-bridge") {
+if (process.argv[2] === "mcp") {
+  // `tempod mcp`: the agent's tempo MCP server (01, Environments). It needs no token.
+  runMcpStdio(TEMPO_MCP_SOCKET).then(
+    () => process.exit(0),
+    () => process.exit(1),
+  );
+} else if (process.argv[2] === "mcp-bridge") {
   bridgeMain(process.argv.slice(3)).then(
     (code) => process.exit(code),
     (e: unknown) => {

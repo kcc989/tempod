@@ -10,6 +10,9 @@ The main threat is code or text inside a workspace (a hostile dependency, a pois
 | --- | --- | --- |
 | GitHub token | Theft from the container | Never in the container; `TempoOutbound` adds it. Scoped to one repo. Lives about 1 hour. |
 | OpenRouter, Anthropic, OpenAI keys | Theft from the container | Never in the container; swapped for a placeholder at egress |
+| Environment secrets with `hosts` | Theft from the container, or sent to another host | Never in the container. Swapped only for hosts in the secret's `hosts`; a placeholder for any other host is refused (rule 7). An echo endpoint on an allowed host could reflect the value, so keep `hosts` narrow. |
+| Injectors | Code that reads secrets | Only the owner saves injector code; an agent can only propose it. Injectors get MACs, not values, and can reach only their own `hosts`. |
+| Agent proposals | The agent asks for wide egress or a hostile injector | The owner reviews every proposal and sees the full code before Apply. Secret values are typed in the review form, never in chat. |
 | MCP server secret headers | Theft from the container, or replay to another host | Never in the container; rule 12 swaps the placeholder only for the host of the server that owns it |
 | Claude token, Codex `auth.json` | Theft by code running in the container | Accepted risk R4 for one owner. Egress log shows every host contacted. The `allowlist` policy can limit hosts. |
 | Other workspaces | One container reads another's files | One container per workspace; no shared disk or network |
@@ -48,7 +51,7 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 | `BETTER_AUTH_SECRET` | Worker secret | Deploy (at least 32 random bytes) |
 | `TEMPO_SETUP_TOKEN` | Worker secret | Deploy; printed once for the setup link |
 | GitHub App id, slug, private key, client id, client secret | CredentialDO named `system`, keys `github_app.id`, `github_app.slug`, `github_app.private_key`, `github_app.client_id`, `github_app.client_secret` | The manifest flow (Deployment, below) |
-| Agent logins, API keys, project secrets | The owner's CredentialDO (02) | The owner, in Settings |
+| Agent logins, API keys, project secrets, environment secrets | The owner's CredentialDO (02) | The owner, in Settings |
 
 **Rules**
 
@@ -66,8 +69,10 @@ A container has no internet of its own. Every HTTP and HTTPS request goes throug
 - Containers start with `enableInternet: false`. Only ports 80 and 443 can leave, and only through the intercepts.
 - Git over SSH does not work. Repos use HTTPS only.
 - **Rule 0**, before the rules in 01: a request whose host is `APP_HOST` returns 403. Containers MUST NOT call the Tempo API.
-- Policy `open` (default): every host passes, with credentials added only by rules 2 to 6.
-- Policy `allowlist`: only the built-in agent hosts (01), the project's `egress_allowlist` patterns, and the hosts of the owner's enabled `http` and `sse` MCP servers pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
+- The egress policy and allowlist come from the workspace's environment (01, Environments). With no environment, they come from the project's Tempo overrides.
+- Egress settings come only from Tempo. `egress_policy` and `egress_allowlist` in `.tempo/settings.toml`, `.conductor/settings.toml` or `conductor.json` are ignored with a warning, because the agent can write those files.
+- Policy `open`: every host passes, with credentials added only by rules 2 to 6.
+- Policy `allowlist` (default): only the built-in agent hosts (01), the `egress_allowlist` patterns, and the hosts of the owner's enabled `http` and `sse` MCP servers pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
 - Every request is logged to `egress_log`: host, path without query, status, time, rule number. The WorkspaceDO keeps the newest 10,000 rows. Diagnostics searches all of them (Observability).
 - Cloud metadata addresses are not reachable from containers, so Tempo needs no rule for them.
 

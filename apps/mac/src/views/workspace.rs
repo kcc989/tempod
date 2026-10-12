@@ -962,6 +962,11 @@ impl WorkspaceView {
             cx,
         );
     }
+    fn environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(w) = self.store.read(cx).state.workspace.clone() {
+            super::environments::open_workspace_dialog(self.client.clone(), &w, window, cx);
+        }
+    }
     fn diagnostics(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let client = self.client.clone();
         let id = self.store.read(cx).workspace_id.clone();
@@ -1159,6 +1164,7 @@ impl WorkspaceView {
                             "Copy workspace link",
                             "Rename chat",
                             "Reset preview access",
+                            "Environment…",
                             "Diagnostics",
                             "Archive",
                         ] {
@@ -1199,6 +1205,7 @@ impl WorkspaceView {
                                                 );
                                             }
                                         }
+                                        "Environment…" => this.environment(window, cx),
                                         "Diagnostics" => this.diagnostics(window, cx),
                                         "Archive" => this.archive(cx),
                                         _ => this.operation(label, window, cx),
@@ -2774,6 +2781,9 @@ impl Render for WorkspaceView {
                     div().p_3().child("This chat is closed.").into_any_element()
                 } else {
                     v_flex()
+                        .children(self.store.read(cx).state.workspace.as_ref().and_then(|w| {
+                            super::environments::proposal_banner(w, &self.client, cx)
+                        }))
                         .children(login.map(|text| {
                             h_flex()
                                 .id("login-banner")

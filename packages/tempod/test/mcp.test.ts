@@ -49,29 +49,29 @@ const bridged = (spec: Extract<McpServerSpec, { transport: "http" | "sse" }>) =>
 describe("acpMcpServers (01, User MCP servers)", () => {
   test("Playwright first; remote transports pass through when the agent supports them", () => {
     const list = acpMcpServers([fs, linear, legacy], { mcpCapabilities: { http: true, sse: true } }, bridge);
-    expect(list.map((s) => s.name)).toEqual([PLAYWRIGHT_MCP_SERVER.name, "fs", "linear", "old"]);
-    expect(list[1]).toEqual({
+    expect(list.map((s) => s.name)).toEqual([PLAYWRIGHT_MCP_SERVER.name, "tempo", "fs", "linear", "old"]);
+    expect(list[2]).toEqual({
       name: "fs",
       command: "npx",
       args: ["-y", "fs"],
       env: [{ name: "ROOT", value: "/w" }],
     });
-    expect(list[2]).toEqual({ type: "http", name: "linear", url: linear.url, headers: [...linear.headers] });
-    expect(list[3]).toEqual({ type: "sse", name: "old", url: legacy.url, headers: [] });
+    expect(list[3]).toEqual({ type: "http", name: "linear", url: linear.url, headers: [...linear.headers] });
+    expect(list[4]).toEqual({ type: "sse", name: "old", url: legacy.url, headers: [] });
   });
 
   test("a transport the agent lacks goes through the tempod bridge", () => {
     const list = acpMcpServers([linear, legacy], { mcpCapabilities: { http: true, sse: false } }, bridge);
-    expect(list[1]).toMatchObject({ type: "http" });
-    expect(list[2]).toEqual(bridged(legacy));
-    expect(acpMcpServers([linear], {}, bridge)[1]).toEqual(bridged(linear));
+    expect(list[2]).toMatchObject({ type: "http" });
+    expect(list[3]).toEqual(bridged(legacy));
+    expect(acpMcpServers([linear], {}, bridge)[2]).toEqual(bridged(linear));
   });
 });
 
 describe("pi mcp.json (01, Pi)", () => {
   test("holds Playwright and every server; sse uses the bridge", () => {
     const config = piMcpConfig([fs, linear, legacy], bridge);
-    expect(Object.keys(config.mcpServers)).toEqual(["playwright", "fs", "linear", "old"]);
+    expect(Object.keys(config.mcpServers)).toEqual(["playwright", "tempo", "fs", "linear", "old"]);
     expect(config.mcpServers["fs"]).toEqual({ command: "npx", args: ["-y", "fs"], env: { ROOT: "/w" } });
     expect(config.mcpServers["linear"]).toEqual({
       url: linear.url,
@@ -90,7 +90,11 @@ describe("pi mcp.json (01, Pi)", () => {
     writePiMcpConfig(dir, [fs], bridge);
     const path = join(dir, "mcp.json");
     expect(statSync(path).mode & 0o777).toBe(0o600);
-    expect(Object.keys(JSON.parse(readFileSync(path, "utf8")).mcpServers)).toEqual(["playwright", "fs"]);
+    expect(Object.keys(JSON.parse(readFileSync(path, "utf8")).mcpServers)).toEqual([
+      "playwright",
+      "tempo",
+      "fs",
+    ]);
   });
 });
 
@@ -131,8 +135,8 @@ describe("session.start with mcpServers", () => {
 
   test("passes the user servers after Playwright and bridges http when the agent lacks it", async () => {
     const { servers } = await run("claude", {});
-    expect(servers.map((s) => s["name"])).toEqual(["playwright", "fs", "linear"]);
-    expect(servers[2]).toMatchObject({
+    expect(servers.map((s) => s["name"])).toEqual(["playwright", "tempo", "fs", "linear"]);
+    expect(servers[3]).toMatchObject({
       command: "/opt/tempod",
       args: [
         "mcp-bridge",
@@ -147,7 +151,7 @@ describe("session.start with mcpServers", () => {
     await h!.close();
     h = null;
     const direct = await run("claude", { FAKE_MCP_HTTP: "1" });
-    expect(direct.servers[2]).toEqual({
+    expect(direct.servers[3]).toEqual({
       type: "http",
       name: "linear",
       url: linear.url,
@@ -158,7 +162,7 @@ describe("session.start with mcpServers", () => {
   test("writes ~/.pi/agent/mcp.json before a Pi session starts", async () => {
     const { config } = await run("pi", {});
     const file = JSON.parse(readFileSync(join(config.piAgentDir, "mcp.json"), "utf8"));
-    expect(Object.keys(file.mcpServers)).toEqual(["playwright", "fs", "linear"]);
+    expect(Object.keys(file.mcpServers)).toEqual(["playwright", "tempo", "fs", "linear"]);
   }, 30_000);
 });
 

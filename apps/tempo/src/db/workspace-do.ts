@@ -45,6 +45,7 @@ export const workspace = sqliteTable("workspace", {
   imageRef: text("image_ref"),
   summaryRev: integer("summary_rev").notNull(),
   itemsRev: integer("items_rev").notNull(),
+  environmentId: text("environment_id"),
 });
 
 export const ops = sqliteTable("ops", {
@@ -233,7 +234,15 @@ export const fileCache = sqliteTable("file_cache", {
   updatedAt: integer("updated_at").notNull().default(0),
 });
 
+export const environmentProposals = sqliteTable("environment_proposals", {
+  id: text("id").primaryKey(),
+  createdAt: integer("created_at").notNull(),
+  status: text("status", { enum: ["pending", "applied", "dismissed"] }).notNull(),
+  proposalJson: text("proposal_json").notNull(),
+});
+
 export const workspaceSchema = {
+  environmentProposals,
   fileCache,
   workspace,
   ops,

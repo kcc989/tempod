@@ -39,6 +39,7 @@ export const ERROR_MESSAGES = {
   CHECKPOINT_NOT_FOUND: "That checkpoint no longer exists.",
   MODEL_REQUIRED: "Set a default model for this agent in Settings → Project.",
   SETTINGS_INVALID: "Settings are not valid.",
+  ENVIRONMENT_EXISTS: "An environment with this name already exists.",
   EGRESS_BLOCKED: "(Shown only in the egress log.)",
   INTERNAL: "Something went wrong.",
 } as const;

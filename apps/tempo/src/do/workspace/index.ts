@@ -31,7 +31,7 @@ import {
 } from "./container.ts";
 import { discoverModels } from "./model-catalog.ts";
 import { WorkspaceCore, type Author } from "./core.ts";
-import { applyTempodEvent } from "./events.ts";
+import { applyTempodEvent, sendEnv, sendEnvironment } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { BROWSER_IDLE_MS, browserConnect, browserFetch, browserIdleCheck, closeBrowser } from "./browser.ts";
@@ -282,12 +282,17 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
   async getEgressConfig(): Promise<EgressConfig> {
     const project = await this.core.project();
-    const env = this.core.settings().environment;
+    const environment = await this.core.environment();
+    const settings = this.core.settings().environment;
+    this.core.setKv("egressPolicy", environment?.egressPolicy ?? settings.egress_policy);
     return {
       owner: project.owner,
       repo: project.name,
-      policy: env.egress_policy,
-      allowlist: env.egress_allowlist,
+      environmentId: environment?.id ?? null,
+      policy: environment?.egressPolicy ?? settings.egress_policy,
+      allowlist: environment?.egressAllowlist ?? settings.egress_allowlist,
+      secrets: environment?.secrets ?? [],
+      injectors: environment?.injectors ?? [],
       mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
     };
   }
@@ -302,6 +307,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     rule: number;
   }): Promise<void> {
     if (!this.core.wsOrNull()) return;
+    const blocked = row.rule === 7 || row.rule === 10;
+    const known = blocked && this.core.blockedHosts().includes(row.host);
     const [inserted] = this.core.db.insert(egressLog).values(row).returning({ id: egressLog.id }).all();
     // 02 egress_log: newest 10,000 rows only. Ids only grow, so one indexed range delete keeps the bound.
     if (inserted && inserted.id > EGRESS_LOG_ROWS)
@@ -309,6 +316,21 @@ export class WorkspaceDO extends WorkspaceRpcBase {
         .delete(egressLog)
         .where(lte(egressLog.id, inserted.id - EGRESS_LOG_ROWS))
         .run();
+    if (blocked && !known) this.scheduleEnvironmentPush();
+  }
+
+  private environmentPushTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastEnvironmentPushAt = 0;
+
+  /** environment.set at most every 5 s after a new blocked host (02). */
+  private scheduleEnvironmentPush(): void {
+    if (this.environmentPushTimer) return;
+    const wait = Math.max(0, this.lastEnvironmentPushAt + 5000 - Date.now());
+    this.environmentPushTimer = setTimeout(() => {
+      this.environmentPushTimer = null;
+      this.lastEnvironmentPushAt = Date.now();
+      this.ctx.waitUntil(sendEnvironment(this.core));
+    }, wait);
   }
 
   async pushCodexAuth(content: string, version: number): Promise<void> {
@@ -359,16 +381,19 @@ export class WorkspaceDO extends WorkspaceRpcBase {
         sources: res.sources ?? {},
       });
       core.broadcastDetailSoon();
-      await core.tempod.request("env.set", { env: await core.scriptEnv() });
+      await sendEnv(core);
     } catch (e) {
       log("warn", "settings refresh failed", { workspaceId: core.workspaceId, error: errorText(e) });
     }
   }
 
-  /** env.set after project env vars or secrets change (02). */
+  /** env.set and environment.set after project secrets or the environment change (02). */
   async refreshEnv(): Promise<void> {
-    if (!this.core.wsOrNull() || !this.core.tempod?.open) return;
-    await this.core.tempod.request("env.set", { env: await this.core.scriptEnv() }).catch(() => undefined);
+    if (!this.core.wsOrNull()) return;
+    await this.core.project(true).catch(() => undefined);
+    this.core.broadcastDetailSoon();
+    if (!this.core.tempod?.open) return;
+    await sendEnv(this.core);
   }
 
   async previewFetch(request: Request, port: number, cookie: string): Promise<Response> {

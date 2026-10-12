@@ -2128,8 +2128,11 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
     expect(await w.stub.getEgressConfig()).toEqual({
       owner: "acme",
       repo: "app",
+      environmentId: null,
       policy: "open",
       allowlist: [],
+      secrets: [],
+      injectors: [],
       mcp: [],
     });
     await useSettings(
@@ -2141,8 +2144,11 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
     expect(await w.stub.getEgressConfig()).toEqual({
       owner: "acme",
       repo: "app",
+      environmentId: null,
       policy: "allowlist",
       allowlist: ["*.npmjs.org", "example.com"],
+      secrets: [],
+      injectors: [],
       mcp: [],
     });
   });
