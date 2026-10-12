@@ -59,7 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   environment: {
     instance: "standard-3",
     sleep_after_idle_minutes: 15,
-    egress_policy: "open",
+    egress_policy: "allowlist",
     egress_allowlist: [],
   },
   environment_variables: {},

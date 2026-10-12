@@ -331,7 +331,7 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 - After each request, log `{ts, method, host, path, status, ms, rule}` to the WorkspaceDO `egress_log` with `ctx.waitUntil`. Path without the query string. MUST NOT log headers or bodies.
 - The token is minted with `repository_ids: [<repo id>]` and permissions `contents: write`, `pull_requests: write`, `metadata: read`, `checks: read`, `actions: read`, `issues: read`. A token for one repo cannot touch another.
 - Built-in agent hosts for `allowlist`: `api.anthropic.com`, `claude.ai`, `console.anthropic.com`, `chatgpt.com`, `auth.openai.com`, `api.openai.com`, `openrouter.ai`, `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `cdn.playwright.dev`, `storage.googleapis.com`. Spike S3 and S4 MUST confirm the full list each agent needs.
-- The default policy is `open`.
+- The default policy is `allowlist`.
 
 **Codex device-code login**
 
@@ -587,7 +587,7 @@ default = true
 [environment]
 instance = "standard-3"         # standard-2 | standard-3 | standard-4
 sleep_after_idle_minutes = 15   # 5 to 240
-egress_policy = "open"          # open | allowlist
+egress_policy = "allowlist"     # open | allowlist
 egress_allowlist = []           # host patterns; "*.example.com" is allowed
 
 [environment_variables]
