@@ -2553,7 +2553,18 @@ impl Render for WorkspaceView {
             return div().p_4().child("Not found.").into_any_element();
         }
         if !store.state.ready {
-            return super::skeleton_rows(8).into_any_element();
+            return v_flex()
+                .size_full()
+                .child(
+                    div()
+                        .p_3()
+                        .border_b_1()
+                        .border_color(color(Token::Border, cx))
+                        .text_color(color(Token::MutedForeground, cx))
+                        .child("Loading workspace…"),
+                )
+                .child(super::skeleton_rows(8))
+                .into_any_element();
         }
         let ids = self.tab_ids(cx);
         let documents = self.review.read(cx).document_tabs();

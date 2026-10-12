@@ -103,10 +103,12 @@ impl MainWindow {
                 Theme::change(gpui_kit::component::ThemeMode::Dark, Some(window), cx)
             }
         }
+        Theme::update(cx, |theme| theme.font_size = px(13.));
         let appearance = cx.observe_window_appearance(window, |_, window, cx| {
             if cx.global::<crate::storage::Local>().config().theme == crate::storage::Theme::System
             {
                 Theme::sync_system_appearance(Some(window), cx);
+                Theme::update(cx, |theme| theme.font_size = px(13.));
             }
         });
         let focus = cx.focus_handle();
@@ -404,14 +406,11 @@ impl MainWindow {
                     return div().size_full().child(view).into_any_element();
                 }
             }
-            return div()
-                .p_4()
-                .child("Select a workspace to continue.")
-                .into_any_element();
+            return self.render_welcome(cx);
         }
 
         let Some(top_bar) = self.top_bar.clone() else {
-            return div().size_full().into_any_element();
+            return self.render_welcome(cx);
         };
         v_flex()
             .size_full()
@@ -427,6 +426,44 @@ impl MainWindow {
             )
             .child(div().flex_1().min_h_0().child(self.transcript.clone()))
             .child(self.composer.clone())
+            .into_any_element()
+    }
+
+    fn render_welcome(&self, cx: &App) -> AnyElement {
+        v_flex()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .gap_3()
+            .child(
+                div()
+                    .text_lg()
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                    .child("Your work, in one place"),
+            )
+            .child(
+                div()
+                    .text_color(color(Token::MutedForeground, cx))
+                    .child("Select a workspace, or start a new one."),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new("welcome-new-workspace")
+                            .label("New workspace")
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(Box::new(NewWorkspace), cx)
+                            }),
+                    )
+                    .child(
+                        Button::new("welcome-add-project")
+                            .label("Add project")
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(Box::new(AddProject), cx)
+                            }),
+                    ),
+            )
             .into_any_element()
     }
 
@@ -533,12 +570,14 @@ impl Render for MainWindow {
         let sidebar = if let Some(app_state) = crate::app::AppState::try_global(cx) {
             let hub = app_state.read(cx).hub.read(cx);
             if hub.project_error {
-                div()
-                    .p_4()
-                    .child("Could not load projects. Sign out and connect again.")
-                    .into_any_element()
+                sidebar::shell(
+                    div()
+                        .p_4()
+                        .child("Could not load projects. Sign out and connect again."),
+                    cx,
+                )
             } else if !hub.state.ready || !hub.projects_ready {
-                super::skeleton_rows(6).into_any_element()
+                sidebar::shell(super::skeleton_rows(6), cx)
             } else {
                 WorkspaceSidebar::from_hub(cx)
                     .active(app_state.read(cx).active_workspace.clone().map(Into::into))
@@ -894,6 +933,7 @@ mod view_tests {
     #[gpui_kit::test]
     fn sidebar_rows_badges_and_order_follow_04(cx: &mut TestAppContext) {
         let (handle, state) = setup(cx);
+        cx.read(|cx| assert_eq!(Theme::global(cx).font_size, px(13.)));
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             for (id, label) in [
@@ -905,7 +945,15 @@ mod view_tests {
             ] {
                 assert_eq!(window.find(id).label(), Some(label), "{id}");
             }
-            for id in ["start-in-c", "new-in-a", "sidebar-sort", "history"] {
+            for id in [
+                "start-in-c",
+                "new-in-a",
+                "sidebar-sort",
+                "history",
+                "sidebar-new-workspace",
+                "sidebar-search",
+                "sidebar-settings",
+            ] {
                 assert!(window.try_find(id).is_some(), "{id} missing");
             }
             assert!(window.try_find("status-a2").is_none());
