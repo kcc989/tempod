@@ -14,3 +14,7 @@ The available Codex tools can inspect the parallel core and Mac chats, but expos
 Private-preview and optional Browser Run decisions remain as documented in the [implementation notes](https://github.com/kcc989/tempod/blob/b1ba351bfdbfad66215bbc3e9ea6e6a6c7e3ba0a/docs/IMPLEMENTATION_NOTES.md). This branch does not introduce either design or private wire types.
 
 The Mac goal should check draft/chip recovery, pending-send handling when switching chats, per-chat scrolling and batched announcements against 04/07. These fixes restore existing requirements; the web spec has not changed.
+
+## Core continuation
+
+The follow-up core implements optional `prTitle` on workspace detail/refresh, including closed and merged PRs, and the owner-authenticated same-origin attachment GET route documented in 02. Both use shared generated TypeScript/Rust contracts. Client rendering can consume these contracts without a GitHub token or storage credential. Turn token accounting is being checked separately because ACP context usage is not consumed-token accounting.

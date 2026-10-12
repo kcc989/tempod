@@ -6,7 +6,6 @@ import { TempodClient, type EventHandler } from "../../src/do/workspace/tempod-c
 import { applyTempodEvent } from "../../src/do/workspace/events.ts";
 import {
   DEFAULT_EFFECTIVE,
-  driveToState,
   FakeTempod,
   installFakes,
   internals,
@@ -43,7 +42,11 @@ const transport = (stub: Stub, handler?: EventHandler) =>
   });
 const isolated = async () => {
   const w = await seedWorkspace(await seedProject());
-  await driveToState(w.stub, ["ready"]);
+  await waitFor(async () => {
+    await runDurableObjectAlarm(w.stub);
+    const detail = await w.stub.getWorkspace({});
+    return detail.ok && detail.value.state === "ready";
+  });
   await runInDurableObject(w.stub, async (instance: WorkspaceDO, state: DurableObjectState) => {
     const { core } = internals(instance);
     core.closingTempod = true;
