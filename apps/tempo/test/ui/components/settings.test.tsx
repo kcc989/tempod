@@ -94,15 +94,13 @@ describe("settings page", () => {
     show();
     const nav = screen.getByRole("navigation", { name: "Settings" });
     fireEvent.click(within(nav).getByRole("button", { name: "Git" }));
-    const row = screen.getByRole("group", { name: "Branch prefix" });
-    fireEvent.click(within(row).getByRole("switch"));
-    fireEvent.change(screen.getByRole("textbox", { name: "Branch prefix, set in Tempo" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Branch prefix" }), {
       target: { value: "custom/" },
     });
     fireEvent.click(within(nav).getByRole("button", { name: "Scripts" }));
-    expect(screen.queryByRole("textbox", { name: "Branch prefix, set in Tempo" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Branch prefix" })).toBeNull();
     fireEvent.click(within(nav).getByRole("button", { name: "Git" }));
-    const input = screen.getByRole("textbox", { name: "Branch prefix, set in Tempo" }) as HTMLInputElement;
+    const input = screen.getByRole("textbox", { name: "Branch prefix" }) as HTMLInputElement;
     expect(input.value).toBe("custom/");
     fireEvent.keyDown(input, { code: "Enter", metaKey: true });
     await waitFor(() =>
@@ -117,18 +115,14 @@ describe("settings page", () => {
     show();
     const nav = screen.getByRole("navigation", { name: "Settings" });
     fireEvent.click(within(nav).getByRole("button", { name: "Environment" }));
-    const row = screen.getByRole("group", { name: "Sleep after idle (minutes)" });
-    fireEvent.click(within(row).getByRole("switch"));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Sleep after idle (minutes), set in Tempo" }), {
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Sleep after idle (minutes)" }), {
       target: { value: "1" },
     });
     fireEvent.click(within(nav).getByRole("button", { name: "Git" }));
     fireEvent.click(screen.getByRole("button", { name: /Save/ }));
     expect(screen.getByRole("heading", { name: "Environment" })).toBeTruthy();
     expect(
-      screen
-        .getByRole("spinbutton", { name: "Sleep after idle (minutes), set in Tempo" })
-        .getAttribute("aria-invalid"),
+      screen.getByRole("spinbutton", { name: "Sleep after idle (minutes)" }).getAttribute("aria-invalid"),
     ).toBe("true");
     expect(call).not.toHaveBeenCalledWith("updateProjectSettings", expect.anything());
   });

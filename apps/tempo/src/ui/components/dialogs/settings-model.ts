@@ -357,7 +357,7 @@ const isRecordField = (def: FieldDef): boolean => def.kind === "run" || def.kind
 
 /**
  * The form for a project's saved overrides. A field the project does not set starts from its
- * effective value, so turning the override on keeps what is in use. Run scripts and variables
+ * effective value, so editing starts from what is in use. Run scripts and variables
  * merge per entry with the repo files, so their editors hold only the project's own entries.
  */
 export const formFromLayer = (layer: SettingsLayer, effective: Settings): SettingsForm => {
