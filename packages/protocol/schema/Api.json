@@ -1118,6 +1118,57 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "readFileAt": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ReadFileAtIn.json"
+        },
+        "output": {
+          "$ref": "ReadFileAtOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listArtifacts": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListArtifactsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "Artifact.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "openArtifact": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "OpenArtifactIn.json"
+        },
+        "output": {
+          "$ref": "OpenArtifactOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listCustomAgents": {
       "type": "object",
       "properties": {
@@ -1481,6 +1532,9 @@
     "continueAfterSetupFailure",
     "listTerminals",
     "listScriptRuns",
+    "readFileAt",
+    "listArtifacts",
+    "openArtifact",
     "listCustomAgents",
     "getCustomAgent",
     "saveCustomAgent",

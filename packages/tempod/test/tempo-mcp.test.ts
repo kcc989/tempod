@@ -44,6 +44,7 @@ describe("tempo MCP server (01, Environments)", () => {
     expect(list.result.tools.map((t) => t.name)).toEqual([
       "environment_status",
       "propose_environment_change",
+      "publish_artifact",
     ]);
     expect(await handleMcpMessage({ jsonrpc: "2.0", id: 4, method: "nope" }, call)).toMatchObject({
       error: { code: -32601 },

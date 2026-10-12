@@ -621,3 +621,49 @@ describe("deadlines", () => {
     T,
   );
 });
+
+describe("git.readFile (02)", () => {
+  test(
+    "returns a file as it is in a commit: text as utf8, binary as base64; missing paths and big files fail",
+    async () => {
+      const { c, ws, clone, g } = await boot();
+      const { headSha } = await clone();
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3]);
+      writeFileSync(join(ws, "logo.png"), png);
+      await g("add", "logo.png");
+      await g("commit", "-q", "-m", "logo");
+      const head = await g("rev-parse", "HEAD");
+      writeFileSync(join(ws, "a.txt"), "changed\n");
+
+      const text = await c.ok<{ content: string; encoding: string; size: number }>("git.readFile", {
+        sha: headSha,
+        path: "a.txt",
+        maxBytes: 1024,
+      });
+      expect(text).toEqual({ content: "one\ntwo\nthree\n", encoding: "utf8", size: 14 });
+      const bin = await c.ok<{ content: string; encoding: string; size: number }>("git.readFile", {
+        sha: head,
+        path: `${ws}/logo.png`,
+        maxBytes: 1024,
+      });
+      expect(bin).toEqual({ content: png.toString("base64"), encoding: "base64", size: png.length });
+      expect(await c.req("git.readFile", { sha: headSha, path: "logo.png", maxBytes: 1024 })).toMatchObject({
+        ok: false,
+        error: { code: "NOT_FOUND" },
+      });
+      expect(await c.req("git.readFile", { sha: head, path: "logo.png", maxBytes: 4 })).toMatchObject({
+        ok: false,
+        error: { code: "FILE_TOO_LARGE" },
+      });
+      expect(await c.req("git.readFile", { sha: "--help", path: "a.txt", maxBytes: 9 })).toMatchObject({
+        ok: false,
+        error: { code: "NOT_FOUND" },
+      });
+      expect(await c.req("git.readFile", { sha: head, path: "/etc/passwd", maxBytes: 9 })).toMatchObject({
+        ok: false,
+        error: { code: "PATH_OUTSIDE_WORKSPACE" },
+      });
+    },
+    T,
+  );
+});

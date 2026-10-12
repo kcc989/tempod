@@ -700,6 +700,8 @@ An artifact is a file that an agent publishes for the owner to see: a plan, a sc
 
 **Publish** (`tempod`, on `POST /artifacts`)
 
+`tempod` creates `/home/tempo/artifacts` at startup. Publishes run one at a time, so two publishes of one path never get the same version.
+
 1. Resolve `path` with `realpath`. It MUST be a regular file under `/workspace` or `/home/tempo/artifacts`. Else answer `Path must be a file inside /workspace or $TEMPO_ARTIFACTS_DIR.`
 2. Check the type (Allowed files). Else answer `This file type cannot be published. Use one of: png, jpg, gif, webp, avif, svg, md, pdf, html, txt, log, json, csv.`
 3. Check the size: at most 25 MiB. Else answer `Artifacts are limited to 25 MiB.`

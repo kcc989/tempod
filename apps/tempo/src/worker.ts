@@ -2,6 +2,12 @@ import startHandler from "@tanstack/react-start/server-entry";
 import type { Env } from "./env.ts";
 import { getAuth } from "./auth/auth.ts";
 import { handleAttachment, handleAttachmentRead } from "./http/attachments.ts";
+import {
+  ARTIFACT_ROUTE,
+  handleArtifactHost,
+  handleArtifactRead,
+  parseArtifactHost,
+} from "./http/artifacts.ts";
 import { handleChannel } from "./http/channels.ts";
 import { handleApiV1, handleDownload } from "./http/native.ts";
 import { handlePreview, isPreviewHost } from "./http/preview.ts";
@@ -19,7 +25,10 @@ const ATTACHMENTS = /^\/api\/workspaces\/([0-9a-hjkmnp-tv-z]{26})\/attachments$/
 
 export const handleRequest = async (request: Request, env: Env, ctx: ExecutionContext): Promise<Response> => {
   const url = new URL(request.url);
-  if (isPreviewHost(url.hostname, env)) return handlePreview(request, env, url);
+  if (isPreviewHost(url.hostname, env)) {
+    const artifact = parseArtifactHost(url.hostname, env);
+    return artifact ? handleArtifactHost(request, env, url, artifact) : handlePreview(request, env, url);
+  }
   try {
     const path = url.pathname;
     if (path.startsWith("/api/auth/")) return (await getAuth(env)).handler(request);
@@ -31,6 +40,9 @@ export const handleRequest = async (request: Request, env: Env, ctx: ExecutionCo
       path,
     );
     if (read && request.method === "GET") return handleAttachmentRead(request, env, read[1]!, read[2]!);
+    const art = ARTIFACT_ROUTE.exec(path);
+    if (art && request.method === "GET")
+      return handleArtifactRead(request, env, url, art[1]!, art[2]!, Number(art[3]));
     const att = ATTACHMENTS.exec(path);
     if (att && request.method === "POST") return handleAttachment(request, env, att[1]!);
     if (path.startsWith("/setup/")) return handleSetup(request, env, url);

@@ -1,4 +1,5 @@
 import {
+  ShapesIcon,
   FileCodeIcon,
   FileDiffIcon,
   GlobeIcon,
@@ -8,6 +9,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { sessionTitle, sessionTooltip } from "~/ui/components/chat/chat-tabs-model";
+import { ArtifactTab, ArtifactTitle } from "~/ui/components/artifacts/ArtifactTab";
 import { Composer } from "~/ui/components/chat/Composer";
 import { Transcript } from "~/ui/components/chat/Transcript";
 import { BrowserTab } from "~/ui/components/review/BrowserTab";
@@ -68,6 +70,7 @@ export const CENTER_TAB_KINDS: { readonly [K in CenterTabKind]: CenterTabKindDef
   diff: { icon: FileDiffIcon, Title: () => <>Diff</>, Body: DiffTab },
   browser: { icon: GlobeIcon, Title: ({ tab }) => <>{hostOf(tab.url)}</>, Body: BrowserTab },
   liveView: { icon: RadioIcon, Title: () => <>Live View</>, Body: LiveViewTab },
+  artifact: { icon: ShapesIcon, Title: ArtifactTitle, Body: ArtifactTab },
 };
 
 /** Renders a tab's title or body through the registry with the right prop types. */

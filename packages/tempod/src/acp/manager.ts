@@ -55,6 +55,11 @@ export class SessionManager {
     return this.sessions.get(sessionId);
   }
 
+  /** The running turn of a session, or null (01, Artifacts, Publish 6). */
+  runningTurnId(sessionId: string): string | null {
+    return this.sessions.get(sessionId)?.runningTurnId ?? null;
+  }
+
   get liveCount(): number {
     return this.sessions.size;
   }
@@ -97,7 +102,7 @@ export class SessionManager {
     const bridge: Bridge = { command: config.selfCommand, env: { ...this.deps.caEnv } };
     if (p.agent === "pi") {
       try {
-        writePiMcpConfig(config.piAgentDir, p.mcpServers ?? [], bridge, p.browser);
+        writePiMcpConfig(config.piAgentDir, p.mcpServers ?? [], bridge, p.browser ?? "local", p.sessionId);
       } catch (e) {
         log.warn("writing pi mcp.json failed", { sessionId: p.sessionId, error: errorText(e) });
       }

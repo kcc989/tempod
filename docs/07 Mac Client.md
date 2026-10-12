@@ -232,6 +232,8 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 - Image and Markdown bytes come from the artifact route (02) through `tempo-client` with the bearer token. Images are drawn from those bytes, not through an `ImageCache` URI, so the remote-image rule still holds. SVG is rasterized with `resvg = "=0.48.1"` on the background executor; it never runs script.
 - Markdown renders with `TextView::markdown`, as the transcript. GPUI has no Mermaid renderer, so a `mermaid` block shows as a code block.
 - `pdf` and `html`: the Artifact tab shows the card details and `Open in browser`, which calls `openArtifact` and opens the link in the default browser (C7). No in-app web view.
+- The version menu is a row of `v<n>` buttons, newest first. `Download` saves the version to the Downloads folder (`<name> (2).<ext>` when the name is taken) and shows it in Finder.
+- GPUI has no AVIF decoder: an AVIF image shows `This image type cannot be shown.`
 - File tabs and the Diff tab show images and Markdown previews as 04, with the same rules.
 
 ## macOS integration

@@ -52,6 +52,27 @@ The owner asked for agent artifacts: images, documents, HTML and mini apps, to u
 
 The owner also confirmed these choices: a 25 MiB limit per version; no version pruning; the allowed file types in 01; one self-contained HTML file per artifact (no folders); the Mac app shows Mermaid as code and opens HTML and PDF in the browser.
 
+## Artifacts build (phase 5, 2026-10-12)
+
+Built across protocol, tempod, WorkspaceDO, Worker, web and Mac. Spike S18 and gate F (AT-41 to AT-47) need a real account and are not run.
+
+Spec changes in the same change:
+
+- 02 `artifact.published`: the spec named a field `kind`, but `kind` is every tempod event's tag. The field is `artifactKind`, as in the item content.
+- 02 WorkspaceDO RPC: `artifactEnter(artifactId, code)`. The entry link (05) carries only the code, so the version comes from the `artifact_codes` row. Also `getArtifact(artifactId, version)` for the artifact route.
+- 01 Publish: `tempod` creates `/home/tempo/artifacts` at startup and runs publishes one at a time.
+- 07 Artifacts: the version menu is a row of buttons; `Download` saves to the Downloads folder; AVIF cannot be drawn.
+
+Choices the spec leaves open:
+
+| Spec | Choice |
+| --- | --- |
+| 04 All files tab, Markdown toggle | `Preview` is the default; the choice is kept in `localStorage` as `files:markdown-view`. An SVG file starts on `Source`. |
+| 04 Artifacts tab | The list reloads when an `artifact` item is added or changes status, not on every `item.upsert`. |
+| 01 Upload | Uploads run in the DO's memory, so a DO restart forgets them; the next `artifacts.upload` (sleep, archive, SIGTERM) or `artifacts.resume` (wake) picks the rows up. Each attempt is stored in `artifacts.attempt`. |
+| 04 Phone width | A card opens a full-screen view with `Back`; `pdf` and `html` open a new browser tab. |
+| 04 Diff tab | An image whose `Before` cannot load shows the error text in its place. |
+
 ## Named environments (2026-10-12)
 
 The owner asked for reusable named environments, proxied secrets, Dynamic Worker injectors, a workspace override, and agent-assisted setup. 01 (Environments; Credentials and egress), 02, 04, 05 and 07 are updated in the same change. Choices the request left open:

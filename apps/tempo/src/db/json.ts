@@ -116,6 +116,16 @@ const ITEM_DEFAULTS: { readonly [K in ItemKind]: ItemContent<K> } = {
   handoff: { text: "" },
   revert_marker: { checkpointId: "", toTurnSeq: 0 },
   error: { code: "INTERNAL" },
+  artifact: {
+    artifactId: "",
+    version: 1,
+    title: "",
+    name: "",
+    path: "",
+    mime: "application/octet-stream",
+    artifactKind: "text",
+    size: 0,
+  },
 };
 
 const ITEM_DECODERS = Object.fromEntries(

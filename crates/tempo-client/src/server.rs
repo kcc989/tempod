@@ -28,6 +28,8 @@ pub const CLIENT_ID: &str = "tempo-mac";
 pub const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 /// 04, 07: each attachment is at most 10 MiB.
 pub const MAX_ATTACHMENT_BYTES: u64 = 10 * 1024 * 1024;
+/// 01 Artifacts: at most 25 MiB per version.
+pub const MAX_ARTIFACT_BYTES: u64 = 25 * 1024 * 1024;
 /// RFC 8628 3.5: `slow_down` adds 5 s to the polling interval.
 pub const SLOW_DOWN_STEP: Duration = Duration::from_secs(5);
 /// RFC 8628 3.2: the interval when the server sends none.
@@ -545,17 +547,44 @@ impl Client {
         workspace_id: &str,
         attachment_id: &str,
     ) -> impl Future<Output = Result<AttachmentFile, ApiError>> + Send + 'static {
-        let request = with_bearer(
-            self.server.http().get(self.server.url(&[
-                "api",
-                "workspaces",
-                workspace_id,
-                "attachments",
-                attachment_id,
-            ])),
-            &self.token,
-        )
-        .timeout(Duration::from_secs(120));
+        let url = self.server.url(&[
+            "api",
+            "workspaces",
+            workspace_id,
+            "attachments",
+            attachment_id,
+        ]);
+        self.get_bytes(url, MAX_ATTACHMENT_BYTES)
+    }
+
+    /// The artifact route (02): `GET /api/workspaces/<workspaceId>/artifacts/<artifactId>/<version>`.
+    /// Images, Markdown and text come with their type; HTML and PDF only as downloads. At most
+    /// 25 MiB; a version still uploading is `ARTIFACT_NOT_READY`.
+    pub fn get_artifact(
+        &self,
+        workspace_id: &str,
+        artifact_id: &str,
+        version: u32,
+    ) -> impl Future<Output = Result<AttachmentFile, ApiError>> + Send + 'static {
+        let version = version.to_string();
+        let url = self.server.url(&[
+            "api",
+            "workspaces",
+            workspace_id,
+            "artifacts",
+            artifact_id,
+            &version,
+        ]);
+        self.get_bytes(url, MAX_ARTIFACT_BYTES)
+    }
+
+    fn get_bytes(
+        &self,
+        url: Url,
+        limit: u64,
+    ) -> impl Future<Output = Result<AttachmentFile, ApiError>> + Send + 'static {
+        let request =
+            with_bearer(self.server.http().get(url), &self.token).timeout(Duration::from_secs(120));
         self.send(async move {
             let mut response = request
                 .send()
@@ -565,10 +594,7 @@ impl Client {
             if status != 200 {
                 return Err(read_error(response, status).await);
             }
-            if let Some(size) = response
-                .content_length()
-                .filter(|size| *size > MAX_ATTACHMENT_BYTES)
-            {
+            if let Some(size) = response.content_length().filter(|size| *size > limit) {
                 return Err(ApiError::TooLarge { size });
             }
             let mime = response
@@ -586,7 +612,7 @@ impl Client {
                 .map_err(|e| ApiError::Network(network_error(e)))?
             {
                 let size = bytes.len() as u64 + chunk.len() as u64;
-                if size > MAX_ATTACHMENT_BYTES {
+                if size > limit {
                     return Err(ApiError::TooLarge { size });
                 }
                 bytes.extend_from_slice(&chunk);

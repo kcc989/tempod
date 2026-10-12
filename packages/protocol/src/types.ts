@@ -35,6 +35,7 @@ import { ProfileIssue, SessionCustomAgent } from "./agents.ts";
 import { ErrorCodeSchema } from "./errors.ts";
 import { Settings, SettingsLayer, SettingsSource } from "./settings.ts";
 import { PendingEnvironmentProposal } from "./environments.ts";
+import { ArtifactItemContent } from "./artifacts.ts";
 
 const N = Schema.NullOr;
 const Ms = Schema.Number;
@@ -246,6 +247,7 @@ export const ITEM_CONTENT = {
   handoff: HandoffContent,
   revert_marker: RevertMarkerContent,
   error: ErrorContent,
+  artifact: ArtifactItemContent,
 } as const;
 
 const itemFields = {
@@ -272,6 +274,7 @@ export const Item = Schema.Union([
   itemOf("handoff"),
   itemOf("revert_marker"),
   itemOf("error"),
+  itemOf("artifact"),
 ]);
 export type Item = typeof Item.Type;
 export type ItemOf<K extends Item["kind"]> = Extract<Item, { kind: K }>;

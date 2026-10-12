@@ -23,7 +23,7 @@ use gpui_kit::{
 pub const MIN_SIZE: (f32, f32) = (900., 600.);
 pub const RIGHT_COLLAPSE_WIDTH: f32 = 1100.;
 
-pub const REVIEW_TABS: [&str; 3] = ["Changes", "All files", "Checks"];
+pub const REVIEW_TABS: [&str; 4] = ["Changes", "All files", "Checks", "Artifacts"];
 pub const PROCESS_TABS: [&str; 3] = ["Setup", "Run", "Terminal"];
 
 /// Below the collapse width the right side keeps its own toggle state, closed by default.

@@ -9,6 +9,7 @@ import {
   SecretBindings,
 } from "./environments.ts";
 import { McpServer, McpServerInput } from "./mcp.ts";
+import { Artifact } from "./artifacts.ts";
 import { CustomAgent, CustomAgentDefinition, CustomAgentSummary } from "./agents.ts";
 import { EnvName } from "./settings.ts";
 import {
@@ -257,6 +258,19 @@ export const API = {
   listTerminals: fn("GET", Schema.Struct(W), Schema.Array(Schema.Struct({ terminalId: S }))),
   /** Additive: script history for the Setup and Run tabs. */
   listScriptRuns: fn("GET", Schema.Struct(W), Schema.Array(ScriptRunWithLog)),
+  readFileAt: fn(
+    "GET",
+    Schema.Struct({ ...W, path: S, sha: NonEmpty }),
+    Schema.Struct({ content: S, encoding: Schema.Literals(["utf8", "base64"]), size: N }),
+  ),
+
+  // Artifacts (01, Artifacts): DO and R2 only; they never wake the workspace.
+  listArtifacts: fn("GET", Schema.Struct(W), Schema.Array(Artifact)),
+  openArtifact: fn(
+    "POST",
+    Schema.Struct({ ...W, artifactId: NonEmpty, version: N }),
+    Schema.Struct({ url: S }),
+  ),
 
   // Custom agents (01, Custom agents)
   listCustomAgents: fn("GET", Empty, Schema.Array(CustomAgentSummary)),

@@ -25,6 +25,9 @@ export interface Config {
   readonly nssDb: string;
   /** Unix socket of the `tempo` MCP server (01, Environments). */
   readonly mcpSocket: string;
+  /** `TEMPO_ARTIFACTS_DIR` and the staged copies of published versions (01, Artifacts). */
+  readonly artifactsDir: string;
+  readonly artifactsStage: string;
   /** How children run tempod itself, for `tempod mcp-bridge` (01, User MCP servers). */
   readonly selfCommand: ReadonlyArray<string>;
   /** Commands per agent; tests replace them with a fake adapter. */
@@ -110,6 +113,8 @@ export const loadConfig = (
     piAgentDir: join(home, ".pi", "agent"),
     nssDb: join(home, ".pki", "nssdb"),
     mcpSocket: join(stateDir, "mcp.sock"),
+    artifactsDir: join(home, "artifacts"),
+    artifactsStage: join(stateDir, "artifacts"),
     selfCommand: overrides.selfCommand ?? ["/usr/local/bin/tempod"],
     agentCommands: { ...agentCommandsFor(workspace), ...overrides.agentCommands },
     limits: { ...DEFAULT_LIMITS, ...overrides.limits },

@@ -367,6 +367,38 @@ export const permissionContent: P.PermissionContent = {
 };
 
 /** One item of every kind, in the order a turn makes them. */
+export const ARTIFACT_ID = "01jart00000000000000000001";
+
+export const artifactContent: P.ArtifactItemContent = {
+  artifactId: ARTIFACT_ID,
+  version: 2,
+  title: "Checkout plan",
+  summary: "Steps to fix the flaky checkout test",
+  name: "plan.md",
+  path: "/home/tempo/artifacts/plan.md",
+  mime: "text/markdown",
+  artifactKind: "markdown",
+  size: 2048,
+};
+
+export const artifact: P.Artifact = {
+  id: ARTIFACT_ID,
+  version: 2,
+  sessionId: S1,
+  turnId: uid(101),
+  itemId: uid(1011),
+  path: "/home/tempo/artifacts/plan.md",
+  name: "plan.md",
+  title: "Checkout plan",
+  summary: "Steps to fix the flaky checkout test",
+  mime: "text/markdown",
+  kind: "markdown",
+  size: 2048,
+  sha256: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  status: "ready",
+  createdAt: at(110),
+};
+
 export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
   item("user_message", { n: 1, rev: 1, seconds: 100, content: userMessageContent }),
   item("agent_thought", {
@@ -407,6 +439,7 @@ export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
     status: "failed",
     content: { code: "AGENT_CRASHED", detail: null },
   }),
+  item("artifact", { n: 11, rev: 11, seconds: 110, content: artifactContent }),
 ];
 
 export const permissionRequest: P.PermissionRequest = {

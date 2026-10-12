@@ -432,6 +432,16 @@ pub fn work_summary(folded: &[Item], duration_ms: Option<f64>) -> String {
         .unwrap_or_default()
 }
 
+/// 04 Plan proposals: a tool call whose `rawInput.plan` is a non-empty string.
+pub fn plan_proposal_text(tool: &tempo_protocol::ToolCallItemContent) -> Option<String> {
+    tool.raw_input
+        .as_ref()
+        .and_then(|raw| raw.get("plan"))
+        .and_then(|plan| plan.as_str())
+        .filter(|plan| !plan.trim().is_empty())
+        .map(str::to_string)
+}
+
 /// True when Default detail folds the item into its turn's work row.
 pub fn folds_into_work(item: &Item, last_message: Option<&str>) -> bool {
     match &item.content {
@@ -440,6 +450,7 @@ pub fn folds_into_work(item: &Item, last_message: Option<&str>) -> bool {
         ItemContent::ToolCall(tool) => {
             !matches!(item.status, ItemStatus::Failed | ItemStatus::Cancelled)
                 && work_type(tool) != WorkType::Edit
+                && plan_proposal_text(tool).is_none()
         }
         _ => false,
     }
@@ -522,7 +533,34 @@ pub fn transcript_rows(
             .then_with(|| a.2.cmp(&b.2))
             .then_with(|| a.3.cmp(&b.3))
     });
-    let placed: Vec<&Item> = placed.into_iter().map(|p| p.0).collect();
+    let mut placed: Vec<&Item> = placed.into_iter().map(|p| p.0).collect();
+    // A plan proposal's permission shows right under its card (04, Plan proposals).
+    let plans: HashMap<&str, &str> = placed
+        .iter()
+        .filter_map(|item| match &item.content {
+            ItemContent::ToolCall(tool) if plan_proposal_text(tool).is_some() => {
+                Some((tool.tool_call_id.as_str(), item.id.as_str()))
+            }
+            _ => None,
+        })
+        .collect();
+    let moved: Vec<(String, &Item)> = placed
+        .iter()
+        .filter_map(|item| match &item.content {
+            ItemContent::Permission(p) => p
+                .tool_call_id
+                .as_deref()
+                .and_then(|t| plans.get(t))
+                .map(|plan| (plan.to_string(), *item)),
+            _ => None,
+        })
+        .collect();
+    for (plan, permission) in moved {
+        placed.retain(|i| i.id != permission.id);
+        if let Some(at) = placed.iter().position(|i| i.id == plan) {
+            placed.insert(at + 1, permission);
+        }
+    }
     let turn_of = |item: &Item| item.turn_id.as_deref().and_then(|id| state.turns.get(id));
     let mut last = HashMap::new();
     let mut last_message = HashMap::new();
@@ -1414,6 +1452,51 @@ mod tests {
         assert_eq!(
             ids(&transcript_rows(&state, "s", TranscriptDetail::Detailed)),
             ["u", "th", "m1", "c1", "e1", "f1", "c2", "m2", "footer:t1"]
+        );
+    }
+    #[test]
+    fn a_plan_proposal_stays_outside_with_its_permission_under_it_and_artifacts_stay_outside() {
+        let permission = item(
+            "p1",
+            "t1",
+            5.,
+            "pending",
+            serde_json::json!({"kind": "permission", "content": {
+                "requestId": "r1", "toolCallId": "plan", "title": "Approve?", "options": [],
+            }}),
+        );
+        let artifact = item(
+            "a1",
+            "t1",
+            3.,
+            "completed",
+            serde_json::json!({"kind": "artifact", "content": {
+                "artifactId": "01jart00000000000000000001", "version": 1, "title": "Plan",
+                "name": "plan.md", "path": "/workspace/plan.md", "mime": "text/markdown",
+                "artifactKind": "markdown", "size": 1,
+            }}),
+        );
+        let items = vec![
+            call("c1", 1., "completed", "read", serde_json::Value::Null),
+            call(
+                "plan",
+                2.,
+                "pending",
+                "other",
+                serde_json::json!({"plan": "# Plan"}),
+            ),
+            artifact,
+            text("m1", 4., "agent_message"),
+            permission,
+        ];
+        let state = turn_state("completed", items);
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Default)),
+            ["u", "work:t1", "plan", "p1", "a1", "m1", "footer:t1"]
+        );
+        assert_eq!(
+            plan_proposal_text(&tool("other", "x", serde_json::json!({"plan": " "}))),
+            None
         );
     }
     #[test]

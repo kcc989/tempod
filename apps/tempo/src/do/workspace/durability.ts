@@ -17,6 +17,7 @@ export const HOME_EXCLUDES = [
   ".npm/",
   "node_modules/",
   ".tempod/",
+  "artifacts/",
   ".codex/auth.json",
   ".claude/.credentials.json",
 ] as const;

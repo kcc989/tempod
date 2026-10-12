@@ -15,6 +15,7 @@ import { environmentProposals, permissions, ports, scriptRuns, turns } from "../
 import { errorText, log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
 import { backupHome, takeCheckpoint, uploadBundleWithRetry } from "./durability.ts";
+import { onArtifactPublished, uploadAllArtifacts } from "./artifacts.ts";
 import { storeChanges, summarize } from "./git.ts";
 import { afterTurnEnded, finishTurn } from "./queue.ts";
 import type { OpRunner } from "./runner.ts";
@@ -183,6 +184,9 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
     case "environment.proposed":
       storeProposal(core, event.proposal);
       return;
+    case "artifact.published":
+      onArtifactPublished(core, event);
+      return;
     case "log":
       log(
         event.level === "error" ? "error" : event.level === "warn" ? "warn" : "info",
@@ -274,7 +278,7 @@ const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">)
   }
 };
 
-/** SIGTERM (03, Failure handling): checkpoint, upload, back up, then shutdown. */
+/** SIGTERM (03, Failure handling): checkpoint, upload, back up, upload artifacts, then shutdown. */
 const onSigterm = async (core: WorkspaceCore): Promise<void> => {
   core.tempodStopping = true;
   try {
@@ -282,6 +286,9 @@ const onSigterm = async (core: WorkspaceCore): Promise<void> => {
     const { bundle } = await takeCheckpoint(core, "sigterm", null);
     if (bundle) await uploadBundleWithRetry(core, bundle);
     await backupHome(core).catch((e) => log("warn", "sigterm home backup failed", { error: errorText(e) }));
+    await uploadAllArtifacts(core).catch((e) =>
+      log("warn", "sigterm artifact upload failed", { error: errorText(e) }),
+    );
     await core.tempod?.request("shutdown", { reason: "sigterm" });
   } catch (e) {
     log("warn", "sigterm save failed", { workspaceId: core.workspaceId, error: errorText(e) });

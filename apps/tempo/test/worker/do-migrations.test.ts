@@ -33,6 +33,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0005_browser_run",
       "0006_environments",
       "0007_custom_agents",
+      "0008_artifacts",
     ]);
   });
 });

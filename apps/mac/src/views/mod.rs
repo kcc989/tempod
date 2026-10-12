@@ -1,6 +1,7 @@
 //! Views (07, Window layout and components). Regions follow 04.
 pub mod agents_model;
 pub mod agents_settings;
+pub mod artifacts_model;
 pub mod changes;
 pub mod chat;
 pub mod chat_model;
@@ -46,4 +47,18 @@ pub fn skeleton_rows(rows: usize) -> impl IntoElement {
         .gap_2()
         .p_3()
         .children((0..rows).map(|_| Skeleton::new().h(px(14.)).w_full()))
+}
+
+/// Bytes as the web's `formatBytes` shows them: `812 B`, `2.0 KiB`, `3.4 MiB`.
+pub fn format_bytes(n: f64) -> String {
+    const K: f64 = 1024.;
+    if n < K {
+        format!("{n} B")
+    } else if n < K * K {
+        format!("{:.1} KiB", n / K)
+    } else if n < K * K * K {
+        format!("{:.1} MiB", n / K / K)
+    } else {
+        format!("{:.1} GiB", n / K / K / K)
+    }
 }

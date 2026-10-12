@@ -10,8 +10,8 @@ use std::task::{Context, Poll, Wake, Waker};
 use common::{APP_VERSION, RawReply, TOKEN, fake_http, fake_http_raw};
 use serde_json::json;
 use tempo_client::{
-    ApiError, AttachmentFile, ChannelEvent, CloseReason, MAX_ATTACHMENT_BYTES, Runtime,
-    RuntimeHandle, Server, Signal, Status, Token,
+    ApiError, AttachmentFile, ChannelEvent, CloseReason, MAX_ARTIFACT_BYTES, MAX_ATTACHMENT_BYTES,
+    Runtime, RuntimeHandle, Server, Signal, Status, Token,
 };
 use tempo_protocol::{ErrorCode, SendPromptIn, Turn, api};
 
@@ -300,6 +300,50 @@ async fn get_attachment_reads_the_bytes_with_the_bearer_token_up_to_10_mib() {
         );
     }
     assert!(!c.is_unauthorized());
+}
+
+#[tokio::test(start_paused = true)]
+async fn get_artifact_reads_one_version_up_to_25_mib_and_keeps_artifact_not_ready() {
+    let server = fake_http_raw(|req, _| {
+        let reply = |status, content_type, body: Vec<u8>| RawReply {
+            status,
+            content_type,
+            body,
+            content_length: true,
+        };
+        match req.path.rsplit('/').next().unwrap_or_default() {
+            "1" => reply(200, "text/markdown", b"# Plan".to_vec()),
+            "2" => reply(
+                409,
+                "application/json",
+                json!({"code":"ARTIFACT_NOT_READY","message":"This artifact is still being saved. Try again in a moment."})
+                    .to_string()
+                    .into_bytes(),
+            ),
+            _ => reply(200, "image/png", vec![0u8; MAX_ARTIFACT_BYTES as usize + 1]),
+        }
+    })
+    .await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    let file = c
+        .get_artifact(
+            "01k7000000000000000000000b",
+            "01jart00000000000000000001",
+            1,
+        )
+        .await
+        .expect("reads");
+    assert_eq!(file.mime, "text/markdown");
+    assert_eq!(file.bytes, b"# Plan");
+    assert_eq!(
+        server.requests()[0].path,
+        "/api/workspaces/01k7000000000000000000000b/artifacts/01jart00000000000000000001/1"
+    );
+    let err = c.get_artifact("w", "a", 2).await.expect_err("not ready");
+    assert_eq!(err.code(), Some(ErrorCode::ArtifactNotReady));
+    let err = c.get_artifact("w", "a", 3).await.expect_err("too large");
+    assert!(matches!(err, ApiError::TooLarge { size } if size > MAX_ARTIFACT_BYTES));
 }
 
 #[test]

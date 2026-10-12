@@ -78,6 +78,7 @@ export const ITEM_KINDS = [
   "handoff",
   "revert_marker",
   "error",
+  "artifact",
 ] as const;
 export const ItemKind = Schema.Literals(ITEM_KINDS);
 export type ItemKind = typeof ItemKind.Type;

@@ -36,6 +36,8 @@ export interface ChangesResult {
   readonly fetching: boolean;
   readonly error: Error | null;
   readonly refetch: () => void;
+  /** The commit an image diff's `Before` comes from: baseSha (branch) or headSha (uncommitted). */
+  readonly beforeSha: string | null;
 }
 
 /**
@@ -70,6 +72,7 @@ export function useChanges(workspaceId: string): ChangesResult {
     fetching: query.isFetching,
     error: query.error,
     refetch: () => void refetch(),
+    beforeSha: query.data ? (scope === "branch" ? query.data.baseSha : query.data.headSha) : null,
   };
 }
 
