@@ -25,6 +25,12 @@ The spec disagrees with itself here, or the work needs a dependency only you can
 | Q-2 (resolved 2026-10-11) | 01 Container image | Orphaned agent and script processes need reaping. | Owner approved pinned `tini`. It runs as PID 1, forwards signals to `tempod`, and reaps orphaned children. 01 is updated. |
 | Q-3 (resolved 2026-10-11) | 04 Design and front-end rules, 06 Definition of done | React component tests need a DOM library. | Owner approved pinned `happy-dom` and `@testing-library/react`. Component tests are being added alongside the existing Node logic tests. |
 | Q-4 | 01 Browser Run (phase 3, optional) | 02 has no message or field that carries the Browser Run CDP URL to `tempod` or the Live View URL to the UI. | Not built (see **Not built**). |
+| Q-5 | 03 Transitions, sendPrompt step 5 | The table lets `error` → `starting` happen only through `wakeWorkspace` (the UI's Retry), but sendPrompt also wakes from `error`. | Every wake trigger restarts an errored workspace, including reads such as `getChanges`, `createSession`, terminals and previews. |
+| Q-6 | 02 createWorkspace, 03 Create | Whether a workspace created from a PR (`source.kind = "pr"`) stores that PR's number. | It does not; Create PR on such a workspace returns `PR_EXISTS` and PR polling never starts. |
+| Q-7 | 01 Agents (model "required for opencode and pi"), settings `agent.model` | Which agent the project model applies to, and what happens when OpenCode or Pi has none. | The model applies only to sessions of `agent.default`; nothing blocks a session without a model. |
+| Q-8 | 02 enums | Session status `broken` and review-comment status `resolved` are in the CHECK lists, but no function or transition writes them. | Never written. |
+| Q-9 | 05 Egress control vs Observability | The egress section says the owner sees the newest 10,000 rows; the Diagnostics table says 500. | `egress_log` keeps 10,000 rows (trimmed on every insert and daily); Diagnostics shows the newest 500. |
+| Q-10 | 05 Preview access, 00 Q3 | Capability URLs or Cloudflare Access for previews. | Capability URLs, as specified. The private-preview designs are not built. |
 
 ## ACP mode contract (resolved 2026-10-11)
 
@@ -43,7 +49,7 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | `repo.clone` result | `remoteHeadSha` | 03: for `branch` and `pr` sources, `last_pushed_sha` is the remote head. On wake it also tells the DO that the branch was deleted on GitHub. |
 | Workspace channel | `turn.deleted {turnId}` | `deleteQueuedTurn` and archive remove queued turns; `turn` cannot say a turn is gone. |
 | Server functions | `listScriptRuns {workspaceId}` → runs with `logTail` | The Setup and Run tabs need history after a reload; the channel sends output only live. |
-| HTTP | `GET /api/setup/status` → `{configured, installUrl}`, no auth | The sign-in page must know whether the GitHub App exists; the Add project dialog needs the install link. Both facts are public. |
+| HTTP | `GET /api/setup/status` → `AppSetupStatus {configured, installUrl}`, no auth | The sign-in page must know whether the GitHub App exists; the Add project dialog (web and Mac) needs the install link. Both facts are public. |
 | tempod | A second `hello` on an open socket updates branch, base branch and env | `setBaseBranch` and `renameBranch` change what tempod uses for checkpoints and changes. |
 | `agent.exited` | `reason`: `crashed`, `evicted` (LRU close) or `cancelled` (killed after a cancel timeout) | 01 sends `agent.exited` only for an unexpected exit, but the DO must still learn that a planned exit ended the process, so the next prompt reloads the session. Only `crashed` makes a crash notice. |
 | `repo.clone` params | `mode`: `create` or `wake` | On create, 03's checkout per source applies (`new` always branches from `origin/<baseBranch>`; a `branch` or `pr` source missing on origin fails with `CLONE_FAILED`). On a fresh-disk wake, the branch is tracked from origin when it exists, else it branches from the base. A `repo.clone` with no `mode` behaves like `wake`. |
@@ -86,6 +92,23 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | UI hooks | `useWorkspace(id)` only reads. `useWorkspaceLifecycle(id)` runs once per shown workspace and calls `markViewed` while the view is visible and focused, and again when a turn ends then. `useReconnectRules()` runs app-wide and reconnects every socket when the browser comes back online or the tab is shown again. |
 | `/device` copy | "Check that this code matches the one in Tempo for Mac.", "Tempo for Mac is signed in. You can close this tab.", "Sign-in denied. You can close this tab.", "That code is not valid. Check it and try again.", "That code has expired. Start again in Tempo for Mac.", "This code was already used." |
 | `/login` copy | Not set up: "Tempo is not set up yet. Open the setup link that the deploy printed." Errors other than `forbidden` show the `INTERNAL` text. |
+| Turn usage | `Turn.usage` is ACP v1 `PromptResponse.usage` for that turn (02). Non-finite or negative counts are dropped; a missing total, input or output count drops the whole value. The footer reads `<total> tokens (<input> in, <output> out)`; the context ring still uses `usage_update`. |
+| Command palette | It runs every action with a shortcut that has a handler, including Stop, plan mode, next or previous file and Mark viewed. Send, New line and the permission keys stay out: they act on the focused field or card. |
+| Phone Setup output | Phones have no bottom panel, so `View output` and `Open Setup tab` open a Setup pane with `Back to chat`. It has no bottom-navigation entry. |
+| Shortcuts tab | Shows the Tempo and the Conductor column of the 04 table. |
+| JSON columns | Every JSON column is decoded with Effect Schema on read (a bad value logs `warn` and uses a fallback) and checked on write (`INTERNAL`). Item content from `tempod` that fails its kind's schema keeps each field that still decodes; the others take the kind's empty value. |
+| Preview token rotation | Open preview WebSocket relays close with code 1008. |
+| Queued commit | `commitAndPush` waits behind pending ops; behind a sleep it returns `CONTAINER_NOT_READY`. |
+| Container stop during create or wake | The op is cancelled and the workspace restarts through the unplanned-stop path, so it counts toward 3 restarts an hour. |
+| `container.start` step timeout | 150 s, not 60 s: the health poll is 60 s, and the rest covers a failed snapshot start falling back to the image. Attempts stay at 3. |
+| Channel backpressure (02, 4008) | Workers `WebSocket` has no `bufferedAmount`, so the 4 MiB check reads 0 and never closes a socket. A deployed check should confirm this; a different mechanism needs a spec change. |
+| OAuth tokens (05, Secrets) | Better Auth's `account` rows never keep GitHub `access_token`, `refresh_token` or `id_token`: database hooks null them on create and update. Sign-in needs only the GitHub profile. |
+| Better Auth logs | Its logger writes through `log()`, so the redact rule applies. |
+| Worker invocation logs | Off (`observability.logs.invocation_logs: false`): they record request URLs, which hold preview tokens and the setup token. Structured logs stay on. |
+| Build id | The deploy sets one id, `<version>+<git sha>[.dirty]`, as the Worker's `TEMPO_VERSION` and inlines it into `tempod` (`TEMPO_BUILD_ID`), so the version warning in 05 fires only for different builds. |
+| `setup_url` redirect | When the owner is signed in, `/setup/github/installed` syncs installations at once. Otherwise the Add project dialog syncs them after sign-in. |
+| Attachment upload Origin | A cookie-authenticated upload must send `Origin: https://<APP_HOST>`. Bearer uploads send none. Reads stay Origin-free so `<img>` works. |
+| Transcript thumbnails | PNG, JPEG, GIF and WebP load from the owner-only attachment route. The web uses this browser's upload preview first. The Mac app keeps at most 32 MiB of thumbnails in memory per transcript and never writes them to disk. |
 
 ## Spec ambiguities found by the tests
 
@@ -156,16 +179,18 @@ The Mac build loop keeps these rows (07). The build machine is Linux x86_64, so 
 | M-8 | Links and `tempo://` | `file:///workspace/` links with `..`, `.` or empty segments are ignored. A `tempo://workspace/<id>` id must be 1 to 64 ASCII letters or digits; an unknown id shows `Not found.` as for close code 4404. |
 | M-9 | Dependencies | Pinned in each crate: `gpui-kit =0.7.1`, `async-channel =2.5.0`, `serde =1.0.229`, `serde_json =1.0.154`. `crates/protocol-gen` (a build tool, not shipped) uses `typify =0.8.0` (the newest stable release; 0.10.0-alpha.2 exists), `schemars =0.8.22`, `syn =3.0.8` and `prettyplease =0.3.0`, which typify's output needs. |
 
-### Not built yet (Mac)
+### Mac status (2026-10-12)
+
+Every 07 area has code; nothing renders a stub. What remains is acceptance on a Mac, not missing views.
 
 | Item | Status |
 | --- | --- |
-| `crates/tempo-client` | Runtime, RPC, channels, reconnect, device flow and Rust stores exist and pass local tests. The app owns the real runtime. Device sign-in and saved-session validation are wired, and the hub feeds the sidebar and Dock count. Workspace channel/store/view wiring remains. |
-| `crates/tempo-terminal` | Empty: the `gpui-terminal` fork is not made yet. |
-| Views | Main window panes, title bar, sidebar, chat rows, composer context, top bar and Settings (shortcut table) are started; Changes, Diff, Files, Checks, Setup, Run, Terminal, dialogs and the palette are stubs. |
-| macOS integration | Menus, key bindings, `Info.plist` and entitlements are done; Keychain, notifications, Dock badge and wake are std-only stubs. |
-| Local storage, logs, `scripts/mac/release.sh`, update check, `AppIcon.icns`, `tests/mac-e2e/` | Not built. |
-| `#[gpui_kit::test]` app/view tests | Eight headless tests cover auth lifecycle and Enter in the connect form using the existing pinned GPUI Kit test-support feature. Real Keychain, browser approval and UI acceptance remain open. |
+| `crates/tempo-client` | Runtime, RPC, channels, reconnect, device flow, stores, attachment upload and read, setup status and verified downloads. |
+| `crates/tempo-terminal` | The `gpui-terminal` fork on the remote terminal channel, with selection, copy, scrollback and resize. |
+| Views | Sidebar with 04 indicators and hover card; top bar with the base-branch picker; chat, transcript with thumbnails, composer, queue and steering; state banners and the op checklist; Changes, Diff, Files, Checks; Setup, Run, Terminal; New workspace, Add project, History, command palette, Diagnostics and Settings (typed Project fields). |
+| macOS integration | Menus, key bindings, Keychain, notifications, Dock badge, URL scheme, wake reconnect and window restore. Needs a signed bundle to verify. |
+| Copy left to the app | "Tempo is up to date." (Check for Updates with nothing newer), the macOS notification-permission texts and the toggle label "macOS notifications". Hover times are relative ("5 min ago"); the app has no local time-zone helper yet. |
+| Tests | 194 `tempo-mac` tests (headless GPUI views included) and the `tempo-client`, `tempo-terminal` and protocol suites pass on Linux. Real Keychain, notifications, signing, rendering performance and Gate E stay open. |
 
 ## Continuation verification (2026-10-11)
 
@@ -192,8 +217,8 @@ Release tooling now defaults to `--adhoc`. `--release` requires authorized Devel
 
 - **MQ-1 resolved and consumed:** the final task branch imports published core/web integration through `5e259d6`. Core's generated `ApiMeta.latestMacClientSha256` is bound to `latestMacClient` from the same R2 manifest. Native Download now uses that exact contract: bearer HTTP, a 1 GiB hard bound, declared transfer-size checks, SHA-256 verification before atomic save and macOS system opening. Missing/invalid hashes, incompatible/stale release versions, corrupted bytes and oversized downloads fail closed. The existing exact-size helper remains available for trusted manifest-size callers. Normal and required-update screens share this flow.
 - **First-launch required-update authentication:** a valid saved Keychain session is validated and retained for Download while normal channels stay closed. With no saved token, 07 stops device sign-in before the owner-only download can authenticate; the screen explains manual installation from the owner's browser. A future native authorization path in this state requires a core/spec policy decision. No unauthenticated download route or weakened integrity check was added.
-- **Attachment thumbnails:** the existing `POST /api/workspaces/<workspaceId>/attachments` accepts bearer uploads, but there is no owner-authorized GET by attachment ID. Request an additive `GET /api/workspaces/<workspaceId>/attachments/<attachmentId>` with owner/workspace authorization, bounded file bytes and stored Content-Type. This is a proposal for core, not a native-only route. Current native transcript shows attachment names; inline ACP images work from bounded embedded bytes.
-- **Display metadata:** `Turn` has no per-turn token counts, `CheckRun` has no start/completion/duration fields, and workspace detail/summary has no PR title for closed/merged PRs. These need optional shared fields/server projections to implement the corresponding displays accurately. Session context usage is displayed separately. No native-only wire fields were invented.
+- **Attachment thumbnails:** consumed. `GET /api/workspaces/<workspaceId>/attachments/<attachmentId>` (02) feeds transcript thumbnails in both clients.
+- **Display metadata:** `Turn.usage` and `prTitle` exist and both clients show them. `CheckRun` still has no start, completion or duration fields; 04 does not ask for them.
 - **Privacy wording:** 07 explicitly permits composer drafts in `state.json`, while AT-37 literally forbids any prompt text outside Keychain. The implementation follows the storage table: unsent drafts may persist, tokens remain in Keychain and transcripts/attachment bodies do not persist. The local audit must distinguish this specified draft storage from leaks and record the unresolved wording.
 
 The project settings fallback is a native resource copied from shared `DEFAULT_SETTINGS`; the final verification compares it to the canonical TypeScript value. Without an open workspace the UI labels file-derived settings as unavailable until a workspace opens, rather than inventing source information.
@@ -201,8 +226,8 @@ The project settings fallback is a native resource copied from shared `DEFAULT_S
 Validation and the per-acceptance local checklist accompany the implementation. No claim is made for hosted agent behavior, rendering performance, macOS Keychain/notifications, signing, notarization or Gate E.
 ## Core deployment continuation
 
-The current follow-up adds `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle`, persisted by the WorkspaceDO for any PR state, and owner-authenticated attachment reads at the route documented in 02. `Attachment` metadata is shared in TypeScript/Rust and fixtures. Active formats download as binary; raster previews use private/no-store responses. ACP v1 and OpenCode 1.18.35 stay pinned. Turn token accounting awaits the explicit choice between context snapshots and cumulative prompt-response totals; the existing session context ring remains unchanged.
+The current follow-up adds `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle`, persisted by the WorkspaceDO for any PR state, and owner-authenticated attachment reads at the route documented in 02. `Attachment` metadata is shared in TypeScript/Rust and fixtures. Active formats download as binary; raster previews use private/no-store responses. ACP v1 and OpenCode 1.18.35 stay pinned. Turn token accounting now uses ACP v1 `PromptResponse.usage` per turn (`Turn.usage`, 02); the session context ring remains unchanged.
 
 Alchemy beta.81 imports its optional `@effect/platform-node` peer while loading Cloudflare providers; the existing Effect stack now pins that peer at 4.0.3. A preflight wrapper prevents unavailable existing state-store probes from entering automatic bootstrap. See the deployment guide and CORE-RESULTS.md for the actual failed attempt and state-store recovery requirement.
 
-The native PR imports this core follow-up for compatibility. Its earlier attachment-read and closed/merged PR-title requests are now available in the shared contracts; consuming those additions in the native UI remains follow-up work.
+The native PR imports this core follow-up for compatibility. Both clients now consume the attachment-read route and `prTitle`.

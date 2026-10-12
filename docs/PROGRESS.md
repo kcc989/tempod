@@ -4,6 +4,42 @@ Status of the Tempo build against the spec (tabs 00 to 07). Continuation started
 
 Percentages below are the previous build loops' estimates, not new acceptance measurements. Deviations and open questions are in `IMPLEMENTATION_NOTES.md`. The web continuation now has a separate [acceptance record](WEB_ACCEPTANCE.md).
 
+## Cloud continuation (2026-10-12)
+
+Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: feature complete against tabs 00 to 07, with light validation; the owner tests by hand later.
+
+- **Audit:** six read-only passes compared each tab with the code. No stub or placeholder was left; the gaps were parity, edge cases and rule-level items. They are fixed below or listed as questions (Q-5 to Q-10 in `IMPLEMENTATION_NOTES.md`).
+- **Turn usage:** `turn.ended` and `Turn` carry the agent's per-turn tokens (ACP v1 `PromptResponse.usage`). They are stored in `turns.usage_json` (DO migration `0002_turn_usage`), and both clients show them under each turn. 02 and 04 are updated.
+- **WorkspaceDO:**
+  - A retry of a failed create keeps create semantics and push state.
+  - Archive no longer fails while a turn is starting.
+  - A container that stops during create or wake restarts; the SIGTERM flag resets.
+  - `commitAndPush` queues behind other ops.
+  - The Codex lease is dropped on every stop.
+  - JSON columns are validated with Effect Schema.
+  - Deleting items bumps `items_rev`; review comment ids are checked.
+  - The hub gets each summary even when D1 fails; the egress log is trimmed on insert; token rotation closes preview sockets.
+- **Security and ops (05):**
+  - No GitHub OAuth tokens in D1; Better Auth logs pass through redact.
+  - Invocation logs are off; preview failures keep the privacy headers.
+  - Cookie uploads need the app `Origin`; `setup_url` stores the installation.
+  - The Worker and `tempod` share one build id.
+- **Web:**
+  - Checks shows the PR title in every state; thumbnails load from the attachment route after a reload.
+  - The palette runs composer and diff actions; phones get a Setup pane.
+  - The Shortcuts table shows the Conductor column; stores close with 4400 on an unknown `v`.
+- **Mac:** every parity gap from the audit:
+  - Thumbnails and state banners with the op checklist.
+  - Toasts, 04 copy and the base-branch picker.
+  - 04 sidebar indicators and hover card; a command palette on `Command`.
+  - Typed Settings → Project; sidebar-ordered workspace switching; a Reconnecting bar for the hub.
+  - Update checks that answer; the install link in Add project; accessibility labels.
+- **Checks on Linux:**
+  - `bun run typecheck`, `lint`, `format:check` and `test` pass: 762 Worker, 300 UI logic, 31 component, 203 protocol and 117 daemon tests. Conformance and deployed e2e tests skip.
+  - The web and browser Playwright suites pass (35 and 7 cases) against the container's Chromium.
+  - `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` and `cargo test --workspace` pass; `tempo-mac` has 194 tests.
+- **Not done:** Browser Run (Q-4) and private previews (Q-10) need owner decisions. Spikes, hosted gates B–E and Mac acceptance need a real account, logins and a Mac.
+
 ## Current state
 
 - **Web continuation (2026-10-11):** all four web regions are implemented in the existing source. Added local Playwright acceptance with production components, protocol-checked RPC fixtures and intercepted client WebSockets. CI now runs desktop Chromium, Firefox and WebKit, dark Chromium and phone Chromium. This is local browser evidence; hosted gates remain open.
@@ -141,7 +177,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] A test for a real DO restart with the tempod socket closed.
 
 **tempod**
-- [ ] A fresh spec review after the 18 fixes.
+- [x] A fresh spec review after the 18 fixes (2026-10-12 audit; one gap, the Codex lease on unplanned stops, is fixed).
 - [x] Implement zombie reaping (Q-2, owner approved). Verified by the Linux image smoke tests.
 - [x] Run daemon tests inside the full container image (112 pass, rule 14).
 
@@ -150,7 +186,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [x] Implemented dialogs, indicators, notifications, action registry and phone variants; existing UI model/component tests pass.
 - [x] Add rendered local browser acceptance and run it in CI. Coverage and boundaries are in `WEB_ACCEPTANCE.md`.
 - [ ] Complete deployed gates B–D with real agent sessions and keeled, including PR checks, previews, restart durability and credential grep.
-- [ ] Resolve the shared contracts in `WEB-CLIENT-CORE-REQUESTS.md`: historical turn usage, closed/merged PR titles and authenticated attachment retrieval.
+- [x] Resolve the shared contracts in `WEB-CLIENT-CORE-REQUESTS.md`: historical turn usage, closed/merged PR titles and authenticated attachment retrieval. Both clients use them.
 - [ ] Verify every shortcut in shipped Chrome, Safari and Firefox on macOS.
 
 **Tempo for Mac (07), cloud implementation continuation**
