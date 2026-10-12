@@ -32,6 +32,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0004_drop_unused_statuses",
       "0005_browser_run",
       "0006_environments",
+      "0007_custom_agents",
     ]);
   });
 });

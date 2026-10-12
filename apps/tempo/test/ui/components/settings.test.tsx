@@ -43,9 +43,10 @@ describe("settings page", () => {
     const labels = within(nav)
       .getAllByRole("button")
       .map((b) => b.textContent);
-    expect(labels.slice(0, 7)).toEqual([
+    expect(labels.slice(0, 8)).toEqual([
       "General",
       "Logins",
+      "Agents",
       "Environments",
       "MCP servers",
       "Appearance",
@@ -84,6 +85,7 @@ describe("settings page", () => {
     ).toEqual([
       "General",
       "Logins",
+      "Agents",
       "Environments",
       "MCP servers",
       "Appearance",
