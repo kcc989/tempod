@@ -51,7 +51,8 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 
 **Rules**
 
-- MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, or in R2.
+- MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, in lifecycle events (08), or in R2.
+- Role code (08) is untrusted. It runs in a Dynamic Worker with no bindings and no network, and only approved versions run.
 - The log helper redacts any field whose name matches `/token|key|secret|password|authorization|auth_json|cookie/i`.
 - Home backups exclude `.codex/auth.json`, `.claude/.credentials.json` and `.tempod/` (01, Durability). The daemon outbox may contain unacknowledged credential refreshes.
 - Container snapshots do hold Codex `auth.json`. They stay inside the Cloudflare account; this is part of R4.

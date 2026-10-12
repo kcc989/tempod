@@ -178,6 +178,7 @@ Reserved messages cannot be edited, deleted or reordered until delivery settles.
 - `setup_status` is `none`, `succeeded` or `skipped`. `continueAfterSetupFailure` sets it from `failed` to `skipped`.
 - No turn is `running`.
 - No op is `pending` or `running`, except `housekeeping`.
+- No lifecycle decision for an ended turn is `pending` (08, Decision events). A continue turn from a decision goes to the head of the queue.
 
 **Start the turn**
 

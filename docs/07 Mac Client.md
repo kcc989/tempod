@@ -177,6 +177,8 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 
 ## Transcript, composer and permissions
 
+Phase 5 role UI (08, UI) comes to the Mac client in the same milestone as the web.
+
 Behavior follows 04, Center. These rules are for the Mac app only.
 
 - **No raw HTML (05).** Render agent text with `TextView::markdown`. MUST NOT render raw HTML. If spike S11 shows that `TextView` renders HTML blocks, escape `<` outside code before the text reaches it.
