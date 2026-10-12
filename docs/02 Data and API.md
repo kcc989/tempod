@@ -50,6 +50,22 @@ CREATE TABLE projects (
   UNIQUE (user_id, repo_id)
 );
 
+CREATE TABLE mcp_servers (
+  id               TEXT PRIMARY KEY,           -- ULID
+  user_id          TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,              -- ^[a-z0-9][a-z0-9_-]{0,31}$, never "playwright"
+  transport        TEXT NOT NULL CHECK (transport IN ('stdio','http','sse')),
+  enabled          INTEGER NOT NULL DEFAULT 1,
+  command          TEXT,                       -- stdio only
+  args_json        TEXT NOT NULL DEFAULT '[]', -- stdio only: [string]
+  env_json         TEXT NOT NULL DEFAULT '[]', -- stdio only: [{name, value}]; values are not secret
+  url              TEXT,                       -- http and sse only; https only
+  headers_json     TEXT NOT NULL DEFAULT '[]', -- http and sse only: [{name, value}] or [{name, secret: true}]
+  created_at       INTEGER NOT NULL,
+  updated_at       INTEGER NOT NULL,
+  UNIQUE (user_id, name)
+);
+
 CREATE TABLE workspaces (
   id               TEXT PRIMARY KEY,
   project_id       TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -404,6 +420,7 @@ Secret keys are exactly:
 | `anthropic.api_key` | Anthropic API key (API-key mode) |
 | `openai.api_key` | OpenAI API key (API-key mode) |
 | `project.<projectId>.env.<NAME>` | One project secret env var |
+| `mcp.<serverId>.header.<name>` | The value of one secret header of a user MCP server; `<name>` is the header name in lowercase |
 
 One more CredentialDO instance is named `system`. It holds the GitHub App config under the keys `github_app.id`, `github_app.slug`, `github_app.private_key`, `github_app.client_id` and `github_app.client_secret` (05, Secrets). Its HKDF salt is `system`.
 
@@ -516,7 +533,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, version, code)`, `artifactFetch(request, artifactId, cookie)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, policy, allowlist}` for `TempoOutbound`), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, version, code)`, `artifactFetch(request, artifactId, cookie)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, policy, allowlist, mcp}` for `TempoOutbound`; `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
 
 **Projects and GitHub**
 
@@ -634,6 +651,24 @@ The artifact route is a plain route, like the attachment route: `GET /api/worksp
 | `deleteProjectSecret` | `{projectId, name}` | `{}` | — |
 | `listProjectSecretNames` | `{projectId}` | `{names}` | — |
 
+**MCP servers** (01, User MCP servers)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `listMcpServers` | `{}` | `McpServer[]`, sorted by `name` | — |
+| `saveMcpServer` | `McpServerInput`. Without `id` it creates a server; with `id` it replaces that server. | `McpServer` | `VALIDATION_FAILED`, `NOT_FOUND` |
+| `deleteMcpServer` | `{id}` | `{}`. Also deletes the server's `mcp.<id>.header.*` secrets. | — |
+
+`McpServerInput` is `{id?, name, enabled, transport, command?, args?, env?, url?, headers?}`. Each header is `{name, secret, value?}`. Validation, else `VALIDATION_FAILED`:
+
+- `name` matches `^[a-z0-9][a-z0-9_-]{0,31}$`, is not `playwright` or `tempo` (01, Artifacts), and is unique for the user. At most 20 servers per user.
+- `stdio` needs `command` (1 to 1024 chars) and has no `url` or `headers`. At most 32 `args` and 32 `env` entries; env names match `^[A-Z_][A-Z0-9_]*$`.
+- `http` and `sse` need an absolute `https:` `url` (at most 2048 chars) and have no `command`, `args` or `env`. At most 16 headers; names match `^[A-Za-z0-9-]{1,64}$`, are unique without regard to case, and are not `host`, `content-length`, `connection` or `transfer-encoding`.
+- A header with `secret: false` needs `value`. A header with `secret: true` and a `value` stores that value in CredentialDO. Without `value`, it keeps the stored value; if none is stored, the call fails.
+- Saving removes the secrets of headers that are no longer secret or no longer present.
+
+Changes apply to sessions that start or reload after the change. Running agents keep their list. TempoOutbound sees changes within its 60 s cache.
+
 ## Shared types and the workspace channel
 
 The UI loads a workspace once over its WebSocket, then applies updates. Field names are camelCase on the wire.
@@ -652,6 +687,7 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | `ScriptRun` | `id, kind, scriptId, command, status, exitCode, signal, startedAt, endedAt` |
 | `ReviewComment` | `id, path, lineStart, lineEnd, side, body, status, sentTurnId, createdAt` |
 | `PermissionRequest` | `requestId, sessionId, turnId, itemId, title, options: [{optionId, name, kind}]` |
+| `McpServer` | `id, name, enabled, transport, command, args, env: [{name, value}], url, headers: [{name, secret, value}], createdAt, updatedAt`. A secret header has `value: null` and `set` (boolean); secret values are never returned. |
 | `OpProgress` | `kind, status, step, steps: [{name, status, ms}]`. `WorkspaceDetail.op` is the running op, else the next pending op, else `null`. |
 | `Artifact` | `id, version, sessionId, turnId, itemId, path, name, title, summary, mime, kind, size, sha256, status, createdAt` |
 
@@ -738,7 +774,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `env.set` | `{env}` | `{}` | 10 s |
 | `script.start` | `{runId, kind, scriptId, command, cwd, timeoutMs}` | `{pid}` | 10 s |
 | `script.stop` | `{runId}` | `{}` | 15 s |
-| `session.start` | `{sessionId, agent, env, modeId?, model?, browser, acpSessionId?}`; `browser` is `"local"` or `"run"` (01, Browser Run) | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
+| `session.start` | `{sessionId, agent, env, modeId?, model?, browser, acpSessionId?, mcpServers?}`; `browser` is `"local"` or `"run"` (01, Browser Run); `mcpServers` is `McpServerSpec[]` (01, User MCP servers), default `[]` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
 | `session.prompt` | `{sessionId, turnId, content}` | `{accepted: true}`; the end comes as `turn.ended` | 30 s |
 | `session.steer` | `{sessionId, turnId, messageId, content}` | `{outcome: "injected" or "promptRequired" or "unsupported"}`; the existing prompt owns the turn lifecycle | 30 s |
 | `session.cancel` | `{sessionId, turnId}` | `{}` | 20 s |

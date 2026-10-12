@@ -461,6 +461,7 @@ export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePan
 export type SettingsTab =
   | "general"
   | "logins"
+  | "mcp"
   | "project"
   | "appearance"
   | "notifications"

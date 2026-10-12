@@ -983,6 +983,61 @@ pub struct CustomInstance {
 pub struct DeleteCredentialIn {
     pub key: ::std::string::String,
 }
+///`DeleteMcpServerIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeleteMcpServerIn {
+    pub id: DeleteMcpServerInId,
+}
+///`DeleteMcpServerInId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct DeleteMcpServerInId(::std::string::String);
+impl ::std::ops::Deref for DeleteMcpServerInId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<DeleteMcpServerInId> for ::std::string::String {
+    fn from(value: DeleteMcpServerInId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for DeleteMcpServerInId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeleteMcpServerInId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeleteMcpServerInId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for DeleteMcpServerInId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`DeleteProjectSecretIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeleteProjectSecretIn {
@@ -2271,6 +2326,123 @@ impl ::std::convert::TryFrom<::std::string::String> for LogLevel {
 pub struct MarkViewedIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`McpEnvVar`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct McpEnvVar {
+    pub name: ::std::string::String,
+    pub value: ::std::string::String,
+}
+///`McpHeader`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct McpHeader {
+    pub name: ::std::string::String,
+    pub secret: bool,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub set: ::std::option::Option<bool>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub value: ::std::option::Option<::std::string::String>,
+}
+///`McpHeaderInput`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct McpHeaderInput {
+    pub name: ::std::string::String,
+    pub secret: bool,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub value: ::std::option::Option<::std::string::String>,
+}
+///`McpServer`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct McpServer {
+    pub args: ::std::vec::Vec<::std::string::String>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub command: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: f64,
+    pub enabled: bool,
+    pub env: ::std::vec::Vec<McpEnvVar>,
+    pub headers: ::std::vec::Vec<McpHeader>,
+    pub id: ::std::string::String,
+    pub name: ::std::string::String,
+    pub transport: McpTransport,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: f64,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub url: ::std::option::Option<::std::string::String>,
+}
+///`McpServerInput`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct McpServerInput {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub args: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub command: ::std::option::Option<::std::string::String>,
+    pub enabled: bool,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub env: ::std::option::Option<::std::vec::Vec<McpEnvVar>>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub headers: ::std::option::Option<::std::vec::Vec<McpHeaderInput>>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub id: ::std::option::Option<::std::string::String>,
+    pub name: ::std::string::String,
+    pub transport: McpTransport,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub url: ::std::option::Option<::std::string::String>,
+}
+///`McpTransport`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum McpTransport {
+    #[serde(rename = "stdio")]
+    Stdio,
+    #[serde(rename = "http")]
+    Http,
+    #[serde(rename = "sse")]
+    Sse,
+}
+impl ::std::fmt::Display for McpTransport {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Stdio => f.write_str("stdio"),
+            Self::Http => f.write_str("http"),
+            Self::Sse => f.write_str("sse"),
+        }
+    }
+}
+impl ::std::str::FromStr for McpTransport {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "stdio" => Ok(Self::Stdio),
+            "http" => Ok(Self::Http),
+            "sse" => Ok(Self::Sse),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for McpTransport {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for McpTransport {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`Mention`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6080,6 +6252,15 @@ pub mod api {
         type Input = crate::DeleteCredentialIn;
         type Output = crate::Empty;
     }
+    /// `deleteMcpServer`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DeleteMcpServer;
+    impl crate::Function for DeleteMcpServer {
+        const NAME: &'static str = "deleteMcpServer";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::DeleteMcpServerIn;
+        type Output = crate::Empty;
+    }
     /// `deleteProjectSecret`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteProjectSecret;
@@ -6241,6 +6422,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::Empty;
         type Output = ::std::vec::Vec<crate::ListInstallationsItem>;
+    }
+    /// `listMcpServers`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListMcpServers;
+    impl crate::Function for ListMcpServers {
+        const NAME: &'static str = "listMcpServers";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = ::std::vec::Vec<crate::McpServer>;
     }
     /// `listModels`
     #[derive(Clone, Copy, Debug)]
@@ -6458,6 +6648,15 @@ pub mod api {
         type Input = crate::RunScriptIn;
         type Output = crate::ScriptRun;
     }
+    /// `saveMcpServer`
+    #[derive(Clone, Copy, Debug)]
+    pub struct SaveMcpServer;
+    impl crate::Function for SaveMcpServer {
+        const NAME: &'static str = "saveMcpServer";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::McpServerInput;
+        type Output = crate::McpServer;
+    }
     /// `searchFiles`
     #[derive(Clone, Copy, Debug)]
     pub struct SearchFiles;
@@ -6615,6 +6814,7 @@ pub mod api {
         ("createSession", crate::Method::Post),
         ("createWorkspace", crate::Method::Post),
         ("deleteCredential", crate::Method::Post),
+        ("deleteMcpServer", crate::Method::Post),
         ("deleteProjectSecret", crate::Method::Post),
         ("deleteQueuedTurn", crate::Method::Post),
         ("deleteReviewComment", crate::Method::Post),
@@ -6633,6 +6833,7 @@ pub mod api {
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
         ("listInstallations", crate::Method::Get),
+        ("listMcpServers", crate::Method::Get),
         ("listModels", crate::Method::Get),
         ("listOpenPullRequests", crate::Method::Get),
         ("listProjectSecretNames", crate::Method::Get),
@@ -6657,6 +6858,7 @@ pub mod api {
         ("revertToCheckpoint", crate::Method::Post),
         ("rotatePreviewKey", crate::Method::Post),
         ("runScript", crate::Method::Post),
+        ("saveMcpServer", crate::Method::Post),
         ("searchFiles", crate::Method::Get),
         ("sendPrompt", crate::Method::Post),
         ("setApiKey", crate::Method::Post),
@@ -6719,6 +6921,7 @@ pub mod wire {
         "CredentialStatus",
         "CustomInstance",
         "DeleteCredentialIn",
+        "DeleteMcpServerIn",
         "DeleteProjectSecretIn",
         "DeleteQueuedTurnIn",
         "DeleteReviewCommentIn",
@@ -6771,6 +6974,12 @@ pub mod wire {
         "ListWorkspacesIn",
         "LogLevel",
         "MarkViewedIn",
+        "McpEnvVar",
+        "McpHeader",
+        "McpHeaderInput",
+        "McpServer",
+        "McpServerInput",
+        "McpTransport",
         "Mention",
         "MergeMethod",
         "MergePullRequestIn",
@@ -6918,6 +7127,7 @@ pub mod wire {
             "CredentialStatus" => crate::roundtrip::<crate::CredentialStatus>(text),
             "CustomInstance" => crate::roundtrip::<crate::CustomInstance>(text),
             "DeleteCredentialIn" => crate::roundtrip::<crate::DeleteCredentialIn>(text),
+            "DeleteMcpServerIn" => crate::roundtrip::<crate::DeleteMcpServerIn>(text),
             "DeleteProjectSecretIn" => crate::roundtrip::<crate::DeleteProjectSecretIn>(text),
             "DeleteQueuedTurnIn" => crate::roundtrip::<crate::DeleteQueuedTurnIn>(text),
             "DeleteReviewCommentIn" => crate::roundtrip::<crate::DeleteReviewCommentIn>(text),
@@ -6974,6 +7184,12 @@ pub mod wire {
             "ListWorkspacesIn" => crate::roundtrip::<crate::ListWorkspacesIn>(text),
             "LogLevel" => crate::roundtrip::<crate::LogLevel>(text),
             "MarkViewedIn" => crate::roundtrip::<crate::MarkViewedIn>(text),
+            "McpEnvVar" => crate::roundtrip::<crate::McpEnvVar>(text),
+            "McpHeader" => crate::roundtrip::<crate::McpHeader>(text),
+            "McpHeaderInput" => crate::roundtrip::<crate::McpHeaderInput>(text),
+            "McpServer" => crate::roundtrip::<crate::McpServer>(text),
+            "McpServerInput" => crate::roundtrip::<crate::McpServerInput>(text),
+            "McpTransport" => crate::roundtrip::<crate::McpTransport>(text),
             "Mention" => crate::roundtrip::<crate::Mention>(text),
             "MergeMethod" => crate::roundtrip::<crate::MergeMethod>(text),
             "MergePullRequestIn" => crate::roundtrip::<crate::MergePullRequestIn>(text),

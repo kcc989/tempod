@@ -50,6 +50,8 @@ The owner asked for agent artifacts: images, documents, HTML and mini apps, to u
 | Network for HTML | None: offline only, enforced by CSP on a separate host per artifact | 05 Artifact access |
 | New libraries | Approved: `@modelcontextprotocol/sdk` 1.32.1 (tempod), `mermaid` 12.1.0 (web), `resvg` 0.48.1 (Mac) | 01, 04, 07 |
 
+The name `tempo` is now reserved for user MCP servers (02, `saveMcpServer`), as `playwright` is. The code reserves only `playwright` until phase 5 adds the Tempo MCP server.
+
 The owner also confirmed these choices: a 25 MiB limit per version; no version pruning; the allowed file types in 01; one self-contained HTML file per artifact (no folders); the Mac app shows Mermaid as code and opens HTML and PDF in the browser.
 
 ## ACP mode contract (resolved 2026-10-11)
@@ -74,6 +76,19 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | `agent.exited` | `reason`: `crashed`, `evicted` (LRU close) or `cancelled` (killed after a cancel timeout) | 01 sends `agent.exited` only for an unexpected exit, but the DO must still learn that a planned exit ended the process, so the next prompt reloads the session. Only `crashed` makes a crash notice. |
 | `repo.clone` params | `mode`: `create` or `wake` | On create, 03's checkout per source applies (`new` always branches from `origin/<baseBranch>`; a `branch` or `pr` source missing on origin fails with `CLONE_FAILED`). On a fresh-disk wake, the branch is tracked from origin when it exists, else it branches from the base. A `repo.clone` with no `mode` behaves like `wake`. |
 | tempod | Full script logs at `$HOME/.tempod/logs/<runId>.log` | 01 says the DO writes the full log (up to 50 MiB) to R2 at exit. The DO reads this file with `Files` after `script.exited`. |
+
+## User MCP servers (owner request, 2026-10-12)
+
+The owner asked for MCP servers that work with every agent and with remote servers. The owner chose: servers per user, stdio plus remote `http` and `sse`, a tempod bridge for agents that lack a transport, and secret headers swapped at egress. 00, 01, 02, 04, 05 and 07 now describe it (01, User MCP servers; 02, `mcp_servers` and MCP servers functions; `TempoOutbound` rule 12).
+
+| # | Topic | Finding | What the code does |
+| --- | --- | --- | --- |
+| MCP-1 | 01 Pi | `pi-acp` 0.0.34 accepts `mcpServers` but does not pass them to pi (its README says so). So Pi had no Playwright MCP before this change. Pi 1.1.0 has its own MCP client that reads `~/.pi/agent/mcp.json` (stdio and streamable HTTP, no SSE). | `tempod` writes that file before each Pi session start, with Playwright and the user servers; `sse` servers use the bridge. No new dependency. |
+| MCP-2 | 01 Agents | Reported `mcpCapabilities`: Claude and OpenCode `http` and `sse`; Codex `http` only; Pi neither. | `tempod` maps each server from the agent's `initialize` result. Codex gets `sse` servers through the bridge. |
+| MCP-3 | 01 Bridge | The bridge is `tempod mcp-bridge`, so no MCP SDK is added. It implements the client half of streamable HTTP (POST, `Mcp-Session-Id`, `MCP-Protocol-Version`, JSON or SSE replies, optional GET stream, DELETE on exit) and of the SSE transport. | `packages/tempod/src/mcp-bridge.ts`; tests in `packages/tempod/test/mcp.test.ts`. |
+| MCP-4 | 02 `mcp_servers` | Rule 9 (no secrets in D1) means stdio `env` values must not be secret. A stdio server that needs a key cannot get one from Tempo yet. | The form says env values are not secret. Remote servers take secret headers. |
+| MCP-5 | 01 Pi | Pi expands `${VAR}` and runs a value that starts with `!` as a command in `env` and `headers` values. | Values are the owner's own, inside the owner's container, so this adds no access. Not escaped. |
+| MCP-6 | OAuth | MCP servers that need an OAuth sign-in are not supported; a bearer token in a secret header works. | Not built. |
 
 ## Choices where the spec is silent
 

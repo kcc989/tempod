@@ -1,0 +1,2 @@
+{"id":"01jmcp0000000000000000000a","name":"linear","enabled":true,"transport":"http","command":null,"args":[],"env":[],"url":"https://mcp.linear.app/mcp","headers":[{"name":"Authorization","secret":true,"value":null,"set":true}],"createdAt":1760000000000,"updatedAt":1760000000000}
+{"id":"01jmcp0000000000000000000b","name":"fs","enabled":false,"transport":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/workspace"],"env":[{"name":"ROOT","value":"/workspace"}],"url":null,"headers":[],"createdAt":1760000000000,"updatedAt":1760000100000}

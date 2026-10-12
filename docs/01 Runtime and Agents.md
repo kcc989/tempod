@@ -271,7 +271,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 - The placeholder string is exactly `tempo-placeholder`. `TempoOutbound` swaps it for the real key (see below).
 - `tempod` sends `initialize` with `protocolVersion: 1` and these client capabilities: `fs.readTextFile: true`, `fs.writeTextFile: true`, `terminal: false`, and session.notices: true. Agents run commands with their own shell tools.
 - `tempod` serves `fs/read_text_file` and `fs/write_text_file` only for absolute paths under `/workspace` or `/home/tempo/attachments`. Any other path returns a JSON-RPC error.
-- Every `session/new` and `session/load` passes two MCP servers, Playwright and Tempo (Artifacts, below). Playwright:
+- Every `session/new` and `session/load` passes Playwright, then Tempo (Artifacts, below), then the user's MCP servers (below). Playwright:
 
 ```json
 {
@@ -283,6 +283,25 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 ```
 
 Spike S7 MUST confirm the bin name `mcp-server-playwright` and these flags for the pinned `@playwright/mcp` version.
+
+**User MCP servers.** The owner adds MCP servers in Settings → MCP servers (02, `mcp_servers`). Each `session/new` and `session/load` passes Playwright first, then Tempo (Artifacts), then every enabled user server. The WorkspaceDO reads the user's enabled servers from D1 at session start and sends them in `session.start` as `mcpServers: McpServerSpec[]`:
+
+- `{name, transport: "stdio", command, args, env: [{name, value}]}`
+- `{name, transport: "http" | "sse", url, headers: [{name, value}]}`
+
+A secret header (02, `saveMcpServer`) has the value `tempo-placeholder:mcp:<serverId>:<header name in lowercase>`. The real value never enters the container; `TempoOutbound` rule 12 swaps it. A stdio server runs inside the container; its `env` values are not secret and are stored in D1. A key that a stdio server needs belongs in an `http` or `sse` server or a project secret, not in `env`.
+
+`tempod` maps each spec to the agent's `initialize` result, `agentCapabilities.mcpCapabilities`:
+
+| Spec | Agent supports the transport | Agent does not |
+| --- | --- | --- |
+| `stdio` | ACP stdio server | (all agents support stdio) |
+| `http` | ACP `{type: "http", name, url, headers}` | The bridge, as an ACP stdio server |
+| `sse` | ACP `{type: "sse", name, url, headers}` | The bridge, as an ACP stdio server |
+
+The bridge is `tempod` itself: `command` is `/usr/local/bin/tempod`, `args` are `["mcp-bridge", "--transport", "http" | "sse", "--url", <url>]` plus `["--header", "<name>: <value>"]` per header, and `env` is the CA env from startup step 2. It reads newline-delimited JSON-RPC on stdin and writes it on stdout. For `http` it uses the MCP streamable HTTP transport: it POSTs each message with `Accept: application/json, text/event-stream`, keeps the `Mcp-Session-Id` header, and writes each JSON body or SSE `message` event. For `sse` it uses the MCP SSE transport: it opens the `GET` event stream, POSTs to the URL of the `endpoint` event, and writes each `message` event. It exits when stdin closes. All its requests go through `TempoOutbound`.
+
+**Pi.** `pi-acp` accepts `mcpServers` but does not pass them to pi. Pi has its own MCP client, which reads `~/.pi/agent/mcp.json` (stdio and streamable HTTP; no SSE). Before it starts `pi-acp`, `tempod` writes that file, mode 0600, as `{"mcpServers": {<name>: entry}}` with Playwright (the same `args` as in `session/new`, so Browser Run applies), Tempo (the entry in Artifacts) and every user server: stdio as `{command, args, env}`, `http` as `{url, headers}`, and `sse` as the bridge stdio entry. It replaces the whole file on each Pi session start.
 
 **Model discovery before workspace creation.** `listModels` addresses the existing WorkspaceDO class at `models:<userId>` as a private discovery instance. It has no workspace, session, turn or D1 workspace row. It starts the pinned image with only the usual tempod token, connects and sends `hello`, then starts and closes a temporary ACP session for each configured agent to read its model config option. It sends no prompts and clones no repository. Credentials use the same socket and TempoOutbound injection paths as workspace agents. Codex leases and refreshed auth are handled the same way. Closing a temporary session checks Codex auth immediately so a pending watcher refresh is delivered before the container is destroyed. Temporary events are acknowledged without storing payloads. The container is destroyed after discovery, with a ten-minute cleanup alarm and inactivity limit as a backstop. Results are cached for fifteen minutes, keyed by credential metadata and image. Concurrent reads share one discovery run.
 
@@ -312,7 +331,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, { workspaceId: string; 
 
 Rules, checked in this order. The first match wins.
 
-Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, policy, allowlist}` and caches it for 60 s. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 get keys from the user's CredentialDO with `getSecret`.
+Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, policy, allowlist, mcp}` and caches it for 60 s. `mcp` lists the owner's enabled `http` and `sse` servers as `{serverId, host, secretHeaders}`; `secretHeaders` are the lowercase names of their secret headers. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 and 12 get keys from the user's CredentialDO with `getSecret`.
 
 **Rule 0** runs before all of these: a request whose host is `APP_HOST` returns 403 (05, Egress control).
 
@@ -326,9 +345,10 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 | 4 | Host `openrouter.ai`, header `Authorization: Bearer tempo-placeholder` | Replace with the real OpenRouter key |
 | 5 | Host `api.anthropic.com`, header `x-api-key: tempo-placeholder` | Replace with the real Anthropic key |
 | 6 | Host `api.openai.com`, header `Authorization: Bearer tempo-placeholder` | Replace with the real OpenAI key |
+| 12 | Checked after rule 6. Host equals the `host` of a server in `mcp`, and a header named in that server's `secretHeaders` has exactly the value `tempo-placeholder:mcp:<serverId>:<name>` | Replace each such header with the value of `mcp.<serverId>.header.<name>`. If one is not set, return 403, body `tempo: credential not set`. |
 | 7 | Any request that still carries `tempo-placeholder` | Return 403. MUST NOT forward the placeholder. |
 | 8 | Egress policy `open` | Pass through unchanged |
-| 9 | Egress policy `allowlist`, host matches a project pattern or the built-in agent list | Pass through unchanged |
+| 9 | Egress policy `allowlist`, host matches a project pattern, the built-in agent list, or the `host` of a server in `mcp` | Pass through unchanged |
 | 10 | Anything else | Return 403, body `tempo: egress blocked for <host>` |
 
 - Return the upstream `Response` as is. MUST NOT buffer bodies; model responses stream.
@@ -367,7 +387,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, browser, acpSessionId: null}`. `model` is the model chosen for this session (`createSession` or the composer's model picker), else `agent.models.<agent>` from the effective settings, or absent when both are empty. For `opencode` and `pi` with no model, nothing is sent: the session stays `idle` and the turn that waited for it fails with `MODEL_REQUIRED`. `browser` is `"run"` when `browser.run` is true and the egress policy is `open` (Browser Run), else `"local"`.
 3. `tempod` spawns the adapter as user `tempo` with cwd `/workspace` and the given env.
 4. `tempod` sends `initialize`. It checks `agentCapabilities` and stores them. It also reads top-level `_meta.steering.supported`, normalizes it to the boolean `capabilities.steering`, and exposes that flag as `Session.steering`. Missing support means false. Steering uses the ACP v1 `_session/steering` extension, not a concurrent `session/prompt`.
-5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright, tempo]}` and stores the returned ACP session id, modes and config options.
+5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright, tempo, ...userServers]}` and stores the returned ACP session id, modes and config options.
 6. If the requested mode differs from the current one, `tempod` sets the advertised `mode` config option with `session/set_config_option`, or uses `session/set_mode` for agents exposing session modes. If `model` is set, it sends `session/set_config_option` for the `model` option.
 7. `tempod` returns the `session.start` result: `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded: false, handoff: false}`.
 
@@ -396,7 +416,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Reload after a restart**
 
 1. `tempod` spawns the adapter and sends `initialize`.
-2. If `agentCapabilities.loadSession` is true, it sends `session/load {sessionId: <acpSessionId>, cwd: "/workspace", mcpServers: [playwright, tempo]}`.
+2. If `agentCapabilities.loadSession` is true, it sends `session/load {sessionId: <acpSessionId>, cwd: "/workspace", mcpServers: [playwright, tempo, ...userServers]}`.
 3. While `session/load` runs, the agent replays history as `session/update` messages. `tempod` MUST drop all of them. The transcript already has them.
 4. If `session/load` succeeds, return the `session.start` result with `reloaded: true`.
 5. If it fails, or the agent cannot load sessions, call `session/new`, store the new ACP session id, and return the result with `handoff: true`. The WorkspaceDO sets `handoff_pending = 1`.

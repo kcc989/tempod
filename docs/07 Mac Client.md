@@ -45,7 +45,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Image and Markdown file tabs, image diffs, plan proposals | Same | Mermaid blocks show as code |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
-| Settings: General, Logins, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
+| Settings: General, Logins, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |

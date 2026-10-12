@@ -28,7 +28,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     let status = 0;
     try {
       const config: EgressConfig = this.ctx.props.catalog
-        ? { owner: "", repo: "", policy: "allowlist", allowlist: [] }
+        ? { owner: "", repo: "", policy: "allowlist", allowlist: [], mcp: [] }
         : await this.config(workspaceId);
       const decision = decide(url, request.headers, this.env.APP_HOST, config);
       rule = decision.rule;
@@ -52,6 +52,17 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
           return new Response("tempo: credential not set", { status: 403 });
         }
         headers.set(decision.set.name, value);
+      }
+      if (decision.mcp) {
+        const creds = this.env.CREDENTIALS.getByName(userId);
+        for (const swap of decision.mcp) {
+          const value = await creds.getSecret(swap.key);
+          if (value === null) {
+            status = 403;
+            return new Response("tempo: credential not set", { status: 403 });
+          }
+          headers.set(swap.name, value);
+        }
       }
       const response = await fetch(new Request(request, { headers }));
       status = response.status;
