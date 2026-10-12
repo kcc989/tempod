@@ -1,4 +1,4 @@
-//! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 3 to 12 rows, in the
+//! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 2 to 12 rows, in the
 //! `Composer` key context. Enter sends, ⇧Enter adds a line (the text field's own binding), Esc
 //! stops the turn, ⇧Tab toggles plan mode. Pickers use agent-reported modes and models.
 use super::composer_model::{self, SlashEntry};
@@ -9,19 +9,21 @@ use crate::actions::{
     TogglePlanMode,
 };
 use crate::keymap::COMPOSER;
-use gpui_kit::component::IndexPath;
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
 use gpui_kit::component::list::{List, ListEvent, ListState};
 use gpui_kit::component::popover::Popover;
+use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::v_flex;
-use gpui_kit::component::{Disableable as _, h_flex};
+use gpui_kit::component::{Disableable as _, Sizable as _, h_flex};
+use gpui_kit::component::{Icon, IndexPath};
 use gpui_kit::{
     AppContext as _, Context, Entity, EventEmitter, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, div, px,
+    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    px,
 };
 use tempo_protocol as p;
 
@@ -34,6 +36,9 @@ impl SelectItem for Choice {
     type Value = String;
     fn title(&self) -> SharedString {
         self.label.clone()
+    }
+    fn render(&self, _: &mut Window, _: &mut gpui_kit::App) -> impl IntoElement {
+        div().py_1().child(self.label.clone())
     }
     fn value(&self) -> &String {
         &self.value
@@ -124,7 +129,7 @@ impl EventEmitter<ComposerEvent> for Composer {}
 
 impl Composer {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(3, 12));
+        let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 12));
         let changed = cx.subscribe(&input, |_, input, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 cx.emit(ComposerEvent::Change(input.read(cx).value().to_string()));
@@ -706,20 +711,18 @@ impl Render for Composer {
             .on_action(
                 cx.listener(|_, _: &TogglePlanMode, _, cx| cx.emit(ComposerEvent::TogglePlanMode)),
             )
-            .m_3()
-            .p_4()
-            .gap_3()
+            .w_full()
+            .max_w(px(792.))
+            .mx_auto()
+            .mb_4()
+            .flex_shrink_0()
+            .p_3()
+            .gap_2()
             .rounded(px(16.))
+            .shadow_md()
             .border_1()
-            .border_color(color(
-                if self.input.read(cx).focus_handle(cx).is_focused(window) {
-                    Token::Primary
-                } else {
-                    Token::Border
-                },
-                cx,
-            ))
-            .bg(color(Token::Background, cx))
+            .border_color(color(Token::Border, cx))
+            .bg(color(Token::Muted, cx))
             .children(
                 self.profile_notice
                     .clone()
@@ -762,7 +765,7 @@ impl Render for Composer {
             }))
             .children(self.uploading.then(|| div().child("Uploading attachment…")))
             .children(menu)
-            .child(
+            .children((!self.mentions.is_empty()).then(|| {
                 h_flex()
                     .flex_wrap()
                     .gap_2()
@@ -776,58 +779,130 @@ impl Render for Composer {
                                 this.mentions.retain(|m| m.path != path);
                                 cx.notify();
                             }))
-                    })),
-            )
-            .children(self.usage.map(|(used, size)| {
-                let label = format!(
-                    "{used:.0} / {size:.0} tokens · {:.0}% context",
-                    (used / size).min(1.) * 100.
-                );
-                div()
-                    .id("context-usage")
-                    .role(Role::Status)
-                    .aria_label(label.clone())
-                    .text_sm()
-                    .child(format!("◔ {label}"))
+                    }))
             }))
             .child(field)
             .child(
                 h_flex()
                     .gap_2()
                     .children((!self.model_choices.is_empty()).then(|| {
-                        Select::new(&self.model)
-                            .accessibility_label("Model")
-                            .placeholder("Model")
-                            .disabled(
-                                self.read_only || self.working || self.starting || self.configuring,
+                        div()
+                            .w(px(self
+                                .model_choices
+                                .iter()
+                                .find(|choice| {
+                                    self.model.read(cx).selected_value() == Some(&choice.value)
+                                })
+                                .map(|choice| {
+                                    (choice.label.chars().count() as f32 * 7. + 34.)
+                                        .clamp(64., 220.)
+                                })
+                                .unwrap_or(90.)))
+                            .flex_shrink_0()
+                            .child(
+                                Select::new(&self.model)
+                                    .menu_width(px(320.))
+                                    .search_placeholder("Search models")
+                                    .icon(
+                                        Icon::new(IconName::ChevronDown)
+                                            .size(px(12.))
+                                            .text_color(color(Token::MutedForeground, cx)),
+                                    )
+                                    .w_full()
+                                    .large()
+                                    .h(px(28.))
+                                    .py_0()
+                                    .text_sm()
+                                    .appearance(false)
+                                    .accessibility_label("Model")
+                                    .placeholder("Model")
+                                    .disabled(
+                                        self.read_only
+                                            || self.working
+                                            || self.starting
+                                            || self.configuring,
+                                    ),
                             )
                     }))
                     .children((!self.level_choices.is_empty()).then(|| {
-                        Select::new(&self.level)
-                            .accessibility_label("Reasoning level")
-                            .placeholder("Reasoning level")
-                            .disabled(
-                                self.read_only || self.working || self.starting || self.configuring,
-                            )
+                        div().w(px(120.)).flex_shrink_0().child(
+                            Select::new(&self.level)
+                                .menu_width(px(320.))
+                                .icon(
+                                    Icon::new(IconName::ChevronDown)
+                                        .size(px(12.))
+                                        .text_color(color(Token::MutedForeground, cx)),
+                                )
+                                .w_full()
+                                .small()
+                                .appearance(false)
+                                .accessibility_label("Reasoning level")
+                                .placeholder("Reasoning level")
+                                .disabled(
+                                    self.read_only
+                                        || self.working
+                                        || self.starting
+                                        || self.configuring,
+                                ),
+                        )
                     }))
                     .children((!self.mode_choices.is_empty()).then(|| {
-                        Select::new(&self.mode)
-                            .accessibility_label("Mode")
-                            .placeholder("Mode")
-                            .disabled(
-                                self.read_only || self.working || self.starting || self.configuring,
+                        div()
+                            .w(px(self
+                                .mode_choices
+                                .iter()
+                                .find(|choice| {
+                                    self.mode.read(cx).selected_value() == Some(&choice.value)
+                                })
+                                .map(|choice| {
+                                    (choice.label.chars().count() as f32 * 7. + 34.)
+                                        .clamp(64., 220.)
+                                })
+                                .unwrap_or(90.)))
+                            .flex_shrink_0()
+                            .child(
+                                Select::new(&self.mode)
+                                    .menu_width(px(320.))
+                                    .icon(
+                                        Icon::new(IconName::ChevronDown)
+                                            .size(px(12.))
+                                            .text_color(color(Token::MutedForeground, cx)),
+                                    )
+                                    .w_full()
+                                    .small()
+                                    .appearance(false)
+                                    .accessibility_label("Mode")
+                                    .placeholder("Mode")
+                                    .disabled(
+                                        self.read_only
+                                            || self.working
+                                            || self.starting
+                                            || self.configuring,
+                                    ),
+                            )
+                    }))
+                    .child(div().flex_1())
+                    .children(self.usage.map(|(used, size)| {
+                        let percent = (used / size).min(1.) * 100.;
+                        let label = format!("{used:.0} / {size:.0} tokens · {percent:.0}% context");
+                        Button::new("context-usage")
+                            .ghost()
+                            .small()
+                            .accessibility_label(label.clone())
+                            .tooltip(label.clone())
+                            .child(
+                                ProgressCircle::new("context-ring")
+                                    .value(percent as f32)
+                                    .size(px(14.))
+                                    .color(color(Token::MutedForeground, cx))
+                                    .accessibility_label(label),
                             )
                     }))
                     .child(
-                        div()
-                            .flex_1()
-                            .text_sm()
-                            .text_color(color(Token::MutedForeground, cx))
-                            .child("⌘L to focus"),
-                    )
-                    .child(
                         Button::new("attach-file")
-                            .label("+")
+                            .ghost()
+                            .small()
+                            .icon(IconName::Plus)
                             .accessibility_label("Attach file")
                             .tooltip("Attach file (⌘U)")
                             .disabled(self.read_only || self.uploading || self.sending)
@@ -838,7 +913,8 @@ impl Render for Composer {
                     .child(
                         Button::new("send-prompt")
                             .primary()
-                            .label("↑")
+                            .icon(IconName::ArrowUp)
+                            .small()
                             .accessibility_label(if self.working { "Queue" } else { "Send" })
                             .w(px(28.))
                             .rounded(px(8.))

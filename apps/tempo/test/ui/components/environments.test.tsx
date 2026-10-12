@@ -73,6 +73,15 @@ beforeEach(() => {
   fixture.state = { workspace: detail() };
   vi.mocked(call).mockImplementation(async (name, input) => {
     if (name === "listEnvironments") return envs as never;
+    if (name === "getCredentialStatus")
+      return {
+        claude: { set: false, updatedAt: null },
+        codex: { set: false, updatedAt: null, lastRefresh: null },
+        anthropic: { set: false, updatedAt: null },
+        openai: { set: false, updatedAt: null },
+        openrouter: { set: false, updatedAt: null },
+      } as never;
+    if (name === "listModels") return [] as never;
     if (name === "listProjects") return projects as never;
     if (name === "listProjectSecretNames") return { names: [] } as never;
     if (name === "createEnvironment")
@@ -111,6 +120,15 @@ describe("Settings → Environments", () => {
   it("shows a taken name inline", async () => {
     vi.mocked(call).mockImplementation(async (name) => {
       if (name === "listEnvironments") return envs as never;
+      if (name === "getCredentialStatus")
+        return {
+          claude: { set: false, updatedAt: null },
+          codex: { set: false, updatedAt: null, lastRefresh: null },
+          anthropic: { set: false, updatedAt: null },
+          openai: { set: false, updatedAt: null },
+          openrouter: { set: false, updatedAt: null },
+        } as never;
+      if (name === "listModels") return [] as never;
       throw new TempoError("ENVIRONMENT_EXISTS");
     });
     show(<EnvironmentsTab />);

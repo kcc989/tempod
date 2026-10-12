@@ -378,6 +378,7 @@ fn footer(cx: &App) -> impl IntoElement {
                 .ghost()
                 .small()
                 .icon(IconName::Settings)
+                .label("Settings")
                 .accessibility_label("Settings")
                 .tooltip("Settings (⌘,)")
                 .on_click(|_, window, cx| {
@@ -453,6 +454,7 @@ fn render_section(
     let label = section.label.clone();
     let header = h_flex()
         .h(px(32.))
+        .flex_none()
         .gap_1()
         .child(
             h_flex()
@@ -542,6 +544,7 @@ fn render_section(
             .into_any_element()
     };
     v_flex()
+        .w_full()
         .gap_1()
         .pb_2()
         .child(header)
@@ -697,6 +700,7 @@ fn render_row(
         .child(row.title.clone());
     let line =
         h_flex()
+            .w_full()
             .gap_1p5()
             .child(status_icon(
                 ElementId::Name(format!("status-{id}").into()),
@@ -734,6 +738,7 @@ fn render_row(
         .px_2()
         .py_1p5()
         .w_full()
+        .min_h(px(48.))
         .rounded_md()
         .hover(move |style| style.bg(muted.opacity(0.08)))
         .child(line)
@@ -751,10 +756,12 @@ fn render_row(
             }
         });
     if active {
-        trigger = trigger.bg(color(Token::Primary, cx).opacity(0.12));
+        trigger = trigger.bg(color(Token::SidebarAccent, cx));
     }
     let menu_summary = summary.clone();
-    let trigger = trigger.context_menu(move |menu, _, cx| row_menu(menu, &menu_summary, cx));
+    let trigger = trigger
+        .test_support()
+        .context_menu(move |menu, _, cx| row_menu(menu, &menu_summary, cx));
     let hover_summary = summary;
     HoverCard::new(ElementId::Name(format!("hover-{id}").into()))
         .open_delay(HOVER_DELAY)

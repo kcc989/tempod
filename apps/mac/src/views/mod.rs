@@ -42,8 +42,9 @@ use gpui_kit::{IntoElement, ParentElement as _, Styled as _, px};
 /// 04, Empty and loading states: lists show skeleton rows, never a blank pane. Regions that are
 /// not built yet show the same.
 pub fn skeleton_rows(rows: usize) -> impl IntoElement {
-    v_flex()
-        .gap_2()
-        .p_3()
-        .children((0..rows).map(|_| Skeleton::new().h(px(14.)).w_full()))
+    v_flex().gap_2().p_3().children((0..rows).map(|i| {
+        Skeleton::new()
+            .h(px(18.))
+            .w(gpui_kit::relative([0.82, 0.64, 0.93, 0.71, 0.56][i % 5]))
+    }))
 }

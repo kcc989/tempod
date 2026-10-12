@@ -64,6 +64,8 @@ struct Panes {
 pub struct MainWindow {
     focus: FocusHandle,
     dialogs: Entity<super::dialogs::Dialogs>,
+    settings: Option<Entity<super::settings::SettingsView>>,
+    settings_active: bool,
     _bounds: Subscription,
     panes: Panes,
     narrow: bool,
@@ -94,6 +96,7 @@ impl MainWindow {
             Some(w) => (Some(w.top_bar), w.tabs, w.rows),
             None => (None, Vec::new(), Vec::new()),
         };
+        super::tokens::install(cx);
         match cx.global::<crate::storage::Local>().config().theme {
             crate::storage::Theme::System => Theme::sync_system_appearance(Some(window), cx),
             crate::storage::Theme::Light => {
@@ -120,12 +123,18 @@ impl MainWindow {
                 if signed_in && !this.signed_in {
                     window.focus(&this.focus, cx);
                 } else if !signed_in {
+                    this.settings = None;
                     window.close_all_dialogs(cx);
                     this.dialogs.update(cx, |d, cx| {
                         d.kind = None;
                         cx.notify();
                     });
                 }
+                let settings_open = state.read(cx).settings_open;
+                if this.settings_active && !settings_open {
+                    window.focus(&this.focus, cx);
+                }
+                this.settings_active = settings_open;
                 this.signed_in = signed_in;
                 cx.notify();
             })
@@ -175,6 +184,8 @@ impl MainWindow {
             _activation: activation,
             focus,
             dialogs,
+            settings: None,
+            settings_active: false,
             _bounds: bounds,
             panes: Panes {
                 sidebar: saved.sidebar,
@@ -200,6 +211,31 @@ impl MainWindow {
             sign_in,
             _hub: hub_subscription,
         }
+    }
+
+    pub(crate) fn show_settings(
+        &mut self,
+        tab: Option<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let settings = self
+            .settings
+            .get_or_insert_with(|| cx.new(|cx| super::settings::SettingsView::new(window, cx)));
+        if let Some(tab) = tab {
+            settings
+                .read(cx)
+                .form
+                .clone()
+                .update(cx, |form, cx| form.show_tab(tab, cx));
+        }
+        let focus = settings.read(cx).focus.clone();
+        window.focus(&focus, cx);
+        crate::app::AppState::global(cx).update(cx, |app, cx| {
+            app.settings_open = true;
+            cx.notify();
+        });
+        cx.notify();
     }
 
     pub fn transcript(&self) -> &Entity<TranscriptView> {
@@ -554,6 +590,20 @@ impl Render for MainWindow {
                 .child(div().flex_1().child(sign_in.clone()))
                 .into_any_element();
         }
+        if crate::app::AppState::try_global(cx).is_some_and(|a| a.read(cx).settings_open)
+            && let Some(settings) = self.settings.clone()
+        {
+            return v_flex()
+                .size_full()
+                .bg(color(Token::Background, cx))
+                .text_color(color(Token::Foreground, cx))
+                .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
+                    super::palette::open(this.focus.clone(), window, cx)
+                }))
+                .child(TitleBar::new().child(crate::APP_NAME))
+                .child(div().flex_1().min_h_0().child(settings))
+                .into_any_element();
+        }
         let panels = crate::storage::Panels {
             sidebar: self.panes.sidebar,
             right: self.panes.right,
@@ -617,6 +667,7 @@ impl Render for MainWindow {
             .track_focus(&self.focus)
             .bg(color(Token::Background, cx))
             .text_color(color(Token::Foreground, cx))
+            .on_action(|_: &OpenSettings, _, cx| super::settings::open(cx))
             .on_action(cx.listener(|this, _: &RenameWorkspace, window, cx| {
                 this.dialogs
                     .update(cx, |d, cx| d.show("Rename workspace", window, cx))
@@ -793,9 +844,10 @@ impl Render for MainWindow {
                         .child(resizable_panel().child(center))
                         .child(
                             resizable_panel()
-                                .size(px(pane_sizes.right.unwrap_or(380.)))
+                                .size(px(pane_sizes.right.unwrap_or(380.).clamp(300., 600.)))
+                                .size_range(px(300.)..px(600.))
                                 .visible(show_right)
-                                .child(right),
+                                .child(div().size_full().bg(color(Token::Panel, cx)).child(right)),
                         ),
                 ),
             )
@@ -910,6 +962,7 @@ mod view_tests {
                 });
             });
             let (handle, view) = open(Default::default(), cx).unwrap();
+            state.update(cx, |s, _| s.main_window = Some(handle));
             let focus = view.read(cx).focus.clone();
             handle
                 .update(cx, |_, window, cx| window.focus(&focus, cx))
@@ -928,6 +981,146 @@ mod view_tests {
         })
         .unwrap();
         cx.run_until_parked();
+    }
+
+    #[gpui_kit::test]
+    fn sidebar_settings_returns_to_the_same_workspace(cx: &mut TestAppContext) {
+        let (handle, state) = setup(cx);
+        let view = cx
+            .update_window(handle, |_, window, cx| {
+                let view = gpui_kit::base::Root::read(window, cx)
+                    .view()
+                    .clone()
+                    .downcast::<MainWindow>()
+                    .unwrap();
+                view.update(cx, |view, cx| {
+                    view.review_tab = 2;
+                    view.composer.update(cx, |composer, cx| {
+                        composer.set_text("Unsent draft", window, cx)
+                    });
+                });
+                window.render_frame(cx);
+                window.click("sidebar-settings", cx);
+                view
+            })
+            .unwrap();
+        cx.run_until_parked();
+        assert!(state.read_with(cx, |state, _| state.settings_open));
+        assert_eq!(
+            state.read_with(cx, |s, _| s.main_window.unwrap().window_id()),
+            handle.window_id()
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.dispatch_action(Box::new(ToggleRightSide), cx);
+            window.click("settings-back", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(!state.read_with(cx, |state, _| state.settings_open));
+        view.read_with(cx, |view, cx| {
+            assert_eq!(view.review_tab, 2);
+            assert_eq!(view.composer.read(cx).text(cx), "Unsent draft");
+            assert!(view.panes.right);
+        });
+        cx.update(super::super::settings::open_logins);
+        cx.run_until_parked();
+        view.read_with(cx, |view, cx| {
+            assert_eq!(
+                view.settings.as_ref().unwrap().read(cx).form.read(cx).tab,
+                super::super::settings_form::TAB_LOGINS
+            )
+        });
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+        act(cx, handle, BackFromSettings);
+        assert!(!state.read_with(cx, |state, _| state.settings_open));
+        cx.update(super::super::settings::open);
+        cx.run_until_parked();
+        view.read_with(cx, |view, cx| {
+            assert_eq!(
+                view.settings.as_ref().unwrap().read(cx).form.read(cx).tab,
+                super::super::settings_form::TAB_LOGINS
+            )
+        });
+    }
+
+    #[gpui_kit::test]
+    fn settings_navigation_selects_each_named_project(cx: &mut TestAppContext) {
+        let (handle, _) = setup(cx);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("sidebar-settings", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let view = cx
+            .update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                for id in [
+                    "settings-project-a",
+                    "settings-project-b",
+                    "settings-project-c",
+                ] {
+                    assert!(window.try_find(id).is_some());
+                }
+                window.click("settings-project-b", cx);
+                gpui_kit::base::Root::read(window, cx)
+                    .view()
+                    .clone()
+                    .downcast::<MainWindow>()
+                    .unwrap()
+            })
+            .unwrap();
+        cx.run_until_parked();
+        view.read_with(cx, |v, cx| {
+            assert_eq!(
+                v.settings
+                    .as_ref()
+                    .unwrap()
+                    .read(cx)
+                    .form
+                    .read(cx)
+                    .selected_project()
+                    .unwrap()
+                    .id,
+                "b"
+            )
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("project-settings-nav-b-0").is_some());
+            assert!(window.try_find("project-settings-nav-a-0").is_none());
+            window.click("project-settings-nav-b-3", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        view.read_with(cx, |v, cx| {
+            assert_eq!(
+                v.settings.as_ref().unwrap().read(cx).form.read(cx).section,
+                3
+            )
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("settings-project-c", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        view.read_with(cx, |v, cx| {
+            assert_eq!(
+                v.settings
+                    .as_ref()
+                    .unwrap()
+                    .read(cx)
+                    .form
+                    .read(cx)
+                    .selected_project()
+                    .unwrap()
+                    .id,
+                "c"
+            )
+        });
     }
 
     #[gpui_kit::test]
@@ -956,6 +1149,21 @@ mod view_tests {
             ] {
                 assert!(window.try_find(id).is_some(), "{id} missing");
             }
+            let project = window.find("section-a").bounds();
+            let row = window.find("workspace-a1").bounds();
+            assert!(
+                row.size.height >= px(48.),
+                "workspace row is clipped: {row:?}"
+            );
+            assert!(
+                row.origin.y >= project.bottom(),
+                "workspace overlaps project header"
+            );
+            let settings = window.find("sidebar-settings").bounds();
+            assert!(
+                settings.size.width >= px(70.),
+                "Settings must have a visible label"
+            );
             assert!(window.try_find("status-a2").is_none());
             assert!(window.try_find("pr-a2").is_none());
             assert!(window.try_find("start-in-a").is_none());

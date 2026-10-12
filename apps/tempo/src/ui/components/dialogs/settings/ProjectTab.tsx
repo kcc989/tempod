@@ -27,6 +27,7 @@ import {
   type SettingsForm,
 } from "../settings-model";
 import { FieldRow } from "./ProjectFields";
+import { ProjectModels } from "./ProjectModels";
 import { useOpenWorkspaceDetail } from "./useOpenWorkspace";
 
 /**
@@ -130,6 +131,7 @@ function ProjectSettingsForm({
   const [form, setForm] = useState<SettingsForm>(initial);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [problem, setProblem] = useState<string | null>(null);
+  const [modelReset, setModelReset] = useState(0);
   const initialSig = useMemo(() => formSignature(initial), [initial]);
   const dirty = formSignature(form) !== initialSig;
 
@@ -193,7 +195,22 @@ function ProjectSettingsForm({
             {group}
           </legend>
           <div className="divide-y">
-            {FIELDS.filter((d) => d.section === group).map((def) => (
+            {group === "Agent" && (
+              <ProjectModels
+                key={`${initialSig}:${modelReset}`}
+                form={form}
+                initial={initial}
+                ctx={ctx}
+                disabled={save.isPending}
+                onChange={(changes) => {
+                  setForm((f) => ({ ...f, ...changes }));
+                  setErrors((current) =>
+                    Object.fromEntries(Object.entries(current).filter(([path]) => !(path in changes))),
+                  );
+                }}
+              />
+            )}
+            {FIELDS.filter((d) => d.section === group && group !== "Agent").map((def) => (
               <FieldRow
                 key={def.path}
                 def={def}
@@ -221,6 +238,7 @@ function ProjectSettingsForm({
             disabled={!dirty || save.isPending}
             onClick={() => {
               setForm(initial);
+              setModelReset((n) => n + 1);
               setErrors({});
               setProblem(null);
             }}

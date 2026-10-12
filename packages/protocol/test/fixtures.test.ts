@@ -60,6 +60,22 @@ const decodeRecord = (schema: Schema.Top, record: unknown): void => {
 };
 
 describe("channel fixtures (07, Testing)", () => {
+  it("normalizes absent additive protocol 1 fields and rejects explicit invalid values", () => {
+    const value = JSON.parse(lines(join(fixtures, "channel", "workspace-first-load.jsonl"))[0]!);
+    delete value.workspace.browserActive;
+    delete value.workspace.settings.browser;
+    delete value.workspace.settings.agent.models;
+    const decode = Schema.decodeUnknownSync(WorkspaceServerMessage);
+    const decoded = decode(value);
+    expect(decoded.type).toBe("hello");
+    if (decoded.type !== "hello") throw new Error("expected hello");
+    expect(decoded.workspace.browserActive).toBe(false);
+    expect(decoded.workspace.settings.browser.run).toBe(false);
+    expect(decoded.workspace.settings.agent.models).toEqual({ claude: "", codex: "", opencode: "", pi: "" });
+    for (const invalid of [null, "yes"]) {
+      expect(() => decode({ ...value, workspace: { ...value.workspace, browserActive: invalid } })).toThrow();
+    }
+  });
   const sessions = readdirSync(join(fixtures, "channel"))
     .filter((f) => f.endsWith(".jsonl"))
     .map((f) => f.replace(/\.jsonl$/, ""));

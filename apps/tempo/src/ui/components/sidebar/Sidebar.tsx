@@ -152,12 +152,13 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
           </Link>
         </Button>
         <Button
-          size="icon-sm"
+          size="sm"
           variant="ghost"
           aria-label="Settings"
           onClick={() => openDialog({ kind: "settings" })}
         >
           <SettingsIcon />
+          Settings
         </Button>
       </div>
     </div>

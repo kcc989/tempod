@@ -505,7 +505,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           )}
           <div
             className={cn(
-              "rounded-2xl border border-input bg-muted/30 p-3 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 sm:p-4",
+              "rounded-2xl border border-input bg-muted p-3 shadow-md",
               dragging && "border-ring bg-accent/40 ring-2 ring-ring/20",
             )}
           >
@@ -593,7 +593,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   if (!e.clipboardData.getData("text/plain")) e.preventDefault();
                   addFiles(pasted);
                 }}
-                className="max-h-72 min-h-24 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent sm:pr-28"
+                className="max-h-72 min-h-16 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent sm:pr-28"
               />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2">

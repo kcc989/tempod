@@ -6,7 +6,19 @@ import { call } from "../../../src/ui/lib/api";
 import { dialogStore, openDialog, resetUiState, settingsStore } from "../../../src/ui/state/workspace-ui";
 
 vi.mock("~/ui/lib/api", () => ({
-  call: vi.fn(async (name: string) => (name === "listEnvironments" ? [] : { names: [] })),
+  call: vi.fn(async (name) =>
+    name === "getCredentialStatus"
+      ? {
+          claude: { set: false, updatedAt: null },
+          codex: { set: false, updatedAt: null, lastRefresh: null },
+          anthropic: { set: false, updatedAt: null },
+          openai: { set: false, updatedAt: null },
+          openrouter: { set: false, updatedAt: null },
+        }
+      : name === "listModels" || name === "listEnvironments"
+        ? []
+        : { names: [] },
+  ),
 }));
 vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
 const projects = [
@@ -102,8 +114,9 @@ describe("settings page", () => {
       "tempo/second",
     ]);
     expect(screen.getByRole("heading", { name: "Agents" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Default model" })).toBeTruthy();
     for (const agent of ["Claude", "Codex", "OpenCode", "Pi"])
-      expect(screen.getByRole("group", { name: `${agent} default model` })).toBeTruthy();
+      expect(screen.queryByRole("group", { name: `${agent} default model` })).toBeNull();
     expect(screen.getByRole("group", { name: "Browser Run" })).toBeTruthy();
     fireEvent.click(within(nav).getByRole("button", { name: "Scripts" }));
     expect(screen.queryByRole("group", { name: "Browser Run" })).toBeNull();

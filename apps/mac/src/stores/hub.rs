@@ -38,6 +38,7 @@ impl HubStore {
                 if this
                     .update(cx, |hub, cx| {
                         match event {
+                            ChannelEvent::DecodeError(_) => {}
                             ChannelEvent::Message(message) => {
                                 let events = hub.state.apply(message);
                                 let config = cx.global::<crate::storage::Local>().config();

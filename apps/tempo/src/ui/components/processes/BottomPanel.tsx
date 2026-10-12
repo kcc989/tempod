@@ -30,7 +30,7 @@ export function BottomPanel({ workspaceId }: BottomPanelProps) {
     <Tabs
       value={tab}
       onValueChange={(v) => isBottomTab(v) && setBottomTab(workspaceId, v)}
-      className="h-full min-h-0 gap-0"
+      className="h-full min-h-0 gap-0 bg-card"
     >
       <TabsList variant="line" aria-label="Processes" className="w-full shrink-0 justify-start px-2">
         <TabsTrigger value="setup">

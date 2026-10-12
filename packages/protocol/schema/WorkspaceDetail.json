@@ -190,7 +190,8 @@
       }
     },
     "browserActive": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     },
     "settings": {
       "$ref": "Settings.json"
@@ -351,7 +352,6 @@
     "setupStatus",
     "pushed",
     "ports",
-    "browserActive",
     "settings",
     "runningTurnId",
     "queue",

@@ -23,7 +23,7 @@
     "build:tempod": "turbo run build --filter=@tempo/tempod",
     "protocol:gen": "bun packages/protocol/scripts/gen-schema.ts",
     "protocol:fixtures": "bun packages/protocol/scripts/gen-fixtures.ts",
-    "mac:dev": "cargo run -p tempo-mac",
+    "mac:dev": "bash scripts/mac/dev.sh",
     "mac:test": "cargo test --workspace",
     "mac:release": "bash scripts/mac/release.sh",
     "test:tempod:container": "bun scripts/test-tempod-container.ts",

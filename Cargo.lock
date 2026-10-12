@@ -7027,6 +7027,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempo-keychain"
+version = "0.1.0"
+dependencies = [
+ "security-framework",
+]
+
+[[package]]
 name = "tempo-mac"
 version = "0.1.0"
 dependencies = [
