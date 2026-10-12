@@ -39,6 +39,19 @@ The owner answered Q-4 to Q-10. The spec now says:
 | Q-9 Egress rows | Store 10,000; Diagnostics shows the newest 500 matches, filtered on the server. | 02 `getDiagnostics`, 05 |
 | Q-10 Previews | Owner-only: no secret in the hostname; a one-time link from `openPreview` sets a `__Host-tempo_preview` cookie. Protected Quick Tunnels were rejected: containers can reach only ports 80 and 443 through `TempoOutbound`, and the tunnel needs port 7844. | 01, 02, 03, 04, 05, 06, 07 |
 
+## Artifacts (owner decisions 2026-10-12)
+
+The owner asked for agent artifacts: images, documents, HTML and mini apps, to understand plans and review PRs. Spec only; no code yet. It is phase 5 with gate F and spike S18.
+
+| Question | Decision | Spec |
+| --- | --- | --- |
+| How agents publish | An MCP tool, `publish_artifact`, added to the `tempo` MCP server of Environments (`tempod mcp`) | 01 Artifacts |
+| Where artifacts live | R2, every version, until the workspace is deleted; readable while sleeping and archived | 01, 02 R2 layout, 03 |
+| Network for HTML | None: offline only, enforced by CSP on a separate host per artifact | 05 Artifact access |
+| New libraries | Approved: `mermaid` 12.1.0 (web), `resvg` 0.48.1 (Mac). No MCP SDK: the `tempo` server stays a hand-written loop, as Environments made it. | 04, 07 |
+
+The owner also confirmed these choices: a 25 MiB limit per version; no version pruning; the allowed file types in 01; one self-contained HTML file per artifact (no folders); the Mac app shows Mermaid as code and opens HTML and PDF in the browser.
+
 ## Named environments (2026-10-12)
 
 The owner asked for reusable named environments, proxied secrets, Dynamic Worker injectors, a workspace override, and agent-assisted setup. 01 (Environments; Credentials and egress), 02, 04, 05 and 07 are updated in the same change. Choices the request left open:
@@ -84,16 +97,16 @@ Specs 00, 01, 02, 04, 05, 06 and 07 are updated. Findings from the pinned adapte
 | Area | What is built | Not proven here |
 | --- | --- | --- |
 | Protocol | Types, functions, error codes, `session.start` fields; regenerated schema, fixtures and Rust types | — |
-| Worker | D1 `custom_agents` (migration `0003_custom_agents`); Artifacts store (binding reads, `isomorphic-git` 1.44.1 push with an in-memory file system, 300 s write token revoked in `finally`, 3 push attempts); the four functions; `createSession` and `createWorkspace` resolve the custom agent in the Worker | S18: a real Artifacts repo. Tests replace the store; the empty-repo first push and the error codes of `isomorphic-git` against Artifacts are unverified. |
+| Worker | D1 `custom_agents` (migration `0003_custom_agents`); Artifacts store (binding reads, `isomorphic-git` 1.44.1 push with an in-memory file system, 300 s write token revoked in `finally`, 3 push attempts); the four functions; `createSession` and `createWorkspace` resolve the custom agent in the Worker | S19: a real Artifacts repo. Tests replace the store; the empty-repo first push and the error codes of `isomorphic-git` against Artifacts are unverified. |
 | WorkspaceDO | Session columns (migration `0007_custom_agents`); profile stored and sent on every start and reload; `profileIssues` stored | — |
-| tempod | Per-agent mapping from 01; profile files under `.tempod/profiles/<sessionId>`; MCP `${NAME}` expanded in memory; model then reasoning level; issues | S19: real adapters. Tests use the fake ACP agent. |
+| tempod | Per-agent mapping from 01; profile files under `.tempod/profiles/<sessionId>`; MCP `${NAME}` expanded in memory; model then reasoning level; issues | S20: real adapters. Tests use the fake ACP agent. |
 | Container | `container/pi/tempo-profile.ts` copied to `/opt/tempo/pi/` | The image was not built here. |
 | Web | Settings → Agents, New chat and New workspace entries, reasoning-level picker, notice, tab label | — |
 | Mac | Same features; Settings → Agents page; `Manage agents…` opens it | Native rendering and interaction need the local Mac check. |
 
 - **Mac tab tooltip.** GPUI Kit 0.7.1 `Tab` has no tooltip method of its own, but it implements GPUI's `StatefulInteractiveElement`. The Mac app sets its `tooltip` with GPUI Kit's `Tooltip` view to `<custom agent> · <base agent>`, and the same text as the accessibility label. The rendered tooltip still needs the local Mac check.
 - **Alchemy and the `artifacts` binding.** The deploy path writes the binding through the wrangler config (`scripts/deploy-worker.ts`, S-1). `alchemy.run.ts` is unchanged.
-- **Merged with main (2026-10-12).** Main added user MCP servers (with a bridge for transports an agent lacks), `~/.pi/agent/mcp.json` for pi, per-agent models and a prompt-first New workspace dialog. Custom agents now build on them: a custom agent's MCP servers join the user's servers and use the same bridge; pi gets Playwright, `tempo` and user servers from `mcp.json`, so the plain-pi profile wrapper was dropped (the owner's decision that every pi session gets Playwright is met by main's `mcp.json`); New workspace lists custom agents in its model picker; a custom agent's `model` counts for `agent.models.<agent>`. Spike and test numbers moved to S18, S19 and AT-41 to AT-45 because main took S17 and AT-38 to AT-40.
+- **Merged with main (2026-10-12).** Main added user MCP servers (with a bridge for transports an agent lacks), `~/.pi/agent/mcp.json` for pi, per-agent models and a prompt-first New workspace dialog. Custom agents now build on them: a custom agent's MCP servers join the user's servers and use the same bridge; pi gets Playwright, `tempo` and user servers from `mcp.json`, so the plain-pi profile wrapper was dropped (the owner's decision that every pi session gets Playwright is met by main's `mcp.json`); New workspace lists custom agents in its model picker; a custom agent's `model` counts for `agent.models.<agent>`. Spike and test numbers moved to S19, S20 and AT-48 to AT-52 because main took S17 and AT-38 to AT-40.
 - **Reasoning-level picker.** The composer now shows the agent's `thought_level` option as its own picker for every chat; it no longer appears under the other options menu.
 
 ## Additive protocol changes
@@ -218,8 +231,8 @@ The test agents found these. The code makes the choice shown; none contradicts a
 | Item | Status |
 | --- | --- |
 | Tempo for Mac (07, Rust on GPUI Kit) | In scope (the owner approved it on 2026-10-11). Built after the server side of M0 in its own build loop: `crates/tempo-protocol`, `crates/tempo-client`, `crates/tempo-terminal`, `crates/protocol-gen`, `apps/mac`. The build machine runs Linux, so macOS-only parts (Keychain, notifications, Dock badge, URL scheme, signing, notarization) sit behind `cfg(target_os = "macos")` and cannot be run here; everything else compiles and is tested here. Rust is pinned to 1.97.0 in `rust-toolchain.toml`. |
-| Spikes S1 to S19 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
-| Acceptance tests AT-1 to AT-45 | Not run, for the same reason. `tests/e2e` holds the plan. |
+| Spikes S1 to S20 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
+| Acceptance tests AT-1 to AT-52 | Not run, for the same reason. `tests/e2e` holds the plan. |
 | Adapter conformance tests | `tests/conformance` holds the plan; they run inside the image. |
 | tempod tests in the image | Rule 14 says tempod tests run inside the container image. The build machine has no Docker, so `packages/tempod` tests run on the host; they need only the image's tools (git, rg, tmux, bash, coreutils). |
 | Browser checks of the web UI | 04 asks for every shortcut to be tested in Chrome, Safari and Firefox on macOS. There is no browser on the build machine. |
