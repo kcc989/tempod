@@ -1,6 +1,9 @@
 //! Settings (04, Settings; 07): its own window with sidebar navigation.
 //! Devices is web only (07, Scope).
-use super::settings_form::{PROJECT_PAGES, SettingsForm, TAB_GENERAL, TAB_LOGINS, TAB_PROJECT};
+use super::environments::EnvironmentsPage;
+use super::settings_form::{
+    PROJECT_PAGES, SettingsForm, TAB_ENVIRONMENTS, TAB_GENERAL, TAB_LOGINS, TAB_PROJECT,
+};
 use super::tokens::{Token, color};
 use gpui_kit::base::Root;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -10,7 +13,14 @@ use gpui_kit::{
     ParentElement as _, Render, SharedString, Styled as _, Window, WindowOptions, div, px, size,
 };
 
-pub const TABS: [&str; 5] = ["Logins", "Project", "Appearance", "General", "Shortcuts"];
+pub const TABS: [&str; 6] = [
+    "Logins",
+    "Project",
+    "Appearance",
+    "General",
+    "Shortcuts",
+    "Environments",
+];
 
 /// The shortcut table of 04 with its Conductor column, read-only.
 pub const SHORTCUTS: &[(&str, &str)] = &[
@@ -50,6 +60,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
 
 pub struct SettingsWindow {
     form: Entity<SettingsForm>,
+    environments: Entity<EnvironmentsPage>,
 }
 
 impl Render for SettingsWindow {
@@ -69,6 +80,8 @@ impl Render for SettingsWindow {
                         .child(div().text_color(muted).child(*keys))
                 }))
                 .into_any_element()
+        } else if tab == TAB_ENVIRONMENTS {
+            self.environments.clone().into_any_element()
         } else {
             self.form.clone().into_any_element()
         };
@@ -80,7 +93,7 @@ impl Render for SettingsWindow {
             .border_r_1()
             .border_color(color(Token::Border, cx))
             .child(div().text_color(muted).child("Personal"))
-            .children([TAB_GENERAL, TAB_LOGINS, 2, 4].map(|ix| {
+            .children([TAB_GENERAL, TAB_LOGINS, TAB_ENVIRONMENTS, 2, 4].map(|ix| {
                 Button::new(SharedString::from(format!("settings-nav-{ix}")))
                     .ghost()
                     .label(TABS[ix])
@@ -167,7 +180,8 @@ fn show(tab: Option<usize>, cx: &mut App) {
                 form
             });
             cx.observe(&form, |_, _, cx| cx.notify()).detach();
-            SettingsWindow { form }
+            let environments = cx.new(|cx| EnvironmentsPage::new(window, cx));
+            SettingsWindow { form, environments }
         })
     });
     if let Ok((handle, _)) = opened
