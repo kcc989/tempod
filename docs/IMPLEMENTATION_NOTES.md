@@ -38,6 +38,7 @@ The owner answered Q-4 to Q-10. The spec now says:
 | Q-8 Unused statuses | Session `broken` and review-comment `resolved` are removed. | 02 |
 | Q-9 Egress rows | Store 10,000; Diagnostics shows the newest 500 matches, filtered on the server. | 02 `getDiagnostics`, 05 |
 | Q-10 Previews | Owner-only: no secret in the hostname; a one-time link from `openPreview` sets a `__Host-tempo_preview` cookie. Protected Quick Tunnels were rejected: containers can reach only ports 80 and 443 through `TempoOutbound`, and the tunnel needs port 7844. | 01, 02, 03, 04, 05, 06, 07 |
+| Q-11 TOML (2026-10-12) | Tempo uses no TOML of its own. `.tempo/settings.toml` becomes `.tempo/settings.yaml`, parsed with `yaml` 2.9.1. Tempo no longer reads `.conductor/settings.toml`; `conductor.json` still works. The Mac client keeps `config.yaml`, parsed with `serde_yaml_ng` 0.10.0; an existing `config.toml` is not read, so the app starts with default settings once. The `.conductor` settings source stays in the protocol enum, unused, because protocol changes are additive (05). Codex `config.toml`, `Cargo.toml` and `rust-toolchain.toml` stay, because those tools read only TOML. | 01, 04, 06, 07, 08 |
 
 ## ACP mode contract (resolved 2026-10-11)
 

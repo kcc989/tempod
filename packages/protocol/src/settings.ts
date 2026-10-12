@@ -130,6 +130,7 @@ export const SettingsLayer = Schema.Struct({
 });
 export type SettingsLayer = typeof SettingsLayer.Type;
 
+// ".conductor" is never sent since Tempo stopped reading .conductor/settings.toml; it stays because protocol changes are additive (05).
 export const SETTINGS_SOURCES = ["tempo", ".tempo", ".conductor", "conductor.json", "default"] as const;
 export const SettingsSource = Schema.Literals(SETTINGS_SOURCES);
 export type SettingsSource = typeof SettingsSource.Type;

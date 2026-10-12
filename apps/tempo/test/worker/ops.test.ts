@@ -694,7 +694,7 @@ describe("create op", { timeout: 60_000 }, () => {
   });
 
   it("settings.read failing 3 times is skipped: defaults are used, the error shows in the Setup tab, and the op continues", async () => {
-    const w = await seedWs({ prepare: (t) => t.fail("settings.read", "INTERNAL", "invalid TOML at line 3") });
+    const w = await seedWs({ prepare: (t) => t.fail("settings.read", "INTERNAL", "invalid YAML at line 3") });
     await driveToState(w.stub, "ready");
     await driveOp(w.stub, "create", "done");
     // 03 Step limits: settings.read | 10 s | 3 | Use defaults; show the error in the Setup tab
@@ -703,7 +703,7 @@ describe("create op", { timeout: 60_000 }, () => {
     expect(opState(op).skipped).toEqual(["settings.read"]);
     expect(Object.keys(opState(op).timings)).toContain("setup.run");
     const d = await detail(w.stub);
-    expect((d.settingsErrors ?? []).some((e: string) => e.includes("invalid TOML at line 3"))).toBe(true);
+    expect((d.settingsErrors ?? []).some((e: string) => e.includes("invalid YAML at line 3"))).toBe(true);
     expect(d.settings.scripts.setup).toBe("");
     expect(d.settings.environment.instance).toBe("standard-3");
     expect(d.state).toBe("ready");

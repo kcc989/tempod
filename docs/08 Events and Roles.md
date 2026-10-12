@@ -6,7 +6,7 @@ Built-in roles use the same path as user roles. The host has no code for any one
 
 | # | Decision | Choice | Reason |
 | --- | --- | --- | --- |
-| E1 | Role format | A markdown file with TOML front matter. The body is the prompt. | Claude Code, Codex, OpenCode, Copilot and Factory define agents as data. TOML uses `smol-toml`, which Tempo already has (01). |
+| E1 | Role format | A markdown file with YAML front matter. The body is the prompt. | Claude Code, OpenCode, Copilot and Factory define agents the same way. YAML uses `yaml`, as the settings file does (01). |
 | E2 | Role sources | Built-in files, user roles in D1, and `.tempo/roles/*.md` on the workspace branch | No redeploy for user or repo roles |
 | E3 | Triggers | Exact filters on event type and a few payload fields | Static filters are enough for the chain. GitHub Actions `on:` works the same way. |
 | E4 | Agent events | Only `agent.turn.ended`. Tool, plan and usage detail stays in the existing `events` and `items` tables. | Small vocabulary, no new `tempod` protocol |
@@ -85,23 +85,25 @@ These words join the vocabulary in 00. Use them exactly.
 
 ## Roles
 
-**File format.** TOML front matter between two `+++` lines, then the prompt as markdown.
+**File format.** YAML front matter between two `---` lines, then the prompt as markdown.
 
 ```markdown
-+++
-description = "Reviews the branch diff against the plan and reports blocking issues."
-agent = "other"
-access = "read-only"
-inputs = ["diff", "plan", "result:coder"]
-requestable = true
-on = [{ event = "role.run.completed", role = "coder", status = "done" }]
-
-[limits]
-rounds = 2
-continues = 2
-timeout = "20m"
-tokens = 2000000
-+++
+---
+description: Reviews the branch diff against the plan and reports blocking issues.
+agent: other
+access: read-only
+inputs: [diff, plan, "result:coder"]
+requestable: true
+on:
+  - event: role.run.completed
+    role: coder
+    status: done
+limits:
+  rounds: 2
+  continues: 2
+  timeout: 20m
+  tokens: 2000000
+---
 Review the diff against the plan. Report each problem as a finding.
 Mark a finding blocking when the change must not merge with it.
 Set status "pass" when no finding is blocking, else "fail".
@@ -120,10 +122,11 @@ Set status "pass" when no finding is blocking, else "fail".
 | `on` | Triggers (below) | None |
 | `limits.rounds` | Runs of this role per change, 1 to 10 | 1 |
 | `limits.continues` | Follow-up prompts per run, 0 to 10 | 2 |
-| `limits.timeout` | `"<n>m"` or `"<n>h"`, at most `"2h"` | `"20m"` |
+| `limits.timeout` | `<n>m` or `<n>h`, at most `2h` | `20m` |
 | `limits.tokens` | Total tokens per run; 0 = no cap | 0 |
 
 - The role's name is the file name without `.md` for built-in and repo roles, and the stored name for user roles. A name matches `^[a-z][a-z0-9-]{1,31}$`.
+- Parse the front matter with `yaml` as YAML 1.2, so the key `on` is a string, not a boolean.
 - The body is sent as it is. Tempo does not fill in templates.
 - A role needs `on`, or `requestable = true`, or both.
 - A file that fails to parse or validate is listed with its error and never runs.
@@ -318,14 +321,14 @@ A missing input is the text `(none)`.
 
 A limit hit fails the run with `ROLE_LIMIT` and names the limit in `detail`.
 
-Project settings gain a `[roles]` table in `.tempo/settings.toml` (01):
+Project settings gain a `roles` section in `.tempo/settings.yaml` (01):
 
-```toml
-[roles]
-enabled = true                # false: no triggers and no requests in this project
-max_chain_depth = 10
-max_runs_per_change = 20
-max_tokens_per_change = 0     # 0 = no cap
+```yaml
+roles:
+  enabled: true               # false: no triggers and no requests in this project
+  max_chain_depth: 10
+  max_runs_per_change: 20
+  max_tokens_per_change: 0    # 0 = no cap
 ```
 
 ## Built-in roles

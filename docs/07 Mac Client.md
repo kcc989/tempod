@@ -252,7 +252,7 @@ The app stores no workspace data on disk. This table is the full list of what it
 | What | Where |
 | --- | --- |
 | Session token | Keychain, generic password, service `dev.tempo.mac`, account = the Tempo host |
-| Tempo URL, theme, transcript detail, notifications on or off, sound on or off | `~/Library/Application Support/dev.tempo.mac/config.toml` |
+| Tempo URL, theme, transcript detail, notifications on or off, sound on or off | `~/Library/Application Support/dev.tempo.mac/config.yaml` |
 | Pane sizes, open panels, sort order, last workspace, composer drafts, diff viewed marks | `~/Library/Application Support/dev.tempo.mac/state.json` |
 | Logs | `~/Library/Logs/Tempo/tempo.log`: JSON lines, 5 files of 5 MB each |
 

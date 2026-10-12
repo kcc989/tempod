@@ -290,8 +290,8 @@ describe("WebSocket protocol", () => {
     await c.hello();
     await c.ok("env.set", { env: { ONLY: "yes" } });
     await Bun.write(
-      `${h.config.workspace}/.tempo/settings.toml`,
-      '[scripts]\nsetup = "bun install"\n[unknown]\nx = 1\n',
+      `${h.config.workspace}/.tempo/settings.yaml`,
+      "scripts:\n  setup: bun install\nunknown:\n  x: 1\n",
     );
     const s = await c.ok<{
       effective: { scripts: { setup: string }; agent: { models: { pi: string } } };

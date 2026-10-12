@@ -179,7 +179,7 @@ describe("fs.list, fs.read, fs.search", () => {
 describe("settings.read", () => {
   test("resolves overrides and files; a later file change sends settings.changed", async () => {
     const { c, ws, h } = await setup();
-    writeFile(join(ws, ".tempo", "settings.toml"), '[scripts]\nsetup = "bun install"\n');
+    writeFile(join(ws, ".tempo", "settings.yaml"), "scripts:\n  setup: bun install\n");
     writeFileSync(
       join(ws, "conductor.json"),
       JSON.stringify({ scripts: { archive: "echo bye" }, spotlight_testing: true }),
@@ -194,7 +194,7 @@ describe("settings.read", () => {
     expect(r.warnings.join("\n")).toContain("spotlight_testing");
     await h.app.refresh();
     expect(c.of("settings.changed")).toHaveLength(0);
-    writeFile(join(ws, ".tempo", "settings.toml"), '[scripts]\nsetup = "npm ci"\n');
+    writeFile(join(ws, ".tempo", "settings.yaml"), "scripts:\n  setup: npm ci\n");
     await h.app.refresh();
     const changed = await c.waitEvent("settings.changed");
     expect(changed.effective.scripts.setup).toBe("npm ci");

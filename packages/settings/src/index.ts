@@ -8,18 +8,16 @@ import {
   type SettingsSource,
 } from "@tempo/protocol";
 import { Schema } from "effect";
-import { parse as parseToml } from "smol-toml";
+import { parse as parseYaml } from "yaml";
 
 /** Settings files, as read from the workspace branch (01, Project settings file). */
 export interface SettingsFiles {
-  readonly tempoToml?: string | null;
-  readonly conductorToml?: string | null;
+  readonly tempoYaml?: string | null;
   readonly conductorJson?: string | null;
 }
 
 export const SETTINGS_PATHS = {
-  tempoToml: ".tempo/settings.toml",
-  conductorToml: ".conductor/settings.toml",
+  tempoYaml: ".tempo/settings.yaml",
   conductorJson: "conductor.json",
 } as const;
 
@@ -82,9 +80,9 @@ const describeCause = (cause: unknown): string => {
   return text.split("\n").slice(0, 6).join(" ").replace(/\s+/g, " ").trim() || "invalid settings";
 };
 
-const parseTomlSafe = (file: string, text: string): { value: unknown } | { error: string } => {
+const parseYamlSafe = (file: string, text: string): { value: unknown } | { error: string } => {
   try {
-    return { value: parseToml(text) };
+    return { value: parseYaml(text) ?? {} };
   } catch (e) {
     return {
       error: `${file}: ${e instanceof Error ? e.message.split("\n")[0] : "parse error"}; the file was ignored`,
@@ -92,83 +90,14 @@ const parseTomlSafe = (file: string, text: string): { value: unknown } | { error
   }
 };
 
-export const readTempoToml = (text: string): LayerResult => {
-  const file = SETTINGS_PATHS.tempoToml;
-  const parsed = parseTomlSafe(file, text);
+export const readTempoYaml = (text: string): LayerResult => {
+  const file = SETTINGS_PATHS.tempoYaml;
+  const parsed = parseYamlSafe(file, text);
   if ("error" in parsed) return { layer: null, warnings: [], errors: [parsed.error] };
   return validate(file, parsed.value, []);
 };
 
 const CONDUCTOR_IGNORED_NOTE = "Conductor keys that Tempo ignores";
-
-/** Maps `.conductor/settings.toml` to a Tempo layer (01, Conductor mapping). */
-export const readConductorToml = (text: string): LayerResult => {
-  const file = SETTINGS_PATHS.conductorToml;
-  const parsed = parseTomlSafe(file, text);
-  if ("error" in parsed) return { layer: null, warnings: [], errors: [parsed.error] };
-  const raw = parsed.value;
-  if (!isObj(raw))
-    return { layer: null, warnings: [], errors: [`${file}: not a table; the file was ignored`] };
-  const ignored: string[] = [];
-  const out: Obj = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (k === "scripts" && isObj(v)) {
-      const scripts: Obj = {};
-      for (const [sk, sv] of Object.entries(v)) {
-        if (["setup", "archive", "run_mode", "auto_run_after_setup"].includes(sk)) scripts[sk] = sv;
-        else if (sk === "run" && isObj(sv)) {
-          const run: Obj = {};
-          for (const [id, def] of Object.entries(sv)) {
-            if (!isObj(def)) {
-              ignored.push(`scripts.run.${id}`);
-              continue;
-            }
-            const args = Array.isArray(def["args"]) ? def["args"].map(String) : [];
-            const command = [String(def["command"] ?? ""), ...args].filter((s) => s !== "").join(" ");
-            const entry: Obj = { command };
-            const options = def["options"];
-            if (isObj(options) && typeof options["cwd"] === "string") entry["cwd"] = options["cwd"];
-            if (typeof def["default"] === "boolean") entry["default"] = def["default"];
-            for (const dk of Object.keys(def)) {
-              if (!["command", "args", "options", "default"].includes(dk))
-                ignored.push(`scripts.run.${id}.${dk}`);
-            }
-            if (isObj(options)) {
-              for (const ok of Object.keys(options))
-                if (ok !== "cwd") ignored.push(`scripts.run.${id}.options.${ok}`);
-            }
-            run[id] = entry;
-          }
-          scripts["run"] = run;
-        } else ignored.push(`scripts.${sk}`);
-      }
-      out["scripts"] = scripts;
-    } else if (k === "environment_variables" && isObj(v)) {
-      const cloud = v["cloud"];
-      if (isObj(cloud)) out["environment_variables"] = stringRecord(cloud);
-      else out["environment_variables"] = stringRecord(v);
-    } else if (k === "prompts" && isObj(v)) {
-      if ("general" in v) out["prompts"] = { general: v["general"] };
-      for (const pk of Object.keys(v)) if (pk !== "general") ignored.push(`prompts.${pk}`);
-    } else if (k === "git" && isObj(v)) {
-      const git: Obj = {};
-      for (const [gk, gv] of Object.entries(v)) {
-        if (["branch_prefix", "delete_branch_on_archive", "archive_on_merge"].includes(gk)) git[gk] = gv;
-        else ignored.push(`git.${gk}`);
-      }
-      out["git"] = git;
-    } else ignored.push(k);
-  }
-  const warnings = ignored.length ? [`${file}: ${CONDUCTOR_IGNORED_NOTE}: ${ignored.join(", ")}`] : [];
-  return validate(file, out, warnings);
-};
-
-const stringRecord = (o: Obj): Obj => {
-  const out: Obj = {};
-  for (const [k, v] of Object.entries(o))
-    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") out[k] = String(v);
-  return out;
-};
 
 /** Maps `conductor.json` to a Tempo layer (01, Conductor mapping). */
 export const readConductorJson = (text: string): LayerResult => {
@@ -275,8 +204,8 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
 const decodeSettings = Schema.decodeUnknownExit(Settings);
 
 /**
- * Computes effective settings. Precedence, highest first: UI overrides, `.tempo/settings.toml`,
- * `.conductor/settings.toml`, `conductor.json`, defaults.
+ * Computes effective settings. Precedence, highest first: UI overrides, `.tempo/settings.yaml`,
+ * `conductor.json`, defaults.
  */
 export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles): SettingsReadResult => {
   const warnings: string[] = [];
@@ -290,8 +219,7 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
     if (r.layer) layers.push([source, r.layer]);
   };
   add("conductor.json", files.conductorJson, readConductorJson);
-  add(".conductor", files.conductorToml, readConductorToml);
-  add(".tempo", files.tempoToml, readTempoToml);
+  add(".tempo", files.tempoYaml, readTempoYaml);
   const sources: Sources = {};
   let effective: Settings = DEFAULT_SETTINGS;
   for (const [source, layer] of layers) effective = apply(effective, layer, source, sources);

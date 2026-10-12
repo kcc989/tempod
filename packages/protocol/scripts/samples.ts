@@ -55,7 +55,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { effective: DEFAULT_SETTINGS, warnings: [], errors: [] },
     {
       effective: w.settings,
-      warnings: ["Unknown key scripts.watch in .tempo/settings.toml"],
+      warnings: ["Unknown key scripts.watch in .tempo/settings.yaml"],
       errors: [],
       sources: { "agent.default": "tempo", "scripts.setup": ".tempo", "git.branch_prefix": "default" },
     },

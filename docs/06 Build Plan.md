@@ -29,7 +29,7 @@ tempo/
     protocol/                   Effect Schemas: shared types, channels, tempod protocol, errors
     tempod/                     the daemon: main.ts, server.ts, outbox.ts, acp/, scripts.ts,
                                 git.ts, ports.ts, watcher.ts, proxy.ts
-    settings/                   settings.toml parsing and Conductor mapping (used by tempod and the Worker)
+    settings/                   settings.yaml parsing and conductor.json mapping (used by tempod and the Worker)
     cities/                     the fixed slug list
   container/
     Dockerfile
@@ -100,7 +100,7 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-11 | A Codex token refresh in one workspace reaches a second running workspace, which then completes a turn. |
 | AT-12 | The diff view is correct for added, changed, deleted, renamed and untracked files in both scopes. Review comments reach the agent in the next prompt. |
 | AT-13 | Revert restores the exact tree of the chosen checkpoint, shows the marker, and the next prompt carries the revert note. |
-| AT-14 | A repo with only `.conductor/settings.toml` runs its setup and run scripts, with `CONDUCTOR_PORT` set. |
+| AT-14 | A repo with only `conductor.json` runs its setup and run scripts, with `CONDUCTOR_PORT` set. |
 | AT-15 | A terminal runs commands; after a reconnect, the session and scrollback are still there. |
 | AT-16 | A Vite preview opened from Tempo works with hot reload, also in a Browser tab. The bare preview URL in a fresh browser shows the preview 404 page. Reset preview access stops an open preview. An agent passes a Playwright MCP check on `localhost`. |
 

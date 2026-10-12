@@ -95,7 +95,7 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]
 
 | Path | Content |
 | --- | --- |
-| `.codex/config.toml` | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `check_for_update_on_startup = false`, `cli_auth_credentials_store = "file"`, `[analytics] enabled = false`, `[feedback] enabled = false` |
+| `.codex/config.toml` (Codex reads only TOML) | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `check_for_update_on_startup = false`, `cli_auth_credentials_store = "file"`, `[analytics] enabled = false`, `[feedback] enabled = false` |
 | `.claude/settings.json` | `{"cleanupPeriodDays": 365}` so session files outlive the 30-day default |
 | `.gitconfig` | `init.defaultBranch = main`, `pull.rebase = false`, `safe.directory = /workspace` |
 
@@ -576,69 +576,62 @@ A snapshot is usable only if both are true:
 
 ## Project settings file
 
-A repo MAY hold `.tempo/settings.toml`. Tempo also reads Conductor's files, so a repo set up for Conductor works with no changes.
+A repo MAY hold `.tempo/settings.yaml`. Tempo also reads Conductor's `conductor.json`, so a repo set up with it works with no changes.
 
-```toml
-[agent]
-default = "claude"              # claude | codex | opencode | pi
+```yaml
+agent:
+  default: claude               # claude | codex | opencode | pi
+  models:                       # each agent's default model: its model config value; "" = the agent's own default
+    claude: ""
+    codex: ""
+    opencode: ""                # required to start an OpenCode session
+    pi: ""                      # required to start a Pi session
 
-[agent.models]                  # each agent's default model: its model config value; "" = the agent's own default
-claude = ""
-codex = ""
-opencode = ""                   # required to start an OpenCode session
-pi = ""                         # required to start a Pi session
+browser:
+  run: false                    # true: agents use Browser Run, watched in Live View; ignored under egress_policy: allowlist
 
-[browser]
-run = false                     # true: agents use Browser Run, watched in Live View; ignored under egress_policy = "allowlist"
+scripts:
+  setup: bun install
+  archive: ""
+  run_mode: concurrent          # concurrent | nonconcurrent
+  auto_run_after_setup: false
+  run:
+    dev:
+      command: bun run dev
+      cwd: ""                   # relative to /workspace; empty = /workspace
+      default: true
 
-[scripts]
-setup = "bun install"
-archive = ""
-run_mode = "concurrent"         # concurrent | nonconcurrent
-auto_run_after_setup = false
+environment:
+  instance: standard-3          # standard-2 | standard-3 | standard-4
+  sleep_after_idle_minutes: 15  # 5 to 240
+  egress_policy: open           # open | allowlist
+  egress_allowlist: []          # host patterns; "*.example.com" is allowed
 
-[scripts.run.dev]
-command = "bun run dev"
-cwd = ""                        # relative to /workspace; empty = /workspace
-default = true
+environment_variables:
+  NODE_ENV: development
 
-[environment]
-instance = "standard-3"         # standard-2 | standard-3 | standard-4
-sleep_after_idle_minutes = 15   # 5 to 240
-egress_policy = "open"          # open | allowlist
-egress_allowlist = []           # host patterns; "*.example.com" is allowed
+git:
+  branch_prefix: tempo/
+  delete_branch_on_archive: false
+  archive_on_merge: false
 
-[environment_variables]
-NODE_ENV = "development"
-
-[git]
-branch_prefix = "tempo/"
-delete_branch_on_archive = false
-archive_on_merge = false
-
-[prompts]
-general = ""                    # added to the first prompt of every session
+prompts:
+  general: ""                   # added to the first prompt of every session
 ```
 
 **Precedence**, highest first:
 
 1. Project overrides set in the Tempo UI (D1 `projects.settings_json`).
-2. `.tempo/settings.toml` on the workspace branch.
-3. `.conductor/settings.toml`, mapped as below.
-4. `conductor.json`, mapped as below.
-5. Defaults (the values shown above, with all scripts empty).
+2. `.tempo/settings.yaml` on the workspace branch.
+3. `conductor.json`, mapped as below.
+4. Defaults (the values shown above, with all scripts empty).
+
+Tempo does not read `.conductor/settings.toml`. Tempo uses no TOML of its own; the only TOML files are ones other tools require (Codex `config.toml`, Rust `Cargo.toml` and `rust-toolchain.toml`).
 
 **Conductor mapping**
 
 | Conductor key | Tempo key |
 | --- | --- |
-| `scripts.setup`, `scripts.archive`, `scripts.run_mode`, `scripts.auto_run_after_setup` | Same names |
-| `scripts.run.<id>.command` plus `args` (joined with spaces) | `scripts.run.<id>.command` |
-| `scripts.run.<id>.options.cwd` | `scripts.run.<id>.cwd` |
-| `scripts.run.<id>.default` | Same |
-| `environment_variables.cloud`, else `environment_variables` | `environment_variables` |
-| `prompts.general` | Same |
-| `git.branch_prefix`, `git.delete_branch_on_archive`, `git.archive_on_merge` | Same |
 | `conductor.json` `scripts.setup`, `scripts.archive` | Same |
 | `conductor.json` `scripts.run` (one string) | `scripts.run.default.command`, with `default = true` |
 | `conductor.json` `runScriptMode` | `scripts.run_mode` |
@@ -647,11 +640,11 @@ Other Conductor keys (for example `spotlight_testing`, `file_include_globs`, `pr
 
 **Rules**
 
-- Parse TOML with `smol-toml`. Validate with an Effect Schema.
+- Parse YAML with `yaml`. An empty file means no settings. Validate with an Effect Schema.
 - If a file fails to parse or validate, ignore the whole file, show the error in the Setup tab, and use the next source.
 - Unknown keys are warnings, not errors.
 - Secrets MUST NOT be in the repo file. Set them in the UI; they live in CredentialDO and join `environment_variables` at runtime.
-- Read settings after the clone, and again when the file watcher sees a change to any of the three files. A script uses the settings in effect when it starts.
+- Read settings after the clone, and again when the file watcher sees a change to either file. A script uses the settings in effect when it starts.
 
 ## Sources
 

@@ -222,7 +222,7 @@ describe("the form", () => {
   });
 });
 
-describe("effective values and sources (04: Tempo, .tempo, .conductor, conductor.json or default)", () => {
+describe("effective values and sources (04: Tempo, .tempo, conductor.json or default)", () => {
   const layer: SettingsLayer = { scripts: { setup: "make" } };
 
   it("uses the open workspace's values and sources", () => {
