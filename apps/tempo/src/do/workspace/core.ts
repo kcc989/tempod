@@ -155,7 +155,11 @@ export class WorkspaceCore {
   }
 
   get workspaceId(): string {
-    return this.ws().workspaceId;
+    const row = this.wsOrNull();
+    if (row) return row.workspaceId;
+    const userId = this.kv<string>("catalogUserId");
+    if (userId && this.ctx.id.name === `models:${userId}`) return this.ctx.id.name;
+    throw new TempoError("NOT_FOUND");
   }
 
   updateWs(patch: Partial<typeof workspace.$inferInsert>): void {
@@ -237,7 +241,9 @@ export class WorkspaceCore {
   }
 
   credentials() {
-    return this.env.CREDENTIALS.getByName(this.ws().userId);
+    const userId = this.wsOrNull()?.userId ?? this.kv<string>("catalogUserId");
+    if (!userId) throw new TempoError("NOT_FOUND");
+    return this.env.CREDENTIALS.getByName(userId);
   }
 
   /** Script env (01, Scripts): TEMPO_* and CONDUCTOR_* vars plus the project's env vars and secrets. */

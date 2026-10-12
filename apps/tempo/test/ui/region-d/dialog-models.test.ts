@@ -25,6 +25,8 @@ import {
   emptySource,
   filterPullRequests,
   initialAgent,
+  initialModel,
+  modelChoices,
   isSourceTab,
 } from "~/ui/components/dialogs/new-workspace-model";
 
@@ -171,6 +173,31 @@ describe("New workspace", () => {
       source: { kind: "new", baseBranch: "main" },
     });
     expect(createInput(project, { ...emptySource(), tab: "branch" }, "claude", "x")).toBeNull();
+  });
+
+  it("routes reported grouped models to the logged-in agent and honours the configured default", () => {
+    const reports = [
+      {
+        agent: "claude" as const,
+        currentValue: "same-id",
+        options: [{ value: "same-id", name: "Claude model" }],
+      },
+      {
+        agent: "codex" as const,
+        currentValue: "same-id",
+        options: [{ value: "same-id", name: "Codex model" }],
+      },
+    ];
+    const configured = { settings: { agent: { default: "codex" as const, model: "custom" } } };
+    const choices = modelChoices(["claude", "codex"], reports);
+    expect(new Set(choices.map((choice) => choice.key)).size).toBe(2);
+    expect(initialModel(choices, reports, configured)).toMatchObject({ agent: "codex", model: "same-id" });
+    expect(modelChoices(["claude"], reports).map((choice) => choice.agent)).toEqual(["claude"]);
+    expect(createInput(project, emptySource(), "codex", "Fix it", "same-id")).toMatchObject({
+      agent: "codex",
+      model: "same-id",
+    });
+    expect(modelChoices(["pi"], [])).toEqual([]);
   });
 
   it("filters pull requests by number, title or branch", () => {

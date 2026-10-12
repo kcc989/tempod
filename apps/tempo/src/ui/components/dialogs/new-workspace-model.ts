@@ -2,6 +2,7 @@ import {
   AGENT_IDS,
   DEFAULT_SETTINGS,
   type AgentId,
+  type AgentModels,
   type CredentialStatus,
   type FnInput,
   type NewSource,
@@ -65,6 +66,7 @@ export const createInput = (
   draft: SourceDraft,
   agent: AgentId | null,
   prompt: string,
+  model?: string,
 ): FnInput<"createWorkspace"> | null => {
   const source = buildSource(draft, project);
   if (!source) return null;
@@ -73,6 +75,7 @@ export const createInput = (
     projectId: project.id,
     source,
     ...(agent ? { agent } : {}),
+    ...(model ? { model } : {}),
     ...(text ? { prompt: { text } } : {}),
   };
 };
@@ -89,5 +92,47 @@ export const filterPullRequests = <P extends { number: number; title: string; he
       String(p.number).startsWith(q) ||
       p.title.toLowerCase().includes(q) ||
       p.headBranch.toLowerCase().includes(q),
+  );
+};
+
+export interface ModelChoice {
+  readonly key: string;
+  readonly agent: AgentId;
+  readonly model: string;
+  readonly name: string;
+}
+
+export const modelChoices = (
+  available: ReadonlyArray<AgentId>,
+  reported: ReadonlyArray<AgentModels>,
+): ModelChoice[] =>
+  available.flatMap((agent) =>
+    (reported.find((entry) => entry.agent === agent)?.options ?? []).map((option) => ({
+      key: JSON.stringify([agent, option.value]),
+      agent,
+      model: option.value,
+      name: option.name,
+    })),
+  );
+
+export const initialModel = (
+  choices: ReadonlyArray<ModelChoice>,
+  reported: ReadonlyArray<AgentModels>,
+  project: Pick<Project, "settings">,
+): ModelChoice | null => {
+  const agent = initialAgent(
+    choices.map((choice) => choice.agent),
+    project,
+  );
+  const preferred =
+    (project.settings.agent?.default ?? DEFAULT_SETTINGS.agent.default) === agent
+      ? project.settings.agent?.model
+      : undefined;
+  const current = reported.find((entry) => entry.agent === agent)?.currentValue;
+  return (
+    choices.find((choice) => choice.agent === agent && choice.model === preferred) ??
+    choices.find((choice) => choice.agent === agent && choice.model === current) ??
+    choices.find((choice) => choice.agent === agent) ??
+    null
   );
 };

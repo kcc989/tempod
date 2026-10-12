@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { AgentId, ApiKeyProvider, DiffScope, MergeMethod, ReviewSide } from "./enums.ts";
 import { EnvName } from "./settings.ts";
 import {
+  AgentModels,
   ChangedFile,
   CheckRun,
   CheckpointInfo,
@@ -92,10 +93,12 @@ export const API = {
       projectId: S,
       source: NewSource,
       agent: opt(AgentId),
+      model: opt(S),
       prompt: opt(Schema.Struct({ text: NonEmpty })),
     }),
     WorkspaceSummary,
   ),
+  listModels: fn("GET", Empty, Schema.Array(AgentModels)),
   listWorkspaces: fn("GET", Schema.Struct({ includeArchived: opt(B) }), Schema.Array(WorkspaceSummary)),
   getWorkspace: fn("GET", Schema.Struct(W), WorkspaceDetail),
   renameWorkspace: fn("POST", Schema.Struct({ ...W, title: S }), Empty),

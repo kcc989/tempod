@@ -137,6 +137,14 @@ pub struct AgentMessageContent {
     pub blocks: ::std::option::Option<::std::vec::Vec<ContentBlock>>,
     pub text: ::std::string::String,
 }
+///`AgentModels`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AgentModels {
+    pub agent: AgentId,
+    #[serde(rename = "currentValue")]
+    pub current_value: ::std::string::String,
+    pub options: ::std::vec::Vec<ConfigSelectOption>,
+}
 ///`AgentThoughtContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct AgentThoughtContent {
@@ -722,6 +730,8 @@ pub struct CreateSessionIn {
 pub struct CreateWorkspaceIn {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub agent: ::std::option::Option<AgentId>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub model: ::std::option::Option<::std::string::String>,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
@@ -5843,6 +5853,15 @@ pub mod api {
         type Input = crate::Empty;
         type Output = ::std::vec::Vec<crate::ListInstallationsItem>;
     }
+    /// `listModels`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListModels;
+    impl crate::Function for ListModels {
+        const NAME: &'static str = "listModels";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = ::std::vec::Vec<crate::AgentModels>;
+    }
     /// `listOpenPullRequests`
     #[derive(Clone, Copy, Debug)]
     pub struct ListOpenPullRequests;
@@ -6196,6 +6215,7 @@ pub mod api {
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
         ("listInstallations", crate::Method::Get),
+        ("listModels", crate::Method::Get),
         ("listOpenPullRequests", crate::Method::Get),
         ("listProjectSecretNames", crate::Method::Get),
         ("listProjects", crate::Method::Get),
@@ -6242,6 +6262,7 @@ pub mod wire {
         "AddReviewCommentIn",
         "AgentId",
         "AgentMessageContent",
+        "AgentModels",
         "AgentThoughtContent",
         "ApiKeyProvider",
         "ApiMeta",
@@ -6428,6 +6449,7 @@ pub mod wire {
             "AddReviewCommentIn" => crate::roundtrip::<crate::AddReviewCommentIn>(text),
             "AgentId" => crate::roundtrip::<crate::AgentId>(text),
             "AgentMessageContent" => crate::roundtrip::<crate::AgentMessageContent>(text),
+            "AgentModels" => crate::roundtrip::<crate::AgentModels>(text),
             "AgentThoughtContent" => crate::roundtrip::<crate::AgentThoughtContent>(text),
             "ApiKeyProvider" => crate::roundtrip::<crate::ApiKeyProvider>(text),
             "ApiMeta" => crate::roundtrip::<crate::ApiMeta>(text),

@@ -163,6 +163,25 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "listModels": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentModels.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listWorkspaces": {
       "type": "object",
       "properties": {
@@ -1059,6 +1078,7 @@
     "listBranches",
     "listOpenPullRequests",
     "createWorkspace",
+    "listModels",
     "listWorkspaces",
     "getWorkspace",
     "renameWorkspace",

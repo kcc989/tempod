@@ -48,6 +48,10 @@ export const createWorkspace = createServerFn({ method: "POST" })
   .validator((data: FnInput<"createWorkspace">) => data)
   .handler(({ data }) => run("createWorkspace", data));
 
+export const listModels = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listModels">) => data)
+  .handler(({ data }) => run("listModels", data));
+
 export const listWorkspaces = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listWorkspaces">) => data)
   .handler(({ data }) => run("listWorkspaces", data));

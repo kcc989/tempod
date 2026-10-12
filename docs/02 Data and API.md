@@ -474,7 +474,8 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createWorkspace` | `{projectId, source, agent?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
+| `createWorkspace` | `{projectId, source, agent?, model?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
+| `listModels` | `{}` | `AgentModels[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; cached for 15 minutes and invalidated by credentials or image changes | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
 | `renameWorkspace` | `{workspaceId, title}` | `{}` | — |

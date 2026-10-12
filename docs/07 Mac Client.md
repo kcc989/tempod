@@ -31,7 +31,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |
 | Sidebar, hover card, right-click menu, History | Same |  |
-| New workspace dialog | Same | First prompt is text only, as on the web |
+| New workspace dialog | Same | Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model and mode pickers | Same |  |
