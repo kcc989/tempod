@@ -1,7 +1,17 @@
 import { Schema } from "effect";
-import { AgentId, ApiKeyProvider, DiffScope, MergeMethod, ReviewSide } from "./enums.ts";
+import { AgentId, ApiKeyProvider, DiffScope, EgressStatusFilter, MergeMethod, ReviewSide } from "./enums.ts";
+import { EgressPolicy } from "./enums.ts";
+import {
+  EgressAllowlist,
+  Environment,
+  EnvironmentName,
+  InjectorInputs,
+  SecretBindings,
+} from "./environments.ts";
+import { McpServer, McpServerInput } from "./mcp.ts";
 import { EnvName } from "./settings.ts";
 import {
+  AgentModelOptions,
   ChangedFile,
   CheckRun,
   CheckpointInfo,
@@ -84,6 +94,30 @@ export const API = {
     Schema.Struct({ projectId: S }),
     Schema.Array(Schema.Struct({ number: N, title: S, headBranch: S })),
   ),
+  setProjectEnvironment: fn(
+    "POST",
+    Schema.Struct({ projectId: S, environmentId: Schema.NullOr(S) }),
+    Project,
+  ),
+
+  // Environments (01, Environments)
+  listEnvironments: fn("GET", Empty, Schema.Array(Environment)),
+  createEnvironment: fn("POST", Schema.Struct({ name: EnvironmentName }), Environment),
+  updateEnvironment: fn(
+    "POST",
+    Schema.Struct({
+      environmentId: S,
+      name: opt(EnvironmentName),
+      egressPolicy: opt(EgressPolicy),
+      egressAllowlist: opt(EgressAllowlist),
+      secrets: opt(SecretBindings),
+      injectors: opt(InjectorInputs),
+    }),
+    Environment,
+  ),
+  deleteEnvironment: fn("POST", Schema.Struct({ environmentId: S }), Empty),
+  setEnvironmentSecret: fn("POST", Schema.Struct({ environmentId: S, name: EnvName, value: S }), Empty),
+  deleteEnvironmentSecret: fn("POST", Schema.Struct({ environmentId: S, name: S }), Empty),
 
   // Workspaces
   createWorkspace: fn(
@@ -92,10 +126,12 @@ export const API = {
       projectId: S,
       source: NewSource,
       agent: opt(AgentId),
+      model: opt(S),
       prompt: opt(Schema.Struct({ text: NonEmpty })),
     }),
     WorkspaceSummary,
   ),
+  listModels: fn("GET", Empty, Schema.Array(AgentModelOptions)),
   listWorkspaces: fn("GET", Schema.Struct({ includeArchived: opt(B) }), Schema.Array(WorkspaceSummary)),
   getWorkspace: fn("GET", Schema.Struct(W), WorkspaceDetail),
   renameWorkspace: fn("POST", Schema.Struct({ ...W, title: S }), Empty),
@@ -107,9 +143,23 @@ export const API = {
   archiveWorkspace: fn("POST", Schema.Struct(W), Empty),
   restoreWorkspace: fn("POST", Schema.Struct(W), Empty),
   deleteWorkspace: fn("POST", Schema.Struct(W), Empty),
-  rotatePreviewToken: fn("POST", Schema.Struct(W), Schema.Struct({ previewToken: S })),
+  openPreview: fn("POST", Schema.Struct({ ...W, port: N }), Schema.Struct({ url: S })),
+  rotatePreviewKey: fn("POST", Schema.Struct(W), Empty),
+  /** POST: each call mints a new Live View link, which is a secret (01, Browser Run). */
+  getBrowserLiveView: fn("POST", Schema.Struct(W), Schema.Struct({ url: Schema.NullOr(S) })),
   setBaseBranch: fn("POST", Schema.Struct({ ...W, baseBranch: NonEmpty }), Empty),
-  getDiagnostics: fn("GET", Schema.Struct(W), Diagnostics),
+  /** `egressHost`: text the host contains, any case. `egressStatus` defaults to `all`. */
+  getDiagnostics: fn(
+    "GET",
+    Schema.Struct({ ...W, egressHost: opt(S), egressStatus: opt(EgressStatusFilter) }),
+    Diagnostics,
+  ),
+  setWorkspaceEnvironment: fn("POST", Schema.Struct({ ...W, environmentId: Schema.NullOr(S) }), Empty),
+  resolveEnvironmentProposal: fn(
+    "POST",
+    Schema.Struct({ ...W, proposalId: S, status: Schema.Literals(["applied", "dismissed"]) }),
+    Empty,
+  ),
 
   // Sessions and turns
   createSession: fn("POST", Schema.Struct({ ...W, agent: AgentId, model: opt(S), modeId: opt(S) }), Session),
@@ -232,6 +282,11 @@ export const API = {
     Schema.Struct({ projectId: S }),
     Schema.Struct({ names: Schema.Array(S) }),
   ),
+
+  // MCP servers
+  listMcpServers: fn("GET", Empty, Schema.Array(McpServer)),
+  saveMcpServer: fn("POST", McpServerInput, McpServer),
+  deleteMcpServer: fn("POST", Schema.Struct({ id: NonEmpty }), Empty),
 } as const;
 
 export type Api = typeof API;
@@ -255,3 +310,10 @@ export const ApiMeta = Schema.Struct({
   latestMacClientSha256: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 });
 export type ApiMeta = typeof ApiMeta.Type;
+
+/** `GET /api/setup/status`, no auth: whether the GitHub App exists, and its install page. */
+export const AppSetupStatus = Schema.Struct({
+  configured: Schema.Boolean,
+  installUrl: Schema.NullOr(S),
+});
+export type AppSetupStatus = typeof AppSetupStatus.Type;

@@ -1,6 +1,6 @@
 import { isErrorBody, TempoError, type ConfigOption, type FnInput, type Session } from "@tempo/protocol";
 import { useIsMutating } from "@tanstack/react-query";
-import { ArchiveRestoreIcon, ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
+import { ArchiveRestoreIcon, ArrowUpIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/ui/components/ui/button";
@@ -63,6 +63,7 @@ import {
   type PendingAttachment,
   type PickerRow,
 } from "./ComposerParts";
+import { EnvironmentProposalBanner } from "./EnvironmentProposals";
 
 export interface ComposerProps {
   readonly workspaceId: string;
@@ -346,6 +347,9 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     if (running) cancel.mutate({ workspaceId, turnId: running.id });
   };
 
+  useAction("stop", stop, { enabled: !!running });
+  useAction("togglePlan", () => togglePlan(), { enabled: planId !== null && !pickersDisabled });
+
   useShortcuts(
     {
       send: () => {
@@ -439,9 +443,10 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
 
   return (
     <div className="shrink-0">
+      <EnvironmentProposalBanner workspaceId={workspaceId} />
       {loginText && <LoginBanner text={loginText} />}
       <div
-        className={cn("relative border-t px-3 pt-2 pb-2", dragging && "bg-accent/40")}
+        className="relative px-3 pt-2 pb-3"
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
@@ -457,7 +462,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           addFiles([...e.dataTransfer.files]);
         }}
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
           {(plan !== null || inPlan || queued.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5" aria-label="Queued messages">
               {plan !== null && <PlanPill progress={plan} />}
@@ -481,163 +486,184 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
               ))}
             </div>
           )}
-          {hasChips && (
-            <div className="flex flex-wrap gap-1">
-              {reviewCommentIds.length > 0 && (
-                <ReviewChip count={reviewCommentIds.length} onRemove={() => setReviewCommentIds([])} />
-              )}
-              {mentions.map((m) => (
-                <MentionChip
-                  key={m.path}
-                  path={m.path}
-                  onRemove={() => setMentions((list) => list.filter((x) => x.path !== m.path))}
-                />
-              ))}
-              {attachments.map((a) => (
-                <AttachmentChip key={a.localId} a={a} onRemove={() => removeAttachment(a)} />
-              ))}
-            </div>
-          )}
-          <div className="relative">
-            {sendPending && (
-              <p role="status" className="pb-1 text-xs text-muted-foreground">
-                Saving message…
-              </p>
+          <div
+            className={cn(
+              "rounded-2xl border border-input bg-muted/30 p-3 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 sm:p-4",
+              dragging && "border-ring bg-accent/40 ring-2 ring-ring/20",
             )}
-            {pickerOpen && (
-              <PickerList
-                id={pickerId}
-                rows={rows}
-                activeIndex={activeIndex}
-                status={pickerStatus}
-                onPick={pick}
-                onRetry={triggerKind === "mention" && files.isError ? () => void files.refetch() : undefined}
-              />
+          >
+            {hasChips && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {reviewCommentIds.length > 0 && (
+                  <ReviewChip count={reviewCommentIds.length} onRemove={() => setReviewCommentIds([])} />
+                )}
+                {mentions.map((m) => (
+                  <MentionChip
+                    key={m.path}
+                    path={m.path}
+                    onRemove={() => setMentions((list) => list.filter((x) => x.path !== m.path))}
+                  />
+                ))}
+                {attachments.map((a) => (
+                  <AttachmentChip key={a.localId} a={a} onRemove={() => removeAttachment(a)} />
+                ))}
+              </div>
             )}
-            <Textarea
-              ref={textRef}
-              value={draft}
-              rows={1}
-              placeholder={
-                workspaceBusy
-                  ? `Queue a message for ${label}`
-                  : sleeping
-                    ? `Message ${label} to wake this workspace`
-                    : `Message ${label}`
-              }
-              aria-label="Message"
-              aria-autocomplete="list"
-              aria-expanded={pickerOpen}
-              aria-controls={pickerOpen ? pickerId : undefined}
-              aria-activedescendant={pickerOpen && rows.length > 0 ? `${pickerId}-${activeIndex}` : undefined}
-              onChange={(e) => {
-                const text = e.target.value;
-                const at = e.target.selectionStart;
-                setDraft(text);
-                setCaret(at);
-                if (dismissed !== null && dismissed !== triggerKeyOf(text, at)) setDismissed(null);
-              }}
-              onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-              onKeyDown={(e) => {
-                if (!pickerOpen || rows.length === 0) return;
-                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                  e.preventDefault();
-                  const delta = e.key === "ArrowDown" ? 1 : -1;
-                  setActive({ key: activeKey, index: (activeIndex + delta + rows.length) % rows.length });
-                } else if (e.key === "Tab" && !e.shiftKey) {
-                  e.preventDefault();
-                  pick(activeIndex);
-                }
-              }}
-              onPaste={(e) => {
-                const pasted = [...e.clipboardData.files];
-                if (pasted.length === 0) return;
-                if (!e.clipboardData.getData("text/plain")) e.preventDefault();
-                addFiles(pasted);
-              }}
-              className="max-h-48 min-h-9 resize-none"
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <SimpleTooltip label={`Attach a file (${formatBinding("attach")})`}>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Attach a file"
-                onClick={() => fileRef.current?.click()}
+            <div className="relative">
+              <span
+                className="pointer-events-none absolute top-0 right-0 hidden text-xs text-muted-foreground/70 sm:block"
+                aria-hidden="true"
               >
-                <PaperclipIcon />
-              </Button>
-            </SimpleTooltip>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              hidden
-              tabIndex={-1}
-              aria-hidden
-              onChange={(e) => {
-                addFiles([...(e.target.files ?? [])]);
-                e.target.value = "";
-              }}
-            />
-            {pickers.model && (
-              <ModelPicker
-                option={pickers.model}
-                open={modelOpen}
-                onOpenChange={setModelOpen}
+                {formatBinding("focusComposer")} to focus
+              </span>
+              {sendPending && (
+                <p role="status" className="pb-1 text-xs text-muted-foreground">
+                  Saving message…
+                </p>
+              )}
+              {pickerOpen && (
+                <PickerList
+                  id={pickerId}
+                  rows={rows}
+                  activeIndex={activeIndex}
+                  status={pickerStatus}
+                  onPick={pick}
+                  onRetry={
+                    triggerKind === "mention" && files.isError ? () => void files.refetch() : undefined
+                  }
+                />
+              )}
+              <Textarea
+                ref={textRef}
+                value={draft}
+                rows={1}
+                placeholder={
+                  workspaceBusy
+                    ? `Queue a message for ${label}`
+                    : sleeping
+                      ? `Message ${label} to wake this workspace`
+                      : "Ask to make changes, @mention files, run /commands"
+                }
+                aria-label="Message"
+                aria-autocomplete="list"
+                aria-expanded={pickerOpen}
+                aria-controls={pickerOpen ? pickerId : undefined}
+                aria-activedescendant={
+                  pickerOpen && rows.length > 0 ? `${pickerId}-${activeIndex}` : undefined
+                }
+                onChange={(e) => {
+                  const text = e.target.value;
+                  const at = e.target.selectionStart;
+                  setDraft(text);
+                  setCaret(at);
+                  if (dismissed !== null && dismissed !== triggerKeyOf(text, at)) setDismissed(null);
+                }}
+                onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+                onKeyDown={(e) => {
+                  if (!pickerOpen || rows.length === 0) return;
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const delta = e.key === "ArrowDown" ? 1 : -1;
+                    setActive({ key: activeKey, index: (activeIndex + delta + rows.length) % rows.length });
+                  } else if (e.key === "Tab" && !e.shiftKey) {
+                    e.preventDefault();
+                    pick(activeIndex);
+                  }
+                }}
+                onPaste={(e) => {
+                  const pasted = [...e.clipboardData.files];
+                  if (pasted.length === 0) return;
+                  if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+                  addFiles(pasted);
+                }}
+                className="max-h-72 min-h-24 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent sm:pr-28"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2">
+              {pickers.model && (
+                <ModelPicker
+                  option={pickers.model}
+                  open={modelOpen}
+                  onOpenChange={setModelOpen}
+                  disabled={pickersDisabled}
+                  onPick={(v) => onConfig(pickers.model!, v)}
+                  onClosed={refocus}
+                />
+              )}
+              <ModePicker
+                session={session}
+                modeOption={pickers.modeOption}
                 disabled={pickersDisabled}
-                onPick={(v) => onConfig(pickers.model!, v)}
+                onMode={(modeId) => setMode.mutate({ workspaceId, sessionId, modeId })}
+                onConfig={onConfig}
                 onClosed={refocus}
               />
-            )}
-            <ModePicker
-              session={session}
-              modeOption={pickers.modeOption}
-              disabled={pickersDisabled}
-              onMode={(modeId) => setMode.mutate({ workspaceId, sessionId, modeId })}
-              onConfig={onConfig}
-              onClosed={refocus}
-            />
-            <OptionsMenu
-              options={pickers.others}
-              disabled={pickersDisabled}
-              onConfig={onConfig}
-              onClosed={refocus}
-            />
-            <div className="ml-auto flex items-center gap-1">
-              {usage && <ContextRing usage={usage} />}
-              {running && (
-                <SimpleTooltip label="Stop (Esc)">
+              <OptionsMenu
+                options={pickers.others}
+                disabled={pickersDisabled}
+                onConfig={onConfig}
+                onClosed={refocus}
+              />
+              <div className="ml-auto flex items-center gap-2">
+                <SimpleTooltip label={`Attach a file (${formatBinding("attach")})`}>
                   <Button
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Stop"
-                    onClick={stop}
-                    disabled={cancel.isPending}
+                    size="icon"
+                    variant="ghost"
+                    className="rounded-lg text-muted-foreground"
+                    aria-label="Attach a file"
+                    onClick={() => fileRef.current?.click()}
                   >
-                    <SquareIcon className="fill-current" />
+                    <PlusIcon className="size-5" />
                   </Button>
                 </SimpleTooltip>
-              )}
-              <Button
-                size="icon-sm"
-                aria-label={workspaceBusy ? "Queue" : "Send"}
-                onClick={() => submit()}
-                disabled={!sendable || sendPending}
-              >
-                <ArrowUpIcon />
-              </Button>
-              {running && session.steering === true && (
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  hidden
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(e) => {
+                    addFiles([...(e.target.files ?? [])]);
+                    e.target.value = "";
+                  }}
+                />
+
+                {usage && <ContextRing usage={usage} />}
+                {running && (
+                  <SimpleTooltip label="Stop (Esc)">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="rounded-lg"
+                      aria-label="Stop"
+                      onClick={stop}
+                      disabled={cancel.isPending}
+                    >
+                      <SquareIcon className="fill-current" />
+                    </Button>
+                  </SimpleTooltip>
+                )}
                 <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => submit("steer")}
+                  size="icon"
+                  className="rounded-lg disabled:bg-muted-foreground/25 disabled:text-muted-foreground disabled:opacity-100"
+                  aria-label={workspaceBusy ? "Queue" : "Send"}
+                  onClick={() => submit()}
                   disabled={!sendable || sendPending}
                 >
-                  Send now
+                  <ArrowUpIcon className="size-4" />
                 </Button>
-              )}
+                {running && session.steering === true && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => submit("steer")}
+                    disabled={!sendable || sendPending}
+                  >
+                    Send now
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>

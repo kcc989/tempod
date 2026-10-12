@@ -5,6 +5,7 @@ import {
   LaptopIcon,
   LinkIcon,
   MoonIcon,
+  NetworkIcon,
   PowerIcon,
   RotateCwIcon,
   StethoscopeIcon,
@@ -23,12 +24,14 @@ import { useProject } from "~/ui/hooks/useProjects";
 import { macWorkspaceUrl } from "~/ui/lib/links";
 import { formatBinding } from "~/ui/lib/shortcuts";
 import { openDialog } from "~/ui/state/workspace-ui";
+import { openLiveViewTab, openPreviewTab } from "./open-preview";
+import { LiveDot } from "./PortLinks";
 import { canArchive, githubUrlFor, powerAction, type WorkspaceView } from "./topbar-logic";
 import type { WorkspaceActions } from "./useWorkspaceActions";
 
 /**
- * 04, Overflow menu: Wake or Sleep, Rotate preview link, Open on GitHub, Copy workspace link,
- * Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links here.
+ * 04, Overflow menu: Wake or Sleep, Reset preview access, Open on GitHub, Copy workspace link,
+ * Environment…, Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links and `Live` here.
  */
 export function OverflowMenu({
   view,
@@ -43,6 +46,7 @@ export function OverflowMenu({
   const project = useProject(w.projectId);
   const power = powerAction(w.state);
   const ports = phone ? (d?.ports ?? []) : [];
+  const live = phone && (d?.browserActive ?? false);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -51,17 +55,23 @@ export function OverflowMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
-        {ports.length > 0 && (
+        {(ports.length > 0 || live) && (
           <>
             <DropdownMenuLabel>Previews</DropdownMenuLabel>
             {ports.map((p) => (
-              <DropdownMenuItem key={p.port} asChild>
-                <a href={p.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLinkIcon />
-                  <span className="font-mono tabular-nums">{p.port} ↗</span>
-                </a>
+              <DropdownMenuItem key={p.port} onSelect={() => void openPreviewTab(w.id, p.port)}>
+                <ExternalLinkIcon />
+                <span className="font-mono tabular-nums">{p.port} ↗</span>
               </DropdownMenuItem>
             ))}
+            {live && (
+              <DropdownMenuItem onSelect={() => void openLiveViewTab(w.id)}>
+                <span className="flex size-4 items-center justify-center">
+                  <LiveDot />
+                </span>
+                Live
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
           </>
         )}
@@ -74,10 +84,10 @@ export function OverflowMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={w.state === "archived" || w.state === "archiving"}
-          onSelect={() => void actions.rotatePreview()}
+          onSelect={() => void actions.resetPreviewAccess()}
         >
           <RotateCwIcon />
-          Rotate preview link
+          Reset preview access
         </DropdownMenuItem>
         {project ? (
           <DropdownMenuItem asChild>
@@ -95,6 +105,10 @@ export function OverflowMenu({
         <DropdownMenuItem onSelect={() => void actions.copyLink()}>
           <LinkIcon />
           Copy workspace link
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => openDialog({ kind: "environment", workspaceId: w.id })}>
+          <NetworkIcon />
+          Environment…
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openDialog({ kind: "diagnostics", workspaceId: w.id })}>
           <StethoscopeIcon />

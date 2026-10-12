@@ -2,6 +2,7 @@
 //! and the store logic shared with the app. It has no GPUI dependency.
 
 mod channel;
+mod environments;
 mod error;
 mod prng;
 mod runtime;
@@ -17,11 +18,14 @@ pub use channel::{
     TerminalChannelEvent, TerminalFrame, TerminalHandle, TerminalInput, WorkspaceChannelEvent,
     WorkspaceHandle, reconnect_delay,
 };
+pub use environments::{
+    ENVIRONMENT_NAME_MAX, ProposalApplied, ProposalApply, merge_proposal, unique_name,
+};
 pub use error::{ApiError, DENIED_MESSAGE, NOT_TEMPO_MESSAGE, SignInError};
 pub use runtime::{Runtime, RuntimeHandle, Signal};
 pub use server::{
-    CLIENT_ID, Client, DEVICE_GRANT_TYPE, DeviceAuthorization, MAX_ATTACHMENT_BYTES,
-    SLOW_DOWN_STEP, Server, TokenStatus,
+    AttachmentFile, CLIENT_ID, Client, DEVICE_GRANT_TYPE, DeviceAuthorization,
+    MAX_ATTACHMENT_BYTES, SLOW_DOWN_STEP, Server, TokenStatus,
 };
 pub use token::Token;
 pub use version::{compare_versions, newer_version_available, parse_version};

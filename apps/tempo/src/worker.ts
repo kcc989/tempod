@@ -11,7 +11,8 @@ import { log } from "./log.ts";
 export { WorkspaceDO } from "./do/workspace/index.ts";
 export { UserHubDO } from "./do/user-hub.ts";
 export { CredentialDO } from "./do/credential.ts";
-export { TempoOutbound } from "./egress/outbound.ts";
+export { InjectorSecrets, TempoOutbound } from "./egress/outbound.ts";
+export { BrowserOutbound } from "./egress/browser-outbound.ts";
 export { DirectoryBackupGateway } from "@cloudflare/sandbox";
 
 const ATTACHMENTS = /^\/api\/workspaces\/([0-9a-hjkmnp-tv-z]{26})\/attachments$/;

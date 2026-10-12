@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ResolveEnvironmentProposalIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "proposalId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["applied", "dismissed"]
+    }
+  },
+  "required": ["workspaceId", "proposalId", "status"],
+  "additionalProperties": true
+}

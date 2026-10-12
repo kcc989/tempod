@@ -6,7 +6,7 @@
   "main": "./src/worker.ts",
   "compatibility_date": "2026-10-10",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
   "vars": {
     "APP_HOST": "localhost:5173",
     "PREVIEW_DOMAIN": "previews.localhost",
@@ -51,4 +51,6 @@
     },
   ],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }],
+  "browser": { "binding": "BROWSER" },
+  "worker_loaders": [{ "binding": "LOADER" }],
 }

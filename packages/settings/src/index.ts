@@ -1,7 +1,9 @@
 import {
+  AGENT_IDS,
   DEFAULT_SETTINGS,
   Settings,
   SettingsLayer,
+  type AgentId,
   type SettingsReadResult,
   type SettingsSource,
 } from "@tempo/protocol";
@@ -26,7 +28,8 @@ const isObj = (u: unknown): u is Obj => typeof u === "object" && u !== null && !
 
 /** Known keys of a Tempo layer. `*` means any key; a nested object describes its children. */
 const KNOWN: Obj = {
-  agent: { default: true, model: true },
+  agent: { default: true, models: { claude: true, codex: true, opencode: true, pi: true } },
+  browser: { run: true },
   scripts: {
     setup: true,
     archive: true,
@@ -217,8 +220,19 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
   };
   if (layer.agent) {
     leaf("agent", "default", layer.agent.default);
-    leaf("agent", "model", layer.agent.model);
+    const models = layer.agent.models;
+    if (models) {
+      const nextModels: Record<AgentId, string> = { ...next.agent.models };
+      for (const agent of AGENT_IDS) {
+        const model = models[agent];
+        if (model === undefined) continue;
+        nextModels[agent] = model;
+        setSource(sources, `agent.models.${agent}`, source);
+      }
+      next.agent.models = nextModels;
+    }
   }
+  if (layer.browser) leaf("browser", "run", layer.browser.run);
   if (layer.scripts) {
     const s = layer.scripts;
     leaf("scripts", "setup", s.setup);
@@ -260,6 +274,15 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
 
 const decodeSettings = Schema.decodeUnknownExit(Settings);
 
+/** Repo files are writable by the agent, so they never set egress (05, Egress control). */
+const withoutEgress = (source: SettingsSource, layer: SettingsLayer, warnings: string[]): SettingsLayer => {
+  const e = layer.environment;
+  if (!e || (e.egress_policy === undefined && e.egress_allowlist === undefined)) return layer;
+  warnings.push(`${source}: egress settings in repo files are ignored; set them in Tempo`);
+  const { egress_policy: _p, egress_allowlist: _a, ...rest } = e;
+  return { ...layer, environment: rest };
+};
+
 /**
  * Computes effective settings. Precedence, highest first: UI overrides, `.tempo/settings.toml`,
  * `.conductor/settings.toml`, `conductor.json`, defaults.
@@ -273,7 +296,7 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
     const r = read(text);
     warnings.push(...r.warnings);
     errors.push(...r.errors);
-    if (r.layer) layers.push([source, r.layer]);
+    if (r.layer) layers.push([source, withoutEgress(source, r.layer, warnings)]);
   };
   add("conductor.json", files.conductorJson, readConductorJson);
   add(".conductor", files.conductorToml, readConductorToml);
@@ -288,8 +311,15 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
     for (const key of Object.keys(sources)) if (sources[key] === "tempo") delete sources[key];
     return { effective, warnings, errors, sources };
   }
+  if (final.value.browser.run && !browserRunOn(final.value)) warnings.push(BROWSER_RUN_ALLOWLIST_WARNING);
   return { effective: final.value, warnings, errors, sources };
 };
+
+export const BROWSER_RUN_ALLOWLIST_WARNING = "Browser Run is off: it does not pass the egress allowlist.";
+
+/** 01 Browser Run: on only with the `open` egress policy, because Browser Run does not pass TempoOutbound. */
+export const browserRunOn = (settings: Settings): boolean =>
+  settings.browser.run && settings.environment.egress_policy === "open";
 
 /** Validates UI overrides on their own (updateProjectSettings). */
 export const validateOverrides = (

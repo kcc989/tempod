@@ -2,9 +2,11 @@ import { DurableObject } from "cloudflare:workers";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { eq, like } from "drizzle-orm";
 import { credentialSchema, codexLeases, secrets } from "../db/credential-do.ts";
+import { json, type SecretMeta } from "../db/json.ts";
 import { CREDENTIAL_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
 import type { Env } from "../env.ts";
 import { deriveKey, open, seal } from "../lib/crypto.ts";
+import { environmentSecretKey, environmentSecretPrefix } from "../lib/environments.ts";
 import { log } from "../log.ts";
 import { TempoError, capture, type Result, type FnOutput } from "@tempo/protocol";
 import {
@@ -46,7 +48,7 @@ export interface GithubAppConfig {
 export interface SecretStatus {
   readonly key: string;
   readonly updatedAt: number;
-  readonly meta: { readonly lastRefresh?: number };
+  readonly meta: SecretMeta;
 }
 
 /**
@@ -176,20 +178,13 @@ export class CredentialDO extends DurableObject<Env> {
     }
   }
 
-  async putSecret(
-    key: string,
-    value: string,
-    meta: Record<string, unknown> = {},
-  ): Promise<{ version: number }> {
+  async putSecret(key: string, value: string, meta: SecretMeta = {}): Promise<{ version: number }> {
     const sealed = await seal(await this.key(), key, value);
     return { version: this.storeSealedSecret(key, sealed, meta) };
   }
 
-  private storeSealedSecret(
-    key: string,
-    sealed: Awaited<ReturnType<typeof seal>>,
-    meta: Record<string, unknown>,
-  ): number {
+  private storeSealedSecret(key: string, sealed: Awaited<ReturnType<typeof seal>>, meta: SecretMeta): number {
+    const metaJson = json.secretMeta.write(meta);
     const now = Date.now();
     const prev = this.db.select({ version: secrets.version }).from(secrets).where(eq(secrets.key, key)).get();
     const version = (prev?.version ?? 0) + 1;
@@ -200,18 +195,12 @@ export class CredentialDO extends DurableObject<Env> {
         ciphertext: sealed.ciphertext,
         iv: sealed.iv,
         version,
-        metaJson: JSON.stringify(meta),
+        metaJson,
         updatedAt: now,
       })
       .onConflictDoUpdate({
         target: secrets.key,
-        set: {
-          ciphertext: sealed.ciphertext,
-          iv: sealed.iv,
-          version,
-          metaJson: JSON.stringify(meta),
-          updatedAt: now,
-        },
+        set: { ciphertext: sealed.ciphertext, iv: sealed.iv, version, metaJson, updatedAt: now },
       })
       .run();
     return version;
@@ -230,34 +219,36 @@ export class CredentialDO extends DurableObject<Env> {
       .map((r) => ({
         key: r.key,
         updatedAt: r.updatedAt,
-        meta: JSON.parse(r.metaJson) as { lastRefresh?: number },
+        meta: json.secretMeta.read(r.metaJson, {}),
       }));
   }
 
-  async listProjectEnv(projectId: string): Promise<Record<string, string>> {
-    const prefix = `project.${projectId}.env.`;
-    const rows = this.db
-      .select({ key: secrets.key })
-      .from(secrets)
-      .where(like(secrets.key, `${prefix}%`))
-      .all();
+  private async valuesWithPrefix(prefix: string): Promise<Record<string, string>> {
     const out: Record<string, string> = {};
-    for (const r of rows) {
-      const value = await this.getSecret(r.key);
-      if (value !== null) out[r.key.slice(prefix.length)] = value;
+    for (const name of this.namesWithPrefix(prefix)) {
+      const value = await this.getSecret(prefix + name);
+      if (value !== null) out[name] = value;
     }
     return out;
   }
 
-  async listProjectEnvNames(projectId: string): Promise<string[]> {
-    const prefix = `project.${projectId}.env.`;
+  private namesWithPrefix(prefix: string): string[] {
     return this.db
       .select({ key: secrets.key })
       .from(secrets)
       .where(like(secrets.key, `${prefix}%`))
       .all()
+      .filter((r) => r.key.startsWith(prefix))
       .map((r) => r.key.slice(prefix.length))
       .sort();
+  }
+
+  async listProjectEnv(projectId: string): Promise<Record<string, string>> {
+    return this.valuesWithPrefix(`project.${projectId}.env.`);
+  }
+
+  async listProjectEnvNames(projectId: string): Promise<string[]> {
+    return this.namesWithPrefix(`project.${projectId}.env.`);
   }
 
   async deleteProjectEnv(projectId: string): Promise<void> {
@@ -267,6 +258,42 @@ export class CredentialDO extends DurableObject<Env> {
       .run();
   }
 
+  /** WorkspaceDO only (02): values for the container's env. */
+  async listEnvironmentSecrets(environmentId: string): Promise<Record<string, string>> {
+    return this.valuesWithPrefix(environmentSecretPrefix(environmentId));
+  }
+
+  async listEnvironmentSecretNames(environmentId: string): Promise<string[]> {
+    return this.namesWithPrefix(environmentSecretPrefix(environmentId));
+  }
+
+  async deleteEnvironmentSecrets(environmentId: string): Promise<void> {
+    this.db
+      .delete(secrets)
+      .where(like(secrets.key, `${environmentSecretPrefix(environmentId)}%`))
+      .run();
+  }
+
+  /** TempoOutbound only (01, rule 11): an injector gets the MAC, never the value. */
+  async hmacEnvironmentSecret(
+    environmentId: string,
+    name: string,
+    data: string | ArrayBuffer,
+    hash: "SHA-1" | "SHA-256" | "SHA-512",
+    prefix: string,
+  ): Promise<ArrayBuffer | null> {
+    const value = await this.getSecret(environmentSecretKey(environmentId, name));
+    if (value === null) return null;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(prefix + value),
+      { name: "HMAC", hash },
+      false,
+      ["sign"],
+    );
+    return crypto.subtle.sign("HMAC", key, typeof data === "string" ? new TextEncoder().encode(data) : data);
+  }
+
   /** Stores a Codex auth.json only if it is newer, then pushes it to every other lease holder (01). */
   async offerCodexAuth(
     content: string,
@@ -274,7 +301,7 @@ export class CredentialDO extends DurableObject<Env> {
     fromWorkspaceId: string | null,
   ): Promise<{ accepted: boolean; version: number }> {
     const row = this.db.select().from(secrets).where(eq(secrets.key, SECRET_KEYS.codex)).get();
-    const current = row ? ((JSON.parse(row.metaJson) as { lastRefresh?: number }).lastRefresh ?? 0) : -1;
+    const current = row ? (json.secretMeta.read(row.metaJson, {}).lastRefresh ?? 0) : -1;
     if (row && !(lastRefresh > current)) return { accepted: false, version: row.version };
     const { version } = await this.putSecret(SECRET_KEYS.codex, content, { lastRefresh });
     const leases = this.db.select().from(codexLeases).all();
@@ -312,7 +339,7 @@ export class CredentialDO extends DurableObject<Env> {
     if (!row) return null;
     const content = await this.getSecret(SECRET_KEYS.codex);
     if (content === null) return null;
-    const meta = JSON.parse(row.metaJson) as { lastRefresh?: number };
+    const meta = json.secretMeta.read(row.metaJson, {});
     return { content, version: row.version, lastRefresh: meta.lastRefresh ?? 0 };
   }
 

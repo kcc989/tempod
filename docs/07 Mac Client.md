@@ -31,7 +31,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |
 | Sidebar, hover card, right-click menu, History | Same |  |
-| New workspace dialog | Same | First prompt is text only, as on the web |
+| New workspace dialog | Same | Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model and mode pickers | Same |  |
@@ -41,9 +41,12 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Checks | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
 | Previews | Different | Open in the default browser; no Browser tab |
+| Artifact cards, Artifacts tab, Artifact tab | Different | Images, Markdown and text show in the app. HTML and PDF artifacts open in the default browser through `openArtifact`. Mermaid blocks show as code (Artifacts, below). |
+| Image and Markdown file tabs, image diffs, plan proposals | Same | Mermaid blocks show as code |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
-| Settings: General, Logins, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
+| Environment… dialog and environment proposal review | Same |  |
+| Settings: General, Logins, Environments, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |
@@ -101,7 +104,7 @@ The Worker gets a small JSON API, bearer-token sign-in and a download route. The
 | Bearer and device plugins | 05, Authentication | Better Auth `bearer()` and `deviceAuthorization()`; `/api/v1` accepts only bearer tokens |
 | WebSocket auth | 02, Hub and terminal channels | Upgrades also accept `Authorization: Bearer` with no `Origin` header |
 | `/device` page | 04, Dialogs | Where the owner approves a Mac sign-in |
-| Settings: Devices | 04, Dialogs | Lists sign-in sessions, with Revoke |
+| Settings: Devices | 04, Settings | Lists sign-in sessions, with Revoke |
 | Mac downloads | 02, R2 layout | `clients/mac/` in R2, served at `GET /downloads/mac/<version>`, owner only |
 | Shared types | 06, Repo layout | `bun run protocol:gen` writes the JSON Schema and the Rust types |
 
@@ -142,6 +145,8 @@ The Mac stores apply the same messages with the same rules as the web stores (02
 
 ## Window layout and components
 
+The Mac shell uses a 13 pt base size, matching the dense web shell. Sidebar actions, the Projects header, the scrolling project list and the fixed History/Settings footer follow 04, including empty, loading and error states. The sidebar uses the theme sidebar surface; project headers and workspace rows have distinct type weight and spacing. With no workspace selected, the center offers New workspace and Add project. Review controls are compact, the empty changes list fills the available space, and the commit form sits in a padded, bordered footer. Process controls use consistent padding and spacing.
+
 The main window has the five regions of 04. Each region uses the GPUI Kit components below. Where no component fits, Tempo builds its own, marked **custom**.
 
 | Region (04) | GPUI Kit components |
@@ -152,7 +157,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
 | Center tabs | `Tabs` |
 | Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
-| Composer | `Textarea` (grows from 1 to 12 rows); `Select` for model and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
+| Composer | `Textarea` (grows from 3 to 12 rows); `Select` for model and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
 | Changes, Checks | `VirtualList`, `Badge`, `Tag` |
 | All files | `Tree` |
 | File tab | `Editor`, read-only, with syntax highlighting |
@@ -177,6 +182,8 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 
 Behavior follows 04, Center. These rules are for the Mac app only.
 
+Tool calls use a borderless disclosure with indented content. Tool text renders as Markdown; unfenced execute output preserves literal lines in a code block, matching 04.
+
 - **No raw HTML (05).** Render agent text with `TextView::markdown`. MUST NOT render raw HTML. If spike S11 shows that `TextView` renders HTML blocks, escape `<` outside code before the text reaches it.
 - **No remote images (05).** Wrap the transcript in an `ImageCache` whose `load` refuses `http://` and `https://` URIs, and show those images as links. Images from ACP `image` blocks load from their inline data.
 - **Links.** Install `on_link_click`. Open `http` and `https` URLs in the default browser. A `file:///workspace/<path>` link opens a file tab at that path. Ignore every other scheme.
@@ -184,6 +191,7 @@ Behavior follows 04, Center. These rules are for the Mac app only.
 - **Work rows.** Group, label and count items exactly as 04, Work row, Work types and Tool call labels, with the same Default and Detailed detail. Put the rules in `src/views/chat_model.rs` so they are tested without a window.
 - **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control on an opaque background, as 04. Each chat tab keeps its own scroll position.
 - **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right and bottom panels: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
+- **Composer appearance.** The text field and toolbar share the rounded container from 04, using the native theme background. The field grows from 3 to 12 rows without a separate border; the toolbar aligns attachment and send controls to the right and shows the native ⌘L focus hint.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
 - **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
 - **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.
@@ -215,7 +223,15 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Setup and Run.** Same as 04: output from `script.output`, Start and Stop, and ⌘R to start or stop the default run script.
 
-**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click opens the preview URL in the default browser. There is no in-app Browser tab in this version (C7). Rotate preview link works as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
+**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. There is no in-app Browser tab in this version (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` calls `getBrowserLiveView` and opens the URL in the default browser. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
+
+**Artifacts** (phase 5, 04 Artifacts tab and Artifact tab)
+
+- Artifact cards, the Artifacts tab and the Artifact tab follow 04, with the same copy.
+- Image and Markdown bytes come from the artifact route (02) through `tempo-client` with the bearer token. Images are drawn from those bytes, not through an `ImageCache` URI, so the remote-image rule still holds. SVG is rasterized with `resvg = "=0.48.1"` on the background executor; it never runs script.
+- Markdown renders with `TextView::markdown`, as the transcript. GPUI has no Mermaid renderer, so a `mermaid` block shows as a code block.
+- `pdf` and `html`: the Artifact tab shows the card details and `Open in browser`, which calls `openArtifact` and opens the link in the default browser (C7). No in-app web view.
+- File tabs and the Diff tab show images and Markdown previews as 04, with the same rules.
 
 ## macOS integration
 
@@ -256,6 +272,7 @@ The app stores no workspace data on disk. This table is the full list of what it
 - Write files atomically: temp file, then rename. If a file does not parse, rename it to `<name>.bad` and start from defaults.
 - Logs pass through the same redact rule as 05. MUST NOT log tokens, secrets, prompts or transcript text.
 - Project settings, logins and secrets are server data. The Settings window changes them with the same functions as the web.
+- Project settings follow 04's direct editing and `Reset to inherited` behavior, including explicit empty and Off overrides, source labels, and per-entry merging for run scripts and environment variables. There is no separate override toggle.
 - The bundle identifier is `dev.tempo.mac`. Change it only before the first release; the Keychain item and folders depend on it.
 
 ## Build, signing, distribution and updates
@@ -319,6 +336,7 @@ Phase 4 starts after gate D passes. Server changes come first, so the web UI nev
 | M3 Review | Changes, diff, comments, files, checks, commit and push, PR, merge, archive | AT-29 and AT-30 pass |
 | M4 Processes | Setup, Run, terminal, previews, Diagnostics, Settings | AT-31 passes |
 | M5 Native and ship | Menus, shortcuts, notifications, Dock badge, URL scheme, `mac:release`, update check | AT-32 to AT-37 pass |
+| M6 Artifacts (phase 5) | Artifact cards and tabs, image and Markdown file tabs, image diffs, plan proposals | AT-47 passes, with the web UI's gate F |
 
 **Spikes.** Same rules as 06: throwaway code, results in `spikes/S<n>.md`, and the spec changes before M1 if a result differs. They run before M0 ends.
 

@@ -50,6 +50,23 @@
           "enum": ["Infinity", "-Infinity", "NaN"]
         }
       ]
+    },
+    "environmentId": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["id", "installationId", "repoId", "owner", "name", "defaultBranch", "settings", "sortOrder"],

@@ -14,7 +14,8 @@ pub struct AppState {
     pub server_url: Option<String>,
     pub main_window: Option<gpui_kit::AnyWindowHandle>,
     pub workspace_focused: bool,
-    pub collapsed_projects: std::collections::BTreeSet<String>,
+    /// Collapsed sidebar sections: `pinned` or a project id.
+    pub collapsed_sections: std::collections::BTreeSet<String>,
     pub credentials_rev: u64,
     pub credential_changed: Option<tempo_protocol::CredentialProvider>,
     pub settings_window: Option<gpui_kit::AnyWindowHandle>,
@@ -34,6 +35,8 @@ pub struct AppState {
     pub downloading_update: bool,
     download_task: Option<Task<()>>,
     pub update_error: Option<String>,
+    /// Check for Updates… was chosen: the next result shows as a toast.
+    manual_update_check: bool,
     auth_task: Option<Task<()>>,
 }
 
@@ -47,7 +50,7 @@ impl AppState {
         Self {
             main_window: None,
             workspace_focused: false,
-            collapsed_projects: Default::default(),
+            collapsed_sections: Default::default(),
             credentials_rev: 0,
             credential_changed: None,
             settings_window: None,
@@ -67,6 +70,7 @@ impl AppState {
             downloading_update: false,
             download_task: None,
             update_error: None,
+            manual_update_check: false,
             auth_task: None,
         }
     }
@@ -183,7 +187,7 @@ impl AppState {
                 .map_err(|_| tempo_client::SignInError::NotTempo)?;
                 let required = matches!(update, crate::update::UpdateCheck::Required { .. });
                 let _ = this.update(cx, |state, cx| {
-                    state.available_update = meta.latest_mac_client.clone();
+                    state.available_update = crate::update::offered_version(&update);
                     state.update_meta = Some(meta.clone());
                     cx.notify();
                 });
@@ -328,7 +332,8 @@ impl AppState {
                 let result = request.await;
                 if this
                     .update(cx, |s, cx| {
-                        match result {
+                        let manual = std::mem::take(&mut s.manual_update_check);
+                        let feedback = match result {
                             Ok(meta) => {
                                 s.update_meta = Some(meta.clone());
                                 s.update_error = None;
@@ -336,25 +341,39 @@ impl AppState {
                                     &meta.min_mac_client,
                                     meta.latest_mac_client.as_deref(),
                                 ) {
-                                    Ok(crate::update::UpdateCheck::Required { .. }) => {
-                                        s.available_update = meta.latest_mac_client.clone();
-                                        s.stop_for_update(cx);
-                                    }
-                                    Ok(crate::update::UpdateCheck::Available(v)) => {
-                                        s.available_update = Some(v.to_string())
-                                    }
-                                    Ok(crate::update::UpdateCheck::UpToDate) => {
-                                        s.available_update = None
+                                    Ok(check) => {
+                                        s.available_update = crate::update::offered_version(&check);
+                                        if matches!(
+                                            check,
+                                            crate::update::UpdateCheck::Required { .. }
+                                        ) {
+                                            s.stop_for_update(cx);
+                                        }
+                                        crate::update::manual_check_message(&check).map(Ok)
                                     }
                                     Err(_) => {
-                                        s.update_error = Some(
-                                            "The server returned invalid update information."
-                                                .into(),
-                                        )
+                                        s.update_error = Some(crate::update::INVALID_META.into());
+                                        Some(Err(crate::update::INVALID_META))
                                     }
                                 }
                             }
-                            Err(_) => s.update_error = Some("Could not check for updates.".into()),
+                            Err(_) => {
+                                s.update_error = Some(crate::update::CHECK_FAILED.into());
+                                Some(Err(crate::update::CHECK_FAILED))
+                            }
+                        };
+                        if manual && let Some(feedback) = feedback {
+                            s.toast(
+                                match feedback {
+                                    Ok(text) => {
+                                        gpui_kit::component::notification::Notification::info(text)
+                                    }
+                                    Err(text) => {
+                                        gpui_kit::component::notification::Notification::error(text)
+                                    }
+                                },
+                                cx,
+                            );
                         }
                         cx.notify();
                     })
@@ -394,15 +413,28 @@ impl AppState {
                 return;
             }
         };
-        let Some(client) = self.session.as_ref().map(|s| s.client.clone()) else {
-            self.update_error =
-                Some("A saved owner session is required to download this update.".into());
+        let fail = |state: &mut Self,
+                    error: &str,
+                    window: &mut gpui_kit::Window,
+                    cx: &mut Context<Self>| {
+            state.update_error = Some(error.into());
+            window.push_notification(
+                gpui_kit::component::notification::Notification::error(error.to_string()),
+                cx,
+            );
             cx.notify();
+        };
+        let Some(client) = self.session.as_ref().map(|s| s.client.clone()) else {
+            fail(
+                self,
+                "A saved owner session is required to download this update.",
+                window,
+                cx,
+            );
             return;
         };
         let Some(downloads) = crate::update::downloads_dir() else {
-            self.update_error = Some("The Downloads folder is unavailable.".into());
-            cx.notify();
+            fail(self, "The Downloads folder is unavailable.", window, cx);
             return;
         };
         self.downloading_update = true;
@@ -451,6 +483,22 @@ impl AppState {
     pub fn check_updates(&mut self, cx: &mut Context<Self>) {
         self.update_monitor.take();
         self.start_monitors(cx);
+    }
+
+    /// Check for Updates…: the result, or the reason it failed, shows as a toast.
+    pub fn check_updates_now(&mut self, cx: &mut Context<Self>) {
+        self.manual_update_check = self.session.is_some();
+        self.check_updates(cx);
+    }
+
+    /// A toast in the main window, after the current update.
+    fn toast(&self, note: gpui_kit::component::notification::Notification, cx: &mut Context<Self>) {
+        use gpui_kit::component::WindowExt as _;
+        if let Some(handle) = self.main_window {
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_, window, cx| window.push_notification(note, cx));
+            });
+        }
     }
     fn close_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.settings_window.take() {
@@ -536,6 +584,12 @@ impl AppState {
     }
 }
 
+/// Installs `state` as the app's state without signing in, for view tests.
+#[cfg(test)]
+pub fn set_global_for_test(state: Entity<AppState>, cx: &mut App) {
+    cx.set_global(GlobalAppState(state));
+}
+
 /// Moves `id` to the front of `order` and returns the id pushed out beyond `cap`, if any.
 pub fn touch_lru(order: &mut Vec<String>, id: &str, cap: usize) -> Option<String> {
     order.retain(|x| x != id);
@@ -608,7 +662,7 @@ pub fn init(runtime: ClientRuntime, urls: async_channel::Receiver<Vec<String>>, 
         }
     });
     cx.on_action(|_: &CheckForUpdates, cx| {
-        AppState::global(cx).update(cx, |a, cx| a.check_updates(cx));
+        AppState::global(cx).update(cx, |a, cx| a.check_updates_now(cx));
     });
     cx.on_action(|_: &OpenSettings, cx| crate::views::settings::open(cx));
     cx.on_action(|_: &SignOut, cx| {

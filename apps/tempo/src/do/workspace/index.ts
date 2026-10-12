@@ -1,10 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, lte } from "drizzle-orm";
 import {
   TempoError,
   capture,
-  newPreviewToken,
   type AgentId,
   type FnOutput,
+  type PrState,
   type Result,
   type Source,
   type WorkspaceFnName,
@@ -14,23 +14,28 @@ import {
 import { resolveSettings } from "@tempo/settings";
 import { attachments, egressLog, ops, sessions, turns, workspace } from "../../db/workspace-do.ts";
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
+import { json } from "../../db/json.ts";
 import type { Env } from "../../env.ts";
 import type { EgressConfig } from "../../egress/rules.ts";
-import { PREVIEW_HEADER } from "../../http/preview.ts";
+import { BROWSER_APP_HEADER, BROWSER_CDP_HEADER, PREVIEW_HEADER } from "../../http/preview.ts";
+import { mcpToEgress } from "../../lib/mcp.ts";
 import { errorText, log } from "../../log.ts";
 import { openUiChannel } from "./channel.ts";
 import {
   connectTempod,
   containerRunning,
   destroyContainer,
+  dropCodexLease,
   scheduleReconnect,
   type ConnectHandlers,
 } from "./container.ts";
-import { WorkspaceCore, parseJson, type Author } from "./core.ts";
-import { applyTempodEvent } from "./events.ts";
+import { discoverModels } from "./model-catalog.ts";
+import { WorkspaceCore, type Author } from "./core.ts";
+import { applyTempodEvent, sendEnv, sendEnvironment } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
-import { previewFetch } from "./preview.ts";
+import { BROWSER_IDLE_MS, browserConnect, browserFetch, browserIdleCheck, closeBrowser } from "./browser.ts";
+import { newPreviewKey, previewEnter, previewFetch } from "./preview.ts";
 import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
 import { makeMethods, type MethodInput, type Methods } from "./rpc.ts";
 import { OpRunner } from "./runner.ts";
@@ -44,6 +49,7 @@ const IDLE_CHECK_MS = 60_000;
 const PR_POLL_MS = 60_000;
 const HOUSEKEEPING_MS = 24 * 60 * 60_000;
 const RESTARTS_PER_HOUR = 3;
+const EGRESS_LOG_ROWS = 10_000;
 const TERMINAL_PATH = /^\/api\/ws\/terminal\/[0-9a-hjkmnp-tv-z]{26}\/(t[1-9])$/;
 
 export interface InitInput {
@@ -56,7 +62,10 @@ export interface InitInput {
   readonly source: Source;
   readonly defaultAgent: AgentId;
   readonly agent: AgentId;
+  readonly model?: string;
   readonly prompt: { readonly text: string } | null;
+  /** For `source.kind = "pr"`: the PR as createWorkspace read it (03, Create a workspace). */
+  readonly pr?: { readonly number: number; readonly state: PrState; readonly title: string } | null;
   readonly author: Author;
   readonly createdAt: number;
 }
@@ -75,6 +84,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   private lastHeartbeat = 0;
   private lastIdleCheck = 0;
   private lastPrPoll = 0;
+  private modelDiscovery: Promise<FnOutput<"listModels">> | null = null;
+  private lastBrowserCheck = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -87,7 +98,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     this.runner = new OpRunner(
       core,
       makeSteps(this.handlers),
-      makeHooks(() => this.scheduleHousekeeping()),
+      makeHooks(
+        () => this.scheduleHousekeeping(),
+        () => this.onUnplannedStop("The container stopped unexpectedly."),
+      ),
       (step, state) => afterSkipWithState(core, step, state),
     );
     core.kickQueue = () => this.kickQueue();
@@ -142,18 +156,18 @@ export class WorkspaceDO extends WorkspaceRpcBase {
             archivedAt: null,
             branch: input.branch,
             baseBranch: input.baseBranch,
-            sourceJson: JSON.stringify(input.source),
+            sourceJson: json.source.write(input.source),
             state: "creating",
             stateSince: now,
             errorCode: null,
             errorDetail: null,
             attention: "none",
             setupStatus: "none",
-            previewToken: newPreviewToken(),
-            settingsJson: JSON.stringify(preliminary),
+            previewKey: newPreviewKey(),
+            settingsJson: json.settings.write(preliminary),
             pushed: 0,
-            prNumber: null,
-            prState: null,
+            prNumber: input.pr?.number ?? null,
+            prState: input.pr?.state ?? null,
             checksState: null,
             lastActivityAt: now,
             lastViewedAt: now,
@@ -169,9 +183,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
           })
           .run();
         core.setKv("author", input.author);
-        if (input.prompt) {
+        if (input.pr) core.setKv("prTitle", input.pr.title);
+        {
           const sessionId = newId();
-          const turnId = newId();
           core.db
             .insert(sessions)
             .values({
@@ -179,9 +193,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               agent: input.agent,
               title: "",
               acpSessionId: null,
-              status: "starting",
+              status: input.prompt ? "starting" : "idle",
               modeId: null,
-              configJson: "{}",
+              configJson: json.config.write(input.model ? { model: input.model } : {}),
               modesJson: "[]",
               configOptionsJson: "[]",
               commandsJson: "[]",
@@ -196,31 +210,34 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               closedAt: null,
             })
             .run();
-          core.db
-            .insert(turns)
-            .values({
-              id: turnId,
-              sessionId,
-              seq: 1,
-              queuePos: 1,
-              status: "queued",
-              promptJson: JSON.stringify({
-                text: input.prompt.text,
-                mentions: [],
-                attachmentIds: [],
-                reviewCommentIds: [],
-              }),
-              stopReason: null,
-              errorCode: null,
-              errorDetail: null,
-              checkpointId: null,
-              reverted: 0,
-              queuedAt: now,
-              startedAt: null,
-              endedAt: null,
-            })
-            .run();
-          first.turn = { sessionId, turnId };
+          if (input.prompt) {
+            const turnId = newId();
+            core.db
+              .insert(turns)
+              .values({
+                id: turnId,
+                sessionId,
+                seq: 1,
+                queuePos: 1,
+                status: "queued",
+                promptJson: json.prompt.write({
+                  text: input.prompt.text,
+                  mentions: [],
+                  attachmentIds: [],
+                  reviewCommentIds: [],
+                }),
+                stopReason: null,
+                errorCode: null,
+                errorDetail: null,
+                checkpointId: null,
+                reverted: 0,
+                queuedAt: now,
+                startedAt: null,
+                endedAt: null,
+              })
+              .run();
+            first.turn = { sessionId, turnId };
+          }
         }
       });
       const firstTurn = first.turn;
@@ -242,6 +259,17 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     });
   }
 
+  async discoverModels(userId: string): Promise<Result<FnOutput<"listModels">>> {
+    return capture(async () => {
+      if (this.ctx.id.name !== `models:${userId}`) throw new TempoError("NOT_FOUND");
+      if (this.modelDiscovery) await this.modelDiscovery;
+      this.modelDiscovery ??= discoverModels(this.core, userId).finally(() => {
+        this.modelDiscovery = null;
+      });
+      return this.modelDiscovery;
+    });
+  }
+
   async getGithubToken(): Promise<string | null> {
     if (!this.core.wsOrNull()) return null;
     try {
@@ -254,12 +282,18 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
   async getEgressConfig(): Promise<EgressConfig> {
     const project = await this.core.project();
-    const env = this.core.settings().environment;
+    const environment = await this.core.environment();
+    const settings = this.core.settings().environment;
+    this.core.setKv("egressPolicy", environment?.egressPolicy ?? settings.egress_policy);
     return {
       owner: project.owner,
       repo: project.name,
-      policy: env.egress_policy,
-      allowlist: env.egress_allowlist,
+      environmentId: environment?.id ?? null,
+      policy: environment?.egressPolicy ?? settings.egress_policy,
+      allowlist: environment?.egressAllowlist ?? settings.egress_allowlist,
+      secrets: environment?.secrets ?? [],
+      injectors: environment?.injectors ?? [],
+      mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
     };
   }
 
@@ -273,7 +307,30 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     rule: number;
   }): Promise<void> {
     if (!this.core.wsOrNull()) return;
-    this.core.db.insert(egressLog).values(row).run();
+    const blocked = row.rule === 7 || row.rule === 10;
+    const known = blocked && this.core.blockedHosts().includes(row.host);
+    const [inserted] = this.core.db.insert(egressLog).values(row).returning({ id: egressLog.id }).all();
+    // 02 egress_log: newest 10,000 rows only. Ids only grow, so one indexed range delete keeps the bound.
+    if (inserted && inserted.id > EGRESS_LOG_ROWS)
+      this.core.db
+        .delete(egressLog)
+        .where(lte(egressLog.id, inserted.id - EGRESS_LOG_ROWS))
+        .run();
+    if (blocked && !known) this.scheduleEnvironmentPush();
+  }
+
+  private environmentPushTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastEnvironmentPushAt = 0;
+
+  /** environment.set at most every 5 s after a new blocked host (02). */
+  private scheduleEnvironmentPush(): void {
+    if (this.environmentPushTimer) return;
+    const wait = Math.max(0, this.lastEnvironmentPushAt + 5000 - Date.now());
+    this.environmentPushTimer = setTimeout(() => {
+      this.environmentPushTimer = null;
+      this.lastEnvironmentPushAt = Date.now();
+      this.ctx.waitUntil(sendEnvironment(this.core));
+    }, wait);
   }
 
   async pushCodexAuth(content: string, version: number): Promise<void> {
@@ -317,27 +374,35 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     try {
       const project = await core.project(true);
       const res = await core.tempod.request("settings.read", { overrides: project.overrides });
-      core.updateWs({ settingsJson: JSON.stringify(res.effective) });
+      core.updateWs({ settingsJson: json.settings.write(res.effective) });
       core.setKv("settingsIssues", {
         warnings: res.warnings,
         errors: res.errors,
         sources: res.sources ?? {},
       });
       core.broadcastDetailSoon();
-      await core.tempod.request("env.set", { env: await core.scriptEnv() });
+      await sendEnv(core);
     } catch (e) {
       log("warn", "settings refresh failed", { workspaceId: core.workspaceId, error: errorText(e) });
     }
   }
 
-  /** env.set after project env vars or secrets change (02). */
+  /** env.set and environment.set after project secrets or the environment change (02). */
   async refreshEnv(): Promise<void> {
-    if (!this.core.wsOrNull() || !this.core.tempod?.open) return;
-    await this.core.tempod.request("env.set", { env: await this.core.scriptEnv() }).catch(() => undefined);
+    if (!this.core.wsOrNull()) return;
+    await this.core.project(true).catch(() => undefined);
+    this.core.broadcastDetailSoon();
+    if (!this.core.tempod?.open) return;
+    await sendEnv(this.core);
   }
 
-  async previewFetch(request: Request, port: number, token: string): Promise<Response> {
-    return previewFetch(this.core, request, port, token, () => this.tryEnsureAwake());
+  async previewFetch(request: Request, port: number, cookie: string): Promise<Response> {
+    return previewFetch(this.core, request, port, cookie, () => this.tryEnsureAwake());
+  }
+
+  /** 05 Enter: the preview cookie value for a good code, else null. */
+  async previewEnter(port: number, code: string): Promise<string | null> {
+    return previewEnter(this.core, port, code);
   }
 
   // ---------- fetch: UI channel, terminal, preview ----------
@@ -345,9 +410,13 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   override async fetch(request: Request): Promise<Response> {
     const preview = request.headers.get(PREVIEW_HEADER);
     if (preview) {
-      const [port, token] = preview.split(":");
-      return this.previewFetch(request, Number(port), token ?? "");
+      const sep = preview.indexOf(":");
+      return this.previewFetch(request, Number(preview.slice(0, sep)), sep < 0 ? "" : preview.slice(sep + 1));
     }
+    if (request.headers.has(BROWSER_CDP_HEADER)) return browserConnect(this.core, request);
+    const browserPort = request.headers.get(BROWSER_APP_HEADER);
+    if (browserPort)
+      return browserFetch(this.core, request, Number(browserPort), () => this.tryEnsureAwake());
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/ws/workspace/")) return openUiChannel(this.core, request);
     const term = TERMINAL_PATH.exec(url.pathname);
@@ -380,7 +449,16 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
   override async alarm(): Promise<void> {
     const core = this.core;
-    if (!core.wsOrNull()) return;
+    if (!core.wsOrNull()) {
+      if (core.kv("catalogUserId")) {
+        core.tempod?.close();
+        core.tempod = null;
+        if (core.container?.running) await core.container.destroy();
+        await core.credentials().dropCodexLease(core.workspaceId);
+        core.setKv("catalogToken", null);
+      }
+      return;
+    }
     await this.runner.runDue();
     const now = Date.now();
     if (this.containerExpected() && now - this.lastHeartbeat >= HEARTBEAT_MS - 500) {
@@ -398,6 +476,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     ) {
       this.lastPrPoll = now;
       await pollPullRequestSafe(core);
+    }
+    if (core.ws().browserSessionId !== null && now - this.lastBrowserCheck >= BROWSER_IDLE_MS - 500) {
+      this.lastBrowserCheck = now;
+      await browserIdleCheck(core, now);
     }
     await this.armAlarm();
   }
@@ -417,6 +499,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     if (containerRunning(core)) candidates.push(this.lastIdleCheck + IDLE_CHECK_MS);
     if (core.uiSockets().length > 0 && core.ws().prNumber !== null)
       candidates.push(this.lastPrPoll + PR_POLL_MS);
+    if (core.ws().browserSessionId !== null) candidates.push(this.lastBrowserCheck + BROWSER_IDLE_MS);
     if (candidates.length === 0) {
       await core.ctx.storage.deleteAlarm();
       return;
@@ -457,16 +540,12 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const core = this.core;
     const state = core.state;
     if (!(CONTAINER_STATES as ReadonlyArray<string>).includes(state)) return;
-    // During setting_up the create or wake op only waits for script.exited; a stopped container ends that wait.
-    const setupWait =
-      state === "setting_up" && !containerRunning(core) ? this.runner.waitingOn("setup.run") : null;
-    if (!setupWait && this.runner.hasPendingOrRunning(["create", "wake", "sleep", "archive"])) {
-      // The op owns the container, but a lost socket (a DO restart, a deploy) still needs a reconnect.
-      if (containerRunning(core) && !core.tempod?.open) this.onTempodLost();
-      return;
-    }
+    const starting = this.runner.find("create") ?? this.runner.find("wake");
     if (!containerRunning(core)) {
-      if (setupWait) this.runner.cancel(setupWait.id);
+      // container.start owns the container while it (re)starts it; sleep and archive skip what needs it.
+      if (starting?.step === "container.start") return;
+      if (starting) this.runner.cancel(starting.id);
+      else if (this.runner.hasPendingOrRunning(["sleep", "archive"])) return;
       await this.onUnplannedStop("The container stopped unexpectedly.");
       return;
     }
@@ -521,19 +600,24 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     core.closeTerminals(1001, "container stopped");
     core.tempod?.close(1000, "container stopped");
     core.tempod = null;
+    core.tempodStopping = false;
     core.liveSessions.clear();
     core.updateWs({ tempodToken: null });
+    dropCodexLease(core);
+    closeBrowser(core);
     const now = Date.now();
-    const recent = parseJson<number[]>(core.ws().autoRestartsJson, []).filter((t) => now - t < 60 * 60_000);
+    const recent = json.autoRestarts
+      .read(core.ws().autoRestartsJson, [])
+      .filter((t) => now - t < 60 * 60_000);
     if (recent.length >= RESTARTS_PER_HOUR) {
-      core.updateWs({ autoRestartsJson: JSON.stringify(recent) });
+      core.updateWs({ autoRestartsJson: json.autoRestarts.write(recent) });
       core.setState("error", {
         code: "CONTAINER_START_FAILED",
         detail: "The container stopped 3 times in an hour.",
       });
       return;
     }
-    core.updateWs({ autoRestartsJson: JSON.stringify([...recent, now]) });
+    core.updateWs({ autoRestartsJson: json.autoRestarts.write([...recent, now]) });
     core.setState("starting");
     if (!this.runner.find("wake")) this.runner.insert("wake");
   }

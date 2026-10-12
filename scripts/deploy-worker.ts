@@ -30,8 +30,14 @@ const run = (cmd: string, args: string[], cwd: string, extraEnv: Record<string, 
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(" ")} exited ${r.status}`);
 };
 
+// One build id for the Worker and tempod, so the DO can warn when they differ (05, Upgrades).
+const git = (args: string[]): string =>
+  spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout?.trim() ?? "";
+const sha = git(["rev-parse", "--short=12", "HEAD"]);
+const buildId = sha ? `${version}+${sha}${git(["status", "--porcelain"]) ? ".dirty" : ""}` : version;
+
 // 1. tempod binary and the image check.
-run("bun", ["run", "build:tempod"], root);
+run("bun", ["run", "build:tempod"], root, { TEMPO_BUILD_ID: buildId });
 run("bun", ["container/check-versions.ts"], root);
 if (!versions.base_image_digest && spawnSync("docker", ["buildx", "version"]).status === 0) {
   run("bun", ["container/pin-base.ts"], root);
@@ -94,12 +100,17 @@ const config = {
   main: "./src/worker.ts",
   compatibility_date: "2026-10-10",
   compatibility_flags: ["nodejs_compat"],
-  observability: { enabled: true, redact_query_string: true },
+  // Disable invocation logs because request URLs can contain setup and preview tokens.
+  observability: {
+    enabled: true,
+    redact_query_string: true,
+    logs: { enabled: true, invocation_logs: false },
+  },
   vars: {
     APP_HOST: env("APP_HOST"),
     PREVIEW_DOMAIN: env("PREVIEW_DOMAIN"),
     TEMPO_OWNER_GITHUB_ID: env("TEMPO_OWNER_GITHUB_ID"),
-    TEMPO_VERSION: version,
+    TEMPO_VERSION: buildId,
   },
   containers: [
     {
@@ -126,6 +137,8 @@ const config = {
     { binding: "DB", database_name: env("TEMPO_D1_DATABASE_NAME"), database_id: env("TEMPO_D1_DATABASE_ID") },
   ],
   r2_buckets: [{ binding: "DATA", bucket_name: env("TEMPO_R2_BUCKET_NAME") }],
+  browser: { binding: "BROWSER" },
+  worker_loaders: [{ binding: "LOADER" }],
   routes: [
     { pattern: env("APP_HOST"), custom_domain: true },
     { pattern: `*.${env("PREVIEW_DOMAIN")}/*`, zone_name: env("PREVIEW_DOMAIN") },

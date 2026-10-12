@@ -20,6 +20,29 @@ export const githubInstallations = sqliteTable(
   (t) => [check("github_installations_account_type", sql`${t.accountType} IN ('User','Organization')`)],
 );
 
+export const environments = sqliteTable(
+  "environments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    egressPolicy: text("egress_policy", { enum: ["open", "allowlist"] })
+      .notNull()
+      .default("allowlist"),
+    egressAllowlistJson: text("egress_allowlist_json").notNull().default("[]"),
+    secretsJson: text("secrets_json").notNull().default("[]"),
+    injectorsJson: text("injectors_json").notNull().default("[]"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("environments_user_name").on(t.userId, t.name),
+    check("environments_egress_policy", sql`${t.egressPolicy} IN ('open','allowlist')`),
+  ],
+);
+
 export const projects = sqliteTable(
   "projects",
   {
@@ -36,10 +59,35 @@ export const projects = sqliteTable(
     defaultBranch: text("default_branch").notNull(),
     settingsJson: text("settings_json").notNull().default("{}"),
     sortOrder: integer("sort_order").notNull().default(0),
+    environmentId: text("environment_id").references(() => environments.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
   (t) => [uniqueIndex("projects_user_repo").on(t.userId, t.repoId)],
+);
+
+export const mcpServers = sqliteTable(
+  "mcp_servers",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    transport: text("transport", { enum: ["stdio", "http", "sse"] }).notNull(),
+    enabled: integer("enabled").notNull().default(1),
+    command: text("command"),
+    argsJson: text("args_json").notNull().default("[]"),
+    envJson: text("env_json").notNull().default("[]"),
+    url: text("url"),
+    headersJson: text("headers_json").notNull().default("[]"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    check("mcp_servers_transport", sql`${t.transport} IN ('stdio','http','sse')`),
+    uniqueIndex("mcp_servers_user_name").on(t.userId, t.name),
+  ],
 );
 
 export const WORKSPACE_STATE_SQL = sql`('creating','starting','setting_up','ready','working','stopping','sleeping','archiving','archived','error')`;
@@ -91,4 +139,6 @@ export const workspaces = sqliteTable(
 
 export type ProjectRow = typeof projects.$inferSelect;
 export type WorkspaceRow = typeof workspaces.$inferSelect;
+export type EnvironmentRow = typeof environments.$inferSelect;
+export type McpServerRow = typeof mcpServers.$inferSelect;
 export type InstallationRow = typeof githubInstallations.$inferSelect;

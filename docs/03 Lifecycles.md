@@ -27,7 +27,7 @@ Only these transitions are allowed. Any other change of `workspace.state` is a b
 | `ready`, `working`, `sleeping`, `error` | `archiveWorkspace` | `archiving` | `archive` |
 | `archiving` | Container destroyed and final data saved | `archived` | `archive` |
 | `archived` | `restoreWorkspace` | `sleeping` | `restore` |
-| `error` | `wakeWorkspace` (the UI's Retry) | `starting` | `wake` |
+| `error` | Any wake trigger (below), including `wakeWorkspace` (the UI's Retry) | `starting` | `wake` |
 | `ready`, `working`, `setting_up` | Container stopped without Tempo asking | `starting` | `wake` |
 | Any state except `archived` | A step fails for good | `error` | — |
 
@@ -41,7 +41,7 @@ Only these transitions are allowed. Any other change of `workspace.state` is a b
 
 Open UI sockets do not count. A tab left open all day MUST NOT keep a container running.
 
-**Wake triggers:** `sendPrompt`, `createSession`, a terminal WebSocket, a preview request, `wakeWorkspace`, `rerunSetup`, `runScript`. Read calls that need the container (`getChanges`, `getFileDiff`, `searchFiles`) return `CONTAINER_NOT_READY` and also start a wake. While sleeping, `listFiles` and `readFile` use the DO's last synced file cache. Cache misses return `CONTAINER_NOT_READY` without waking; the user can explicitly wake to browse current files. In other states these calls still require a ready container.
+**Wake triggers:** `sendPrompt`, `createSession`, a terminal WebSocket, a preview request, `wakeWorkspace`, `rerunSetup`, `runScript`. Read calls that need the container (`getChanges`, `getFileDiff`, `listFiles`, `readFile`, `searchFiles`) return `CONTAINER_NOT_READY` and also start a wake. The one exception is `sleeping`: there `listFiles` and `readFile` are not wake triggers. They use the DO's last synced file cache (02, WorkspaceDO schema). Cache misses return `CONTAINER_NOT_READY` without waking; the user can explicitly wake to browse current files. In every other state, `error` included, these two calls need a ready container and are wake triggers, as the other read calls are.
 
 **Unplanned restarts.** At most 3 in any 60 minutes, tracked in `workspace.auto_restarts_json`. The 4th goes to `error` with `CONTAINER_START_FAILED`.
 
@@ -77,9 +77,9 @@ Every multi-step flow is an op in the WorkspaceDO `ops` table, run one step per 
 | Op | Steps, in order |
 | --- | --- |
 | `create` | `container.start` → `tempod.connect` → `repo.clone` → `settings.read` → `setup.run` → `done` |
-| `wake` | `container.start` → `tempod.connect` → if fresh disk: `repo.clone` → `repo.applyCheckpoint` → `home.restore` → `settings.read` → `setup.run`; then `sessions.markReload` → `done` |
-| `sleep` | `turns.check` → `git.checkpoint` (`pre_sleep`) → `bundle.upload` → `home.backup` → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `done` |
-| `archive` | `turns.cancel` → `script.archive` → `git.checkpoint` (`pre_archive`) → `bundle.upload` → `home.backup` → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `github.deleteBranch` → `done` |
+| `wake` | `container.start` → `tempod.connect` → if fresh disk: `repo.clone` → `repo.applyCheckpoint` → `home.restore` → `settings.read` → `setup.run`; then `sessions.markReload` → `artifacts.resume` → `done` |
+| `sleep` | `turns.check` → `git.checkpoint` (`pre_sleep`) → `bundle.upload` → `home.backup` → `artifacts.upload` → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `done` |
+| `archive` | `turns.cancel` → `script.archive` → `git.checkpoint` (`pre_archive`) → `bundle.upload` → `home.backup` → `artifacts.upload` → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `github.deleteBranch` → `done` |
 | `restore` | `branch.check` → `done` |
 | `revert` | `git.checkpoint` (`pre_revert`) → `bundle.upload` → `git.revert` → `transcript.mark` → `done` |
 | `commit_push` | `git.commitAndPush` → `done` |
@@ -102,6 +102,8 @@ When the container is not running, `archive` skips every step that needs it and 
 | `git.checkpoint` | 2 min | 3 | For `revert`, fail with `INTERNAL` without reverting; otherwise skip and log `warn` |
 | `bundle.upload` | 5 min | 3 | Mark `local_only` |
 | `home.backup` | 5 min | 2 | Skip; log `warn` |
+| `artifacts.upload` | 5 min | 2 | Skip; log `warn`. Rows stay `uploading`; the snapshot keeps their staged copies. |
+| `artifacts.resume` | 30 s | 1 | Continue; the next wake tries again |
 | `tempod.shutdown` | 45 s | 1 | Continue |
 | `container.snapshot` | 5 min | 2 | Continue; the next wake uses the fresh path |
 | `container.destroy` | 30 s | 3 | `INTERNAL` |
@@ -121,14 +123,14 @@ The server function does the checks and the D1 insert; the WorkspaceDO does ever
 3. Pick the branch:
    - `source.kind = "new"`: `<git.branch_prefix><slug>`, for example `tempo/lisbon`.
    - `source.kind = "branch"`: `source.branch`. It MUST exist on origin.
-   - `source.kind = "pr"`: the PR's `head.ref` from `GET /repos/{owner}/{repo}/pulls/{number}`. If `head.repo.id` is not the project's repo id, fail with `VALIDATION_FAILED` and the message "Pull requests from forks are not supported."
-4. Insert the D1 row with `state = 'creating'`. The partial unique index on `(project_id, branch)` rejects a branch in use; map that to `BRANCH_IN_USE`.
+   - `source.kind = "pr"`: the PR's `head.ref` from `GET /repos/{owner}/{repo}/pulls/{number}`. If `head.repo.id` is not the project's repo id, fail with `VALIDATION_FAILED` and the message "Pull requests from forks are not supported." Keep the PR's number, title and state (as in Status polling).
+4. Insert the D1 row with `state = 'creating'`. For `source.kind = "pr"`, also set `pr_number` and `pr_state`. The partial unique index on `(project_id, branch)` rejects a branch in use; map that to `BRANCH_IN_USE`.
 5. Call `WorkspaceDO.init(...)` and return its `WorkspaceSummary`.
 
 **In `WorkspaceDO.init`**
 
-1. Write the `workspace` row. Make `preview_token` (16 chars from `[a-z0-9]`, from `crypto.getRandomValues`). Set `title` to the first 60 characters of the prompt, or to the slug.
-2. If there is a prompt: create a session (`starting`, agent = input agent or project default), a turn (`queued`, `seq = 1`) and its `user_message` item.
+1. Write the `workspace` row. Make `preview_key` (32 random bytes from `crypto.getRandomValues`, base64url). For `source.kind = "pr"`, set `pr_number` and `pr_state`, and keep the PR title as `refreshPullRequest` does, from the server function's values, so the workspace shows the PR at once and status polling starts. Set `title` to the first 60 characters of the prompt, or to the slug.
+2. Always create the first session (agent = input agent or project default, selected model in `config_json`). With a prompt, its status is `starting`; create a turn (`queued`, `seq = 1`) and its `user_message` item. Without a prompt, its status is `idle`; do not create a turn or message.
 3. Insert the `create` op. Set state `starting`. Set the alarm to now.
 4. Publish the summary to UserHubDO.
 
@@ -218,10 +220,11 @@ Sleep saves everything, then destroys the container. Wake picks the fastest rest
 1. `turns.check`: if a turn is running or queued, cancel the op. The workspace is not idle.
 2. `git.checkpoint` with reason `pre_sleep`, then `bundle.upload`.
 3. `home.backup`.
-4. `tempod.shutdown`: `tempod` stops scripts and agents and flushes its outbox. It keeps running, so the snapshot can still be taken.
-5. `container.snapshot`: `snapshotContainer({ name })`. Insert the `snapshots` row.
-6. `container.destroy`: `ctx.container.destroy()`. Set `tempod_token = null`. Close all terminal sockets with code 1001.
-7. State `sleeping`. Drop the Codex lease in CredentialDO.
+4. `artifacts.upload`: upload every `artifacts` row still `uploading` (01, Artifacts, Upload), and wait for the uploads already running.
+5. `tempod.shutdown`: the DO first attempts a final file cache sync (02, WorkspaceDO schema). Then `tempod` stops scripts and agents and flushes its outbox. It keeps running, so the snapshot can still be taken.
+6. `container.snapshot`: `snapshotContainer({ name })`. Insert the `snapshots` row.
+7. `container.destroy`: `ctx.container.destroy()`. Set `tempod_token = null`. Close all terminal sockets with code 1001.
+8. State `sleeping`. Drop the Codex lease in CredentialDO.
 
 **Wake** (`wake` op)
 
@@ -232,7 +235,8 @@ Sleep saves everything, then destroys the container. Wake picks the fastest rest
 2. `tempod.connect`: open `/v1/connect`, send `hello` with the stored incarnation and `tempod_acked_seq`.
 3. Fresh disk only: `repo.clone`, `repo.applyCheckpoint` (newest checkpoint with an R2 bundle), `home.restore`, `settings.read`, `setup.run`.
 4. `sessions.markReload`: mark every non-closed session as having no live process. The next prompt reloads it.
-5. State `ready` (or `setting_up` until setup ends).
+5. `artifacts.resume`: start the upload of every `artifacts` row still `uploading`. On a fresh disk the staged copies are gone, so those rows become `lost` and their items `failed`.
+6. State `ready` (or `setting_up` until setup ends).
 
 **Timing targets** (spike S6 measures them)
 
@@ -303,7 +307,7 @@ Archive frees the branch and the container; restore brings the workspace back as
 
 1. `turns.cancel`: cancel the running turn and delete queued turns. Answer pending permission requests as cancelled.
 2. `script.archive`: run the archive script, 120 s timeout. A failure is a `warn` notice only.
-3. `git.checkpoint` with reason `pre_archive`, upload, `home.backup`, `tempod.shutdown`, `container.snapshot`, `container.destroy`, as in sleep.
+3. `git.checkpoint` with reason `pre_archive`, upload, `home.backup`, `artifacts.upload`, `tempod.shutdown`, `container.snapshot`, `container.destroy`, as in sleep.
 4. `github.deleteBranch`: only if `git.delete_branch_on_archive` is true, `pushed = 1`, and there is no open PR. `DELETE /repos/{owner}/{repo}/git/refs/heads/<branch>`.
 5. Set `archived_at = now` in the DO and in D1. State `archived`. Drop the Codex lease.
 
@@ -332,7 +336,7 @@ Every known failure has one detector and one response. The user always sees the 
 | Start from snapshot fails | `container.start` step | Mark the snapshot `unusable`; start from the image at once |
 | `tempod` socket closes while the container runs | WebSocket close | Reconnect up to 5 times (1, 2, 4, 8, 16 s). Then `destroy()` and wake. |
 | Container stops on its own (host restart, out of memory) | Heartbeat sees `running = false` | Running turn becomes `interrupted`; notice item; wake, within the 3-per-hour limit |
-| `tempod` gets SIGTERM | `tempod` | `tempod` sends `tempod.stopping`, and the running turn ends `interrupted`. The DO requests `git.checkpoint {reason: "sigterm"}`, uploads the bundle, runs `home.backup`, then sends `shutdown`. When the container stops, the row above applies. |
+| `tempod` gets SIGTERM | `tempod` | `tempod` sends `tempod.stopping`, and the running turn ends `interrupted`. The DO attempts a file cache sync, requests `git.checkpoint {reason: "sigterm"}`, uploads the bundle, runs `home.backup`, uploads artifacts still `uploading`, then sends `shutdown`. When the container stops, the row above applies. |
 | Adapter exits during a turn | `agent.exited` | Turn `failed` / `AGENT_CRASHED`; notice with `stderrTail`; next prompt reloads |
 | `session/load` fails | `session.start` result | Handoff (01, Sessions) |
 | Credential rejected | `turn.ended` error, or `credential.invalid` | Turn `failed` / `CREDENTIAL_INVALID`; banner in the UI |
@@ -344,5 +348,7 @@ Every known failure has one detector and one response. The user always sees the 
 | GitHub API returns 4xx | Any GitHub call | No retry. Map to the matching code, else `GITHUB_API_ERROR` |
 | DO restarts during an op | DO constructor | `running` op back to `pending`; its step runs again |
 | Deploy while containers run | DO restart | Running containers keep their old image and env. The DO reconnects with `workspace.tempod_token`. |
+| Artifact upload fails | Upload (01, Artifacts) | Retry with backoff, 5 attempts; the row stays `uploading` and the item `pending` until a later wake or sleep uploads it |
+| Staged artifact copy lost | `artifacts.resume` on a fresh disk | Row `lost`, item `failed` |
 | Outbox overflow | `outbox.overflow` | Notice item: some live events were lost; the transcript may have gaps |
 | Egress blocked | `TempoOutbound` rule 10 | 403 to the container; row in `egress_log` |

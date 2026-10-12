@@ -1,22 +1,37 @@
-import type { AgentId, CredentialStatus, Session, Turn } from "@tempo/protocol";
-import { AGENT_IDS, agentLabel, hasLogin } from "~/ui/lib/agents";
+import type { AgentId, CredentialStatus, Session, Settings, Turn } from "@tempo/protocol";
+import { AGENT_IDS, agentLabel, hasLogin, needsModel } from "~/ui/lib/agents";
 
 /** Pure helpers for the center tab strip (04, Tabs). */
+
+export const NO_LOGIN_HINT = "Add login in Settings";
+export const NO_MODEL_HINT = "Set a model in Settings → Project";
 
 export interface AgentMenuEntry {
   readonly agent: AgentId;
   readonly label: string;
-  /** False when the agent has no login; the menu shows `Add login in Settings`. */
   readonly enabled: boolean;
+  /** Why the agent is disabled. */
+  readonly hint: typeof NO_LOGIN_HINT | typeof NO_MODEL_HINT | null;
 }
 
-/** The four agents for New chat. While the credential status loads, every agent is offered. */
-export const agentMenu = (status: CredentialStatus | undefined): AgentMenuEntry[] =>
-  AGENT_IDS.map((agent) => ({
-    agent,
-    label: agentLabel(agent),
-    enabled: status === undefined || hasLogin(agent, status),
-  }));
+/**
+ * The four agents for New chat. An agent without a login, or OpenCode or Pi with an empty
+ * `agent.models.<agent>` in the workspace's effective settings, is disabled. While the credential
+ * status or the settings load, they do not disable anything.
+ */
+export const agentMenu = (
+  status: CredentialStatus | undefined,
+  settings: Settings | null | undefined,
+): AgentMenuEntry[] =>
+  AGENT_IDS.map((agent) => {
+    const hint =
+      status !== undefined && !hasLogin(agent, status)
+        ? NO_LOGIN_HINT
+        : settings && needsModel(agent, settings)
+          ? NO_MODEL_HINT
+          : null;
+    return { agent, label: agentLabel(agent), enabled: hint === null, hint };
+  });
 
 const bySortOrder = (a: Session, b: Session) => a.sortOrder - b.sortOrder;
 

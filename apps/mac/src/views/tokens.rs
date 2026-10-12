@@ -7,6 +7,7 @@ use gpui_kit::{App, Hsla};
 pub enum Token {
     Background,
     Foreground,
+    Sidebar,
     /// `--muted-foreground`
     MutedForeground,
     /// `--primary`
@@ -16,8 +17,10 @@ pub enum Token {
     /// `--warning` (04's custom token)
     Warning,
     Border,
-    /// Added lines in the diff view (07, Changes).
+    /// Added lines in the diff view (07, Changes); open PRs and passed checks (04, Indicators).
     Success,
+    /// `--merged`: merged PRs (04, Indicators).
+    Merged,
 }
 
 pub fn color(token: Token, cx: &App) -> Hsla {
@@ -28,12 +31,14 @@ pub fn from_theme(colors: &ThemeColor, token: Token) -> Hsla {
     match token {
         Token::Background => colors.background,
         Token::Foreground => colors.foreground,
+        Token::Sidebar => colors.sidebar,
         Token::MutedForeground => colors.muted_foreground,
         Token::Primary => colors.primary,
         Token::Destructive => colors.danger,
         Token::Warning => colors.warning,
         Token::Border => colors.border,
         Token::Success => colors.success,
+        Token::Merged => colors.magenta,
     }
 }
 
@@ -48,21 +53,25 @@ mod tests {
         let tokens = [
             Token::Background,
             Token::Foreground,
+            Token::Sidebar,
             Token::MutedForeground,
             Token::Primary,
             Token::Destructive,
             Token::Warning,
             Token::Border,
             Token::Success,
+            Token::Merged,
         ];
         colors.background = hsla(0.0, 0.0, 0.0, 1.0);
         colors.foreground = hsla(0.1, 0.0, 0.0, 1.0);
-        colors.muted_foreground = hsla(0.2, 0.0, 0.0, 1.0);
-        colors.primary = hsla(0.3, 0.0, 0.0, 1.0);
-        colors.danger = hsla(0.4, 0.0, 0.0, 1.0);
-        colors.warning = hsla(0.5, 0.0, 0.0, 1.0);
-        colors.border = hsla(0.6, 0.0, 0.0, 1.0);
-        colors.success = hsla(0.7, 0.0, 0.0, 1.0);
+        colors.sidebar = hsla(0.2, 0.0, 0.0, 1.0);
+        colors.muted_foreground = hsla(0.3, 0.0, 0.0, 1.0);
+        colors.primary = hsla(0.4, 0.0, 0.0, 1.0);
+        colors.danger = hsla(0.5, 0.0, 0.0, 1.0);
+        colors.warning = hsla(0.6, 0.0, 0.0, 1.0);
+        colors.border = hsla(0.7, 0.0, 0.0, 1.0);
+        colors.success = hsla(0.8, 0.0, 0.0, 1.0);
+        colors.magenta = hsla(0.9, 0.0, 0.0, 1.0);
         for (ix, token) in tokens.into_iter().enumerate() {
             assert_eq!(from_theme(&colors, token).h, ix as f32 / 10.0, "{token:?}");
         }

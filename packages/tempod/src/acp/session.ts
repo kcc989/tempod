@@ -7,7 +7,6 @@ import {
   type AnyMessage,
   type ClientConnection,
   type ContentBlock as AcpContentBlock,
-  type McpServer,
   type ReadTextFileRequest,
   type RequestPermissionResponse,
   type WriteTextFileRequest,
@@ -15,12 +14,15 @@ import {
 import {
   modelOption,
   newId,
-  PLAYWRIGHT_MCP_SERVER,
   TempoError,
+  toTurnUsage,
   type AgentId,
+  type BrowserMode,
+  type McpServerSpec,
   type PermissionOption,
   type SessionStartResult,
   type TempodEvent,
+  type TurnUsage,
 } from "@tempo/protocol";
 import type { Subprocess } from "bun";
 import { ITEM_CONTENT_MAX, tailLines } from "../bounds.ts";
@@ -30,18 +32,12 @@ import { insideRoots } from "../fs.ts";
 import { errorText, type Logger } from "../log.ts";
 import { isObj, modeConfig, toConfigOptions, toModes } from "./convert.ts";
 import { SessionMapper, type TurnOutcome } from "./mapper.ts";
+import { acpMcpServers, type Bridge } from "./mcp.ts";
 
 const STDERR_LINES = 200;
 const STDERR_LINE_CHARS = 2_000;
 const START_STEP_MS = 90_000;
 const CLOSE_REQUEST_MS = 3_000;
-
-export const playwrightServer = (): McpServer => ({
-  name: PLAYWRIGHT_MCP_SERVER.name,
-  command: PLAYWRIGHT_MCP_SERVER.command,
-  args: [...PLAYWRIGHT_MCP_SERVER.args],
-  env: PLAYWRIGHT_MCP_SERVER.env.map((e) => ({ ...e })),
-});
 
 export const CLIENT_CAPABILITIES = {
   fs: { readTextFile: true, writeTextFile: true },
@@ -60,6 +56,7 @@ export interface SessionDeps {
   readonly killGraceMs: number;
   readonly mergeMs: number;
   readonly maxBytes: number;
+  readonly bridge: Bridge;
   readonly onGone: (session: AgentSession) => void;
   readonly onProcess: (session: AgentSession, pid: number | null) => void;
 }
@@ -352,7 +349,9 @@ export class AgentSession {
   async start(p: {
     modeId?: string | null;
     model?: string | null;
+    browser?: BrowserMode;
     acpSessionId?: string | null;
+    mcpServers?: ReadonlyArray<McpServerSpec> | undefined;
   }): Promise<SessionStartResult> {
     const init = await this.request<{
       protocolVersion?: unknown;
@@ -368,6 +367,7 @@ export class AgentSession {
     this.capabilities = isObj(init.agentCapabilities) ? structuredClone(init.agentCapabilities) : {};
     const steering = isObj(init._meta) ? init._meta["steering"] : undefined;
     this.capabilities["steering"] = isObj(steering) && steering["supported"] === true;
+    const mcpServers = acpMcpServers(p.mcpServers ?? [], this.capabilities, this.deps.bridge, p.browser);
     let reloaded = false;
     let handoff = false;
     const wanted = p.acpSessionId ?? null;
@@ -378,7 +378,7 @@ export class AgentSession {
           const res = await this.request<unknown>("session/load", {
             sessionId: wanted,
             cwd: this.deps.workspace,
-            mcpServers: [playwrightServer()],
+            mcpServers,
           });
           this.acpSessionId = wanted;
           this.applySessionResponse(res);
@@ -398,7 +398,7 @@ export class AgentSession {
     if (!reloaded) {
       const res = await this.request<{ sessionId?: unknown }>("session/new", {
         cwd: this.deps.workspace,
-        mcpServers: [playwrightServer()],
+        mcpServers,
       });
       if (typeof res.sessionId !== "string") throw new Error("session/new returned no sessionId");
       this.acpSessionId = res.sessionId;
@@ -507,12 +507,19 @@ export class AgentSession {
     this.mapper.startTurn(turnId);
     this.deps.emit({ kind: "turn.started", sessionId: this.sessionId, turnId });
     this.conn.agent
-      .request<{ stopReason?: unknown }>("session/prompt", {
+      .request<{ stopReason?: unknown; usage?: unknown }>("session/prompt", {
         sessionId: this.acpSessionId,
         prompt: content as unknown as AcpContentBlock[],
       })
       .then(
-        (res) => this.finishTurn(turn, typeof res?.stopReason === "string" ? res.stopReason : null),
+        (res) =>
+          this.finishTurn(
+            turn,
+            typeof res?.stopReason === "string" ? res.stopReason : null,
+            undefined,
+            false,
+            toTurnUsage(res?.usage),
+          ),
         (e: unknown) => void this.onPromptError(turn, e),
       );
     return true;
@@ -573,6 +580,7 @@ export class AgentSession {
     stopReason: string | null,
     error?: { code: string; message: string },
     interrupted = false,
+    usage: TurnUsage | null = null,
   ): void {
     if (turn.ended) return;
     turn.ended = true;
@@ -593,6 +601,7 @@ export class AgentSession {
       stopReason,
       ...(error ? { error } : {}),
       ...(interrupted ? { interrupted: true } : {}),
+      ...(usage ? { usage } : {}),
     });
     if (this.turn === turn) this.turn = null;
     this.lastUsed = Date.now();

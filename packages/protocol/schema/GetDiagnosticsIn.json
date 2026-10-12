@@ -5,6 +5,26 @@
   "properties": {
     "workspaceId": {
       "type": "string"
+    },
+    "egressHost": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "egressStatus": {
+      "anyOf": [
+        {
+          "$ref": "EgressStatusFilter.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["workspaceId"],

@@ -1,3 +1,4 @@
+import { REVIEW_STATUSES, SESSION_STATUSES } from "@tempo/protocol";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /** WorkspaceDO SQLite (02). DDL lives in do-migrations.ts; these tables type the queries. */
@@ -22,7 +23,12 @@ export const workspace = sqliteTable("workspace", {
   errorDetail: text("error_detail"),
   attention: text("attention").notNull(),
   setupStatus: text("setup_status").notNull(),
-  previewToken: text("preview_token").notNull(),
+  // Unused since 0003_preview_access; 05 Upgrades forbids dropping a column.
+  previewToken: text("preview_token")
+    .notNull()
+    .$defaultFn(() => ""),
+  previewKey: text("preview_key").notNull(),
+  browserSessionId: text("browser_session_id"),
   settingsJson: text("settings_json").notNull(),
   pushed: integer("pushed").notNull(),
   prNumber: integer("pr_number"),
@@ -39,6 +45,7 @@ export const workspace = sqliteTable("workspace", {
   imageRef: text("image_ref"),
   summaryRev: integer("summary_rev").notNull(),
   itemsRev: integer("items_rev").notNull(),
+  environmentId: text("environment_id"),
 });
 
 export const ops = sqliteTable("ops", {
@@ -61,7 +68,7 @@ export const sessions = sqliteTable("sessions", {
   agent: text("agent").notNull(),
   title: text("title").notNull(),
   acpSessionId: text("acp_session_id"),
-  status: text("status").notNull(),
+  status: text("status", { enum: SESSION_STATUSES }).notNull(),
   modeId: text("mode_id"),
   configJson: text("config_json").notNull(),
   modesJson: text("modes_json").notNull(),
@@ -94,6 +101,7 @@ export const turns = sqliteTable("turns", {
   queuedAt: integer("queued_at").notNull(),
   startedAt: integer("started_at"),
   endedAt: integer("ended_at"),
+  usageJson: text("usage_json"),
 });
 
 export const items = sqliteTable("items", {
@@ -155,7 +163,7 @@ export const reviewComments = sqliteTable("review_comments", {
   lineEnd: integer("line_end"),
   side: text("side"),
   body: text("body").notNull(),
-  status: text("status").notNull(),
+  status: text("status", { enum: REVIEW_STATUSES }).notNull(),
   sentTurnId: text("sent_turn_id"),
   createdAt: integer("created_at").notNull(),
 });
@@ -202,6 +210,12 @@ export const attachments = sqliteTable("attachments", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const previewCodes = sqliteTable("preview_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  port: integer("port").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+});
+
 export const egressLog = sqliteTable("egress_log", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ts: integer("ts").notNull(),
@@ -220,7 +234,15 @@ export const fileCache = sqliteTable("file_cache", {
   updatedAt: integer("updated_at").notNull().default(0),
 });
 
+export const environmentProposals = sqliteTable("environment_proposals", {
+  id: text("id").primaryKey(),
+  createdAt: integer("created_at").notNull(),
+  status: text("status", { enum: ["pending", "applied", "dismissed"] }).notNull(),
+  proposalJson: text("proposal_json").notNull(),
+});
+
 export const workspaceSchema = {
+  environmentProposals,
   fileCache,
   workspace,
   ops,
@@ -236,6 +258,7 @@ export const workspaceSchema = {
   ports,
   permissions,
   attachments,
+  previewCodes,
   egressLog,
 };
 

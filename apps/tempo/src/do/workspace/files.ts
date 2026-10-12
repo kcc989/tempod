@@ -1,5 +1,6 @@
 import { asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { TempoError, type FnOutput } from "@tempo/protocol";
+import { json } from "../../db/json.ts";
 import { fileCache } from "../../db/workspace-do.ts";
 import type { WorkspaceCore } from "./core.ts";
 
@@ -44,8 +45,9 @@ export class WorkspaceFiles {
       .from(fileCache)
       .where(eq(fileCache.path, cachePath(path)))
       .get();
-    if (!row?.responseJson) throw new TempoError("CONTAINER_NOT_READY");
-    return JSON.parse(row.responseJson) as FnOutput<"readFile">;
+    const response = json.fileResponse.read(row?.responseJson, null);
+    if (!response) throw new TempoError("CONTAINER_NOT_READY");
+    return response;
   }
 
   rememberList(paths: ReadonlyArray<string>): void {
@@ -65,7 +67,8 @@ export class WorkspaceFiles {
     // Only persist files in fs.list: ignored files and paths outside the repo stay out of the cache.
     if (!this.core.db.select({ path: fileCache.path }).from(fileCache).where(eq(fileCache.path, key)).get())
       return;
-    const responseJson = JSON.stringify(response);
+    const responseJson = json.fileResponse.tryWrite(response);
+    if (responseJson === null) return this.forgetFile(path);
     const bytes = encoder.encode(responseJson).byteLength;
     if (bytes > 1024 * 1024) return;
     this.core.ctx.storage.transactionSync(() => {

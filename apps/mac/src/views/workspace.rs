@@ -1,18 +1,21 @@
 use super::chat::{TranscriptEvent, TranscriptRow, TranscriptView};
 use super::chat_model;
 use super::composer::{Composer, ComposerEvent};
+use super::indicators::PreviewLink;
 use super::tokens::{Token, color};
 use crate::actions::*;
 use crate::stores::workspace::WorkspaceStore;
-use gpui_kit::component::button::{Button, ButtonVariant};
-use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
+use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
+use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::popover::Popover;
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Disableable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, DismissEvent, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    IntoElement, ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _,
     Styled as _, Subscription, Task, Window, div,
 };
 use std::collections::{HashMap, HashSet};
@@ -47,6 +50,21 @@ struct QueueEditor {
     input: Entity<TextareaState>,
 }
 
+/// The base branch picker (04, Top bar): `listBranches` results for the current search, or none
+/// while they load.
+struct BranchPicker {
+    query: Entity<InputState>,
+    branches: Option<Result<Vec<String>, String>>,
+    generation: u64,
+    _search: Option<Task<()>>,
+    _query_changed: Subscription,
+}
+
+/// Error toasts with the same code replace each other, as the web's `error:<code>` toast id.
+struct ErrorToast;
+
+const BROWSER_SESSION_ENDED: &str = "Browser session ended.";
+
 pub struct WorkspaceView {
     pub store: Entity<WorkspaceStore>,
     client: Client,
@@ -65,14 +83,18 @@ pub struct WorkspaceView {
     pending_permissions: HashSet<String>,
     previous_mode: HashMap<String, String>,
     seen_permissions: HashSet<String>,
-    error: Option<String>,
+    window_handle: Option<gpui_kit::AnyWindowHandle>,
+    toasted_store_error: Option<String>,
+    last_state: Option<p::WorkspaceState>,
+    error_details_open: bool,
+    banner_pending: bool,
+    branch_picker: Option<BranchPicker>,
     queue_editor: Option<QueueEditor>,
     queue_pending: bool,
     operation: Option<String>,
     operation_session: Option<String>,
     operation_draft: bool,
     operation_pending: bool,
-    plan_open: bool,
     operation_window: Option<gpui_kit::AnyWindowHandle>,
     revert_checkpoint: Option<String>,
     revert_seq: Option<f64>,
@@ -196,14 +218,18 @@ impl WorkspaceView {
             pending_permissions: HashSet::new(),
             previous_mode: HashMap::new(),
             seen_permissions: HashSet::new(),
-            error: None,
+            window_handle: Some(window.window_handle()),
+            toasted_store_error: None,
+            last_state: None,
+            error_details_open: false,
+            banner_pending: false,
+            branch_picker: None,
             queue_editor: None,
             queue_pending: false,
             operation: None,
             operation_session: None,
             operation_draft: false,
             operation_pending: false,
-            plan_open: false,
             operation_window: None,
             revert_checkpoint: None,
             revert_seq: None,
@@ -287,9 +313,8 @@ impl WorkspaceView {
                 r.open_picker(cx);
                 r.focus_query(window, cx);
             }),
-            "tempo::ShowDiff" | "tempo::NextFile" => {
-                self.review.update(cx, |r, cx| r.navigate(true, window, cx))
-            }
+            "tempo::ShowDiff" => self.show_diff(window, cx),
+            "tempo::NextFile" => self.review.update(cx, |r, cx| r.navigate(true, window, cx)),
             "tempo::PreviousFile" => self
                 .review
                 .update(cx, |r, cx| r.navigate(false, window, cx)),
@@ -315,6 +340,382 @@ impl WorkspaceView {
             _ => {}
         }
     }
+    /// ⌘⇧D (04, Diff tab): focus the open diff tab, else open the first changed file's diff.
+    pub fn show_diff(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let review = self.review.read(cx);
+        if review.document_open && review.diff.is_some() {
+            return;
+        }
+        let open = review
+            .document_tabs()
+            .into_iter()
+            .rev()
+            .find(|(key, _)| key.starts_with("diff:"));
+        self.review.update(cx, |r, cx| match open {
+            Some((key, _)) => r.select_document(&key, window, cx),
+            None => r.navigate(true, window, cx),
+        });
+        cx.notify();
+    }
+
+    fn active_agent(&self, cx: &gpui_kit::App) -> Option<p::AgentId> {
+        self.active
+            .as_ref()
+            .and_then(|id| self.store.read(cx).state.sessions.get(id))
+            .map(|s| s.agent)
+    }
+
+    /// Error codes the banners on screen show; their toasts are skipped (04, Toasts).
+    fn banner_codes(&self, cx: &gpui_kit::App) -> Vec<String> {
+        let state = &self.store.read(cx).state;
+        let mut codes = state
+            .workspace
+            .as_ref()
+            .map(|w| chat_model::banner_codes(&chat_model::workspace_banners(w)))
+            .unwrap_or_default();
+        if let Some(agent) = self.active_agent(cx)
+            && let Some((code, _)) = chat_model::login_banner(
+                agent,
+                self.credentials.as_ref(),
+                &state.credential_invalid,
+            )
+        {
+            codes.push(code.into());
+        }
+        codes
+    }
+
+    /// 04, Toasts: a failed server function shows its UI message, unless a banner shows its code.
+    /// A 401 shows Connect to Tempo instead (07).
+    fn toast_error(&mut self, error: &tempo_client::ApiError, cx: &mut Context<Self>) {
+        if error.is_unauthorized() {
+            return;
+        }
+        let code = error
+            .code()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "INTERNAL".into());
+        if self.banner_codes(cx).contains(&code) {
+            return;
+        }
+        let message = api_error_message(error, self.active_agent(cx));
+        self.toast(code, message, cx);
+    }
+
+    fn toast(&mut self, key: String, message: String, cx: &mut Context<Self>) {
+        self.push_notification(
+            Notification::error(message).id1::<ErrorToast>(SharedString::from(key)),
+            cx,
+        );
+    }
+
+    fn push_notification(&mut self, notification: Notification, cx: &mut Context<Self>) {
+        let Some(handle) = self.window_handle else {
+            return;
+        };
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                window.push_notification(notification, cx)
+            });
+        });
+    }
+
+    /// The bottom panel holds the Setup tab (04, `setting_up` and `View output`): show it.
+    fn show_setup_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.processes.update(cx, |p, cx| p.show_setup(cx));
+        self.reveal_right(cx);
+        let Some(panels) = cx
+            .try_global::<crate::storage::Local>()
+            .map(|local| local.state().panels)
+        else {
+            return;
+        };
+        if !panels.bottom {
+            window.dispatch_action(Box::new(ToggleBottomPanel), cx);
+        }
+    }
+
+    /// A banner button's server function; `setup_tab` shows the Setup tab once it succeeds.
+    fn banner_call<F: p::Function>(
+        &mut self,
+        input: F::Input,
+        setup_tab: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.banner_pending {
+            return;
+        }
+        self.banner_pending = true;
+        let request = self.client.call::<F>(input);
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.banner_pending = false;
+                match result {
+                    Ok(_) if setup_tab => this.show_setup_tab(window, cx),
+                    Ok(_) => {}
+                    Err(error) => this.toast_error(&error, cx),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// 04, Empty, loading and error states: one workspace banner.
+    fn render_banner(
+        &self,
+        banner: chat_model::WorkspaceBanner,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
+        use chat_model::WorkspaceBanner as B;
+        use p::OpProgressStepsItemStatus as S;
+        let muted = color(Token::MutedForeground, cx);
+        let workspace_id = self.store.read(cx).workspace_id.clone();
+        match banner {
+            B::Progress {
+                title,
+                steps,
+                setup,
+            } => v_flex()
+                .id("workspace-progress")
+                .role(Role::Status)
+                .aria_label(title)
+                .px_3()
+                .py_2()
+                .gap_1()
+                .border_b_1()
+                .border_color(color(Token::Border, cx))
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(Spinner::new().color(color(Token::Primary, cx)).small())
+                        .child(title)
+                        .child(
+                            div()
+                                .flex_1()
+                                .text_color(muted)
+                                .child("Prompts you send now wait in the queue."),
+                        )
+                        .children(setup.then(|| {
+                            Button::new("open-setup-tab")
+                                .label("Open Setup tab")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.show_setup_tab(window, cx)
+                                }))
+                        })),
+                )
+                .child(
+                    v_flex()
+                        .id("workspace-progress-steps")
+                        .role(Role::List)
+                        .aria_label("Steps")
+                        .pl(gpui_kit::px(22.))
+                        .max_w(gpui_kit::px(448.))
+                        .children(steps.into_iter().enumerate().map(|(ix, step)| {
+                            let (mark, state, tint) = match step.status {
+                                S::Done => ("✓", "Done", Token::Success),
+                                S::Running => ("", "Running", Token::Primary),
+                                S::Failed => ("✕", "Failed", Token::Destructive),
+                                S::Skipped => ("−", "Skipped", Token::MutedForeground),
+                                S::Pending => ("○", "Waiting", Token::MutedForeground),
+                            };
+                            let quiet = matches!(step.status, S::Pending | S::Skipped);
+                            h_flex()
+                                .id(("workspace-progress-step", ix))
+                                .role(Role::ListItem)
+                                .aria_label(format!("{}, {state}", step.label))
+                                .gap_2()
+                                .text_xs()
+                                .text_color(if quiet {
+                                    muted
+                                } else {
+                                    color(Token::Foreground, cx)
+                                })
+                                .child(if step.status == S::Running {
+                                    Spinner::new()
+                                        .color(color(tint, cx))
+                                        .xsmall()
+                                        .into_any_element()
+                                } else {
+                                    div()
+                                        .w(gpui_kit::px(12.))
+                                        .text_color(color(tint, cx))
+                                        .child(mark)
+                                        .into_any_element()
+                                })
+                                .child(div().flex_1().child(step.label))
+                                .children(step.time.map(|t| div().text_color(muted).child(t)))
+                        })),
+                )
+                .into_any_element(),
+            B::Error {
+                message, detail, ..
+            } => {
+                let open = self.error_details_open;
+                let retry_id = workspace_id.clone();
+                v_flex()
+                    .id("workspace-error")
+                    .role(Role::Alert)
+                    .aria_label(message.clone())
+                    .px_3()
+                    .py_1()
+                    .border_b_1()
+                    .border_color(color(Token::Destructive, cx))
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(div().flex_1().min_w_0().child(message))
+                            .child(
+                                Button::new("retry-workspace")
+                                    .label("Retry")
+                                    .disabled(self.banner_pending)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.banner_call::<api::WakeWorkspace>(
+                                            p::WakeWorkspaceIn {
+                                                workspace_id: retry_id.clone(),
+                                            },
+                                            false,
+                                            window,
+                                            cx,
+                                        )
+                                    })),
+                            )
+                            .children(detail.is_some().then(|| {
+                                Button::new("workspace-error-details")
+                                    .ghost()
+                                    .label("Details")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.error_details_open = !this.error_details_open;
+                                        cx.notify();
+                                    }))
+                            }))
+                            .child(
+                                Button::new("archive-failed-workspace")
+                                    .ghost()
+                                    .label("Archive")
+                                    .disabled(self.operation_pending)
+                                    .on_click(cx.listener(|this, _, _, cx| this.archive(cx))),
+                            ),
+                    )
+                    .children(detail.filter(|_| open).map(|detail| {
+                        div()
+                            .id("workspace-error-detail")
+                            .max_h(gpui_kit::px(192.))
+                            .overflow_y_scroll()
+                            .mt_1()
+                            .p_2()
+                            .font_family("monospace")
+                            .text_xs()
+                            .child(detail)
+                    }))
+                    .into_any_element()
+            }
+            B::SetupFailed => {
+                let rerun_id = workspace_id.clone();
+                h_flex()
+                    .id("setup-failed")
+                    .role(Role::Alert)
+                    .aria_label("Setup failed.")
+                    .px_3()
+                    .py_1()
+                    .gap_2()
+                    .border_b_1()
+                    .border_color(color(Token::Warning, cx))
+                    .child(div().flex_1().min_w_0().child("Setup failed."))
+                    .child(
+                        Button::new("rerun-setup")
+                            .label("Rerun setup")
+                            .disabled(self.banner_pending)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.banner_call::<api::RerunSetup>(
+                                    p::RerunSetupIn {
+                                        workspace_id: rerun_id.clone(),
+                                    },
+                                    true,
+                                    window,
+                                    cx,
+                                )
+                            })),
+                    )
+                    .child(
+                        Button::new("continue-after-setup")
+                            .label("Continue anyway")
+                            .disabled(self.banner_pending)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.banner_call::<api::ContinueAfterSetupFailure>(
+                                    p::ContinueAfterSetupFailureIn {
+                                        workspace_id: workspace_id.clone(),
+                                    },
+                                    false,
+                                    window,
+                                    cx,
+                                )
+                            })),
+                    )
+                    .child(
+                        Button::new("view-setup-output")
+                            .ghost()
+                            .label("View output")
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.show_setup_tab(window, cx)),
+                            ),
+                    )
+                    .into_any_element()
+            }
+            B::Sleeping => div()
+                .id("workspace-sleeping")
+                .role(Role::Status)
+                .aria_label("Sleeping. Sending a message wakes it.")
+                .px_3()
+                .py_1()
+                .border_b_1()
+                .border_color(color(Token::Border, cx))
+                .text_color(muted)
+                .child("Sleeping. Sending a message wakes it.")
+                .into_any_element(),
+        }
+    }
+
+    /// 07 Previews: openPreview's one-time entry link opens in the default browser.
+    fn open_preview(&mut self, port: f64, cx: &mut Context<Self>) {
+        let request = self.client.call::<api::OpenPreview>(p::OpenPreviewIn {
+            workspace_id: self.store.read(cx).workspace_id.clone(),
+            port,
+        });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(out) => cx.open_url(&out.url),
+                Err(e) => this.toast_error(&e, cx),
+            });
+        })
+        .detach();
+    }
+
+    /// 07 Previews: `Live` opens a new Live View link in the default browser. The link is a
+    /// secret: it is never logged or kept.
+    fn open_live_view(&mut self, cx: &mut Context<Self>) {
+        let request = self
+            .client
+            .call::<api::GetBrowserLiveView>(p::GetBrowserLiveViewIn {
+                workspace_id: self.store.read(cx).workspace_id.clone(),
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(p::GetBrowserLiveViewOut { url: Some(url) }) => cx.open_url(&url),
+                Ok(p::GetBrowserLiveViewOut { url: None }) => {
+                    this.push_notification(Notification::info(BROWSER_SESSION_ENDED), cx)
+                }
+                Err(e) => this.toast_error(&e, cx),
+            });
+        })
+        .detach();
+    }
+
     fn mutate<F: p::Function>(&mut self, input: F::Input, cx: &mut Context<Self>) {
         if self.operation_pending {
             return;
@@ -344,7 +745,7 @@ impl WorkspaceView {
                         }
                         this.review.update(cx, |r, cx| r.refresh(cx));
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.toast_error(&e, cx),
                 }
                 cx.notify();
             });
@@ -358,7 +759,6 @@ impl WorkspaceView {
         self.operation = Some(name.into());
         self.operation_session = self.active.clone();
         self.operation_draft = false;
-        self.error = None;
         let title = self
             .store
             .read(cx)
@@ -372,14 +772,6 @@ impl WorkspaceView {
                 .as_ref()
                 .and_then(|id| self.store.read(cx).state.sessions.get(id))
                 .map(|s| s.title.clone())
-                .unwrap_or_default()
-        } else if name == "Base branch" {
-            self.store
-                .read(cx)
-                .state
-                .workspace
-                .as_ref()
-                .map(|w| w.base_branch.clone())
                 .unwrap_or_default()
         } else {
             title
@@ -413,17 +805,11 @@ impl WorkspaceView {
         let weak = cx.weak_entity();
         let seq = self.revert_seq.unwrap_or_default();
         window.open_dialog(cx, move |dialog, _, cx| {
-            let feedback = weak
-                .upgrade()
-                .map(|v| (v.read(cx).error.clone(), v.read(cx).operation_pending));
-            let pending = feedback.as_ref().is_some_and(|(_, pending)| *pending);
+            let pending = weak.upgrade().is_some_and(|v| v.read(cx).operation_pending);
             let submit = weak.clone();
             let close = weak.clone();
             let mut dialog = dialog.title(name.clone()).overlay_closable(false);
-            if matches!(
-                name.as_str(),
-                "Create PR" | "Rename" | "Rename chat" | "Base branch"
-            ) {
+            if matches!(name.as_str(), "Create PR" | "Rename" | "Rename chat") {
                 dialog = dialog.child(Input::new(&title));
             }
             if name == "Create PR" {
@@ -441,8 +827,8 @@ impl WorkspaceView {
                         }),
                 );
             }
-            if name == "Rotate preview link" {
-                dialog = dialog.child("Old preview links will stop working.");
+            if name == "Reset preview access" {
+                dialog = dialog.child(RESET_PREVIEW_CONFIRM);
             }
             if name == "Merge" {
                 dialog = dialog.child("Squash merge this pull request?");
@@ -451,9 +837,6 @@ impl WorkspaceView {
                 dialog = dialog.child(format!(
                     "Files go back to the end of turn {seq}. A safety checkpoint is saved first."
                 ));
-            }
-            if let Some((Some(error), _)) = feedback {
-                dialog = dialog.child(div().text_color(color(Token::Destructive, cx)).child(error));
             }
             if pending {
                 dialog = dialog.child("Working…");
@@ -565,21 +948,9 @@ impl WorkspaceView {
                 },
                 cx,
             ),
-            Some("Base branch") => {
-                if let Ok(base_branch) = title.try_into() {
-                    self.mutate::<api::SetBaseBranch>(
-                        p::SetBaseBranchIn {
-                            workspace_id: id,
-                            base_branch,
-                        },
-                        cx,
-                    )
-                }
+            Some("Reset preview access") => {
+                self.mutate::<api::RotatePreviewKey>(p::RotatePreviewKeyIn { workspace_id: id }, cx)
             }
-            Some("Rotate preview link") => self.mutate::<api::RotatePreviewToken>(
-                p::RotatePreviewTokenIn { workspace_id: id },
-                cx,
-            ),
             _ => {}
         }
     }
@@ -590,6 +961,11 @@ impl WorkspaceView {
             },
             cx,
         );
+    }
+    fn environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(w) = self.store.read(cx).state.workspace.clone() {
+            super::environments::open_workspace_dialog(self.client.clone(), &w, window, cx);
+        }
     }
     fn diagnostics(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let client = self.client.clone();
@@ -622,21 +998,32 @@ impl WorkspaceView {
             None
         };
         let branch = w.branch.clone();
+        let base_branch = self.base_branch_picker(&w, cx);
+        let pr_link = crate::app::AppState::try_global(cx).and_then(|app| {
+            let hub = app.read(cx).hub.read(cx);
+            let project = hub.projects.iter().find(|p| p.id == w.project_id)?;
+            super::indicators::pr_link(&project.owner, &project.name, w.pr_number, w.pr_state)
+        });
         let id = w.id.clone();
         let sleep = w.state == p::WorkspaceState::Sleeping;
         let weak = cx.weak_entity();
         let instance = match &w.settings.environment.instance {
             p::Instance::InstanceName(name) => name.to_string(),
-            p::Instance::CustomInstance(instance) => {
-                format!("{} CPUs · {} MiB", instance.vcpu, instance.memory_mib)
-            }
+            p::Instance::CustomInstance(instance) => format!(
+                "{} vCPU, {} GiB",
+                instance.vcpu,
+                (instance.memory_mib as f64 / 1024.).round()
+            ),
         };
         let pill = match w.state {
-            p::WorkspaceState::Starting => match w.op.as_ref().map(|op| op.step.as_str()) {
-                Some("repo.clone") => "Cloning repository…".into(),
-                Some("repo.applyCheckpoint") => "Restoring files…".into(),
-                Some("home.restore") => "Restoring sessions…".into(),
-                _ => "Starting…".into(),
+            p::WorkspaceState::Starting => match w
+                .op
+                .as_ref()
+                .map(|op| op.step.as_str())
+                .filter(|step| !step.is_empty())
+            {
+                Some(step) => format!("Starting… {}", chat_model::step_label(step)),
+                None => "Starting…".into(),
             },
             p::WorkspaceState::SettingUp => "Running setup".into(),
             p::WorkspaceState::Ready | p::WorkspaceState::Working => {
@@ -666,21 +1053,38 @@ impl WorkspaceView {
                         cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()))
                     }),
             )
-            .child(
-                Button::new("base-branch")
-                    .label(format!("→ {}", w.base_branch))
-                    .disabled(w.pr_number.is_some())
-                    .on_click(
-                        cx.listener(|this, _, window, cx| {
-                            this.operation("Base branch", window, cx)
-                        }),
-                    ),
-            )
-            .children(w.ports.into_iter().map(|port| {
-                Button::new(SharedString::from(format!("port-{}", port.port)))
-                    .label(format!("{} ↗", port.port))
-                    .on_click(move |_, _, cx| cx.open_url(&port.url))
+            .child(base_branch)
+            .children(pr_link.map(|link| {
+                let url = link.url;
+                Button::new("pr-link")
+                    .label(link.label)
+                    .text_color(color(link.token, cx))
+                    .accessibility_label("Open the pull request on GitHub")
+                    .on_click(move |_, _, cx| cx.open_url(&url))
             }))
+            .children(
+                super::indicators::preview_links(&w.ports, w.browser_active)
+                    .into_iter()
+                    .map(|link| match link {
+                        PreviewLink::Port(port) => {
+                            Button::new(SharedString::from(format!("port-{port}")))
+                                .label(format!("{port} ↗"))
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.open_preview(port, cx)),
+                                )
+                        }
+                        PreviewLink::Live => Button::new("live-view")
+                            .accessibility_label("Live")
+                            .child(
+                                div()
+                                    .size(gpui_kit::px(6.))
+                                    .rounded_full()
+                                    .bg(color(Token::Destructive, cx)),
+                            )
+                            .child("Live")
+                            .on_click(cx.listener(|this, _, _, cx| this.open_live_view(cx))),
+                    }),
+            )
             .child(div().flex_1())
             .child(if sleep {
                 Button::new("wake-pill")
@@ -759,7 +1163,8 @@ impl WorkspaceView {
                             "Open on GitHub",
                             "Copy workspace link",
                             "Rename chat",
-                            "Rotate preview link",
+                            "Reset preview access",
+                            "Environment…",
                             "Diagnostics",
                             "Archive",
                         ] {
@@ -800,6 +1205,7 @@ impl WorkspaceView {
                                                 );
                                             }
                                         }
+                                        "Environment…" => this.environment(window, cx),
                                         "Diagnostics" => this.diagnostics(window, cx),
                                         "Archive" => this.archive(cx),
                                         _ => this.operation(label, window, cx),
@@ -820,6 +1226,187 @@ impl WorkspaceView {
                     }),
             )
             .into_any_element()
+    }
+
+    /// `→ <base branch>` (04, Top bar): a searchable `listBranches` picker until a PR exists.
+    fn base_branch_picker(
+        &self,
+        w: &p::WorkspaceDetail,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
+        let base = w.base_branch.clone();
+        let locked = w.pr_number.is_some()
+            || matches!(
+                w.state,
+                p::WorkspaceState::Archived | p::WorkspaceState::Archiving
+            );
+        if locked {
+            return div()
+                .id("base-branch")
+                .role(Role::Label)
+                .aria_label(format!("Base branch {base}"))
+                .px_2()
+                .text_color(color(Token::MutedForeground, cx))
+                .child(format!("→ {base}"))
+                .into_any_element();
+        }
+        let weak = cx.weak_entity();
+        Popover::new("base-branch-picker")
+            .open(self.branch_picker.is_some())
+            .trigger(
+                Button::new("base-branch")
+                    .label(format!("→ {base}"))
+                    .accessibility_label(format!("Base branch {base}. Change base branch")),
+            )
+            .on_open_change(cx.listener(|this, open: &bool, window, cx| {
+                if *open {
+                    this.open_branch_picker(window, cx);
+                } else {
+                    this.branch_picker = None;
+                    cx.notify();
+                }
+            }))
+            .content(move |_, _, cx| {
+                let Some(view) = weak.upgrade() else {
+                    return div().into_any_element();
+                };
+                let Some(picker) = &view.read(cx).branch_picker else {
+                    return div().into_any_element();
+                };
+                let list = match &picker.branches {
+                    None => super::skeleton_rows(3).into_any_element(),
+                    Some(Err(message)) => {
+                        let retry = weak.clone();
+                        v_flex()
+                            .p_2()
+                            .gap_2()
+                            .child(message.clone())
+                            .child(Button::new("retry-branches").label("Retry").on_click(
+                                move |_, _, cx| {
+                                    let _ = retry
+                                        .update(cx, |this, cx| this.search_branches(false, cx));
+                                },
+                            ))
+                            .into_any_element()
+                    }
+                    Some(Ok(names)) if names.is_empty() => {
+                        div().p_2().child("No branches.").into_any_element()
+                    }
+                    Some(Ok(names)) => v_flex()
+                        .id("base-branch-list")
+                        .role(Role::List)
+                        .aria_label("Branches")
+                        .max_h(gpui_kit::px(240.))
+                        .overflow_y_scroll()
+                        .children(names.iter().enumerate().map(|(ix, name)| {
+                            let pick = weak.clone();
+                            let branch = name.clone();
+                            Button::new(("base-branch-option", ix))
+                                .ghost()
+                                .label(if *name == base {
+                                    format!("{name} ✓")
+                                } else {
+                                    name.clone()
+                                })
+                                .on_click(move |_, _, cx| {
+                                    let _ = pick.update(cx, |this, cx| {
+                                        this.pick_base_branch(branch.clone(), cx)
+                                    });
+                                })
+                        }))
+                        .into_any_element(),
+                };
+                v_flex()
+                    .w(gpui_kit::px(288.))
+                    .gap_1()
+                    .child(Input::new(&picker.query))
+                    .child(list)
+                    .into_any_element()
+            })
+            .into_any_element()
+    }
+
+    fn open_branch_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search branches"));
+        let changed = cx.subscribe(&query, |this, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                this.search_branches(true, cx);
+            }
+        });
+        query.update(cx, |q, cx| q.focus(window, cx));
+        self.branch_picker = Some(BranchPicker {
+            query,
+            branches: None,
+            generation: 0,
+            _search: None,
+            _query_changed: changed,
+        });
+        self.search_branches(false, cx);
+        cx.notify();
+    }
+
+    /// `listBranches {projectId, query?}`, 200 ms after the search changes, as the web.
+    fn search_branches(&mut self, debounce: bool, cx: &mut Context<Self>) {
+        let Some(w) = self.store.read(cx).state.workspace.clone() else {
+            return;
+        };
+        let Some(picker) = &mut self.branch_picker else {
+            return;
+        };
+        picker.generation += 1;
+        let generation = picker.generation;
+        let query = picker.query.read(cx).value().trim().to_string();
+        let request = self.client.call::<api::ListBranches>(p::ListBranchesIn {
+            project_id: w.project_id,
+            query: (!query.is_empty()).then_some(query),
+        });
+        picker._search = Some(cx.spawn(async move |this, cx| {
+            if debounce {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(200))
+                    .await;
+            }
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                let Some(picker) = &mut this.branch_picker else {
+                    return;
+                };
+                if picker.generation != generation {
+                    return;
+                }
+                picker.branches = Some(
+                    result
+                        .map(|branches| {
+                            branches
+                                .into_iter()
+                                .map(|b| b.name)
+                                .filter(|name| *name != w.branch)
+                                .collect()
+                        })
+                        .map_err(|e| api_error_message(&e, None)),
+                );
+                cx.notify();
+            });
+        }));
+    }
+
+    fn pick_base_branch(&mut self, name: String, cx: &mut Context<Self>) {
+        self.branch_picker = None;
+        let Some(w) = self.store.read(cx).state.workspace.clone() else {
+            return;
+        };
+        if name != w.base_branch
+            && let Ok(base_branch) = name.try_into()
+        {
+            self.mutate::<api::SetBaseBranch>(
+                p::SetBaseBranchIn {
+                    workspace_id: w.id,
+                    base_branch,
+                },
+                cx,
+            );
+        }
+        cx.notify();
     }
 
     fn tab_ids(&self, cx: &gpui_kit::App) -> Vec<String> {
@@ -897,9 +1484,15 @@ impl WorkspaceView {
         if self.chats.contains_key(session_id) {
             return;
         }
-        let transcript = cx.new(|cx| TranscriptView::new(Vec::new(), cx));
-        let composer = cx.new(|cx| Composer::new(window, cx));
         let workspace_id = self.store.read(cx).workspace_id.clone();
+        let client = self.client.clone();
+        let source = workspace_id.clone();
+        let transcript = cx.new(|cx| {
+            let mut transcript = TranscriptView::new(Vec::new(), cx);
+            transcript.set_attachment_source(client, source);
+            transcript
+        });
+        let composer = cx.new(|cx| Composer::new(window, cx));
         let draft = cx
             .global::<crate::storage::Local>()
             .state()
@@ -971,8 +1564,11 @@ impl WorkspaceView {
                             this.revert_seq = Some(turn.seq);
                             this.operation("Revert", window, cx);
                         } else {
-                            this.error = Some("No checkpoint is available for this turn.".into());
-                            cx.notify();
+                            this.toast(
+                                "CHECKPOINT_NOT_FOUND".into(),
+                                crate::errors::error_message("CHECKPOINT_NOT_FOUND", None),
+                                cx,
+                            );
                         }
                     }
                 }
@@ -1022,6 +1618,27 @@ impl WorkspaceView {
 
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.detail = transcript_detail(cx);
+        let store_error = self.store.read(cx).error.clone();
+        if store_error != self.toasted_store_error {
+            self.toasted_store_error = store_error.clone();
+            if let Some(message) = store_error {
+                self.toast("channel".into(), message, cx);
+            }
+        }
+        let state = self
+            .store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .map(|w| w.state);
+        if state == Some(p::WorkspaceState::SettingUp) && self.last_state != state {
+            self.show_setup_tab(window, cx);
+        }
+        if state != Some(p::WorkspaceState::Error) {
+            self.error_details_open = false;
+        }
+        self.last_state = state;
         if let Some(id) = self.closing.clone()
             && !self.close_request
             && chat_model::running_turn(&self.store.read(cx).state, &id).is_none()
@@ -1035,6 +1652,12 @@ impl WorkspaceView {
         if let Some(id) = self.active.clone() {
             self.ensure_chat(&id, window, cx);
         }
+        let agent = self
+            .active
+            .as_ref()
+            .and_then(|id| self.store.read(cx).state.sessions.get(id))
+            .map(|s| s.agent);
+        self.review.update(cx, |r, cx| r.set_agent(agent, cx));
         for (id, chat) in &self.chats {
             let state = &self.store.read(cx).state;
             let read_only = state
@@ -1057,6 +1680,10 @@ impl WorkspaceView {
                 .get(id)
                 .is_some_and(|s| s.steering == Some(true));
             let session = state.sessions.get(id).cloned();
+            let can_revert = state
+                .workspace
+                .as_ref()
+                .is_some_and(|w| w.running_turn_id.is_none() && w.queue.is_empty());
             let placeholder = match (&session, &state.workspace) {
                 (Some(session), Some(w)) if w.state == p::WorkspaceState::Sleeping => format!(
                     "Message {} to wake this workspace",
@@ -1066,6 +1693,8 @@ impl WorkspaceView {
             };
             chat.transcript.update(cx, |t, cx| {
                 t.read_only = read_only;
+                t.agent = session.as_ref().map(|s| s.agent);
+                t.can_revert = can_revert;
                 t.sync(rows, cx);
             });
             chat.composer.update(cx, |c, cx| {
@@ -1133,14 +1762,16 @@ impl WorkspaceView {
             gpui_kit::ImageFormat::Gif => ("Pasted image.gif", "image/gif"),
             gpui_kit::ImageFormat::Webp => ("Pasted image.webp", "image/webp"),
             _ => {
-                self.error = Some("Paste a PNG, JPEG, GIF or WebP image.".into());
-                cx.notify();
+                self.toast(
+                    "attachment".into(),
+                    "Paste a PNG, JPEG, GIF or WebP image.".into(),
+                    cx,
+                );
                 return;
             }
         };
         if image.bytes().len() as u64 > tempo_client::MAX_ATTACHMENT_BYTES {
-            self.error = Some("Each attachment must be at most 10 MiB.".into());
-            cx.notify();
+            self.toast("attachment".into(), TOO_LARGE.into(), cx);
             return;
         }
         chat.composer.update(cx, |c, cx| {
@@ -1170,7 +1801,7 @@ impl WorkspaceView {
                     });
                 }
                 if let Err(e) = result {
-                    this.error = Some(e.to_string());
+                    this.toast_error(&e, cx);
                 }
                 cx.notify();
             });
@@ -1233,7 +1864,7 @@ impl WorkspaceView {
                             .read_to_end(&mut bytes)
                             .map_err(|_| "Could not read attachment.")?;
                         if bytes.len() as u64 > tempo_client::MAX_ATTACHMENT_BYTES {
-                            return Err("Each attachment must be at most 10 MiB.");
+                            return Err(TOO_LARGE);
                         }
                         Ok(bytes)
                     })
@@ -1242,8 +1873,8 @@ impl WorkspaceView {
                     Ok(bytes) => client
                         .upload_attachment(&workspace_id, &name, attachment_mime(&name), bytes)
                         .await
-                        .map_err(|e| e.to_string()),
-                    Err(e) => Err(e.into()),
+                        .map_err(Err),
+                    Err(e) => Err(Ok(e)),
                 };
                 if this
                     .update_in(cx, |this, _, cx| {
@@ -1258,7 +1889,8 @@ impl WorkspaceView {
                                     });
                                 }
                             }
-                            Err(e) => this.error = Some(e),
+                            Err(Ok(message)) => this.toast("attachment".into(), message.into(), cx),
+                            Err(Err(error)) => this.toast_error(&error, cx),
                         }
                         cx.notify();
                     })
@@ -1287,7 +1919,7 @@ impl WorkspaceView {
             let result = request
                 .await
                 .map(|out| out.paths)
-                .map_err(|e| e.to_string());
+                .map_err(|e| api_error_message(&e, None));
             let _ = this.update_in(cx, |this, _, cx| {
                 if let Some(chat) = this.chats.get(&id) {
                     chat.composer.update(cx, |c, cx| c.set_files(result, cx));
@@ -1338,53 +1970,54 @@ impl WorkspaceView {
         let session_id = session_id.to_string();
         cx.spawn_in(window, async move |this, cx| {
             let result = request.await;
-            let _ =
-                this.update_in(cx, |this, window, cx| {
-                    if let Some(chat) = this.chats.get(&session_id) {
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Some(chat) = this.chats.get(&session_id) {
+                    chat.composer.update(cx, |c, cx| {
+                        c.sending = false;
+                        if result.is_ok() {
+                            c.review_count = 0;
+                        }
+                        if result.is_ok() {
+                            c.clear_sent(&prompt, window, cx);
+                        }
+                        cx.notify();
+                    });
+                }
+                if result.is_ok() {
+                    this.review_comments
+                        .retain(|id| !prompt.review_comment_ids.contains(id));
+                    this.review
+                        .update(cx, |r, cx| r.mark_sent(&prompt.review_comment_ids, cx));
+                    for chat in this.chats.values() {
                         chat.composer.update(cx, |c, cx| {
-                            c.sending = false;
-                            if result.is_ok() {
-                                c.review_count = 0;
-                            }
-                            if result.is_ok() {
-                                c.clear_sent(&prompt, window, cx);
-                            }
+                            c.review_count = this.review_comments.len();
                             cx.notify();
                         });
                     }
-                    if result.is_ok() {
-                        this.review_comments
-                            .retain(|id| !prompt.review_comment_ids.contains(id));
-                        this.review
-                            .update(cx, |r, cx| r.mark_sent(&prompt.review_comment_ids, cx));
-                        for chat in this.chats.values() {
-                            chat.composer.update(cx, |c, cx| {
-                                c.review_count = this.review_comments.len();
-                                cx.notify();
-                            });
+                }
+                match result {
+                    Ok(turn) => this.store.update(cx, |store, cx| {
+                        if store.state.turns.contains_key(&turn.id) {
+                            return;
                         }
-                    }
-                    match result {
-                        Ok(turn) => this.store.update(cx, |store, cx| {
-                            if store.state.turns.contains_key(&turn.id) {
-                                return;
-                            }
-                            store
-                                .state
-                                .apply(p::WorkspaceServerMessage::Turn(p::WsTurn {
-                                    type_: p::WsTurnType::Turn,
-                                    turn,
-                                }));
-                            cx.notify();
-                        }),
-                        Err(tempo_client::ApiError::Network(_)) => this.error = Some(
-                            "Delivery could not be confirmed. Check the response before retrying."
-                                .into(),
-                        ),
-                        Err(error) => this.error = Some(error.to_string()),
-                    }
-                    cx.notify();
-                });
+                        store
+                            .state
+                            .apply(p::WorkspaceServerMessage::Turn(p::WsTurn {
+                                type_: p::WsTurnType::Turn,
+                                turn,
+                            }));
+                        cx.notify();
+                    }),
+                    Err(tempo_client::ApiError::Network(_)) => this.toast(
+                        "delivery".into(),
+                        "Delivery could not be confirmed. Check the response before retrying."
+                            .into(),
+                        cx,
+                    ),
+                    Err(error) => this.toast_error(&error, cx),
+                }
+                cx.notify();
+            });
         })
         .detach();
     }
@@ -1453,7 +2086,7 @@ impl WorkspaceView {
                             cx.notify();
                         });
                     }
-                    Err(error) => this.error = Some(error.to_string()),
+                    Err(error) => this.toast_error(&error, cx),
                 }
                 cx.notify();
             });
@@ -1497,7 +2130,7 @@ impl WorkspaceView {
                             cx.notify();
                         });
                     }
-                    Err(error) => this.error = Some(error.to_string()),
+                    Err(error) => this.toast_error(&error, cx),
                 }
                 cx.notify();
             });
@@ -1543,7 +2176,7 @@ impl WorkspaceView {
             let _ = this.update(cx, |this, cx| {
                 this.queue_pending = false;
                 if let Err(error) = result {
-                    this.error = Some(error.to_string());
+                    this.toast_error(&error, cx);
                 }
                 cx.notify();
             });
@@ -1564,7 +2197,7 @@ impl WorkspaceView {
         cx.spawn(async move |this, cx| {
             if let Err(error) = request.await {
                 let _ = this.update(cx, |this, cx| {
-                    this.error = Some(error.to_string());
+                    this.toast_error(&error, cx);
                     cx.notify();
                 });
             }
@@ -1645,7 +2278,7 @@ impl WorkspaceView {
                     chat.composer.update(cx, |c, _| c.configuring = false);
                 }
                 if let Err(error) = result {
-                    this.error = Some(error.to_string());
+                    this.toast_error(&error, cx);
                 }
                 this.sync(window, cx);
             });
@@ -1708,7 +2341,7 @@ impl WorkspaceView {
                     && error.code() != Some(p::ErrorCode::TurnNotActive)
                 {
                     this.closing = None;
-                    this.error = Some(error.to_string());
+                    this.toast_error(&error, cx);
                     cx.notify();
                     return;
                 }
@@ -1718,8 +2351,11 @@ impl WorkspaceView {
                         .await;
                     let _ = this.update(cx, |this, cx| {
                         this.closing = None;
-                        this.error =
-                            Some("The agent is still stopping. Try closing the chat again.".into());
+                        this.toast(
+                            "closing".into(),
+                            "The agent is still stopping. Try closing the chat again.".into(),
+                            cx,
+                        );
                         cx.notify();
                     });
                 }));
@@ -1751,7 +2387,7 @@ impl WorkspaceView {
                         }
                         cx.notify();
                     }),
-                    Err(error) => this.error = Some(error.to_string()),
+                    Err(error) => this.toast_error(&error, cx),
                 }
                 this.sync(window, cx);
             });
@@ -1783,7 +2419,7 @@ impl WorkspaceView {
             let _ = this.update(cx, |this, cx| {
                 this.pending_permissions.remove(&request_id);
                 if let Err(error) = result {
-                    this.error = Some(error.to_string());
+                    this.toast_error(&error, cx);
                 }
                 cx.notify();
             });
@@ -1800,7 +2436,7 @@ impl WorkspaceView {
         cx.spawn(async move |this, cx| {
             if let Err(error) = request.await {
                 let _ = this.update(cx, |this, cx| {
-                    this.error = Some(error.to_string());
+                    this.toast_error(&error, cx);
                     cx.notify();
                 });
             }
@@ -1825,29 +2461,26 @@ impl WorkspaceView {
             return;
         }
         let credentials = self.credentials.clone();
+        let settings = self
+            .store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .map(|w| w.settings.clone());
         let weak = cx.weak_entity();
         let menu = PopupMenu::build(window, cx, move |menu, _, _| {
             chat_model::AGENTS.iter().fold(menu, |menu, agent| {
                 let agent = *agent;
-                let enabled = credentials
-                    .as_ref()
-                    .is_some_and(|c| chat_model::has_login(agent, c));
+                let hint =
+                    chat_model::new_chat_hint(agent, credentials.as_ref(), settings.as_ref());
                 let weak = weak.clone();
                 menu.item(
-                    PopupMenuItem::new(if enabled {
-                        chat_model::agent_label(agent).to_string()
-                    } else {
-                        format!(
-                            "{} · {}",
-                            chat_model::agent_label(agent),
-                            if credentials.is_none() {
-                                "Loading logins…"
-                            } else {
-                                "Add login in Settings"
-                            }
-                        )
+                    PopupMenuItem::new(match hint {
+                        None => chat_model::agent_label(agent).to_string(),
+                        Some(hint) => format!("{} · {hint}", chat_model::agent_label(agent)),
                     })
-                    .disabled(!enabled)
+                    .disabled(hint.is_some())
                     .on_click(move |_, window, cx| {
                         let _ = weak.update(cx, |this, cx| this.create_chat(agent, window, cx));
                     }),
@@ -1911,7 +2544,7 @@ impl WorkspaceView {
                         this.sync(window, cx);
                         this.focus_composer(window, cx);
                     }
-                    Err(error) => this.error = Some(error.to_string()),
+                    Err(error) => this.toast_error(&error, cx),
                 }
                 cx.notify();
             });
@@ -1927,7 +2560,18 @@ impl Render for WorkspaceView {
             return div().p_4().child("Not found.").into_any_element();
         }
         if !store.state.ready {
-            return super::skeleton_rows(8).into_any_element();
+            return v_flex()
+                .size_full()
+                .child(
+                    div()
+                        .p_3()
+                        .border_b_1()
+                        .border_color(color(Token::Border, cx))
+                        .text_color(color(Token::MutedForeground, cx))
+                        .child("Loading workspace…"),
+                )
+                .child(super::skeleton_rows(8))
+                .into_any_element();
         }
         let ids = self.tab_ids(cx);
         let documents = self.review.read(cx).document_tabs();
@@ -1958,32 +2602,28 @@ impl Render for WorkspaceView {
         let reconnecting = store
             .connection
             .shows_reconnecting_bar(std::time::Instant::now());
-        let error = self.error.clone().or_else(|| store.error.clone());
-        let _heading = store
+        let banners = store
             .state
             .workspace
             .as_ref()
-            .map(|w| format!("{} · {} → {}", w.title, w.branch, w.base_branch));
-        let workspace_error = store
-            .state
-            .workspace
-            .as_ref()
-            .filter(|w| w.state == p::WorkspaceState::Error)
-            .map(|w| {
-                w.error_code
-                    .clone()
-                    .unwrap_or_else(|| "Workspace could not start".into())
-            });
-        let missing_login = self
+            .map(chat_model::workspace_banners)
+            .unwrap_or_default();
+        let login = self
             .active
             .as_ref()
             .and_then(|id| store.state.sessions.get(id))
-            .is_some_and(|session| {
-                self.credentials
-                    .as_ref()
-                    .is_some_and(|credentials| !chat_model::has_login(session.agent, credentials))
-            });
-        let invalid_logins = store.state.credential_invalid.clone();
+            .and_then(|session| {
+                chat_model::login_banner(
+                    session.agent,
+                    self.credentials.as_ref(),
+                    &store.state.credential_invalid,
+                )
+            })
+            .map(|(_, text)| text);
+        let plan = self
+            .active
+            .as_ref()
+            .and_then(|id| chat_model::running_plan(&store.state, id));
         let archived = store.state.workspace.as_ref().is_some_and(|w| {
             matches!(
                 w.state,
@@ -2046,139 +2686,145 @@ impl Render for WorkspaceView {
                 )
             })
             .collect();
-        let content =
-            if self.review.read(cx).document_open {
-                self.review.read(cx).document(cx)
-            } else if let Some(chat) = chat {
-                v_flex()
-                    .size_full()
-                    .child(div().flex_1().min_h_0().child(chat.transcript.clone()))
-                    .children(queued.into_iter().map(|(id, text, pending)| {
-                        let edit_id = id.clone();
-                        let delete_id = id.clone();
-                        let before = id.clone();
-                        let drag = QueuedDrag {
-                            workspace_id: self.store.read(cx).workspace_id.clone(),
-                            turn_id: id.clone(),
-                            text: text.clone(),
-                        };
-                        let read_only = chat.composer.read(cx).read_only || pending;
-                        h_flex()
-                            .id(SharedString::from(format!("queued-{id}")))
-                            .px_3()
-                            .py_1()
-                            .text_color(color(Token::MutedForeground, cx))
-                            .child(format!(
-                                "{}: {text}",
-                                if pending { "Sending now" } else { "Queued" }
-                            ))
-                            .child(
-                                Button::new(SharedString::from(format!("edit-{id}")))
-                                    .label("Edit")
-                                    .disabled(read_only || self.queue_pending)
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.edit_queue(&edit_id, window, cx)
-                                    })),
-                            )
-                            .child(
-                                Button::new(SharedString::from(format!("delete-{id}")))
-                                    .label("Delete")
-                                    .disabled(read_only || self.queue_pending)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.delete_queue(&delete_id, cx)
-                                    })),
-                            )
-                            .on_drag(drag, |drag: &QueuedDrag, _, _, cx| cx.new(|_| drag.clone()))
-                            .on_drop(cx.listener(move |this, drag: &QueuedDrag, _, cx| {
-                                if !read_only {
-                                    this.move_queue(drag, &before, cx);
-                                }
-                            }))
-                    }))
-                    .children(self.queue_editor.as_ref().map(|editor| {
-                        v_flex()
-                            .p_3()
-                            .child(Textarea::new(&editor.input).disabled(self.queue_pending))
-                            .child(
-                                h_flex()
-                                    .child(
-                                        Button::new("save-queue-edit")
-                                            .label("Save queued message")
-                                            .disabled(self.queue_pending)
-                                            .on_click(
-                                                cx.listener(|this, _, _, cx| this.save_queue(cx)),
-                                            ),
-                                    )
-                                    .child(
-                                        Button::new("cancel-queue-edit")
-                                            .label("Cancel")
-                                            .disabled(self.queue_pending)
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.queue_editor = None;
-                                                cx.notify();
-                                            })),
-                                    ),
-                            )
-                    }))
-                    .child(if archived {
-                        div()
-                            .p_3()
-                            .child(
-                                Button::new("restore-workspace")
-                                    .label("Restore to continue")
-                                    .on_click(cx.listener(|this, _, _, cx| this.restore(cx))),
-                            )
-                            .into_any_element()
-                    } else if chat.composer.read(cx).read_only {
-                        div().p_3().child("This chat is closed.").into_any_element()
-                    } else {
-                        let plan = self
-                            .store
-                            .read(cx)
-                            .state
-                            .items
-                            .values()
-                            .filter(|item| Some(&item.session_id) == self.active.as_ref())
-                            .filter_map(|item| match &item.content {
-                                p::ItemContent::Plan(plan) => Some((item.updated_at, plan.clone())),
-                                _ => None,
-                            })
-                            .max_by(|a, b| a.0.total_cmp(&b.0))
-                            .map(|(_, p)| p);
-                        v_flex()
-                            .children(plan.map(|plan| {
-                                let done = plan
-                                    .entries
-                                    .iter()
-                                    .filter(|e| e.status == "completed")
-                                    .count();
-                                gpui_kit::component::collapsible::Collapsible::new()
-                                    .open(self.plan_open)
-                                    .child(
-                                        Button::new("plan-progress")
-                                            .label(format!(
-                                                "Plan · {done}/{} completed",
-                                                plan.entries.len()
-                                            ))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.plan_open = !this.plan_open;
-                                                cx.notify();
-                                            })),
-                                    )
-                                    .content(v_flex().children(plan.entries.iter().map(|e| {
-                                        div().child(format!("{} · {}", e.status, e.content))
-                                    })))
-                            }))
-                            .child(chat.composer.clone())
-                            .into_any_element()
-                    })
-                    .into_any_element()
-            } else {
-                div()
-                    .p_4()
-                    .child("Start a new chat to work in this workspace.")
-                    .into_any_element()
-            };
+        let content = if self.review.read(cx).document_open {
+            self.review.read(cx).document(cx)
+        } else if let Some(chat) = chat {
+            let has_queue = !queued.is_empty();
+            v_flex()
+                .size_full()
+                .child(div().flex_1().min_h_0().child(chat.transcript.clone()))
+                .children(has_queue.then(|| {
+                    v_flex()
+                        .id("queued-messages")
+                        .role(Role::List)
+                        .aria_label("Queued messages")
+                        .children(queued.into_iter().map(|(id, text, pending)| {
+                            let edit_id = id.clone();
+                            let delete_id = id.clone();
+                            let before = id.clone();
+                            let drag = QueuedDrag {
+                                workspace_id: self.store.read(cx).workspace_id.clone(),
+                                turn_id: id.clone(),
+                                text: text.clone(),
+                            };
+                            let read_only = chat.composer.read(cx).read_only || pending;
+                            let status = if pending { "Sending now" } else { "Queued" };
+                            h_flex()
+                                .id(SharedString::from(format!("queued-{id}")))
+                                .role(Role::ListItem)
+                                .aria_label(format!("{status}: {text}"))
+                                .px_3()
+                                .py_1()
+                                .text_color(color(Token::MutedForeground, cx))
+                                .child(format!("{status}: {text}"))
+                                .child(
+                                    Button::new(SharedString::from(format!("edit-{id}")))
+                                        .label("Edit")
+                                        .disabled(read_only || self.queue_pending)
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.edit_queue(&edit_id, window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new(SharedString::from(format!("delete-{id}")))
+                                        .label("Delete")
+                                        .disabled(read_only || self.queue_pending)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.delete_queue(&delete_id, cx)
+                                        })),
+                                )
+                                .on_drag(drag, |drag: &QueuedDrag, _, _, cx| {
+                                    cx.new(|_| drag.clone())
+                                })
+                                .on_drop(cx.listener(move |this, drag: &QueuedDrag, _, cx| {
+                                    if !read_only {
+                                        this.move_queue(drag, &before, cx);
+                                    }
+                                }))
+                        }))
+                }))
+                .children(self.queue_editor.as_ref().map(|editor| {
+                    v_flex()
+                        .p_3()
+                        .child(Textarea::new(&editor.input).disabled(self.queue_pending))
+                        .child(
+                            h_flex()
+                                .child(
+                                    Button::new("save-queue-edit")
+                                        .label("Save queued message")
+                                        .disabled(self.queue_pending)
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.save_queue(cx)),
+                                        ),
+                                )
+                                .child(
+                                    Button::new("cancel-queue-edit")
+                                        .label("Cancel")
+                                        .disabled(self.queue_pending)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.queue_editor = None;
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                }))
+                .child(if archived {
+                    div()
+                        .p_3()
+                        .child(
+                            Button::new("restore-workspace")
+                                .label("Restore to continue")
+                                .on_click(cx.listener(|this, _, _, cx| this.restore(cx))),
+                        )
+                        .into_any_element()
+                } else if chat.composer.read(cx).read_only {
+                    div().p_3().child("This chat is closed.").into_any_element()
+                } else {
+                    v_flex()
+                        .children(self.store.read(cx).state.workspace.as_ref().and_then(|w| {
+                            super::environments::proposal_banner(w, &self.client, cx)
+                        }))
+                        .children(login.map(|text| {
+                            h_flex()
+                                .id("login-banner")
+                                .role(Role::Alert)
+                                .aria_label(text.clone())
+                                .px_3()
+                                .py_1()
+                                .gap_2()
+                                .border_t_1()
+                                .border_color(color(Token::Border, cx))
+                                .child(div().flex_1().min_w_0().child(text))
+                                .child(
+                                    Button::new("add-login")
+                                        .label("Add login")
+                                        .on_click(|_, _, cx| super::settings::open_logins(cx)),
+                                )
+                        }))
+                        .children(plan.map(|(done, total)| {
+                            let label = format!("Plan {done}/{total}");
+                            div()
+                                .id("plan-progress")
+                                .role(Role::Status)
+                                .aria_label(label.clone())
+                                .mx_3()
+                                .mt_1()
+                                .px_1p5()
+                                .rounded_md()
+                                .text_xs()
+                                .text_color(color(Token::Primary, cx))
+                                .child(label)
+                        }))
+                        .child(chat.composer.clone())
+                        .into_any_element()
+                })
+                .into_any_element()
+        } else {
+            div()
+                .p_4()
+                .child("Start a new chat to work in this workspace.")
+                .into_any_element()
+        };
         let _ = window;
         let tab_ids = ids.clone();
         v_flex()
@@ -2199,7 +2845,7 @@ impl Render for WorkspaceView {
             ))
             .on_action(cx.listener(|this, _: &ShowDiff, window, cx| {
                 this.reveal_right(cx);
-                this.review.update(cx, |r, cx| r.navigate(true, window, cx))
+                this.show_diff(window, cx)
             }))
             .on_action(cx.listener(|this, _: &OpenFile, _, cx| {
                 this.reveal_right(cx);
@@ -2264,64 +2910,6 @@ impl Render for WorkspaceView {
                 cx.listener(|this, _: &ModelPicker, window, cx| this.focus_model(window, cx)),
             )
             .on_action(cx.listener(|this, _: &ExpandAllToolCalls, _, cx| this.expand_tools(cx)))
-            .children(workspace_error.map(|error| {
-                h_flex()
-                    .p_2()
-                    .gap_2()
-                    .text_color(color(Token::Destructive, cx))
-                    .child(error)
-                    .child(
-                        Button::new("retry-workspace")
-                            .label("Retry")
-                            .disabled(self.operation_pending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.mutate::<api::WakeWorkspace>(
-                                    p::WakeWorkspaceIn {
-                                        workspace_id: this.store.read(cx).workspace_id.clone(),
-                                    },
-                                    cx,
-                                )
-                            })),
-                    )
-                    .child(
-                        Button::new("workspace-error-details")
-                            .label("Details")
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.diagnostics(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("archive-failed-workspace")
-                            .label("Archive")
-                            .on_click(cx.listener(|this, _, _, cx| this.archive(cx))),
-                    )
-            }))
-            .children(missing_login.then(|| {
-                h_flex()
-                    .p_2()
-                    .gap_2()
-                    .child("This agent needs a login.")
-                    .child(
-                        Button::new("add-missing-login")
-                            .label("Add login")
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(Box::new(OpenSettings), cx)
-                            }),
-                    )
-            }))
-            .children(invalid_logins.into_iter().map(|provider| {
-                h_flex()
-                    .p_2()
-                    .gap_2()
-                    .child(format!("The {provider} login needs attention."))
-                    .child(
-                        Button::new(SharedString::from(format!("fix-login-{provider}")))
-                            .label("Add login")
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(Box::new(OpenSettings), cx)
-                            }),
-                    )
-            }))
             .children(reconnecting.then(|| {
                 div()
                     .px_3()
@@ -2329,13 +2917,11 @@ impl Render for WorkspaceView {
                     .text_color(color(Token::Warning, cx))
                     .child("Reconnecting…")
             }))
-            .children(error.map(|error| {
-                div()
-                    .px_3()
-                    .py_2()
-                    .text_color(color(Token::Destructive, cx))
-                    .child(error)
-            }))
+            .children(
+                banners
+                    .into_iter()
+                    .map(|banner| self.render_banner(banner, cx)),
+            )
             .child(
                 h_flex()
                     .child(
@@ -2395,6 +2981,25 @@ impl Render for WorkspaceView {
     }
 }
 
+const TOO_LARGE: &str = "Each attachment must be at most 10 MiB.";
+/// 04, Confirmations: Reset preview access.
+const RESET_PREVIEW_CONFIRM: &str = "Open previews will stop working. Open them again from Tempo.";
+
+/// The toast text for a failed server function, as the web `errorText`: the server's message,
+/// else the error table's.
+pub fn api_error_message(error: &tempo_client::ApiError, agent: Option<p::AgentId>) -> String {
+    match error {
+        tempo_client::ApiError::Server { error, .. } if !error.message.trim().is_empty() => {
+            error.message.clone()
+        }
+        tempo_client::ApiError::Server { error, .. } => {
+            crate::errors::error_message(&error.code.to_string(), agent)
+        }
+        tempo_client::ApiError::TooLarge { .. } => TOO_LARGE.into(),
+        _ => crate::errors::error_message("INTERNAL", None),
+    }
+}
+
 fn transcript_detail(cx: &gpui_kit::App) -> chat_model::TranscriptDetail {
     cx.global::<crate::storage::Local>()
         .config()
@@ -2438,6 +3043,8 @@ mod tests {
     struct LocalServer {
         url: String,
         requests: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
+        /// What getBrowserLiveView returns as `url`.
+        live_view: Arc<Mutex<Option<String>>>,
         stop: Arc<AtomicBool>,
         worker: Option<std::thread::JoinHandle<()>>,
     }
@@ -2450,6 +3057,8 @@ mod tests {
             let log = requests.clone();
             let stop = Arc::new(AtomicBool::new(false));
             let stopping = stop.clone();
+            let live_view = Arc::new(Mutex::new(Some(LIVE_VIEW_LINK.to_string())));
+            let live = live_view.clone();
             let response = serde_json::to_string(turn).unwrap();
             let worker = std::thread::spawn(move || {
                 while !stopping.load(Ordering::Relaxed) {
@@ -2524,6 +3133,34 @@ mod tests {
                         } else {
                             (200, response.clone())
                         }
+                    } else if path.contains("/attachments/") {
+                        (200, "fake png bytes".into())
+                    } else if path.ends_with("/listBranches") {
+                        (
+                            200,
+                            r#"[{"name":"main"},{"name":"release"},{"name":"feature/own"}]"#.into(),
+                        )
+                    } else if fail && path.ends_with("/setBaseBranch") {
+                        (
+                            409,
+                            r#"{"code":"PR_EXISTS","message":"A pull request already exists."}"#
+                                .into(),
+                        )
+                    } else if path.ends_with("/openPreview") {
+                        if fail {
+                            (404, r#"{"code":"NOT_FOUND","message":"Not found."}"#.into())
+                        } else {
+                            (200, format!(r#"{{"url":"{PREVIEW_LINK}"}}"#))
+                        }
+                    } else if path.ends_with("/getBrowserLiveView") {
+                        if fail {
+                            (404, r#"{"code":"NOT_FOUND","message":"Not found."}"#.into())
+                        } else {
+                            (
+                                200,
+                                serde_json::json!({"url": *live.lock().unwrap()}).to_string(),
+                            )
+                        }
                     } else if path.ends_with("/getCredentialStatus") {
                         (200,r#"{"claude":{"set":true,"updatedAt":null},"anthropic":{"set":true,"updatedAt":null},"openai":{"set":true,"updatedAt":null},"openrouter":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null}}"#.into())
                     } else if path.ends_with("/listFiles") {
@@ -2536,8 +3173,13 @@ mod tests {
                     } else {
                         (200, "{}".into())
                     };
+                    let content_type = if path.contains("/attachments/") {
+                        "image/png"
+                    } else {
+                        "application/json"
+                    };
                     let reply = format!(
-                        "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        "HTTP/1.1 {status} Test\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                         body.len()
                     );
                     let _ = stream.write_all(reply.as_bytes());
@@ -2546,6 +3188,7 @@ mod tests {
             Self {
                 url,
                 requests,
+                live_view,
                 stop,
                 worker: Some(worker),
             }
@@ -2557,6 +3200,9 @@ mod tests {
             self.worker.take().unwrap().join().unwrap();
         }
     }
+    const PREVIEW_LINK: &str = "https://3000-01k7000000000000000000000b.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9";
+    const LIVE_VIEW_LINK: &str =
+        "https://live.example-browser.com/devtools/inspector.html?wss=session&jwt=live-view-token";
     #[test]
     fn right_side_starts_closed_while_sleeping_or_quiet() {
         use p::WorkspaceState::{Ready, Sleeping};
@@ -2615,6 +3261,12 @@ mod tests {
         }
     }
 
+    fn toasts(cx: &mut TestAppContext, window: AnyWindowHandle) -> usize {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.notifications(cx).len())
+            .unwrap()
+    }
+
     fn wait_queue(cx: &mut TestAppContext, view: &Entity<WorkspaceView>) {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
@@ -2641,6 +3293,182 @@ mod tests {
             assert!(Instant::now() < deadline, "chat action did not finish");
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn toast_text_is_the_server_message_or_the_error_table() {
+        let server = |code, message: &str| tempo_client::ApiError::Server {
+            status: 409,
+            error: p::ErrorBody {
+                code,
+                message: message.into(),
+                detail: Some("internal detail".into()),
+            },
+        };
+        assert_eq!(
+            api_error_message(
+                &server(p::ErrorCode::PrExists, "A pull request already exists."),
+                None
+            ),
+            "A pull request already exists."
+        );
+        assert_eq!(
+            api_error_message(
+                &server(p::ErrorCode::CredentialMissing, ""),
+                Some(p::AgentId::Codex)
+            ),
+            "Add your Codex login in Settings."
+        );
+        assert_eq!(
+            api_error_message(&tempo_client::ApiError::Http { status: 502 }, None),
+            "Something went wrong."
+        );
+        assert_eq!(
+            api_error_message(&tempo_client::ApiError::TooLarge { size: 1 << 30 }, None),
+            TOO_LARGE
+        );
+    }
+
+    #[gpui_kit::test]
+    fn transcript_loads_image_attachments_from_the_attachment_route(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let item = state
+            .items
+            .values_mut()
+            .find(|item| {
+                item.session_id == session && matches!(item.content, p::ItemContent::UserMessage(_))
+            })
+            .unwrap();
+        let p::ItemContent::UserMessage(message) = &mut item.content else {
+            unreachable!()
+        };
+        message.attachments = vec![
+            p::UserMessageContentAttachmentsItem {
+                id: "att-png".into(),
+                mime: "image/png".into(),
+                name: "design.png".into(),
+            },
+            p::UserMessageContentAttachmentsItem {
+                id: "att-pdf".into(),
+                mime: "application/pdf".into(),
+                name: "spec.pdf".into(),
+            },
+        ];
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (_window, view) = mount(cx, state, client);
+        wait_until(cx, &view, |view, cx| {
+            view.chats[&session]
+                .transcript
+                .read(cx)
+                .has_thumbnail("att-png")
+        });
+        let requests = server.requests.lock().unwrap();
+        let paths: Vec<_> = requests
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .filter(|path| path.contains("/attachments/"))
+            .collect();
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0].ends_with("/attachments/att-png"));
+    }
+
+    #[gpui_kit::test]
+    fn base_branch_picker_lists_other_branches_and_sets_the_pick(cx: &mut TestAppContext) {
+        for fail in [false, true] {
+            let mut state = fixture();
+            state.workspace.as_mut().unwrap().pr_number = None;
+            state.workspace.as_mut().unwrap().branch = "feature/own".into();
+            let turn = state.turns.values().next().unwrap().clone();
+            let server = LocalServer::new(&turn, fail);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            cx.update_window(window, |_, window, cx| {
+                view.update(cx, |view, cx| view.open_branch_picker(window, cx))
+            })
+            .unwrap();
+            wait_until(cx, &view, |view, _| {
+                view.branch_picker
+                    .as_ref()
+                    .is_some_and(|p| p.branches.is_some())
+            });
+            view.read_with(cx, |view, _| {
+                let branches = view.branch_picker.as_ref().unwrap().branches.clone();
+                assert_eq!(branches, Some(Ok(vec!["main".into(), "release".into()])));
+            });
+            view.update(cx, |view, cx| view.pick_base_branch("release".into(), cx));
+            wait_until(cx, &view, |view, _| !view.operation_pending);
+            assert!(view.read_with(cx, |view, _| view.branch_picker.is_none()));
+            let requests = server.requests.lock().unwrap().clone();
+            let list = requests
+                .iter()
+                .find(|(path, _)| path.ends_with("/listBranches"))
+                .unwrap();
+            assert!(list.1["projectId"].is_string() && list.1.get("query").is_none());
+            let set = requests
+                .iter()
+                .find(|(path, _)| path.ends_with("/setBaseBranch"))
+                .unwrap();
+            assert_eq!(set.1["baseBranch"], "release");
+            assert_eq!(toasts(cx, window), usize::from(fail));
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn error_banner_retries_with_wake_and_skips_toasts_for_its_code(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        let w = state.workspace.as_mut().unwrap();
+        w.state = p::WorkspaceState::Error;
+        w.error_code = Some("INTERNAL".into());
+        w.error_detail = Some("stack".into());
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, true);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            view.update(cx, |view, cx| {
+                let id = view.store.read(cx).workspace_id.clone();
+                view.banner_call::<api::WakeWorkspace>(
+                    p::WakeWorkspaceIn { workspace_id: id },
+                    false,
+                    window,
+                    cx,
+                );
+                let session = view.active.clone().unwrap();
+                view.configure(&session, None, "plan", window, cx);
+            })
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| {
+            !view.banner_pending
+                && view
+                    .active
+                    .as_ref()
+                    .is_some_and(|id| !view.chats[id].composer.read(cx).configuring)
+        });
+        assert!(
+            server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/wakeWorkspace"))
+        );
+        assert_eq!(toasts(cx, window), 0, "the banner already shows INTERNAL");
     }
 
     #[gpui_kit::test]
@@ -2676,6 +3504,88 @@ mod tests {
                 .iter()
                 .any(|(path, _)| path.ends_with("/wakeWorkspace") || path.ends_with("/getChanges"))
         );
+    }
+
+    #[gpui_kit::test]
+    fn review_reloads_on_state_changes_never_wake_the_workspace(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::Ready;
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.review.update(cx, |review, cx| {
+                    review.open_picker(cx);
+                    review.open_file("README.md".into(), window, cx);
+                });
+            });
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| view.review.read(cx).file.is_some());
+        for next in [
+            p::WorkspaceState::Stopping,
+            p::WorkspaceState::Sleeping,
+            p::WorkspaceState::Error,
+            p::WorkspaceState::Starting,
+        ] {
+            server.requests.lock().unwrap().clear();
+            view.update(cx, |view, cx| {
+                view.store.update(cx, |store, cx| {
+                    let w = store.state.workspace.as_mut().unwrap();
+                    w.state = next;
+                    w.rev += 1.;
+                    cx.notify();
+                })
+            });
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/listReviewComments"))
+            {
+                assert!(
+                    Instant::now() < deadline,
+                    "{next:?}: the review did not reload"
+                );
+                cx.run_until_parked();
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            std::thread::sleep(Duration::from_millis(200));
+            cx.run_until_parked();
+            let requests = server.requests.lock().unwrap();
+            let paths: Vec<_> = requests.iter().map(|(path, _)| path.as_str()).collect();
+            let waking = [
+                "/getChanges",
+                "/getFileDiff",
+                "/searchFiles",
+                "/wakeWorkspace",
+            ];
+            let cached = ["/listFiles", "/readFile"];
+            for path in &paths {
+                assert!(
+                    !waking.iter().any(|name| path.ends_with(name)),
+                    "{next:?}: {path}"
+                );
+                if next != p::WorkspaceState::Sleeping {
+                    assert!(
+                        !cached.iter().any(|name| path.ends_with(name)),
+                        "{next:?}: {path}"
+                    );
+                }
+            }
+            if next == p::WorkspaceState::Sleeping {
+                for name in cached {
+                    assert!(paths.iter().any(|path| path.ends_with(name)), "{name}");
+                }
+            }
+        }
     }
 
     #[gpui_kit::test]
@@ -2777,8 +3687,8 @@ mod tests {
         wait_until(cx, &view, |view, cx| {
             !view.chats[&id].composer.read(cx).configuring
         });
+        assert_eq!(toasts(cx, window), 1);
         view.read_with(cx, |view, cx| {
-            assert!(view.error.is_some());
             assert_eq!(view.store.read(cx).state.sessions[&id].mode_id, old_mode);
         });
         cx.update_window(window, |_, window, cx| {
@@ -2844,9 +3754,9 @@ mod tests {
                     .advance_clock(Duration::from_secs(30));
                 cx.run_until_parked();
             }
+            assert_eq!(toasts(cx, window), 1);
             view.read_with(cx, |view, cx| {
                 assert!(view.closing.is_none());
-                assert!(view.error.is_some());
                 assert_ne!(
                     view.store.read(cx).state.sessions[&id].status,
                     p::SessionStatus::Closed
@@ -3268,12 +4178,12 @@ mod tests {
         })
         .unwrap();
         wait_sent(cx, &view);
+        assert_eq!(toasts(cx, window), 1);
         view.read_with(cx, |view, cx| {
             assert_eq!(
                 view.chats[&session].composer.read(cx).text(cx),
                 "Retry this draft"
             );
-            assert_eq!(view.error.as_deref(), Some("Could not send."));
         });
         cx.update_window(window, |_, window, cx| {
             view.update(cx, |view, cx| {
@@ -3299,5 +4209,138 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[gpui_kit::test]
+    fn port_click_opens_the_link_from_open_preview_in_the_default_browser(cx: &mut TestAppContext) {
+        for fail in [false, true] {
+            let state = fixture();
+            let id = state.workspace.as_ref().unwrap().id.clone();
+            let turn = state.turns.values().next().unwrap().clone();
+            let server = LocalServer::new(&turn, fail);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            view.update(cx, |view, cx| view.open_preview(3000., cx));
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/openPreview"))
+                || (!fail && cx.opened_url().is_none())
+            {
+                cx.run_until_parked();
+                assert!(Instant::now() < deadline, "openPreview did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let requests = server.requests.lock().unwrap().clone();
+            let call = requests
+                .iter()
+                .find(|(path, _)| path.ends_with("/openPreview"))
+                .unwrap();
+            assert_eq!(
+                call.1,
+                serde_json::json!({"workspaceId": id, "port": 3000.0})
+            );
+            if fail {
+                assert_eq!(toasts(cx, window), 1);
+            } else {
+                assert_eq!(cx.opened_url().as_deref(), Some(PREVIEW_LINK));
+                assert_eq!(toasts(cx, window), 0);
+            }
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn live_opens_a_new_live_view_link_in_the_default_browser(cx: &mut TestAppContext) {
+        assert_eq!(BROWSER_SESSION_ENDED, "Browser session ended.");
+        // The opened URL stays recorded on `cx`, so the case that opens one runs last.
+        for (fail, link) in [(true, None), (false, None), (false, Some(LIVE_VIEW_LINK))] {
+            let mut state = fixture();
+            state.workspace.as_mut().unwrap().browser_active = true;
+            let id = state.workspace.as_ref().unwrap().id.clone();
+            let turn = state.turns.values().next().unwrap().clone();
+            let server = LocalServer::new(&turn, fail);
+            *server.live_view.lock().unwrap() = link.map(String::from);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            view.update(cx, |view, cx| view.open_live_view(cx));
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/getBrowserLiveView"))
+                || (cx.opened_url().is_none() && toasts(cx, window) == 0)
+            {
+                cx.run_until_parked();
+                assert!(
+                    Instant::now() < deadline,
+                    "getBrowserLiveView did not finish"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let requests = server.requests.lock().unwrap().clone();
+            let call = requests
+                .iter()
+                .find(|(path, _)| path.ends_with("/getBrowserLiveView"))
+                .unwrap();
+            assert_eq!(call.1, serde_json::json!({"workspaceId": id}));
+            assert_eq!(cx.opened_url().as_deref(), link);
+            assert_eq!(toasts(cx, window), usize::from(link.is_none()));
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn reset_preview_access_confirms_then_rotates_the_key(cx: &mut TestAppContext) {
+        assert_eq!(
+            RESET_PREVIEW_CONFIRM,
+            "Open previews will stop working. Open them again from Tempo."
+        );
+        let state = fixture();
+        let id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.operation("Reset preview access", window, cx)
+            })
+        })
+        .unwrap();
+        assert!(
+            !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/rotatePreviewKey")),
+            "nothing is reset before the confirmation"
+        );
+        view.update(cx, |view, cx| view.submit_operation(cx));
+        wait_until(cx, &view, |view, _| !view.operation_pending);
+        let requests = server.requests.lock().unwrap().clone();
+        let call = requests
+            .iter()
+            .find(|(path, _)| path.ends_with("/rotatePreviewKey"))
+            .unwrap();
+        assert_eq!(call.1, serde_json::json!({"workspaceId": id}));
+        assert!(view.read_with(cx, |view, _| view.operation.is_none()));
     }
 }

@@ -1,10 +1,11 @@
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
-use gpui_kit::component::{Disableable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+use gpui_kit::component::{Disableable as _, Selectable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
-    div, uniform_list,
+    div,
 };
 use tempo_protocol::{self as p, api};
 
@@ -19,7 +20,10 @@ pub struct Dialogs {
     branch: Entity<InputState>,
     prompt: Entity<TextareaState>,
     agent: Option<p::AgentId>,
-    credentials: Option<p::CredentialStatus>,
+    models: Vec<p::AgentModelOptions>,
+    model: Option<String>,
+    models_loading: bool,
+    workspace_options: bool,
     branches: Vec<p::ListBranchesItem>,
     branch_search: Option<gpui_kit::Task<()>>,
     prs: Vec<p::ListOpenPullRequestsItem>,
@@ -29,7 +33,9 @@ pub struct Dialogs {
     history: Vec<p::WorkspaceSummary>,
     delete: Option<p::WorkspaceSummary>,
     confirm: Entity<InputState>,
-    query: Entity<InputState>,
+    /// The GitHub App's install page (`GET /api/setup/status` → `installUrl`), when known.
+    pub install_url: Option<String>,
+    installations_loading: bool,
     pending: bool,
     keep_open: bool,
     error: Option<String>,
@@ -48,11 +54,7 @@ impl Dialogs {
         );
         let confirm =
             cx.new(|cx| InputState::new(window, cx).placeholder("Type the workspace slug"));
-        let query = cx.new(|cx| InputState::new(window, cx).placeholder("Title, branch or slug"));
-        let mut inputs_changed: Vec<_> = [&confirm, &query]
-            .into_iter()
-            .map(|input| cx.observe(input, |_, _, cx| cx.notify()))
-            .collect();
+        let mut inputs_changed = vec![cx.observe(&confirm, |_, _, cx| cx.notify())];
         inputs_changed.push(branch_changed);
         Self {
             kind: None,
@@ -63,9 +65,14 @@ impl Dialogs {
             project: None,
             source: 0,
             branch,
-            prompt: cx.new(|cx| TextareaState::new(window, cx).placeholder("First prompt")),
+            prompt: cx.new(|cx| {
+                TextareaState::new(window, cx).placeholder("What do you want to work on?")
+            }),
             agent: None,
-            credentials: None,
+            models: vec![],
+            model: None,
+            models_loading: false,
+            workspace_options: false,
             branches: vec![],
             branch_search: None,
             prs: vec![],
@@ -75,7 +82,8 @@ impl Dialogs {
             history: vec![],
             delete: None,
             confirm,
-            query,
+            install_url: None,
+            installations_loading: false,
             _inputs_changed: inputs_changed,
             pending: false,
             keep_open: false,
@@ -107,8 +115,10 @@ impl Dialogs {
                     });
                 })
         });
-        if kind == "Command palette" {
-            window.focus(&self.query.read(cx).focus_handle(cx), cx);
+        if kind == "New workspace" {
+            self.source = 0;
+            self.workspace_options = false;
+            window.focus(&self.prompt.read(cx).focus_handle(cx), cx);
         } else {
             window.focus(&self.branch.read(cx).focus_handle(cx), cx);
         }
@@ -117,20 +127,9 @@ impl Dialogs {
         if let Some(project) = self.projects.first().cloned() {
             self.select_project(project.id, window, cx);
         }
-        let Some(client) = &self.client else {
-            return;
-        };
-        let request = client.call::<api::GetCredentialStatus>(Default::default());
-        cx.spawn(async move |this, cx| {
-            let result = request.await;
-            let _ = this.update(cx, |this, cx| {
-                if let Ok(status) = result {
-                    this.credentials = Some(status);
-                }
-                cx.notify();
-            });
-        })
-        .detach();
+        if kind == "New workspace" {
+            self.load_models(cx);
+        }
         if kind == "Rename workspace" {
             let title = app
                 .read(cx)
@@ -143,23 +142,97 @@ impl Dialogs {
                 .update(cx, |i, cx| i.set_value(title, window, cx));
         }
         if kind == "Add project" {
-            let request = client.call::<api::ListInstallations>(Default::default());
-            cx.spawn(async move |this, cx| {
-                let result = request.await;
-                let _ = this.update(cx, |this, cx| {
-                    match result {
-                        Ok(out) => this.installations = out,
-                        Err(e) => this.error = Some(e.to_string()),
-                    }
-                    cx.notify();
-                });
-            })
-            .detach();
+            self.load_installations(cx);
         }
         if kind == "History" {
             self.load_history(cx);
         }
         cx.notify();
+    }
+    fn load_models(&mut self, cx: &mut Context<Self>) {
+        let Some(client) = &self.client else {
+            return;
+        };
+        let request = client.call::<api::ListModels>(Default::default());
+        self.models_loading = true;
+        self.error = None;
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.models_loading = false;
+                match result {
+                    Ok(models) => {
+                        this.models = models;
+                        let preferred = this
+                            .projects
+                            .iter()
+                            .find(|p| Some(&p.id) == this.project.as_ref())
+                            .and_then(|p| p.settings.agent.as_ref())
+                            .and_then(|a| a.default);
+                        let entry = this
+                            .models
+                            .iter()
+                            .find(|m| Some(m.agent) == preferred)
+                            .or_else(|| this.models.first());
+                        if let Some(entry) = entry {
+                            this.agent = Some(entry.agent);
+                            this.model = entry
+                                .options
+                                .iter()
+                                .find(|o| o.value == entry.current_value)
+                                .or_else(|| entry.options.first())
+                                .map(|o| o.value.clone());
+                        } else {
+                            this.agent = None;
+                            this.model = None;
+                        }
+                    }
+                    Err(e) => {
+                        this.model = None;
+                        this.error = Some(e.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+    fn load_installations(&mut self, cx: &mut Context<Self>) {
+        let Some(client) = &self.client else {
+            return;
+        };
+        self.installations_loading = true;
+        self.error = None;
+        let status = client.server().setup_status();
+        cx.spawn(async move |this, cx| {
+            if let Ok(status) = status.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.install_url = status.install_url;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+        let request = client.call::<api::ListInstallations>(Default::default());
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.installations_loading = false;
+                match result {
+                    Ok(out) => {
+                        if let Some(first) = out.first().map(|i| i.installation_id)
+                            && this.installation.is_none()
+                        {
+                            this.select_installation(first, cx);
+                        }
+                        this.installations = out;
+                    }
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
     fn close(&mut self, cx: &mut Context<Self>) {
         self.kind = None;
@@ -203,7 +276,7 @@ impl Dialogs {
                 }
                 match result {
                     Ok(out) => this.branches = out,
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
@@ -247,7 +320,7 @@ impl Dialogs {
         .detach();
     }
     fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.pending {
+        if self.pending || self.models_loading || self.model.is_none() {
             return;
         }
         let Some(client) = &self.client else {
@@ -288,6 +361,7 @@ impl Dialogs {
             project_id,
             source,
             agent: self.agent,
+            model: self.model.clone(),
             prompt,
         });
         self.pending = true;
@@ -305,7 +379,7 @@ impl Dialogs {
                             this.close(cx);
                         }
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => super::toast::error(&e, this.agent, window, cx),
                 }
                 cx.notify();
             });
@@ -328,7 +402,7 @@ impl Dialogs {
                 }
                 match result {
                     Ok(repos) => this.repos = repos,
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
@@ -353,6 +427,7 @@ impl Dialogs {
                 this.pending = false;
                 match result {
                     Ok(project) => {
+                        let linked = format!("Linked {}/{}", project.owner, project.name);
                         crate::app::AppState::global(cx)
                             .read(cx)
                             .hub
@@ -362,9 +437,16 @@ impl Dialogs {
                                 h.projects.push(project);
                                 cx.notify();
                             });
+                        if let Some(handle) = this.modal_window {
+                            cx.defer(move |cx| {
+                                let _ = handle.update(cx, |_, window, cx| {
+                                    super::toast::success(linked, window, cx)
+                                });
+                            });
+                        }
                         this.close(cx);
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => super::toast::error_in_main_window(&e, None, cx),
                 }
                 cx.notify();
             });
@@ -388,7 +470,7 @@ impl Dialogs {
                             .filter(|w| w.state == p::WorkspaceState::Archived)
                             .collect()
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
@@ -409,7 +491,7 @@ impl Dialogs {
             let _ = this.update(cx, |this, cx| {
                 this.pending = false;
                 if let Err(e) = result {
-                    this.error = Some(e.to_string());
+                    super::toast::error_in_main_window(&e, None, cx);
                 } else {
                     this.delete = None;
                     if F::NAME == "renameWorkspace" {
@@ -429,6 +511,48 @@ impl Render for Dialogs {
         let Some(kind) = self.kind else {
             return div().into_any_element();
         };
+        let choices: Vec<_> = self
+            .models
+            .iter()
+            .flat_map(|entry| {
+                entry.options.iter().map(|option| {
+                    (
+                        entry.agent,
+                        option.value.clone(),
+                        format!(
+                            "{} · {}",
+                            option.name,
+                            super::chat_model::agent_label(entry.agent)
+                        ),
+                    )
+                })
+            })
+            .collect();
+        let model_label = choices
+            .iter()
+            .find(|(agent, value, _)| {
+                Some(*agent) == self.agent && Some(value) == self.model.as_ref()
+            })
+            .map(|(_, _, label)| label.clone())
+            .unwrap_or_else(|| "Select model".into());
+        let weak = cx.weak_entity();
+        let model_picker = Button::new("workspace-model")
+            .label(model_label)
+            .disabled(self.pending || self.models_loading)
+            .dropdown_menu(move |menu, _, _| {
+                choices.iter().fold(menu, |menu, (agent, value, label)| {
+                    let weak = weak.clone();
+                    let agent = *agent;
+                    let value = value.clone();
+                    menu.item(PopupMenuItem::new(label.clone()).on_click(move |_, _, cx| {
+                        let _ = weak.update(cx, |this, cx| {
+                            this.agent = Some(agent);
+                            this.model = Some(value.clone());
+                            cx.notify();
+                        });
+                    }))
+                })
+            });
         let body = match kind {
             "New workspace" => v_flex()
                 .gap_2()
@@ -442,74 +566,65 @@ impl Render for Dialogs {
                         }))
                 }))
                 .child(
-                    h_flex().gap_2().children(
-                        ["New branch", "Existing branch", "Pull request"]
-                            .into_iter()
-                            .enumerate()
-                            .map(|(ix, label)| {
-                                Button::new(label).label(label).on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        this.source = ix;
-                                        cx.notify();
-                                    },
-                                ))
-                            }),
-                    ),
+                    Button::new("workspace-options")
+                        .label("Workspace options")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.workspace_options = !this.workspace_options;
+                            cx.notify();
+                        })),
                 )
-                .child(Input::new(&self.branch))
-                .children((self.source != 2).then(|| {
-                    h_flex().gap_1().children(self.branches.iter().map(|b| {
-                        let name = b.name.clone();
-                        Button::new(SharedString::from(format!("branch-{name}")))
-                            .label(name.clone())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.branch
-                                    .update(cx, |i, cx| i.set_value(name.clone(), window, cx))
+                .children(self.workspace_options.then(|| {
+                    v_flex()
+                        .child(
+                            h_flex().gap_2().children(
+                                ["New branch", "Existing branch", "Pull request"]
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(ix, label)| {
+                                        Button::new(label).label(label).on_click(cx.listener(
+                                            move |this, _, _, cx| {
+                                                this.source = ix;
+                                                cx.notify();
+                                            },
+                                        ))
+                                    }),
+                            ),
+                        )
+                        .child(Input::new(&self.branch))
+                        .children((self.source != 2).then(|| {
+                            h_flex().gap_1().children(self.branches.iter().map(|b| {
+                                let name = b.name.clone();
+                                Button::new(SharedString::from(format!("branch-{name}")))
+                                    .label(name.clone())
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.branch.update(cx, |i, cx| {
+                                            i.set_value(name.clone(), window, cx)
+                                        })
+                                    }))
                             }))
-                    }))
-                }))
-                .children((self.source == 2).then(|| {
-                    v_flex().children(self.prs.iter().map(|p| {
-                        let number = p.number;
-                        Button::new(SharedString::from(format!("pr-{number}")))
-                            .label(format!("#{} {}", p.number, p.title))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.branch
-                                    .update(cx, |i, cx| i.set_value(number.to_string(), window, cx))
+                        }))
+                        .children((self.source == 2).then(|| {
+                            v_flex().children(self.prs.iter().map(|p| {
+                                let number = p.number;
+                                Button::new(SharedString::from(format!("pr-{number}")))
+                                    .label(format!("#{} {}", p.number, p.title))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.branch.update(cx, |i, cx| {
+                                            i.set_value(number.to_string(), window, cx)
+                                        })
+                                    }))
                             }))
-                    }))
+                        }))
                 }))
-                .child("Agent")
-                .child(
-                    h_flex().gap_2().children(
-                        [
-                            p::AgentId::Claude,
-                            p::AgentId::Codex,
-                            p::AgentId::Opencode,
-                            p::AgentId::Pi,
-                        ]
-                        .map(|agent| {
-                            let allowed = self
-                                .credentials
-                                .as_ref()
-                                .is_some_and(|s| super::chat_model::has_login(agent, s));
-                            Button::new(SharedString::from(agent.to_string()))
-                                .label(super::chat_model::agent_label(agent))
-                                .disabled(!allowed)
-                                .tooltip(if allowed {
-                                    "Start with this agent"
-                                } else {
-                                    "Add login in Settings"
-                                })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.agent = Some(agent);
-                                    cx.notify();
-                                }))
-                        }),
-                    ),
-                )
                 .child(Textarea::new(&self.prompt))
-                .child(
+                .children(self.models_loading.then(|| div().child("Loading models…")))
+                .child(model_picker)
+                .children((!self.models_loading && self.model.is_none()).then(|| {
+                    Button::new("retry-models")
+                        .label("Retry loading models")
+                        .on_click(cx.listener(|this, _, _, cx| this.load_models(cx)))
+                }))
+                .children(self.workspace_options.then(|| {
                     Button::new("keep-open")
                         .label(if self.keep_open {
                             "Keep open ✓"
@@ -519,12 +634,17 @@ impl Render for Dialogs {
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.keep_open = !this.keep_open;
                             cx.notify();
-                        })),
-                )
+                        }))
+                }))
                 .child(
                     Button::new("create-workspace")
                         .label("Create")
-                        .disabled(self.pending || self.project.is_none())
+                        .disabled(
+                            self.pending
+                                || self.models_loading
+                                || self.model.is_none()
+                                || self.project.is_none(),
+                        )
                         .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),
                 )
                 .into_any_element(),
@@ -548,29 +668,118 @@ impl Render for Dialogs {
                         })),
                 )
                 .into_any_element(),
-            "Add project" => v_flex()
-                .gap_2()
-                .children(self.installations.iter().map(|i| {
-                    let id = i.installation_id;
-                    Button::new(SharedString::from(format!("installation-{id}")))
-                        .label(i.account_login.clone())
-                        .on_click(
-                            cx.listener(move |this, _, _, cx| this.select_installation(id, cx)),
+            "Add project" => {
+                let muted = super::tokens::color(super::tokens::Token::MutedForeground, cx);
+                let linked: Vec<f64> = crate::app::AppState::try_global(cx)
+                    .map(|a| {
+                        a.read(cx)
+                            .hub
+                            .read(cx)
+                            .projects
+                            .iter()
+                            .map(|p| p.repo_id)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if self.installations_loading {
+                    super::skeleton_rows(4).into_any_element()
+                } else if self.installations.is_empty() && self.error.is_none() {
+                    let install = self.install_url.clone();
+                    v_flex()
+                        .gap_2()
+                        .items_center()
+                        .p_4()
+                        .child(
+                            div()
+                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                .child("Install the GitHub App"),
                         )
-                }))
-                .children(
-                    self.installations
-                        .is_empty()
-                        .then(|| div().child("Install the GitHub App in Tempo in your browser.")),
-                )
-                .children(self.repos.iter().map(|r| {
-                    let id = r.repo_id;
-                    Button::new(SharedString::from(format!("repo-{id}")))
-                        .label(format!("Link {}/{}", r.owner, r.name))
-                        .disabled(self.pending)
-                        .on_click(cx.listener(move |this, _, _, cx| this.link(id, cx)))
-                }))
-                .into_any_element(),
+                        .child(div().text_sm().text_color(muted).child(if install.is_some() {
+                            "Install it on an account or org, then pick the repos it can reach."
+                        } else {
+                            "The install link shows here once the GitHub App exists."
+                        }))
+                        .children(install.map(|url| {
+                            Button::new("install-github-app")
+                                .label("Install the GitHub App")
+                                .on_click(move |_, _, cx| cx.open_url(&url))
+                        }))
+                        .into_any_element()
+                } else {
+                    v_flex()
+                        .gap_2()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .children(self.installations.iter().map(|i| {
+                                    let id = i.installation_id;
+                                    Button::new(SharedString::from(format!("installation-{id}")))
+                                        .label(i.account_login.clone())
+                                        .selected(self.installation == Some(id))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.select_installation(id, cx)
+                                        }))
+                                })),
+                        )
+                        .child(
+                            v_flex()
+                                .id("installation-repos")
+                                .role(gpui_kit::Role::List)
+                                .aria_label("Repos")
+                                .children(self.repos.iter().map(|r| {
+                                    let id = r.repo_id;
+                                    let name = format!("{}/{}", r.owner, r.name);
+                                    h_flex()
+                                        .id(SharedString::from(format!("repo-row-{id}")))
+                                        .role(gpui_kit::Role::ListItem)
+                                        .aria_label(name.clone())
+                                        .gap_2()
+                                        .py_1()
+                                        .child(
+                                            div().flex_1().min_w_0().truncate().child(name.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(muted)
+                                                .child(r.default_branch.clone()),
+                                        )
+                                        .child(if linked.contains(&id) {
+                                            div()
+                                                .text_xs()
+                                                .text_color(muted)
+                                                .child("Linked")
+                                                .into_any_element()
+                                        } else {
+                                            Button::new(SharedString::from(format!("repo-{id}")))
+                                                .label("Link")
+                                                .accessibility_label(format!("Link {name}"))
+                                                .disabled(self.pending)
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.link(id, cx)
+                                                }))
+                                                .into_any_element()
+                                        })
+                                })),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .justify_between()
+                                .child(
+                                    div().text_xs().text_color(muted).child(
+                                        "Repo missing? Give the app access to it on GitHub.",
+                                    ),
+                                )
+                                .children(self.install_url.clone().map(|url| {
+                                    Button::new("manage-github-app")
+                                        .label("Manage on GitHub")
+                                        .on_click(move |_, _, cx| cx.open_url(&url))
+                                })),
+                        )
+                        .into_any_element()
+                }
+            }
             "History" => v_flex()
                 .gap_2()
                 .children(self.history.iter().map(|w| {
@@ -625,79 +834,7 @@ impl Render for Dialogs {
                         )
                 }))
                 .into_any_element(),
-            _ => {
-                let query = self.query.read(cx).value().to_lowercase();
-                let app = crate::app::AppState::global(cx);
-                let mut rows: Vec<_> = app
-                    .read(cx)
-                    .hub
-                    .read(cx)
-                    .state
-                    .workspaces
-                    .values()
-                    .filter(|w| {
-                        format!("{} {} {}", w.title, w.branch, w.slug)
-                            .to_lowercase()
-                            .contains(&query)
-                    })
-                    .cloned()
-                    .collect();
-                rows.sort_by(|a, b| b.last_activity_at.total_cmp(&a.last_activity_at));
-                v_flex()
-                    .gap_2()
-                    .child(Input::new(&self.query))
-                    .child(
-                        uniform_list(
-                            "palette-workspaces",
-                            rows.len(),
-                            cx.processor(move |_, range: std::ops::Range<usize>, _, cx| {
-                                range
-                                    .map(|ix| {
-                                        let w = rows[ix].clone();
-                                        Button::new(SharedString::from(w.id.clone()))
-                                            .label(format!(
-                                                "{} · {} · {}",
-                                                w.title, w.branch, w.slug
-                                            ))
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                crate::app::AppState::global(cx).update(
-                                                    cx,
-                                                    |a, cx| {
-                                                        a.show_workspace(&w.id, cx);
-                                                    },
-                                                );
-                                                this.close(cx);
-                                                cx.notify();
-                                            }))
-                                            .into_any_element()
-                                    })
-                                    .collect()
-                            }),
-                        )
-                        .h(gpui_kit::px(240.)),
-                    )
-                    .children(
-                        palette_actions()
-                            .into_iter()
-                            .filter(|(label, _)| label.to_lowercase().contains(&query))
-                            .map(|(label, action)| {
-                                Button::new(label).label(label).on_click(cx.listener(
-                                    move |this, _, window, cx| {
-                                        this.close(cx);
-                                        let handle = window.window_handle();
-                                        let action = action.boxed_clone();
-                                        cx.defer(move |cx| {
-                                            let _ = handle.update(cx, |_, window, cx| {
-                                                window.dispatch_action(action, cx)
-                                            });
-                                        });
-                                        cx.notify();
-                                    },
-                                ))
-                            }),
-                    )
-                    .into_any_element()
-            }
+            _ => div().into_any_element(),
         };
         v_flex()
             .capture_key_down(
@@ -735,7 +872,27 @@ impl Render for Dialogs {
             .p_4()
             .gap_2()
             .child(kind)
-            .children(self.error.clone().map(|e| div().child(e)))
+            .children(self.error.clone().map(|e| {
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_color(super::tokens::color(super::tokens::Token::Destructive, cx))
+                            .child(e),
+                    )
+                    .children(matches!(kind, "Add project" | "History").then(|| {
+                        Button::new("retry-dialog")
+                            .label("Retry")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if kind == "History" {
+                                    this.error = None;
+                                    this.load_history(cx);
+                                } else {
+                                    this.load_installations(cx);
+                                }
+                            }))
+                    }))
+            }))
             .child(body)
             .child(
                 Button::new("close-dialog")
@@ -748,35 +905,4 @@ impl Render for Dialogs {
             )
             .into_any_element()
     }
-}
-
-fn palette_actions() -> Vec<(&'static str, Box<dyn gpui_kit::Action>)> {
-    use crate::actions::*;
-    vec![
-        ("New workspace", Box::new(NewWorkspace)),
-        ("New chat", Box::new(NewChat)),
-        ("Close tab", Box::new(CloseTab)),
-        ("Open file", Box::new(OpenFile)),
-        ("Search files", Box::new(SearchFiles)),
-        ("Toggle sidebar", Box::new(ToggleSidebar)),
-        ("Toggle right side", Box::new(ToggleRightSide)),
-        ("Toggle bottom panel", Box::new(ToggleBottomPanel)),
-        ("Diff", Box::new(ShowDiff)),
-        ("Commit and push", Box::new(CommitAndPush)),
-        ("Create PR", Box::new(CreatePr)),
-        ("Merge", Box::new(Merge)),
-        ("Archive", Box::new(Archive)),
-        ("Run", Box::new(ToggleRun)),
-        ("Settings", Box::new(OpenSettings)),
-        (
-            "Next workspace that needs you",
-            Box::new(NextWorkspaceNeedingYou),
-        ),
-        ("Next workspace", Box::new(NextWorkspace)),
-        ("Previous workspace", Box::new(PreviousWorkspace)),
-        ("Focus composer", Box::new(FocusComposer)),
-        ("Attach file", Box::new(AttachFile)),
-        ("Model picker", Box::new(ModelPicker)),
-        ("Expand tool calls", Box::new(ExpandAllToolCalls)),
-    ]
 }

@@ -50,10 +50,18 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("deleteWorkspace", input);
   }
 
-  rotatePreviewToken(
-    input: MethodInput<"rotatePreviewToken">,
-  ): Promise<Result<FnOutput<"rotatePreviewToken">>> {
-    return this.rpc("rotatePreviewToken", input);
+  openPreview(input: MethodInput<"openPreview">): Promise<Result<FnOutput<"openPreview">>> {
+    return this.rpc("openPreview", input);
+  }
+
+  rotatePreviewKey(input: MethodInput<"rotatePreviewKey">): Promise<Result<FnOutput<"rotatePreviewKey">>> {
+    return this.rpc("rotatePreviewKey", input);
+  }
+
+  getBrowserLiveView(
+    input: MethodInput<"getBrowserLiveView">,
+  ): Promise<Result<FnOutput<"getBrowserLiveView">>> {
+    return this.rpc("getBrowserLiveView", input);
   }
 
   setBaseBranch(input: MethodInput<"setBaseBranch">): Promise<Result<FnOutput<"setBaseBranch">>> {
@@ -62,6 +70,18 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
 
   getDiagnostics(input: MethodInput<"getDiagnostics">): Promise<Result<FnOutput<"getDiagnostics">>> {
     return this.rpc("getDiagnostics", input);
+  }
+
+  setWorkspaceEnvironment(
+    input: MethodInput<"setWorkspaceEnvironment">,
+  ): Promise<Result<FnOutput<"setWorkspaceEnvironment">>> {
+    return this.rpc("setWorkspaceEnvironment", input);
+  }
+
+  resolveEnvironmentProposal(
+    input: MethodInput<"resolveEnvironmentProposal">,
+  ): Promise<Result<FnOutput<"resolveEnvironmentProposal">>> {
+    return this.rpc("resolveEnvironmentProposal", input);
   }
 
   createSession(input: MethodInput<"createSession">): Promise<Result<FnOutput<"createSession">>> {

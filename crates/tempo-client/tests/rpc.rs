@@ -7,11 +7,11 @@ use std::path::Path;
 use std::sync::Arc;
 use std::task::{Context, Poll, Wake, Waker};
 
-use common::{APP_VERSION, TOKEN, fake_http};
+use common::{APP_VERSION, RawReply, TOKEN, fake_http, fake_http_raw};
 use serde_json::json;
 use tempo_client::{
-    ApiError, ChannelEvent, CloseReason, MAX_ATTACHMENT_BYTES, Runtime, RuntimeHandle, Server,
-    Signal, Status, Token,
+    ApiError, AttachmentFile, ChannelEvent, CloseReason, MAX_ATTACHMENT_BYTES, Runtime,
+    RuntimeHandle, Server, Signal, Status, Token,
 };
 use tempo_protocol::{ErrorCode, SendPromptIn, Turn, api};
 
@@ -152,6 +152,35 @@ async fn meta_sends_no_token() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn setup_status_sends_no_token_and_reads_the_install_link() {
+    let server = fake_http(|_, _| {
+        (
+            200,
+            json!({"configured": true, "installUrl": "https://github.com/apps/t/installations/new"})
+                .to_string(),
+        )
+    })
+    .await;
+    let rt = RuntimeHandle::current();
+    let status = Server::new(&rt, &server.base, APP_VERSION)
+        .expect("server")
+        .setup_status()
+        .await
+        .expect("setup status");
+    assert!(status.configured);
+    assert_eq!(
+        status.install_url.as_deref(),
+        Some("https://github.com/apps/t/installations/new")
+    );
+    let r = &server.requests()[0];
+    assert_eq!(
+        (r.method.as_str(), r.path.as_str()),
+        ("GET", "/api/setup/status")
+    );
+    assert_eq!(r.header("authorization"), None);
+}
+
+#[tokio::test(start_paused = true)]
 async fn upload_attachment_sends_one_multipart_file_with_the_bearer_token() {
     let server = fake_http(|_, _| {
         (
@@ -204,6 +233,73 @@ async fn upload_attachment_sends_one_multipart_file_with_the_bearer_token() {
         }
     );
     assert_eq!(server.requests().len(), 1, "an oversized file is not sent");
+}
+
+#[tokio::test(start_paused = true)]
+async fn get_attachment_reads_the_bytes_with_the_bearer_token_up_to_10_mib() {
+    let server = fake_http_raw(|req, _| {
+        let reply = |status, content_type, body: Vec<u8>, content_length| RawReply {
+            status,
+            content_type,
+            body,
+            content_length,
+        };
+        let big = vec![0u8; MAX_ATTACHMENT_BYTES as usize + 1];
+        match req.path.rsplit('/').next().unwrap_or_default() {
+            "png" => reply(200, "image/png", vec![137, 80, 78, 71], true),
+            "gone" => reply(
+                404,
+                "application/json",
+                json!({"code":"NOT_FOUND","message":"Not found."})
+                    .to_string()
+                    .into_bytes(),
+                true,
+            ),
+            "plain404" => reply(404, "text/plain", b"missing".to_vec(), true),
+            "big" => reply(200, "image/png", big, true),
+            "stream" => reply(200, "image/png; charset=binary", big, false),
+            _ => reply(500, "text/plain", vec![], true),
+        }
+    })
+    .await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    let file = c
+        .get_attachment("01k7000000000000000000000b", "png")
+        .await
+        .expect("reads");
+    assert_eq!(
+        file,
+        AttachmentFile {
+            mime: "image/png".into(),
+            bytes: vec![137, 80, 78, 71]
+        }
+    );
+    let r = &server.requests()[0];
+    assert_eq!(
+        (r.method.as_str(), r.path.as_str()),
+        (
+            "GET",
+            "/api/workspaces/01k7000000000000000000000b/attachments/png"
+        )
+    );
+    assert_eq!(r.header("authorization"), Some("Bearer test-session-token"));
+    assert_eq!(r.header("x-tempo-client"), Some("mac/0.2.0"));
+    assert_eq!(r.header("origin"), None);
+
+    for id in ["gone", "plain404"] {
+        let err = c.get_attachment("w", id).await.expect_err("404");
+        assert_eq!(err.status(), Some(404));
+        assert_eq!(err.code(), Some(ErrorCode::NotFound), "{id}");
+    }
+    for id in ["big", "stream"] {
+        let err = c.get_attachment("w", id).await.expect_err("too large");
+        assert!(
+            matches!(err, ApiError::TooLarge { size } if size > MAX_ATTACHMENT_BYTES),
+            "{id}: {err:?}"
+        );
+    }
+    assert!(!c.is_unauthorized());
 }
 
 #[test]
