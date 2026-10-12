@@ -50,12 +50,13 @@ afterEach(() => {
 
 describe("egress decide()", () => {
   const APP = "tempo.test";
-  const open_: EgressConfig = { owner: "acme", repo: "app", policy: "open", allowlist: [] };
+  const open_: EgressConfig = { owner: "acme", repo: "app", policy: "open", allowlist: [], mcp: [] };
   const allow: EgressConfig = {
     owner: "acme",
     repo: "app",
     policy: "allowlist",
     allowlist: ["pypi.org", "*.example.com"],
+    mcp: [],
   };
   const d = (url: string, headers: Record<string, string> = {}, config: EgressConfig = open_) =>
     decide(new URL(url), new Headers(headers), APP, config);
@@ -228,6 +229,42 @@ describe("egress decide()", () => {
         rule: 7,
         action: "block",
       });
+    });
+  });
+
+  describe("rule 12: MCP secret headers", () => {
+    // 01: swap only the server's own placeholder, only for the server's own host.
+    const sid = "01jmcpserver0000000000000a";
+    const mcp = [{ serverId: sid, host: "mcp.linear.app", secretHeaders: ["authorization"] }];
+    const withMcp: EgressConfig = { ...allow, mcp };
+    const ph = `tempo-placeholder:mcp:${sid}:authorization`;
+    it("swaps the placeholder for the server host", () => {
+      expect(d("https://mcp.linear.app/mcp", { Authorization: ph }, withMcp)).toEqual({
+        rule: 12,
+        action: "forward",
+        mcp: [{ name: "authorization", key: `mcp.${sid}.header.authorization` }],
+      });
+    });
+    it("refuses the placeholder sent to another host", () => {
+      const r = d("https://evil.example.com/", { Authorization: ph }, { ...withMcp, policy: "open" });
+      expect(r).toMatchObject({ rule: 7, action: "block", status: 403 });
+    });
+    it("refuses another server's placeholder on this host", () => {
+      const other = `tempo-placeholder:mcp:01jother00000000000000000a:authorization`;
+      expect(d("https://mcp.linear.app/mcp", { Authorization: other }, withMcp)).toMatchObject({ rule: 7 });
+    });
+    it("refuses the placeholder in a header that is not secret", () => {
+      expect(d("https://mcp.linear.app/mcp", { "X-Key": ph }, withMcp)).toMatchObject({ rule: 7 });
+    });
+    it("never swaps over http:", () => {
+      expect(d("http://mcp.linear.app/mcp", { Authorization: ph }, withMcp)).toEqual({
+        rule: 9,
+        action: "forward",
+      });
+    });
+    it("allows MCP hosts under the allowlist policy (rule 9)", () => {
+      expect(d("https://mcp.linear.app/mcp", {}, withMcp)).toMatchObject({ rule: 9, action: "forward" });
+      expect(d("https://mcp.linear.app/mcp", {}, allow)).toMatchObject({ rule: 10, action: "block" });
     });
   });
 

@@ -24,7 +24,7 @@ import {
   newId,
 } from "@tempo/protocol";
 import { resolveSettings } from "@tempo/settings";
-import { projects, workspaces } from "../../db/d1.ts";
+import { mcpServers, projects, workspaces, type McpServerRow } from "../../db/d1.ts";
 import { EMPTY_PROMPT, json, readItemContent, validItemContent, type ItemContent } from "../../db/json.ts";
 import {
   items,
@@ -266,6 +266,16 @@ export class WorkspaceCore {
 
   author(): Author {
     return this.kv<Author>("author") ?? { name: "Tempo", email: "tempo@users.noreply.github.com" };
+  }
+
+  /** The owner's enabled MCP servers (01, User MCP servers), read from D1 each time. */
+  async mcpServers(): Promise<McpServerRow[]> {
+    return drizzleD1(this.env.DB)
+      .select()
+      .from(mcpServers)
+      .where(and(eq(mcpServers.userId, this.ws().userId), eq(mcpServers.enabled, 1)))
+      .orderBy(asc(mcpServers.name))
+      .all();
   }
 
   credentials() {

@@ -3,7 +3,7 @@
  * hello, tool, permission, slow, hang, crash, child, big-image, big-text, fail401, write <path>, read <path>.
  * Env: FAKE_STATE_DIR (sessions on disk, for session/load), FAKE_LOAD=0 (no loadSession),
  * FAKE_LOAD_FAIL=1 (session/load fails after replaying), FAKE_CLOSE=0 (no session/close),
- * FAKE_IGNORE_SIGTERM=1.
+ * FAKE_IGNORE_SIGTERM=1, FAKE_MCP_HTTP=1 (mcpCapabilities.http).
  */
 import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -126,6 +126,7 @@ class FakeAgent implements Agent {
       agentCapabilities: {
         loadSession: env["FAKE_LOAD"] !== "0",
         promptCapabilities: { image: true },
+        mcpCapabilities: { http: env["FAKE_MCP_HTTP"] === "1", sse: false },
         ...(env["FAKE_CLOSE"] === "0" ? {} : { sessionCapabilities: { close: {} } }),
       },
     };
@@ -150,6 +151,7 @@ class FakeAgent implements Agent {
     saveRec(sessionId, { modeId: "default", model: "m1", history: [] });
     record(`new ${sessionId}`);
     for (const s of p.mcpServers) if ("command" in s) record(`mcp ${s.name} ${s.args.join(" ")}`);
+    record(`mcpjson ${JSON.stringify(p.mcpServers)}`);
     return {
       sessionId,
       ...(env["FAKE_MODE_CONFIG"] === "1" ? {} : { modes: modes("default") }),
@@ -159,6 +161,7 @@ class FakeAgent implements Agent {
 
   async loadSession(p: LoadSessionRequest): Promise<LoadSessionResponse> {
     record(`load ${p.sessionId}`);
+    record(`mcpjson ${JSON.stringify(p.mcpServers)}`);
     const rec = loadRec(p.sessionId);
     if (!rec) throw RequestError.resourceNotFound(p.sessionId);
     for (const line of rec.history) await this.text(p.sessionId, `replay: ${line}`);

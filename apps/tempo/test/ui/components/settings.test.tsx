@@ -63,6 +63,7 @@ describe("settings page", () => {
     ).toEqual([
       "General",
       "Logins",
+      "MCP servers",
       "Appearance",
       "Shortcuts",
       "Devices",

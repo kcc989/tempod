@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "McpServerInput",
+  "type": "object",
+  "properties": {
+    "id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "transport": {
+      "$ref": "McpTransport.json"
+    },
+    "command": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "args": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "env": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "McpEnvVar.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "headers": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "McpHeaderInput.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["name", "enabled", "transport"],
+  "additionalProperties": true
+}
