@@ -1,7 +1,7 @@
 import startHandler from "@tanstack/react-start/server-entry";
 import type { Env } from "./env.ts";
 import { getAuth } from "./auth/auth.ts";
-import { handleAttachment } from "./http/attachments.ts";
+import { handleAttachment, handleAttachmentRead } from "./http/attachments.ts";
 import { handleChannel } from "./http/channels.ts";
 import { handleApiV1, handleDownload } from "./http/native.ts";
 import { handlePreview, isPreviewHost } from "./http/preview.ts";
@@ -12,6 +12,7 @@ export { WorkspaceDO } from "./do/workspace/index.ts";
 export { UserHubDO } from "./do/user-hub.ts";
 export { CredentialDO } from "./do/credential.ts";
 export { TempoOutbound } from "./egress/outbound.ts";
+export { BrowserOutbound } from "./egress/browser-outbound.ts";
 export { DirectoryBackupGateway } from "@cloudflare/sandbox";
 
 const ATTACHMENTS = /^\/api\/workspaces\/([0-9a-hjkmnp-tv-z]{26})\/attachments$/;
@@ -26,6 +27,10 @@ export const handleRequest = async (request: Request, env: Env, ctx: ExecutionCo
       return (await handleChannel(request, env, url)) ?? new Response("Not found", { status: 404 });
     if (path === "/api/setup/status") return handleSetupStatus(env);
     if (path.startsWith("/api/v1/")) return handleApiV1(request, env, url);
+    const read = /^\/api\/workspaces\/([0-9a-hjkmnp-tv-z]{26})\/attachments\/([0-9a-hjkmnp-tv-z]{26})$/.exec(
+      path,
+    );
+    if (read && request.method === "GET") return handleAttachmentRead(request, env, read[1]!, read[2]!);
     const att = ATTACHMENTS.exec(path);
     if (att && request.method === "POST") return handleAttachment(request, env, att[1]!);
     if (path.startsWith("/setup/")) return handleSetup(request, env, url);

@@ -19,6 +19,7 @@ import {
   type InitializeResponse,
   type LoadSessionRequest,
   type LoadSessionResponse,
+  type NewSessionRequest,
   type NewSessionResponse,
   type PromptRequest,
   type PromptResponse,
@@ -63,7 +64,28 @@ const modes = (current: string) => ({
   currentModeId: current,
 });
 
-const configOptions = (model: string): SessionConfigOption[] => [
+const configOptions = (model: string, mode = "default"): SessionConfigOption[] => [
+  ...(env["FAKE_MODE_CONFIG"] === "1"
+    ? [
+        {
+          id: "agent-mode",
+          name: "Session Mode",
+          category: "mode",
+          type: "select" as const,
+          currentValue: mode,
+          options: [
+            {
+              group: "agents",
+              name: "Agents",
+              options: [
+                { value: "default", name: "Default" },
+                { value: "plan", name: "Plan", description: "Plan only" },
+              ],
+            },
+          ],
+        },
+      ]
+    : []),
   {
     id: "model",
     name: "Model",
@@ -123,11 +145,16 @@ class FakeAgent implements Agent {
     return { outcome: env["FAKE_STEERING_IDLE"] === "1" ? "promptRequired" : "injected" };
   }
 
-  newSession(): NewSessionResponse {
+  newSession(p: NewSessionRequest): NewSessionResponse {
     const sessionId = `acp-${Math.random().toString(36).slice(2, 10)}`;
     saveRec(sessionId, { modeId: "default", model: "m1", history: [] });
     record(`new ${sessionId}`);
-    return { sessionId, modes: modes("default"), configOptions: configOptions("m1") };
+    for (const s of p.mcpServers) if ("command" in s) record(`mcp ${s.name} ${s.args.join(" ")}`);
+    return {
+      sessionId,
+      ...(env["FAKE_MODE_CONFIG"] === "1" ? {} : { modes: modes("default") }),
+      configOptions: configOptions("m1"),
+    };
   }
 
   async loadSession(p: LoadSessionRequest): Promise<LoadSessionResponse> {
@@ -137,10 +164,14 @@ class FakeAgent implements Agent {
     for (const line of rec.history) await this.text(p.sessionId, `replay: ${line}`);
     await this.update(p.sessionId, { sessionUpdate: "session_info_update", title: "Old title" });
     if (env["FAKE_LOAD_FAIL"] === "1") throw RequestError.internalError(undefined, "load failed");
-    return { modes: modes(rec.modeId), configOptions: configOptions(rec.model) };
+    return {
+      ...(env["FAKE_MODE_CONFIG"] === "1" ? {} : { modes: modes(rec.modeId) }),
+      configOptions: configOptions(rec.model, rec.modeId),
+    };
   }
 
   setSessionMode(p: SetSessionModeRequest): Record<string, never> {
+    if (env["FAKE_MODE_CONFIG"] === "1") throw RequestError.methodNotFound("session/set_mode");
     const rec = loadRec(p.sessionId);
     if (rec) saveRec(p.sessionId, { ...rec, modeId: p.modeId });
     record(`mode ${p.modeId}`);
@@ -149,10 +180,17 @@ class FakeAgent implements Agent {
 
   setSessionConfigOption(p: SetSessionConfigOptionRequest): SetSessionConfigOptionResponse {
     const rec = loadRec(p.sessionId);
-    const model = String(p.value);
-    if (rec) saveRec(p.sessionId, { ...rec, model });
-    record(`config ${p.configId}=${model}`);
-    return { configOptions: configOptions(model) };
+    if (p.configId === "agent-mode" && !["default", "plan"].includes(String(p.value)))
+      throw RequestError.invalidParams();
+    const next = {
+      modeId: rec?.modeId ?? "default",
+      model: rec?.model ?? "m1",
+      history: rec?.history ?? [],
+      ...(p.configId === "agent-mode" ? { modeId: String(p.value) } : { model: String(p.value) }),
+    };
+    if (rec) saveRec(p.sessionId, next);
+    record(`config ${p.configId}=${String(p.value)}`);
+    return { configOptions: configOptions(next.model, next.modeId) };
   }
 
   closeSession(p: CloseSessionRequest): Record<string, never> {
@@ -204,6 +242,12 @@ class FakeAgent implements Agent {
         });
         await this.text(sid, "done");
         return { stopReason: "end_turn" };
+      case "usage":
+        await this.text(sid, "counted");
+        return {
+          stopReason: "end_turn",
+          usage: { totalTokens: 1500, inputTokens: 1200, outputTokens: 300, cachedReadTokens: 800 },
+        };
       case "permission": {
         await this.update(sid, {
           sessionUpdate: "tool_call",

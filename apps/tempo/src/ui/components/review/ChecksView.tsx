@@ -44,7 +44,6 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
   const prNumber = w?.prNumber ?? null;
   const prState = w?.prState ?? null;
   const checksState = w?.checksState ?? null;
-  const prOpen = prState === "open" || prState === "draft";
 
   const runs = useCallQuery("listCheckRuns", { workspaceId }, { enabled: prNumber !== null, retry: false });
   const refresh = useCallMutation("refreshPullRequest", { toast: false });
@@ -62,12 +61,7 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
     if (prNumber !== null) void refetch();
   }, [checksState, prState, prNumber, refetch]);
 
-  const open = useCallQuery(
-    "listOpenPullRequests",
-    { projectId: w?.projectId ?? "" },
-    { enabled: prOpen && !!w?.projectId, staleTime: 60_000, retry: false },
-  );
-  const title = open.data?.find((p) => p.number === prNumber)?.title ?? null;
+  const title = detail?.prTitle ?? refresh.data?.prTitle ?? null;
   const sorted = useMemo(() => sortRuns(runs.data ?? []), [runs.data]);
 
   if (!w) return <SkeletonRows />;

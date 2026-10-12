@@ -86,3 +86,15 @@ export const stripMeta = (o: Obj, ...drop: string[]): Obj => {
   for (const [k, v] of Object.entries(o)) if (k !== "_meta" && !drop.includes(k)) out[k] = v;
   return out;
 };
+
+export const modeConfig = (options: readonly ConfigOption[]): ConfigOption | undefined =>
+  options.find((o) => o.category === "mode" && o.type === "select" && typeof o.currentValue === "string");
+
+export const configModes = (option: ConfigOption): SessionMode[] =>
+  (option.options ?? [])
+    .flatMap((entry) => ("group" in entry ? entry.options : [entry]))
+    .map((entry) => ({
+      id: entry.value,
+      name: entry.name,
+      ...(entry.description != null ? { description: entry.description } : {}),
+    }));

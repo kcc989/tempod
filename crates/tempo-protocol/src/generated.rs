@@ -137,6 +137,14 @@ pub struct AgentMessageContent {
     pub blocks: ::std::option::Option<::std::vec::Vec<ContentBlock>>,
     pub text: ::std::string::String,
 }
+///`AgentModelOptions`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AgentModelOptions {
+    pub agent: AgentId,
+    #[serde(rename = "currentValue")]
+    pub current_value: ::std::string::String,
+    pub options: ::std::vec::Vec<ConfigSelectOption>,
+}
 ///`AgentThoughtContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct AgentThoughtContent {
@@ -205,6 +213,11 @@ pub struct ApiMeta {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub latest_mac_client: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "latestMacClientSha256",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub latest_mac_client_sha256: ::std::option::Option<::std::string::String>,
     #[serde(rename = "minMacClient")]
     pub min_mac_client: ::std::string::String,
     pub protocol: ApiMetaProtocol,
@@ -245,11 +258,29 @@ impl<'de> ::serde::Deserialize<'de> for ApiMetaProtocol {
             .map_err(|e| <D::Error as ::serde::de::Error>::custom(e.to_string()))
     }
 }
+///`AppSetupStatus`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AppSetupStatus {
+    pub configured: bool,
+    #[serde(
+        rename = "installUrl",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub install_url: ::std::option::Option<::std::string::String>,
+}
 ///`ArchiveWorkspaceIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ArchiveWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`Attachment`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct Attachment {
+    pub id: ::std::string::String,
+    pub mime: ::std::string::String,
+    pub name: ::std::string::String,
+    pub size: f64,
 }
 ///`Attention`
 #[derive(
@@ -318,6 +349,62 @@ pub struct AvailableCommand {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub input: ::std::option::Option<::serde_json::Value>,
     pub name: ::std::string::String,
+}
+///`CancelCodexLoginIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CancelCodexLoginIn {
+    #[serde(rename = "loginId")]
+    pub login_id: CancelCodexLoginInLoginId,
+}
+///`CancelCodexLoginInLoginId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CancelCodexLoginInLoginId(::std::string::String);
+impl ::std::ops::Deref for CancelCodexLoginInLoginId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CancelCodexLoginInLoginId> for ::std::string::String {
+    fn from(value: CancelCodexLoginInLoginId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CancelCodexLoginInLoginId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CancelCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CancelCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CancelCodexLoginInLoginId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`CancelTurnIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -722,6 +809,8 @@ pub struct CreateSessionIn {
 pub struct CreateWorkspaceIn {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub agent: ::std::option::Option<AgentId>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub model: ::std::option::Option<::std::string::String>,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
@@ -1138,6 +1227,73 @@ impl ::std::convert::TryFrom<::std::string::String> for EgressPolicy {
         value.parse()
     }
 }
+///`EgressStatusFilter`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum EgressStatusFilter {
+    #[serde(rename = "all")]
+    All,
+    #[serde(rename = "blocked")]
+    Blocked,
+    #[serde(rename = "2xx")]
+    X2xx,
+    #[serde(rename = "3xx")]
+    X3xx,
+    #[serde(rename = "4xx")]
+    X4xx,
+    #[serde(rename = "5xx")]
+    X5xx,
+}
+impl ::std::fmt::Display for EgressStatusFilter {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::All => f.write_str("all"),
+            Self::Blocked => f.write_str("blocked"),
+            Self::X2xx => f.write_str("2xx"),
+            Self::X3xx => f.write_str("3xx"),
+            Self::X4xx => f.write_str("4xx"),
+            Self::X5xx => f.write_str("5xx"),
+        }
+    }
+}
+impl ::std::str::FromStr for EgressStatusFilter {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "all" => Ok(Self::All),
+            "blocked" => Ok(Self::Blocked),
+            "2xx" => Ok(Self::X2xx),
+            "3xx" => Ok(Self::X3xx),
+            "4xx" => Ok(Self::X4xx),
+            "5xx" => Ok(Self::X5xx),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for EgressStatusFilter {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for EgressStatusFilter {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`ErrorBody`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ErrorBody {
@@ -1232,6 +1388,8 @@ pub enum ErrorCode {
     PathOutsideWorkspace,
     #[serde(rename = "CHECKPOINT_NOT_FOUND")]
     CheckpointNotFound,
+    #[serde(rename = "MODEL_REQUIRED")]
+    ModelRequired,
     #[serde(rename = "SETTINGS_INVALID")]
     SettingsInvalid,
     #[serde(rename = "EGRESS_BLOCKED")]
@@ -1278,6 +1436,7 @@ impl ::std::fmt::Display for ErrorCode {
             Self::FileTooLarge => f.write_str("FILE_TOO_LARGE"),
             Self::PathOutsideWorkspace => f.write_str("PATH_OUTSIDE_WORKSPACE"),
             Self::CheckpointNotFound => f.write_str("CHECKPOINT_NOT_FOUND"),
+            Self::ModelRequired => f.write_str("MODEL_REQUIRED"),
             Self::SettingsInvalid => f.write_str("SETTINGS_INVALID"),
             Self::EgressBlocked => f.write_str("EGRESS_BLOCKED"),
             Self::Internal => f.write_str("INTERNAL"),
@@ -1324,6 +1483,7 @@ impl ::std::str::FromStr for ErrorCode {
             "FILE_TOO_LARGE" => Ok(Self::FileTooLarge),
             "PATH_OUTSIDE_WORKSPACE" => Ok(Self::PathOutsideWorkspace),
             "CHECKPOINT_NOT_FOUND" => Ok(Self::CheckpointNotFound),
+            "MODEL_REQUIRED" => Ok(Self::ModelRequired),
             "SETTINGS_INVALID" => Ok(Self::SettingsInvalid),
             "EGRESS_BLOCKED" => Ok(Self::EgressBlocked),
             "INTERNAL" => Ok(Self::Internal),
@@ -1352,6 +1512,18 @@ pub struct ErrorContent {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub detail: ::std::option::Option<::std::string::String>,
 }
+///`GetBrowserLiveViewIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetBrowserLiveViewIn {
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`GetBrowserLiveViewOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetBrowserLiveViewOut {
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub url: ::std::option::Option<::std::string::String>,
+}
 ///`GetChangesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetChangesIn {
@@ -1371,6 +1543,16 @@ pub struct GetChangesOut {
 ///`GetDiagnosticsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetDiagnosticsIn {
+    #[serde(
+        rename = "egressHost",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub egress_host: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "egressStatus",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub egress_status: ::std::option::Option<EgressStatusFilter>,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
@@ -2449,6 +2631,18 @@ impl ::std::convert::TryFrom<::std::string::String> for OpStatus {
         value.parse()
     }
 }
+///`OpenPreviewIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct OpenPreviewIn {
+    pub port: f64,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`OpenPreviewOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct OpenPreviewOut {
+    pub url: ::std::string::String,
+}
 ///`PermissionContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct PermissionContent {
@@ -2555,6 +2749,122 @@ pub struct PlanEntry {
     pub content: ::std::string::String,
     pub priority: ::std::string::String,
     pub status: ::std::string::String,
+}
+///`PollCodexLoginIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PollCodexLoginIn {
+    #[serde(rename = "loginId")]
+    pub login_id: PollCodexLoginInLoginId,
+}
+///`PollCodexLoginInLoginId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PollCodexLoginInLoginId(::std::string::String);
+impl ::std::ops::Deref for PollCodexLoginInLoginId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PollCodexLoginInLoginId> for ::std::string::String {
+    fn from(value: PollCodexLoginInLoginId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PollCodexLoginInLoginId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PollCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PollCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PollCodexLoginInLoginId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`PollCodexLoginOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PollCodexLoginOut {
+    pub status: PollCodexLoginOutStatus,
+}
+///`PollCodexLoginOutStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum PollCodexLoginOutStatus {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "connected")]
+    Connected,
+    #[serde(rename = "expired")]
+    Expired,
+}
+impl ::std::fmt::Display for PollCodexLoginOutStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Pending => f.write_str("pending"),
+            Self::Connected => f.write_str("connected"),
+            Self::Expired => f.write_str("expired"),
+        }
+    }
+}
+impl ::std::str::FromStr for PollCodexLoginOutStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "connected" => Ok(Self::Connected),
+            "expired" => Ok(Self::Expired),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for PollCodexLoginOutStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PollCodexLoginOutStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`PrState`
 #[derive(
@@ -2720,6 +3030,11 @@ pub struct RefreshPullRequestOut {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub pr_state: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "prTitle",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub pr_title: ::std::option::Option<::std::string::String>,
 }
 ///`RenameBranchIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -2936,15 +3251,12 @@ pub enum ReviewStatus {
     Draft,
     #[serde(rename = "sent")]
     Sent,
-    #[serde(rename = "resolved")]
-    Resolved,
 }
 impl ::std::fmt::Display for ReviewStatus {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
             Self::Draft => f.write_str("draft"),
             Self::Sent => f.write_str("sent"),
-            Self::Resolved => f.write_str("resolved"),
         }
     }
 }
@@ -2954,7 +3266,6 @@ impl ::std::str::FromStr for ReviewStatus {
         match value {
             "draft" => Ok(Self::Draft),
             "sent" => Ok(Self::Sent),
-            "resolved" => Ok(Self::Resolved),
             _ => Err("invalid value".into()),
         }
     }
@@ -2973,17 +3284,11 @@ impl ::std::convert::TryFrom<::std::string::String> for ReviewStatus {
         value.parse()
     }
 }
-///`RotatePreviewTokenIn`
+///`RotatePreviewKeyIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RotatePreviewTokenIn {
+pub struct RotatePreviewKeyIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
-}
-///`RotatePreviewTokenOut`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RotatePreviewTokenOut {
-    #[serde(rename = "previewToken")]
-    pub preview_token: ::std::string::String,
 }
 ///`RunMode`
 #[derive(
@@ -3411,8 +3716,6 @@ pub enum SessionStatus {
     Running,
     #[serde(rename = "closed")]
     Closed,
-    #[serde(rename = "broken")]
-    Broken,
 }
 impl ::std::fmt::Display for SessionStatus {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -3421,7 +3724,6 @@ impl ::std::fmt::Display for SessionStatus {
             Self::Idle => f.write_str("idle"),
             Self::Running => f.write_str("running"),
             Self::Closed => f.write_str("closed"),
-            Self::Broken => f.write_str("broken"),
         }
     }
 }
@@ -3433,7 +3735,6 @@ impl ::std::str::FromStr for SessionStatus {
             "idle" => Ok(Self::Idle),
             "running" => Ok(Self::Running),
             "closed" => Ok(Self::Closed),
-            "broken" => Ok(Self::Broken),
             _ => Err("invalid value".into()),
         }
     }
@@ -3740,6 +4041,7 @@ pub struct SetSessionModeIn {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Settings {
     pub agent: SettingsAgent,
+    pub browser: SettingsBrowser,
     pub environment: SettingsEnvironment,
     pub environment_variables:
         ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
@@ -3751,7 +4053,20 @@ pub struct Settings {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct SettingsAgent {
     pub default: AgentId,
-    pub model: ::std::string::String,
+    pub models: SettingsAgentModels,
+}
+///`SettingsAgentModels`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SettingsAgentModels {
+    pub claude: ::std::string::String,
+    pub codex: ::std::string::String,
+    pub opencode: ::std::string::String,
+    pub pi: ::std::string::String,
+}
+///`SettingsBrowser`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SettingsBrowser {
+    pub run: bool,
 }
 ///`SettingsEnvironment`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3774,6 +4089,8 @@ pub struct SettingsLayer {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub agent: ::std::option::Option<SettingsLayerAgent>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub browser: ::std::option::Option<SettingsLayerBrowser>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub environment: ::std::option::Option<SettingsLayerEnvironment>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub environment_variables: ::std::option::Option<
@@ -3792,7 +4109,25 @@ pub struct SettingsLayerAgent {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub default: ::std::option::Option<AgentId>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub model: ::std::option::Option<::std::string::String>,
+    pub models: ::std::option::Option<SettingsLayerAgentModels>,
+}
+///`SettingsLayerAgentModels`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct SettingsLayerAgentModels {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub claude: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub codex: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub opencode: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub pi: ::std::option::Option<::std::string::String>,
+}
+///`SettingsLayerBrowser`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct SettingsLayerBrowser {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub run: ::std::option::Option<bool>,
 }
 ///`SettingsLayerEnvironment`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
@@ -4003,6 +4338,20 @@ pub struct SleepWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`StartCodexLoginOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StartCodexLoginOut {
+    #[serde(rename = "expiresAt")]
+    pub expires_at: f64,
+    #[serde(rename = "intervalMs")]
+    pub interval_ms: f64,
+    #[serde(rename = "loginId")]
+    pub login_id: ::std::string::String,
+    #[serde(rename = "userCode")]
+    pub user_code: ::std::string::String,
+    #[serde(rename = "verificationUrl")]
+    pub verification_url: ::std::string::String,
+}
 ///`StopScriptIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct StopScriptIn {
@@ -4197,6 +4546,8 @@ pub struct Turn {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub stop_reason: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub usage: ::std::option::Option<TurnUsage>,
 }
 ///`TurnPrompt`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4275,6 +4626,31 @@ impl ::std::convert::TryFrom<::std::string::String> for TurnStatus {
         value.parse()
     }
 }
+///`TurnUsage`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct TurnUsage {
+    #[serde(
+        rename = "cachedReadTokens",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub cached_read_tokens: ::std::option::Option<f64>,
+    #[serde(
+        rename = "cachedWriteTokens",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub cached_write_tokens: ::std::option::Option<f64>,
+    #[serde(rename = "inputTokens")]
+    pub input_tokens: f64,
+    #[serde(rename = "outputTokens")]
+    pub output_tokens: f64,
+    #[serde(
+        rename = "thoughtTokens",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub thought_tokens: ::std::option::Option<f64>,
+    #[serde(rename = "totalTokens")]
+    pub total_tokens: f64,
+}
 ///`UnlinkProjectIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct UnlinkProjectIn {
@@ -4342,6 +4718,8 @@ pub struct WorkspaceDetail {
     #[serde(rename = "baseBranch")]
     pub base_branch: ::std::string::String,
     pub branch: ::std::string::String,
+    #[serde(rename = "browserActive")]
+    pub browser_active: bool,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub changes: ::std::option::Option<ChangesSummary>,
     #[serde(
@@ -4390,8 +4768,11 @@ pub struct WorkspaceDetail {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub pr_state: ::std::option::Option<PrState>,
-    #[serde(rename = "previewToken")]
-    pub preview_token: ::std::string::String,
+    #[serde(
+        rename = "prTitle",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub pr_title: ::std::option::Option<::std::string::String>,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
     pub pushed: bool,
@@ -5618,6 +5999,15 @@ pub mod api {
         type Input = crate::ArchiveWorkspaceIn;
         type Output = crate::Empty;
     }
+    /// `cancelCodexLogin`
+    #[derive(Clone, Copy, Debug)]
+    pub struct CancelCodexLogin;
+    impl crate::Function for CancelCodexLogin {
+        const NAME: &'static str = "cancelCodexLogin";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::CancelCodexLoginIn;
+        type Output = crate::Empty;
+    }
     /// `cancelTurn`
     #[derive(Clone, Copy, Debug)]
     pub struct CancelTurn;
@@ -5735,6 +6125,15 @@ pub mod api {
         type Input = crate::EditQueuedTurnIn;
         type Output = crate::Turn;
     }
+    /// `getBrowserLiveView`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetBrowserLiveView;
+    impl crate::Function for GetBrowserLiveView {
+        const NAME: &'static str = "getBrowserLiveView";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::GetBrowserLiveViewIn;
+        type Output = crate::GetBrowserLiveViewOut;
+    }
     /// `getChanges`
     #[derive(Clone, Copy, Debug)]
     pub struct GetChanges;
@@ -5843,6 +6242,15 @@ pub mod api {
         type Input = crate::Empty;
         type Output = ::std::vec::Vec<crate::ListInstallationsItem>;
     }
+    /// `listModels`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListModels;
+    impl crate::Function for ListModels {
+        const NAME: &'static str = "listModels";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = ::std::vec::Vec<crate::AgentModelOptions>;
+    }
     /// `listOpenPullRequests`
     #[derive(Clone, Copy, Debug)]
     pub struct ListOpenPullRequests;
@@ -5923,6 +6331,24 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::MergePullRequestIn;
         type Output = crate::Empty;
+    }
+    /// `openPreview`
+    #[derive(Clone, Copy, Debug)]
+    pub struct OpenPreview;
+    impl crate::Function for OpenPreview {
+        const NAME: &'static str = "openPreview";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::OpenPreviewIn;
+        type Output = crate::OpenPreviewOut;
+    }
+    /// `pollCodexLogin`
+    #[derive(Clone, Copy, Debug)]
+    pub struct PollCodexLogin;
+    impl crate::Function for PollCodexLogin {
+        const NAME: &'static str = "pollCodexLogin";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::PollCodexLoginIn;
+        type Output = crate::PollCodexLoginOut;
     }
     /// `readFile`
     #[derive(Clone, Copy, Debug)]
@@ -6014,14 +6440,14 @@ pub mod api {
         type Input = crate::RevertToCheckpointIn;
         type Output = crate::Empty;
     }
-    /// `rotatePreviewToken`
+    /// `rotatePreviewKey`
     #[derive(Clone, Copy, Debug)]
-    pub struct RotatePreviewToken;
-    impl crate::Function for RotatePreviewToken {
-        const NAME: &'static str = "rotatePreviewToken";
+    pub struct RotatePreviewKey;
+    impl crate::Function for RotatePreviewKey {
+        const NAME: &'static str = "rotatePreviewKey";
         const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::RotatePreviewTokenIn;
-        type Output = crate::RotatePreviewTokenOut;
+        type Input = crate::RotatePreviewKeyIn;
+        type Output = crate::Empty;
     }
     /// `runScript`
     #[derive(Clone, Copy, Debug)]
@@ -6131,6 +6557,15 @@ pub mod api {
         type Input = crate::SleepWorkspaceIn;
         type Output = crate::Empty;
     }
+    /// `startCodexLogin`
+    #[derive(Clone, Copy, Debug)]
+    pub struct StartCodexLogin;
+    impl crate::Function for StartCodexLogin {
+        const NAME: &'static str = "startCodexLogin";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::Empty;
+        type Output = crate::StartCodexLoginOut;
+    }
     /// `stopScript`
     #[derive(Clone, Copy, Debug)]
     pub struct StopScript;
@@ -6171,6 +6606,7 @@ pub mod api {
     pub const ALL: &[(&str, crate::Method)] = &[
         ("addReviewComment", crate::Method::Post),
         ("archiveWorkspace", crate::Method::Post),
+        ("cancelCodexLogin", crate::Method::Post),
         ("cancelTurn", crate::Method::Post),
         ("closeSession", crate::Method::Post),
         ("commitAndPush", crate::Method::Post),
@@ -6184,6 +6620,7 @@ pub mod api {
         ("deleteReviewComment", crate::Method::Post),
         ("deleteWorkspace", crate::Method::Post),
         ("editQueuedTurn", crate::Method::Post),
+        ("getBrowserLiveView", crate::Method::Post),
         ("getChanges", crate::Method::Get),
         ("getCredentialStatus", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
@@ -6196,6 +6633,7 @@ pub mod api {
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
         ("listInstallations", crate::Method::Get),
+        ("listModels", crate::Method::Get),
         ("listOpenPullRequests", crate::Method::Get),
         ("listProjectSecretNames", crate::Method::Get),
         ("listProjects", crate::Method::Get),
@@ -6205,6 +6643,8 @@ pub mod api {
         ("listWorkspaces", crate::Method::Get),
         ("markViewed", crate::Method::Post),
         ("mergePullRequest", crate::Method::Post),
+        ("openPreview", crate::Method::Post),
+        ("pollCodexLogin", crate::Method::Post),
         ("readFile", crate::Method::Get),
         ("refreshPullRequest", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
@@ -6215,7 +6655,7 @@ pub mod api {
         ("respondPermission", crate::Method::Post),
         ("restoreWorkspace", crate::Method::Post),
         ("revertToCheckpoint", crate::Method::Post),
-        ("rotatePreviewToken", crate::Method::Post),
+        ("rotatePreviewKey", crate::Method::Post),
         ("runScript", crate::Method::Post),
         ("searchFiles", crate::Method::Get),
         ("sendPrompt", crate::Method::Post),
@@ -6228,6 +6668,7 @@ pub mod api {
         ("setSessionConfig", crate::Method::Post),
         ("setSessionMode", crate::Method::Post),
         ("sleepWorkspace", crate::Method::Post),
+        ("startCodexLogin", crate::Method::Post),
         ("stopScript", crate::Method::Post),
         ("unlinkProject", crate::Method::Post),
         ("updateProjectSettings", crate::Method::Post),
@@ -6242,12 +6683,16 @@ pub mod wire {
         "AddReviewCommentIn",
         "AgentId",
         "AgentMessageContent",
+        "AgentModelOptions",
         "AgentThoughtContent",
         "ApiKeyProvider",
         "ApiMeta",
+        "AppSetupStatus",
         "ArchiveWorkspaceIn",
+        "Attachment",
         "Attention",
         "AvailableCommand",
+        "CancelCodexLoginIn",
         "CancelTurnIn",
         "Capabilities",
         "ChangedFile",
@@ -6282,10 +6727,13 @@ pub mod wire {
         "DiffScope",
         "EditQueuedTurnIn",
         "EgressPolicy",
+        "EgressStatusFilter",
         "Empty",
         "ErrorBody",
         "ErrorCode",
         "ErrorContent",
+        "GetBrowserLiveViewIn",
+        "GetBrowserLiveViewOut",
         "GetChangesIn",
         "GetChangesOut",
         "GetDiagnosticsIn",
@@ -6332,12 +6780,16 @@ pub mod wire {
         "OpKind",
         "OpProgress",
         "OpStatus",
+        "OpenPreviewIn",
+        "OpenPreviewOut",
         "PermissionContent",
         "PermissionOption",
         "PermissionRequest",
         "PermissionStatus",
         "PlanContent",
         "PlanEntry",
+        "PollCodexLoginIn",
+        "PollCodexLoginOut",
         "PrState",
         "Project",
         "ReadFileIn",
@@ -6356,8 +6808,7 @@ pub mod wire {
         "ReviewComment",
         "ReviewSide",
         "ReviewStatus",
-        "RotatePreviewTokenIn",
-        "RotatePreviewTokenOut",
+        "RotatePreviewKeyIn",
         "RunMode",
         "RunScript",
         "RunScriptIn",
@@ -6385,6 +6836,7 @@ pub mod wire {
         "SettingsSource",
         "SetupStatus",
         "SleepWorkspaceIn",
+        "StartCodexLoginOut",
         "StopScriptIn",
         "TerminalReady",
         "TerminalResize",
@@ -6428,12 +6880,16 @@ pub mod wire {
             "AddReviewCommentIn" => crate::roundtrip::<crate::AddReviewCommentIn>(text),
             "AgentId" => crate::roundtrip::<crate::AgentId>(text),
             "AgentMessageContent" => crate::roundtrip::<crate::AgentMessageContent>(text),
+            "AgentModelOptions" => crate::roundtrip::<crate::AgentModelOptions>(text),
             "AgentThoughtContent" => crate::roundtrip::<crate::AgentThoughtContent>(text),
             "ApiKeyProvider" => crate::roundtrip::<crate::ApiKeyProvider>(text),
             "ApiMeta" => crate::roundtrip::<crate::ApiMeta>(text),
+            "AppSetupStatus" => crate::roundtrip::<crate::AppSetupStatus>(text),
             "ArchiveWorkspaceIn" => crate::roundtrip::<crate::ArchiveWorkspaceIn>(text),
+            "Attachment" => crate::roundtrip::<crate::Attachment>(text),
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
+            "CancelCodexLoginIn" => crate::roundtrip::<crate::CancelCodexLoginIn>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
             "Capabilities" => crate::roundtrip::<crate::Capabilities>(text),
             "ChangedFile" => crate::roundtrip::<crate::ChangedFile>(text),
@@ -6470,10 +6926,13 @@ pub mod wire {
             "DiffScope" => crate::roundtrip::<crate::DiffScope>(text),
             "EditQueuedTurnIn" => crate::roundtrip::<crate::EditQueuedTurnIn>(text),
             "EgressPolicy" => crate::roundtrip::<crate::EgressPolicy>(text),
+            "EgressStatusFilter" => crate::roundtrip::<crate::EgressStatusFilter>(text),
             "Empty" => crate::roundtrip::<crate::Empty>(text),
             "ErrorBody" => crate::roundtrip::<crate::ErrorBody>(text),
             "ErrorCode" => crate::roundtrip::<crate::ErrorCode>(text),
             "ErrorContent" => crate::roundtrip::<crate::ErrorContent>(text),
+            "GetBrowserLiveViewIn" => crate::roundtrip::<crate::GetBrowserLiveViewIn>(text),
+            "GetBrowserLiveViewOut" => crate::roundtrip::<crate::GetBrowserLiveViewOut>(text),
             "GetChangesIn" => crate::roundtrip::<crate::GetChangesIn>(text),
             "GetChangesOut" => crate::roundtrip::<crate::GetChangesOut>(text),
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),
@@ -6524,12 +6983,16 @@ pub mod wire {
             "OpKind" => crate::roundtrip::<crate::OpKind>(text),
             "OpProgress" => crate::roundtrip::<crate::OpProgress>(text),
             "OpStatus" => crate::roundtrip::<crate::OpStatus>(text),
+            "OpenPreviewIn" => crate::roundtrip::<crate::OpenPreviewIn>(text),
+            "OpenPreviewOut" => crate::roundtrip::<crate::OpenPreviewOut>(text),
             "PermissionContent" => crate::roundtrip::<crate::PermissionContent>(text),
             "PermissionOption" => crate::roundtrip::<crate::PermissionOption>(text),
             "PermissionRequest" => crate::roundtrip::<crate::PermissionRequest>(text),
             "PermissionStatus" => crate::roundtrip::<crate::PermissionStatus>(text),
             "PlanContent" => crate::roundtrip::<crate::PlanContent>(text),
             "PlanEntry" => crate::roundtrip::<crate::PlanEntry>(text),
+            "PollCodexLoginIn" => crate::roundtrip::<crate::PollCodexLoginIn>(text),
+            "PollCodexLoginOut" => crate::roundtrip::<crate::PollCodexLoginOut>(text),
             "PrState" => crate::roundtrip::<crate::PrState>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
@@ -6548,8 +7011,7 @@ pub mod wire {
             "ReviewComment" => crate::roundtrip::<crate::ReviewComment>(text),
             "ReviewSide" => crate::roundtrip::<crate::ReviewSide>(text),
             "ReviewStatus" => crate::roundtrip::<crate::ReviewStatus>(text),
-            "RotatePreviewTokenIn" => crate::roundtrip::<crate::RotatePreviewTokenIn>(text),
-            "RotatePreviewTokenOut" => crate::roundtrip::<crate::RotatePreviewTokenOut>(text),
+            "RotatePreviewKeyIn" => crate::roundtrip::<crate::RotatePreviewKeyIn>(text),
             "RunMode" => crate::roundtrip::<crate::RunMode>(text),
             "RunScript" => crate::roundtrip::<crate::RunScript>(text),
             "RunScriptIn" => crate::roundtrip::<crate::RunScriptIn>(text),
@@ -6577,6 +7039,7 @@ pub mod wire {
             "SettingsSource" => crate::roundtrip::<crate::SettingsSource>(text),
             "SetupStatus" => crate::roundtrip::<crate::SetupStatus>(text),
             "SleepWorkspaceIn" => crate::roundtrip::<crate::SleepWorkspaceIn>(text),
+            "StartCodexLoginOut" => crate::roundtrip::<crate::StartCodexLoginOut>(text),
             "StopScriptIn" => crate::roundtrip::<crate::StopScriptIn>(text),
             "TerminalReady" => crate::roundtrip::<crate::TerminalReady>(text),
             "TerminalResize" => crate::roundtrip::<crate::TerminalResize>(text),

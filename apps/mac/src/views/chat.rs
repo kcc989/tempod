@@ -2,7 +2,7 @@
 //! per message. Agent text is escaped before it reaches `TextView` (`crate::markdown`); each row
 //! sits in the transcript's `LocalImageCache` (`crate::image_policy`); link clicks follow
 //! `crate::links`. A streamed delta appends to its row and remeasures only that row.
-use super::chat_model::RowContent;
+use super::chat_model::{self, RowContent, WorkType};
 use super::tokens::{Token, color};
 use crate::image_policy::LocalImageCache;
 use crate::links::{self, LinkTarget};
@@ -10,20 +10,34 @@ use crate::markdown::escape_raw_html;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Disableable as _, h_flex, v_flex};
 use gpui_kit::{
-    Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, Role, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, div, image_cache,
+    Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
+    ImageFormat, ImageSource, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
+    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
+    Window, div, image_cache, px,
 };
-use std::collections::{HashMap, HashSet};
-use tempo_protocol::{ItemContent, ItemStatus, NoticeLevel};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
+use tempo_client::{AttachmentFile, Client};
+use tempo_protocol::{AgentId, ItemContent, ItemStatus, NoticeLevel, TurnStatus};
 
 /// Opens a file tab at a workspace path (07, Links). Handled by the workspace view in M3.
 #[derive(Clone, PartialEq, Eq, Debug, Action)]
 #[action(namespace = tempo, no_json)]
 pub struct OpenWorkspaceFile(pub SharedString);
+#[derive(Clone, PartialEq, Eq, Debug, Action)]
+#[action(namespace = tempo,no_json)]
+pub struct OpenWorkspaceFileAt {
+    pub path: SharedString,
+    pub line: u32,
+}
+/// Shows the Changes tab on the right side (04, Edit rows).
+#[derive(Clone, PartialEq, Eq, Debug, Default, Action)]
+#[action(namespace = tempo, no_json)]
+pub struct ShowChanges;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TranscriptRow {
@@ -71,33 +85,170 @@ pub enum TranscriptEvent {
     Retry {
         turn_id: String,
     },
+    Revert {
+        turn_id: String,
+    },
 }
 
 impl EventEmitter<TranscriptEvent> for TranscriptView {}
+
+/// Encoded bytes of transcript thumbnails kept in memory per transcript.
+const THUMBNAIL_BUDGET: usize = 32 * 1024 * 1024;
+
+/// Attachment thumbnails by attachment id, in memory only (07, Local storage). Failed and evicted
+/// ones show as a name chip and are not fetched again.
+#[derive(Default)]
+struct Thumbnails {
+    images: HashMap<String, Arc<Image>>,
+    order: VecDeque<String>,
+    bytes: usize,
+    pending: HashSet<String>,
+    skipped: HashSet<String>,
+}
+
+impl Thumbnails {
+    fn wants(&self, id: &str) -> bool {
+        !self.images.contains_key(id) && !self.pending.contains(id) && !self.skipped.contains(id)
+    }
+
+    /// Returns the images evicted to stay within the budget.
+    fn insert(&mut self, id: String, image: Arc<Image>) -> Vec<Arc<Image>> {
+        self.pending.remove(&id);
+        self.bytes += image.bytes().len();
+        self.order.push_back(id.clone());
+        self.images.insert(id, image);
+        let mut evicted = Vec::new();
+        while self.bytes > THUMBNAIL_BUDGET && self.order.len() > 1 {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            if let Some(image) = self.images.remove(&oldest) {
+                self.bytes -= image.bytes().len();
+                evicted.push(image);
+            }
+            self.skipped.insert(oldest);
+        }
+        evicted
+    }
+
+    fn fail(&mut self, id: &str) {
+        self.pending.remove(id);
+        self.skipped.insert(id.to_string());
+    }
+}
+
+/// An image the attachment route served inline, ready to draw from its bytes.
+fn thumbnail_image(file: AttachmentFile) -> Option<Arc<Image>> {
+    let format = match file.mime.as_str() {
+        "image/png" => ImageFormat::Png,
+        "image/jpeg" => ImageFormat::Jpeg,
+        "image/gif" => ImageFormat::Gif,
+        "image/webp" => ImageFormat::Webp,
+        _ => return None,
+    };
+    (!file.bytes.is_empty()).then(|| Arc::new(Image::from_bytes(format, file.bytes)))
+}
 
 pub struct TranscriptView {
     rows: Vec<TranscriptRow>,
     scroller: Entity<MessageScrollerState>,
     images: Entity<LocalImageCache>,
-    expanded: HashSet<String>,
+    open: HashMap<String, bool>,
+    ticker: Option<gpui_kit::Task<()>>,
+    inline_images: HashMap<String, Arc<Image>>,
+    media_pending: HashSet<String>,
     permission_focus: HashMap<String, FocusHandle>,
+    attachment_source: Option<(Client, String)>,
+    thumbnails: Thumbnails,
     pub read_only: bool,
+    /// The chat's agent, for error messages that name it.
+    pub agent: Option<AgentId>,
+    /// No turn runs and none is queued, so a revert can start (04, Transcript).
+    pub can_revert: bool,
 }
 
 impl TranscriptView {
     pub fn new(rows: Vec<TranscriptRow>, cx: &mut Context<Self>) -> Self {
         let count = rows.len();
+        cx.on_release(|this, cx| {
+            for image in this.thumbnails.images.values() {
+                ImageSource::Image(image.clone()).remove_asset(cx);
+            }
+        })
+        .detach();
         Self {
             rows,
             scroller: cx.new(|cx| MessageScrollerState::new(count, cx)),
             images: LocalImageCache::new(cx),
-            expanded: HashSet::new(),
+            open: HashMap::new(),
+            ticker: None,
+            inline_images: HashMap::new(),
+            media_pending: HashSet::new(),
             permission_focus: HashMap::new(),
+            attachment_source: None,
+            thumbnails: Thumbnails::default(),
             read_only: false,
+            agent: None,
+            can_revert: false,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_thumbnail(&self, attachment_id: &str) -> bool {
+        self.thumbnails.images.contains_key(attachment_id)
+    }
+
+    /// Where attachment thumbnails load from: the owner-only attachment route (02).
+    pub fn set_attachment_source(&mut self, client: Client, workspace_id: String) {
+        self.attachment_source = Some((client, workspace_id));
+    }
+
+    fn load_thumbnails(&mut self, rows: &[TranscriptRow], cx: &mut Context<Self>) {
+        let Some((client, workspace_id)) = self.attachment_source.clone() else {
+            return;
+        };
+        for row in rows {
+            let Some(RowContent::Item { item, .. }) = &row.native else {
+                continue;
+            };
+            let ItemContent::UserMessage(message) = &item.content else {
+                continue;
+            };
+            for attachment in &message.attachments {
+                if !chat_model::is_served_inline(&attachment.mime)
+                    || !self.thumbnails.wants(&attachment.id)
+                {
+                    continue;
+                }
+                self.thumbnails.pending.insert(attachment.id.clone());
+                let request = client.get_attachment(&workspace_id, &attachment.id);
+                let id = attachment.id.clone();
+                let row_id = row.id.clone();
+                cx.spawn(async move |this, cx| {
+                    let image = request.await.ok().and_then(thumbnail_image);
+                    let _ = this.update(cx, |this, cx| {
+                        match image {
+                            Some(image) => {
+                                for old in this.thumbnails.insert(id, image) {
+                                    ImageSource::Image(old).remove_asset(cx);
+                                }
+                            }
+                            None => this.thumbnails.fail(&id),
+                        }
+                        if let Some(ix) = this.rows.iter().position(|r| r.id == row_id) {
+                            this.scroller
+                                .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                        }
+                        cx.notify();
+                    });
+                })
+                .detach();
+            }
         }
     }
 
     pub fn sync(&mut self, rows: Vec<TranscriptRow>, cx: &mut Context<Self>) {
+        self.load_thumbnails(&rows, cx);
         for row in &rows {
             if let Some(RowContent::Item { item, .. }) = &row.native
                 && let ItemContent::Permission(p) = &item.content
@@ -105,6 +256,54 @@ impl TranscriptView {
                 self.permission_focus
                     .entry(p.request_id.clone())
                     .or_insert_with(|| cx.focus_handle());
+            }
+        }
+        let tools: Vec<_> = rows
+            .iter()
+            .flat_map(|row| row_items(row.native.as_ref()))
+            .filter_map(|item| match &item.content {
+                ItemContent::ToolCall(tool) => Some((item.id.clone(), tool.clone())),
+                _ => None,
+            })
+            .collect();
+        for (item_id, tool) in tools {
+            for (index, block) in tool.content.iter().enumerate() {
+                let key = format!("{item_id}:block:{index}");
+                if self.inline_images.contains_key(&key) || self.media_pending.contains(&key) {
+                    continue;
+                }
+                let block = serde_json::Value::Object(block.0.clone());
+                let inner = if block["type"] == "content" {
+                    &block["content"]
+                } else {
+                    &block
+                };
+                if inner["type"] != "image" {
+                    continue;
+                }
+                self.media_pending.insert(key.clone());
+                let item_id = item_id.clone();
+                cx.spawn(async move |this, cx| {
+                    let image = cx
+                        .background_executor()
+                        .spawn(async move { crate::inline_media::image(&block) })
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        if let Some(image) = image {
+                            this.inline_images.insert(key, image);
+                        }
+                        if let Some(ix) = this
+                            .rows
+                            .iter()
+                            .position(|r| row_items(r.native.as_ref()).any(|i| i.id == item_id))
+                        {
+                            this.scroller
+                                .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                        }
+                        cx.notify();
+                    });
+                })
+                .detach();
             }
         }
         let common = self
@@ -126,7 +325,28 @@ impl TranscriptView {
             }
         }
         self.rows = rows;
+        let running = self.rows.iter().any(|row| {
+            matches!(&row.native, Some(RowContent::Work { turn, .. }) if turn.status == TurnStatus::Running)
+        });
+        if !running {
+            self.ticker = None;
+        } else if self.ticker.is_none() {
+            self.ticker = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_secs(1))
+                        .await;
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            }));
+        }
         cx.notify();
+    }
+
+    fn is_open(&self, key: &str, default: bool) -> bool {
+        self.open.get(key).copied().unwrap_or(default)
     }
 
     pub fn focus_permission(&self, request_id: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -141,6 +361,27 @@ impl TranscriptView {
 
     pub fn len(&self) -> usize {
         self.rows.len()
+    }
+
+    /// ⌃O: expands or collapses every work row and every tool call (04, Work row).
+    pub fn toggle_tools(&mut self, cx: &mut Context<Self>) {
+        let mut keys = Vec::new();
+        for row in &self.rows {
+            if let Some(RowContent::Work { turn, .. }) = &row.native {
+                keys.push((work_key(turn), turn.status == TurnStatus::Running));
+            }
+            for item in row_items(row.native.as_ref()) {
+                if matches!(item.content, ItemContent::ToolCall(_)) {
+                    keys.push((item.id.clone(), item.status == ItemStatus::Failed));
+                }
+            }
+        }
+        let collapse = !keys.is_empty() && keys.iter().all(|(k, d)| self.is_open(k, *d));
+        for (key, _) in keys {
+            self.open.insert(key, !collapse);
+        }
+        self.scroller.update(cx, |s, cx| s.remeasure(cx));
+        cx.notify();
     }
 
     pub fn is_empty(&self) -> bool {
@@ -169,6 +410,7 @@ impl Render for TranscriptView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.weak_entity();
         let images = self.images.clone();
+        let background = color(Token::Background, cx);
         MessageScroller::new("transcript", self.scroller.clone(), move |ix, _, cx| {
             let row = view
                 .upgrade()
@@ -185,8 +427,36 @@ impl Render for TranscriptView {
                     }
                 }))
         })
+        .with_jump_button_transition(std::time::Duration::ZERO)
+        .with_jump_button_renderer(move |button| {
+            button.label("Jump to latest").bg(background).shadow_md()
+        })
         .size_full()
     }
+}
+
+fn work_key(turn: &tempo_protocol::Turn) -> String {
+    let phase = if turn.status == TurnStatus::Running {
+        "running"
+    } else {
+        "done"
+    };
+    format!("work:{}:{phase}", turn.id)
+}
+
+fn row_items(row: Option<&RowContent>) -> Box<dyn Iterator<Item = &tempo_protocol::Item> + '_> {
+    match row {
+        Some(RowContent::Item { item, .. }) => Box::new(std::iter::once(item.as_ref())),
+        Some(RowContent::Work { items, .. }) => Box::new(items.iter()),
+        _ => Box::new(std::iter::empty()),
+    }
+}
+
+fn now_ms() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or_default()
 }
 
 fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
@@ -198,11 +468,32 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         .py_2()
         .child(
             TextView::markdown(id, text)
+                .code_block_actions(|block, _, _| {
+                    let code = block.code();
+                    Button::new("copy-code")
+                        .label("Copy")
+                        .accessibility_label("Copy code block")
+                        .on_click(move |_, _, cx| {
+                            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                code.to_string(),
+                            ))
+                        })
+                })
                 .selectable(true)
                 .on_link_click(|url, _, window, cx| match links::classify(url) {
                     LinkTarget::Browser(url) => cx.open_url(&url),
                     LinkTarget::FileTab(path) => {
-                        window.dispatch_action(Box::new(OpenWorkspaceFile(path.into())), cx)
+                        if let Some(line) = links::line_number(url) {
+                            window.dispatch_action(
+                                Box::new(OpenWorkspaceFileAt {
+                                    path: path.into(),
+                                    line,
+                                }),
+                                cx,
+                            )
+                        } else {
+                            window.dispatch_action(Box::new(OpenWorkspaceFile(path.into())), cx)
+                        }
                     }
                     LinkTarget::Ignore => {}
                 }),
@@ -230,47 +521,104 @@ fn render_native_row(
             .text_color(color(Token::MutedForeground, cx))
             .child("Working…")
             .into_any_element(),
-        RowContent::Footer { turn } => {
-            let duration = turn
-                .started_at
-                .zip(turn.ended_at)
-                .map(|(start, end)| format!("{:.1}s · ", (end - start).max(0.) / 1000.))
-                .unwrap_or_default();
+        RowContent::Work { turn, items, dim } => {
+            let running = turn.status == TurnStatus::Running;
+            let header = if running {
+                let elapsed = turn
+                    .started_at
+                    .map(|start| chat_model::format_duration(now_ms() - start))
+                    .unwrap_or_default();
+                h_flex()
+                    .gap_2()
+                    .child(Spinner::new())
+                    .child(div().flex_1().min_w_0().truncate().child(
+                        chat_model::current_step(&items).unwrap_or_else(|| "Working".into()),
+                    ))
+                    .child(
+                        div()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(elapsed),
+                    )
+                    .into_any_element()
+            } else {
+                let duration = turn
+                    .started_at
+                    .zip(turn.ended_at)
+                    .map(|(start, end)| end - start);
+                div()
+                    .text_color(color(Token::MutedForeground, cx))
+                    .child(chat_model::work_summary(&items, duration))
+                    .into_any_element()
+            };
+            let content = v_flex()
+                .children(items.into_iter().map(|item| {
+                    render_native_row(
+                        TranscriptRow::from_native(RowContent::Item {
+                            item: Box::new(item),
+                            dim: false,
+                            revertable: false,
+                        }),
+                        ix,
+                        view.clone(),
+                        cx,
+                    )
+                }))
+                .into_any_element();
+            let key = work_key(&turn);
+            let open = view
+                .upgrade()
+                .is_some_and(|v| v.read(cx).is_open(&key, running));
             div()
-                .px_4()
-                .py_2()
-                .opacity(if turn.reverted { 0.5 } else { 1. })
-                .text_color(color(Token::MutedForeground, cx))
-                .child(format!("{duration}{}", turn.status))
+                .opacity(if dim { 0.5 } else { 1. })
+                .child(
+                    Collapsible::new()
+                        .open(open)
+                        .child(
+                            Button::new(SharedString::from(format!("{id}:toggle")))
+                                .ghost()
+                                .w_full()
+                                .accessibility_label("Work")
+                                .child(header)
+                                .on_click(move |_, _, cx| {
+                                    let _ = view.update(cx, |this, cx| {
+                                        let open = this.is_open(&key, running);
+                                        this.open.insert(key.clone(), !open);
+                                        this.scroller
+                                            .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                                        cx.notify();
+                                    });
+                                }),
+                        )
+                        .content(content),
+                )
                 .into_any_element()
         }
-        RowContent::Item { item, dim } => {
+        RowContent::Footer { turn, work_row } => div()
+            .px_4()
+            .py_2()
+            .opacity(if turn.reverted { 0.5 } else { 1. })
+            .text_color(color(Token::MutedForeground, cx))
+            .child(chat_model::turn_footer(&turn, work_row))
+            .into_any_element(),
+        RowContent::Item {
+            item,
+            dim,
+            revertable,
+        } => {
             let body = match &item.content {
                 ItemContent::AgentMessage(c) => v_flex()
                     .child(markdown(id.clone(), &c.text))
                     .children((item.status == ItemStatus::Streaming).then(|| {
-                        div()
-                            .px_4()
-                            .text_color(color(Token::MutedForeground, cx))
-                            .child("Streaming…")
+                        let caret = color(Token::Foreground, cx).opacity(0.6);
+                        div().mx_4().w(px(6.)).h(px(14.)).rounded(px(1.)).bg(caret)
                     }))
                     .into_any_element(),
-                ItemContent::UserMessage(c) => v_flex()
-                    .child(markdown(id.clone(), &c.text))
-                    .children(
-                        c.mentions
-                            .iter()
-                            .map(|m| div().px_4().text_sm().child(format!("@{}", m.path))),
-                    )
-                    .children(
-                        c.attachments
-                            .iter()
-                            .map(|a| div().px_4().text_sm().child(a.name.clone())),
-                    )
-                    .into_any_element(),
+                ItemContent::UserMessage(c) => {
+                    user_message(&id, &item, c, revertable, view.clone(), cx)
+                }
                 ItemContent::AgentThought(c) => disclosure(
                     id.clone(),
-                    "Thinking".into(),
+                    Disclosure::new("Thinking"),
                     markdown(id.clone(), &c.text),
                     ix,
                     view.clone(),
@@ -278,7 +626,7 @@ fn render_native_row(
                 ),
                 ItemContent::Handoff(c) => disclosure(
                     id.clone(),
-                    "Session restarted; transcript handed to the agent".into(),
+                    Disclosure::new("Session restarted; transcript handed to the agent"),
                     markdown(id.clone(), &c.text),
                     ix,
                     view.clone(),
@@ -286,34 +634,150 @@ fn render_native_row(
                 ),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
-                        let text = block
-                            .0
-                            .get("text")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("");
-                        markdown(format!("{}:block:{index}", id).into(), text)
+                        let key: SharedString = format!("{}:block:{index}", id).into();
+                        if let Some(image) = view
+                            .update(cx, |this, _| this.inline_images.get(key.as_ref()).cloned())
+                            .ok()
+                            .flatten()
+                        {
+                            return gpui_kit::img(image)
+                                .max_w(gpui_kit::px(320.))
+                                .max_h(gpui_kit::px(240.))
+                                .into_any_element();
+                        }
+                        let value = serde_json::Value::Object(block.0.clone());
+                        if value["type"] == "diff" {
+                            let path = value["path"].as_str().unwrap_or("");
+                            let old = value["oldText"].as_str().unwrap_or("");
+                            let new = value["newText"].as_str().unwrap_or("");
+                            let lines = old.lines().count() + new.lines().count();
+                            if lines > super::diff_model::MAX_DIFF_LINES {
+                                return div()
+                                    .child("This diff is too large to show.")
+                                    .into_any_element();
+                            }
+                            let text = format!(
+                                "--- {path}\n+++ {path}\n{}{}",
+                                old.lines().map(|l| format!("-{l}\n")).collect::<String>(),
+                                new.lines().map(|l| format!("+{l}\n")).collect::<String>()
+                            );
+                            return div()
+                                .font_family("monospace")
+                                .child(text)
+                                .into_any_element();
+                        }
+                        if value["type"] == "terminal" {
+                            return div()
+                                .font_family("monospace")
+                                .child(format!(
+                                    "Terminal {}",
+                                    value["terminalId"].as_str().unwrap_or("")
+                                ))
+                                .into_any_element();
+                        }
+                        let inner = if value["type"] == "content" {
+                            &value["content"]
+                        } else {
+                            &value
+                        };
+                        markdown(key, inner["text"].as_str().unwrap_or("Inline media"))
                     });
-                    let details =
-                        v_flex()
-                            .children(blocks)
-                            .children(c.locations.iter().map(|loc| {
-                                markdown(
-                                    format!("{}:{}", id, loc.path).into(),
-                                    &format!(
-                                        "[{}](file:///workspace/{})",
-                                        loc.path,
-                                        loc.path.trim_start_matches("/workspace/")
-                                    ),
-                                )
-                            }));
-                    disclosure(
+                    let details = v_flex()
+                        .children(blocks)
+                        .children(c.raw_input.as_ref().map(|v| {
+                            div()
+                                .font_family("monospace")
+                                .child(serde_json::to_string_pretty(v).unwrap_or_default())
+                        }))
+                        .children(c.raw_output.as_ref().map(|v| {
+                            div()
+                                .font_family("monospace")
+                                .child(serde_json::to_string_pretty(v).unwrap_or_default())
+                        }))
+                        .children(c.locations.iter().enumerate().map(|(ix, loc)| {
+                            let path = links::workspace_path(&loc.path).map(str::to_string);
+                            let line = loc
+                                .line
+                                .filter(|n| n.is_finite() && *n >= 1. && *n <= u32::MAX as f64)
+                                .map(|n| n as u32);
+                            Button::new(("tool-location", ix))
+                                .label(format!(
+                                    "{}{}",
+                                    loc.path,
+                                    line.map(|n| format!(":{n}")).unwrap_or_default()
+                                ))
+                                .disabled(path.is_none())
+                                .on_click(move |_, window, cx| {
+                                    if let Some(path) = &path {
+                                        if let Some(line) = line {
+                                            window.dispatch_action(
+                                                Box::new(OpenWorkspaceFileAt {
+                                                    path: path.clone().into(),
+                                                    line,
+                                                }),
+                                                cx,
+                                            );
+                                        } else {
+                                            window.dispatch_action(
+                                                Box::new(OpenWorkspaceFile(path.clone().into())),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                })
+                        }));
+                    let kind = chat_model::work_type(c);
+                    let status = match item.status {
+                        ItemStatus::Pending
+                        | ItemStatus::InProgress
+                        | ItemStatus::Failed
+                        | ItemStatus::Cancelled => format!(" · {}", item.status),
+                        _ => String::new(),
+                    };
+                    let (label, mono) = if kind == WorkType::Edit {
+                        let counts = chat_model::edit_counts(c);
+                        let name = if counts.path.is_empty() {
+                            c.title.as_str()
+                        } else {
+                            counts.file_name()
+                        };
+                        (
+                            format!("{name} +{} −{}", counts.added, counts.removed),
+                            false,
+                        )
+                    } else {
+                        chat_model::tool_label(c)
+                    };
+                    let row = disclosure(
                         id.clone(),
-                        format!("{} · {}", c.title, item.status).into(),
+                        Disclosure {
+                            title: format!("{} {label}{status}", work_icon(kind)).into(),
+                            tooltip: Some(c.title.clone().into()),
+                            mono,
+                            default_open: item.status == ItemStatus::Failed,
+                        },
                         details.into_any_element(),
                         ix,
                         view.clone(),
                         cx,
-                    )
+                    );
+                    if kind == WorkType::Edit {
+                        v_flex()
+                            .child(row)
+                            .child(
+                                div().px_4().child(
+                                    Button::new(SharedString::from(format!("{id}:changes")))
+                                        .ghost()
+                                        .label("Changes")
+                                        .on_click(|_, window, cx| {
+                                            window.dispatch_action(Box::new(ShowChanges), cx)
+                                        }),
+                                ),
+                            )
+                            .into_any_element()
+                    } else {
+                        row
+                    }
                 }
                 ItemContent::Plan(c) => v_flex()
                     .px_4()
@@ -345,28 +809,7 @@ fn render_native_row(
                     .border_color(color(Token::Border, cx))
                     .child(format!("Reverted to turn {}", c.to_turn_seq))
                     .into_any_element(),
-                ItemContent::Error(c) => {
-                    let turn_id = item.turn_id.clone();
-                    let weak = view.clone();
-                    v_flex()
-                        .px_4()
-                        .gap_2()
-                        .text_color(color(Token::Destructive, cx))
-                        .child(c.code.clone())
-                        .children(c.detail.clone())
-                        .children(turn_id.map(|turn_id| {
-                            Button::new(SharedString::from(format!("{id}:retry")))
-                                .label("Retry")
-                                .on_click(move |_, _, cx| {
-                                    let _ = weak.update(cx, |_, cx| {
-                                        cx.emit(TranscriptEvent::Retry {
-                                            turn_id: turn_id.clone(),
-                                        })
-                                    });
-                                })
-                        }))
-                        .into_any_element()
-                }
+                ItemContent::Error(c) => error_card(&id, &item, c, ix, view.clone(), cx),
                 ItemContent::Permission(p) => {
                     let read_only = view.upgrade().is_none_or(|v| v.read(cx).read_only);
                     let answered = p.chosen_option_id.is_some()
@@ -444,38 +887,282 @@ fn render_native_row(
     }
 }
 
+/// 04, Transcript, `user_message`: text, mention chips and attachment thumbnails; the time and
+/// `Revert to here` show on hover.
+fn user_message(
+    id: &SharedString,
+    item: &tempo_protocol::Item,
+    c: &tempo_protocol::UserMessageContent,
+    revertable: bool,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let (thumbnails, can_revert) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            let images: HashMap<_, _> = c
+                .attachments
+                .iter()
+                .filter_map(|a| Some((a.id.clone(), v.thumbnails.images.get(&a.id)?.clone())))
+                .collect();
+            (images, !v.read_only && v.can_revert)
+        })
+        .unwrap_or_default();
+    let muted = color(Token::MutedForeground, cx);
+    let border = color(Token::Border, cx);
+    let chip = move |key: SharedString, label: String| {
+        div()
+            .id(key)
+            .role(Role::Note)
+            .aria_label(format!("Attachment {label}"))
+            .px_1p5()
+            .border_1()
+            .border_color(border)
+            .rounded_sm()
+            .text_xs()
+            .child(label)
+            .into_any_element()
+    };
+    let attachments = c.attachments.iter().map(|a| {
+        let key: SharedString = format!("{id}:attachment:{}", a.id).into();
+        let name = a.name.clone();
+        match thumbnails.get(&a.id).cloned() {
+            Some(image) => {
+                let fallback_key = key.clone();
+                div()
+                    .id(key.clone())
+                    .role(Role::Image)
+                    .aria_label(name.clone())
+                    .child(
+                        gpui_kit::img(image)
+                            .size(px(64.))
+                            .object_fit(ObjectFit::Cover)
+                            .rounded_sm()
+                            .border_1()
+                            .border_color(border)
+                            .with_fallback({
+                                let name = name.clone();
+                                move || chip(fallback_key.clone(), name.clone())
+                            }),
+                    )
+                    .into_any_element()
+            }
+            None => chip(key, name),
+        }
+    });
+    let mentions = c.mentions.iter().enumerate().map(|(ix, m)| {
+        let path = links::workspace_path(&m.path).map(str::to_string);
+        Button::new(SharedString::from(format!("{id}:mention:{ix}")))
+            .ghost()
+            .label(format!("@{}", m.path))
+            .accessibility_label(format!("Open {}", m.path))
+            .disabled(path.is_none())
+            .on_click(move |_, window, cx| {
+                if let Some(path) = &path {
+                    window.dispatch_action(Box::new(OpenWorkspaceFile(path.clone().into())), cx)
+                }
+            })
+    });
+    let turn = item.turn_id.clone();
+    let group: SharedString = format!("{id}:hover").into();
+    let now = now_ms();
+    v_flex()
+        .id(SharedString::from(format!("{id}:user")))
+        .group(group.clone())
+        .role(Role::Article)
+        .aria_label("Your message")
+        .children((!c.text.is_empty()).then(|| markdown(id.clone(), &c.text)))
+        .children(
+            (!c.mentions.is_empty() || !c.attachments.is_empty()).then(|| {
+                h_flex()
+                    .px_4()
+                    .gap_1()
+                    .flex_wrap()
+                    .children(mentions)
+                    .children(attachments)
+            }),
+        )
+        .child(
+            h_flex()
+                .px_4()
+                .gap_2()
+                .h(px(20.))
+                .text_xs()
+                .text_color(muted)
+                .invisible()
+                .group_hover(group, |s| s.visible())
+                .child(chat_model::format_relative(item.created_at, now))
+                .children((revertable && can_revert && turn.is_some()).then(|| {
+                    Button::new(SharedString::from(format!("revert-{}", item.id)))
+                        .ghost()
+                        .label("Revert to here")
+                        .on_click(move |_, _, cx| {
+                            let _ = view.update(cx, |this, cx| {
+                                if !this.read_only
+                                    && let Some(turn) = &turn
+                                {
+                                    cx.emit(TranscriptEvent::Revert {
+                                        turn_id: turn.clone(),
+                                    });
+                                }
+                            });
+                        })
+                })),
+        )
+        .into_any_element()
+}
+
+/// 04, Transcript, `error`: a red card with the message, the code, and Retry.
+fn error_card(
+    id: &SharedString,
+    item: &tempo_protocol::Item,
+    c: &tempo_protocol::ErrorContent,
+    ix: usize,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let detail_key = format!("{id}:detail");
+    let (agent, read_only, open) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            (v.agent, v.read_only, v.is_open(&detail_key, false))
+        })
+        .unwrap_or((None, true, false));
+    let message = crate::errors::error_message(&c.code, agent);
+    let toggle = view.clone();
+    let retry = view;
+    let turn_id = item.turn_id.clone();
+    v_flex()
+        .id(SharedString::from(format!("{id}:error")))
+        .role(Role::Alert)
+        .aria_label(message.clone())
+        .mx_4()
+        .my_1()
+        .p_2()
+        .gap_1()
+        .border_1()
+        .border_color(color(Token::Destructive, cx))
+        .rounded_md()
+        .child(
+            h_flex()
+                .gap_2()
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_sm().child(message))
+                        .child(
+                            div()
+                                .font_family("monospace")
+                                .text_xs()
+                                .text_color(color(Token::MutedForeground, cx))
+                                .child(c.code.clone()),
+                        ),
+                )
+                .children(c.detail.is_some().then(|| {
+                    Button::new(SharedString::from(format!("{id}:details")))
+                        .ghost()
+                        .label("Details")
+                        .on_click(move |_, _, cx| {
+                            let _ = toggle.update(cx, |this, cx| {
+                                let open = this.is_open(&detail_key, false);
+                                this.open.insert(detail_key.clone(), !open);
+                                this.scroller
+                                    .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                                cx.notify();
+                            });
+                        })
+                }))
+                .children(turn_id.filter(|_| !read_only).map(|turn_id| {
+                    Button::new(SharedString::from(format!("{id}:retry")))
+                        .label("Retry")
+                        .on_click(move |_, _, cx| {
+                            let _ = retry.update(cx, |_, cx| {
+                                cx.emit(TranscriptEvent::Retry {
+                                    turn_id: turn_id.clone(),
+                                })
+                            });
+                        })
+                })),
+        )
+        .children(open.then(|| c.detail.clone()).flatten().map(|detail| {
+            div()
+                .font_family("monospace")
+                .text_xs()
+                .text_color(color(Token::MutedForeground, cx))
+                .child(detail)
+        }))
+        .into_any_element()
+}
+
+struct Disclosure {
+    title: SharedString,
+    tooltip: Option<SharedString>,
+    mono: bool,
+    default_open: bool,
+}
+
+impl Disclosure {
+    fn new(title: &'static str) -> Self {
+        Self {
+            title: title.into(),
+            tooltip: None,
+            mono: false,
+            default_open: false,
+        }
+    }
+}
+
 fn disclosure(
     id: SharedString,
-    title: SharedString,
+    header: Disclosure,
     content: AnyElement,
     ix: usize,
     view: gpui_kit::WeakEntity<TranscriptView>,
     cx: &mut gpui_kit::App,
 ) -> AnyElement {
+    let key = id.to_string();
+    let default = header.default_open;
     let expanded = view
         .upgrade()
-        .is_some_and(|v| v.read(cx).expanded.contains(id.as_ref()));
-    let key = id.to_string();
+        .is_some_and(|v| v.read(cx).is_open(&key, default));
+    let mut button = Button::new(SharedString::from(format!("{id}:disclosure")))
+        .ghost()
+        .label(header.title)
+        .on_click(move |_, _, cx| {
+            let _ = view.update(cx, |this, cx| {
+                let open = this.is_open(&key, default);
+                this.open.insert(key.clone(), !open);
+                this.scroller.update(cx, |s, cx| {
+                    s.remeasure_items(ix..ix + 1, cx);
+                });
+                cx.notify();
+            });
+        });
+    if let Some(tooltip) = header.tooltip {
+        button = button.tooltip(tooltip);
+    }
+    if header.mono {
+        button = button.font_family("monospace");
+    }
     Collapsible::new()
         .open(expanded)
-        .child(
-            Button::new(SharedString::from(format!("{id}:disclosure")))
-                .ghost()
-                .label(title)
-                .on_click(move |_, _, cx| {
-                    let _ = view.update(cx, |this, cx| {
-                        if !this.expanded.remove(&key) {
-                            this.expanded.insert(key.clone());
-                        }
-                        this.scroller.update(cx, |s, cx| {
-                            s.remeasure_items(ix..ix + 1, cx);
-                        });
-                        cx.notify();
-                    });
-                }),
-        )
+        .child(div().min_w_0().truncate().child(button))
         .content(content)
         .into_any_element()
+}
+
+fn work_icon(kind: WorkType) -> &'static str {
+    match kind {
+        WorkType::Explore => "⌕",
+        WorkType::Edit => "✎",
+        WorkType::Run => ">_",
+        WorkType::Web => "↗",
+        WorkType::SubAgent => "◎",
+        WorkType::Other => "◇",
+    }
 }
 
 #[cfg(test)]
@@ -491,5 +1178,98 @@ mod tests {
             row.rendered().as_ref(),
             "Hello &lt;img src=https://x.test/p.png> and `Vec<u8>`"
         );
+    }
+
+    #[test]
+    fn thumbnails_take_served_images_and_evict_the_oldest_past_the_budget() {
+        let file = |mime: &str, len: usize| AttachmentFile {
+            mime: mime.into(),
+            bytes: vec![1; len],
+        };
+        assert!(thumbnail_image(file("image/png", 3)).is_some());
+        assert!(thumbnail_image(file("application/octet-stream", 3)).is_none());
+        assert!(thumbnail_image(file("image/webp", 0)).is_none());
+        let mut cache = Thumbnails::default();
+        let big = THUMBNAIL_BUDGET / 2 + 1;
+        cache.pending.insert("a".into());
+        assert!(cache.wants("b") && !cache.wants("a"));
+        let image = |len| thumbnail_image(file("image/png", len)).unwrap();
+        assert!(cache.insert("a".into(), image(big)).is_empty());
+        assert_eq!(cache.insert("b".into(), image(big)).len(), 1);
+        assert!(!cache.images.contains_key("a") && cache.images.contains_key("b"));
+        assert!(
+            !cache.wants("a"),
+            "an evicted thumbnail is not fetched again"
+        );
+        cache.fail("c");
+        assert!(!cache.wants("c"));
+    }
+
+    #[gpui_kit::test]
+    fn expand_all_toggles_work_rows_and_folded_tool_calls(cx: &mut gpui_kit::TestAppContext) {
+        let mut state = tempo_client::state::workspace::WorkspaceState::new();
+        for line in include_str!(
+            "../../../../packages/protocol/fixtures/channel/workspace-first-load.jsonl"
+        )
+        .lines()
+        {
+            state.apply(serde_json::from_str(line).unwrap());
+        }
+        let rows: Vec<_> = state
+            .sessions
+            .keys()
+            .flat_map(|id| {
+                chat_model::transcript_rows(&state, id, chat_model::TranscriptDetail::Default)
+            })
+            .map(TranscriptRow::from_native)
+            .collect();
+        let work = rows
+            .iter()
+            .filter(|r| matches!(r.native, Some(RowContent::Work { .. })))
+            .count();
+        assert!(work > 0);
+        let view = cx.new(|cx| TranscriptView::new(rows, cx));
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| {
+            assert!(view.open.keys().filter(|k| k.starts_with("work:")).count() == work);
+            assert!(view.open.values().all(|open| *open));
+        });
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| assert!(view.open.values().all(|open| !open)));
+    }
+
+    #[gpui_kit::test]
+    fn expand_all_toggles_only_tool_rows(cx: &mut gpui_kit::TestAppContext) {
+        let mut state = tempo_client::state::workspace::WorkspaceState::new();
+        for line in include_str!(
+            "../../../../packages/protocol/fixtures/channel/workspace-first-load.jsonl"
+        )
+        .lines()
+        {
+            state.apply(serde_json::from_str(line).unwrap());
+        }
+        let rows: Vec<_> = state
+            .items
+            .values()
+            .filter(|item| matches!(item.content, ItemContent::ToolCall(_)))
+            .cloned()
+            .map(|item| {
+                TranscriptRow::from_native(RowContent::Item {
+                    item: Box::new(item),
+                    dim: false,
+                    revertable: false,
+                })
+            })
+            .collect();
+        assert!(!rows.is_empty());
+        let count = rows.len();
+        let view = cx.new(|cx| TranscriptView::new(rows, cx));
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.open.len(), count);
+            assert!(view.open.values().all(|open| *open));
+        });
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| assert!(view.open.values().all(|open| !open)));
     }
 }

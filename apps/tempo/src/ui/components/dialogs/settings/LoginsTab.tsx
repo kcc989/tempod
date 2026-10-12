@@ -1,13 +1,15 @@
-import type { CredentialProvider, CredentialStatus } from "@tempo/protocol";
+import type { CredentialProvider, CredentialStatus, FnOutput } from "@tempo/protocol";
+import { useQueryClient } from "@tanstack/react-query";
 import { FileJsonIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Badge } from "~/ui/components/ui/badge";
 import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
 import { Textarea } from "~/ui/components/ui/textarea";
-import { useCallMutation } from "~/ui/hooks/useCall";
+import { invalidateCalls, useCallMutation } from "~/ui/hooks/useCall";
+import { call } from "~/ui/lib/api";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { formatRelative } from "~/ui/lib/format";
 import { errorCode, errorDetail, errorText, toastError } from "~/ui/lib/toast";
@@ -56,7 +58,7 @@ const inlineOrToast = (e: unknown, setError: (s: string) => void) => {
 function LoginCard({ row, status }: { row: LoginRow; status: CredentialStatus }) {
   const state = loginState(status, row.provider);
   const remove = useCallMutation("deleteCredential", {
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => toast.success(`${row.label} removed`),
   });
   const lastRefresh = row.provider === "codex" ? status.codex.lastRefresh : null;
@@ -133,7 +135,7 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const save = useCallMutation("setClaudeToken", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setToken("");
       setError(null);
@@ -172,13 +174,138 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
 }
 
 function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
+  return (
+    <div className="grid gap-3">
+      <CodexDeviceLogin replacing={replacing} />
+      <details>
+        <summary className="cursor-pointer text-xs text-muted-foreground">Use auth.json instead</summary>
+        <div className="pt-2">
+          <CodexUploadForm row={row} replacing={replacing} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+export function CodexDeviceLogin({ replacing }: { replacing: boolean }) {
+  const queryClient = useQueryClient();
+  const [login, setLogin] = useState<FnOutput<"startCodexLogin"> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const start = useCallMutation("startCodexLogin", {
+    toast: false,
+    onSuccess: (result) => {
+      setError(null);
+      setLogin(result);
+    },
+    onError: (e) => setError(errorText(e)),
+  });
+
+  useEffect(() => {
+    if (!login || cancelling) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const result =
+          Date.now() >= login.expiresAt
+            ? { status: "expired" as const }
+            : await call("pollCodexLogin", { loginId: login.loginId });
+        if (stopped) return;
+        if (result.status === "pending") {
+          timer = setTimeout(() => void poll(), login.intervalMs);
+          return;
+        }
+        setLogin(null);
+        if (result.status === "connected") {
+          forgetInvalid("codex");
+          await invalidateCalls(queryClient, "getCredentialStatus");
+          toast.success("Codex connected");
+        } else setError("Codex login expired. Connect again to get a new code.");
+      } catch (e) {
+        if (!stopped) {
+          setLogin(null);
+          setError(errorText(e));
+        }
+      }
+    };
+    timer = setTimeout(() => void poll(), login.intervalMs);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [login, cancelling, queryClient]);
+
+  const cancel = async () => {
+    if (!login) return;
+    setCancelling(true);
+    try {
+      await call("cancelCodexLogin", { loginId: login.loginId });
+      setLogin(null);
+      setError(null);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs text-muted-foreground">
+        Sign in with ChatGPT using a one-time code. Enable device-code login in your ChatGPT security settings
+        or ask your workspace admin.
+      </p>
+      {login ? (
+        <>
+          <p className="text-xs">Open the sign-in page, then enter this code:</p>
+          <code className="text-lg tracking-widest" aria-label="Codex sign-in code">
+            {login.userCode}
+          </code>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm">
+              <a href={login.verificationUrl} target="_blank" rel="noopener noreferrer">
+                Open sign-in page
+              </a>
+            </Button>
+            <Button size="sm" variant="ghost" disabled={cancelling} onClick={() => void cancel()}>
+              Cancel
+            </Button>
+          </div>
+          <p role="status" className="text-xs text-muted-foreground">
+            Waiting for sign-in… This code expires in 15 minutes.
+          </p>
+        </>
+      ) : (
+        <Button
+          size="sm"
+          className="justify-self-start"
+          disabled={start.isPending}
+          onClick={() => {
+            setError(null);
+            start.mutate({});
+          }}
+        >
+          {start.isPending ? "Connecting…" : replacing ? "Reconnect Codex" : "Connect Codex"}
+        </Button>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CodexUploadForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [pasted, setPasted] = useState("");
   const [file, setFile] = useState<{ readonly name: string; readonly text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const save = useCallMutation("setCodexAuth", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setPasted("");
       setFile(null);
@@ -272,7 +399,7 @@ function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const save = useCallMutation("setApiKey", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setKey("");
       setError(null);

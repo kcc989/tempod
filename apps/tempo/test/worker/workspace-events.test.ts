@@ -1,5 +1,12 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { HANDOFF_FIRST_LINE, HANDOFF_MAX_CHARS, newId, revertNote, type TempodEvent } from "@tempo/protocol";
+import {
+  HANDOFF_FIRST_LINE,
+  HANDOFF_MAX_CHARS,
+  newId,
+  revertNote,
+  TURN_SUMMARY_RULE,
+  type TempodEvent,
+} from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { recoverSteering } from "../../src/do/workspace/queue.ts";
@@ -830,6 +837,45 @@ describe("turn.ended", () => {
       expect(
         await sql(ctx.stub, "SELECT id FROM items WHERE turn_id = ? AND kind = 'error'", ctx.turnId),
       ).toHaveLength(0);
+    },
+    T,
+  );
+
+  it(
+    "usage from the prompt response is stored on the turn and sent on the wire; bad counts are dropped",
+    async () => {
+      // 02 turns.usage_json and Turn.usage; 04 Transcript: "if the agent sends usage, tokens".
+      const ctx = await runningTurn();
+      await endTurn(ctx, ctx.sessionId, ctx.turnId, {
+        stopReason: "end_turn",
+        usage: { totalTokens: 1500, inputTokens: 1200, outputTokens: 300, thoughtTokens: -5 },
+      });
+      const row = (await turnRow(ctx.stub, ctx.turnId))!;
+      expect(JSON.parse(String(row.usage_json))).toEqual({
+        totalTokens: 1500,
+        inputTokens: 1200,
+        outputTokens: 300,
+      });
+      const wire = await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
+        const core = internals(i).core;
+        return core.turnToWire(core.turnRow(ctx.turnId));
+      });
+      expect(wire.usage).toEqual({ totalTokens: 1500, inputTokens: 1200, outputTokens: 300 });
+    },
+    T,
+  );
+
+  it(
+    "a turn without usage has no usage field",
+    async () => {
+      const ctx = await runningTurn();
+      await endTurn(ctx, ctx.sessionId, ctx.turnId);
+      const wire = await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
+        const core = internals(i).core;
+        return core.turnToWire(core.turnRow(ctx.turnId));
+      });
+      expect("usage" in wire).toBe(false);
+      expect((await turnRow(ctx.stub, ctx.turnId))!.usage_json).toBeNull();
     },
     T,
   );
@@ -1687,13 +1733,11 @@ describe("ports.changed", () => {
     "updates detail.ports with a preview URL per port and tells the UI",
     async () => {
       // 01 Ports: "Each port P becomes a preview." Preview URL:
-      // "https://<P>-<workspaceId lowercase>-<previewToken>.<PREVIEW_DOMAIN>". 02 WorkspaceDetail.ports: [{port, url}].
+      // "https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>". 02 WorkspaceDetail.ports: [{port, url}].
       const ctx = await readyWorkspace();
       const ui = await openUi(ctx);
       await backlogDone(ui);
-      const token = (await detail(ctx.stub)).previewToken as string;
-      expect(token).toMatch(/^[a-z0-9]{16}$/);
-      const url = (p: number) => `https://${p}-${ctx.workspaceId.toLowerCase()}-${token}.previews.test`;
+      const url = (p: number) => `https://${p}-${ctx.workspaceId.toLowerCase()}.previews.test`;
 
       await applied(ctx.stub, await emit(ctx, { kind: "ports.changed", ports: [5173, 3000] }));
       const ports = [...(await detail(ctx.stub)).ports].sort((a: any, b: any) => a.port - b.port);
@@ -1934,10 +1978,11 @@ describe("prompt content blocks", () => {
   it(
     "sends the general prompt only on the first prompt of each session",
     async () => {
-      // 01 Send a prompt, block 1: "On the first prompt of a session only: a text block with the project's prompts.general, if it is set."
+      // 01 Send a prompt, block 1: "On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set."
       const ctx = await runningTurn({ prompt: "First", effective: withGeneral });
       const p1 = ctx.tempod.requestsOf("session.prompt")[0];
       expect(p1.content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: "First" },
       ]);
@@ -1956,6 +2001,7 @@ describe("prompt content blocks", () => {
       );
       const t3 = await prompt(ctx, session.id, "Third");
       expect((await waitPrompt(ctx, t3)).content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: "Third" },
       ]);
@@ -1964,11 +2010,12 @@ describe("prompt content blocks", () => {
   );
 
   it(
-    "sends no general prompt block when prompts.general is empty",
+    "sends only the turn-summary rule when prompts.general is empty",
     async () => {
       // 01 Send a prompt, block 1: "if it is set".
       const ctx = await runningTurn({ prompt: "Only text" });
       expect(ctx.tempod.requestsOf("session.prompt")[0].content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: "Only text" },
       ]);
     },
@@ -2179,6 +2226,7 @@ describe("prompt content blocks", () => {
       });
       const p = await waitPrompt(ctx, turn);
       expect(p.content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
@@ -2244,6 +2292,7 @@ describe("prompt content blocks", () => {
       await runInDurableObject(ctx.stub, (i: WorkspaceDO) => internals(i).core.kickQueue());
       await waitFor(async () => (await turnRow(ctx.stub, turn))?.status === "running", 5000, "turn running");
       expect(ctx.tempod.requestsOf("session.prompt").at(-1).content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
@@ -2280,6 +2329,7 @@ describe("prompt content blocks", () => {
       ctx.tempod.failures.delete("session.prompt");
       const t2 = await prompt(ctx, sessionId, "Second try");
       expect((await waitPrompt(ctx, t2)).content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: [HANDOFF_FIRST_LINE, "User: First try"].join("\n") },
         { type: "text", text: note },
@@ -2387,6 +2437,114 @@ describe("queue runner scheduling", () => {
       ctx.tempod.failures.delete("session.start");
       const t2 = await prompt(ctx, first.session_id, "Now start");
       await waitPrompt(ctx, t2);
+    },
+    T,
+  );
+
+  it(
+    "an OpenCode turn with an empty agent.models.opencode fails with MODEL_REQUIRED before session.start",
+    async () => {
+      // 01 Start a session 2: "For opencode and pi an empty model fails the session with MODEL_REQUIRED before
+      // anything is sent, and the turn that waited for it fails with the same code." 06 AT-40.
+      const ctx = await readyWorkspace({ prompt: "Start OpenCode", agent: "opencode" });
+      const first = (await sql(ctx.stub, "SELECT id, session_id FROM turns WHERE seq = 1"))[0]!;
+      await waitFor(
+        async () => (await turnRow(ctx.stub, first.id))?.status === "failed",
+        5000,
+        "turn failed",
+      );
+      expect((await turnRow(ctx.stub, first.id))!.error_code).toBe("MODEL_REQUIRED");
+      const errors = await sql(
+        ctx.stub,
+        "SELECT content_json FROM items WHERE turn_id = ? AND kind = 'error'",
+        first.id,
+      );
+      expect(errors.map((e) => JSON.parse(e.content_json).code)).toEqual(["MODEL_REQUIRED"]);
+      expect(ctx.tempod.requestsOf("session.start")).toHaveLength(0);
+      expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(0);
+      expect((await sessionRow(ctx.stub, first.session_id))!.status).toBe("idle");
+      await waitFor(async () => (await wsRow(ctx.stub)).state === "ready", 3000, "state ready");
+
+      const effective = {
+        ...DEFAULT_EFFECTIVE,
+        agent: {
+          ...DEFAULT_EFFECTIVE.agent,
+          models: { ...DEFAULT_EFFECTIVE.agent.models, opencode: "openrouter/oc" },
+        },
+      };
+      await sql(ctx.stub, "UPDATE workspace SET settings_json = ? WHERE id = 1", JSON.stringify(effective));
+      const t2 = await prompt(ctx, first.session_id, "Now with a model");
+      await waitPrompt(ctx, t2);
+      expect(ctx.tempod.requestsOf("session.start")[0]).toMatchObject({
+        agent: "opencode",
+        model: "openrouter/oc",
+      });
+    },
+    T,
+  );
+
+  it(
+    "session.start carries agent.models.<agent> of the session's agent, and no model when it is empty",
+    async () => {
+      // 01 Start a session 2: "model is agent.models.<agent> from the effective settings, or absent when empty."
+      const models = { claude: "", codex: "gpt-5-codex", opencode: "", pi: "openrouter/pi" };
+      const ctx = await readyWorkspace({
+        prompt: "Start Pi",
+        agent: "pi",
+        effective: { ...DEFAULT_EFFECTIVE, agent: { default: "codex", models } },
+      });
+      await waitFor(() => ctx.tempod.requestsOf("session.start").length === 1, 5000, "pi session.start");
+      expect(ctx.tempod.requestsOf("session.start")[0]).toMatchObject({
+        agent: "pi",
+        model: "openrouter/pi",
+      });
+
+      const claude = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+      await waitFor(() => ctx.tempod.requestsOf("session.start").length === 2, 5000, "claude session.start");
+      const start = ctx.tempod.requestsOf("session.start")[1];
+      expect(start).toMatchObject({ sessionId: claude.id, agent: "claude" });
+      expect(start).not.toHaveProperty("model");
+    },
+    T,
+  );
+
+  it(
+    "a model chosen for the session itself wins over agent.models, so OpenCode starts without a default",
+    async () => {
+      // 02 createSession takes model?; agent.models.<agent> is the agent's default model (01, Project settings file).
+      const ctx = await readyWorkspace();
+      const s = unwrap(
+        (await ctx.stub.createSession({ agent: "opencode", model: "openrouter/own" })) as never,
+      ) as { id: string };
+      await waitFor(() => ctx.tempod.requestsOf("session.start").length === 1, 5000, "session.start");
+      expect(ctx.tempod.requestsOf("session.start")[0]).toMatchObject({
+        sessionId: s.id,
+        agent: "opencode",
+        model: "openrouter/own",
+      });
+    },
+    T,
+  );
+
+  it(
+    "createSession for Pi with no model ends the start with a MODEL_REQUIRED notice and sends nothing",
+    async () => {
+      const ctx = await readyWorkspace();
+      const s = unwrap((await ctx.stub.createSession({ agent: "pi" })) as never) as { id: string };
+      await waitFor(
+        async () => (await sessionRow(ctx.stub, s.id))?.status === "idle",
+        5000,
+        "session start ended",
+      );
+      const notices = await sql(
+        ctx.stub,
+        "SELECT content_json FROM items WHERE session_id = ? AND kind = 'notice'",
+        s.id,
+      );
+      expect(notices.map((n) => JSON.parse(n.content_json).text)).toEqual([
+        "Set a default model for this agent in Settings → Project.",
+      ]);
+      expect(ctx.tempod.requestsOf("session.start")).toHaveLength(0);
     },
     T,
   );

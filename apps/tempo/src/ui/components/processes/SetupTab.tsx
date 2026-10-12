@@ -21,39 +21,43 @@ export function SetupTab({ workspaceId }: { workspaceId: string }) {
   const status = workspace.setupStatus;
   const hasScript = workspace.settings.scripts.setup.trim() !== "";
   const archived = workspace.state === "archived" || workspace.state === "archiving";
+  // With no script, the empty state below says so; a status row would repeat it.
+  const noScript = !hasScript && status === "none" && !run;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5">
-        <SetupStatusIcon status={status} />
-        <span className="text-sm font-medium">{SETUP_STATUS_TEXT[status]}</span>
-        {run && status !== "running" && (
-          <span className="text-xs text-muted-foreground">{runSummary(run)}</span>
-        )}
-        <div className="ml-auto flex items-center gap-1.5">
-          {status === "failed" && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={continueAnyway.isPending || archived}
-              onClick={() => continueAnyway.mutate({ workspaceId })}
-            >
-              Continue anyway
-            </Button>
+      {!noScript && (
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5">
+          <SetupStatusIcon status={status} />
+          <span className="text-sm font-medium">{SETUP_STATUS_TEXT[status]}</span>
+          {run && status !== "running" && (
+            <span className="text-xs text-muted-foreground">{runSummary(run)}</span>
           )}
-          {(hasScript || status !== "none") && (
-            <Button
-              size="sm"
-              variant={status === "failed" ? "default" : "outline"}
-              disabled={rerunSetup.isPending || status === "running" || archived}
-              onClick={() => rerunSetup.mutate({ workspaceId })}
-            >
-              <RotateCwIcon aria-hidden />
-              Rerun setup
-            </Button>
-          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            {status === "failed" && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={continueAnyway.isPending || archived}
+                onClick={() => continueAnyway.mutate({ workspaceId })}
+              >
+                Continue anyway
+              </Button>
+            )}
+            {(hasScript || status !== "none") && (
+              <Button
+                size="sm"
+                variant={status === "failed" ? "default" : "outline"}
+                disabled={rerunSetup.isPending || status === "running" || archived}
+                onClick={() => rerunSetup.mutate({ workspaceId })}
+              >
+                <RotateCwIcon aria-hidden />
+                Rerun setup
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       <SettingsIssues workspace={workspace} />
       {hasScript && (
         <p

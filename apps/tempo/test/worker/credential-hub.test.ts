@@ -2,8 +2,9 @@ import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test"
 import { newId, type WorkspaceSummary } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import type { CredentialDO, SecretStatus } from "../../src/do/credential.ts";
+import { destroyContainer } from "../../src/do/workspace/container.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
-import { seedCredentials, seedProject, seedWorkspace, waitFor, type Seeded } from "./fakes.ts";
+import { internals, seedCredentials, seedProject, seedWorkspace, waitFor, type Seeded } from "./fakes.ts";
 
 // ---------- helpers ----------
 
@@ -547,6 +548,66 @@ describe("CredentialDO Codex auth.json", () => {
       version: 3,
     });
     expect(c.tempod.requestsOf("credential.put")).toHaveLength(0);
+  });
+});
+
+describe("Codex lease lifetime (01 Codex auth.json sync)", () => {
+  const codexWorkspace = async () => {
+    const seeded = await seedProject();
+    await seedCredentials(seeded.userId);
+    const creds = credsFor(seeded.userId);
+    await creds.putSecret("codex.auth_json", codexAuth(new Date().toISOString()), {
+      lastRefresh: Date.now(),
+    });
+    const w = await seedWorkspace(seeded, { agent: "codex", prompt: "Use codex" });
+    await driveToReady(w.stub);
+    await waitFor(async () => (await leaseRows(creds)).includes(w.workspaceId), 5000, "lease added");
+    return { ...w, creds };
+  };
+  const leaseKv = (stub: DurableObjectStub<WorkspaceDO>) =>
+    runInDurableObject(stub, (i: WorkspaceDO) => internals(i).core.kv<boolean>("codexLease") ?? false);
+
+  it("drops the lease when the container stops on its own, and the next Codex session start adds it again", async () => {
+    const w = await codexWorkspace();
+    w.container.running = false;
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      await (i as unknown as { heartbeat(): Promise<void> }).heartbeat();
+    });
+    // 01 Codex auth.json sync 6: CredentialDO "drops it when its container stops".
+    await waitFor(async () => !(await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease dropped");
+    expect(await leaseKv(w.stub)).toBe(false);
+    await driveToReady(w.stub);
+    const sessionId = (
+      await runInDurableObject(w.stub, (_i: unknown, state: DurableObjectState) =>
+        state.storage.sql.exec("SELECT id FROM sessions").one(),
+      )
+    )["id"] as string;
+    const sent = await w.stub.sendPrompt({
+      sessionId,
+      text: "Again",
+      mentions: [],
+      attachmentIds: [],
+      reviewCommentIds: [],
+    });
+    expect(sent.ok).toBe(true);
+    await waitFor(async () => (await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease added again");
+    expect(await leaseKv(w.stub)).toBe(true);
+  });
+
+  it("drops the lease when the DO destroys the container", async () => {
+    const w = await codexWorkspace();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => destroyContainer(internals(i).core, "test"));
+    await waitFor(async () => !(await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease dropped");
+    expect(await leaseKv(w.stub)).toBe(false);
+  });
+
+  it("keeps other workspaces' leases", async () => {
+    const w = await codexWorkspace();
+    const other = newId();
+    await w.creds.addCodexLease(other);
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => destroyContainer(internals(i).core, "test"));
+    await waitFor(async () => !(await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease dropped");
+    expect(await leaseRows(w.creds)).toContain(other);
   });
 });
 

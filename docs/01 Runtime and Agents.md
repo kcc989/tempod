@@ -105,6 +105,8 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]
 
 The Node base image already has user and group `node` at uid/gid 1000. Rename them to `tempo`; creating a second user at uid 1000 fails. `bun run test:tempod:container` builds `container/Dockerfile.test` from the workspace image and runs the daemon tests as `tempo`.
 
+For builds behind a TLS proxy, supply a combined public CA bundle as BuildKit secret `proxy_ca` (`TEMPO_BUILD_CA=<path> bun run test:tempod:container`). Networked steps mount it temporarily and keep TLS verification enabled; the CA is not copied into image layers. Set `TEMPO_TEST_MOUNT_SOURCE=1` on Linux to mount the source and already installed frozen-lockfile dependencies read-only into the complete workspace image instead of building a second test image. Both modes run as uid 1000 with tini as PID 1.
+
 **Size budget.** The image MUST stay under 6 GB so it fits the 16 GB disk of `standard-3` with room for repos and dependencies.
 
 ## Container config and start
@@ -259,7 +261,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 | Session files | `~/.claude/projects/-workspace/<sessionId>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `~/.local/share/opencode/project/<slug>/storage/` | `~/.pi/agent/sessions/`, `~/.pi/pi-acp/session-map.json` |
 | Default mode | `bypassPermissions` | `agent-full-access` | Agent default (`build`) | Agent default |
 | Plan mode | `plan` | `read-only` | `plan` | None |
-| Model choice | ACP config option, category `model` | Same | Same; required in project settings | Same; required in project settings |
+| Model choice | ACP config option, category `model` | Same | Same; `agent.models.opencode` is required | Same; `agent.models.pi` is required |
 | `session/load` | Yes | Yes | Verify in S9 | Yes, through `session-map.json` |
 
 **Rules for every agent**
@@ -282,7 +284,9 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 
 Spike S7 MUST confirm the bin name `mcp-server-playwright` and these flags for the pinned `@playwright/mcp` version.
 
-**ACP version.** Use ACP v1 (stable) through `@agentclientprotocol/sdk` 1.8.0. MUST NOT use v2; it is still a draft. ACP v1 has no `session/set_model`. Set the model with `session/set_config_option` on the option whose category is `model`.
+**Model discovery before workspace creation.** `listModels` addresses the existing WorkspaceDO class at `models:<userId>` as a private discovery instance. It has no workspace, session, turn or D1 workspace row. It starts the pinned image with only the usual tempod token, connects and sends `hello`, then starts and closes a temporary ACP session for each configured agent to read its model config option. It sends no prompts and clones no repository. Credentials use the same socket and TempoOutbound injection paths as workspace agents. Codex leases and refreshed auth are handled the same way. Closing a temporary session checks Codex auth immediately so a pending watcher refresh is delivered before the container is destroyed. Temporary events are acknowledged without storing payloads. The container is destroyed after discovery, with a ten-minute cleanup alarm and inactivity limit as a backstop. Results are cached for fifteen minutes, keyed by credential metadata and image. Concurrent reads share one discovery run.
+
+**ACP version.** Use ACP v1 (stable) through `@agentclientprotocol/sdk` 1.8.0. MUST NOT use v2; it is still a draft. ACP v1 mode config options (category `mode`, type `select`) define the available modes and current selection when advertised. Flatten grouped choices into Tempo’s `modes` and copy `currentValue` into `modeId`; refresh both on config updates. Use `session/set_config_option` to change that mode. Agents exposing the ACP session modes interface use `session/set_mode`. ACP v1 has no `session/set_model`. Set the model with `session/set_config_option` on the option whose category is `model`.
 
 ## Credentials and egress
 
@@ -312,6 +316,8 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 
 **Rule 0** runs before all of these: a request whose host is `APP_HOST` returns 403 (05, Egress control).
 
+**Rule 11** runs right after rule 0: a WebSocket upgrade to `wss://browser.tempo.internal/` goes to `WorkspaceDO.browserConnect(request)` (Browser Run). With `browser.run` off, or any other request to that host, it returns 404. MUST NOT add credentials. It is logged with `rule = 11`.
+
 | # | Match | Action |
 | --- | --- | --- |
 | 1 | Scheme `http:` | Skip rules 2 to 7 and apply rules 8 to 10. MUST NOT add credentials. |
@@ -331,6 +337,12 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 - Built-in agent hosts for `allowlist`: `api.anthropic.com`, `claude.ai`, `console.anthropic.com`, `chatgpt.com`, `auth.openai.com`, `api.openai.com`, `openrouter.ai`, `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `cdn.playwright.dev`, `storage.googleapis.com`. Spike S3 and S4 MUST confirm the full list each agent needs.
 - The default policy is `open`.
 
+**Codex device-code login**
+
+Settings uses device-code login by default, without a workspace or container. CredentialDO follows Codex's device-code exchange at `https://auth.openai.com`: request `/api/accounts/deviceauth/usercode` with the Codex public client ID, show `/codex/device` and the user code, poll `/api/accounts/deviceauth/token`, then exchange the authorization code and PKCE verifier at `/oauth/token` with redirect URI `/deviceauth/callback`. Pending poll responses are 403 or 404. Honor the returned interval (minimum one second), expire after 15 minutes, and bound each request to 15 seconds. Never return or log upstream bodies, device auth IDs, authorization codes, verifiers or tokens. This follows the open-source CLI implementation; upstream changes may require updates.
+
+CredentialDO holds one login attempt in memory per owner; a repeated start returns the active attempt. Eviction expires the attempt and the owner reconnects. Serialize start/poll calls; cancellation, removal or a manual upload invalidates the attempt, including an in-flight exchange. Successful login saves Codex-compatible `auth.json` (including ID/access/refresh tokens, account ID and `last_refresh`) encrypted under `codex.auth_json` and pushes it to existing lease holders. No credentials enter browser storage. Upload remains a fallback.
+
 **Codex `auth.json` sync**
 
 Codex rewrites `auth.json` when its token is about 8 days old or a request returns 401. Parallel containers each hold a copy, so Tempo keeps one newest version and pushes it everywhere.
@@ -341,7 +353,7 @@ Codex rewrites `auth.json` when its token is about 8 days old or a request retur
 4. The WorkspaceDO calls `CredentialDO.offerCodexAuth(content, lastRefresh, workspaceId)`. CredentialDO stores it only if `lastRefresh` is newer, then increments `version`.
 5. CredentialDO calls `pushCodexAuth` on every WorkspaceDO that holds a lease, except the sender. Each sends `credential.put` to its `tempod`.
 6. A WorkspaceDO takes a lease when a `codex` session starts and drops it when its container stops.
-7. If a `codex` turn fails with an error that contains `401` or `refresh_token`, `tempod` sends `credential.invalid {provider: "codex"}`. The UI shows a banner asking for a new upload.
+7. If a `codex` turn fails with an error that contains `401` or `refresh_token`, `tempod` sends `credential.invalid {provider: "codex"}`. The UI shows a banner asking the owner to reconnect in Settings.
 
 **Claude token.** The WorkspaceDO reads it from CredentialDO and sends it in `session.start` as part of the adapter env. `tempod` MUST NOT write it to disk or log it.
 
@@ -352,22 +364,28 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Start a session**
 
 1. The WorkspaceDO inserts the session row with status `starting`.
-2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, acpSessionId: null}`.
+2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, browser, acpSessionId: null}`. `model` is the model chosen for this session (`createSession` or the composer's model picker), else `agent.models.<agent>` from the effective settings, or absent when both are empty. For `opencode` and `pi` with no model, nothing is sent: the session stays `idle` and the turn that waited for it fails with `MODEL_REQUIRED`. `browser` is `"run"` when `browser.run` is true and the egress policy is `open` (Browser Run), else `"local"`.
 3. `tempod` spawns the adapter as user `tempo` with cwd `/workspace` and the given env.
 4. `tempod` sends `initialize`. It checks `agentCapabilities` and stores them. It also reads top-level `_meta.steering.supported`, normalizes it to the boolean `capabilities.steering`, and exposes that flag as `Session.steering`. Missing support means false. Steering uses the ACP v1 `_session/steering` extension, not a concurrent `session/prompt`.
 5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright]}` and stores the returned ACP session id, modes and config options.
-6. If the requested mode differs from the current one, `tempod` sends `session/set_mode`. If a model is set, it sends `session/set_config_option` for the `model` option.
+6. If the requested mode differs from the current one, `tempod` sets the advertised `mode` config option with `session/set_config_option`, or uses `session/set_mode` for agents exposing session modes. If `model` is set, it sends `session/set_config_option` for the `model` option.
 7. `tempod` returns the `session.start` result: `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded: false, handoff: false}`.
 
 **Send a prompt**
 
 - The WorkspaceDO sends `session.prompt {sessionId, turnId, content}`. `content` is a list of ACP content blocks built in this order:
-  1. On the first prompt of a session only: a text block with the project's `prompts.general`, if it is set.
+  1. On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set.
   2. On the first prompt after a handoff only: the handoff text block (below); then clear `handoff_pending`. On any prompt: `sessions.pending_note`, if set (for example, the revert note in 03); then clear it.
   3. One text block per review comment group: `Review comments:` followed by one line per comment, `<path>:<line>: <text>`.
   4. The user's text.
   5. One `resource_link` per @-mentioned file: `uri` = `file:///workspace/<path>`, `name` = the file name.
   6. Images: an `image` block if `promptCapabilities.image` is true; else a `resource_link` to the file saved at `/home/tempo/attachments/<turnId>/<name>`.
+- The turn-summary rule is this fixed text. The web and Mac clients show the last agent message of a turn as its answer (04, Work row), so it must stand alone:
+
+  ```text
+  Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that says what you changed, which checks you ran and their results, and what is left to do. Name the command for each check. Link each file you name as file:///workspace/<path>.
+  ```
+
 - `tempod` calls `session/prompt` and turns every `session/update` into items (02). When `session/prompt` returns, it sends `turn.ended {turnId, stopReason}`.
 - Only one turn runs per workspace at a time, across all its sessions. Other prompts wait in the queue.
 
@@ -385,7 +403,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 
 **Handoff text.** Exactly this first line: `This conversation continues an earlier session that was lost. Here is the transcript so far, oldest first:`. Then one line per item, `User: <text>`, `Agent: <text>` or `Tool: <title>`. Cut from the oldest end so the block is at most 24,000 characters.
 
-**Process limits.** At most 3 adapter processes run at once. To start a fourth, close the least recently used session that has no running turn: send `session/close` if the agent supports it, then SIGTERM. Its status in Tempo stays `idle`.
+**Process limits.** At most 3 adapter processes run at once. Concurrent session starts are serialized so admission and eviction cannot race. If every slot is busy, return `AGENT_START_FAILED` and preserve the running turns. To start a fourth, close the least recently used session that has no running turn: send `session/close` if the agent supports it, then SIGTERM. Its status in Tempo stays `idle`.
 
 **Crashes.** `tempod` keeps the last 200 stderr lines of each adapter. If an adapter exits unexpectedly, it sends `agent.exited {sessionId, code, signal, stderrTail}`. A running turn ends as `failed`.
 
@@ -424,13 +442,13 @@ Scripts work as in Conductor: one setup script, any number of run scripts, one a
 
 **Ports.** The port scanner sends `ports.changed {ports}` when the set of listening ports changes. Each port P becomes a preview.
 
-**Preview URL.** `https://<P>-<workspaceId lowercase>-<previewToken>.<PREVIEW_DOMAIN>`, for example `https://3000-01jaxk3v2m9q8r7t6y5w4e3d2c-k3j9x2m4q8w7e5r1.example-previews.com`. `previewToken` is 16 characters from `[a-z0-9]`, made at workspace creation. Rotating it breaks old links.
+**Preview URL.** `https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>`, for example `https://3000-01jaxk3v2m9q8r7t6y5w4e3d2c.example-previews.com`. The hostname holds no secret. Each request needs the preview cookie for that host, which only the owner can get (05, Preview access).
 
 **Preview request path**
 
-1. The Worker sees a host under `PREVIEW_DOMAIN`. It matches the first label against `^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})-([a-z0-9]{16})$`. No match returns 404.
-2. It calls `WorkspaceDO.previewFetch(request, port, token)`.
-3. The WorkspaceDO compares the token in constant time. A mismatch returns 404, not 403.
+1. The Worker sees a host under `PREVIEW_DOMAIN`. It matches the first label against `^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})$`. No match returns the preview 404 page (05).
+2. A `GET /__tempo/enter` calls `WorkspaceDO.previewEnter(port, code)` (05, Preview access). Any other request calls `WorkspaceDO.previewFetch(request, port, cookie)` with the value of the `__Host-tempo_preview` cookie, after removing that cookie from the request.
+3. The WorkspaceDO checks the cookie (05). A missing or bad cookie returns the preview 404 page, never 401 or 403.
 4. If the container is not running, the DO starts the wake flow. An HTML `GET` gets a small `Waking workspace` page that reloads every 3 s. Any other request gets 503 with `Retry-After: 5`.
 5. The DO forwards to `tempod` at `/v1/proxy/<P>/<path and query>` through `getTcpPort(7070)`. It adds `Authorization: Bearer <TEMPOD_TOKEN>`, `X-Forwarded-Host` and `X-Forwarded-Proto: https`.
 6. `tempod` sets `Host: localhost:<P>` and forwards to `127.0.0.1:<P>`. Dev servers that bind only to localhost work, and host checks such as Vite's pass.
@@ -474,13 +492,19 @@ Agents test in headless Chromium inside their own container, through the Playwri
 - Chromium trusts the Cloudflare containers CA through the NSS database that `tempod` sets up, so HTTPS sites load during tests.
 - Memory: plan on up to 1 GiB for Chromium. This is one reason `standard-3` is the default.
 
-**Browser Run (phase 3, optional)**
+**Browser Run (phase 3, optional, off by default)**
 
-- The Worker creates a Browser Run session and passes its CDP WebSocket URL to `tempod`, which starts the Playwright MCP server with `--cdp-endpoint <url>` for that session.
-- The UI shows the session's Live View URL in a Browser tab. Live View currently sends `frame-ancestors *`, so an iframe works, but this is not documented.
-- The Live View URL carries a JWT that lets anyone control the tab. Treat it as a secret. MUST NOT log it or store it.
-- The site under test must be reachable from Browser Run, so it uses the preview URL.
+With `browser.run = true`, agents drive a Cloudflare Browser Run session instead of the container's Chromium, and the owner can watch and control it in Live View. The container never sees a Cloudflare token or a Live View URL.
+
+- **Config.** The Worker has a Browser Run binding `BROWSER`. Under the `allowlist` egress policy, `browser.run` is ignored and the Setup tab shows `Browser Run is off: it does not pass the egress allowlist.` Browser Run loads other sites from Cloudflare's network, not through `TempoOutbound`.
+- **Start.** `session.start` carries `browser: "run"` (else `"local"`). For `"run"`, `tempod` passes the Playwright MCP server `"--cdp-endpoint", "wss://browser.tempo.internal/"` in place of `"--headless", "--isolated", "--browser", "chromium"`. Playwright MCP connects on its first browser tool call.
+- **CDP.** That connection leaves the container through `TempoOutbound` rule 11, which hands it to `WorkspaceDO.browserConnect(request)`. That reuses the workspace's Browser Run session while `env.BROWSER.getSession` says it is open, or acquires one with `env.BROWSER.acquire({keepAlive: 600000, outboundByHost: {localhost: ctx.exports.BrowserOutbound({props: {workspaceId}})}})`. It stores the session id in `workspace.browser_session_id` and returns the WebSocket from the session-pinned `webSocket` fetcher of `env.BROWSER.connectSession(sessionId)`.
+- **The app under test.** Agents still open `http://localhost:<port>`. Browser Run sends requests for `localhost` to `BrowserOutbound`, which calls `WorkspaceDO.browserFetch(request, port)`. That follows steps 4 to 7 of the preview request path. Port 7070 is refused.
+- **Live View.** `getBrowserLiveView` (02) checks that the session is still open (else it clears `browser_session_id` and returns null), lists the session's targets with `env.BROWSER.devtools.listTargets(sessionId)`, takes the last target of type `page`, and returns `env.BROWSER.getLiveView(sessionId, {targetId, mode: "tab"})`'s `devtoolsFrontendUrl`. The URL is valid for 5 minutes to connect. It carries a JWT that lets anyone control the tab: MUST NOT log it, store it or send it to `tempod`. Live View sends `frame-ancestors *`, so the web UI shows it in an iframe.
+- **State.** `WorkspaceDetail.browserActive` is true while `browser_session_id` is set.
+- **End.** While a session is open, the WorkspaceDO reads `env.BROWSER.getSession(sessionId)` every 60 s. It closes the session with `env.BROWSER.closeSession(sessionId)` and clears `browser_session_id` when the session has had no connection for 60 s, when the container stops, and on archive. It clears `browser_session_id` at once when Browser Run has ended the session itself, which it does after 10 minutes without a connection.
 - Pricing on Workers Paid: 10 browser hours a month included, then $0.09 an hour ([source](https://developers.cloudflare.com/browser-run/pricing/)).
+- Spike S17 MUST confirm the binding calls above, a WebSocket through `TempoOutbound`, and `outboundByHost` for `localhost`.
 
 ## Durability
 
@@ -509,6 +533,7 @@ BASE=$(git merge-base "$PARENT" "origin/$BASE_BRANCH")
 git bundle create /home/tempo/.tempod/ckpt.bundle "refs/tempo/checkpoints/$CHECKPOINT_ID" "^$BASE"
 ```
 
+- Repeating `git.checkpoint` with the same checkpoint id returns that ref’s original tree and regenerates its bundle. It MUST NOT overwrite an existing checkpoint ref with later edits.
 - This MUST NOT change the branch, `HEAD`, or the user's index. It uses its own index file.
 - `.gitignore` applies, so `node_modules` and `.env` files are not in checkpoints. Project secrets come back through env vars; dependencies come back through the setup script.
 - The WorkspaceDO starts every checkpoint with the request `git.checkpoint {checkpointId, turnId, reason}` (02). `tempod` answers `{commit, tree, parent, base, bundlePath, bundleBytes}` or `{unchanged: true}`.
@@ -521,12 +546,12 @@ const backup = new DirectoryBackup(this.ctx.container, this.ctx.exports.Director
   { binding: "DATA", prefix: "homes/" + workspaceId + "/" });
 const rec = await backup.backup({
   dir: "/home/tempo",
-  exclude: [".cache/", ".npm/", "node_modules/", ".tempod/ckpt.bundle",
+  exclude: [".cache/", ".npm/", "node_modules/", ".tempod/",
             ".codex/auth.json", ".claude/.credentials.json"],
 });
 ```
 
-- Credentials MUST be excluded from backups. They come back from CredentialDO.
+- Credentials MUST be excluded from backups. They come back from CredentialDO. Exclude the entire `.tempod/` directory: its SQLite outbox can contain unacknowledged `credential.changed` payloads, and a home restore MUST NOT overwrite the running daemon’s database. A fresh disk starts a new incarnation; snapshots retain the daemon database.
 - Keep the 3 newest backups per workspace. Delete older ones with `backup.delete(rec)`.
 
 **Snapshot.** Call `ctx.container.snapshotContainer({ name: snapshotName })`, where `snapshotName` is `<workspaceId>-<n>`. Store `{id, size, imageRef, createdAt}`. `imageRef` is `ctx.container.images.workspace` at that time.
@@ -556,7 +581,15 @@ A repo MAY hold `.tempo/settings.toml`. Tempo also reads Conductor's files, so a
 ```toml
 [agent]
 default = "claude"              # claude | codex | opencode | pi
-model = ""                      # the agent's model config value; required for opencode and pi
+
+[agent.models]                  # each agent's default model: its model config value; "" = the agent's own default
+claude = ""
+codex = ""
+opencode = ""                   # required to start an OpenCode session
+pi = ""                         # required to start a Pi session
+
+[browser]
+run = false                     # true: agents use Browser Run, watched in Live View; ignored under egress_policy = "allowlist"
 
 [scripts]
 setup = "bun install"

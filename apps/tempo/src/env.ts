@@ -14,6 +14,8 @@ interface TempoEnv {
   readonly TEMPO_ENCRYPTION_KEY: string;
   readonly BETTER_AUTH_SECRET: string;
   readonly TEMPO_SETUP_TOKEN: string;
+  /** Browser Run (01, Browser Run). Absent in local dev and tests. */
+  readonly BROWSER?: BrowserRun;
   /** Optional: version string shown in /api/v1/meta. */
   readonly TEMPO_VERSION?: string;
 }

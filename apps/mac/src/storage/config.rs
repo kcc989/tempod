@@ -10,14 +10,24 @@ pub enum Theme {
     Dark,
 }
 
-/// `config.toml` (07, Local storage): the Tempo URL, the theme, and notifications and sound on or
-/// off. Keys the app does not know are ignored.
+/// Settings → Appearance → Transcript detail (04, Center: Detail).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TranscriptDetail {
+    #[default]
+    Default,
+    Detailed,
+}
+
+/// `config.toml` (07, Local storage): the Tempo URL, the theme, transcript detail, and
+/// notifications and sound on or off. Keys the app does not know are ignored.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     pub theme: Theme,
+    pub transcript_detail: TranscriptDetail,
     pub notifications: bool,
     pub sound: bool,
 }
@@ -27,6 +37,7 @@ impl Default for Config {
         Self {
             url: None,
             theme: Theme::System,
+            transcript_detail: TranscriptDetail::Default,
             notifications: false,
             sound: true,
         }
@@ -53,22 +64,29 @@ mod tests {
         let c = Config::default();
         assert_eq!(c.url, None);
         assert_eq!(c.theme, Theme::System);
+        assert_eq!(c.transcript_detail, TranscriptDetail::Default);
         assert!(!c.notifications);
         assert!(c.sound);
         assert_eq!(Config::parse("").unwrap(), c);
     }
 
     #[test]
-    fn writes_the_four_flat_keys() {
+    fn writes_the_five_flat_keys() {
         let c = Config {
             url: Some("https://tempo.example.com".into()),
             theme: Theme::Dark,
+            transcript_detail: TranscriptDetail::Detailed,
             notifications: true,
             sound: false,
         };
         assert_eq!(
             c.to_toml(),
-            "url = \"https://tempo.example.com\"\ntheme = \"dark\"\nnotifications = true\nsound = false\n"
+            "url = \"https://tempo.example.com\"\ntheme = \"dark\"\ntranscript_detail = \"detailed\"\nnotifications = true\nsound = false\n"
+        );
+        assert!(
+            Config::default()
+                .to_toml()
+                .contains("transcript_detail = \"default\"\n")
         );
         assert!(!Config::default().to_toml().contains("url"));
     }
@@ -80,6 +98,7 @@ mod tests {
         let c = Config {
             url: Some("https://t.example.com/\"quoted\"".into()),
             theme: Theme::Light,
+            transcript_detail: TranscriptDetail::Detailed,
             notifications: true,
             sound: true,
         };
@@ -102,8 +121,25 @@ mod tests {
     }
 
     #[test]
+    fn transcript_detail_parses_both_values() {
+        assert_eq!(
+            Config::parse("transcript_detail = \"detailed\"")
+                .unwrap()
+                .transcript_detail,
+            TranscriptDetail::Detailed
+        );
+        assert_eq!(
+            Config::parse("transcript_detail = \"default\"")
+                .unwrap()
+                .transcript_detail,
+            TranscriptDetail::Default
+        );
+    }
+
+    #[test]
     fn a_wrong_value_does_not_parse() {
         assert!(Config::parse("theme = \"blue\"").is_err());
+        assert!(Config::parse("transcript_detail = \"compact\"").is_err());
         assert!(Config::parse("notifications = \"yes\"").is_err());
         assert!(Config::parse("url = ").is_err());
     }

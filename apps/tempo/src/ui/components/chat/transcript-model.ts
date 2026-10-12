@@ -9,6 +9,8 @@ import {
   type Turn,
 } from "@tempo/protocol";
 import type { DiffLine } from "~/ui/lib/diff";
+import { formatTokens } from "~/ui/lib/format";
+import { foldsIntoWork, type TranscriptDetail } from "./work-model";
 
 /** Pure helpers for the transcript (04, Transcript; 02, Item model). */
 
@@ -21,7 +23,22 @@ export type TranscriptRow =
       /** The item's turn was reverted: 50% opacity. */
       readonly dim: boolean;
     }
-  | { readonly kind: "footer"; readonly key: string; readonly turnId: string; readonly dim: boolean }
+  | {
+      readonly kind: "work";
+      readonly key: string;
+      readonly turnId: string;
+      /** Folded items, in order (04, Work row). */
+      readonly itemIds: ReadonlyArray<string>;
+      readonly dim: boolean;
+    }
+  | {
+      readonly kind: "footer";
+      readonly key: string;
+      readonly turnId: string;
+      readonly dim: boolean;
+      /** The turn has a work row, which shows the duration. */
+      readonly worked: boolean;
+    }
   | { readonly kind: "working"; readonly key: string; readonly turnId: string };
 
 const ENDED = new Set<Turn["status"]>(["completed", "cancelled", "failed", "interrupted"]);
@@ -32,12 +49,14 @@ export const isEnded = (t: Pick<Turn, "status">): boolean => ENDED.has(t.status)
  * The rows of one session's transcript. A user message of a queued turn shows as a chip above the
  * composer, so it is left out; one whose turn was deleted is gone. A started turn's user message
  * sits at the turn's start, so prompts that waited in the queue come after the turn before them.
- * Each ended turn gets a footer; a running turn gets a working row at the end.
+ * Each ended turn gets a footer; a running turn gets a working row at the end. In Default detail a
+ * turn's work items fold into one work row, placed before the turn's first other item.
  */
 export const buildTranscriptRows = (
   order: ReadonlyArray<string>,
   items: Readonly<Record<string, Item>>,
   turns: Readonly<Record<string, Turn>>,
+  detail: TranscriptDetail = "default",
 ): TranscriptRow[] => {
   const placed: Array<{ item: Item; at: number; rank: number; index: number }> = [];
   order.forEach((id, index) => {
@@ -59,15 +78,43 @@ export const buildTranscriptRows = (
     if (p.item.turnId) last.set(p.item.turnId, i);
   });
 
+  const folded = new Map<string, string[]>();
+  if (detail === "default") {
+    const lastMessage = new Map<string, string>();
+    for (const p of placed)
+      if (p.item.kind === "agent_message" && p.item.turnId) lastMessage.set(p.item.turnId, p.item.id);
+    for (const p of placed) {
+      const turnId = p.item.turnId;
+      if (!turnId || !turns[turnId] || !foldsIntoWork(p.item, lastMessage.get(turnId))) continue;
+      const ids = folded.get(turnId) ?? [];
+      ids.push(p.item.id);
+      folded.set(turnId, ids);
+    }
+  }
+
   const rows: TranscriptRow[] = [];
+  const placedWork = new Set<string>();
   let running: Turn | undefined;
   placed.forEach((p, i) => {
     const turn = p.item.turnId ? turns[p.item.turnId] : undefined;
     const dim = turn?.reverted === true;
-    rows.push({ kind: "item", key: p.item.id, itemId: p.item.id, turnId: p.item.turnId, dim });
+    const work = turn ? folded.get(turn.id) : undefined;
+    if (turn && work && p.item.kind !== "user_message" && !placedWork.has(turn.id)) {
+      placedWork.add(turn.id);
+      rows.push({ kind: "work", key: `work:${turn.id}`, turnId: turn.id, itemIds: work, dim });
+    }
+    if (!work?.includes(p.item.id))
+      rows.push({ kind: "item", key: p.item.id, itemId: p.item.id, turnId: p.item.turnId, dim });
     if (!turn || last.get(turn.id) !== i) return;
-    if (isEnded(turn)) rows.push({ kind: "footer", key: `footer:${turn.id}`, turnId: turn.id, dim });
-    else if (turn.status === "running") running = turn;
+    if (isEnded(turn))
+      rows.push({
+        kind: "footer",
+        key: `footer:${turn.id}`,
+        turnId: turn.id,
+        dim,
+        worked: work !== undefined,
+      });
+    else if (turn.status === "running" && !work) running = turn;
   });
   if (running) rows.push({ kind: "working", key: `working:${running.id}`, turnId: running.id });
   return rows;
@@ -323,3 +370,10 @@ export const turnOutcome = (turn: Pick<Turn, "status" | "stopReason">): string |
 
 export const turnDuration = (turn: Pick<Turn, "startedAt" | "endedAt">): number | null =>
   turn.startedAt !== null && turn.endedAt !== null ? Math.max(0, turn.endedAt - turn.startedAt) : null;
+
+/** The footer's token text, from the usage the agent reported for this turn. */
+export const turnTokens = (turn: Pick<Turn, "usage">): string | null => {
+  const u = turn.usage;
+  if (!u) return null;
+  return `${formatTokens(u.totalTokens)} tokens (${formatTokens(u.inputTokens)} in, ${formatTokens(u.outputTokens)} out)`;
+};

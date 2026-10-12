@@ -1,4 +1,4 @@
-import type { CredentialStatus } from "@tempo/protocol";
+import { DEFAULT_SETTINGS, type CredentialStatus, type Settings } from "@tempo/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   agentMenu,
@@ -31,20 +31,52 @@ afterEach(() => {
 });
 
 describe("new chat menu", () => {
+  const models = (over: Partial<Settings["agent"]["models"]> = {}): Settings => ({
+    ...DEFAULT_SETTINGS,
+    agent: {
+      ...DEFAULT_SETTINGS.agent,
+      models: { claude: "", codex: "", opencode: "m/oc", pi: "m/pi", ...over },
+    },
+  });
+
   it("disables agents without a login (claude: claude or anthropic; codex: codex or openai; opencode and pi: openrouter)", () => {
     const enabled = (s: CredentialStatus) =>
-      agentMenu(s)
+      agentMenu(s, models())
         .filter((e) => e.enabled)
         .map((e) => e.agent);
     expect(enabled(status())).toEqual([]);
     expect(enabled(status({ anthropic: on }))).toEqual(["claude"]);
     expect(enabled(status({ openai: on }))).toEqual(["codex"]);
     expect(enabled(status({ openrouter: on }))).toEqual(["opencode", "pi"]);
-    expect(agentMenu(status()).map((e) => e.label)).toEqual(["Claude", "Codex", "OpenCode", "Pi"]);
+    expect(agentMenu(status(), models()).map((e) => e.label)).toEqual(["Claude", "Codex", "OpenCode", "Pi"]);
+    expect(agentMenu(status(), models()).map((e) => e.hint)).toEqual(Array(4).fill("Add login in Settings"));
   });
 
-  it("offers every agent while the status loads", () => {
-    expect(agentMenu(undefined).every((e) => e.enabled)).toBe(true);
+  it("disables OpenCode and Pi with an empty agent.models.<agent> (04, Tabs)", () => {
+    const all = status({ claude: on, codex: { ...on, lastRefresh: 1 }, openrouter: on });
+    const menu = agentMenu(all, models({ opencode: "" }));
+    expect(menu.map((e) => [e.agent, e.enabled, e.hint])).toEqual([
+      ["claude", true, null],
+      ["codex", true, null],
+      ["opencode", false, "Set a model in Settings → Project"],
+      ["pi", true, null],
+    ]);
+    expect(
+      agentMenu(all, DEFAULT_SETTINGS)
+        .filter((e) => !e.enabled)
+        .map((e) => e.agent),
+    ).toEqual(["opencode", "pi"]);
+    // A missing login is the first thing to fix.
+    expect(agentMenu(status(), DEFAULT_SETTINGS)[2]!.hint).toBe("Add login in Settings");
+  });
+
+  it("offers every agent while the status and settings load", () => {
+    expect(agentMenu(undefined, null).every((e) => e.enabled && e.hint === null)).toBe(true);
+    expect(
+      agentMenu(undefined, DEFAULT_SETTINGS)
+        .filter((e) => e.enabled)
+        .map((e) => e.agent),
+    ).toEqual(["claude", "codex"]);
   });
 });
 

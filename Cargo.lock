@@ -7043,6 +7043,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempo-client",
  "tempo-protocol",
+ "tempo-terminal",
  "toml 0.8.23",
 ]
 

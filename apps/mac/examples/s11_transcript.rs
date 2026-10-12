@@ -57,6 +57,7 @@ fn content(rows: usize) -> MainWindowContent {
             label: (*project).into(),
             rows: (0..8)
                 .map(|w| SidebarRow {
+                    summary: None,
                     id: format!("w{p}{w}").into(),
                     title: format!("Workspace {}", p * 8 + w + 1).into(),
                     detail: format!("tempo/branch-{w} · city-{w}").into(),
@@ -96,6 +97,7 @@ fn main() {
         .with_http_client(image_policy::blocked_http_client())
         .run(move |cx: &mut App| {
             gpui_kit::init(cx);
+            cx.set_global(tempo_mac::storage::Local::load(None));
             keymap::bind(cx);
             menus::set(cx);
             let (handle, view) = main_window::open(content(args.rows), cx).expect("open window");

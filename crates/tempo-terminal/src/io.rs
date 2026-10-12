@@ -24,9 +24,9 @@ pub struct TerminalRemote {
 }
 
 impl TerminalIo {
-    /// Two unbounded channels: one end for the view, one for the bridge.
+    /// Output is bounded so the parser applies backpressure to the socket bridge.
     pub fn pair() -> (TerminalIo, TerminalRemote) {
-        let (output_tx, output_rx) = async_channel::unbounded();
+        let (output_tx, output_rx) = async_channel::bounded(1024);
         let (input_tx, input_rx) = async_channel::unbounded();
         (
             TerminalIo {

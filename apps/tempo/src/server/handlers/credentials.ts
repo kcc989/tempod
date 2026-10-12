@@ -1,5 +1,5 @@
 import { waitUntil } from "cloudflare:workers";
-import { TempoError, type FnInput, type FnOutput } from "@tempo/protocol";
+import { TempoError, unwrap, type FnInput, type FnOutput } from "@tempo/protocol";
 import { and, eq, isNull } from "drizzle-orm";
 import { workspaces } from "../../db/d1.ts";
 import { SECRET_KEYS, projectEnvKey } from "../../do/credential.ts";
@@ -68,6 +68,22 @@ export const setCodexAuth = async (
 ): Promise<FnOutput<"setCodexAuth">> => {
   const { lastRefresh } = parseCodexAuth(authJson);
   await creds(c).replaceCodexAuth(authJson, lastRefresh);
+  return {};
+};
+
+export const startCodexLogin = async (c: HandlerCtx): Promise<FnOutput<"startCodexLogin">> =>
+  unwrap(await creds(c).startCodexLogin());
+
+export const pollCodexLogin = async (
+  c: HandlerCtx,
+  { loginId }: FnInput<"pollCodexLogin">,
+): Promise<FnOutput<"pollCodexLogin">> => unwrap(await creds(c).pollCodexLogin(loginId));
+
+export const cancelCodexLogin = async (
+  c: HandlerCtx,
+  { loginId }: FnInput<"cancelCodexLogin">,
+): Promise<FnOutput<"cancelCodexLogin">> => {
+  await creds(c).cancelCodexLogin(loginId);
   return {};
 };
 

@@ -60,8 +60,8 @@ export function FieldRow({
   const source = state.set ? "tempo" : effectiveLeaf(def, ctx).source;
 
   return (
-    <div role="group" aria-labelledby={`${id}-label`} className="grid gap-1.5 py-2.5">
-      <div className="flex items-start gap-3">
+    <div role="group" aria-labelledby={`${id}-label`} className="grid gap-3 py-6">
+      <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <span id={`${id}-label`} className="text-sm font-medium">
             {def.label}
@@ -372,9 +372,7 @@ function EnvRowsEditor({
     onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
   return (
     <div id={id} className="grid gap-2">
-      <p className="text-xs text-muted-foreground">
-        Stored as plain text. Put keys and tokens in secrets below.
-      </p>
+      <p className="text-xs text-muted-foreground">Stored as plain text. Put keys and tokens in Secrets.</p>
       {rows.map((r, i) => (
         <div key={r.key} className="grid grid-cols-[10rem_minmax(0,1fr)_auto] items-center gap-1.5">
           <Input

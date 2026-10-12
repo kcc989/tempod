@@ -1,0 +1,79 @@
+{
+  "agent": "claude",
+  "bin": "/usr/local/bin/claude-agent-acp",
+  "live": false,
+  "agentInfo": {
+    "name": "@agentclientprotocol/claude-agent-acp",
+    "title": "Claude Agent",
+    "version": "0.89.1"
+  },
+  "agentCapabilities": {
+    "_meta": {
+      "claudeCode": {
+        "promptQueueing": true
+      },
+      "authStatus": {}
+    },
+    "promptCapabilities": {
+      "image": true,
+      "embeddedContext": true
+    },
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "auth": {
+      "logout": {}
+    },
+    "providers": {},
+    "loadSession": true,
+    "sessionCapabilities": {
+      "additionalDirectories": {},
+      "close": {},
+      "delete": {},
+      "fork": {},
+      "list": {},
+      "resume": {},
+      "subagents": {}
+    }
+  },
+  "authMethods": [],
+  "modes": [
+    "default",
+    "acceptEdits",
+    "plan",
+    "auto",
+    "bypassPermissions"
+  ],
+  "currentModeId": "default",
+  "configOptions": [
+    {
+      "id": "mode",
+      "type": "select",
+      "category": "mode"
+    },
+    {
+      "id": "model",
+      "type": "select",
+      "category": "model"
+    },
+    {
+      "id": "effort",
+      "type": "select",
+      "category": "thought_level"
+    },
+    {
+      "id": "fast",
+      "type": "select",
+      "category": "model_config"
+    }
+  ],
+  "setMode": "bypassPermissions",
+  "loadBeforeAnyTurn": {
+    "ok": false,
+    "error": "Resource not found: 100da9bd-dedc-4bab-a73e-14b61b01ee9d",
+    "replayedUpdates": 0
+  },
+  "environment": "complete production Linux image; no real agent credentials; CONFORMANCE_LIVE=0",
+  "imageId": "sha256:2928ec1c55dce72aeef9f1e2bf37ee622d853e9245aa9d36cbb2ca25a26cc343"
+}

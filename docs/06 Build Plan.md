@@ -70,6 +70,7 @@ Each spike is throwaway code in its own branch that answers one question. Its re
 | S8 | Do previews work for real dev servers? | A Vite dev server bound to `127.0.0.1` loads through the preview URL, and hot reload over WebSocket works. A sleeping workspace shows the wake page. | — |
 | S9 | Do OpenCode and Pi work through ACP? | `opencode acp` and `pi-acp` complete 3 turns each with OpenRouter via the placeholder swap. Record whether `session/load` works for each. | R6 |
 | S10 | Does the terminal work through the DO? | PTY `exec` with tmux over the DO WebSocket. Resize works. A reconnect gets the same session and scrollback. | — |
+| S17 | Does Browser Run work as 01 uses it? | Playwright MCP in the container connects over `wss://browser.tempo.internal/` through `TempoOutbound` to a session from `env.BROWSER.acquire`. The remote browser loads `http://localhost:<port>` through `outboundByHost`. Live View shows the page in an iframe on `APP_HOST`. `closeSession` ends it. | — |
 
 ## Acceptance tests
 
@@ -99,7 +100,7 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-13 | Revert restores the exact tree of the chosen checkpoint, shows the marker, and the next prompt carries the revert note. |
 | AT-14 | A repo with only `.conductor/settings.toml` runs its setup and run scripts, with `CONDUCTOR_PORT` set. |
 | AT-15 | A terminal runs commands; after a reconnect, the session and scrollback are still there. |
-| AT-16 | A Vite preview works with hot reload. Rotating the token breaks the old link. An agent passes a Playwright MCP check on `localhost`. |
+| AT-16 | A Vite preview opened from Tempo works with hot reload, also in a Browser tab. The bare preview URL in a fresh browser shows the preview 404 page. Reset preview access stops an open preview. An agent passes a Playwright MCP check on `localhost`. |
 
 **Gate D: Phase 3**
 
@@ -110,7 +111,10 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-19 | Archive, restore, wake: transcript and files are intact. |
 | AT-20 | With the `allowlist` policy, a host not on the list gets 403 and an `egress_log` row. `APP_HOST` is blocked under both policies. |
 | AT-21 | At phone width: list workspaces, read a live transcript, send a prompt, approve a permission. |
-| AT-22 | Every shortcut in 04 works in Chrome, Safari and Firefox on macOS. |
+| AT-22 | Every shortcut in 04 works in Chrome on macOS. |
+| AT-38 | A workspace created from a PR shows `#<number> ↗` and the PR state at once; Create PR is not offered. |
+| AT-39 | With `browser.run = true`, an agent checks the app on `localhost` in Browser Run, and the Live View tab shows it. Under `allowlist`, the agent uses local Chromium. |
+| AT-40 | An OpenCode chat with no `agent.models.opencode` is disabled in the New chat menu; a queued OpenCode turn fails with `MODEL_REQUIRED`. |
 
 **Also at Gate D:** during a full e2e run, grep all Worker logs, `events` rows and R2 objects for the test credentials' values. Zero matches is required.
 

@@ -11,3 +11,6 @@ publish.workspace = true
 alacritty_terminal = { version = "=0.25.1", default-features = false }
 async-channel = "=2.5.0"
 gpui-kit = { version = "=0.7.1" }
+
+[dev-dependencies]
+gpui-kit = { version = "=0.7.1", features = ["test-support"] }

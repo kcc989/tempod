@@ -28,8 +28,18 @@ export const HostPattern = Schema.String.check(
 
 export const EnvName = Schema.String.check(Schema.isPattern(/^[A-Z_][A-Z0-9_]*$/));
 
+/** Each agent's default model: its `model` config value; "" means the agent's own default. */
+export const AgentModels = Schema.Struct({
+  claude: Schema.String,
+  codex: Schema.String,
+  opencode: Schema.String,
+  pi: Schema.String,
+});
+export type AgentModels = typeof AgentModels.Type;
+
 export const Settings = Schema.Struct({
-  agent: Schema.Struct({ default: AgentId, model: Schema.String }),
+  agent: Schema.Struct({ default: AgentId, models: AgentModels }),
+  browser: Schema.Struct({ run: Schema.Boolean }),
   scripts: Schema.Struct({
     setup: Schema.String,
     archive: Schema.String,
@@ -54,7 +64,8 @@ export const Settings = Schema.Struct({
 export type Settings = typeof Settings.Type;
 
 export const DEFAULT_SETTINGS: Settings = {
-  agent: { default: "claude", model: "" },
+  agent: { default: "claude", models: { claude: "", codex: "", opencode: "", pi: "" } },
+  browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
   environment: {
     instance: "standard-3",
@@ -71,7 +82,20 @@ const opt = Schema.optional;
 
 /** One settings layer: every key optional. Used for files and for the project's UI overrides. */
 export const SettingsLayer = Schema.Struct({
-  agent: opt(Schema.Struct({ default: opt(AgentId), model: opt(Schema.String) })),
+  agent: opt(
+    Schema.Struct({
+      default: opt(AgentId),
+      models: opt(
+        Schema.Struct({
+          claude: opt(Schema.String),
+          codex: opt(Schema.String),
+          opencode: opt(Schema.String),
+          pi: opt(Schema.String),
+        }),
+      ),
+    }),
+  ),
+  browser: opt(Schema.Struct({ run: opt(Schema.Boolean) })),
   scripts: opt(
     Schema.Struct({
       setup: opt(Schema.String),
