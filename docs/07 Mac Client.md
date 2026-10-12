@@ -37,7 +37,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Permission cards, plan mode, model and mode pickers | Same |  |
 | Attachments, @-mentions, `/` commands | Same | Also accepts files dragged from Finder |
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
-| All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode |
+| All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
 | Checks | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
 | Previews | Different | Open in the default browser; no Browser tab |
@@ -151,7 +151,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Sidebar | `Sidebar`; rows are custom; `HoverCard`; `Menu` for the right-click menu; `Badge` for the PR; `Spinner` |
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
 | Center tabs | `Tabs` |
-| Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for thoughts, tool calls and handoff |
+| Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
 | Composer | `Textarea` (grows from 1 to 12 rows); `Select` for model and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
 | Changes, Checks | `VirtualList`, `Badge`, `Tag` |
 | All files | `Tree` |
@@ -181,7 +181,9 @@ Behavior follows 04, Center. These rules are for the Mac app only.
 - **No remote images (05).** Wrap the transcript in an `ImageCache` whose `load` refuses `http://` and `https://` URIs, and show those images as links. Images from ACP `image` blocks load from their inline data.
 - **Links.** Install `on_link_click`. Open `http` and `https` URLs in the default browser. A `file:///workspace/<path>` link opens a file tab at that path. Ignore every other scheme.
 - **Streaming.** On `item.delta`, append the text to the item and call `remeasure_items` for that row only.
-- **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control. Each chat tab keeps its own scroll position.
+- **Work rows.** Group, label and count items exactly as 04, Work row, Work types and Tool call labels, with the same Default and Detailed detail. Put the rules in `src/views/chat_model.rs` so they are tested without a window.
+- **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control on an opaque background, as 04. Each chat tab keeps its own scroll position.
+- **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right and bottom panels: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
 - **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
 - **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.
@@ -246,7 +248,7 @@ The app stores no workspace data on disk. This table is the full list of what it
 | What | Where |
 | --- | --- |
 | Session token | Keychain, generic password, service `dev.tempo.mac`, account = the Tempo host |
-| Tempo URL, theme, notifications on or off, sound on or off | `~/Library/Application Support/dev.tempo.mac/config.toml` |
+| Tempo URL, theme, transcript detail, notifications on or off, sound on or off | `~/Library/Application Support/dev.tempo.mac/config.toml` |
 | Pane sizes, open panels, sort order, last workspace, composer drafts, diff viewed marks | `~/Library/Application Support/dev.tempo.mac/state.json` |
 | Logs | `~/Library/Logs/Tempo/tempo.log`: JSON lines, 5 files of 5 MB each |
 

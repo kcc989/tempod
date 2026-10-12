@@ -105,6 +105,10 @@ export interface WorkspaceUiState {
   readonly diffScope: DiffScope;
   readonly rightTab: RightTab;
   readonly bottomTab: BottomTab;
+  /** Sleeping, or no changes and no PR: the right side starts closed (04, Right and bottom panels). */
+  readonly rightQuiet: boolean;
+  /** The user opened the right side while quiet. Not kept. */
+  readonly rightPinned: boolean;
 }
 
 const emptyWorkspaceUi: WorkspaceUiState = {
@@ -116,6 +120,8 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   diffScope: "branch",
   rightTab: "changes",
   bottomTab: "setup",
+  rightQuiet: false,
+  rightPinned: false,
 };
 
 const workspaceStores = new Map<string, Store<WorkspaceUiState>>();
@@ -306,15 +312,30 @@ export const setRightTab = (workspaceId: string, rightTab: RightTab): void =>
 export const setBottomTab = (workspaceId: string, bottomTab: BottomTab): void =>
   update(workspaceId, (s) => (s.bottomTab === bottomTab ? s : { ...s, bottomTab }));
 
+export const setRightQuiet = (workspaceId: string, rightQuiet: boolean): void =>
+  update(workspaceId, (s) => (s.rightQuiet === rightQuiet ? s : { ...s, rightQuiet }));
+
+const pinRight = (workspaceId: string | null): void => {
+  if (workspaceId) update(workspaceId, (s) => (s.rightPinned ? s : { ...s, rightPinned: true }));
+};
+
+/** Whether the right side shows for this workspace: the layout choice, unless it starts closed. */
+export const isRightOpen = (
+  layout: Pick<LayoutState, "rightOpen">,
+  ui: Pick<WorkspaceUiState, "rightQuiet" | "rightPinned">,
+): boolean => layout.rightOpen && (ui.rightPinned || !ui.rightQuiet);
+
 /** Selects a right-panel tab and makes sure the right side is open. */
 export const showRightTab = (workspaceId: string, tab: RightTab): void => {
   setRightTab(workspaceId, tab);
+  pinRight(workspaceId);
   setLayout({ rightOpen: true });
 };
 
 /** Selects a bottom-panel tab and makes sure the right side and the bottom panel are open. */
 export const showBottomTab = (workspaceId: string, tab: BottomTab): void => {
   setBottomTab(workspaceId, tab);
+  pinRight(workspaceId);
   setLayout({ rightOpen: true, bottomOpen: true });
 };
 
@@ -389,14 +410,26 @@ export const setLayout = (patch: Partial<LayoutState>): void => {
 /** ⌘B. */
 export const toggleSidebar = (): void => setLayout({ sidebarOpen: !getLayout().sidebarOpen });
 
-/** ⌘⌥B. */
-export const toggleRight = (): void => setLayout({ rightOpen: !getLayout().rightOpen });
+const shownRight = (l: LayoutState): boolean =>
+  l.lastWorkspaceId ? isRightOpen(l, getWorkspaceUi(l.lastWorkspaceId)) : l.rightOpen;
+
+/** ⌘⌥B. Opening pins the right side for the open workspace; closing is kept as the layout choice. */
+export const toggleRight = (): void => {
+  const l = getLayout();
+  if (shownRight(l)) setLayout({ rightOpen: false });
+  else {
+    pinRight(l.lastWorkspaceId);
+    setLayout({ rightOpen: true });
+  }
+};
 
 /** ⌥J. The bottom panel lives in the right side, so opening it also opens the right side. */
 export const toggleBottom = (): void => {
   const l = getLayout();
-  if (!l.rightOpen) setLayout({ rightOpen: true, bottomOpen: true });
-  else setLayout({ bottomOpen: !l.bottomOpen });
+  if (!shownRight(l)) {
+    pinRight(l.lastWorkspaceId);
+    setLayout({ rightOpen: true, bottomOpen: true });
+  } else setLayout({ bottomOpen: !l.bottomOpen });
 };
 
 export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePane });

@@ -374,6 +374,10 @@ export const HANDOFF_FIRST_LINE =
   "This conversation continues an earlier session that was lost. Here is the transcript so far, oldest first:";
 export const HANDOFF_MAX_CHARS = 24_000;
 
+/** Turn-summary rule (01, Send a prompt, block 1). */
+export const TURN_SUMMARY_RULE =
+  "Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that says what you changed, which checks you ran and their results, and what is left to do. Name the command for each check. Link each file you name as file:///workspace/<path>.";
+
 export const revertNote = (seq: number): string =>
   `Note: the user reverted the files to the state after turn ${seq}. Changes made after that point are gone.`;
 

@@ -59,6 +59,7 @@ test("file dialogs and Run shortcut remain available with the right side hidden"
   await expect(page.getByText("Read only", { exact: true })).toBeVisible();
   await page.keyboard.press(`${mod}+Shift+f`);
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Search text" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeHidden();
   app.setRunScript();

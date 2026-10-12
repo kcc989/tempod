@@ -19,8 +19,7 @@ export type WorkspaceBanner =
       readonly message: string;
       readonly detail: string | null;
     }
-  | { readonly kind: "setupFailed" }
-  | { readonly kind: "sleeping" };
+  | { readonly kind: "setupFailed" };
 
 export interface StepRow {
   readonly key: string;
@@ -69,7 +68,6 @@ export const workspaceBanners = (
   ) {
     out.push({ kind: "setupFailed" });
   }
-  if (ws.state === "sleeping") out.push({ kind: "sleeping" });
   return out;
 };
 

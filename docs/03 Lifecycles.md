@@ -41,7 +41,7 @@ Only these transitions are allowed. Any other change of `workspace.state` is a b
 
 Open UI sockets do not count. A tab left open all day MUST NOT keep a container running.
 
-**Wake triggers:** `sendPrompt`, `createSession`, a terminal WebSocket, a preview request, `wakeWorkspace`, `rerunSetup`, `runScript`. Read calls that need the container (`getChanges`, `getFileDiff`, `listFiles`, `readFile`, `searchFiles`) return `CONTAINER_NOT_READY` and also start a wake.
+**Wake triggers:** `sendPrompt`, `createSession`, a terminal WebSocket, a preview request, `wakeWorkspace`, `rerunSetup`, `runScript`. Read calls that need the container (`getChanges`, `getFileDiff`, `searchFiles`) return `CONTAINER_NOT_READY` and also start a wake. While sleeping, `listFiles` and `readFile` use the DO's last synced file cache. Cache misses return `CONTAINER_NOT_READY` without waking; the user can explicitly wake to browse current files. In other states these calls still require a ready container.
 
 **Unplanned restarts.** At most 3 in any 60 minutes, tracked in `workspace.auto_restarts_json`. The 4th goes to `error` with `CONTAINER_START_FAILED`.
 

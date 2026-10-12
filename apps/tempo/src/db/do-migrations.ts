@@ -241,6 +241,18 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
       "ALTER TABLE turns ADD COLUMN steering_pending INTEGER NOT NULL DEFAULT 0 CHECK (steering_pending IN (0, 1))",
     ],
   },
+  {
+    tag: "0002_file_cache",
+    when: 1791849600000,
+    statements: [
+      `CREATE TABLE file_cache (
+  path           TEXT PRIMARY KEY,
+  response_json  TEXT,
+  bytes          INTEGER NOT NULL DEFAULT 0,
+  updated_at     INTEGER NOT NULL DEFAULT 0
+)`,
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

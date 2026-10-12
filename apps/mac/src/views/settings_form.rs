@@ -1,7 +1,7 @@
-use crate::storage::{Local, Theme as SavedTheme};
+use crate::storage::{Local, Theme as SavedTheme, TranscriptDetail};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
-use gpui_kit::component::{Disableable as _, Theme, ThemeMode, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Selectable as _, Theme, ThemeMode, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
     Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task, Window, div,
@@ -1032,9 +1032,9 @@ impl Render for SettingsForm {
                         )
                 }))
                 .into_any_element(),
-            2 => h_flex()
+            2 => v_flex()
                 .gap_2()
-                .children(
+                .child(h_flex().gap_2().child("Theme").children(
                     [
                         ("System", SavedTheme::System),
                         ("Light", SavedTheme::Light),
@@ -1058,6 +1058,24 @@ impl Render for SettingsForm {
                                 }
                             })
                     }),
+                ))
+                .child(
+                    h_flex().gap_2().child("Transcript detail").children(
+                        [
+                            ("Default", TranscriptDetail::Default),
+                            ("Detailed", TranscriptDetail::Detailed),
+                        ]
+                        .map(|(label, detail)| {
+                            let current = cx.global::<Local>().config().transcript_detail;
+                            Button::new(SharedString::from(format!("detail-{label}")))
+                                .label(label)
+                                .selected(current == detail)
+                                .on_click(move |_, _, cx| {
+                                    cx.global_mut::<Local>()
+                                        .update_config(|c| c.transcript_detail = detail);
+                                })
+                        }),
+                    ),
                 )
                 .into_any_element(),
             _ => {
