@@ -349,3 +349,8 @@ The web-only first-run message now directs the owner to the private setup link i
 ## GitHub App private-email sign-in
 
 An owner sign-in returned `email_not_found` after OAuth. The configured App exists and sign-in initiation returns 200, but the owner has no public GitHub email. Better Auth 1.7.7 reads `/user/emails` and requires an email for its callback; the original manifest omitted the GitHub App account permission needed by that endpoint. The manifest and 05 now request `email_addresses: read`, covered by the manifest-form Worker regression. Existing Apps need the same permission enabled in GitHub settings and renewed user consent if prompted. No identity fallback, synthetic email, public-email requirement, owner-check change or credential rotation was added.
+
+
+## Existing workspace migration ordering
+
+The first hosted existing-workspace check exposed `DrizzleError: Rollback` on workspace reads and WebSocket upgrades. The file-cache release already recorded migration timestamp 1791849600000, while merged turn usage had been inserted before it at 1791835200000. Drizzle uses the latest timestamp, so it skipped adding `turns.usage_json`; the later status-table rebuild then rolled back. The turn-usage entry now follows the existing file-cache timestamp, before its consumers. Already-upgraded workspaces have later journal entries and do not reapply it. Regression tests reproduce both released schemas, preserve sessions/turns/cached files and verify a second migration run. No workspace state is deleted or manually rewritten, and this fix does not change token accounting semantics.
