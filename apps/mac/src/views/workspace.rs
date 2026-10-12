@@ -38,6 +38,10 @@ impl Render for QueuedDrag {
     }
 }
 
+/// Something showed a right or bottom tab; the main window opens the right side (04, Right and
+/// bottom panels).
+pub struct RevealRight;
+
 struct QueueEditor {
     turn_id: String,
     input: Entity<TextareaState>,
@@ -80,8 +84,14 @@ pub struct WorkspaceView {
     close_timeout: Option<Task<()>>,
     new_chat_menu: Option<Entity<PopupMenu>>,
     new_chat_dismiss: Option<Subscription>,
+    detail: chat_model::TranscriptDetail,
+    /// Opened explicitly this app session, so it stays open while the workspace is quiet.
+    pub right_opened: bool,
+    _detail_changed: Subscription,
     _store_changed: Subscription,
 }
+
+impl gpui_kit::EventEmitter<RevealRight> for WorkspaceView {}
 
 impl WorkspaceView {
     pub fn new(
@@ -159,7 +169,16 @@ impl WorkspaceView {
                 }
             })
         });
+        let detail_changed =
+            cx.observe_global_in::<crate::storage::Local>(window, |this, window, cx| {
+                if transcript_detail(cx) != this.detail {
+                    this.sync(window, cx);
+                }
+            });
         let mut view = Self {
+            detail: transcript_detail(cx),
+            right_opened: false,
+            _detail_changed: detail_changed,
             processes,
             review,
             review_comments: vec![],
@@ -241,8 +260,23 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if matches!(
+            action.name(),
+            "tempo::CommitAndPush"
+                | "tempo::ToggleRun"
+                | "tempo::OpenFile"
+                | "tempo::SearchFiles"
+                | "tempo::ShowDiff"
+                | "tempo::NextFile"
+                | "tempo::PreviousFile"
+                | "tempo::ToggleDiffScope"
+                | "tempo::ShowChanges"
+        ) {
+            self.reveal_right(cx);
+        }
         match action.name() {
             "tempo::NewChat" => self.open_new_chat(window, cx),
+            "tempo::ShowChanges" => self.review.update(cx, |r, cx| r.show_changes(cx)),
             "tempo::CloseTab" => self.close_active(window, cx),
             "tempo::CreatePr" => self.operation("Create PR", window, cx),
             "tempo::Merge" => self.operation("Merge", window, cx),
@@ -648,7 +682,21 @@ impl WorkspaceView {
                     .on_click(move |_, _, cx| cx.open_url(&port.url))
             }))
             .child(div().flex_1())
-            .child(
+            .child(if sleep {
+                Button::new("wake-pill")
+                    .label(pill)
+                    .tooltip("Wake. Sending a message also wakes it.")
+                    .disabled(self.operation_pending)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.mutate::<api::WakeWorkspace>(
+                            p::WakeWorkspaceIn {
+                                workspace_id: this.store.read(cx).workspace_id.clone(),
+                            },
+                            cx,
+                        )
+                    }))
+                    .into_any_element()
+            } else {
                 div()
                     .text_color(color(
                         if w.state == p::WorkspaceState::Error {
@@ -658,18 +706,23 @@ impl WorkspaceView {
                         },
                         cx,
                     ))
-                    .child(pill),
-            )
+                    .child(pill)
+                    .into_any_element()
+            })
             .children(primary.map(|label| {
                 Button::new("primary-action")
                     .label(label)
                     .disabled(self.operation_pending)
                     .on_click(cx.listener(move |this, _, window, cx| match label {
                         "Commit and push" => {
+                            this.reveal_right(cx);
                             this.review.update(cx, |r, cx| r.request_commit(window, cx))
                         }
                         "Archive" => this.archive(cx),
-                        "View checks" => this.review.update(cx, |r, cx| r.show_checks(cx)),
+                        "View checks" => {
+                            this.reveal_right(cx);
+                            this.review.update(cx, |r, cx| r.show_checks(cx))
+                        }
                         _ => this.operation(label, window, cx),
                     }))
             }))
@@ -755,6 +808,15 @@ impl WorkspaceView {
                             ));
                         }
                         menu
+                    }),
+            )
+            .child(
+                Button::new("toggle-right-side")
+                    .icon(gpui_kit::assets::IconName::PanelRight)
+                    .accessibility_label("Toggle right side")
+                    .tooltip("Toggle right side (⌘⌥B)")
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(Box::new(ToggleRightSide), cx)
                     }),
             )
             .into_any_element()
@@ -938,7 +1000,28 @@ impl WorkspaceView {
         );
     }
 
+    /// The right side starts closed while the workspace sleeps or has no changes and no PR.
+    pub fn right_starts_closed(&self, cx: &gpui_kit::App) -> bool {
+        let state = &self.store.read(cx).state;
+        let Some(w) = &state.workspace else {
+            return true;
+        };
+        let has_changes = self.review.read(cx).has_changes()
+            || [w.changes.as_ref(), state.changes.as_ref()]
+                .into_iter()
+                .flatten()
+                .any(|c| !c.files.is_empty());
+        right_starts_closed(w.state, has_changes, w.pr_number.is_some())
+    }
+
+    pub fn reveal_right(&mut self, cx: &mut Context<Self>) {
+        self.right_opened = true;
+        cx.emit(RevealRight);
+        cx.notify();
+    }
+
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.detail = transcript_detail(cx);
         if let Some(id) = self.closing.clone()
             && !self.close_request
             && chat_model::running_turn(&self.store.read(cx).state, &id).is_none()
@@ -964,7 +1047,7 @@ impl WorkspaceView {
                         p::WorkspaceState::Archived | p::WorkspaceState::Archiving
                     )
                 });
-            let rows = chat_model::transcript_rows(state, id)
+            let rows = chat_model::transcript_rows(state, id, self.detail)
                 .into_iter()
                 .map(TranscriptRow::from_native)
                 .collect();
@@ -974,6 +1057,13 @@ impl WorkspaceView {
                 .get(id)
                 .is_some_and(|s| s.steering == Some(true));
             let session = state.sessions.get(id).cloned();
+            let placeholder = match (&session, &state.workspace) {
+                (Some(session), Some(w)) if w.state == p::WorkspaceState::Sleeping => format!(
+                    "Message {} to wake this workspace",
+                    chat_model::agent_label(session.agent)
+                ),
+                _ => String::new(),
+            };
             chat.transcript.update(cx, |t, cx| {
                 t.read_only = read_only;
                 t.sync(rows, cx);
@@ -983,6 +1073,7 @@ impl WorkspaceView {
                 c.review_count = self.review_comments.len();
                 c.working = working;
                 c.steering = steering;
+                c.set_placeholder(&placeholder, window, cx);
                 if let Some(session) = &session {
                     c.sync_session(session, window, cx);
                 }
@@ -2107,28 +2198,40 @@ impl Render for WorkspaceView {
                 },
             ))
             .on_action(cx.listener(|this, _: &ShowDiff, window, cx| {
+                this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.navigate(true, window, cx))
             }))
             .on_action(cx.listener(|this, _: &OpenFile, _, cx| {
+                this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.open_picker(cx))
             }))
             .on_action(cx.listener(|this, _: &SearchFiles, _, cx| {
+                this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.open_picker(cx))
             }))
             .on_action(cx.listener(|this, _: &ToggleDiffScope, window, cx| {
+                this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.toggle_scope(window, cx))
             }))
             .on_action(cx.listener(|this, _: &NextFile, window, cx| {
+                this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.navigate(true, window, cx))
             }))
             .on_action(cx.listener(|this, _: &PreviousFile, window, cx| {
+                this.reveal_right(cx);
                 this.review
                     .update(cx, |r, cx| r.navigate(false, window, cx))
             }))
+            .on_action(cx.listener(|this, _: &super::chat::ShowChanges, _, cx| {
+                this.reveal_right(cx);
+                this.review.update(cx, |r, cx| r.show_changes(cx))
+            }))
             .on_action(cx.listener(|this, _: &ToggleRun, _, cx| {
+                this.reveal_right(cx);
                 this.processes.update(cx, |p, cx| p.toggle_default_run(cx))
             }))
             .on_action(cx.listener(|this, _: &CommitAndPush, window, cx| {
+                this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.request_commit(window, cx))
             }))
             .child(self.top_bar(cx))
@@ -2292,6 +2395,16 @@ impl Render for WorkspaceView {
     }
 }
 
+fn transcript_detail(cx: &gpui_kit::App) -> chat_model::TranscriptDetail {
+    cx.global::<crate::storage::Local>()
+        .config()
+        .transcript_detail
+}
+
+pub fn right_starts_closed(state: p::WorkspaceState, has_changes: bool, has_pr: bool) -> bool {
+    state == p::WorkspaceState::Sleeping || (!has_changes && !has_pr)
+}
+
 fn attachment_mime(name: &str) -> &'static str {
     match name
         .rsplit('.')
@@ -2444,6 +2557,15 @@ mod tests {
             self.worker.take().unwrap().join().unwrap();
         }
     }
+    #[test]
+    fn right_side_starts_closed_while_sleeping_or_quiet() {
+        use p::WorkspaceState::{Ready, Sleeping};
+        assert!(super::right_starts_closed(Sleeping, true, true));
+        assert!(super::right_starts_closed(Ready, false, false));
+        assert!(!super::right_starts_closed(Ready, true, false));
+        assert!(!super::right_starts_closed(Ready, false, true));
+    }
+
     fn fixture() -> tempo_client::state::workspace::WorkspaceState {
         let mut state = tempo_client::state::workspace::WorkspaceState::new();
         for line in include_str!(

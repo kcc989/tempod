@@ -1,12 +1,4 @@
-import {
-  AlertCircleIcon,
-  CheckIcon,
-  CircleIcon,
-  MinusIcon,
-  MoonIcon,
-  TriangleAlertIcon,
-  XIcon,
-} from "lucide-react";
+import { AlertCircleIcon, CheckIcon, CircleIcon, MinusIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/ui/components/ui/button";
@@ -66,16 +58,6 @@ function Banner({ workspaceId, banner }: { workspaceId: string; banner: Workspac
       return <ErrorBanner workspaceId={workspaceId} message={banner.message} detail={banner.detail} />;
     case "setupFailed":
       return <SetupFailedBanner workspaceId={workspaceId} />;
-    case "sleeping":
-      return (
-        <div
-          role="status"
-          className="flex items-center gap-2 border-b bg-muted/60 px-3 py-1.5 text-sm text-muted-foreground"
-        >
-          <MoonIcon className="size-3.5 shrink-0" />
-          Sleeping. Sending a message wakes it.
-        </div>
-      );
   }
 }
 

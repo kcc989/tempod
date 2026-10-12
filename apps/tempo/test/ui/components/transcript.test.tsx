@@ -1,3 +1,4 @@
+import type { Item } from "@tempo/protocol";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { createElement } from "react";
@@ -72,5 +73,58 @@ describe("transcript reading", () => {
     view.unmount();
     const reopened = render(element(client, "scroll-w"));
     expect(reopened.container.querySelector('[aria-label="Transcript"]')?.scrollTop).toBe(240);
+  });
+});
+
+describe("work row (04, Work row)", () => {
+  const tool = (id: string, toolKind: string, over: Record<string, unknown> = {}) =>
+    ({
+      id,
+      sessionId: "s1",
+      turnId: "t1",
+      kind: "tool_call",
+      status: "completed",
+      content: { toolCallId: id, title: id, toolKind, locations: [], content: [], ...over },
+      rev: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    }) as Item;
+
+  it("folds work into one collapsed row and keeps edits, failures and the answer visible", () => {
+    fixture.state = {
+      ...state(),
+      turns: { t1: turn({ status: "completed", startedAt: 1000, endedAt: 49_000 }) },
+      order: { s1: ["r1", "x1", "e1", "f1", "a1"] },
+      items: {
+        r1: tool("r1", "read", { locations: [{ path: "/workspace/README.md" }] }),
+        x1: tool("x1", "execute", {
+          title: "bun test",
+          rawInput: { command: "bun test", description: "Run the tests" },
+        }),
+        e1: tool("e1", "edit", {
+          content: [{ type: "diff", path: "/workspace/src/a.ts", oldText: "a\n", newText: "a\nb\n" }],
+        }),
+        f1: {
+          ...tool("f1", "execute", {
+            title: "bun lint",
+            content: [{ type: "content", content: { type: "text", text: "lint error" } }],
+          }),
+          status: "failed",
+        },
+        a1: agentMessage("a1", "The answer", { status: "completed" }),
+      },
+    };
+    const view = render(element(new QueryClient(), "work-w"));
+    const row = view.getByRole("button", { name: "Explored 1 file · ran 1 command · 48 s" });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(view.queryByText("Run the tests")).toBeNull();
+    expect(view.getByText("a.ts")).toBeTruthy();
+    expect(view.getByText("+1")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Changes" })).toBeTruthy();
+    expect(view.getByText("lint error")).toBeTruthy();
+    expect(view.getByText("The answer")).toBeTruthy();
+    expect(view.queryByLabelText("Done")).toBeNull();
+    fireEvent.click(row);
+    expect(view.getByText("Run the tests")).toBeTruthy();
   });
 });

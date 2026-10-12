@@ -828,6 +828,13 @@ impl ReviewPanel {
         self.load_paths(cx);
         cx.notify();
     }
+    pub fn show_changes(&mut self, cx: &mut Context<Self>) {
+        self.tab = 0;
+        cx.notify();
+    }
+    pub fn has_changes(&self) -> bool {
+        !self.files.is_empty()
+    }
     pub fn show_checks(&mut self, cx: &mut Context<Self>) {
         self.tab = 2;
         self.load_checks(cx);

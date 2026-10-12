@@ -34,6 +34,12 @@ pub fn right_side_visible(width: f32, open: bool, open_when_narrow: bool) -> boo
     }
 }
 
+/// A workspace's right side shows when the layout has it open and the workspace is not quiet
+/// (sleeping, or no changes and no PR), unless the user opened it this app session (04).
+pub fn right_side_open(layout_open: bool, starts_closed: bool, opened: bool) -> bool {
+    layout_open && (!starts_closed || opened)
+}
+
 pub struct WorkspaceContent {
     pub top_bar: TopBar,
     pub tabs: Vec<SharedString>,
@@ -76,6 +82,7 @@ pub struct MainWindow {
     sections: Vec<SidebarSection>,
     active: Option<SharedString>,
     live_workspaces: Vec<Entity<super::workspace::WorkspaceView>>,
+    live_subscriptions: Vec<(gpui_kit::EntityId, Subscription)>,
 }
 
 impl MainWindow {
@@ -177,6 +184,7 @@ impl MainWindow {
             sections: content.sections,
             active: content.active,
             live_workspaces: Vec::new(),
+            live_subscriptions: Vec::new(),
             top_bar,
             tabs,
             transcript: cx.new(|cx| TranscriptView::new(rows, cx)),
@@ -276,11 +284,45 @@ impl MainWindow {
             view.update(cx, |view, cx| view.handle_action(action, window, cx));
         }
     }
-    fn toggle_right(&mut self, cx: &mut Context<Self>) {
+    fn layout_right(&self) -> bool {
         if self.narrow {
-            self.panes.right_when_narrow = !self.panes.right_when_narrow;
+            self.panes.right_when_narrow
         } else {
-            self.panes.right = !self.panes.right;
+            self.panes.right
+        }
+    }
+
+    fn right_visible(&self, cx: &App) -> bool {
+        match self.live_active(cx) {
+            Some(view) => {
+                let view = view.read(cx);
+                right_side_open(
+                    self.layout_right(),
+                    view.right_starts_closed(cx),
+                    view.right_opened,
+                )
+            }
+            None => self.layout_right(),
+        }
+    }
+
+    fn open_right(&mut self, cx: &mut Context<Self>) {
+        self.panes.right = true;
+        self.panes.right_when_narrow = true;
+        if let Some(view) = self.live_active(cx) {
+            view.update(cx, |v, _| v.right_opened = true);
+        }
+        cx.notify();
+    }
+
+    fn toggle_right(&mut self, cx: &mut Context<Self>) {
+        if !self.right_visible(cx) {
+            return self.open_right(cx);
+        }
+        if self.narrow {
+            self.panes.right_when_narrow = false;
+        } else {
+            self.panes.right = false;
         }
         cx.notify();
     }
@@ -321,6 +363,8 @@ impl MainWindow {
                 .collect();
             self.live_workspaces
                 .retain(|v| cached.contains(&v.read(cx).store.read(cx).workspace_id));
+            let live: Vec<_> = self.live_workspaces.iter().map(|v| v.entity_id()).collect();
+            self.live_subscriptions.retain(|(id, _)| live.contains(id));
             if let Some(active) = app.read(cx).active_workspace.clone() {
                 if let Some(view) = self
                     .live_workspaces
@@ -338,6 +382,13 @@ impl MainWindow {
                 if let (Some(store), Some(client)) = (store, app.read(cx).client()) {
                     let view = cx
                         .new(|cx| super::workspace::WorkspaceView::new(store, client, window, cx));
+                    let reveal =
+                        cx.subscribe(&view, |this, _, _: &super::workspace::RevealRight, cx| {
+                            this.panes.right = true;
+                            this.panes.right_when_narrow = true;
+                            cx.notify();
+                        });
+                    self.live_subscriptions.push((view.entity_id(), reveal));
                     self.live_workspaces.push(view.clone());
                     return div().size_full().child(view).into_any_element();
                 }
@@ -490,7 +541,8 @@ impl Render for MainWindow {
         let width = f32::from(window.viewport_size().width);
         self.narrow = width < RIGHT_COLLAPSE_WIDTH;
         let pane_sizes = cx.global::<crate::storage::Local>().state().panes;
-        let show_right = right_side_visible(width, self.panes.right, self.panes.right_when_narrow);
+        let show_right = right_side_visible(width, self.panes.right, self.panes.right_when_narrow)
+            && self.right_visible(cx);
         let sidebar = if let Some(app_state) = crate::app::AppState::try_global(cx) {
             let hub = app_state.read(cx).hub.read(cx);
             if hub.project_error {
@@ -659,6 +711,9 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &ToggleRightSide, _, cx| this.toggle_right(cx)))
             .on_action(cx.listener(|this, _: &ToggleBottomPanel, _, cx| {
                 this.panes.bottom = !this.panes.bottom;
+                if this.panes.bottom {
+                    this.open_right(cx);
+                }
                 cx.notify();
             }))
             .on_action(
@@ -762,6 +817,14 @@ pub fn open(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn right_side_starts_closed_until_opened() {
+        assert!(right_side_open(true, false, false));
+        assert!(!right_side_open(true, true, false));
+        assert!(right_side_open(true, true, true));
+        assert!(!right_side_open(false, false, true));
+    }
 
     #[test]
     fn right_side_collapses_below_1100() {

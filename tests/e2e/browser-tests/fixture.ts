@@ -21,7 +21,6 @@ import {
 
 /** Synthetic channel/RPC data for the real browser components. No credentials or deployment. */
 export async function browserFixture(page: Page) {
-  let workspace = detail({ state: "working", runningTurnId: "t1" });
   let sessions: Session[] = [
     session({ steering: true }),
     session({ id: "s2", title: "Second chat", sortOrder: 1 }),
@@ -48,6 +47,11 @@ export async function browserFixture(page: Page) {
     sortOrder: 0,
   };
   const changes = [{ path: "src/main.ts", status: "M", additions: 1, deletions: 1, binary: false }];
+  let workspace = detail({
+    state: "working",
+    runningTurnId: "t1",
+    changes: { files: changes, additions: 1, deletions: 1 },
+  });
   const broadcast = (message: WorkspaceServerMessage) => {
     for (const socket of sockets) socket.send(JSON.stringify(message));
   };

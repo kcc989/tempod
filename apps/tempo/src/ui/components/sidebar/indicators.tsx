@@ -74,8 +74,33 @@ export function ChecksDot({ workspace: w }: { workspace: Pick<WorkspaceSummary, 
   );
 }
 
-/** 04, Container pill. */
-export function ContainerPill({ pill, className }: { pill: Pill; className?: string }) {
+/** 04, Container pill. With `onWake` (sleeping) it is the workspace view's one Wake button. */
+export function ContainerPill({
+  pill,
+  className,
+  onWake,
+}: {
+  pill: Pill;
+  className?: string;
+  onWake?: () => void;
+}) {
+  if (onWake) {
+    return (
+      <SimpleTooltip label="Wake. Sending a message also wakes it.">
+        <button
+          type="button"
+          onClick={onWake}
+          className={cn(
+            "inline-flex h-6 max-w-56 min-w-0 shrink items-center gap-1.5 rounded-full border px-2 text-xs whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground",
+            className,
+          )}
+        >
+          <MoonIcon aria-hidden className="size-3 shrink-0" />
+          <span className="truncate">{pill.text}</span>
+        </button>
+      </SimpleTooltip>
+    );
+  }
   return (
     <span
       role="status"
