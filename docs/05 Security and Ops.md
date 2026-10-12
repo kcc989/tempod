@@ -15,7 +15,8 @@ The main threat is code or text inside a workspace (a hostile dependency, a pois
 | Tempo API | A container calls the Tempo app | Rule 0 in `TempoOutbound` blocks `APP_HOST`; every API call needs the owner's session cookie |
 | `tempod` | Someone else drives the daemon | Reachable only through `getTcpPort` from its own DO; per-start bearer token |
 | Previews | Someone finds a preview URL | The URL holds no secret; every request needs the owner's preview cookie; reset on demand; `Referrer-Policy: no-referrer` |
-| The UI | XSS from agent output | Markdown rendered without raw HTML; remote images not loaded |
+| The UI | XSS from agent output | Markdown rendered without raw HTML; remote images not loaded; SVG and Mermaid output only through `<img>` |
+| Artifacts | Agent HTML reads Tempo data or sends data out | Never on `APP_HOST`; one host per artifact under `PREVIEW_DOMAIN`; owner cookie; CSP blocks every network fetch. Self-navigation of the frame is not blocked (R19). |
 | The UI | CSRF | `SameSite=Lax` cookie, `POST` for writes, `Origin` check |
 | Supply chain | A changed package or image | Every version pinned; the base image pinned by digest |
 
@@ -24,6 +25,8 @@ The main threat is code or text inside a workspace (a hostile dependency, a pois
 - MUST NOT enable raw HTML in Markdown (no `rehype-raw`).
 - MUST NOT load remote images in agent Markdown. Render them as links. Images from ACP `image` content blocks are fine; they are inline data.
 - Links in the transcript open with `rel="noopener noreferrer"`.
+- MUST NOT render SVG inline, in `<object>` or in an `<iframe>` on `APP_HOST`. SVG files, SVG artifacts and Mermaid output render only through `<img>`.
+- MUST NOT serve artifact HTML or PDFs from `APP_HOST`. The artifact route sends them only as downloads (02).
 
 ## Authentication and authorization
 
@@ -85,6 +88,29 @@ A preview is for the owner only. The hostname names the port and the workspace a
 - `PREVIEW_DOMAIN` MUST NOT be `APP_HOST` or a parent of it, so preview pages cannot read Tempo's cookies.
 - MUST NOT log preview codes, cookie values or request URLs on a preview host. Log the port and workspace id only.
 - Browser Run does not use previews: it reaches the app through `BrowserOutbound` (01, Browser Run).
+
+## Artifact access
+
+HTML and PDF artifacts open only from their own host. The rules copy Preview access; the differences are listed here.
+
+- **Host.** `a-<artifactId>-<workspaceId lowercase>.<PREVIEW_DOMAIN>`. The Worker matches the first label against `^a-([0-9a-hjkmnp-tv-z]{26})-([0-9a-hjkmnp-tv-z]{26})$`. Each artifact has its own origin, so one artifact cannot read another.
+- **Entry link.** `openArtifact {workspaceId, artifactId, version}` returns `https://<host>/__tempo/enter?code=<code>`. The code follows the preview rules (32 characters, once, 60 s) and is bound to that artifact and version. The WorkspaceDO stores only its SHA-256 in `artifact_codes`.
+- **Enter.** A good code is deleted. The Worker answers `303` to `/<version>/<name>` (name percent-encoded) with `Set-Cookie: __Host-tempo_artifact=<value>; Path=/; Secure; HttpOnly; SameSite=None; Partitioned; Max-Age=86400` and `Cache-Control: no-store`.
+- **Cookie value.** `<expiresAt>.<mac>`, with the MAC over `a.<artifactId>.<expiresAt>` and the workspace's `preview_key`. `rotatePreviewKey` also ends every artifact cookie.
+- **Requests.** `GET /<version>/<name>` with a good cookie calls `artifactFetch`, which streams that version from R2. Any version of the artifact works with one cookie. Every other path, method or name, a version not `ready`, and a missing or bad cookie return the preview 404 page.
+- **Response headers** (every response):
+
+| Kind | `Content-Type` | `Content-Security-Policy` |
+| --- | --- | --- |
+| `html` | `text/html; charset=utf-8` | `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:; style-src 'unsafe-inline' data: blob:; img-src data: blob:; font-src data: blob:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors https://<APP_HOST>; sandbox allow-scripts allow-forms allow-modals allow-downloads` |
+| `pdf` | `application/pdf` | `default-src 'none'; frame-ancestors https://<APP_HOST>`. No `sandbox`: browsers do not render PDFs in a sandboxed document. |
+| Any other kind | Its `mime` | `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors https://<APP_HOST>; sandbox` |
+
+  Also `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow` and `Cross-Origin-Opener-Policy: same-origin`.
+- **Offline.** The CSP blocks `fetch`, XHR, WebSocket, `EventSource`, beacons, form posts and every remote script, style, image, font and frame. Without `allow-same-origin` the document has an opaque origin, so it has no cookies and no storage. Without `allow-popups` and `allow-top-navigation` it cannot open windows or move Tempo's page.
+- **Accepted gap (R19).** A frame can still navigate itself to another site, with data in the URL. No browser control blocks this. It adds little: the agent that wrote the HTML can already send data out through egress under the `open` policy.
+- MUST NOT log artifact codes, cookie values or request URLs on an artifact host. Log the artifact id and workspace id only.
+- Spike S18 MUST confirm the cookie flow inside Tempo's iframe, the CSP above in Chrome, Safari and Firefox, and PDF display in the iframe.
 
 ## Deployment and configuration
 
@@ -164,7 +190,7 @@ Container memory is the biggest cost; sleeping is the main control. The per-hour
 | Container CPU | Active CPU only | None needed; idle waiting costs little |
 | Container disk | Provisioned GB × hours running | Instance size |
 | Durable Objects | Duration while a container runs (the DO holds a socket) | Same as memory: sleep |
-| R2 | Bundles, backups, logs, attachments | Retention rules (02) |
+| R2 | Bundles, backups, logs, attachments, artifacts | Retention rules (02); artifacts at most 25 MiB per version |
 | Browser Run (phase 3) | Browser hours over 10 a month | Off by default |
 | Models | Your Claude and ChatGPT plans; OpenRouter usage | Outside Tempo |
 

@@ -22,6 +22,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | D10 | GitHub and API-key credentials | Injected by the TempoOutbound egress handler. They never enter the container. | The documented Sandbox pattern for secrets |
 | D11 | Claude and Codex credentials | Placed in the container: the Claude token as a process env var, the Codex auth.json as a file. Codex token refreshes sync back through CredentialDO. | Each CLI owns its own login and token refresh |
 | D12 | Mac client | Tempo for Mac, a native app built with GPUI Kit. It is a client of the same Worker, through a JSON API and the same WebSocket channels. | Native speed and Conductor's ⌘ shortcuts, with one source of truth (07) |
+| D13 | Agent artifacts | Agents publish files with the `publish_artifact` tool of Tempo's own MCP server. Tempo copies each version to R2 and shows it in the transcript. HTML runs offline, on its own host under `PREVIEW_DOMAIN`. | The owner can read plans, screenshots, diagrams and reports, also while the workspace sleeps. Agent HTML never runs on `APP_HOST`. |
 
 **Rules for agents that build from this doc set**
 
@@ -35,7 +36,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 
 | Tab | Holds |
 | --- | --- |
-| 01 Runtime and Agents | Container image, `tempod`, agents, credentials, egress, scripts, previews, terminal, browser tests, durability |
+| 01 Runtime and Agents | Container image, `tempod`, agents, credentials, egress, scripts, previews, terminal, browser tests, artifacts, durability |
 | 02 Data and API | D1 and DO schemas, R2 layout, event model, server functions, WebSocket protocols, error codes |
 | 03 Lifecycles | State machines, step runner, every multi-step flow, failure handling |
 | 04 UI | Layout, panes, dialogs, indicators, keyboard shortcuts |
@@ -62,6 +63,7 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 | G9 | Fast start | New workspace to first agent output: under 120 s. Resume a sleeping workspace: under 30 s. |
 | G10 | Live output | Agent output in the UI within 1 s of `tempod` reading it (p95) |
 | G11 | A native Mac client | Same features as the web UI, except in-app previews (07) |
+| G12 | Show what agents make | Images, Markdown with diagrams, PDFs and offline HTML apps that an agent publishes show in the transcript, and stay readable while the workspace sleeps |
 
 **Non-goals for version 1**
 
@@ -90,6 +92,7 @@ Use these words exactly, in code, UI and docs.
 | Event | One normalized message about a session, stored in order | `event` |
 | Checkpoint | A hidden git commit of the full working tree, made at the end of each turn | `checkpoint` |
 | Preview | An owner-only URL to one port inside a container | `preview` |
+| Artifact | A file that an agent published for the owner to see. Each publish adds a version, kept in R2. | `artifact` |
 | Setup, run, archive scripts | Per-project shell scripts, as in Conductor | `setupScript`, `runScript`, `archiveScript` |
 | `tempod` | The daemon inside each container. It runs agents and talks to the WorkspaceDO. | `tempod` |
 
@@ -140,11 +143,11 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 | `UserHubDO` | Durable Object | 1 per user | UI WebSocket fan-out for the sidebar; workspace summaries | Browser, `WorkspaceDO` |
 | `CredentialDO` | Durable Object | 1 per user | Encrypted secrets; Codex `auth.json` versions and fan-out | `WorkspaceDO` |
 | `TempoOutbound` | `WorkerEntrypoint` used as the container egress handler | Per request, with props workspaceId and userId | Egress policy, credential injection, egress log | GitHub, model APIs, the internet |
-| `tempod` | Bun-compiled binary, container entrypoint | 1 per running container | ACP client for agents, scripts, git, port detection, preview proxy, local outbox | `WorkspaceDO` (inbound WebSocket), agent processes |
+| `tempod` | Bun-compiled binary, container entrypoint | 1 per running container | ACP client for agents, scripts, git, port detection, preview proxy, the Tempo MCP server, local outbox | `WorkspaceDO` (inbound WebSocket), agent processes |
 | Tempo for Mac | Rust app on GPUI Kit (07) | 0 or more per owner | Window layout, drafts, its Keychain token | Tempo Worker (`/api/v1`, WebSockets) |
 | Image `workspace` | Container image (Debian trixie, Node 24) | 1 image, many containers | Agents, Chromium, Playwright, dev tools | — |
 | D1 database `tempo` | SQLite (D1) | 1 | Users, GitHub installations, projects, workspace summaries | — |
-| R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs | — |
+| R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs, artifacts | — |
 
 ## Where state lives
 
@@ -157,7 +160,7 @@ The WorkspaceDO is the source of truth for a workspace. D1 holds only what lists
 | Workspace summary: name, branch, state, attention, PR | D1 `workspaces`, written only by its WorkspaceDO after createWorkspace inserts it | Deleted |
 | Workspace state, sessions, turns, transcript items, events, checkpoint index, review comments, script runs | WorkspaceDO SQLite | Workspace deleted |
 | Secrets | CredentialDO SQLite, AES-256-GCM | Deleted |
-| Checkpoint bundles, home backups, attachments, script logs | R2 bucket `tempo-data` | Retention rules in 02 |
+| Checkpoint bundles, home backups, attachments, script logs, artifacts | R2 bucket `tempo-data` | Retention rules in 02 |
 | Container snapshot | Cloudflare Containers snapshot | 30 days after creation or last restore |
 | Live UI connections | UserHubDO and WorkspaceDO memory | Connection closes |
 
@@ -209,13 +212,23 @@ Agents test in a real Chromium inside their own container; you see the same app 
 - The UI shows each detected port as a preview link and can open it in a Browser tab next to the chat.
 - Cloudflare Browser Run with Live View is optional, off by default, and comes in phase 3. With it on, agents drive a remote browser that you can watch and control (01, Browser Run).
 
+## Artifacts
+
+An agent can show you a file it made: a plan, a screenshot, a diagram, a PDF report or a small HTML app. Details are in 01, Artifacts.
+
+- Every session gets Tempo's own MCP server, with one tool: `publish_artifact {path, title, summary?}`.
+- `tempod` copies the file, and the WorkspaceDO uploads it to R2. Each publish of the same path in the same session is a new version of the same artifact.
+- The transcript shows each publish as an artifact card. The card opens an Artifact tab. The right panel has an Artifacts tab that lists all of them.
+- Images, Markdown (with Mermaid diagrams) and text show inside the Tempo UI. PDFs and HTML show from their own owner-only host under `PREVIEW_DOMAIN`, in an iframe. HTML runs offline: it cannot load or send anything over the network.
+- Artifacts stay readable while the workspace sleeps and after it is archived. They are deleted with the workspace.
+
 ## UI
 
 The UI copies Conductor's three-pane layout in the browser. Full spec is in 04 UI.
 
 - **Left sidebar:** projects, each with its workspaces. Each row shows the branch, the city name, a status icon and the PR number.
-- **Center:** tabs for chats (one per session), files, the diff and previews. The composer sits at the bottom of a chat tab.
-- **Right panel, top:** Changes, All files, and Checks.
+- **Center:** tabs for chats (one per session), files, the diff, previews and artifacts. The composer sits at the bottom of a chat tab.
+- **Right panel, top:** Changes, All files, Checks and Artifacts.
 - **Right panel, bottom:** Setup, Run and Terminal tabs.
 - **Top bar:** branch name, base branch, preview links, and the next git action (commit and push, create PR, merge).
 - Shortcuts follow Conductor, except where a browser reserves the key. ⌘N, ⌘T and ⌘W become ⌥N, ⌥T and ⌥W.
@@ -230,6 +243,7 @@ The container is the security boundary, and the only way out of it is `TempoOutb
 - GitHub tokens and the OpenRouter key never enter a container. Claude and Codex credentials do. This is an accepted risk for one trusted user and is logged as R4.
 - Secrets are encrypted with AES-256-GCM in CredentialDO, keyed by `TEMPO_ENCRYPTION_KEY`.
 - `tempod` port 7070 is reachable only from the WorkspaceDO through `getTcpPort`. Each container start gets a new bearer token. The preview proxy MUST refuse port 7070.
+- Artifact HTML and PDFs never load on `APP_HOST`. Each artifact has its own owner-only host under `PREVIEW_DOMAIN`, with a CSP that blocks all network access (05, Artifact access).
 - Under the `durable_object` scheduling policy every container process has root capabilities. A non-root user sets file ownership only; it is not a boundary.
 - Tempo for Mac signs in with a device code that the owner approves in the browser. It keeps a bearer token in the Keychain, and the owner can revoke it (05, 07).
 
@@ -248,13 +262,14 @@ Example: 5 workspaces running 4 hours a day for 22 days is 440 hours, about $46 
 
 ## Phases
 
-Build in five phases. Each phase ends at a gate: gate A is the spike results, and gates B to E are passing acceptance tests. Spikes, tests and the gates are in 06 Build Plan.
+Build in six phases. Each phase ends at a gate: gate A is the spike results, and gates B to F are passing acceptance tests. Spikes, tests and the gates are in 06 Build Plan.
 
 1. **Phase 0, spikes.** Prove the risky parts in throwaway code: the container API, egress injection, each agent's login through the egress proxy, snapshots, previews, Playwright.
 2. **Phase 1, one workspace.** Claude Code only. Create, chat, stream, checkpoint, sleep, wake and resume, with the transcript intact.
 3. **Phase 2, parallel work.** Many workspaces, the live sidebar, Codex, OpenCode and Pi, the diff view, scripts, terminal, previews and revert.
 4. **Phase 3, ship.** Commit and push, pull requests, checks, merge, archive and restore, settings, and optional Browser Run.
 5. **Phase 4, Mac client.** The native API and device sign-in on the server, then Tempo for Mac on GPUI Kit (07).
+6. **Phase 5, artifacts.** The Tempo MCP server, artifact storage in R2, the artifact host, the Artifact and Artifacts tabs, image and Markdown views in file and diff tabs, and Mermaid diagrams, in the web UI and the Mac app.
 
 ## Risks and open questions
 
@@ -273,6 +288,7 @@ The biggest risk is that the container platform is new: Sandbox SDK 1.0 shipped 
 | R9 | A snapshot works only with the image it came from | Slow wake after each image change | Fallback wake path; R2 home backups; change the image rarely | S6 |
 | R10 | Host restarts send SIGTERM, then SIGKILL within 15 minutes | A running turn stops | On SIGTERM the WorkspaceDO checkpoints and backs up before the container stops; the turn is marked interrupted; the session reloads | S6 |
 | R11 | The WorkspaceDO cannot hibernate while its container runs | Small DO duration cost | Accepted; container cost dominates | — |
+| R19 | Agent HTML runs in the owner's browser | A hostile artifact tries to read Tempo data or send data out | Own host under `PREVIEW_DOMAIN`, owner cookie, CSP `connect-src 'none'` and `sandbox`. A frame can still navigate itself to another site; this is accepted, because the same agent can already send data out through egress. | S18 |
 
 **Open questions for you**
 
