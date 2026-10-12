@@ -1,3 +1,4 @@
+import type { WorkspaceSummary } from "@tempo/protocol";
 import { CopyIcon, GitBranchIcon, PanelRightIcon } from "lucide-react";
 import { useState } from "react";
 import { ContainerPill, StatusIcon } from "~/ui/components/sidebar/indicators";
@@ -6,8 +7,10 @@ import { Skeleton } from "~/ui/components/ui/skeleton";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
+import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { pillText } from "~/ui/lib/indicators";
+import { cn } from "~/ui/lib/utils";
 import { toggleRight } from "~/ui/state/workspace-ui";
 import { BaseBranchPicker } from "./BaseBranchPicker";
 import { requestCommit } from "./commit-request";
@@ -15,7 +18,7 @@ import { InlineEdit } from "./InlineEdit";
 import { OverflowMenu } from "./OverflowMenu";
 import { PortLinks } from "./PortLinks";
 import { PrimaryActionButton } from "./PrimaryAction";
-import { shortcutAvailability, workspaceView, type WorkspaceView } from "./topbar-logic";
+import { prLink, shortcutAvailability, workspaceView, type WorkspaceView } from "./topbar-logic";
 import { useWorkspaceActions, type WorkspaceActions } from "./useWorkspaceActions";
 
 export interface TopBarProps {
@@ -25,8 +28,9 @@ export interface TopBarProps {
 }
 
 /**
- * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`. Middle: preview ports.
- * Right: container pill, the primary git action, the overflow menu and the right-side toggle.
+ * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`, the PR link. Middle: preview
+ * ports, then `Live` during a Browser Run session. Right: container pill, the primary git action, the
+ * overflow menu and the right-side toggle.
  */
 export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
   const summary = useHubWorkspace(workspaceId);
@@ -96,8 +100,14 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
           baseBranch={w.baseBranch}
           locked={w.prNumber !== null || w.state === "archived" || w.state === "archiving"}
         />
+        <PrLinkAnchor workspace={w} />
       </div>
-      <PortLinks workspaceId={w.id} ports={d?.ports ?? []} className="flex-1 justify-center" />
+      <PortLinks
+        workspaceId={w.id}
+        ports={d?.ports ?? []}
+        browserActive={d?.browserActive ?? false}
+        className="flex-1 justify-center"
+      />
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <ContainerPill pill={pillFor(view)} onWake={w.state === "sleeping" ? actions.wake : undefined} />
         <PrimaryActionButton workspaceId={w.id} />
@@ -109,6 +119,25 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
         </SimpleTooltip>
       </div>
     </header>
+  );
+}
+
+function PrLinkAnchor({ workspace: w }: { workspace: WorkspaceSummary }) {
+  const link = prLink(useProject(w.projectId), w);
+  if (!link) return null;
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={link.ariaLabel}
+      className={cn(
+        "shrink-0 rounded-md px-1 font-mono text-xs tabular-nums outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        link.className,
+      )}
+    >
+      {link.label}
+    </a>
   );
 }
 

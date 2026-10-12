@@ -7,6 +7,15 @@ pub struct SlashEntry {
     pub plan: bool,
 }
 
+/// The draft review comments chip (04, Composer), as the web `reviewChipLabel`.
+pub fn review_chip_label(n: usize) -> String {
+    if n == 1 {
+        "1 review comment".into()
+    } else {
+        format!("{n} review comments")
+    }
+}
+
 pub fn slash_query(text: &str, caret: usize) -> Option<&str> {
     let query = text.get(..caret)?.strip_prefix('/')?;
     (!query.chars().any(|c| c.is_whitespace() || c == '/')).then_some(query)
@@ -97,6 +106,11 @@ pub fn slash_entries(commands: &[p::AvailableCommand], plan: bool, query: &str) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn review_chip_matches_the_web_copy() {
+        assert_eq!(review_chip_label(1), "1 review comment");
+        assert_eq!(review_chip_label(3), "3 review comments");
+    }
     #[test]
     fn mentions_follow_whitespace_and_utf8_boundaries() {
         assert_eq!(mention_query("Ask é @src later", 11), Some((7, "src")));

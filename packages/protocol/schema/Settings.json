@@ -9,11 +9,37 @@
         "default": {
           "$ref": "AgentId.json"
         },
-        "model": {
-          "type": "string"
+        "models": {
+          "type": "object",
+          "properties": {
+            "claude": {
+              "type": "string"
+            },
+            "codex": {
+              "type": "string"
+            },
+            "opencode": {
+              "type": "string"
+            },
+            "pi": {
+              "type": "string"
+            }
+          },
+          "required": ["claude", "codex", "opencode", "pi"],
+          "additionalProperties": true
         }
       },
-      "required": ["default", "model"],
+      "required": ["default", "models"],
+      "additionalProperties": true
+    },
+    "browser": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "boolean"
+        }
+      },
+      "required": ["run"],
       "additionalProperties": true
     },
     "scripts": {
@@ -104,6 +130,6 @@
       "additionalProperties": true
     }
   },
-  "required": ["agent", "scripts", "environment", "environment_variables", "git", "prompts"],
+  "required": ["agent", "browser", "scripts", "environment", "environment_variables", "git", "prompts"],
   "additionalProperties": true
 }

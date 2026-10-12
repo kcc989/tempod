@@ -1,5 +1,6 @@
 import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
+import { randomBase64Url } from "../lib/crypto.ts";
 
 /**
  * DO migrations (02, Conventions): run in the DO constructor inside blockConcurrencyWhile.
@@ -8,7 +9,8 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 type Migrations = ReadonlyArray<{
   readonly tag: string;
   readonly when: number;
-  readonly statements: ReadonlyArray<string>;
+  /** A function runs each time the migrations load, for values that must differ per DO. */
+  readonly statements: ReadonlyArray<string | (() => string)>;
 }>;
 
 const toConfig = (list: Migrations) => ({
@@ -16,7 +18,7 @@ const toConfig = (list: Migrations) => ({
   migrations: Object.fromEntries(
     list.map((m, idx) => [
       `m${idx.toString().padStart(4, "0")}`,
-      m.statements.join("\n--> statement-breakpoint\n"),
+      m.statements.map((st) => (typeof st === "string" ? st : st())).join("\n--> statement-breakpoint\n"),
     ]),
   ),
 });
@@ -242,6 +244,11 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
     ],
   },
   {
+    tag: "0002_turn_usage",
+    when: 1791835200000,
+    statements: ["ALTER TABLE turns ADD COLUMN usage_json TEXT"],
+  },
+  {
     tag: "0002_file_cache",
     when: 1791849600000,
     statements: [
@@ -252,6 +259,106 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
   updated_at     INTEGER NOT NULL DEFAULT 0
 )`,
     ],
+  },
+  {
+    tag: "0003_preview_access",
+    when: 1791921600000,
+    statements: [
+      "ALTER TABLE workspace ADD COLUMN preview_key TEXT NOT NULL DEFAULT ''",
+      () => `UPDATE workspace SET preview_key = '${randomBase64Url(32)}'`,
+      `CREATE TABLE preview_codes (
+  code_hash   TEXT PRIMARY KEY,
+  port        INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL
+)`,
+    ],
+  },
+  {
+    // 02 drops session status 'broken' and review status 'resolved'. SQLite cannot alter a CHECK, so
+    // the tables are rebuilt. turns is rebuilt too: it references sessions, which must not be dropped
+    // while a table still points at it.
+    tag: "0004_drop_unused_statuses",
+    when: 1792008000000,
+    statements: [
+      `CREATE TABLE sessions_new (
+  id                   TEXT PRIMARY KEY,
+  agent                TEXT NOT NULL CHECK (agent IN ('claude','codex','opencode','pi')),
+  title                TEXT NOT NULL DEFAULT '',
+  acp_session_id       TEXT,
+  status               TEXT NOT NULL CHECK (status IN ('starting','idle','running','closed')),
+  mode_id              TEXT,
+  config_json          TEXT NOT NULL DEFAULT '{}',
+  modes_json           TEXT NOT NULL DEFAULT '[]',
+  config_options_json  TEXT NOT NULL DEFAULT '[]',
+  commands_json        TEXT NOT NULL DEFAULT '[]',
+  capabilities_json    TEXT NOT NULL DEFAULT '{}',
+  usage_json           TEXT NOT NULL DEFAULT '{}',
+  handoff_pending      INTEGER NOT NULL DEFAULT 0,
+  pending_note         TEXT,
+  general_prompt_sent  INTEGER NOT NULL DEFAULT 0,
+  sort_order           INTEGER NOT NULL,
+  created_at           INTEGER NOT NULL,
+  updated_at           INTEGER NOT NULL,
+  closed_at            INTEGER
+)`,
+      `INSERT INTO sessions_new (id, agent, title, acp_session_id, status, mode_id, config_json, modes_json,
+  config_options_json, commands_json, capabilities_json, usage_json, handoff_pending, pending_note,
+  general_prompt_sent, sort_order, created_at, updated_at, closed_at)
+SELECT id, agent, title, acp_session_id, CASE status WHEN 'broken' THEN 'closed' ELSE status END, mode_id,
+  config_json, modes_json, config_options_json, commands_json, capabilities_json, usage_json, handoff_pending,
+  pending_note, general_prompt_sent, sort_order, created_at, updated_at, closed_at
+FROM sessions`,
+      `CREATE TABLE turns_new (
+  id             TEXT PRIMARY KEY,
+  session_id     TEXT NOT NULL REFERENCES sessions_new(id),
+  seq            INTEGER NOT NULL UNIQUE,
+  queue_pos      INTEGER,
+  steering_pending INTEGER NOT NULL DEFAULT 0 CHECK (steering_pending IN (0, 1)),
+  status         TEXT NOT NULL CHECK (status IN ('queued','running','completed','cancelled','failed','interrupted')),
+  prompt_json    TEXT NOT NULL,
+  stop_reason    TEXT,
+  error_code     TEXT,
+  error_detail   TEXT,
+  checkpoint_id  TEXT,
+  reverted       INTEGER NOT NULL DEFAULT 0,
+  queued_at      INTEGER NOT NULL,
+  started_at     INTEGER,
+  ended_at       INTEGER,
+  usage_json     TEXT
+)`,
+      `INSERT INTO turns_new (id, session_id, seq, queue_pos, steering_pending, status, prompt_json, stop_reason,
+  error_code, error_detail, checkpoint_id, reverted, queued_at, started_at, ended_at, usage_json)
+SELECT id, session_id, seq, queue_pos, steering_pending, status, prompt_json, stop_reason, error_code,
+  error_detail, checkpoint_id, reverted, queued_at, started_at, ended_at, usage_json
+FROM turns`,
+      "DROP TABLE turns",
+      "DROP TABLE sessions",
+      "ALTER TABLE sessions_new RENAME TO sessions",
+      "ALTER TABLE turns_new RENAME TO turns",
+      "CREATE INDEX turns_by_status ON turns(status, queue_pos)",
+      `CREATE TABLE review_comments_new (
+  id            TEXT PRIMARY KEY,
+  path          TEXT NOT NULL,
+  line_start    INTEGER,
+  line_end      INTEGER,
+  side          TEXT CHECK (side IN ('old','new')),
+  body          TEXT NOT NULL,
+  status        TEXT NOT NULL CHECK (status IN ('draft','sent')),
+  sent_turn_id  TEXT,
+  created_at    INTEGER NOT NULL
+)`,
+      `INSERT INTO review_comments_new (id, path, line_start, line_end, side, body, status, sent_turn_id, created_at)
+SELECT id, path, line_start, line_end, side, body, CASE status WHEN 'resolved' THEN 'sent' ELSE status END,
+  sent_turn_id, created_at
+FROM review_comments`,
+      "DROP TABLE review_comments",
+      "ALTER TABLE review_comments_new RENAME TO review_comments",
+    ],
+  },
+  {
+    tag: "0005_browser_run",
+    when: 1792094400000,
+    statements: ["ALTER TABLE workspace ADD COLUMN browser_session_id TEXT"],
   },
 ];
 

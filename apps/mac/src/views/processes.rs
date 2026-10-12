@@ -54,6 +54,13 @@ impl ProcessPanel {
     fn id(&self, cx: &gpui_kit::App) -> String {
         self.store.read(cx).workspace_id.clone()
     }
+    /// Selects the Setup tab (04: `setting_up` and `View output` open it).
+    pub fn show_setup(&mut self, cx: &mut Context<Self>) {
+        if self.tab != 0 {
+            self.tab = 0;
+            cx.notify();
+        }
+    }
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         let request = self
             .client
@@ -65,7 +72,7 @@ impl ProcessPanel {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(runs) => this.history = runs,
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
@@ -135,7 +142,7 @@ impl ProcessPanel {
                 let _ = this.update(cx, |this, cx| {
                     this.pending = false;
                     if let Err(e) = result {
-                        this.error = Some(e.to_string());
+                        super::toast::error_in_main_window(&e, None, cx);
                     }
                     this.refresh(cx);
                     cx.notify();
@@ -153,7 +160,7 @@ impl ProcessPanel {
                     this.pending = false;
                     match result {
                         Ok(run) => this.run = Some(run.id),
-                        Err(e) => this.error = Some(e.to_string()),
+                        Err(e) => super::toast::error_in_main_window(&e, None, cx),
                     }
                     this.refresh(cx);
                     cx.notify();
@@ -176,7 +183,7 @@ impl ProcessPanel {
                 this.pending = false;
                 match result {
                     Ok(run) => this.run = Some(run.id),
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => super::toast::error_in_main_window(&e, None, cx),
                 }
                 this.refresh(cx);
                 cx.notify();
@@ -199,7 +206,7 @@ impl ProcessPanel {
             let _ = this.update(cx, |this, cx| {
                 this.pending = false;
                 if let Err(e) = result {
-                    this.error = Some(e.to_string());
+                    super::toast::error_in_main_window(&e, None, cx);
                 }
                 cx.notify();
             });

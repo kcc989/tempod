@@ -16,6 +16,8 @@ export const handleAttachment = async (
     const bearer = request.headers.get("Authorization")?.toLowerCase().startsWith("bearer ") ?? false;
     if (origin !== null && origin !== appOrigin(env)) return errorOf("FORBIDDEN");
     const user = await requireOwner(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
+    // 05, CSRF: a cookie-authenticated write must come from the app's own origin.
+    if (origin === null && !bearer) return errorOf("FORBIDDEN");
     const ws = await getOwnedWorkspace(env, user.id, workspaceId);
     if (!ws) return errorOf("NOT_FOUND");
     if (ws.archivedAt !== null) return errorOf("WORKSPACE_ARCHIVED");

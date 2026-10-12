@@ -44,6 +44,45 @@ describe("settings page", () => {
     expect(screen.getByRole("button", { name: "Appearance" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Logins" })).toBeNull();
   });
+  it("shows the Tempo and Conductor keys on Shortcuts", () => {
+    openDialog({ kind: "settings", tab: "shortcuts" });
+    show();
+    const table = screen.getByRole("table", { name: "Keyboard shortcuts" });
+    expect(within(table).getByRole("columnheader", { name: "Tempo" })).toBeTruthy();
+    expect(within(table).getByRole("columnheader", { name: "Conductor" })).toBeTruthy();
+    expect(within(table).getByRole("row", { name: /^Settings/ }).textContent).toContain("⌘,");
+  });
+  it("shows a default model per agent and Browser Run on Agents", () => {
+    openDialog({ kind: "settings", tab: "project", projectId: "p1" });
+    show();
+    const nav = screen.getByRole("navigation", { name: "Settings" });
+    expect(
+      within(nav)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([
+      "General",
+      "Logins",
+      "Appearance",
+      "Shortcuts",
+      "Devices",
+      "tempo/first",
+      "Agents",
+      "Scripts",
+      "Environment",
+      "Git",
+      "Prompts",
+      "Secrets",
+      "General",
+      "tempo/second",
+    ]);
+    expect(screen.getByRole("heading", { name: "Agents" })).toBeTruthy();
+    for (const agent of ["Claude", "Codex", "OpenCode", "Pi"])
+      expect(screen.getByRole("group", { name: `${agent} default model` })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Browser Run" })).toBeTruthy();
+    fireEvent.click(within(nav).getByRole("button", { name: "Scripts" }));
+    expect(screen.queryByRole("group", { name: "Browser Run" })).toBeNull();
+  });
   it("keeps settings open when another dialog opens", () => {
     openDialog({ kind: "settings", tab: "project", projectId: "p2" });
     openDialog({ kind: "addProject" });

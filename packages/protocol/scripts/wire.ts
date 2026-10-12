@@ -30,6 +30,7 @@ export const SHARED = {
   CredentialProvider: P.CredentialProvider,
   InstanceName: P.InstanceName,
   EgressPolicy: P.EgressPolicy,
+  EgressStatusFilter: P.EgressStatusFilter,
   RunMode: P.RunMode,
   LogLevel: P.LogLevel,
   NoticeLevel: P.NoticeLevel,
@@ -89,6 +90,7 @@ export const SHARED = {
   Diagnostics: P.Diagnostics,
   NewSource: P.NewSource,
   ApiMeta: P.ApiMeta,
+  AppSetupStatus: P.AppSetupStatus,
 } as const satisfies Record<string, Schema.Top>;
 
 export const WORKSPACE_CHANNEL = {

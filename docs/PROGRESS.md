@@ -4,6 +4,45 @@ Status of the Tempo build against the spec (tabs 00 to 07). Continuation started
 
 Percentages below are the previous build loops' estimates, not new acceptance measurements. Deviations and open questions are in `IMPLEMENTATION_NOTES.md`. The web continuation now has a separate [acceptance record](WEB_ACCEPTANCE.md).
 
+## Cloud continuation (2026-10-12)
+
+Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: feature complete against tabs 00 to 07, with light validation; the owner tests by hand later.
+
+- **Audit:** six read-only passes compared each tab with the code. No stub or placeholder was left; the gaps were parity, edge cases and rule-level items. They are fixed below or listed as questions (Q-5 to Q-10 in `IMPLEMENTATION_NOTES.md`).
+- **Turn usage:** `turn.ended` and `Turn` carry the agent's per-turn tokens (ACP v1 `PromptResponse.usage`). They are stored in `turns.usage_json` (DO migration `0002_turn_usage`), and both clients show them under each turn. 02 and 04 are updated.
+- **WorkspaceDO:**
+  - A retry of a failed create keeps create semantics and push state.
+  - Archive no longer fails while a turn is starting.
+  - A container that stops during create or wake restarts; the SIGTERM flag resets.
+  - `commitAndPush` queues behind other ops.
+  - The Codex lease is dropped on every stop.
+  - JSON columns are validated with Effect Schema.
+  - Deleting items bumps `items_rev`; review comment ids are checked.
+  - The hub gets each summary even when D1 fails; the egress log is trimmed on insert; token rotation closes preview sockets.
+- **Security and ops (05):**
+  - No GitHub OAuth tokens in D1; Better Auth logs pass through redact.
+  - Invocation logs are off; preview failures keep the privacy headers.
+  - Cookie uploads need the app `Origin`; `setup_url` stores the installation.
+  - The Worker and `tempod` share one build id.
+- **Web:**
+  - Checks shows the PR title in every state; thumbnails load from the attachment route after a reload.
+  - The palette runs composer and diff actions; phones get a Setup pane.
+  - The Shortcuts table shows the Conductor column; stores close with 4400 on an unknown `v`.
+- **Mac:** every parity gap from the audit:
+  - Thumbnails and state banners with the op checklist.
+  - Toasts, 04 copy and the base-branch picker.
+  - 04 sidebar indicators and hover card; a command palette on `Command`.
+  - Typed Settings → Project; sidebar-ordered workspace switching; a Reconnecting bar for the hub.
+  - Update checks that answer; the install link in Add project; accessibility labels.
+- **Checks on Linux:**
+  - `bun run typecheck`, `lint`, `format:check` and `test` pass: 762 Worker, 300 UI logic, 31 component, 203 protocol and 117 daemon tests. Conformance and deployed e2e tests skip.
+  - The web and browser Playwright suites pass (35 and 7 cases) against the container's Chromium.
+  - `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` and `cargo test --workspace` pass; `tempo-mac` has 194 tests.
+- **Owner decisions:** Q-4 to Q-10 are answered and built: Browser Run with Live View, owner-only previews, PR workspaces and one default model per agent (`IMPLEMENTATION_NOTES.md`).
+- **Merged main `548417d`:** PR #10 replaces the Settings dialog with sidebar settings pages (web and Mac); a project's Agents page holds the per-agent models and Browser Run. PR #11 adds Codex device-code login (`startCodexLogin`, `pollCodexLogin`, `cancelCodexLogin`); `auth.json` upload stays as a fallback.
+- **Merged main `c6c6c84`:** PR #12 lets a sleeping workspace browse synced files. The WorkspaceDO keeps a `file_cache` table (DO migration `0002_file_cache`), filled by best-effort sync passes. While sleeping, `listFiles` and `readFile` answer from it; a cache miss returns `CONTAINER_NOT_READY` without a wake. Web and Mac file views show the cached files and `Wake to browse files`. In every other state, `error` included, the two calls stay wake triggers (Q-5); 03 says so.
+- **Not done:** spikes, hosted gates B–E and Mac acceptance need a real account, logins and a Mac.
+
 ## Current state
 
 - **Web continuation (2026-10-11):** all four web regions are implemented in the existing source. Added local Playwright acceptance with production components, protocol-checked RPC fixtures and intercepted client WebSockets. CI now runs desktop Chromium, Firefox and WebKit, dark Chromium and phone Chromium. This is local browser evidence; hosted gates remain open.
@@ -45,7 +84,7 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 | Area | Spec | Done | State |
 | --- | --- | --- | --- |
 | Monorepo, tooling, CI | 06 | 85% | Turborepo + Bun, TS 6.0.3, oxlint, oxfmt, CI workflow. Local format check and published CI pass. |
-| `packages/protocol` | 02 | 95% | Effect Schema wire types, 63 API functions, channels, tempod envelopes. JSON Schema and fixtures are generated and checked; format check passes. |
+| `packages/protocol` | 02 | 95% | Effect Schema wire types, 68 API functions, channels, tempod envelopes. JSON Schema and fixtures are generated and checked; format check passes. |
 | `packages/settings`, `packages/cities` | 01, 03 | 100% | Done and tested. |
 | `tempod` daemon | 01 | 90% | Built; 109 tests pass. |
 | Worker: Durable Objects and ops | 01, 03 | 82% | Interim review fixes pass local Worker tests; live restart validation pending. |
@@ -56,8 +95,8 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 | Container image and deploy | 01, 05 | 85% | Dockerfile, versions.json, Alchemy + wrangler deploy. |
 | Web UI | 04 | implemented with contract gaps | Regions are present; local browser acceptance added. Historical usage, closed PR titles, attachment retrieval, hosted gates and macOS shortcut verification remain. |
 | Tempo for Mac | 07 | integrated source; native acceptance open | Review, file tabs, processes/remote terminal, settings, diagnostics, shell actions and local release helpers are wired. Native/hosted acceptance remains. |
-| Private previews + Browser Run | 00 Q3, 01 | design | Research done; decision brief not written. |
-| Spikes S1–S16, acceptance tests AT-1–AT-37 | 06 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
+| Owner-only previews + Browser Run | 00 Q3, 01, 05 | built | Owner decisions Q-4 and Q-10. Spike S17, AT-16 and AT-39 are not run. |
+| Spikes S1–S17, acceptance tests AT-1–AT-40 | 06, 07 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
 
 ## Done
 
@@ -141,7 +180,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [ ] A test for a real DO restart with the tempod socket closed.
 
 **tempod**
-- [ ] A fresh spec review after the 18 fixes.
+- [x] A fresh spec review after the 18 fixes (2026-10-12 audit; one gap, the Codex lease on unplanned stops, is fixed).
 - [x] Implement zombie reaping (Q-2, owner approved). Verified by the Linux image smoke tests.
 - [x] Run daemon tests inside the full container image (112 pass, rule 14).
 
@@ -150,7 +189,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [x] Implemented dialogs, indicators, notifications, action registry and phone variants; existing UI model/component tests pass.
 - [x] Add rendered local browser acceptance and run it in CI. Coverage and boundaries are in `WEB_ACCEPTANCE.md`.
 - [ ] Complete deployed gates B–D with real agent sessions and keeled, including PR checks, previews, restart durability and credential grep.
-- [ ] Resolve the shared contracts in `WEB-CLIENT-CORE-REQUESTS.md`: historical turn usage, closed/merged PR titles and authenticated attachment retrieval.
+- [x] Resolve the shared contracts in `WEB-CLIENT-CORE-REQUESTS.md`: historical turn usage, closed/merged PR titles and authenticated attachment retrieval. Both clients use them.
 - [ ] Verify every shortcut in shipped Chrome, Safari and Firefox on macOS.
 
 **Tempo for Mac (07), cloud implementation continuation**
@@ -165,23 +204,21 @@ The owner elected to test locally. These source milestones do not claim an M1–
 **Private previews and Browser Run (owner request, 2026-10-11)**
 - [x] Research: Browser Run, Protected Quick Tunnels, Cloudflare Access, code integration points.
 - [x] Three designs; two reviewed.
-- [ ] Review of the in-container cloudflared design. Research found that cloudflared needs port 7844, and only ports 80 and 443 leave the container (05).
-- [ ] Decision brief, then the owner's decisions (Q3 and Q-4).
-- [ ] Spec changes (00, 01, 02, 04, 05, 07), then the build.
+- [x] Review of the in-container cloudflared design. Rejected: cloudflared needs port 7844, and only ports 80 and 443 leave the container (05).
+- [x] The owner's decisions (00 Q3, Q-4 and Q-10).
+- [x] Spec changes (00, 01, 02, 04, 05, 07), then the build.
 
 **Needs a Cloudflare account and real logins**
-- [ ] Spikes S1–S16 (gate A).
-- [ ] Acceptance tests AT-1–AT-37, e2e and conformance runs.
+- [ ] Spikes S1–S17 (gate A).
+- [ ] Acceptance tests AT-1–AT-40, e2e and conformance runs.
 - [ ] First real deploy.
 
 ## Decisions waiting on the owner
 
 See `IMPLEMENTATION_NOTES.md`:
 - **S-1 to S-6:** spec changes to make.
-- **Q-1 to Q-4:** open questions.
 - **M-1:** remote-image blocking in the Mac app.
-- **00 Q1 to Q5 and 07 Q7:** open questions in the spec.
-- **Private previews:** the design choice, once the brief is ready.
+- **00 Q1, Q2, Q4 and Q5, and 07 Q7:** open questions in the spec.
 
 ## Core cloud implementation audit (2026-10-11)
 
