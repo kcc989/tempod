@@ -4215,6 +4215,8 @@ pub struct Turn {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub stop_reason: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub usage: ::std::option::Option<TurnUsage>,
 }
 ///`TurnPrompt`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4292,6 +4294,31 @@ impl ::std::convert::TryFrom<::std::string::String> for TurnStatus {
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
+}
+///`TurnUsage`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct TurnUsage {
+    #[serde(
+        rename = "cachedReadTokens",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub cached_read_tokens: ::std::option::Option<f64>,
+    #[serde(
+        rename = "cachedWriteTokens",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub cached_write_tokens: ::std::option::Option<f64>,
+    #[serde(rename = "inputTokens")]
+    pub input_tokens: f64,
+    #[serde(rename = "outputTokens")]
+    pub output_tokens: f64,
+    #[serde(
+        rename = "thoughtTokens",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub thought_tokens: ::std::option::Option<f64>,
+    #[serde(rename = "totalTokens")]
+    pub total_tokens: f64,
 }
 ///`UnlinkProjectIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]

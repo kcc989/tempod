@@ -1,4 +1,5 @@
 import type { Env } from "../env.ts";
+import { errorText, log } from "../log.ts";
 
 export const PREVIEW_HEADER = "x-tempo-preview";
 
@@ -32,7 +33,17 @@ export const handlePreview = async (request: Request, env: Env, url: URL): Promi
   // previewFetch runs inside the DO's fetch(), because RPC cannot carry a WebSocket upgrade.
   const headers = new Headers(request.headers);
   headers.set(PREVIEW_HEADER, `${parsed.port}:${parsed.token}`);
-  const res = await env.WORKSPACE.getByName(parsed.workspaceId).fetch(new Request(request, { headers }));
+  let res: Response;
+  try {
+    res = await env.WORKSPACE.getByName(parsed.workspaceId).fetch(new Request(request, { headers }));
+  } catch (e) {
+    log("error", "preview request failed", {
+      workspaceId: parsed.workspaceId,
+      port: parsed.port,
+      error: errorText(e),
+    });
+    return new Response("Something went wrong.", { status: 502, headers: PRIVACY_HEADERS });
+  }
   if (res.webSocket) return res;
   const out = new Response(res.body, res);
   for (const [k, v] of Object.entries(PRIVACY_HEADERS)) out.headers.set(k, v);

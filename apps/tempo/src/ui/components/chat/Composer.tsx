@@ -345,6 +345,9 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     if (running) cancel.mutate({ workspaceId, turnId: running.id });
   };
 
+  useAction("stop", stop, { enabled: !!running });
+  useAction("togglePlan", () => togglePlan(), { enabled: planId !== null && !pickersDisabled });
+
   useShortcuts(
     {
       send: () => {

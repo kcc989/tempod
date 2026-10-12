@@ -17,10 +17,12 @@ import {
   newId,
   PLAYWRIGHT_MCP_SERVER,
   TempoError,
+  toTurnUsage,
   type AgentId,
   type PermissionOption,
   type SessionStartResult,
   type TempodEvent,
+  type TurnUsage,
 } from "@tempo/protocol";
 import type { Subprocess } from "bun";
 import { ITEM_CONTENT_MAX, tailLines } from "../bounds.ts";
@@ -507,12 +509,19 @@ export class AgentSession {
     this.mapper.startTurn(turnId);
     this.deps.emit({ kind: "turn.started", sessionId: this.sessionId, turnId });
     this.conn.agent
-      .request<{ stopReason?: unknown }>("session/prompt", {
+      .request<{ stopReason?: unknown; usage?: unknown }>("session/prompt", {
         sessionId: this.acpSessionId,
         prompt: content as unknown as AcpContentBlock[],
       })
       .then(
-        (res) => this.finishTurn(turn, typeof res?.stopReason === "string" ? res.stopReason : null),
+        (res) =>
+          this.finishTurn(
+            turn,
+            typeof res?.stopReason === "string" ? res.stopReason : null,
+            undefined,
+            false,
+            toTurnUsage(res?.usage),
+          ),
         (e: unknown) => void this.onPromptError(turn, e),
       );
     return true;
@@ -573,6 +582,7 @@ export class AgentSession {
     stopReason: string | null,
     error?: { code: string; message: string },
     interrupted = false,
+    usage: TurnUsage | null = null,
   ): void {
     if (turn.ended) return;
     turn.ended = true;
@@ -593,6 +603,7 @@ export class AgentSession {
       stopReason,
       ...(error ? { error } : {}),
       ...(interrupted ? { interrupted: true } : {}),
+      ...(usage ? { usage } : {}),
     });
     if (this.turn === turn) this.turn = null;
     this.lastUsed = Date.now();

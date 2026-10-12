@@ -198,6 +198,22 @@ describe("session.start", () => {
 
 describe("session.prompt", () => {
   test(
+    "turn.ended carries the token usage from the prompt response",
+    async () => {
+      const { start, prompt, ended } = await setup();
+      await start("s1");
+      expect(await prompt("s1", "t1", "usage")).toEqual({ accepted: true });
+      expect((await ended("t1")).usage).toEqual({
+        totalTokens: 1500,
+        inputTokens: 1200,
+        outputTokens: 300,
+        cachedReadTokens: 800,
+      });
+    },
+    T,
+  );
+
+  test(
     "chunks become one streaming item with coalesced deltas; turn.ended carries the stop reason",
     async () => {
       const { c, start, prompt, ended } = await setup();
@@ -206,6 +222,7 @@ describe("session.prompt", () => {
       const end = await ended("t1");
       expect(end.stopReason).toBe("end_turn");
       expect(end.error).toBeUndefined();
+      expect(end.usage).toBeUndefined();
       expect(c.of("turn.started").some((e) => e.turnId === "t1")).toBe(true);
       const created = c.of("item.created").filter((e) => e.turnId === "t1");
       expect(created.map((e) => e.item.kind)).toEqual(["agent_thought", "agent_message"]);

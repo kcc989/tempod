@@ -6,6 +6,7 @@ import {
   ContentBlock,
   PermissionOption,
   SessionMode,
+  TurnUsage,
 } from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
 import { ChangedFile } from "./types.ts";
@@ -112,6 +113,7 @@ export const TempodEvent = Schema.Union([
     stopReason: Schema.NullOr(Schema.String),
     error: Schema.optional(ResError),
     interrupted: Schema.optional(Schema.Boolean),
+    usage: Schema.optional(TurnUsage),
   }),
   ev("permission.requested", {
     requestId: Schema.String,

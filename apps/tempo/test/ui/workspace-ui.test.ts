@@ -245,6 +245,14 @@ describe("panels and layout", () => {
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: true });
   });
 
+  it("at phone width the Setup output opens as its own pane", () => {
+    setPhonePane("chat");
+    showBottomTab(W, "run");
+    expect(getLayout().phonePane).toBe("chat");
+    showBottomTab(W, "setup");
+    expect(getLayout().phonePane).toBe("setup");
+  });
+
   it("falls back to defaults when storage is broken", () => {
     storage.set("tempo:layout:panels", "{bad json");
     resetUiState();

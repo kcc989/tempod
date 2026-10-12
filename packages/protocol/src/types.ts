@@ -9,6 +9,7 @@ import {
   SessionMode,
   ToolCallContent,
   ToolLocation,
+  TurnUsage,
   Usage,
 } from "./acp.ts";
 import {
@@ -163,6 +164,7 @@ export const Turn = Schema.Struct({
   queuedAt: Ms,
   startedAt: N(Ms),
   endedAt: N(Ms),
+  usage: Schema.optional(TurnUsage),
 });
 export type Turn = typeof Turn.Type;
 

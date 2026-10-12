@@ -312,16 +312,24 @@ export const showRightTab = (workspaceId: string, tab: RightTab): void => {
   setLayout({ rightOpen: true });
 };
 
-/** Selects a bottom-panel tab and makes sure the right side and the bottom panel are open. */
+/**
+ * Selects a bottom-panel tab and makes sure the right side and the bottom panel are open. At
+ * phone width there is no bottom panel, so the Setup output shows as its own pane.
+ */
 export const showBottomTab = (workspaceId: string, tab: BottomTab): void => {
   setBottomTab(workspaceId, tab);
-  setLayout({ rightOpen: true, bottomOpen: true });
+  setLayout(
+    tab === "setup"
+      ? { rightOpen: true, bottomOpen: true, phonePane: "setup" }
+      : { rightOpen: true, bottomOpen: true },
+  );
 };
 
 // ---------------------------------------------------------------------------------------------
 // Layout (global, kept in localStorage)
 
-export type PhonePane = "chat" | "changes";
+/** `setup` has no bottom-navigation entry; the Setup banners open it. */
+export type PhonePane = "chat" | "changes" | "setup";
 
 export interface LayoutState {
   readonly sidebarOpen: boolean;

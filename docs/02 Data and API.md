@@ -183,7 +183,8 @@ CREATE TABLE turns (
   reverted       INTEGER NOT NULL DEFAULT 0,
   queued_at      INTEGER NOT NULL,
   started_at     INTEGER,
-  ended_at       INTEGER
+  ended_at       INTEGER,
+  usage_json     TEXT                      -- token usage the agent reported for this turn; null when none
 );
 CREATE INDEX turns_by_status ON turns(status, queue_pos);
 
@@ -564,7 +565,8 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | `WorkspaceSummary` | `id, projectId, slug, title, branch, baseBranch, state, attention, defaultAgent, prNumber, prState, checksState, pinned, lastActivityAt, createdAt, archivedAt, rev` |
 | `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, previewToken, ports: [{port, url}], settings, runningTurnId, queue: [turnId], imageRef, op, prTitle?` |
 | `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported) |
-| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false) |
+| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false), `usage?` (`TurnUsage`; absent when the agent sent none) |
+| `TurnUsage` | `totalTokens, inputTokens, outputTokens, thoughtTokens?, cachedReadTokens?, cachedWriteTokens?`: ACP v1 `PromptResponse.usage` for one turn. Counts that are not finite and non-negative are dropped; a missing required count drops the whole value. |
 | `Item` | `id, sessionId, turnId, kind, status, content, rev, createdAt, updatedAt` |
 | `ScriptRun` | `id, kind, scriptId, command, status, exitCode, signal, startedAt, endedAt` |
 | `ReviewComment` | `id, path, lineStart, lineEnd, side, body, status, sentTurnId, createdAt` |
@@ -684,7 +686,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `item.updated` | `sessionId, itemId, patch` |
 | `session.updated` | `sessionId, patch` (mode, config options, commands, usage, title) |
 | `turn.started` | `sessionId, turnId` |
-| `turn.ended` | `sessionId, turnId, stopReason, error?, interrupted?` |
+| `turn.ended` | `sessionId, turnId, stopReason, error?, interrupted?, usage?` (`TurnUsage` from the `session/prompt` response) |
 | `permission.requested` | `requestId, sessionId, turnId, itemId, title, options` |
 | `agent.exited` | `sessionId, code, signal, stderrTail` |
 | `script.output` | `runId, stream, data` |

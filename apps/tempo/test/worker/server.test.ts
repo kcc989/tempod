@@ -513,6 +513,27 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
     gh.installations = [];
   });
 
+  it("GitHub's setup_url stores the new installation for a signed-in owner (05 setup step 5)", async () => {
+    const o = await owner();
+    gh.installations = [
+      { id: o.installationId, account: { login: "acme", type: "Organization" }, suspended_at: null },
+      { id: 556001, account: { login: "fresh-org", type: "Organization" }, suspended_at: null },
+    ];
+    const anonymous = await setup("/setup/github/installed?installation_id=556001&setup_action=install");
+    expect(anonymous.status).toBe(302);
+    expect(await d1Row("SELECT * FROM github_installations WHERE installation_id = 556001")).toBeNull();
+    const res = await setup("/setup/github/installed?installation_id=556001&setup_action=install", {
+      headers: { Cookie: await sessionCookie(o.token) },
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("https://tempo.test/");
+    expect(await d1Row("SELECT * FROM github_installations WHERE installation_id = 556001")).toMatchObject({
+      user_id: o.userId,
+      account_login: "fresh-org",
+    });
+    gh.installations = [];
+  });
+
   it("listInstallations returns GITHUB_API_ERROR when GitHub refuses", async () => {
     const o = await owner();
     gh.installationsStatus = 403;
@@ -1587,6 +1608,22 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
     expect(obj?.httpMetadata?.contentType).toBe("text/plain");
     const rows = await doRows(stub, "SELECT * FROM attachments WHERE id = ?", body["attachmentId"]);
     expect(rows[0]).toMatchObject({ name: "notes.txt", mime: "text/plain", size_bytes: 11, r2_key: key });
+  });
+
+  it("refuses a cookie upload without an Origin header (05, CSRF) and one from another origin", async () => {
+    const o = await owner();
+    const { workspaceId } = await seedWorkspace(o);
+    const cookie = await sessionCookie(o.token);
+    const file = () => formWith(new File(["x"], "x.txt", { type: "text/plain" }));
+    const bare = await postAttachment(workspaceId, file(), { Cookie: cookie });
+    expect(((await bare.json()) as ErrorBody).code).toBe("FORBIDDEN");
+    const foreign = await postAttachment(workspaceId, file(), {
+      Cookie: cookie,
+      Origin: "https://evil.test",
+    });
+    expect(((await foreign.json()) as ErrorBody).code).toBe("FORBIDDEN");
+    const same = await postAttachment(workspaceId, file(), { Cookie: cookie, Origin: APP_ORIGIN });
+    expect(same.status).toBe(200);
   });
 
   it("returns FILE_TOO_LARGE for a file over 10 MiB and stores nothing", async () => {

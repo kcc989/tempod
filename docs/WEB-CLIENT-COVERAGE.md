@@ -43,7 +43,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Four-agent new-chat menu, unavailable login disabled | Present; models/modes come from agent config | chat-tabs/dialog models | AT-10 and all real login combinations |
 | Rename, close confirmation while running, closed reading | Present | chat-tabs logic; closed-chat fixture browser | Live cancellation/close and archived reading |
 | User bubbles, mentions, timestamps and checkpoint revert | Present | transcript model/permission components | AT-13 exact tree/safety checkpoint |
-| User attachment thumbnails | Same-browser cache present; reload/other-browser thumbnails blocked by missing read contract | attachment/block/composer tests | Authenticated attachment retrieval contract, then reload |
+| User attachment thumbnails | Present: same-browser upload cache first, then the owner-only `GET /api/workspaces/<id>/attachments/<id>` route for PNG, JPEG, GIF and WebP; name chip on error or other types | attachment-cache tests | Reload and other-browser check against a deployed route |
 | Agent GFM, lazy Shiki, code copy, streaming caret | Present; remote images/HTML never rendered | Markdown component/security and highlighting tests; streamed fixture | AT-3/4; clipboard and actual inline media |
 | Thought and handoff collapsed text | Present | transcript-model tests | Real agent thoughts and restart handoff |
 | Tool icon/title/status, expand, diffs/terminal text/file locations | Present; ACP terminal IDs have no output contract, and 01 advertises terminal=false | transcript/tool-content/expand helpers | AT-4; real adapter tool payloads |
@@ -78,7 +78,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Line/range/file draft comments, send to agent | Present | diff-model; composer/phone browser | AT-12 line drag and real sent payload |
 | All files tree, read-only Shiki file tabs | Present | file-tree/highlight logic; file-dialog browser | Large real repo, binary/error/sleeping paths |
 | Cmd-P fuzzy picker and Cmd-Shift-F search | Present; hosts now remain when right side is hidden; retry and phone explanation added | fixture browser hidden-panel journey; search/model tests | Real file failures, regex/limits, all macOS browsers |
-| Checks number/title/state/GitHub/check rows | Present for open PR; closed/merged title blocked by contract | checks-model | AT-17/18; core PR-title contract |
+| Checks number/title/state/GitHub/check rows | Present for every PR state: title from `WorkspaceDetail.prTitle` or the `refreshPullRequest` result | checks-model | AT-17/18 |
 | Browser address/reload/new tab, iframe restrictions | Present; excludes allow-top-navigation | browser-model tests | AT-16 real dev server/HMR and preview rotation |
 | Right-side/bottom toggles and panel persistence | Present | workspace-ui/layout/shortcuts tests | All macOS browsers and reload |
 | Setup live/history, rerun, continue anyway, settings issues | Present | script-runs/settings models | AT-14 real setup failure and warnings |

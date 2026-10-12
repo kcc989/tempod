@@ -1205,6 +1205,22 @@ describe("handlePreview without a match", () => {
     const res = await handlePreview(new Request(url), env as never, url);
     expect(res.status).toBe(404);
   });
+  it("answers 502 with the privacy headers when the WorkspaceDO throws, without logging the hostname", async () => {
+    const token = newPreviewToken();
+    const url = new URL(`https://5173-${newId()}-${token}.previews.test/`);
+    const throwing = {
+      ...env,
+      WORKSPACE: { getByName: () => ({ fetch: () => Promise.reject(new Error("boom")) }) },
+    };
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await handlePreview(new Request(url), throwing as never, url);
+    const logged = spy.mock.calls.map((c) => String(c[0])).join("\n");
+    spy.mockRestore();
+    expect(res.status).toBe(502);
+    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    expect(logged).not.toContain(token);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -1364,5 +1380,36 @@ describe("home backup credential boundary", () => {
         ),
       ).toBe(false);
     }
+  });
+});
+
+describe("Better Auth options (05, Secrets and Observability)", () => {
+  it("never stores GitHub OAuth tokens on the account row", async () => {
+    const { withoutOAuthTokens } = await import("../../src/auth/options.ts");
+    const row = withoutOAuthTokens({
+      id: "a1",
+      providerId: "github",
+      accessToken: "gho_secret",
+      refreshToken: "ghr_secret",
+      idToken: "id",
+    });
+    expect(row).toMatchObject({
+      id: "a1",
+      providerId: "github",
+      accessToken: null,
+      refreshToken: null,
+      idToken: null,
+    });
+  });
+
+  it("sends Better Auth log lines through the redact helper", async () => {
+    const { authLog } = await import("../../src/auth/options.ts");
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    authLog("warn", "oauth failed", { accessToken: "gho_secret", status: 401 }, new Error("boom"));
+    const line = JSON.parse(String(spy.mock.calls[0]![0]));
+    spy.mockRestore();
+    expect(line.msg).toBe("auth: oauth failed");
+    expect(line.args).toEqual([{ accessToken: "[redacted]", status: 401 }, "boom"]);
+    expect(JSON.stringify(line)).not.toContain("gho_secret");
   });
 });

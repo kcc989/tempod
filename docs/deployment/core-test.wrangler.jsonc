@@ -6,7 +6,11 @@
     "nodejs_compat"
   ],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
   },
   "vars": {
     "APP_HOST": "tempo-core-test.example.invalid",

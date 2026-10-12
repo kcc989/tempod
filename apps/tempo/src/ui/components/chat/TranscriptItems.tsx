@@ -36,7 +36,7 @@ import { formatDuration, formatTime } from "~/ui/lib/format";
 import { isEditableTarget } from "~/ui/lib/shortcuts";
 import { cn } from "~/ui/lib/utils";
 import { CONFIRM_TEXT, confirm, openFile } from "~/ui/state/workspace-ui";
-import { attachmentPreview } from "./attachment-cache";
+import { thumbnailSrc } from "./attachment-cache";
 import { reviewChipLabel } from "./composer-model";
 import { BlockViewer, UnifiedDiff } from "./ContentBlocks";
 import { toggleExpanded, useExpanded } from "./expand-store";
@@ -52,6 +52,7 @@ import {
   toolIcon,
   turnDuration,
   turnOutcome,
+  turnTokens,
   workspacePath,
   type ToolIcon,
 } from "./transcript-model";
@@ -146,26 +147,9 @@ function UserMessage({
                 <span className="truncate">{m.path}</span>
               </button>
             ))}
-            {attachments.map((a) => {
-              const preview = attachmentPreview(a.id);
-              return preview ? (
-                <img
-                  key={a.id}
-                  src={preview}
-                  alt={a.name}
-                  title={a.name}
-                  className="size-16 rounded-sm border object-cover"
-                />
-              ) : (
-                <span
-                  key={a.id}
-                  className="inline-flex max-w-60 items-center gap-1 rounded-sm border bg-background px-1.5 py-px text-xs"
-                >
-                  <PaperclipIcon className="size-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{a.name}</span>
-                </span>
-              );
-            })}
+            {attachments.map((a) => (
+              <AttachmentThumb key={a.id} workspaceId={ctx.workspaceId} attachment={a} />
+            ))}
             {reviewCommentIds.length > 0 && (
               <span className="inline-flex items-center gap-1 rounded-sm border bg-background px-1.5 py-px text-xs">
                 <MessageSquareIcon className="size-3 text-muted-foreground" />
@@ -533,14 +517,41 @@ function ErrorCard({ ctx, item, turn }: { ctx: ItemContext; item: ItemOf<"error"
   );
 }
 
-/** Under each turn: its duration, and how it ended when that is not plain success. */
+function AttachmentThumb({
+  workspaceId,
+  attachment,
+}: {
+  workspaceId: string;
+  attachment: { id: string; name: string; mime: string };
+}) {
+  const [failed, setFailed] = useState(false);
+  const src = failed ? undefined : thumbnailSrc(workspaceId, attachment);
+  return src ? (
+    <img
+      src={src}
+      alt={attachment.name}
+      title={attachment.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="size-16 rounded-sm border object-cover"
+    />
+  ) : (
+    <span className="inline-flex max-w-60 items-center gap-1 rounded-sm border bg-background px-1.5 py-px text-xs">
+      <PaperclipIcon className="size-3 shrink-0 text-muted-foreground" />
+      <span className="truncate">{attachment.name}</span>
+    </span>
+  );
+}
+
+/** Under each turn: its duration, its tokens when the agent sent usage, and how it ended when that is not plain success. */
 export function TurnFooter({ turn }: { turn: Turn }) {
   const ms = turnDuration(turn);
+  const tokens = turnTokens(turn);
   const outcome = turnOutcome(turn);
-  if (ms === null && outcome === null) return null;
+  if (ms === null && tokens === null && outcome === null) return null;
   return (
     <p className="text-xs text-muted-foreground">
-      {[ms !== null ? formatDuration(ms) : null, outcome].filter(Boolean).join(" · ")}
+      {[ms !== null ? formatDuration(ms) : null, tokens, outcome].filter(Boolean).join(" · ")}
     </p>
   );
 }

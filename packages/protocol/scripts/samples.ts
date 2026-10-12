@@ -96,6 +96,9 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       endedAt: null,
     }),
     w.turn(4, { status: "failed", stopReason: null, errorCode: "AGENT_CRASHED", reverted: true }),
+    w.turn(5, {
+      usage: { totalTokens: 15300, inputTokens: 12000, outputTokens: 3300, cachedReadTokens: 9000 },
+    }),
   ],
   UserMessageContent: [w.userMessageContent],
   AgentMessageContent: [

@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
+import { ChevronLeftIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
 import { BottomPanel } from "~/ui/components/processes/BottomPanel";
+import { SetupTab } from "~/ui/components/processes/SetupTab";
 import { useToggleRunAction } from "~/ui/components/processes/useScripts";
 import { ReviewDialogs } from "~/ui/components/review/ReviewDialogs";
 import { RightPanel } from "~/ui/components/review/RightPanel";
@@ -23,6 +25,7 @@ import {
   openDiff,
   openDialog,
   setLayout,
+  setPhonePane,
   toggleDiffScope,
 } from "~/ui/state/workspace-ui";
 
@@ -158,6 +161,18 @@ function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
       {phonePane === "changes" ? (
         <section aria-label="Changes" className="flex min-h-0 flex-1 flex-col">
           <RightPanel workspaceId={workspaceId} variant="phone" />
+        </section>
+      ) : phonePane === "setup" ? (
+        <section aria-label="Setup" className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center border-b px-2 py-1">
+            <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
+              <ChevronLeftIcon aria-hidden />
+              Back to chat
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1">
+            <SetupTab workspaceId={workspaceId} />
+          </div>
         </section>
       ) : (
         <section aria-label="Chat" className="flex min-h-0 flex-1 flex-col">
