@@ -1,5 +1,12 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { HANDOFF_FIRST_LINE, HANDOFF_MAX_CHARS, newId, revertNote, type TempodEvent } from "@tempo/protocol";
+import {
+  HANDOFF_FIRST_LINE,
+  HANDOFF_MAX_CHARS,
+  newId,
+  revertNote,
+  TURN_SUMMARY_RULE,
+  type TempodEvent,
+} from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { recoverSteering } from "../../src/do/workspace/queue.ts";
@@ -1934,10 +1941,11 @@ describe("prompt content blocks", () => {
   it(
     "sends the general prompt only on the first prompt of each session",
     async () => {
-      // 01 Send a prompt, block 1: "On the first prompt of a session only: a text block with the project's prompts.general, if it is set."
+      // 01 Send a prompt, block 1: "On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set."
       const ctx = await runningTurn({ prompt: "First", effective: withGeneral });
       const p1 = ctx.tempod.requestsOf("session.prompt")[0];
       expect(p1.content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: "First" },
       ]);
@@ -1956,6 +1964,7 @@ describe("prompt content blocks", () => {
       );
       const t3 = await prompt(ctx, session.id, "Third");
       expect((await waitPrompt(ctx, t3)).content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: "Third" },
       ]);
@@ -1964,11 +1973,12 @@ describe("prompt content blocks", () => {
   );
 
   it(
-    "sends no general prompt block when prompts.general is empty",
+    "sends only the turn-summary rule when prompts.general is empty",
     async () => {
       // 01 Send a prompt, block 1: "if it is set".
       const ctx = await runningTurn({ prompt: "Only text" });
       expect(ctx.tempod.requestsOf("session.prompt")[0].content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: "Only text" },
       ]);
     },
@@ -2179,6 +2189,7 @@ describe("prompt content blocks", () => {
       });
       const p = await waitPrompt(ctx, turn);
       expect(p.content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
@@ -2244,6 +2255,7 @@ describe("prompt content blocks", () => {
       await runInDurableObject(ctx.stub, (i: WorkspaceDO) => internals(i).core.kickQueue());
       await waitFor(async () => (await turnRow(ctx.stub, turn))?.status === "running", 5000, "turn running");
       expect(ctx.tempod.requestsOf("session.prompt").at(-1).content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
@@ -2280,6 +2292,7 @@ describe("prompt content blocks", () => {
       ctx.tempod.failures.delete("session.prompt");
       const t2 = await prompt(ctx, sessionId, "Second try");
       expect((await waitPrompt(ctx, t2)).content).toEqual([
+        { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: [HANDOFF_FIRST_LINE, "User: First try"].join("\n") },
         { type: "text", text: note },

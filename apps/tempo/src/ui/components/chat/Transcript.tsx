@@ -7,7 +7,8 @@ import { Button } from "~/ui/components/ui/button";
 import { LoadingText } from "~/ui/components/ui/spinner";
 import { useWorkspace } from "~/ui/hooks/useWorkspace";
 import { cn } from "~/ui/lib/utils";
-import { ItemView, TurnFooter, WorkingRow, type ItemContext } from "./TranscriptItems";
+import { useTranscriptDetail } from "~/ui/lib/transcript-detail";
+import { ItemView, TurnFooter, WorkingRow, WorkRow, type ItemContext } from "./TranscriptItems";
 import {
   announceText,
   buildTranscriptRows,
@@ -37,7 +38,11 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
   const ws = useWorkspace(workspaceId);
   const order = ws.order[sessionId] ?? EMPTY;
   const session = ws.sessions[sessionId];
-  const rows = useMemo(() => buildTranscriptRows(order, ws.items, ws.turns), [order, ws.items, ws.turns]);
+  const detail = useTranscriptDetail();
+  const rows = useMemo(
+    () => buildTranscriptRows(order, ws.items, ws.turns, detail),
+    [order, ws.items, ws.turns, detail],
+  );
   const archived = ws.workspace?.state === "archived" || ws.workspace?.state === "archiving";
   const idle = ws.workspace ? ws.workspace.runningTurnId === null && ws.workspace.queue.length === 0 : false;
   const ctx = useMemo<ItemContext>(
@@ -188,7 +193,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
         <Button
           size="sm"
           variant="outline"
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 shadow-sm"
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-background shadow-md hover:bg-accent dark:bg-background dark:hover:bg-accent"
           onClick={() => {
             stick.current = true;
             setAway(false);
@@ -230,7 +235,16 @@ function Row({
     const turn = turns[row.turnId];
     return turn ? (
       <div className={cn("pb-3", row.dim && "opacity-50")}>
-        <TurnFooter turn={turn} />
+        <TurnFooter turn={turn} worked={row.worked} />
+      </div>
+    ) : null;
+  }
+  if (row.kind === "work") {
+    const turn = turns[row.turnId];
+    const folded = row.itemIds.map((id) => items[id]).filter((i) => i !== undefined);
+    return turn ? (
+      <div className={cn("py-1.5", row.dim && "opacity-50")}>
+        <WorkRow ctx={ctx} turn={turn} items={folded} />
       </div>
     ) : null;
   }

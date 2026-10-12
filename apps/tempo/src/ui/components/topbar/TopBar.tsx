@@ -1,12 +1,14 @@
-import { CopyIcon, GitBranchIcon } from "lucide-react";
+import { CopyIcon, GitBranchIcon, PanelRightIcon } from "lucide-react";
 import { useState } from "react";
 import { ContainerPill, StatusIcon } from "~/ui/components/sidebar/indicators";
 import { Button } from "~/ui/components/ui/button";
 import { Skeleton } from "~/ui/components/ui/skeleton";
+import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { pillText } from "~/ui/lib/indicators";
+import { toggleRight } from "~/ui/state/workspace-ui";
 import { BaseBranchPicker } from "./BaseBranchPicker";
 import { requestCommit } from "./commit-request";
 import { InlineEdit } from "./InlineEdit";
@@ -24,7 +26,7 @@ export interface TopBarProps {
 
 /**
  * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`. Middle: preview ports.
- * Right: container pill, the primary git action and the overflow menu.
+ * Right: container pill, the primary git action, the overflow menu and the right-side toggle.
  */
 export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
   const summary = useHubWorkspace(workspaceId);
@@ -97,9 +99,14 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
       </div>
       <PortLinks workspaceId={w.id} ports={d?.ports ?? []} className="flex-1 justify-center" />
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <ContainerPill pill={pillFor(view)} />
+        <ContainerPill pill={pillFor(view)} onWake={w.state === "sleeping" ? actions.wake : undefined} />
         <PrimaryActionButton workspaceId={w.id} />
         <OverflowMenu view={view} actions={actions} />
+        <SimpleTooltip label="Toggle right side (⌘⌥B)">
+          <Button size="icon-sm" variant="ghost" aria-label="Toggle right side" onClick={toggleRight}>
+            <PanelRightIcon />
+          </Button>
+        </SimpleTooltip>
       </div>
     </header>
   );
@@ -116,7 +123,11 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
           {w.branch} → {w.baseBranch}
         </span>
       </div>
-      <ContainerPill pill={pillFor(view)} className="max-w-32" />
+      <ContainerPill
+        pill={pillFor(view)}
+        className="max-w-32"
+        onWake={w.state === "sleeping" ? actions.wake : undefined}
+      />
       <OverflowMenu view={view} actions={actions} phone />
     </header>
   );
