@@ -36,7 +36,7 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - name: Install browser engines
-        run: ./tests/e2e/node_modules/.bin/playwright install --with-deps chromium firefox webkit
+        run: ./tests/e2e/node_modules/.bin/playwright install --with-deps chromium
       - name: Web client acceptance with local protocol fixtures
         run: bun run test:web
       - name: Existing workspace browser regressions

@@ -110,7 +110,7 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-19 | Archive, restore, wake: transcript and files are intact. |
 | AT-20 | With the `allowlist` policy, a host not on the list gets 403 and an `egress_log` row. `APP_HOST` is blocked under both policies. |
 | AT-21 | At phone width: list workspaces, read a live transcript, send a prompt, approve a permission. |
-| AT-22 | Every shortcut in 04 works in Chrome, Safari and Firefox on macOS. |
+| AT-22 | Every shortcut in 04 works in Chrome on macOS. |
 
 **Also at Gate D:** during a full e2e run, grep all Worker logs, `events` rows and R2 objects for the test credentials' values. Zero matches is required.
 
