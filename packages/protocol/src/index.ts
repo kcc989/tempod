@@ -6,5 +6,6 @@ export * from "./settings.ts";
 export * from "./types.ts";
 export * from "./channels.ts";
 export * from "./tempod.ts";
+export * from "./mcp.ts";
 export * from "./api.ts";
 export * from "./redact.ts";

@@ -148,8 +148,22 @@
     "pushed": {
       "type": "boolean"
     },
-    "previewToken": {
-      "type": "string"
+    "prTitle": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "ports": {
       "type": "array",
@@ -174,6 +188,9 @@
         "required": ["port", "url"],
         "additionalProperties": true
       }
+    },
+    "browserActive": {
+      "type": "boolean"
     },
     "settings": {
       "$ref": "Settings.json"
@@ -303,8 +320,8 @@
     "errorDetail",
     "setupStatus",
     "pushed",
-    "previewToken",
     "ports",
+    "browserActive",
     "settings",
     "runningTurnId",
     "queue",

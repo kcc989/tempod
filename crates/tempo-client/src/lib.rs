@@ -20,8 +20,8 @@ pub use channel::{
 pub use error::{ApiError, DENIED_MESSAGE, NOT_TEMPO_MESSAGE, SignInError};
 pub use runtime::{Runtime, RuntimeHandle, Signal};
 pub use server::{
-    CLIENT_ID, Client, DEVICE_GRANT_TYPE, DeviceAuthorization, MAX_ATTACHMENT_BYTES,
-    SLOW_DOWN_STEP, Server, TokenStatus,
+    AttachmentFile, CLIENT_ID, Client, DEVICE_GRANT_TYPE, DeviceAuthorization,
+    MAX_ATTACHMENT_BYTES, SLOW_DOWN_STEP, Server, TokenStatus,
 };
 pub use token::Token;
 pub use version::{compare_versions, newer_version_available, parse_version};

@@ -414,6 +414,24 @@ export class Git {
     return this.op("checkpoint", true, () =>
       this.wrap(async () => {
         if (!SAFE_ID.test(p.checkpointId)) throw new TempoError("VALIDATION_FAILED", "Bad checkpoint id.");
+        const ref = CKPT_REF + p.checkpointId;
+        const existing = await this.revParse(ref);
+        if (existing) {
+          const tree = (await this.gitOk(["rev-parse", `${ref}^{tree}`], { readOnly: true })).trim();
+          const parent = (await this.gitOk(["rev-parse", `${ref}^1`], { readOnly: true })).trim();
+          const base = await this.checkpointBase(parent, baseBranch);
+          const bundle = this.deps.ckptBundle;
+          await rm(bundle, { force: true });
+          await this.gitOk(["bundle", "create", bundle, ref, ...(base.exclude ? [`^${base.sha}`] : [])]);
+          return {
+            commit: existing,
+            tree,
+            parent,
+            base: base.sha,
+            bundlePath: bundle,
+            bundleBytes: statSync(bundle).size,
+          };
+        }
         const index = this.deps.ckptIndex;
         mkdirSync(this.deps.stateDir, { recursive: true });
         await this.headSha();
@@ -443,7 +461,6 @@ export class Git {
             extraEnv: await this.identityEnv(),
           })
         ).trim();
-        const ref = CKPT_REF + p.checkpointId;
         await this.gitOk(["update-ref", ref, commit]);
         const base = await this.checkpointBase(parent, baseBranch);
         const bundle = this.deps.ckptBundle;

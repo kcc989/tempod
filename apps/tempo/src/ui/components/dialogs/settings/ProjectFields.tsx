@@ -8,13 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { Switch } from "~/ui/components/ui/switch";
 import { Textarea } from "~/ui/components/ui/textarea";
 import { cn } from "~/ui/lib/utils";
-import type { SettingsSource } from "@tempo/protocol";
+import { DEFAULT_SETTINGS, type SettingsSource } from "@tempo/protocol";
 import {
   effectiveEntries,
   effectiveLeaf,
+  getAt,
   INSTANCE_PRESETS,
   nextRowKey,
   sourceLabel,
+  toEdit,
   type EditValue,
   type EffectiveContext,
   type EnvRow,
@@ -34,7 +36,7 @@ function SourceBadge({ source }: { source: SettingsSource }) {
   );
 }
 
-/** One settings key: its effective value and source, and Tempo's own value when set here. */
+/** Editing a key creates an override; resetting it restores inheritance on save. */
 export function FieldRow({
   def,
   state,
@@ -50,11 +52,16 @@ export function FieldRow({
 }) {
   const id = fieldId(def);
   const isRecord = def.kind === "run" || def.kind === "env";
-  const setValue = (value: EditValue) => onChange({ ...state, value });
+  const setValue = (value: EditValue) => onChange({ set: true, value });
+  const savedOverride = getAt(ctx.layer, def.path) !== undefined;
+  const resetPending = !state.set && savedOverride;
+  const inheritedValue = () => toEdit(def, isRecord ? {} : getAt(ctx.settings ?? DEFAULT_SETTINGS, def.path));
+  const value = state.set || resetPending ? state.value : inheritedValue();
+  const source = state.set ? "tempo" : effectiveLeaf(def, ctx).source;
 
   return (
-    <div role="group" aria-labelledby={`${id}-label`} className="grid gap-1.5 py-2.5">
-      <div className="flex items-start gap-3">
+    <div role="group" aria-labelledby={`${id}-label`} className="grid gap-3 py-6">
+      <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <span id={`${id}-label`} className="text-sm font-medium">
             {def.label}
@@ -62,21 +69,30 @@ export function FieldRow({
           {def.hint && <p className="text-xs text-muted-foreground">{def.hint}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Switch
-            id={`${id}-set`}
-            checked={state.set}
-            onCheckedChange={(on) => onChange({ ...state, set: on })}
-          />
-          <Label htmlFor={`${id}-set`} className="text-xs font-normal text-muted-foreground">
-            Set in Tempo
-          </Label>
+          {!resetPending && (!isRecord || state.set) && <SourceBadge source={source} />}
+          {state.set && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-label={`Reset ${def.label} to repository or default value`}
+              onClick={() => onChange({ set: false, value: savedOverride ? state.value : inheritedValue() })}
+            >
+              Reset to inherited
+            </Button>
+          )}
         </div>
       </div>
-      {isRecord ? <EffectiveEntries def={def} ctx={ctx} /> : <EffectiveValue def={def} ctx={ctx} />}
-      {state.set && (
-        <div className="rounded-md border border-dashed p-2">
-          <Editor id={id} def={def} value={state.value} onChange={setValue} invalid={error !== undefined} />
+      {isRecord && <EffectiveEntries def={def} ctx={ctx} />}
+      {resetPending ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <p role="status">Save to restore the repository or default value.</p>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setValue(state.value)}>
+            Undo reset
+          </Button>
         </div>
+      ) : (
+        <Editor id={id} def={def} value={value} onChange={setValue} invalid={error !== undefined} />
       )}
       {error && (
         <p role="alert" className="text-xs text-destructive">
@@ -87,43 +103,32 @@ export function FieldRow({
   );
 }
 
-function EffectiveValue({ def, ctx }: { def: FieldDef; ctx: EffectiveContext }) {
-  const { text, source } = effectiveLeaf(def, ctx);
-  const code = def.kind === "multiline" || def.kind === "hosts" || def.path === "git.branch_prefix";
-  return (
-    <div className="flex items-start gap-2 text-xs">
-      <span className="text-muted-foreground">In effect</span>
-      <span
-        className={cn("min-w-0 flex-1 break-words whitespace-pre-wrap", code && "line-clamp-3 font-mono")}
-      >
-        {text}
-      </span>
-      <SourceBadge source={source} />
-    </div>
-  );
-}
-
 function EffectiveEntries({ def, ctx }: { def: FieldDef; ctx: EffectiveContext }) {
   const entries = effectiveEntries(def, ctx);
   if (entries.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        In effect: none. Entries set in Tempo are added to the ones in repo files.
+        No entries in effect. Tempo entries merge with repository entries; matching names override them.
       </p>
     );
   }
   return (
-    <ul aria-label={`${def.label} in effect`} className="grid gap-0.5 text-xs">
-      {entries.map((e) => (
-        <li key={e.key} className="flex items-start gap-2">
-          {def.kind === "run" && <span className="shrink-0 font-medium">{e.key}</span>}
-          <span className="min-w-0 flex-1 truncate font-mono" title={e.text}>
-            {e.text}
-          </span>
-          <SourceBadge source={e.source} />
-        </li>
-      ))}
-    </ul>
+    <div className="grid gap-1">
+      <p className="text-xs text-muted-foreground">
+        Tempo entries merge with repository entries; matching names override them.
+      </p>
+      <ul aria-label={`${def.label} in effect`} className="grid gap-0.5 text-xs">
+        {entries.map((e) => (
+          <li key={e.key} className="flex items-start gap-2">
+            {def.kind === "run" && <span className="shrink-0 font-medium">{e.key}</span>}
+            <span className="min-w-0 flex-1 truncate font-mono" title={e.text}>
+              {e.text}
+            </span>
+            <SourceBadge source={e.source} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -140,7 +145,7 @@ function Editor({
   onChange: (v: EditValue) => void;
   invalid: boolean;
 }) {
-  const label = `${def.label}, set in Tempo`;
+  const label = def.label;
   switch (value.kind) {
     case "text": {
       const set = (text: string) => onChange({ kind: "text", text });
@@ -192,7 +197,12 @@ function Editor({
     case "bool":
       return (
         <div className="flex items-center gap-2">
-          <Switch id={id} checked={value.on} onCheckedChange={(on) => onChange({ kind: "bool", on })} />
+          <Switch
+            id={id}
+            aria-label={label}
+            checked={value.on}
+            onCheckedChange={(on) => onChange({ kind: "bool", on })}
+          />
           <Label htmlFor={id} className="text-xs font-normal">
             {value.on ? "On" : "Off"}
           </Label>
@@ -247,7 +257,7 @@ function InstanceEditor({
         value={value.preset}
         onValueChange={(v) => onChange({ ...value, preset: v as InstanceEdit["preset"] })}
       >
-        <SelectTrigger id={id} aria-label="Instance size, set in Tempo" className="w-56">
+        <SelectTrigger id={id} aria-label="Instance size" className="w-56">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -362,9 +372,7 @@ function EnvRowsEditor({
     onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
   return (
     <div id={id} className="grid gap-2">
-      <p className="text-xs text-muted-foreground">
-        Stored as plain text. Put keys and tokens in secrets below.
-      </p>
+      <p className="text-xs text-muted-foreground">Stored as plain text. Put keys and tokens in Secrets.</p>
       {rows.map((r, i) => (
         <div key={r.key} className="grid grid-cols-[10rem_minmax(0,1fr)_auto] items-center gap-1.5">
           <Input

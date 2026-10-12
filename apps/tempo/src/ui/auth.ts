@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { ERROR_MESSAGES } from "@tempo/protocol";
+import { ERROR_MESSAGES, type AppSetupStatus } from "@tempo/protocol";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 
@@ -222,10 +222,7 @@ export const approveDevice = (userCode: string): Promise<DeviceLookup> => decide
 export const denyDevice = (userCode: string): Promise<DeviceLookup> => decide("/device/deny", userCode);
 
 /** GET /api/setup/status (no auth): whether the GitHub App exists, and its install link. */
-export interface SetupStatus {
-  readonly configured: boolean;
-  readonly installUrl: string | null;
-}
+export type SetupStatus = AppSetupStatus;
 
 export const setupStatusQueryOptions = queryOptions({
   queryKey: ["setup", "status"] as const,

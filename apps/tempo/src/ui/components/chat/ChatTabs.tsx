@@ -171,7 +171,13 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const closed = useMemo(() => closedSessions(sessions), [sessions]);
 
   const newChatMenu = (
-    <NewChatMenu open={menuOpen} onOpenChange={setMenuOpen} disabled={!ready || archived} onPick={newChat} />
+    <NewChatMenu
+      workspaceId={workspaceId}
+      open={menuOpen}
+      onOpenChange={setMenuOpen}
+      disabled={!ready || archived}
+      onPick={newChat}
+    />
   );
   const closedMenu =
     closed.length > 0 ? (
@@ -390,19 +396,22 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   );
 }
 
-function NewChatMenu({
+export function NewChatMenu({
+  workspaceId,
   open,
   onOpenChange,
   disabled,
   onPick,
 }: {
+  workspaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
   onPick: (agent: AgentId) => void;
 }) {
   const creds = useCredentialStatus().data;
-  const entries = agentMenu(creds);
+  const settings = useWorkspaceSelector(workspaceId, (s) => s.workspace?.settings ?? null);
+  const entries = agentMenu(creds, settings);
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
@@ -417,9 +426,7 @@ function NewChatMenu({
         {entries.map((e) => (
           <DropdownMenuItem key={e.agent} disabled={!e.enabled} onSelect={() => onPick(e.agent)}>
             <span className="flex-1">{e.label}</span>
-            {!e.enabled && (
-              <DropdownMenuShortcut className="tracking-normal">Add login in Settings</DropdownMenuShortcut>
-            )}
+            {e.hint && <DropdownMenuShortcut className="tracking-normal">{e.hint}</DropdownMenuShortcut>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

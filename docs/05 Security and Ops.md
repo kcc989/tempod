@@ -10,11 +10,12 @@ The main threat is code or text inside a workspace (a hostile dependency, a pois
 | --- | --- | --- |
 | GitHub token | Theft from the container | Never in the container; `TempoOutbound` adds it. Scoped to one repo. Lives about 1 hour. |
 | OpenRouter, Anthropic, OpenAI keys | Theft from the container | Never in the container; swapped for a placeholder at egress |
+| MCP server secret headers | Theft from the container, or replay to another host | Never in the container; rule 12 swaps the placeholder only for the host of the server that owns it |
 | Claude token, Codex `auth.json` | Theft by code running in the container | Accepted risk R4 for one owner. Egress log shows every host contacted. The `allowlist` policy can limit hosts. |
 | Other workspaces | One container reads another's files | One container per workspace; no shared disk or network |
 | Tempo API | A container calls the Tempo app | Rule 0 in `TempoOutbound` blocks `APP_HOST`; every API call needs the owner's session cookie |
 | `tempod` | Someone else drives the daemon | Reachable only through `getTcpPort` from its own DO; per-start bearer token |
-| Previews | Someone finds a preview URL | 16-character secret in the hostname; rotate on demand; `Referrer-Policy: no-referrer` |
+| Previews | Someone finds a preview URL | The URL holds no secret; every request needs the owner's preview cookie; reset on demand; `Referrer-Policy: no-referrer` |
 | The UI | XSS from agent output | Markdown rendered without raw HTML; remote images not loaded |
 | The UI | CSRF | `SameSite=Lax` cookie, `POST` for writes, `Origin` check |
 | Supply chain | A changed package or image | Every version pinned; the base image pinned by digest |
@@ -53,7 +54,7 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 
 - MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, or in R2.
 - The log helper redacts any field whose name matches `/token|key|secret|password|authorization|auth_json|cookie/i`.
-- Home backups exclude `.codex/auth.json` and `.claude/.credentials.json` (01, Durability).
+- Home backups exclude `.codex/auth.json`, `.claude/.credentials.json` and `.tempod/` (01, Durability). The daemon outbox may contain unacknowledged credential refreshes.
 - Container snapshots do hold Codex `auth.json`. They stay inside the Cloudflare account; this is part of R4.
 - The `system` CredentialDO derives its key with salt `system` instead of a user id.
 - Rotating `TEMPO_ENCRYPTION_KEY` is not supported in version 1. A new key makes every stored secret unreadable, and the owner enters them again. The GitHub App must then be set up again.
@@ -66,21 +67,25 @@ A container has no internet of its own. Every HTTP and HTTPS request goes throug
 - Git over SSH does not work. Repos use HTTPS only.
 - **Rule 0**, before the rules in 01: a request whose host is `APP_HOST` returns 403. Containers MUST NOT call the Tempo API.
 - Policy `open` (default): every host passes, with credentials added only by rules 2 to 6.
-- Policy `allowlist`: only the built-in agent hosts (01) and the project's `egress_allowlist` patterns pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
-- Every request is logged to `egress_log`: host, path without query, status, time, rule number. The owner sees the newest 10,000 rows in Diagnostics.
+- Policy `allowlist`: only the built-in agent hosts (01), the project's `egress_allowlist` patterns, and the hosts of the owner's enabled `http` and `sse` MCP servers pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
+- Every request is logged to `egress_log`: host, path without query, status, time, rule number. The WorkspaceDO keeps the newest 10,000 rows. Diagnostics searches all of them (Observability).
 - Cloud metadata addresses are not reachable from containers, so Tempo needs no rule for them.
 
 ## Preview access
 
-A preview URL is a capability: whoever has the link can use the app behind it. That keeps previews working in iframes, on phones and in Browser Run, with no cookies.
+A preview is for the owner only. The hostname names the port and the workspace and holds no secret. Each request needs a preview cookie, and only an owner-only server function can start one.
 
-- Token: 16 characters from `[a-z0-9]`, from `crypto.getRandomValues`. That is about 82 bits.
-- Compare tokens in constant time. A wrong token or an unknown workspace returns 404, never 403.
-- `rotatePreviewToken` makes a new token; old links stop working at once.
+- **Entry link.** `openPreview {workspaceId, port}` returns `https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>/__tempo/enter?code=<code>`. The code is 32 characters from `[a-z0-9]`, from `crypto.getRandomValues`. It works once, for that port only, for 60 s. The WorkspaceDO stores only its SHA-256 in `preview_codes`.
+- **Enter.** `GET /__tempo/enter?code=<code>` calls `previewEnter(port, code)`. A good code is deleted and the Worker answers `303` to `/` with `Set-Cookie: __Host-tempo_preview=<value>; Path=/; Secure; HttpOnly; SameSite=None; Partitioned; Max-Age=86400` and `Cache-Control: no-store`. A bad, used or expired code returns the preview 404 page.
+- **Cookie value.** `<expiresAt>.<mac>`: `expiresAt` in epoch seconds, 24 hours ahead; `mac` is base64url HMAC-SHA256 with `preview_key` over `<port>.<expiresAt>`. The DO checks the expiry and compares the MAC in constant time. The Worker removes the cookie before the request reaches the app.
+- `Partitioned` keeps the cookie working inside Tempo's iframe, where it is a third-party cookie.
+- **Preview 404 page.** One fixed page, the same for an unknown workspace, a bad host, a missing or bad cookie and a bad code: `This preview opens only from Tempo.` It never says whether the workspace exists.
+- `rotatePreviewKey` makes a new `preview_key`; every preview cookie for the workspace stops working at once.
+- Paths under `/__tempo/` on a preview host belong to Tempo; the app never sees them.
 - The Worker adds `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex, nofollow` to every preview response.
 - `PREVIEW_DOMAIN` MUST NOT be `APP_HOST` or a parent of it, so preview pages cannot read Tempo's cookies.
-- MUST NOT log full preview hostnames. Log the port and workspace id only.
-- Open question Q3 (00): whether to add Cloudflare Access in front of previews.
+- MUST NOT log preview codes, cookie values or request URLs on a preview host. Log the port and workspace id only.
+- Browser Run does not use previews: it reaches the app through `BrowserOutbound` (01, Browser Run).
 
 ## Deployment and configuration
 
@@ -107,7 +112,7 @@ One deploy command builds the image, deploys the Worker and runs migrations. A o
 | `DATA` | R2 binding | Bucket `tempo-data` |
 | `WORKSPACE`, `USER_HUB`, `CREDENTIALS` | DO bindings | As in 01 |
 
-**Deploy.** `bun run deploy` runs Alchemy v2. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and print `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>`.
+**Deploy.** `bun run deploy` first verifies Cloudflare API access and the existing Alchemy state-store health endpoint, then runs Alchemy v2. An unreachable existing store must stop deployment before bootstrap; a network error must never be interpreted as absent state. When the store exists, the wrapper disables automatic bootstrap/upgrade approval (`--yes`) and runs without prompts. Existing state-store auth/encryption secrets and the Tempo secrets must be preserved. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and print `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>`.
 
 **GitHub App setup** (manifest flow)
 
@@ -136,7 +141,7 @@ Every log line is structured JSON, and every workspace has a Diagnostics view th
 | Ops | The last 50 ops with status, steps, timings and errors |
 | Container | State, instance, image ref, snapshot list, `tempod` version and incarnation |
 | Logs | The newest 200 `log` events |
-| Egress | The newest 500 `egress_log` rows, filterable by host and status |
+| Egress | The newest 500 `egress_log` rows that match the host and status filters. The WorkspaceDO applies the filters to all stored rows. |
 | Sessions | Each session's agent, ACP session id, capabilities and live or not |
 
 ## Upgrades and versioning

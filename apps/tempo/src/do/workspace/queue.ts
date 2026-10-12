@@ -5,11 +5,14 @@ import {
   HANDOFF_MAX_CHARS,
   PLACEHOLDER,
   TempoError,
+  TURN_SUMMARY_RULE,
   type AgentId,
   type ContentBlock,
-  type TurnPrompt,
+  type Settings,
   type Turn,
+  type TurnUsage,
 } from "@tempo/protocol";
+import { EMPTY_PROMPT, json, readItemContent } from "../../db/json.ts";
 import {
   attachments,
   items,
@@ -23,8 +26,10 @@ import {
 import { SECRET_KEYS } from "../credential.ts";
 import { errorText, log } from "../../log.ts";
 import { bytesToBase64 } from "../../lib/crypto.ts";
+import { mcpToSpec } from "../../lib/mcp.ts";
+import { browserRunEnabled } from "./browser.ts";
 import { requireTempod } from "./container.ts";
-import { parseJson, type WorkspaceCore } from "./core.ts";
+import type { WorkspaceCore } from "./core.ts";
 import { backupHomeIfDue, takeCheckpoint, uploadBundleWithRetry } from "./durability.ts";
 import { refreshChanges } from "./git.ts";
 
@@ -73,7 +78,11 @@ export const requireCredential = async (core: WorkspaceCore, agent: AgentId): Pr
  * The adapter env for one agent (01, Agents): the Claude token travels in the env, Codex gets
  * its auth.json over the socket, everything else uses the placeholder that TempoOutbound swaps.
  */
-export const agentEnv = async (core: WorkspaceCore, agent: AgentId): Promise<Record<string, string>> => {
+export const agentEnv = async (
+  core: WorkspaceCore,
+  agent: AgentId,
+  signal?: AbortSignal,
+): Promise<Record<string, string>> => {
   const creds = core.credentials();
   switch (agent) {
     case "claude": {
@@ -85,11 +94,11 @@ export const agentEnv = async (core: WorkspaceCore, agent: AgentId): Promise<Rec
     case "codex": {
       const auth = await creds.getCodexAuth();
       if (auth) {
-        await requireTempod(core).request("credential.put", {
-          provider: "codex",
-          content: auth.content,
-          version: auth.version,
-        });
+        await requireTempod(core).request(
+          "credential.put",
+          { provider: "codex", content: auth.content, version: auth.version },
+          signal ? { signal } : {},
+        );
         await creds.addCodexLease(core.workspaceId);
         core.setKv("codexLease", true);
         return {};
@@ -105,37 +114,62 @@ export const agentEnv = async (core: WorkspaceCore, agent: AgentId): Promise<Rec
   }
 };
 
+/** Agents whose sessions need `agent.models.<agent>` (01, Agents: Model choice). */
+export const MODEL_REQUIRED_AGENTS: ReadonlySet<AgentId> = new Set(["opencode", "pi"]);
+
+/**
+ * The `model` of session.start (01, Start a session 2): the session's own choice, else
+ * `agent.models.<agent>`, else none. OpenCode and Pi without one fail with MODEL_REQUIRED.
+ */
+export const sessionModel = (
+  agent: AgentId,
+  config: Readonly<Record<string, unknown>>,
+  settings: Settings,
+): string | null => {
+  const own = typeof config["model"] === "string" ? config["model"] : "";
+  const model = own || settings.agent.models[agent];
+  if (model) return model;
+  if (MODEL_REQUIRED_AGENTS.has(agent))
+    throw new TempoError("MODEL_REQUIRED", undefined, `agent.models.${agent} is empty`);
+  return null;
+};
+
 /** Starts (or reloads) the session's adapter in tempod and stores what the agent reports. */
-export const ensureSessionLive = async (core: WorkspaceCore, session: SessionRow): Promise<void> => {
+export const ensureSessionLive = async (
+  core: WorkspaceCore,
+  session: SessionRow,
+  signal?: AbortSignal,
+): Promise<void> => {
   if (core.liveSessions.has(session.id)) return;
   const tempod = requireTempod(core);
   const agent = session.agent as AgentId;
-  const env = await agentEnv(core, agent);
-  const config = parseJson<Record<string, unknown>>(session.configJson, {});
-  const settings = core.settings();
-  const model =
-    typeof config["model"] === "string"
-      ? (config["model"] as string)
-      : agent === settings.agent.default && settings.agent.model
-        ? settings.agent.model
-        : null;
-  const res = await tempod.request("session.start", {
-    sessionId: session.id,
-    agent,
-    env,
-    modeId: session.modeId ?? DEFAULT_MODE[agent],
-    model,
-    acpSessionId: session.acpSessionId,
-  });
+  const config = json.config.read(session.configJson, {});
+  const model = sessionModel(agent, config, core.settings());
+  const env = await agentEnv(core, agent, signal);
+  const opts = signal ? { signal } : {};
+  const res = await tempod.request(
+    "session.start",
+    {
+      sessionId: session.id,
+      agent,
+      env,
+      modeId: session.modeId ?? DEFAULT_MODE[agent],
+      ...(model ? { model } : {}),
+      browser: browserRunEnabled(core) ? "run" : "local",
+      acpSessionId: session.acpSessionId,
+      mcpServers: (await core.mcpServers()).map(mcpToSpec),
+    },
+    opts,
+  );
   core.liveSessions.add(session.id);
   core.updateSession(session.id, {
     acpSessionId: res.acpSessionId,
     status: "idle",
-    modesJson: JSON.stringify(res.modes),
+    modesJson: json.modes.write(res.modes),
     modeId: res.modeId ?? session.modeId ?? DEFAULT_MODE[agent],
-    configOptionsJson: JSON.stringify(res.configOptions),
-    commandsJson: JSON.stringify(res.availableCommands),
-    capabilitiesJson: JSON.stringify(res.capabilities),
+    configOptionsJson: json.configOptions.write(res.configOptions),
+    commandsJson: json.commands.write(res.availableCommands),
+    capabilitiesJson: json.capabilities.write(res.capabilities),
     ...(res.handoff ? { handoffPending: 1 } : {}),
   });
   for (const [configId, value] of Object.entries(config)) {
@@ -146,8 +180,8 @@ export const ensureSessionLive = async (core: WorkspaceCore, session: SessionRow
       option.currentValue !== value &&
       (typeof value === "string" || typeof value === "boolean")
     ) {
-      const r = await tempod.request("session.setConfig", { sessionId: session.id, configId, value });
-      core.updateSession(session.id, { configOptionsJson: JSON.stringify(r.configOptions) });
+      const r = await tempod.request("session.setConfig", { sessionId: session.id, configId, value }, opts);
+      core.updateSession(session.id, { configOptionsJson: json.configOptions.write(r.configOptions) });
     }
   }
 };
@@ -167,7 +201,7 @@ export const buildHandoffText = (core: WorkspaceCore, sessionId: string, beforeT
     .all()
     .filter((r) => r.turnId !== beforeTurnId);
   const lines = rows.map((r) => {
-    const c = parseJson<{ text?: string; title?: string }>(r.contentJson, {});
+    const c = readItemContent(r.kind, r.contentJson) as { text?: string; title?: string };
     if (r.kind === "user_message") return `User: ${c.text ?? ""}`;
     if (r.kind === "agent_message") return `Agent: ${c.text ?? ""}`;
     return `Tool: ${c.title ?? ""}`;
@@ -203,17 +237,13 @@ export const buildContent = async (
   session: SessionRow,
   turn: TurnRow,
 ): Promise<PromptContent> => {
-  const prompt = parseJson<TurnPrompt>(turn.promptJson, {
-    text: "",
-    mentions: [],
-    attachmentIds: [],
-    reviewCommentIds: [],
-  });
+  const prompt = json.prompt.read(turn.promptJson, EMPTY_PROMPT);
   const blocks: ContentBlock[] = [];
   const settings = core.settings();
   const patch: Partial<SessionRow> = {};
   let handoff: string | null = null;
   if (session.generalPromptSent === 0) {
+    blocks.push(text(TURN_SUMMARY_RULE));
     if (settings.prompts.general) blocks.push(text(settings.prompts.general));
     patch.generalPromptSent = 1;
   }
@@ -250,7 +280,9 @@ export const buildContent = async (
     });
   }
   if (prompt.attachmentIds.length > 0) {
-    const caps = parseJson<{ promptCapabilities?: { image?: boolean } }>(session.capabilitiesJson, {});
+    const caps = json.capabilities.read(session.capabilitiesJson, {}) as {
+      promptCapabilities?: { image?: boolean };
+    };
     const rows = core.db
       .select()
       .from(attachments)
@@ -330,13 +362,42 @@ export const recoverSteering = (core: WorkspaceCore): void => {
   }
 };
 
+/** Marks the queue busy while `work` runs. turns.cancel (archive) waits on `queueWork` (03 Archive 1). */
+const whileQueueBusy = async <T>(core: WorkspaceCore, work: () => Promise<T>): Promise<T> => {
+  let release!: () => void;
+  core.queueBusy = true;
+  core.queueWork = new Promise<void>((resolve) => (release = resolve));
+  try {
+    return await work();
+  } finally {
+    core.queueBusy = false;
+    core.queueWork = null;
+    core.turnStartAbort = null;
+    release();
+  }
+};
+
+/** 03 Queue runner: a turn starts, or keeps starting, only while the workspace is ready or working. */
+const turnAllowed = (core: WorkspaceCore): boolean => core.state === "ready" || core.state === "working";
+
 export const steerQueued = async (core: WorkspaceCore, queued: TurnRow): Promise<Turn | null> => {
   const running = core.runningTurn();
   if (!running || running.sessionId !== queued.sessionId || core.queueBusy) return null;
   const session = core.sessionRow(queued.sessionId);
-  const capabilities = parseJson<Record<string, unknown>>(session.capabilitiesJson, {});
-  if (capabilities["steering"] !== true) return null;
-  core.queueBusy = true;
+  if (json.capabilities.read(session.capabilitiesJson, {})["steering"] !== true) return null;
+  try {
+    return await whileQueueBusy(core, () => steer(core, session, queued, running));
+  } finally {
+    core.kickQueue();
+  }
+};
+
+const steer = async (
+  core: WorkspaceCore,
+  session: SessionRow,
+  queued: TurnRow,
+  running: TurnRow,
+): Promise<Turn | null> => {
   core.updateTurn(queued.id, { steeringPending: 1 });
   try {
     const content = await buildContent(core, session, queued);
@@ -360,8 +421,7 @@ export const steerQueued = async (core: WorkspaceCore, queued: TurnRow): Promise
       .set({ sentTurnId: running.id })
       .where(eq(reviewComments.sentTurnId, queued.id))
       .run();
-    core.db.delete(turns).where(eq(turns.id, queued.id)).run();
-    core.broadcast({ type: "turn.deleted", turnId: queued.id });
+    core.deleteTurn(queued.id);
     core.broadcastDetailSoon();
     return core.turnToWire(core.turnRow(running.id));
   } catch (error) {
@@ -385,9 +445,6 @@ export const steerQueued = async (core: WorkspaceCore, queued: TurnRow): Promise
       err.code,
       "Steering delivery could not be confirmed. Check the agent response before retrying.",
     );
-  } finally {
-    core.queueBusy = false;
-    core.kickQueue();
   }
 };
 
@@ -396,11 +453,10 @@ export const runQueue = async (core: WorkspaceCore, opsBusy: () => boolean): Pro
   const row = core.wsOrNull();
   if (!row) return;
   if (core.runningTurn()) return;
-  const state = row.state;
   const next = core.queuedTurns()[0];
   const canStart =
     next !== undefined &&
-    (state === "ready" || state === "working") &&
+    turnAllowed(core) &&
     ["none", "succeeded", "skipped"].includes(row.setupStatus) &&
     !opsBusy() &&
     !core.turnEndInProgress;
@@ -409,11 +465,19 @@ export const runQueue = async (core: WorkspaceCore, opsBusy: () => boolean): Pro
     backToReady(core);
     return;
   }
-  core.queueBusy = true;
+  const abort = new AbortController();
   try {
-    await startTurn(core, next);
+    await whileQueueBusy(core, () => {
+      core.turnStartAbort = abort;
+      return startTurn(core, next, abort.signal);
+    });
   } finally {
-    core.queueBusy = false;
+    const status = core.db
+      .select({ status: turns.status })
+      .from(turns)
+      .where(eq(turns.id, next.id))
+      .get()?.status;
+    if (status !== "queued") core.kickQueue();
   }
 };
 
@@ -421,30 +485,54 @@ const backToReady = (core: WorkspaceCore): void => {
   if (core.state === "working" && !core.turnEndInProgress && !core.runningTurn()) core.setState("ready");
 };
 
-const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
+const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal): Promise<void> => {
   const session = core.sessionRow(turn.sessionId);
   if (session.status === "closed") {
     core.updateTurn(turn.id, { status: "cancelled", queuePos: null, endedAt: Date.now() });
     return;
   }
+  let content: PromptContent | undefined;
+  let sentAt = 0;
   try {
-    await ensureSessionLive(core, session);
+    await ensureSessionLive(core, session, signal);
     const fresh = core.sessionRow(session.id);
-    const content = await buildContent(core, fresh, turn);
-    const sentAt = Date.now();
+    content = await buildContent(core, fresh, turn);
+    // The workspace left ready while the agent started (an archive): the turn stays queued and is not sent.
+    if (signal.aborted || !turnAllowed(core)) {
+      log("info", "turn start stopped before the prompt", { workspaceId: core.workspaceId });
+      return;
+    }
+    sentAt = Date.now();
     await requireTempod(core).request("session.prompt", {
       sessionId: session.id,
       turnId: turn.id,
       content: content.blocks,
     });
     commitContent(core, session.id, turn.id, content, sentAt);
+    if (core.turnRow(turn.id).status !== "queued") return;
+    if (!turnAllowed(core)) {
+      // The agent has the prompt, but the workspace may no longer run turns: cancel it at once.
+      await requireTempod(core)
+        .request("session.cancel", { sessionId: session.id, turnId: turn.id })
+        .catch(() => undefined);
+      finishTurn(core, turn.id, "cancelled", { stopReason: "cancelled" });
+      return;
+    }
     const now = Date.now();
     core.updateTurn(turn.id, { status: "running", startedAt: now, queuePos: null });
     core.updateSession(session.id, { status: "running" });
-    if (core.state !== "working") core.setState("working");
+    if (core.state === "ready") core.setState("working");
     core.updateWs({ lastActivityAt: now });
     core.publish();
   } catch (e) {
+    if (content && core.turnRow(turn.id).startedAt !== null) {
+      commitContent(core, session.id, turn.id, content, sentAt);
+      return;
+    }
+    if (signal.aborted) {
+      log("info", "turn start aborted", { workspaceId: core.workspaceId });
+      return;
+    }
     const err = e instanceof TempoError ? e : new TempoError("AGENT_START_FAILED", undefined, errorText(e));
     if (err.code === "CONTAINER_NOT_READY" || err.code === "TEMPOD_UNREACHABLE") {
       // The turn stays queued; connectTempod runs the queue again once tempod is back.
@@ -480,7 +568,12 @@ export const finishTurn = (
   core: WorkspaceCore,
   turnId: string,
   status: "completed" | "cancelled" | "failed" | "interrupted",
-  info: { stopReason: string | null; errorCode?: string | null; errorDetail?: string | null },
+  info: {
+    stopReason: string | null;
+    errorCode?: string | null;
+    errorDetail?: string | null;
+    usage?: TurnUsage | null;
+  },
 ): boolean => {
   const turn = core.db.select().from(turns).where(eq(turns.id, turnId)).get();
   if (!turn || (turn.status !== "running" && turn.status !== "queued")) return false;
@@ -507,6 +600,7 @@ export const finishTurn = (
     errorDetail: info.errorDetail?.slice(0, 2000) ?? null,
     endedAt: Date.now(),
     queuePos: null,
+    ...(info.usage ? { usageJson: json.turnUsage.write(info.usage) } : {}),
   });
   const session = core.db.select().from(sessions).where(eq(sessions.id, turn.sessionId)).get();
   if (session && session.status === "running") core.updateSession(session.id, { status: "idle" });

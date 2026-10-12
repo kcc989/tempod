@@ -5,6 +5,7 @@ import {
   type CredentialProvider,
   type CredentialStatus,
   type Session,
+  type Settings,
 } from "@tempo/protocol";
 
 export { AGENT_IDS, AGENT_LABELS };
@@ -21,6 +22,12 @@ export const AGENT_PROVIDERS: Record<AgentId, ReadonlyArray<CredentialProvider>>
 
 export const hasLogin = (agent: AgentId, status: CredentialStatus | undefined): boolean =>
   status !== undefined && AGENT_PROVIDERS[agent].some((p) => status[p].set);
+
+/** OpenCode and Pi need `agent.models.<agent>` to start (01, Agents: Model choice). */
+export const MODEL_REQUIRED_AGENTS: ReadonlyArray<AgentId> = ["opencode", "pi"];
+
+export const needsModel = (agent: AgentId, settings: Pick<Settings, "agent">): boolean =>
+  MODEL_REQUIRED_AGENTS.includes(agent) && settings.agent.models[agent] === "";
 
 export const providerAgents = (provider: CredentialProvider): ReadonlyArray<AgentId> =>
   AGENT_IDS.filter((a) => AGENT_PROVIDERS[a].includes(provider));

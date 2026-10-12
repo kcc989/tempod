@@ -1,5 +1,5 @@
 import type { Turn } from "@tempo/protocol";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { ArrowDownIcon } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, SkeletonRows } from "~/ui/components/shell/States";
@@ -7,7 +7,8 @@ import { Button } from "~/ui/components/ui/button";
 import { LoadingText } from "~/ui/components/ui/spinner";
 import { useWorkspace } from "~/ui/hooks/useWorkspace";
 import { cn } from "~/ui/lib/utils";
-import { ItemView, TurnFooter, WorkingRow, type ItemContext } from "./TranscriptItems";
+import { useTranscriptDetail } from "~/ui/lib/transcript-detail";
+import { ItemView, TurnFooter, WorkingRow, WorkRow, type ItemContext } from "./TranscriptItems";
 import {
   announceText,
   buildTranscriptRows,
@@ -25,13 +26,23 @@ const EMPTY: ReadonlyArray<string> = [];
 
 /** Distance from the bottom, in px, that still counts as following new output. */
 const STICK_PX = 48;
+const positions = new Map<string, { top: number; following: boolean; measurements: VirtualItem[] }>();
+const rememberPosition = (key: string, position: NonNullable<ReturnType<typeof positions.get>>) => {
+  positions.delete(key);
+  positions.set(key, position);
+  if (positions.size > 100) positions.delete(positions.keys().next().value!);
+};
 
 /** The session's items (04, Transcript), virtualized past 200 rows. */
 export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
   const ws = useWorkspace(workspaceId);
   const order = ws.order[sessionId] ?? EMPTY;
   const session = ws.sessions[sessionId];
-  const rows = useMemo(() => buildTranscriptRows(order, ws.items, ws.turns), [order, ws.items, ws.turns]);
+  const detail = useTranscriptDetail();
+  const rows = useMemo(
+    () => buildTranscriptRows(order, ws.items, ws.turns, detail),
+    [order, ws.items, ws.turns, detail],
+  );
   const archived = ws.workspace?.state === "archived" || ws.workspace?.state === "archiving";
   const idle = ws.workspace ? ws.workspace.runningTurnId === null && ws.workspace.queue.length === 0 : false;
   const ctx = useMemo<ItemContext>(
@@ -47,8 +58,12 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
-  const [away, setAway] = useState(false);
+  const positionKey = `${workspaceId}:${sessionId}`;
+  const initialPosition = useRef(positions.get(positionKey));
+  const restored = useRef(false);
+  const stick = useRef(initialPosition.current?.following ?? true);
+  const [away, setAway] = useState(!stick.current);
+  const measurements = useRef<VirtualItem[]>([]);
   const virtual = rows.length > VIRTUALIZE_AFTER;
   const empty = rows.length === 0;
 
@@ -61,12 +76,21 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
     overscan: 8,
     enabled: virtual,
     getItemKey: (i) => rows[i]?.key ?? i,
+    initialOffset: initialPosition.current?.top ?? 0,
+    initialMeasurementsCache: initialPosition.current?.measurements ?? [],
   });
 
   const toBottom = useCallback(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, []);
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+      rememberPosition(positionKey, {
+        top: el.scrollTop,
+        following: true,
+        measurements: measurements.current,
+      });
+    }
+  }, [positionKey]);
 
   const onScroll = () => {
     const el = scrollRef.current;
@@ -74,11 +98,22 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
     stick.current = atBottom;
     setAway(!atBottom);
+    rememberPosition(positionKey, {
+      top: el.scrollTop,
+      following: atBottom,
+      measurements: virtual ? virtualizer.takeSnapshot() : [],
+    });
   };
 
   useLayoutEffect(() => {
+    measurements.current = virtual ? virtualizer.takeSnapshot() : [];
+    if (!restored.current && scrollRef.current) {
+      restored.current = true;
+      if (initialPosition.current && !stick.current)
+        scrollRef.current.scrollTop = initialPosition.current.top;
+    }
     if (stick.current) toBottom();
-  }, [rows, ws.items, toBottom]);
+  }, [rows, ws.items, toBottom, virtual, virtualizer]);
 
   useEffect(() => {
     const el = contentRef.current;
@@ -103,7 +138,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
           <EmptyState title="Send a message to start." />
         )}
         <div aria-live="polite" className="sr-only">
-          {announcement}
+          <span key={announcement.key}>{announcement.text}</span>
         </div>
       </div>
     );
@@ -118,6 +153,12 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
       <div
         ref={scrollRef}
         onScroll={onScroll}
+        onWheel={(e) => {
+          if (e.deltaY < 0) {
+            stick.current = false;
+            setAway(true);
+          }
+        }}
         tabIndex={0}
         aria-label="Transcript"
         className="h-full overflow-y-auto outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
@@ -152,7 +193,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
         <Button
           size="sm"
           variant="outline"
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 shadow-sm"
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-background shadow-md hover:bg-accent dark:bg-background dark:hover:bg-accent"
           onClick={() => {
             stick.current = true;
             setAway(false);
@@ -165,7 +206,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
         </Button>
       )}
       <div aria-live="polite" className="sr-only">
-        {announcement}
+        <span key={announcement.key}>{announcement.text}</span>
       </div>
     </div>
   );
@@ -194,7 +235,16 @@ function Row({
     const turn = turns[row.turnId];
     return turn ? (
       <div className={cn("pb-3", row.dim && "opacity-50")}>
-        <TurnFooter turn={turn} />
+        <TurnFooter turn={turn} worked={row.worked} />
+      </div>
+    ) : null;
+  }
+  if (row.kind === "work") {
+    const turn = turns[row.turnId];
+    const folded = row.itemIds.map((id) => items[id]).filter((i) => i !== undefined);
+    return turn ? (
+      <div className={cn("py-1.5", row.dim && "opacity-50")}>
+        <WorkRow ctx={ctx} turn={turn} items={folded} />
       </div>
     ) : null;
   }
@@ -217,19 +267,28 @@ function useAnnouncement(
   order: ReadonlyArray<string>,
   items: TranscriptItemsMap,
   backlogDone: boolean,
-): string {
+): { key: string; text: string } {
   const seen = useRef<Set<string> | null>(null);
-  const [text, setText] = useState("");
+  const initialized = useRef(false);
+  const [text, setText] = useState({ key: "", text: "" });
   useEffect(() => {
-    if (seen.current === null || !backlogDone) {
+    if (!backlogDone || !initialized.current) {
       seen.current ??= new Set();
       messagesToAnnounce(seen.current, order, items);
+      initialized.current = backlogDone;
       return;
     }
-    const ids = messagesToAnnounce(seen.current, order, items);
-    const last = ids[ids.length - 1];
-    const item = last ? items[last] : undefined;
-    if (item?.kind === "agent_message") setText(announceText(item.content.text));
+    const ids = messagesToAnnounce(seen.current!, order, items);
+    if (ids.length > 0)
+      setText({
+        key: ids.join(":"),
+        text: ids
+          .map((id) => {
+            const item = items[id];
+            return item?.kind === "agent_message" ? announceText(item.content.text) : "";
+          })
+          .join(" "),
+      });
   }, [order, items, backlogDone]);
   return text;
 }

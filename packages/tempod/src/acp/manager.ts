@@ -1,7 +1,9 @@
 import {
   TempoError,
   type AgentId,
+  type BrowserMode,
   type ConfigOption,
+  type McpServerSpec,
   type SessionStartResult,
   type TempodEvent,
 } from "@tempo/protocol";
@@ -9,6 +11,7 @@ import type { Config } from "../config.ts";
 import type { TempodDb } from "../db.ts";
 import { errorText, type Logger } from "../log.ts";
 import { agentEnv } from "./agents.ts";
+import { writePiMcpConfig, type Bridge } from "./mcp.ts";
 import { AgentSession } from "./session.ts";
 
 export interface ManagerDeps {
@@ -18,6 +21,7 @@ export interface ManagerDeps {
   readonly emit: (event: TempodEvent) => void;
   readonly baseEnv: () => Record<string, string>;
   readonly scriptEnv: () => Record<string, string>;
+  readonly caEnv?: Record<string, string>;
 }
 
 export interface StartParams {
@@ -27,6 +31,8 @@ export interface StartParams {
   readonly modeId?: string | null | undefined;
   readonly model?: string | null | undefined;
   readonly acpSessionId?: string | null | undefined;
+  readonly browser?: BrowserMode | undefined;
+  readonly mcpServers?: ReadonlyArray<McpServerSpec> | undefined;
 }
 
 const acpError = (e: unknown): TempoError =>
@@ -37,6 +43,7 @@ export class SessionManager {
   private readonly sessions = new Map<string, AgentSession>();
   private readonly starting = new Map<string, Promise<SessionStartResult>>();
   private readonly ready = new Set<AgentSession>();
+  private startTail: Promise<void> = Promise.resolve();
   refusePrompts = false;
 
   constructor(private readonly deps: ManagerDeps) {}
@@ -60,7 +67,13 @@ export class SessionManager {
   start(p: StartParams): Promise<SessionStartResult> {
     const inFlight = this.starting.get(p.sessionId);
     if (inFlight) return inFlight;
-    const promise = this.doStart(p).finally(() => this.starting.delete(p.sessionId));
+    const promise = this.startTail
+      .then(() => this.doStart(p))
+      .finally(() => this.starting.delete(p.sessionId));
+    this.startTail = promise.then(
+      () => undefined,
+      () => undefined,
+    );
     this.starting.set(p.sessionId, promise);
     return promise;
   }
@@ -78,6 +91,14 @@ export class SessionManager {
     const { config, log } = this.deps;
     const command = config.agentCommands[p.agent];
     const env = agentEnv(p.agent, config, this.deps.baseEnv(), this.deps.scriptEnv(), p.env);
+    const bridge: Bridge = { command: config.selfCommand, env: { ...this.deps.caEnv } };
+    if (p.agent === "pi") {
+      try {
+        writePiMcpConfig(config.piAgentDir, p.mcpServers ?? [], bridge, p.browser);
+      } catch (e) {
+        log.warn("writing pi mcp.json failed", { sessionId: p.sessionId, error: errorText(e) });
+      }
+    }
     let session: AgentSession;
     try {
       session = new AgentSession(p.sessionId, p.agent, command, env, {
@@ -89,6 +110,7 @@ export class SessionManager {
         killGraceMs: config.limits.killGraceMs,
         mergeMs: config.limits.deltaMergeMs,
         maxBytes: config.limits.deltaMaxBytes,
+        bridge,
         onGone: (s) => {
           if (this.sessions.get(s.sessionId) === s) this.sessions.delete(s.sessionId);
           this.ready.delete(s);
@@ -126,8 +148,7 @@ export class SessionManager {
         .sort((a, b) => a.lastUsed - b.lastUsed);
       const victim = idle[0];
       if (!victim) {
-        this.deps.log.warn("no idle agent to close; starting over the limit", { sessionId });
-        return;
+        throw new TempoError("AGENT_START_FAILED", "No idle agent is available to close.");
       }
       this.deps.log.info("closing least recently used agent", { sessionId: victim.sessionId });
       await victim.close("evicted", true);
@@ -168,7 +189,11 @@ export class SessionManager {
     } catch (e) {
       throw acpError(e);
     }
-    this.deps.emit({ kind: "session.updated", sessionId: p.sessionId, patch: { modeId: p.modeId } });
+    this.deps.emit({
+      kind: "session.updated",
+      sessionId: p.sessionId,
+      patch: { modeId: s.mapper.state.modeId },
+    });
   }
 
   async setConfig(p: {

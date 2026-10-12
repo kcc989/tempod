@@ -163,6 +163,25 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "listModels": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentModelOptions.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listWorkspaces": {
       "type": "object",
       "properties": {
@@ -342,17 +361,49 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "rotatePreviewToken": {
+    "openPreview": {
       "type": "object",
       "properties": {
         "method": {
           "const": "POST"
         },
         "input": {
-          "$ref": "RotatePreviewTokenIn.json"
+          "$ref": "OpenPreviewIn.json"
         },
         "output": {
-          "$ref": "RotatePreviewTokenOut.json"
+          "$ref": "OpenPreviewOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rotatePreviewKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RotatePreviewKeyIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getBrowserLiveView": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "GetBrowserLiveViewIn.json"
+        },
+        "output": {
+          "$ref": "GetBrowserLiveViewOut.json"
         }
       },
       "required": ["method", "input", "output"],
@@ -968,6 +1019,54 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "startCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "StartCodexLoginOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "pollCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "PollCodexLoginIn.json"
+        },
+        "output": {
+          "$ref": "PollCodexLoginOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelCodexLoginIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "setApiKey": {
       "type": "object",
       "properties": {
@@ -1047,6 +1146,57 @@
       },
       "required": ["method", "input", "output"],
       "additionalProperties": false
+    },
+    "listMcpServers": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "McpServer.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "McpServerInput.json"
+        },
+        "output": {
+          "$ref": "McpServer.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteMcpServerIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
     }
   },
   "required": [
@@ -1059,6 +1209,7 @@
     "listBranches",
     "listOpenPullRequests",
     "createWorkspace",
+    "listModels",
     "listWorkspaces",
     "getWorkspace",
     "renameWorkspace",
@@ -1070,7 +1221,9 @@
     "archiveWorkspace",
     "restoreWorkspace",
     "deleteWorkspace",
-    "rotatePreviewToken",
+    "openPreview",
+    "rotatePreviewKey",
+    "getBrowserLiveView",
     "setBaseBranch",
     "getDiagnostics",
     "createSession",
@@ -1108,11 +1261,17 @@
     "getCredentialStatus",
     "setClaudeToken",
     "setCodexAuth",
+    "startCodexLogin",
+    "pollCodexLogin",
+    "cancelCodexLogin",
     "setApiKey",
     "deleteCredential",
     "setProjectSecret",
     "deleteProjectSecret",
-    "listProjectSecretNames"
+    "listProjectSecretNames",
+    "listMcpServers",
+    "saveMcpServer",
+    "deleteMcpServer"
   ],
   "additionalProperties": false
 }

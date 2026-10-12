@@ -18,6 +18,7 @@ import {
   isSecretName,
   layerFromForm,
   SECTIONS,
+  sectionPage,
   type EffectiveContext,
   type FieldErrors,
   type FieldPath,
@@ -35,9 +36,13 @@ import { useOpenWorkspaceDetail } from "./useOpenWorkspace";
 export function ProjectTab({
   projectId,
   onProjectChange,
+  section,
+  onSectionChange,
 }: {
   projectId: string | undefined;
   onProjectChange: (projectId: string) => void;
+  section?: string;
+  onSectionChange?: (section: string) => void;
 }) {
   const projects = useProjects();
   const open = useOpenWorkspaceDetail();
@@ -60,7 +65,7 @@ export function ProjectTab({
 
   return (
     <div className="grid gap-5">
-      {list.length > 1 && (
+      {!section && list.length > 1 && (
         <div className="flex items-center gap-2">
           <label htmlFor="ps-project" className="text-sm font-medium">
             Project
@@ -83,9 +88,15 @@ export function ProjectTab({
         key={`${project.id}:${JSON.stringify(project.settings)}`}
         project={project}
         workspace={workspace}
+        section={section}
+        onSectionChange={onSectionChange}
       />
-      <ProjectSecrets projectId={project.id} />
-      <UnlinkProject project={project} />
+      <div hidden={section !== undefined && section !== "Secrets"}>
+        <ProjectSecrets key={project.id} projectId={project.id} />
+      </div>
+      <div hidden={section !== undefined && section !== "General"}>
+        <UnlinkProject project={project} />
+      </div>
     </div>
   );
 }
@@ -93,9 +104,13 @@ export function ProjectTab({
 function ProjectSettingsForm({
   project,
   workspace,
+  section,
+  onSectionChange,
 }: {
   project: Project;
   workspace: WorkspaceDetail | null;
+  section?: string;
+  onSectionChange?: (section: string) => void;
 }) {
   const [initial] = useState(() => formFromLayer(project.settings, workspace?.settings ?? DEFAULT_SETTINGS));
   const [form, setForm] = useState<SettingsForm>(initial);
@@ -131,6 +146,8 @@ function ProjectSettingsForm({
     setErrors(found);
     if (Object.keys(found).length > 0) {
       setProblem("Check the highlighted fields.");
+      const invalid = FIELDS.find((field) => found[field.path]);
+      if (invalid) onSectionChange?.(sectionPage(invalid.section));
       return;
     }
     setProblem(null);
@@ -139,6 +156,8 @@ function ProjectSettingsForm({
 
   return (
     <form
+      noValidate
+      hidden={section === "Secrets" || section === "General"}
       aria-label={`Settings for ${project.owner}/${project.name}`}
       onSubmit={(e) => {
         e.preventDefault();
@@ -147,16 +166,20 @@ function ProjectSettingsForm({
     >
       <p className="text-xs text-muted-foreground">
         {workspace
-          ? `Values in effect for ${workspace.title}. Set a key in Tempo to override the repo files.`
-          : "Open a workspace of this project to see values from its repo files. Set a key in Tempo to override them."}
+          ? `Values in effect for ${workspace.title}. Edit and save a value to override it in Tempo. Reset to inherited to use the repository or default value.`
+          : "Open a workspace of this project to see values from its repo files. Edit and save a value to override it in Tempo. Reset to inherited to use the repository or default value."}
       </p>
-      {SECTIONS.map((section) => (
-        <fieldset key={section} className="mt-3 border-t pt-2">
+      {SECTIONS.map((group) => (
+        <fieldset
+          key={group}
+          hidden={section !== undefined && section !== sectionPage(group)}
+          className="mt-6 border-t pt-4"
+        >
           <legend className="pr-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            {section}
+            {group}
           </legend>
           <div className="divide-y">
-            {FIELDS.filter((d) => d.section === section).map((def) => (
+            {FIELDS.filter((d) => d.section === group).map((def) => (
               <FieldRow
                 key={def.path}
                 def={def}

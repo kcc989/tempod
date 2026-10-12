@@ -1,4 +1,5 @@
-import { isErrorBody, TempoError, type ConfigOption, type Mention, type Session } from "@tempo/protocol";
+import { isErrorBody, TempoError, type ConfigOption, type FnInput, type Session } from "@tempo/protocol";
+import { useIsMutating } from "@tanstack/react-query";
 import { ArchiveRestoreIcon, ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,7 +10,6 @@ import { useAction } from "~/ui/hooks/useActions";
 import { useBanner } from "~/ui/hooks/useBanner";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
-import { useLocalStorage } from "~/ui/hooks/useLocalStorage";
 import { useShortcuts } from "~/ui/hooks/useShortcuts";
 import { useWorkspaceSelector, useWorkspaceStore } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
@@ -27,15 +27,19 @@ import { fuzzyFilter } from "~/ui/lib/fuzzy";
 import { cn } from "~/ui/lib/utils";
 import { getWorkspaceUi, takeInsertions, workspaceUiStore } from "~/ui/state/workspace-ui";
 import { reorderedQueue, runningPlan } from "~/ui/stores/workspace-state";
-import { isPreviewable, rememberAttachment } from "./attachment-cache";
+import {
+  finishAttachmentUpload,
+  isPreviewable,
+  rememberAttachment,
+  startAttachmentUpload,
+} from "./attachment-cache";
 import { runningTurnOf } from "./chat-tabs-model";
+import { useComposerDraft } from "./useComposerDraft";
 import {
   applyInsertions,
   canSend,
   configPickers,
   contextUsage,
-  draftKey,
-  isDraft,
   mentionTrigger,
   moveIndex,
   replaceTrigger,
@@ -112,8 +116,6 @@ const uploadAttachment = async (
   return body as { attachmentId: string; name: string; mime: string; size: number };
 };
 
-let localSeq = 0;
-
 const triggerKeyOf = (text: string, caret: number): string | null => {
   const t = slashTrigger(text, caret) ?? mentionTrigger(text, caret);
   return t ? `${text[t.start] === "@" ? "mention" : "slash"}:${t.start}` : null;
@@ -129,12 +131,29 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     return p ? `${p.done}/${p.total}` : null;
   });
   const workspaceBusy = useWorkspaceSelector(workspaceId, (s) => s.workspace?.runningTurnId ?? null) !== null;
+  const sleeping = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state === "sleeping");
   const focusSeq = useWorkspaceUiSelector(workspaceId, (s) => s.composerFocusSeq);
 
-  const [draft, setDraft] = useLocalStorage(draftKey(workspaceId, sessionId), "", isDraft);
-  const [mentions, setMentions] = useState<ReadonlyArray<Mention>>([]);
-  const [reviewCommentIds, setReviewCommentIds] = useState<ReadonlyArray<string>>([]);
-  const [attachments, setAttachments] = useState<ReadonlyArray<PendingAttachment>>([]);
+  const { draft: savedDraft, update, clearSent } = useComposerDraft(workspaceId, sessionId);
+  const { text: draft, mentions, reviewCommentIds, attachments } = savedDraft;
+  const setDraft = (next: string | ((value: string) => string)) => update("text", next);
+  const setMentions = (next: typeof mentions | ((value: typeof mentions) => typeof mentions)) =>
+    update("mentions", next);
+  const setReviewCommentIds = (
+    next: typeof reviewCommentIds | ((value: typeof reviewCommentIds) => typeof reviewCommentIds),
+  ) => update("reviewCommentIds", next);
+  const setAttachments = (next: typeof attachments | ((value: typeof attachments) => typeof attachments)) =>
+    update("attachments", next);
+  const sending = useRef(false);
+  const sentDraft = useRef(savedDraft);
+  const sendPending =
+    useIsMutating({
+      mutationKey: ["call", "sendPrompt"],
+      predicate: (mutation) => {
+        const input = mutation.state.variables as FnInput<"sendPrompt"> | undefined;
+        return input?.workspaceId === workspaceId && input.sessionId === sessionId;
+      },
+    }) > 0;
   const [caret, setCaret] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [active, setActive] = useState({ key: "", index: 0 });
@@ -147,7 +166,16 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const previousMode = useRef<string | null>(null);
   const pickerId = useId();
 
-  const send = useCallMutation("sendPrompt");
+  const send = useCallMutation("sendPrompt", {
+    invalidates: ["listReviewComments"],
+    onSuccess: () => {
+      clearSent(sentDraft.current);
+      sending.current = false;
+    },
+    onError: () => {
+      sending.current = false;
+    },
+  });
   const cancel = useCallMutation("cancelTurn");
   const setMode = useCallMutation("setSessionMode");
   const setConfig = useCallMutation("setSessionConfig");
@@ -300,36 +328,26 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   };
 
   const submit = (delivery: "queue" | "steer" = "queue") => {
-    if (!sendable) return;
-    const backup = { draft, mentions, reviewCommentIds, attachments };
-    send.mutate(
-      {
-        workspaceId,
-        sessionId,
-        text: draft.trim(),
-        mentions: [...mentions],
-        attachmentIds: ready.map((a) => a.attachmentId!),
-        reviewCommentIds: [...reviewCommentIds],
-        delivery,
-      },
-      {
-        onError: () => {
-          setDraft((cur) => (cur === "" ? backup.draft : cur));
-          setMentions((cur) => (cur.length === 0 ? backup.mentions : cur));
-          setReviewCommentIds((cur) => (cur.length === 0 ? backup.reviewCommentIds : cur));
-          setAttachments((cur) => (cur.length === 0 ? backup.attachments : cur));
-        },
-      },
-    );
-    setDraft("");
-    setMentions([]);
-    setReviewCommentIds([]);
-    setAttachments([]);
+    if (!sendable || sending.current || sendPending) return;
+    sending.current = true;
+    sentDraft.current = savedDraft;
+    send.mutate({
+      workspaceId,
+      sessionId,
+      text: draft.trim(),
+      mentions: [...mentions],
+      attachmentIds: ready.map((a) => a.attachmentId!),
+      reviewCommentIds: [...reviewCommentIds],
+      delivery,
+    });
   };
 
   const stop = () => {
     if (running) cancel.mutate({ workspaceId, turnId: running.id });
   };
+
+  useAction("stop", stop, { enabled: !!running });
+  useAction("togglePlan", () => togglePlan(), { enabled: planId !== null && !pickersDisabled });
 
   useShortcuts(
     {
@@ -350,7 +368,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         stop();
       },
       togglePlan: () => {
-        if (planId === null) return false;
+        if (planId === null || pickersDisabled) return false;
         togglePlan();
       },
     },
@@ -361,8 +379,9 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     const { ok, tooLarge } = splitBySize(list);
     if (tooLarge.length > 0) toast.error("Each file can be at most 10 MiB.");
     for (const file of ok) {
-      const localId = `a${++localSeq}`;
+      const localId = crypto.randomUUID();
       const preview = isPreviewable(file.type) ? URL.createObjectURL(file) : undefined;
+      startAttachmentUpload(localId, preview);
       setAttachments((a) => [
         ...a,
         {
@@ -377,6 +396,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       ]);
       uploadAttachment(workspaceId, file)
         .then((r) => {
+          finishAttachmentUpload(localId);
           if (preview) rememberAttachment(r.attachmentId, preview);
           setAttachments((a) =>
             a.map((x) =>
@@ -385,6 +405,8 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           );
         })
         .catch((e: unknown) => {
+          finishAttachmentUpload(localId);
+          if (preview) URL.revokeObjectURL(preview);
           toastError(e);
           setAttachments((a) => a.map((x) => (x.localId === localId ? { ...x, status: "failed" } : x)));
         });
@@ -480,6 +502,11 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
             </div>
           )}
           <div className="relative">
+            {sendPending && (
+              <p role="status" className="pb-1 text-xs text-muted-foreground">
+                Saving message…
+              </p>
+            )}
             {pickerOpen && (
               <PickerList
                 id={pickerId}
@@ -487,13 +514,20 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                 activeIndex={activeIndex}
                 status={pickerStatus}
                 onPick={pick}
+                onRetry={triggerKind === "mention" && files.isError ? () => void files.refetch() : undefined}
               />
             )}
             <Textarea
               ref={textRef}
               value={draft}
               rows={1}
-              placeholder={workspaceBusy ? `Queue a message for ${label}` : `Message ${label}`}
+              placeholder={
+                workspaceBusy
+                  ? `Queue a message for ${label}`
+                  : sleeping
+                    ? `Message ${label} to wake this workspace`
+                    : `Message ${label}`
+              }
               aria-label="Message"
               aria-autocomplete="list"
               aria-expanded={pickerOpen}
@@ -593,7 +627,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                 size="icon-sm"
                 aria-label={workspaceBusy ? "Queue" : "Send"}
                 onClick={() => submit()}
-                disabled={!sendable || send.isPending}
+                disabled={!sendable || sendPending}
               >
                 <ArrowUpIcon />
               </Button>
@@ -602,7 +636,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   size="sm"
                   variant="outline"
                   onClick={() => submit("steer")}
-                  disabled={!sendable || send.isPending}
+                  disabled={!sendable || sendPending}
                 >
                   Send now
                 </Button>

@@ -123,6 +123,7 @@ export class Tempod {
       emit,
       baseEnv: () => this.baseEnv(),
       scriptEnv: () => this.scriptEnv,
+      caEnv: this.caEnv,
     });
     this.ports = new PortScanner({
       intervalMs: config.limits.portScanMs,
@@ -278,6 +279,7 @@ export class Tempod {
       "session.setConfig": (p) => this.agents.setConfig(p),
       "session.close": async (p) => {
         await this.agents.close(p);
+        this.codex.check();
         return {};
       },
       "permission.respond": async (p) => {

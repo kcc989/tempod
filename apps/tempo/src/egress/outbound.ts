@@ -1,12 +1,14 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { SECRET_KEYS } from "../do/credential.ts";
 import type { Env } from "../env.ts";
+import { BROWSER_CDP_HEADER, stripInternalHeaders } from "../http/preview.ts";
 import { log } from "../log.ts";
 import { decide, type EgressConfig } from "./rules.ts";
 
 export interface OutboundProps {
   readonly workspaceId: string;
   readonly userId: string;
+  readonly catalog?: boolean;
 }
 
 const CONFIG_TTL_MS = 60_000;
@@ -25,9 +27,19 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     let rule = 10;
     let status = 0;
     try {
-      const config = await this.config(workspaceId);
+      const config: EgressConfig = this.ctx.props.catalog
+        ? { owner: "", repo: "", policy: "allowlist", allowlist: [], mcp: [] }
+        : await this.config(workspaceId);
       const decision = decide(url, request.headers, this.env.APP_HOST, config);
       rule = decision.rule;
+      if (decision.action === "browser") {
+        // Rule 11 (01, Browser Run): the WorkspaceDO joins the CDP socket to its Browser Run session.
+        const headers = stripInternalHeaders(new Headers(request.headers));
+        headers.set(BROWSER_CDP_HEADER, "1");
+        const response = await workspace.fetch(new Request(request, { headers }));
+        status = response.status;
+        return response;
+      }
       if (decision.action === "block") {
         status = decision.status;
         return new Response(decision.body, { status: decision.status });
@@ -41,6 +53,17 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         }
         headers.set(decision.set.name, value);
       }
+      if (decision.mcp) {
+        const creds = this.env.CREDENTIALS.getByName(userId);
+        for (const swap of decision.mcp) {
+          const value = await creds.getSecret(swap.key);
+          if (value === null) {
+            status = 403;
+            return new Response("tempo: credential not set", { status: 403 });
+          }
+          headers.set(swap.name, value);
+        }
+      }
       const response = await fetch(new Request(request, { headers }));
       status = response.status;
       return response;
@@ -49,19 +72,20 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
       log("warn", "egress fetch failed", { workspaceId, host: url.hostname, rule });
       return new Response(`tempo: upstream error for ${url.hostname}`, { status: 502 });
     } finally {
-      this.ctx.waitUntil(
-        workspace
-          .logEgress({
-            ts: started,
-            method: request.method,
-            host: url.hostname,
-            path: url.pathname,
-            status,
-            ms: Date.now() - started,
-            rule,
-          })
-          .catch(() => undefined),
-      );
+      if (!this.ctx.props.catalog)
+        this.ctx.waitUntil(
+          workspace
+            .logEgress({
+              ts: started,
+              method: request.method,
+              host: url.hostname,
+              path: url.pathname,
+              status,
+              ms: Date.now() - started,
+              rule,
+            })
+            .catch(() => undefined),
+        );
     }
   }
 

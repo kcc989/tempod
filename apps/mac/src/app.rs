@@ -12,14 +12,31 @@ use tempo_client::{Server, Token, TokenStatus};
 
 pub struct AppState {
     pub server_url: Option<String>,
+    pub main_window: Option<gpui_kit::AnyWindowHandle>,
+    pub workspace_focused: bool,
+    /// Collapsed sidebar sections: `pinned` or a project id.
+    pub collapsed_sections: std::collections::BTreeSet<String>,
+    pub credentials_rev: u64,
+    pub credential_changed: Option<tempo_protocol::CredentialProvider>,
+    pub settings_window: Option<gpui_kit::AnyWindowHandle>,
     pub auth: AuthState,
     pub hub: Entity<HubStore>,
     /// Open workspace stores, the one shown most recently first.
     pub workspaces: Vec<Entity<WorkspaceStore>>,
     pub active_workspace: Option<String>,
-    pub tokens: Box<dyn TokenStore>,
+    pub tokens: std::sync::Arc<dyn TokenStore>,
+    cleanup_task: Option<Task<()>>,
     runtime: ClientRuntime,
     session: Option<Session>,
+    session_monitor: Option<Task<()>>,
+    update_monitor: Option<Task<()>>,
+    pub available_update: Option<String>,
+    pub update_meta: Option<tempo_protocol::ApiMeta>,
+    pub downloading_update: bool,
+    download_task: Option<Task<()>>,
+    pub update_error: Option<String>,
+    /// Check for Updates… was chosen: the next result shows as a toast.
+    manual_update_check: bool,
     auth_task: Option<Task<()>>,
 }
 
@@ -31,14 +48,29 @@ impl AppState {
     pub fn new(runtime: ClientRuntime, cx: &mut App) -> Self {
         let url = cx.global::<crate::storage::Local>().config().url.clone();
         Self {
+            main_window: None,
+            workspace_focused: false,
+            collapsed_sections: Default::default(),
+            credentials_rev: 0,
+            credential_changed: None,
+            settings_window: None,
             server_url: url.clone(),
             auth: AuthState::Connect { url, error: None },
             hub: cx.new(|_| HubStore::new()),
             workspaces: Vec::new(),
             active_workspace: None,
-            tokens: platform::token_store(),
+            tokens: platform::token_store().into(),
+            cleanup_task: None,
             runtime,
             session: None,
+            session_monitor: None,
+            update_monitor: None,
+            available_update: None,
+            update_meta: None,
+            downloading_update: false,
+            download_task: None,
+            update_error: None,
+            manual_update_check: false,
             auth_task: None,
         }
     }
@@ -53,7 +85,11 @@ impl AppState {
     }
 
     pub fn client(&self) -> Option<tempo_client::Client> {
-        self.session.as_ref().map(|session| session.client.clone())
+        if matches!(self.auth, AuthState::SignedIn) {
+            self.session.as_ref().map(|session| session.client.clone())
+        } else {
+            None
+        }
     }
 
     pub fn runtime(&self) -> &ClientRuntime {
@@ -86,6 +122,16 @@ impl AppState {
         }
         if let Some(client) = self.client() {
             store.update(cx, |w, cx| w.show(&client, cx));
+            if self.workspace_focused {
+                let viewed =
+                    client.call::<tempo_protocol::api::MarkViewed>(tempo_protocol::MarkViewedIn {
+                        workspace_id: id.into(),
+                    });
+                cx.spawn(async move |_, _| {
+                    let _ = viewed.await;
+                })
+                .detach();
+            }
         }
         let workspace_id = id.to_string();
         cx.global_mut::<crate::storage::Local>()
@@ -97,6 +143,9 @@ impl AppState {
     }
 
     pub fn connect(&mut self, url: &str, restore: bool, cx: &mut Context<Self>) {
+        if self.cleanup_task.is_some() {
+            return;
+        }
         self.auth_task.take();
         let server = match Server::new(&self.runtime.handle(), url, crate::VERSION) {
             Ok(server) => server,
@@ -107,21 +156,77 @@ impl AppState {
             }
         };
         self.server_url = Some(server.origin());
-        let saved = restore
-            .then(|| self.tokens.get(server.host()))
-            .flatten()
-            .map(Token::new);
+        let tokens = self.tokens.clone();
         self.auth = AuthState::Connecting;
         cx.notify();
         self.auth_task = Some(cx.spawn(async move |this, cx| {
+            let host = server.host().to_string();
+            let read_tokens = tokens.clone();
+            let saved = if restore {
+                cx.background_executor()
+                    .spawn(async move { read_tokens.get(&host).map(Token::new) })
+                    .await
+            } else {
+                None
+            };
             let result = async {
-                server.check_server().await?;
+                let meta = server.meta().await.map_err(|error| {
+                    if matches!(error, tempo_client::ApiError::Cancelled) {
+                        tempo_client::SignInError::Cancelled
+                    } else {
+                        tempo_client::SignInError::NotTempo
+                    }
+                })?;
+                if *meta.protocol != 1. {
+                    return Err(tempo_client::SignInError::NotTempo);
+                }
+                let update = crate::update::check_this_app(
+                    &meta.min_mac_client,
+                    meta.latest_mac_client.as_deref(),
+                )
+                .map_err(|_| tempo_client::SignInError::NotTempo)?;
+                let required = matches!(update, crate::update::UpdateCheck::Required { .. });
+                let _ = this.update(cx, |state, cx| {
+                    state.available_update = crate::update::offered_version(&update);
+                    state.update_meta = Some(meta.clone());
+                    cx.notify();
+                });
+                if required {
+                    if let Some(token) = saved.as_ref() {
+                        match server.get_session(token).await {
+                            Ok(TokenStatus::Valid) => {
+                                let _ = this.update(cx, |state, _| {
+                                    state.session =
+                                        Some(Session::new(server.clone(), token.clone()))
+                                });
+                            }
+                            Ok(TokenStatus::Revoked) => {
+                                let tokens = tokens.clone();
+                                let host = server.host().to_string();
+                                cx.background_executor()
+                                    .spawn(async move {
+                                        tokens.delete(&host);
+                                    })
+                                    .await;
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    return Err(tempo_client::SignInError::UpdateRequired {
+                        min_mac_client: meta.min_mac_client,
+                        latest_mac_client: meta.latest_mac_client,
+                    });
+                }
                 if let Some(token) = saved {
                     match server.get_session(&token).await? {
                         TokenStatus::Valid => return Ok(token),
                         TokenStatus::Revoked => {
+                            let tokens = tokens.clone();
+                            let host = server.host().to_string();
+                            cx.background_executor()
+                                .spawn(async move { tokens.delete(&host) })
+                                .await;
                             let _ = this.update(cx, |state, cx| {
-                                state.tokens.delete(server.host());
                                 state.reset_auth(cx);
                             });
                             return Err(tempo_client::SignInError::Cancelled);
@@ -146,9 +251,18 @@ impl AppState {
                 server.poll_token(&authorization).await
             }
             .await;
+            let stored = if let Ok(token) = &result {
+                let token = token.clone();
+                let host = server.host().to_string();
+                cx.background_executor()
+                    .spawn(async move { tokens.set(&host, token.expose()) })
+                    .await
+            } else {
+                Ok(())
+            };
             let _ = this.update(cx, |state, cx| match result {
                 Ok(token) => {
-                    if state.tokens.set(server.host(), token.expose()).is_err() {
+                    if stored.is_err() {
                         state.auth = AuthState::Connect {
                             url: state.server_url.clone(),
                             error: Some(
@@ -165,6 +279,7 @@ impl AppState {
                             .update(cx, |hub, cx| hub.connect(&session.client, cx));
                         state.session = Some(session);
                         state.auth = AuthState::SignedIn;
+                        state.start_monitors(cx);
                         if let Some(id) = cx
                             .global::<crate::storage::Local>()
                             .state()
@@ -179,12 +294,234 @@ impl AppState {
                 Err(tempo_client::SignInError::Cancelled) => {}
                 Err(error) => {
                     state.auth = error_state(state.server_url.clone(), &error);
+                    if matches!(state.auth, AuthState::UpdateRequired) && state.session.is_some() {
+                        state.start_monitors(cx);
+                    }
                     cx.notify();
                 }
             });
         }));
     }
 
+    fn start_monitors(&mut self, cx: &mut Context<Self>) {
+        if self.session_monitor.is_none() {
+            self.session_monitor = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_secs(30))
+                        .await;
+                    let Ok(Some(request)) =
+                        this.update(cx, |s, _| s.session.as_ref().map(|s| s.validate()))
+                    else {
+                        break;
+                    };
+                    if matches!(request.await, Ok(TokenStatus::Revoked)) {
+                        let _ = this.update(cx, |s, cx| s.reset_auth(cx));
+                        break;
+                    }
+                }
+            }));
+        }
+        self.update_monitor = Some(cx.spawn(async move |this, cx| {
+            loop {
+                let Ok(Some(request)) =
+                    this.update(cx, |s, _| s.session.as_ref().map(|s| s.meta()))
+                else {
+                    break;
+                };
+                let result = request.await;
+                if this
+                    .update(cx, |s, cx| {
+                        let manual = std::mem::take(&mut s.manual_update_check);
+                        let feedback = match result {
+                            Ok(meta) => {
+                                s.update_meta = Some(meta.clone());
+                                s.update_error = None;
+                                match crate::update::check_this_app(
+                                    &meta.min_mac_client,
+                                    meta.latest_mac_client.as_deref(),
+                                ) {
+                                    Ok(check) => {
+                                        s.available_update = crate::update::offered_version(&check);
+                                        if matches!(
+                                            check,
+                                            crate::update::UpdateCheck::Required { .. }
+                                        ) {
+                                            s.stop_for_update(cx);
+                                        }
+                                        crate::update::manual_check_message(&check).map(Ok)
+                                    }
+                                    Err(_) => {
+                                        s.update_error = Some(crate::update::INVALID_META.into());
+                                        Some(Err(crate::update::INVALID_META))
+                                    }
+                                }
+                            }
+                            Err(_) => {
+                                s.update_error = Some(crate::update::CHECK_FAILED.into());
+                                Some(Err(crate::update::CHECK_FAILED))
+                            }
+                        };
+                        if manual && let Some(feedback) = feedback {
+                            s.toast(
+                                match feedback {
+                                    Ok(text) => {
+                                        gpui_kit::component::notification::Notification::info(text)
+                                    }
+                                    Err(text) => {
+                                        gpui_kit::component::notification::Notification::error(text)
+                                    }
+                                },
+                                cx,
+                            );
+                        }
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+                cx.background_executor()
+                    .timer(crate::update::CHECK_INTERVAL)
+                    .await;
+            }
+        }));
+    }
+    pub fn has_download_session(&self) -> bool {
+        self.session.is_some()
+    }
+
+    pub fn download_update(&mut self, window: &mut gpui_kit::Window, cx: &mut Context<Self>) {
+        use gpui_kit::component::WindowExt as _;
+        if self.downloading_update {
+            return;
+        }
+        let release = self
+            .update_meta
+            .as_ref()
+            .ok_or("Update information is unavailable.")
+            .and_then(crate::update::download_release);
+        let (version, hash) = match release {
+            Ok(release) => release,
+            Err(error) => {
+                self.update_error = Some(error.into());
+                window.push_notification(
+                    gpui_kit::component::notification::Notification::error(error),
+                    cx,
+                );
+                cx.notify();
+                return;
+            }
+        };
+        let fail = |state: &mut Self,
+                    error: &str,
+                    window: &mut gpui_kit::Window,
+                    cx: &mut Context<Self>| {
+            state.update_error = Some(error.into());
+            window.push_notification(
+                gpui_kit::component::notification::Notification::error(error.to_string()),
+                cx,
+            );
+            cx.notify();
+        };
+        let Some(client) = self.session.as_ref().map(|s| s.client.clone()) else {
+            fail(
+                self,
+                "A saved owner session is required to download this update.",
+                window,
+                cx,
+            );
+            return;
+        };
+        let Some(downloads) = crate::update::downloads_dir() else {
+            fail(self, "The Downloads folder is unavailable.", window, cx);
+            return;
+        };
+        self.downloading_update = true;
+        self.update_error = None;
+        self.download_task = Some(cx.spawn_in(window, async move |this, cx| {
+            let result = match client
+                .download_mac_bounded(&version.to_string(), crate::update::MAX_DOWNLOAD_BYTES)
+                .await
+            {
+                Ok(bytes) => {
+                    cx.background_executor()
+                        .spawn(async move {
+                            crate::update::save_dmg(&downloads, &version, &bytes, &hash)
+                                .map_err(|e| e.to_string())
+                        })
+                        .await
+                }
+                Err(error) => Err(error.to_string()),
+            };
+            let _ = this.update_in(cx, |state, window, cx| {
+                state.downloading_update = false;
+                match result {
+                    Ok(path) => {
+                        cx.open_with_system(&path);
+                        window.push_notification(
+                            gpui_kit::component::notification::Notification::success(
+                                "Update verified and saved to Downloads.",
+                            ),
+                            cx,
+                        );
+                    }
+                    Err(error) => {
+                        state.update_error = Some(error.clone());
+                        window.push_notification(
+                            gpui_kit::component::notification::Notification::error(error),
+                            cx,
+                        );
+                    }
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    pub fn check_updates(&mut self, cx: &mut Context<Self>) {
+        self.update_monitor.take();
+        self.start_monitors(cx);
+    }
+
+    /// Check for Updates…: the result, or the reason it failed, shows as a toast.
+    pub fn check_updates_now(&mut self, cx: &mut Context<Self>) {
+        self.manual_update_check = self.session.is_some();
+        self.check_updates(cx);
+    }
+
+    /// A toast in the main window, after the current update.
+    fn toast(&self, note: gpui_kit::component::notification::Notification, cx: &mut Context<Self>) {
+        use gpui_kit::component::WindowExt as _;
+        if let Some(handle) = self.main_window {
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_, window, cx| window.push_notification(note, cx));
+            });
+        }
+    }
+    fn close_settings(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.settings_window.take() {
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            });
+        }
+    }
+    fn stop_for_update(&mut self, cx: &mut Context<Self>) {
+        self.close_settings(cx);
+        if let Some(session) = &self.session {
+            session.client.close_channels();
+        }
+        self.workspaces.clear();
+        self.active_workspace = None;
+        self.hub.update(cx, |h, cx| {
+            *h = HubStore::new();
+            cx.notify();
+        });
+        platform::set_badge_count(0);
+        self.auth = AuthState::UpdateRequired;
+        cx.notify();
+    }
     pub fn sign_out(&mut self, cx: &mut Context<Self>) {
         if let Some(session) = &self.session {
             let request = session.sign_out();
@@ -197,23 +534,60 @@ impl AppState {
     }
 
     pub fn reset_auth(&mut self, cx: &mut Context<Self>) {
-        self.auth_task.take();
-        if let Some(session) = self.session.take() {
-            session.forget(self.tokens.as_ref());
+        if self.cleanup_task.is_some() {
+            return;
         }
-        crate::platform::set_badge_count(0);
+        self.close_settings(cx);
+        self.auth_task.take();
+        self.session_monitor.take();
+        self.update_monitor.take();
+        self.available_update = None;
+        self.update_meta = None;
+        self.download_task.take();
+        self.downloading_update = false;
+        self.update_error = None;
+        let session = self.session.take();
+        if let Some(session) = &session {
+            session.client.invalidate_session();
+        }
+        platform::set_badge_count(0);
         self.workspaces.clear();
         self.active_workspace = None;
-        self.hub.update(cx, |hub, cx| {
-            *hub = HubStore::new();
+        self.hub.update(cx, |h, cx| {
+            *h = HubStore::new();
             cx.notify();
         });
-        self.auth = AuthState::Connect {
-            url: self.server_url.clone(),
-            error: None,
-        };
+        if let Some(session) = session {
+            self.auth = AuthState::ClearingSession;
+            let tokens = self.tokens.clone();
+            let host = session.host().to_string();
+            self.cleanup_task = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .spawn(async move { tokens.delete(&host) })
+                    .await;
+                let _ = this.update(cx, |s, cx| {
+                    s.cleanup_task.take();
+                    s.auth = AuthState::Connect {
+                        url: s.server_url.clone(),
+                        error: None,
+                    };
+                    cx.notify();
+                });
+            }));
+        } else {
+            self.auth = AuthState::Connect {
+                url: self.server_url.clone(),
+                error: None,
+            };
+        }
         cx.notify();
     }
+}
+
+/// Installs `state` as the app's state without signing in, for view tests.
+#[cfg(test)]
+pub fn set_global_for_test(state: Entity<AppState>, cx: &mut App) {
+    cx.set_global(GlobalAppState(state));
 }
 
 /// Moves `id` to the front of `order` and returns the id pushed out beyond `cap`, if any.
@@ -223,17 +597,73 @@ pub fn touch_lru(order: &mut Vec<String>, id: &str, cap: usize) -> Option<String
     (order.len() > cap).then(|| order.pop()).flatten()
 }
 
+pub fn ensure_main_window(cx: &mut App) -> gpui_kit::Result<()> {
+    let Some(app) = AppState::try_global(cx) else {
+        return Ok(());
+    };
+    if let Some(handle) = app.read(cx).main_window
+        && handle
+            .update(cx, |_, window, _| window.activate_window())
+            .is_ok()
+    {
+        return Ok(());
+    }
+    let (handle, _) = crate::views::main_window::open(Default::default(), cx)?;
+    app.update(cx, |a, cx| {
+        a.main_window = Some(handle);
+        if let Some(id) = a.active_workspace.clone() {
+            a.show_workspace(&id, cx);
+        }
+    });
+    Ok(())
+}
+
 /// Sets up the AppState global, the app-level actions and `tempo://` handling.
 pub fn init(runtime: ClientRuntime, urls: async_channel::Receiver<Vec<String>>, cx: &mut App) {
     let signals = runtime.handle().signals();
     let state = cx.new(|cx| AppState::new(runtime, cx));
     cx.set_global(GlobalAppState(state.clone()));
+    cx.on_window_closed(|cx, id| {
+        if let Some(app) = AppState::try_global(cx) {
+            app.update(cx, |a, cx| {
+                if a.main_window.is_some_and(|w| w.window_id() == id) {
+                    a.main_window = None;
+                    for store in &a.workspaces {
+                        store.update(cx, |s, cx| s.hide(cx));
+                    }
+                }
+                if a.settings_window.is_some_and(|w| w.window_id() == id) {
+                    a.settings_window = None;
+                }
+            });
+        }
+    })
+    .detach();
     if let Some(url) = state.read(cx).server_url.clone() {
         state.update(cx, |state, cx| state.connect(&url, true, cx));
     }
 
     cx.on_action(|_: &Quit, cx| cx.quit());
     cx.on_action(|_: &HideApp, cx| cx.hide());
+    cx.on_action(|_: &About, cx| {
+        use gpui_kit::{ParentElement as _, component::WindowExt as _};
+        if let Some(handle) = AppState::global(cx).read(cx).main_window {
+            let _ = handle.update(cx, |_, window, cx| {
+                window.open_dialog(cx, |dialog, _, _| {
+                    dialog
+                        .title("About Tempo")
+                        .child(format!(
+                            "Tempo {} · Native workspace client",
+                            env!("CARGO_PKG_VERSION")
+                        ))
+                        .child("GPUI Kit · Rust · Remote workspaces")
+                });
+            });
+        }
+    });
+    cx.on_action(|_: &CheckForUpdates, cx| {
+        AppState::global(cx).update(cx, |a, cx| a.check_updates_now(cx));
+    });
     cx.on_action(|_: &OpenSettings, cx| crate::views::settings::open(cx));
     cx.on_action(|_: &SignOut, cx| {
         AppState::global(cx).update(cx, |state, cx| state.sign_out(cx));
@@ -258,8 +688,10 @@ pub fn init(runtime: ClientRuntime, urls: async_channel::Receiver<Vec<String>>, 
                         }
                     }
                     tempo_client::Signal::UpdateRequired => {
-                        state.reset_auth(cx);
-                        state.auth = AuthState::UpdateRequired;
+                        state.update_meta = None;
+                        state.available_update = None;
+                        state.stop_for_update(cx);
+                        state.check_updates(cx);
                         cx.notify();
                     }
                 });
@@ -282,6 +714,7 @@ fn open_urls(urls: &[String], cx: &mut App) {
         AppState::global(cx).update(cx, |state, cx| {
             state.show_workspace(&id, cx);
         });
+        let _ = ensure_main_window(cx);
         cx.activate(true);
     }
 }
@@ -437,7 +870,7 @@ mod auth_tests {
             let runtime = ClientRuntime::start().unwrap();
             cx.new(|cx| {
                 let mut state = AppState::new(runtime, cx);
-                state.tokens = Box::<platform::MemoryTokenStore>::default();
+                state.tokens = std::sync::Arc::<platform::MemoryTokenStore>::default();
                 state
             })
         })
@@ -510,6 +943,33 @@ mod auth_tests {
                 }
             );
         });
+    }
+
+    #[gpui_kit::test]
+    fn required_update_keeps_a_valid_saved_download_session_without_opening_normal_channels(
+        cx: &mut TestAppContext,
+    ) {
+        let server = FakeServer::new("update");
+        let state = state(cx);
+        state.update(cx, |state, cx| {
+            state.tokens.set("127.0.0.1", "test-token").unwrap();
+            state.connect(&server.url, true, cx);
+        });
+        until(cx, &state, |auth| *auth == AuthState::UpdateRequired);
+        state.read_with(cx, |state, cx| {
+            assert!(state.has_download_session());
+            assert!(state.client().is_none());
+            assert_eq!(state.tokens.get("127.0.0.1").as_deref(), Some("test-token"));
+            assert!(!state.hub.read(cx).state.ready);
+        });
+        assert!(
+            !server
+                .paths
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|path| path == "/api/auth/device/code")
+        );
     }
 
     #[gpui_kit::test]
@@ -643,7 +1103,7 @@ mod auth_tests {
             AppState::global(cx)
         });
         state.update(cx, |state, cx| {
-            state.tokens = Box::<platform::MemoryTokenStore>::default();
+            state.tokens = std::sync::Arc::<platform::MemoryTokenStore>::default();
             state.tokens.set("127.0.0.1", "test-token").unwrap();
             state.connect(&server.url, true, cx);
         });

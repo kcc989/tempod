@@ -26,24 +26,24 @@ The Mac app is a client of the cloud Tempo only. It does not run workspaces on t
 
 ## Scope
 
-The Mac app does what the web UI does, with the same names, copy and rules as 04. This table lists every area and says where the Mac app differs.
+The Mac app does what the web UI does, with the same names, copy and rules as 04. Pending prompt submissions keep their per-session guard across tab switches; repeated Enter or Send keeps the next draft without sending it again. This table lists every area and says where the Mac app differs.
 
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |
 | Sidebar, hover card, right-click menu, History | Same |  |
-| New workspace dialog | Same | First prompt is text only, as on the web |
+| New workspace dialog | Same | Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model and mode pickers | Same |  |
 | Attachments, @-mentions, `/` commands | Same | Also accepts files dragged from Finder |
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
-| All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode |
+| All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
 | Checks | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
 | Previews | Different | Open in the default browser; no Browser tab |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
-| Settings: Logins, Project, Appearance, Notifications, Shortcuts | Same | Notifications are macOS notifications |
+| Settings: General, Logins, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |
@@ -97,11 +97,11 @@ The Worker gets a small JSON API, bearer-token sign-in and a download route. The
 | Change | Where it is specified | Summary |
 | --- | --- | --- |
 | `POST /api/v1/rpc/<function>` | 02, Native client API | Same functions, inputs, outputs and errors as the server functions |
-| `GET /api/v1/meta` | 02, Native client API | `{protocol, serverVersion, minMacClient, latestMacClient}`, no auth |
+| `GET /api/v1/meta` | 02, Native client API | `{protocol, serverVersion, minMacClient, latestMacClient, latestMacClientSha256?}`, no auth |
 | Bearer and device plugins | 05, Authentication | Better Auth `bearer()` and `deviceAuthorization()`; `/api/v1` accepts only bearer tokens |
 | WebSocket auth | 02, Hub and terminal channels | Upgrades also accept `Authorization: Bearer` with no `Origin` header |
 | `/device` page | 04, Dialogs | Where the owner approves a Mac sign-in |
-| Settings: Devices | 04, Dialogs | Lists sign-in sessions, with Revoke |
+| Settings: Devices | 04, Settings | Lists sign-in sessions, with Revoke |
 | Mac downloads | 02, R2 layout | `clients/mac/` in R2, served at `GET /downloads/mac/<version>`, owner only |
 | Shared types | 06, Repo layout | `bun run protocol:gen` writes the JSON Schema and the Rust types |
 
@@ -142,6 +142,8 @@ The Mac stores apply the same messages with the same rules as the web stores (02
 
 ## Window layout and components
 
+The Mac shell uses a 13 pt base size, matching the dense web shell. Sidebar actions, the Projects header, the scrolling project list and the fixed History/Settings footer follow 04, including empty, loading and error states. The sidebar uses the theme sidebar surface; project headers and workspace rows have distinct type weight and spacing. With no workspace selected, the center offers New workspace and Add project. Review controls are compact, the empty changes list fills the available space, and the commit form sits in a padded, bordered footer. Process controls use consistent padding and spacing.
+
 The main window has the five regions of 04. Each region uses the GPUI Kit components below. Where no component fits, Tempo builds its own, marked **custom**.
 
 | Region (04) | GPUI Kit components |
@@ -151,7 +153,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Sidebar | `Sidebar`; rows are custom; `HoverCard`; `Menu` for the right-click menu; `Badge` for the PR; `Spinner` |
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
 | Center tabs | `Tabs` |
-| Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for thoughts, tool calls and handoff |
+| Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
 | Composer | `Textarea` (grows from 1 to 12 rows); `Select` for model and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
 | Changes, Checks | `VirtualList`, `Badge`, `Tag` |
 | All files | `Tree` |
@@ -162,7 +164,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Dialogs | `Dialog`, `AlertDialog`, `Form`, `Input`, `Select`, `Checkbox` |
 | Command palette | `Command` |
 | Toasts | `Notification` |
-| Settings | `Settings`, in its own window |
+| Settings | Its own window with left sidebar navigation for Personal and Project sections, matching 04 |
 | Loading | `Skeleton`, `Spinner` |
 | Shortcut hints | `Kbd` |
 
@@ -183,8 +185,12 @@ Tool calls use a borderless disclosure with indented content. Tool text renders 
 - **No remote images (05).** Wrap the transcript in an `ImageCache` whose `load` refuses `http://` and `https://` URIs, and show those images as links. Images from ACP `image` blocks load from their inline data.
 - **Links.** Install `on_link_click`. Open `http` and `https` URLs in the default browser. A `file:///workspace/<path>` link opens a file tab at that path. Ignore every other scheme.
 - **Streaming.** On `item.delta`, append the text to the item and call `remeasure_items` for that row only.
-- **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control. Each chat tab keeps its own scroll position.
+- **Work rows.** Group, label and count items exactly as 04, Work row, Work types and Tool call labels, with the same Default and Detailed detail. Put the rules in `src/views/chat_model.rs` so they are tested without a window.
+- **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control on an opaque background, as 04. Each chat tab keeps its own scroll position.
+- **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right and bottom panels: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
+- **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
+- **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.
 - **Attachments.** Paste an image, drag files from Finder, or press ⌘U. Each file is at most 10 MiB and is sent to `POST /api/workspaces/<workspaceId>/attachments` with the bearer token.
 - **Permissions.** A new card takes focus if the composer is empty. Enter picks the first `allow` option; ⌫ picks the first `reject` option.
 - **Copy.** ⌘C copies selected text. Each code block has a copy button.
@@ -213,7 +219,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Setup and Run.** Same as 04: output from `script.output`, Start and Stop, and ⌘R to start or stop the default run script.
 
-**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click opens the preview URL in the default browser. There is no in-app Browser tab in this version (C7). Rotate preview link works as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
+**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. There is no in-app Browser tab in this version (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` calls `getBrowserLiveView` and opens the URL in the default browser. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
 
 ## macOS integration
 
@@ -246,7 +252,7 @@ The app stores no workspace data on disk. This table is the full list of what it
 | What | Where |
 | --- | --- |
 | Session token | Keychain, generic password, service `dev.tempo.mac`, account = the Tempo host |
-| Tempo URL, theme, notifications on or off, sound on or off | `~/Library/Application Support/dev.tempo.mac/config.toml` |
+| Tempo URL, theme, transcript detail, notifications on or off, sound on or off | `~/Library/Application Support/dev.tempo.mac/config.toml` |
 | Pane sizes, open panels, sort order, last workspace, composer drafts, diff viewed marks | `~/Library/Application Support/dev.tempo.mac/state.json` |
 | Logs | `~/Library/Logs/Tempo/tempo.log`: JSON lines, 5 files of 5 MB each |
 
@@ -254,6 +260,7 @@ The app stores no workspace data on disk. This table is the full list of what it
 - Write files atomically: temp file, then rename. If a file does not parse, rename it to `<name>.bad` and start from defaults.
 - Logs pass through the same redact rule as 05. MUST NOT log tokens, secrets, prompts or transcript text.
 - Project settings, logins and secrets are server data. The Settings window changes them with the same functions as the web.
+- Project settings follow 04's direct editing and `Reset to inherited` behavior, including explicit empty and Off overrides, source labels, and per-entry merging for run scripts and environment variables. There is no separate override toggle.
 - The bundle identifier is `dev.tempo.mac`. Change it only before the first release; the Keychain item and folders depend on it.
 
 ## Build, signing, distribution and updates
@@ -270,9 +277,11 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 | `bun run mac:test` | `cargo test --workspace` |
 | `bun run protocol:gen` | Writes `packages/protocol/schema/*.json` (JSON Schema Draft-07) and `crates/tempo-protocol/src/generated.rs` |
 | `bun run protocol:fixtures` | Writes `packages/protocol/fixtures/` from the TypeScript schema tests |
-| `bun run mac:release` | Builds, bundles, signs, notarizes and uploads the app (below) |
+| `bun run mac:release -- --adhoc` | Builds a local ad-hoc bundle and DMG (default mode) |
+| `bun run mac:release -- --release` | Builds, signs and notarizes a release without uploading |
+| `bun run mac:release -- --publish` | Runs the signed release checks and publishes with `latest.json` last |
 
-**`mac:release`** (`scripts/mac/release.sh`). It MUST stop at the first failed step.
+**`mac:release`** (`scripts/mac/release.sh`). It MUST stop at the first failed step. The default ad-hoc mode performs local bundling only. The owner explicitly selects signed release or publication; the steps below apply to signed publication. Both signed modes first verify that the version is newer than the owner's existing manifest. The release script reads the uploaded DMG back and compares its bytes before publishing `latest.json`.
 
 1. Read the version from `apps/mac/Cargo.toml`. It MUST be newer than `clients/mac/latest.json`.
 2. `cargo build --release -p tempo-mac --target aarch64-apple-darwin`.
@@ -285,6 +294,8 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 - `TEMPO_MAC_SIGN_IDENTITY` is a "Developer ID Application" identity. `TEMPO_MAC_NOTARY_PROFILE` is made once with `xcrun notarytool store-credentials`. Both need a paid Apple Developer Program membership.
 - Without them, `mac:dev` and local builds use ad-hoc signing (`codesign --sign -`). Those builds are for the owner's own Mac only; macOS may ask again for Keychain access after each rebuild.
 - `Tempo.entitlements` turns on the hardened runtime with no exceptions. No App Sandbox in this version.
+
+`latestMacClientSha256` is the lowercase 64-character SHA-256 from the same `clients/mac/latest.json` record as `latestMacClient`. It is omitted when no valid hash is published. Clients MUST refuse an unverified download when the field is absent. This is additive under protocol version 1.
 
 **Updates.** On launch and every 24 h, read `latestMacClient` from `GET /api/v1/meta`. If it is newer than the app, show `Tempo <version> is available.` with **Download**. Download fetches `GET /downloads/mac/<version>` with the bearer token, checks the SHA-256 from `meta`, saves the DMG to `~/Downloads`, and opens it in Finder. The owner drags the app to Applications. If the app is older than `minMacClient`, it shows only this update screen.
 
