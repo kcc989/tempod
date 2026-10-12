@@ -64,6 +64,15 @@ export const SHARED = {
   SettingsSource: P.SettingsSource,
   SettingsReadResult: P.SettingsReadResult,
 
+  McpStdioServer: P.McpStdioServer,
+  McpRemoteServer: P.McpRemoteServer,
+  McpServerDef: P.McpServerDef,
+  CustomAgentDefinition: P.CustomAgentDefinition,
+  CustomAgent: P.CustomAgent,
+  CustomAgentSummary: P.CustomAgentSummary,
+  ProfileIssue: P.ProfileIssue,
+  SessionCustomAgent: P.SessionCustomAgent,
+
   Project: P.Project,
   WorkspaceSummary: P.WorkspaceSummary,
   OpProgress: P.OpProgress,

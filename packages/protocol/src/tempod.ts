@@ -10,6 +10,7 @@ import {
 } from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
 import { McpServerSpec } from "./mcp.ts";
+import { AgentProfile, ProfileIssue } from "./agents.ts";
 import { ChangedFile } from "./types.ts";
 import { Settings, SettingsLayer, SettingsReadResult } from "./settings.ts";
 import { EnvironmentProposal, EnvironmentSummary } from "./environments.ts";
@@ -215,6 +216,8 @@ export const SessionStartResult = Schema.Struct({
   configOptions: Schema.Array(ConfigOption),
   availableCommands: Schema.Array(AvailableCommand),
   capabilities: Capabilities,
+  /** Fields of the profile tempod could not apply; absent from an older tempod means none. */
+  profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
   reloaded: Schema.Boolean,
   handoff: Schema.Boolean,
 });
@@ -265,6 +268,7 @@ export const TEMPOD_REQUESTS = {
       modeId: Schema.optional(Schema.NullOr(Schema.String)),
       model: Schema.optional(Schema.NullOr(Schema.String)),
       browser: BrowserMode,
+      profile: Schema.optional(AgentProfile),
       acpSessionId: Schema.optional(Schema.NullOr(Schema.String)),
       mcpServers: Schema.optional(Schema.Array(McpServerSpec)),
     }),

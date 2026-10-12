@@ -547,6 +547,16 @@ export class WorkspaceCore {
       usage: json.usage.read(r.usageJson, {}),
       sortOrder: r.sortOrder,
       steering: json.capabilities.read(r.capabilitiesJson, {})["steering"] === true,
+      ...(r.customAgentId
+        ? {
+            customAgent: {
+              id: r.customAgentId,
+              name: r.customAgentName ?? "",
+              commitSha: r.customAgentCommit ?? "",
+            },
+            profileIssues: [...json.profileIssues.read(r.profileIssuesJson, [])],
+          }
+        : {}),
     };
   }
 

@@ -113,6 +113,33 @@ CREATE INDEX workspaces_by_activity ON workspaces(user_id, archived_at, last_act
 - Every DO write increments `summary_rev` and uses `UPDATE … WHERE id = ? AND summary_rev < ?`. A stale write changes nothing.
 - `setPinned` is not an exception: it calls the WorkspaceDO, which writes `pinned` and publishes the summary.
 
+**Custom agents.** Each row points to one file in the user's Artifacts repo (01, Custom agents). The file holds the definition; the row holds what menus need and the commit to read.
+
+```sql
+CREATE TABLE custom_agents (
+  id           TEXT PRIMARY KEY,           -- ULID; also the file name agents/<id>.toml
+  user_id      TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  description  TEXT NOT NULL DEFAULT '',
+  base_agent   TEXT NOT NULL CHECK (base_agent IN ('claude','codex','opencode','pi')),
+  repo         TEXT NOT NULL,              -- Artifacts repo name, user-<userId>
+  path         TEXT NOT NULL,              -- agents/<id>.toml
+  commit_sha   TEXT NOT NULL,              -- commit that holds the current version
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL,
+  deleted_at   INTEGER
+);
+CREATE UNIQUE INDEX custom_agents_active_name ON custom_agents(user_id, name) WHERE deleted_at IS NULL;
+```
+
+**Write rules for `custom_agents`**
+
+- Only the custom-agent server functions write this table. The row changes only after the Artifacts push succeeds, so `commit_sha` always names a commit that exists.
+- A save is idempotent: it creates the repo only if `get` returns `NOT_FOUND` and treats `ALREADY_EXISTS` as success. A rejected (non-fast-forward) push fetches `main` again and retries, at most 3 times, then fails with `ARTIFACTS_ERROR`.
+- The write token is minted per save with `createToken("write", 300)`, used in memory, and revoked in a `finally` block. It MUST NOT be stored or logged.
+- Delete sets `deleted_at` and commits the removal of the file. Sessions that already started keep their profile.
+- Deleting the user deletes the Artifacts repo too.
+
 ## WorkspaceDO schema
 
 Each WorkspaceDO holds the full record of one workspace. Everything the UI shows for a workspace comes from here.
@@ -209,6 +236,11 @@ CREATE TABLE sessions (
   handoff_pending      INTEGER NOT NULL DEFAULT 0,
   pending_note         TEXT,                        -- added to the next prompt, then cleared
   general_prompt_sent  INTEGER NOT NULL DEFAULT 0,
+  custom_agent_id      TEXT,                        -- null for a plain agent
+  custom_agent_name    TEXT,                        -- name at session start
+  custom_agent_commit  TEXT,                        -- commit the profile was read from
+  profile_json         TEXT,                        -- AgentProfile; null for a plain agent
+  profile_issues_json  TEXT NOT NULL DEFAULT '[]',  -- from session.start
   sort_order           INTEGER NOT NULL,
   created_at           INTEGER NOT NULL,
   updated_at           INTEGER NOT NULL,
@@ -560,7 +592,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createWorkspace` | `{projectId, source, agent?, model?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
+| `createWorkspace` | `{projectId, source, agent?, model?, customAgentId?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}`. With `customAgentId`, the first session starts from that custom agent, and `agent` MUST be absent or equal its base agent; `model` defaults to the custom agent's `model`. | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND`, `VALIDATION_FAILED` |
 | `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; cached for 15 minutes and invalidated by credentials or image changes | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
@@ -584,7 +616,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createSession` | `{workspaceId, agent, model?, modeId?}` | `Session` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED` |
+| `createSession` | `{workspaceId, agent, customAgentId?, model?, modeId?}`. With `customAgentId`, `agent` MUST equal its base agent. The Worker reads the file at `commit_sha` and passes the `AgentProfile` to the DO. `model` defaults to the custom agent's `model`; an explicit `model` wins. | `Session` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `NOT_FOUND`, `VALIDATION_FAILED`, `ARTIFACTS_ERROR` |
 | `closeSession` | `{workspaceId, sessionId}` | `{}` | `SESSION_BUSY` |
 | `renameSession` | `{workspaceId, sessionId, title}` | `{}` | — |
 | `sendPrompt` | `{workspaceId, sessionId, text, mentions, attachmentIds, reviewCommentIds, delivery?: "queue" or "steer"}` | `Turn`; the running turn when steering is injected, otherwise the queued turn | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `VALIDATION_FAILED` |
@@ -629,6 +661,15 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `rerunSetup` | `{workspaceId}` | `ScriptRun` | `WORKSPACE_BUSY` |
 | `continueAfterSetupFailure` | `{workspaceId}` | `{}` | — |
 | `listTerminals` | `{workspaceId}` | `[{terminalId}]` | — |
+
+**Custom agents** (01, Custom agents)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `listCustomAgents` | `{}` | `CustomAgentSummary[]`, sorted by name. Reads D1 only. | — |
+| `getCustomAgent` | `{customAgentId}` | `CustomAgent`. Reads the file at `commit_sha`. | `NOT_FOUND`, `ARTIFACTS_ERROR` |
+| `saveCustomAgent` | `{customAgentId?, definition: CustomAgentDefinition}`. No id creates one. | `CustomAgent` | `VALIDATION_FAILED`, `NOT_FOUND`, `CUSTOM_AGENT_EXISTS`, `CUSTOM_AGENT_LIMIT`, `ARTIFACTS_ERROR` |
+| `deleteCustomAgent` | `{customAgentId}` | `{}` | `NOT_FOUND`, `ARTIFACTS_ERROR` |
 
 **Credentials**
 
@@ -677,7 +718,13 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, ports: [{port, url}], settings, browserActive, runningTurnId, queue: [turnId], imageRef, op, prTitle?, environmentId, environmentProposals` |
 | `EnvironmentProposal` | `note` (at most 2,000 chars), `egressPolicy?`, `allowlistAdd?: [pattern]`, `secrets?: [{name, hosts}]`, `injectors?: [{name, hosts, code}]`. Same limits as 01, Environments. |
 | `PendingEnvironmentProposal` | `id, createdAt, proposal: EnvironmentProposal`. `WorkspaceDetail.environmentProposals` lists the pending ones, oldest first. `WorkspaceDetail.environmentId` is the workspace override or null. |
-| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported) |
+| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported), `customAgent?` (`{id, name, commitSha}`; absent for a plain agent), `profileIssues?` (absent means `[]`) |
+| `CustomAgentSummary` | `id, name, description, baseAgent, updatedAt` |
+| `CustomAgentDefinition` | `name, description, baseAgent, model, thoughtLevel, systemPrompt, tools: {allow, deny}, mcp: {playwright, servers: McpServerDef[]}`. Same fields and limits as the file in 01; snake_case in the file, camelCase on the wire. |
+| `CustomAgent` | `CustomAgentDefinition` plus `id, commitSha, updatedAt` |
+| `McpServerDef` | `{name, type: "stdio", command, args, env}` or `{name, type: "http" or "sse", url, headers}`. `env` and `headers` map names to `${NAME}` references only. |
+| `AgentProfile` | `systemPrompt, toolsAllow, toolsDeny, playwright, mcpServers: McpServerDef[], thoughtLevel`. Built by the Worker from a `CustomAgent`; `model` travels in the existing `model` field. |
+| `ProfileIssue` | `"systemPrompt"`, `"tools"`, `"mcpServers"`, `"model"` or `"thoughtLevel"` |
 | `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false), `usage?` (`TurnUsage`; absent when the agent sent none) |
 | `TurnUsage` | `totalTokens, inputTokens, outputTokens, thoughtTokens?, cachedReadTokens?, cachedWriteTokens?`: ACP v1 `PromptResponse.usage` for one turn. Counts that are not finite and non-negative are dropped; a missing required count drops the whole value. |
 | `Item` | `id, sessionId, turnId, kind, status, content, rev, createdAt, updatedAt` |
@@ -771,7 +818,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `environment.set` | `{summary}`: `EnvironmentSummary` = `{name, egressPolicy, egressAllowlist, secrets: [{name, hosts, set}], injectors: [{name, hosts}], blockedHosts}`. `name` is null with no environment. `blockedHosts` = distinct hosts of `egress_log` rows with rule 7 or 10 in the last 24 h, newest first, at most 50. The DO sends it after `env.set`, and at most every 5 s after a new blocked host. | `{}` | 10 s |
 | `script.start` | `{runId, kind, scriptId, command, cwd, timeoutMs}` | `{pid}` | 10 s |
 | `script.stop` | `{runId}` | `{}` | 15 s |
-| `session.start` | `{sessionId, agent, env, modeId?, model?, browser, acpSessionId?, mcpServers?}`; `browser` is `"local"` or `"run"` (01, Browser Run); `mcpServers` is `McpServerSpec[]` (01, User MCP servers), default `[]` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
+| `session.start` | `{sessionId, agent, env, modeId?, model?, profile?, browser, acpSessionId?, mcpServers?}`; `browser` is `"local"` or `"run"` (01, Browser Run); `mcpServers` is `McpServerSpec[]` (01, User MCP servers), default `[]` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, profileIssues, reloaded, handoff}` | 120 s |
 | `session.prompt` | `{sessionId, turnId, content}` | `{accepted: true}`; the end comes as `turn.ended` | 30 s |
 | `session.steer` | `{sessionId, turnId, messageId, content}` | `{outcome: "injected" or "promptRequired" or "unsupported"}`; the existing prompt owns the turn lifecycle | 30 s |
 | `session.cancel` | `{sessionId, turnId}` | `{}` | 20 s |
@@ -870,6 +917,9 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `ENVIRONMENT_EXISTS` | Another environment has that name | An environment with this name already exists. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |
+| `CUSTOM_AGENT_EXISTS` | Another custom agent has this name | You already have an agent with this name. |
+| `CUSTOM_AGENT_LIMIT` | The user has 50 custom agents | You have the most custom agents allowed. Delete one first. |
+| `ARTIFACTS_ERROR` | An Artifacts read, create, token or push failed | Could not reach agent storage. Try again. |
 | `INTERNAL` | Anything else | Something went wrong. |
 
 `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle` are the GitHub PR title regardless of open, closed or merged state; null means no title has been fetched. The WorkspaceDO persists it and sends detail updates when the title changes.

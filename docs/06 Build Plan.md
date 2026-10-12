@@ -71,6 +71,8 @@ Each spike is throwaway code in its own branch that answers one question. Its re
 | S9 | Do OpenCode and Pi work through ACP? | `opencode acp` and `pi-acp` complete 3 turns each with OpenRouter via the placeholder swap. Record whether `session/load` works for each. | R6 |
 | S10 | Does the terminal work through the DO? | PTY `exec` with tmux over the DO WebSocket. Resize works. A reconnect gets the same session and scrollback. | — |
 | S17 | Does Browser Run work as 01 uses it? | Playwright MCP in the container connects over `wss://browser.tempo.internal/` through `TempoOutbound` to a session from `env.BROWSER.acquire`. The remote browser loads `http://localhost:<port>` through `outboundByHost`. Live View shows the page in an iframe on `APP_HOST`. `closeSession` ends it. | — |
+| S18 | Can the Worker write custom agents to Artifacts? | From a deployed Worker with the `AGENTS` binding: `create` a repo, mint a 300 s write token, push one commit with pinned `isomorphic-git` and an in-memory file system, then `readFile` at that commit. Two concurrent saves both land after the retry rule in 02. The token is revoked after each save and appears in no log. Record the CPU time and memory of one save. | R19 |
+| S19 | Does each adapter apply a custom agent profile? | For each base agent, start a session with a profile that sets every field in the table in 01, Custom agents. Record which fields take effect: the agent follows the system prompt, a denied tool is absent, an allowed-only list hides other built-in tools, a pi codemode script cannot call a denied built-in or MCP tool, an MCP server's tools are listed, and the reasoning level shows in the config options. `session/load` keeps the profile. | R20 |
 
 ## Acceptance tests
 
@@ -115,6 +117,15 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-38 | A workspace created from a PR shows `#<number> ↗` and the PR state at once; Create PR is not offered. |
 | AT-39 | With `browser.run = true`, an agent checks the app on `localhost` in Browser Run, and the Live View tab shows it. Under `allowlist`, the agent uses local Chromium. |
 | AT-40 | An OpenCode chat with no `agent.models.opencode` is disabled in the New chat menu; a queued OpenCode turn fails with `MODEL_REQUIRED`. |
+
+**Gate F: Custom agents** (after Gate E in 07; the Mac app ships its part in the same phase)
+
+| ID | Test |
+| --- | --- |
+| AT-41 | Create a custom agent on `claude` with a system prompt, `tools.deny = ["Edit", "Write"]`, a model and a reasoning level. A chat from it uses that model and level, follows the prompt, and cannot edit a file. `profileIssues` is empty. |
+| AT-42 | The same definition on `codex` follows the prompt, uses the model and level, and shows the notice for `tool limits`. The same definition on `opencode` and on `pi`, with `tools.deny = ["edit", "write"]` and one stdio MCP server, follows the prompt, cannot edit a file, lists the server's tools, and shows no notice. |
+| AT-43 | Edit a custom agent while a chat from it is open. The open chat keeps the old profile after a sleep and wake; a new chat gets the new one. Delete the agent: the open chat still works and the New chat menu no longer lists it. |
+| AT-44 | An MCP server with `env = { X = "${MY_SECRET}" }` and a project secret `MY_SECRET` starts and lists its tools. Saving a literal env value fails with `VALIDATION_FAILED`. Grep of logs, D1, `events`, R2 and the Artifacts repo finds no secret value. |
 
 **Also at Gate D:** during a full e2e run, grep all Worker logs, `events` rows and R2 objects for the test credentials' values. Zero matches is required.
 

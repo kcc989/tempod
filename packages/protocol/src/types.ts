@@ -31,6 +31,7 @@ import {
   TurnStatus,
   WorkspaceState,
 } from "./enums.ts";
+import { ProfileIssue, SessionCustomAgent } from "./agents.ts";
 import { ErrorCodeSchema } from "./errors.ts";
 import { Settings, SettingsLayer, SettingsSource } from "./settings.ts";
 import { PendingEnvironmentProposal } from "./environments.ts";
@@ -141,6 +142,8 @@ export const Session = Schema.Struct({
   usage: Usage,
   sortOrder: Schema.Number,
   steering: Schema.optional(Schema.Boolean),
+  customAgent: Schema.optional(SessionCustomAgent),
+  profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
 });
 export type Session = typeof Session.Type;
 

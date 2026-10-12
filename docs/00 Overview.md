@@ -16,7 +16,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | D4 | Resume | Three layers: a git checkpoint at each turn end, a container snapshot on sleep, and the agent's own session files backed up to R2 | Each layer has a fallback: no snapshot means clone plus setup script; no session files means a new session with a transcript handoff |
 | D5 | Repos | GitHub App. One branch per workspace, named `tempo/<workspace-slug>` | Conductor model; works on existing repos |
 | D6 | Browser testing | Chromium and Playwright inside the Sandbox image. Browser Run Live View is optional. | Tests reach `localhost` with no public exposure |
-| D7 | Stack | The standard stack: TanStack Start, shadcn/ui, Effect v4, Alchemy v2, Drizzle, D1, R2, Better Auth, Bun | Your standard stack for new products |
+| D7 | Stack | The standard stack: TanStack Start, shadcn/ui, Effect v4, Alchemy v2, Drizzle, D1, R2, Better Auth, Bun. Custom agents add Cloudflare Artifacts and `isomorphic-git` (01, Custom agents) | Your standard stack for new products |
 | D8 | SAM code | Do not copy any SAM code. Use SAM as a design reference only. | SAM is AGPL-3.0 |
 | D9 | Container API | Sandbox SDK 1.0 model. WorkspaceDO owns ctx.container under the durable\_object scheduling policy. tempod is the container entrypoint. | SDK 1.0 (2026-09-30) removed the Sandbox class |
 | D10 | GitHub and API-key credentials | Injected by the TempoOutbound egress handler. They never enter the container. | The documented Sandbox pattern for secrets |
@@ -135,7 +135,7 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 
 | Component | Kind | Instances | Owns | Talks to |
 | --- | --- | --- | --- | --- |
-| Tempo Worker | TanStack Start app on Workers | 1 deployment | Routing, auth (Better Auth), server functions, the SPA, GitHub API calls, preview host routing | D1, R2, all DOs, GitHub API |
+| Tempo Worker | TanStack Start app on Workers | 1 deployment | Routing, auth (Better Auth), server functions, the SPA, GitHub API calls, preview host routing, custom agent reads and writes | D1, R2, Artifacts, all DOs, GitHub API |
 | `WorkspaceDO` | Durable Object with a container (`ctx.container`) | 1 per workspace, named by workspace id | Workspace state machine, step runner, sessions, transcript items, checkpoints index, scripts, previews, terminals, the `tempod` connection | `tempod`, `UserHubDO`, `CredentialDO`, D1, R2, GitHub API |
 | `UserHubDO` | Durable Object | 1 per user | UI WebSocket fan-out for the sidebar; workspace summaries | Browser, `WorkspaceDO` |
 | `CredentialDO` | Durable Object | 1 per user | Encrypted secrets; Codex `auth.json` versions and fan-out | `WorkspaceDO` |
@@ -145,6 +145,7 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 | Image `workspace` | Container image (Debian trixie, Node 24) | 1 image, many containers | Agents, Chromium, Playwright, dev tools | — |
 | D1 database `tempo` | SQLite (D1) | 1 | Users, GitHub installations, projects, workspace summaries | — |
 | R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs | — |
+| Artifacts namespace `tempo-agents` | Git-compatible storage | 1 repo per user | Custom agent definitions, one file per agent, one commit per save | — |
 
 ## Where state lives
 
@@ -154,6 +155,7 @@ The WorkspaceDO is the source of truth for a workspace. D1 holds only what lists
 | --- | --- | --- |
 | Users and login sessions | D1, Better Auth tables | Deleted |
 | GitHub installations, projects | D1 | Unlinked |
+| Custom agents | Definition in Artifacts repo `user-<userId>`; pointer and name in D1 `custom_agents` | Deleted |
 | Workspace summary: name, branch, state, attention, PR | D1 `workspaces`, written only by its WorkspaceDO after createWorkspace inserts it | Deleted |
 | Workspace state, sessions, turns, transcript items, events, checkpoint index, review comments, script runs | WorkspaceDO SQLite | Workspace deleted |
 | Secrets | CredentialDO SQLite, AES-256-GCM | Deleted |
@@ -274,6 +276,8 @@ The biggest risk is that the container platform is new: Sandbox SDK 1.0 shipped 
 | R9 | A snapshot works only with the image it came from | Slow wake after each image change | Fallback wake path; R2 home backups; change the image rarely | S6 |
 | R10 | Host restarts send SIGTERM, then SIGKILL within 15 minutes | A running turn stops | On SIGTERM the WorkspaceDO checkpoints and backs up before the container stops; the turn is marked interrupted; the session reloads | S6 |
 | R11 | The WorkspaceDO cannot hibernate while its container runs | Small DO duration cost | Accepted; container cost dominates | — |
+| R19 | Artifacts is in beta and the Worker needs a Git client to write | Saves fail or are slow | One small file per save; retry rule in 02; S18 measures cost; `ARTIFACTS_ERROR` keeps the last good version | S18 |
+| R20 | Adapters apply system prompts and tool limits through private `_meta` keys | An adapter upgrade silently drops a setting | `profileIssues` shows what was not applied; S19 and AT-41 repeat on every adapter upgrade | S19 |
 
 **Open questions for you**
 

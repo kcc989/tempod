@@ -57,6 +57,45 @@ The owner asked for reusable named environments, proxied secrets, Dynamic Worker
 
 The owner approved using ACP v1’s advertised mode config option directly. OpenCode 1.18.35 and the evaluated experimental `0.0.0-tui-v2-202606261840` snapshot both expose category `mode` through `configOptions`. Tempo derives its session `modes`/`modeId` from that option and uses `session/set_config_option`; agents exposing session modes use their advertised `session/set_mode` interface. Config updates and reloads refresh the normalized fields. The experimental snapshot provided no protocol advantage and was not adopted. No deployed-client compatibility shim or new dependency was introduced.
 
+## Custom agents (2026-10-12)
+
+The owner asked for custom agents: a saved system prompt, tool limits, MCP servers, default model and default reasoning level on top of a base agent. The spec was silent, so the owner decided:
+
+- **Owner:** the user. Custom agents work in every project.
+- **Storage:** Cloudflare Artifacts, one repo per user, one file per agent; D1 `custom_agents` holds the pointer (`commit_sha`).
+- **Write path:** pinned `isomorphic-git` in the Worker (new dependency, approved). The Artifacts binding can read files but cannot write them; writes need the Git protocol.
+- **Base agents:** all four, best effort. Fields an adapter cannot apply are reported in `profileIssues`, not refused.
+- **Tools:** built-in allowlist and denylist, plus MCP servers.
+- **Prompt and level:** appended to the agent's system prompt where the adapter allows it; reasoning level set through the ACP config option with category `thought_level`.
+- **Composer:** a reasoning-level picker (from the `thought_level` config option) is added for every chat, not only custom agents, so the default can be changed live.
+- **Scope:** the spec came first; the owner then asked to continue with the build on the same branch, with tool limits enforced by agent extensions where needed.
+
+Specs 00, 01, 02, 04, 05, 06 and 07 are updated. Findings from the pinned adapters that shaped the spec:
+
+- `claude-agent-acp` 0.89.1 reads `_meta.systemPrompt` (object form keeps the `claude_code` preset and forwards `append`) and `_meta.claudeCode.options`. In the Claude Agent SDK, `allowedTools` only skips permission prompts; `tools` limits the built-in set, and `tools: []` turns every built-in tool off. The spec uses `tools` and omits it for an empty allowlist. Its effort option has id `effort`, category `thought_level`.
+- `codex-acp` 2.2.2 maps `_meta.jetbrains.air.customInstructions` to Codex developer instructions. It has no built-in tool filter over ACP. Its effort option has id `reasoning_effort`, category `thought_level`.
+- Pi 1.1.0 (already pinned) has `--append-system-prompt`, `--tools`, `--exclude-tools`, `-e <extension>` and MCP (stdio and streamable HTTP, no SSE). `pi-acp` 0.0.34 spawns `pi --mode rpc` with fixed arguments but honours `PI_ACP_PI_COMMAND`, so `tempod` points it at a per-session wrapper script that adds the flags. `pi-acp` stores ACP `mcpServers` but does not pass them to pi, so a small Tempo pi extension registers MCP servers with `pi.registerMcpServer`. It reports a `thought_level` option.
+- Pi 1.0 codemode (announced 2026-10-01): built-in tools have `direct` exposure and are callable only while active, so `--tools` and `--exclude-tools` block them. MCP tools default to `codemode` exposure, which is callable from scripts whenever registered. A denied MCP tool could therefore still run from a codemode script. The Tempo pi extension adds a `tool_call` guard, which nested codemode calls also pass through. Deferred tool loading, virtual models and mid-conversation system messages need no spec change: models still come from the agent's config options.
+- OpenCode 1.18.35 (binary inspected) reads `OPENCODE_CONFIG_CONTENT`, forwards ACP `mcpServers`, maps agents to modes, and reports an `effort` option with category `thought_level` when the model has variants. Its config has top-level `instructions` (files appended to the system prompt) and `permission` rules (`allow`, `deny`, `ask` per tool). Per-agent `tools` is deprecated in favour of `permission`. Top-level settings are used so that plan mode keeps the limits.
+- Owner follow-up (2026-10-12): with these paths, `opencode` and `pi` now get the system prompt, tool limits and MCP natively. The first-prompt text block was removed from the spec. Only `codex` lacks tool limits: Codex has no built-in tool filter over ACP or config (only per-MCP-server tool lists and sandbox modes).
+
+**Build status**
+
+| Area | What is built | Not proven here |
+| --- | --- | --- |
+| Protocol | Types, functions, error codes, `session.start` fields; regenerated schema, fixtures and Rust types | — |
+| Worker | D1 `custom_agents` (migration `0003_custom_agents`); Artifacts store (binding reads, `isomorphic-git` 1.44.1 push with an in-memory file system, 300 s write token revoked in `finally`, 3 push attempts); the four functions; `createSession` and `createWorkspace` resolve the custom agent in the Worker | S18: a real Artifacts repo. Tests replace the store; the empty-repo first push and the error codes of `isomorphic-git` against Artifacts are unverified. |
+| WorkspaceDO | Session columns (migration `0007_custom_agents`); profile stored and sent on every start and reload; `profileIssues` stored | — |
+| tempod | Per-agent mapping from 01; profile files under `.tempod/profiles/<sessionId>`; MCP `${NAME}` expanded in memory; model then reasoning level; issues | S19: real adapters. Tests use the fake ACP agent. |
+| Container | `container/pi/tempo-profile.ts` copied to `/opt/tempo/pi/` | The image was not built here. |
+| Web | Settings → Agents, New chat and New workspace entries, reasoning-level picker, notice, tab label | — |
+| Mac | Same features; Settings → Agents page; `Manage agents…` opens it | Native rendering and interaction need the local Mac check. |
+
+- **Mac tab tooltip.** GPUI Kit 0.7.1 `Tab` has no tooltip method of its own, but it implements GPUI's `StatefulInteractiveElement`. The Mac app sets its `tooltip` with GPUI Kit's `Tooltip` view to `<custom agent> · <base agent>`, and the same text as the accessibility label. The rendered tooltip still needs the local Mac check.
+- **Alchemy and the `artifacts` binding.** The deploy path writes the binding through the wrangler config (`scripts/deploy-worker.ts`, S-1). `alchemy.run.ts` is unchanged.
+- **Merged with main (2026-10-12).** Main added user MCP servers (with a bridge for transports an agent lacks), `~/.pi/agent/mcp.json` for pi, per-agent models and a prompt-first New workspace dialog. Custom agents now build on them: a custom agent's MCP servers join the user's servers and use the same bridge; pi gets Playwright, `tempo` and user servers from `mcp.json`, so the plain-pi profile wrapper was dropped (the owner's decision that every pi session gets Playwright is met by main's `mcp.json`); New workspace lists custom agents in its model picker; a custom agent's `model` counts for `agent.models.<agent>`. Spike and test numbers moved to S18, S19 and AT-41 to AT-45 because main took S17 and AT-38 to AT-40.
+- **Reasoning-level picker.** The composer now shows the agent's `thought_level` option as its own picker for every chat; it no longer appears under the other options menu.
+
 ## Additive protocol changes
 
 Protocol version 1 allows additive changes only (05). All of these are optional fields or new message types and live in `packages/protocol`.
@@ -179,8 +218,8 @@ The test agents found these. The code makes the choice shown; none contradicts a
 | Item | Status |
 | --- | --- |
 | Tempo for Mac (07, Rust on GPUI Kit) | In scope (the owner approved it on 2026-10-11). Built after the server side of M0 in its own build loop: `crates/tempo-protocol`, `crates/tempo-client`, `crates/tempo-terminal`, `crates/protocol-gen`, `apps/mac`. The build machine runs Linux, so macOS-only parts (Keychain, notifications, Dock badge, URL scheme, signing, notarization) sit behind `cfg(target_os = "macos")` and cannot be run here; everything else compiles and is tested here. Rust is pinned to 1.97.0 in `rust-toolchain.toml`. |
-| Spikes S1 to S17 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
-| Acceptance tests AT-1 to AT-40 | Not run, for the same reason. `tests/e2e` holds the plan. |
+| Spikes S1 to S19 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
+| Acceptance tests AT-1 to AT-45 | Not run, for the same reason. `tests/e2e` holds the plan. |
 | Adapter conformance tests | `tests/conformance` holds the plan; they run inside the image. |
 | tempod tests in the image | Rule 14 says tempod tests run inside the container image. The build machine has no Docker, so `packages/tempod` tests run on the host; they need only the image's tools (git, rg, tmux, bash, coreutils). |
 | Browser checks of the web UI | 04 asks for every shortcut to be tested in Chrome, Safari and Firefox on macOS. There is no browser on the build machine. |

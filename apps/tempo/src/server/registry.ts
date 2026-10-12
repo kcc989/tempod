@@ -1,9 +1,16 @@
 import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protocol";
+import * as agents from "./handlers/agents.ts";
 import * as credentials from "./handlers/credentials.ts";
 import * as environments from "./handlers/environments.ts";
 import * as mcp from "./handlers/mcp.ts";
 import * as projects from "./handlers/projects.ts";
-import { createWorkspace, listModels, listWorkspaces, viaWorkspace } from "./handlers/workspaces.ts";
+import {
+  createSession,
+  createWorkspace,
+  listModels,
+  listWorkspaces,
+  viaWorkspace,
+} from "./handlers/workspaces.ts";
 import type { Handler } from "./run.ts";
 
 type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
@@ -41,10 +48,15 @@ const own: { [K in NonWorkspace]: Handler<K> } = {
   listMcpServers: mcp.listMcpServers,
   saveMcpServer: mcp.saveMcpServer,
   deleteMcpServer: mcp.deleteMcpServer,
+  listCustomAgents: agents.listCustomAgents,
+  getCustomAgent: agents.getCustomAgent,
+  saveCustomAgent: agents.saveCustomAgent,
+  deleteCustomAgent: agents.deleteCustomAgent,
 };
 
 /** One handler per function in the API contract (07, One handler per function). */
 export const HANDLERS = {
   ...own,
   ...Object.fromEntries(WORKSPACE_FNS.map((n) => [n, viaWorkspace(n)])),
+  createSession,
 } as { [K in FnName]: Handler<K> };

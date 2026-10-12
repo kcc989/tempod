@@ -29,6 +29,16 @@
         }
       ]
     },
+    "customAgentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "prompt": {
       "anyOf": [
         {

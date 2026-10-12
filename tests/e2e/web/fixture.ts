@@ -234,6 +234,8 @@ export class WebFixture {
         return [];
       case "listProjectSecretNames":
         return { names: [] };
+      case "listCustomAgents":
+        return [];
       case "refreshPullRequest":
         return {
           prNumber: this.workspace.prNumber,

@@ -56,11 +56,20 @@ pub fn new_chat_hint(
     }
 }
 pub fn session_title(session: &Session) -> String {
-    if session.title.trim().is_empty() {
-        agent_label(session.agent).into()
-    } else {
+    if !session.title.trim().is_empty() {
         session.title.clone()
+    } else if let Some(custom) = &session.custom_agent {
+        custom.name.clone()
+    } else {
+        agent_label(session.agent).into()
     }
+}
+/// A chat from a custom agent names its base agent (04, Tabs).
+pub fn session_tooltip(session: &Session) -> Option<String> {
+    session
+        .custom_agent
+        .as_ref()
+        .map(|c| format!("{} · {}", c.name, agent_label(session.agent)))
 }
 pub fn sessions(state: &WorkspaceState, closed: bool) -> Vec<&Session> {
     let mut sessions: Vec<_> = state

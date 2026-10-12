@@ -1,4 +1,4 @@
-import type { AgentId, CredentialStatus, Session, Settings, Turn } from "@tempo/protocol";
+import type { AgentId, CredentialStatus, CustomAgentSummary, Session, Settings, Turn } from "@tempo/protocol";
 import { AGENT_IDS, agentLabel, hasLogin, needsModel } from "~/ui/lib/agents";
 
 /** Pure helpers for the center tab strip (04, Tabs). */
@@ -33,6 +33,30 @@ export const agentMenu = (
     return { agent, label: agentLabel(agent), enabled: hint === null, hint };
   });
 
+export interface CustomAgentMenuEntry extends AgentMenuEntry {
+  readonly customAgentId: string;
+  /** The base agent's name, shown beside the custom agent's name. */
+  readonly baseLabel: string;
+}
+
+/** The user's custom agents for New chat; disabled when the base agent has no login. */
+export const customAgentMenu = (
+  agents: ReadonlyArray<CustomAgentSummary> | undefined,
+  status: CredentialStatus | undefined,
+): CustomAgentMenuEntry[] =>
+  (agents ?? []).map((a) => {
+    // A custom agent's own model can satisfy `agent.models.<agent>`, so only a login disables it.
+    const enabled = status === undefined || hasLogin(a.baseAgent, status);
+    return {
+      agent: a.baseAgent,
+      customAgentId: a.id,
+      label: a.name,
+      baseLabel: agentLabel(a.baseAgent),
+      enabled,
+      hint: enabled ? null : NO_LOGIN_HINT,
+    };
+  });
+
 const bySortOrder = (a: Session, b: Session) => a.sortOrder - b.sortOrder;
 
 export const openSessionIds = (sessions: Readonly<Record<string, Session>>): string[] =>
@@ -57,8 +81,14 @@ export const chatTabIds = (
   ...viewingClosed.filter((id) => !openIds.includes(id) && sessions[id]?.status === "closed"),
 ];
 
-export const sessionTitle = (session: Pick<Session, "title" | "agent"> | undefined): string =>
-  session ? session.title.trim() || agentLabel(session.agent) : "Chat";
+export const sessionTitle = (
+  session: Pick<Session, "title" | "agent" | "customAgent"> | undefined,
+): string =>
+  session ? session.title.trim() || session.customAgent?.name || agentLabel(session.agent) : "Chat";
+
+/** A chat from a custom agent names its base agent in the tab tooltip (04, Tabs). */
+export const sessionTooltip = (session: Pick<Session, "agent" | "customAgent"> | undefined): string | null =>
+  session?.customAgent ? `${session.customAgent.name} · ${agentLabel(session.agent)}` : null;
 
 export const runningTurnOf = (turns: Readonly<Record<string, Turn>>, sessionId: string): Turn | undefined =>
   Object.values(turns).find((t) => t.sessionId === sessionId && t.status === "running");

@@ -1,4 +1,6 @@
 //! Views (07, Window layout and components). Regions follow 04.
+pub mod agents_model;
+pub mod agents_settings;
 pub mod changes;
 pub mod chat;
 pub mod chat_model;

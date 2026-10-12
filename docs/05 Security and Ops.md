@@ -56,6 +56,8 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 **Rules**
 
 - MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, or in R2.
+- MUST NOT store a secret in Artifacts. Custom agent files hold only `${NAME}` references in MCP `env` and `headers`; validation refuses literal values (01, Custom agents).
+- Artifacts write tokens are minted per save with a 300 s TTL, kept in memory only, and revoked when the save ends. They never reach a container or the browser.
 - The log helper redacts any field whose name matches `/token|key|secret|password|authorization|auth_json|cookie/i`.
 - Home backups exclude `.codex/auth.json`, `.claude/.credentials.json` and `.tempod/` (01, Durability). The daemon outbox may contain unacknowledged credential refreshes.
 - Container snapshots do hold Codex `auth.json`. They stay inside the Cloudflare account; this is part of R4.

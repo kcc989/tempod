@@ -45,6 +45,7 @@ Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: featur
 
 ## Current state
 
+- **Custom agents (2026-10-12, `claude/gallant-hopper-l23ld0`):** spec (00, 01, 02, 04, 05, 06, 07) and build across protocol, Worker (D1 + Cloudflare Artifacts with pinned `isomorphic-git` 1.44.1), WorkspaceDO, tempod (per-agent profiles; Tempo pi extension), web and Mac. In this Linux workspace: typecheck, lint, format check, version check, unit tests (759 Worker, 318 UI logic, 47 component, 223 protocol, 133 daemon, 12 settings), `cargo test --workspace` (267, with libxkbcommon installed) and `cargo clippy -D warnings`, the app and tempod builds, 35 web acceptance and 7 browser regression cases pass (browsers run with the preinstalled Chromium). Spikes S18 (real Artifacts) and S19 (real adapters) and Gate F remain open. See `IMPLEMENTATION_NOTES.md`, Custom agents.
 - **Web continuation (2026-10-11):** all four web regions are implemented in the existing source. Added local Playwright acceptance with production components, protocol-checked RPC fixtures and intercepted client WebSockets. CI now runs desktop Chromium, Firefox and WebKit, dark Chromium and phone Chromium. This is local browser evidence; hosted gates remain open.
 - **Web verification:** after integrating main `5e259d6`, 59 styled local browser cases and 21 existing workspace browser regressions pass; 6 device-specific cases skip intentionally. Root typecheck, lint, unit tests, format check, version check and production build pass in this Linux workspace.
 - **Web integration:** preserved the draft recovery, pending-send guard, chip metadata, scrolling and navigation fixes merged in PR #3. Added a guard so the initial transcript backlog does not announce as new activity, plus a matching native pending-send regression (formatted with pinned Rust 1.97; not executed in this Linux workspace).
@@ -96,7 +97,7 @@ Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: featur
 | Web UI | 04 | implemented with contract gaps | Regions are present; local browser acceptance added. Historical usage, closed PR titles, attachment retrieval, hosted gates and macOS shortcut verification remain. |
 | Tempo for Mac | 07 | integrated source; native acceptance open | Review, file tabs, processes/remote terminal, settings, diagnostics, shell actions and local release helpers are wired. Native/hosted acceptance remains. |
 | Owner-only previews + Browser Run | 00 Q3, 01, 05 | built | Owner decisions Q-4 and Q-10. Spike S17, AT-16 and AT-39 are not run. |
-| Spikes S1–S17, acceptance tests AT-1–AT-40 | 06, 07 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
+| Spikes S1–S19, acceptance tests AT-1–AT-45 | 06, 07 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
 
 ## Done
 
@@ -209,8 +210,8 @@ The owner elected to test locally. These source milestones do not claim an M1–
 - [x] Spec changes (00, 01, 02, 04, 05, 07), then the build.
 
 **Needs a Cloudflare account and real logins**
-- [ ] Spikes S1–S17 (gate A).
-- [ ] Acceptance tests AT-1–AT-40, e2e and conformance runs.
+- [ ] Spikes S1–S19 (gate A).
+- [ ] Acceptance tests AT-1–AT-45, e2e and conformance runs.
 - [ ] First real deploy.
 
 ## Decisions waiting on the owner
