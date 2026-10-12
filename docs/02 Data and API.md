@@ -109,7 +109,8 @@ CREATE TABLE workspace (
   attention           TEXT NOT NULL DEFAULT 'none',
   setup_status        TEXT NOT NULL DEFAULT 'none'
                       CHECK (setup_status IN ('none','running','succeeded','failed','skipped')),
-  preview_token       TEXT NOT NULL,
+  preview_key         TEXT NOT NULL,   -- HMAC key for preview cookies (05, Preview access)
+  browser_session_id  TEXT,            -- open Browser Run session (01); null when none
   settings_json       TEXT NOT NULL DEFAULT '{}',  -- effective settings, last read
   pushed              INTEGER NOT NULL DEFAULT 0,  -- branch exists on origin
   pr_number           INTEGER,
@@ -151,7 +152,7 @@ CREATE TABLE sessions (
   agent                TEXT NOT NULL CHECK (agent IN ('claude','codex','opencode','pi')),
   title                TEXT NOT NULL DEFAULT '',
   acp_session_id       TEXT,
-  status               TEXT NOT NULL CHECK (status IN ('starting','idle','running','closed','broken')),
+  status               TEXT NOT NULL CHECK (status IN ('starting','idle','running','closed')),
   mode_id              TEXT,
   config_json          TEXT NOT NULL DEFAULT '{}',  -- {configId: value} chosen by the user
   modes_json           TEXT NOT NULL DEFAULT '[]',  -- as reported by the agent
@@ -252,7 +253,7 @@ CREATE TABLE review_comments (
   line_end      INTEGER,
   side          TEXT CHECK (side IN ('old','new')),
   body          TEXT NOT NULL,
-  status        TEXT NOT NULL CHECK (status IN ('draft','sent','resolved')),
+  status        TEXT NOT NULL CHECK (status IN ('draft','sent')),
   sent_turn_id  TEXT,
   created_at    INTEGER NOT NULL
 );
@@ -297,6 +298,13 @@ CREATE TABLE attachments (
   r2_key          TEXT NOT NULL,
   container_path  TEXT,                     -- set once copied into the container
   created_at      INTEGER NOT NULL
+);
+
+-- One-time preview entry codes (05, Preview access). A row is deleted when used or after 60 s.
+CREATE TABLE preview_codes (
+  code_hash   TEXT PRIMARY KEY,        -- SHA-256 of the code, hex
+  port        INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL
 );
 
 -- Newest 10,000 rows only.
@@ -456,7 +464,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, token)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, policy, allowlist}` for `TempoOutbound`), `logEgress(row)`, `pushCodexAuth(content, version)`.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, policy, allowlist}` for `TempoOutbound`), `logEgress(row)`, `pushCodexAuth(content, version)`.
 
 **Projects and GitHub**
 
@@ -486,9 +494,11 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `archiveWorkspace` | `{workspaceId}` | `{}` | `WORKSPACE_BUSY` |
 | `restoreWorkspace` | `{workspaceId}` | `{}` | `BRANCH_IN_USE` |
 | `deleteWorkspace` | `{workspaceId}` (archived only) | `{}` | `WORKSPACE_NOT_ARCHIVED` |
-| `rotatePreviewToken` | `{workspaceId}` | `{previewToken}` | — |
+| `openPreview` | `{workspaceId, port}` | `{url}`: a one-time entry link (05, Preview access) | `NOT_FOUND` (port not detected) |
+| `rotatePreviewKey` | `{workspaceId}` | `{}`. Every preview cookie for the workspace stops working. | — |
+| `getBrowserLiveView` | `{workspaceId}` | `{url}`: a Live View URL (01, Browser Run), or null when no Browser Run session is open. MUST NOT be logged or cached. | — |
 | setBaseBranch | {workspaceId, baseBranch}; allowed only while no PR exists | {} | PR\_EXISTS, NOT\_FOUND (branch not on origin) |
-| getDiagnostics | {workspaceId} | {ops, container, logs, egress, sessions} as in 05, Observability | — |
+| getDiagnostics | {workspaceId, egressHost?, egressStatus?}; `egressHost` is text the host contains, any case; `egressStatus` is `all` (default), `blocked` (rule 0, 7 or 10), `2xx`, `3xx`, `4xx` or `5xx` | {ops, container, logs, egress, sessions} as in 05, Observability | — |
 
 **Sessions and turns**
 
@@ -563,7 +573,7 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | --- | --- |
 | `Project` | `id, installationId, repoId, owner, name, defaultBranch, settings, sortOrder` |
 | `WorkspaceSummary` | `id, projectId, slug, title, branch, baseBranch, state, attention, defaultAgent, prNumber, prState, checksState, pinned, lastActivityAt, createdAt, archivedAt, rev` |
-| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, previewToken, ports: [{port, url}], settings, runningTurnId, queue: [turnId], imageRef, op, prTitle?` |
+| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, ports: [{port, url}], settings, browserActive, runningTurnId, queue: [turnId], imageRef, op, prTitle?` |
 | `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported) |
 | `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false), `usage?` (`TurnUsage`; absent when the agent sent none) |
 | `TurnUsage` | `totalTokens, inputTokens, outputTokens, thoughtTokens?, cachedReadTokens?, cachedWriteTokens?`: ACP v1 `PromptResponse.usage` for one turn. Counts that are not finite and non-negative are dropped; a missing required count drops the whole value. |
@@ -656,7 +666,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `env.set` | `{env}` | `{}` | 10 s |
 | `script.start` | `{runId, kind, scriptId, command, cwd, timeoutMs}` | `{pid}` | 10 s |
 | `script.stop` | `{runId}` | `{}` | 15 s |
-| `session.start` | `{sessionId, agent, env, modeId?, model?, acpSessionId?}` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
+| `session.start` | `{sessionId, agent, env, modeId?, model?, browser, acpSessionId?}`; `browser` is `"local"` or `"run"` (01, Browser Run) | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
 | `session.prompt` | `{sessionId, turnId, content}` | `{accepted: true}`; the end comes as `turn.ended` | 30 s |
 | `session.steer` | `{sessionId, turnId, messageId, content}` | `{outcome: "injected" or "promptRequired" or "unsupported"}`; the existing prompt owns the turn lifecycle | 30 s |
 | `session.cancel` | `{sessionId, turnId}` | `{}` | 20 s |
@@ -750,6 +760,7 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `FILE_TOO_LARGE` | File over the read limit | This file is too large to show. |
 | `PATH_OUTSIDE_WORKSPACE` | Path escapes the allowed folders | That path is outside the workspace. |
 | `CHECKPOINT_NOT_FOUND` | No such checkpoint | That checkpoint no longer exists. |
+| `MODEL_REQUIRED` | An OpenCode or Pi session starts while `agent.models.<agent>` is empty | Set a default model for this agent in Settings → Project. |
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |
 | `INTERNAL` | Anything else | Something went wrong. |

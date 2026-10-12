@@ -24,13 +24,20 @@ The spec disagrees with itself here, or the work needs a dependency only you can
 | Q-1 (resolved 2026-10-11) | 03 Revert, Step runner | Owner requires a successful safety checkpoint before reverting. | Revert fails with `INTERNAL` after three failed safety-checkpoint attempts and leaves files and transcript intact. Other checkpoint operations remain best effort. 03 is updated. |
 | Q-2 (resolved 2026-10-11) | 01 Container image | Orphaned agent and script processes need reaping. | Owner approved pinned `tini`. It runs as PID 1, forwards signals to `tempod`, and reaps orphaned children. 01 is updated. |
 | Q-3 (resolved 2026-10-11) | 04 Design and front-end rules, 06 Definition of done | React component tests need a DOM library. | Owner approved pinned `happy-dom` and `@testing-library/react`. Component tests are being added alongside the existing Node logic tests. |
-| Q-4 | 01 Browser Run (phase 3, optional) | 02 has no message or field that carries the Browser Run CDP URL to `tempod` or the Live View URL to the UI. | Not built (see **Not built**). |
-| Q-5 | 03 Transitions, sendPrompt step 5 | The table lets `error` → `starting` happen only through `wakeWorkspace` (the UI's Retry), but sendPrompt also wakes from `error`. | Every wake trigger restarts an errored workspace, including reads such as `getChanges`, `createSession`, terminals and previews. |
-| Q-6 | 02 createWorkspace, 03 Create | Whether a workspace created from a PR (`source.kind = "pr"`) stores that PR's number. | It does not; Create PR on such a workspace returns `PR_EXISTS` and PR polling never starts. |
-| Q-7 | 01 Agents (model "required for opencode and pi"), settings `agent.model` | Which agent the project model applies to, and what happens when OpenCode or Pi has none. | The model applies only to sessions of `agent.default`; nothing blocks a session without a model. |
-| Q-8 | 02 enums | Session status `broken` and review-comment status `resolved` are in the CHECK lists, but no function or transition writes them. | Never written. |
-| Q-9 | 05 Egress control vs Observability | The egress section says the owner sees the newest 10,000 rows; the Diagnostics table says 500. | `egress_log` keeps 10,000 rows (trimmed on every insert and daily); Diagnostics shows the newest 500. |
-| Q-10 | 05 Preview access, 00 Q3 | Capability URLs or Cloudflare Access for previews. | Capability URLs, as specified. The private-preview designs are not built. |
+
+## Owner decisions (2026-10-12)
+
+The owner answered Q-4 to Q-10. The spec now says:
+
+| Question | Decision | Spec |
+| --- | --- | --- |
+| Q-4 Browser Run | Designed: CDP through `TempoOutbound` rule 11 to `env.BROWSER`; the app under test through `outboundByHost` for `localhost`; Live View from `getBrowserLiveView`; `browser.run` setting, off by default, ignored under `allowlist`. Spike S11 checks the binding calls. | 01 Browser Run, 02, 04, 05, 06, 07 |
+| Q-5 Errored workspaces | Any wake trigger restarts an errored workspace. | 03 Transitions |
+| Q-6 Workspaces from a PR | Store `pr_number`, `pr_state` and the title at create; the top bar shows `#<number> ↗`. | 03 Create, 04 Top bar |
+| Q-7 Project model | One default model per agent (`agent.models`). OpenCode and Pi need one: `MODEL_REQUIRED`. | 01 settings and Sessions, 02, 04 |
+| Q-8 Unused statuses | Session `broken` and review-comment `resolved` are removed. | 02 |
+| Q-9 Egress rows | Store 10,000; Diagnostics shows the newest 500 matches, filtered on the server. | 02 `getDiagnostics`, 05 |
+| Q-10 Previews | Owner-only: no secret in the hostname; a one-time link from `openPreview` sets a `__Host-tempo_preview` cookie. Protected Quick Tunnels were rejected: containers can reach only ports 80 and 443 through `TempoOutbound`, and the tunnel needs port 7844. | 01, 02, 03, 04, 05, 06, 07 |
 
 ## ACP mode contract (resolved 2026-10-11)
 

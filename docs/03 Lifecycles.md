@@ -27,7 +27,7 @@ Only these transitions are allowed. Any other change of `workspace.state` is a b
 | `ready`, `working`, `sleeping`, `error` | `archiveWorkspace` | `archiving` | `archive` |
 | `archiving` | Container destroyed and final data saved | `archived` | `archive` |
 | `archived` | `restoreWorkspace` | `sleeping` | `restore` |
-| `error` | `wakeWorkspace` (the UI's Retry) | `starting` | `wake` |
+| `error` | Any wake trigger (below), including `wakeWorkspace` (the UI's Retry) | `starting` | `wake` |
 | `ready`, `working`, `setting_up` | Container stopped without Tempo asking | `starting` | `wake` |
 | Any state except `archived` | A step fails for good | `error` | — |
 
@@ -121,13 +121,13 @@ The server function does the checks and the D1 insert; the WorkspaceDO does ever
 3. Pick the branch:
    - `source.kind = "new"`: `<git.branch_prefix><slug>`, for example `tempo/lisbon`.
    - `source.kind = "branch"`: `source.branch`. It MUST exist on origin.
-   - `source.kind = "pr"`: the PR's `head.ref` from `GET /repos/{owner}/{repo}/pulls/{number}`. If `head.repo.id` is not the project's repo id, fail with `VALIDATION_FAILED` and the message "Pull requests from forks are not supported."
-4. Insert the D1 row with `state = 'creating'`. The partial unique index on `(project_id, branch)` rejects a branch in use; map that to `BRANCH_IN_USE`.
+   - `source.kind = "pr"`: the PR's `head.ref` from `GET /repos/{owner}/{repo}/pulls/{number}`. If `head.repo.id` is not the project's repo id, fail with `VALIDATION_FAILED` and the message "Pull requests from forks are not supported." Keep the PR's number, title and state (as in Status polling).
+4. Insert the D1 row with `state = 'creating'`. For `source.kind = "pr"`, also set `pr_number` and `pr_state`. The partial unique index on `(project_id, branch)` rejects a branch in use; map that to `BRANCH_IN_USE`.
 5. Call `WorkspaceDO.init(...)` and return its `WorkspaceSummary`.
 
 **In `WorkspaceDO.init`**
 
-1. Write the `workspace` row. Make `preview_token` (16 chars from `[a-z0-9]`, from `crypto.getRandomValues`). Set `title` to the first 60 characters of the prompt, or to the slug.
+1. Write the `workspace` row. Make `preview_key` (32 random bytes from `crypto.getRandomValues`, base64url). For `source.kind = "pr"`, set `pr_number` and `pr_state`, and keep the PR title as `refreshPullRequest` does, from the server function's values, so the workspace shows the PR at once and status polling starts. Set `title` to the first 60 characters of the prompt, or to the slug.
 2. If there is a prompt: create a session (`starting`, agent = input agent or project default), a turn (`queued`, `seq = 1`) and its `user_message` item.
 3. Insert the `create` op. Set state `starting`. Set the alarm to now.
 4. Publish the summary to UserHubDO.

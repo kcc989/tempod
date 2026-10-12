@@ -89,7 +89,7 @@ Use these words exactly, in code, UI and docs.
 | Turn | One user prompt plus everything the agent does until it stops | `turn` |
 | Event | One normalized message about a session, stored in order | `event` |
 | Checkpoint | A hidden git commit of the full working tree, made at the end of each turn | `checkpoint` |
-| Preview | A public URL to one port inside a container | `preview` |
+| Preview | An owner-only URL to one port inside a container | `preview` |
 | Setup, run, archive scripts | Per-project shell scripts, as in Conductor | `setupScript`, `runScript`, `archiveScript` |
 | `tempod` | The daemon inside each container. It runs agents and talks to the WorkspaceDO. | `tempod` |
 
@@ -111,7 +111,7 @@ Tempo keeps SAM's control-plane patterns and replaces its compute layer. Facts a
 | Credentials | AES-256-GCM in D1; fetched at agent start; Codex `auth.json` synced back under a lock | Same |
 | Repo access | GitHub App installation tokens through a git credential helper | Same |
 | Terminal | Go PTY, RS256 JWT, custom JSON frames | PTY exec with tmux, xterm.js in the browser |
-| Previews | Worker reverse proxy at `ws-{id}--{port}.{domain}` | Capability hostnames, proxied Worker → WorkspaceDO → tempod |
+| Previews | Worker reverse proxy at `ws-{id}--{port}.{domain}` | Owner-only hostnames with a preview cookie, proxied Worker → WorkspaceDO → tempod |
 | Message delivery | SQLite outbox on the VM, batched POSTs | SQLite outbox in `tempod`, batched over one WebSocket |
 
 **Keep from SAM:** idempotent alarm steps; callbacks instead of polling; no secrets in images; the DO owns session state; an outbox for every message; one lock that serializes Codex token refresh.
@@ -205,9 +205,9 @@ Agents test in a real Chromium inside their own container; you see the same app 
 - The image ships Chromium and Playwright at `/opt/ms-playwright`.
 - Every agent session gets the Playwright MCP server, so all four agents can open pages, click and take screenshots.
 - Tests and the agent's browser use `http://localhost:<port>`. Nothing is exposed for them.
-- You reach a running app at `https://<port>-<workspaceId>-<token>.<PREVIEW_DOMAIN>`. The token is a 16-character secret per workspace. Traffic goes Worker, WorkspaceDO, `tempod`, then the port.
+- You reach a running app at `https://<port>-<workspaceId>.<PREVIEW_DOMAIN>`. The hostname holds no secret: Tempo opens each preview through a one-time link that sets a preview cookie, so only you can open it. Traffic goes Worker, WorkspaceDO, `tempod`, then the port.
 - The UI shows each detected port as a preview link and can open it in a Browser tab next to the chat.
-- Cloudflare Browser Run with Live View is optional and comes in phase 3.
+- Cloudflare Browser Run with Live View is optional, off by default, and comes in phase 3. With it on, agents drive a remote browser that you can watch and control (01, Browser Run).
 
 ## UI
 
@@ -278,7 +278,7 @@ The biggest risk is that the container platform is new: Sandbox SDK 1.0 shipped 
 
 - [ ] Q1. Do any of your repos need Docker? Docker-in-Docker works only as root with special flags, so version 1 leaves it out.
 - [ ] Q2. Is OpenRouter the right default provider for OpenCode and Pi?
-- [ ] Q3. Are capability URLs (a secret in the hostname) good enough for previews, or do you want them behind Cloudflare Access?
+- [x] Q3. Previews are owner-only. The hostname holds no secret; a one-time link sets a preview cookie (05, Preview access).
 - [ ] Q4. Codex through `codex-acp` (one protocol for all agents) or through the Codex app server directly (steering, host-managed tokens)? This spec picks `codex-acp`.
 - [ ] Q5. Default instance `standard-3` (2 vCPU, 8 GiB) or `standard-2` (1 vCPU, 6 GiB)?
 

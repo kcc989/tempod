@@ -213,7 +213,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Setup and Run.** Same as 04: output from `script.output`, Start and Stop, and ⌘R to start or stop the default run script.
 
-**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click opens the preview URL in the default browser. There is no in-app Browser tab in this version (C7). Rotate preview link works as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
+**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. There is no in-app Browser tab in this version (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` calls `getBrowserLiveView` and opens the URL in the default browser. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
 
 ## macOS integration
 
