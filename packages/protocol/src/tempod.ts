@@ -8,6 +8,7 @@ import {
   SessionMode,
 } from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
+import { McpServerSpec } from "./mcp.ts";
 import { ChangedFile } from "./types.ts";
 import { Settings, SettingsLayer, SettingsReadResult } from "./settings.ts";
 
@@ -255,6 +256,7 @@ export const TEMPOD_REQUESTS = {
       modeId: Schema.optional(Schema.NullOr(Schema.String)),
       model: Schema.optional(Schema.NullOr(Schema.String)),
       acpSessionId: Schema.optional(Schema.NullOr(Schema.String)),
+      mcpServers: Schema.optional(Schema.Array(McpServerSpec)),
     }),
     SessionStartResult,
     120_000,

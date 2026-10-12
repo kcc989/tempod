@@ -16,6 +16,7 @@ import { attachments, egressLog, ops, sessions, turns, workspace } from "../../d
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import type { Env } from "../../env.ts";
 import type { EgressConfig } from "../../egress/rules.ts";
+import { mcpToEgress } from "../../lib/mcp.ts";
 import { PREVIEW_HEADER } from "../../http/preview.ts";
 import { errorText, log } from "../../log.ts";
 import { openUiChannel } from "./channel.ts";
@@ -260,6 +261,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       repo: project.name,
       policy: env.egress_policy,
       allowlist: env.egress_allowlist,
+      mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
     };
   }
 

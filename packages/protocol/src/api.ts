@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { AgentId, ApiKeyProvider, DiffScope, MergeMethod, ReviewSide } from "./enums.ts";
+import { McpServer, McpServerInput } from "./mcp.ts";
 import { EnvName } from "./settings.ts";
 import {
   ChangedFile,
@@ -232,6 +233,11 @@ export const API = {
     Schema.Struct({ projectId: S }),
     Schema.Struct({ names: Schema.Array(S) }),
   ),
+
+  // MCP servers
+  listMcpServers: fn("GET", Empty, Schema.Array(McpServer)),
+  saveMcpServer: fn("POST", McpServerInput, McpServer),
+  deleteMcpServer: fn("POST", Schema.Struct({ id: NonEmpty }), Empty),
 } as const;
 
 export type Api = typeof API;

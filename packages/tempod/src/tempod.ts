@@ -123,6 +123,7 @@ export class Tempod {
       emit,
       baseEnv: () => this.baseEnv(),
       scriptEnv: () => this.scriptEnv,
+      caEnv: this.caEnv,
     });
     this.ports = new PortScanner({
       intervalMs: config.limits.portScanMs,

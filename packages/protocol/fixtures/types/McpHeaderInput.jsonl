@@ -1,0 +1,2 @@
+{"name":"Authorization","secret":true}
+{"name":"X-Team","secret":false,"value":"core"}

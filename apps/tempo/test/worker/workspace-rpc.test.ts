@@ -1955,14 +1955,15 @@ describe("scripts", { timeout: 30_000 }, () => {
 });
 
 describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 }, () => {
-  it("getEgressConfig returns {owner, repo, policy, allowlist} from the project and the effective settings", async () => {
+  it("getEgressConfig returns {owner, repo, policy, allowlist, mcp} from the project and the effective settings", async () => {
     const w = await readyWs();
-    // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist}
+    // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist, mcp}
     expect(await w.stub.getEgressConfig()).toEqual({
       owner: "acme",
       repo: "app",
       policy: "open",
       allowlist: [],
+      mcp: [],
     });
     await useSettings(
       w,
@@ -1975,6 +1976,7 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
       repo: "app",
       policy: "allowlist",
       allowlist: ["*.npmjs.org", "example.com"],
+      mcp: [],
     });
   });
 

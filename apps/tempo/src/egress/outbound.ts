@@ -41,6 +41,17 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         }
         headers.set(decision.set.name, value);
       }
+      if (decision.mcp) {
+        const creds = this.env.CREDENTIALS.getByName(userId);
+        for (const swap of decision.mcp) {
+          const value = await creds.getSecret(swap.key);
+          if (value === null) {
+            status = 403;
+            return new Response("tempo: credential not set", { status: 403 });
+          }
+          headers.set(swap.name, value);
+        }
+      }
       const response = await fetch(new Request(request, { headers }));
       status = response.status;
       return response;

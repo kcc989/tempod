@@ -204,6 +204,7 @@ Agents test in a real Chromium inside their own container; you see the same app 
 
 - The image ships Chromium and Playwright at `/opt/ms-playwright`.
 - Every agent session gets the Playwright MCP server, so all four agents can open pages, click and take screenshots.
+- The owner can add their own MCP servers (stdio, or remote over HTTP or SSE) in Settings. Every agent gets them; `tempod` bridges a remote transport the agent lacks, and `TempoOutbound` adds secret headers at egress.
 - Tests and the agent's browser use `http://localhost:<port>`. Nothing is exposed for them.
 - You reach a running app at `https://<port>-<workspaceId>-<token>.<PREVIEW_DOMAIN>`. The token is a 16-character secret per workspace. Traffic goes Worker, WorkspaceDO, `tempod`, then the port.
 - The UI shows each detected port as a preview link and can open it in a Browser tab next to the chat.

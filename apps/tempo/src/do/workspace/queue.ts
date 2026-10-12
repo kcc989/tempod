@@ -24,6 +24,7 @@ import {
 import { SECRET_KEYS } from "../credential.ts";
 import { errorText, log } from "../../log.ts";
 import { bytesToBase64 } from "../../lib/crypto.ts";
+import { mcpToSpec } from "../../lib/mcp.ts";
 import { requireTempod } from "./container.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
 import { backupHomeIfDue, takeCheckpoint, uploadBundleWithRetry } from "./durability.ts";
@@ -127,6 +128,7 @@ export const ensureSessionLive = async (core: WorkspaceCore, session: SessionRow
     modeId: session.modeId ?? DEFAULT_MODE[agent],
     model,
     acpSessionId: session.acpSessionId,
+    mcpServers: (await core.mcpServers()).map(mcpToSpec),
   });
   core.liveSessions.add(session.id);
   core.updateSession(session.id, {

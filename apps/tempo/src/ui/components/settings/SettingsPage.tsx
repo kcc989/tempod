@@ -7,11 +7,13 @@ import {
   MonitorIcon,
   PaletteIcon,
   SearchIcon,
+  ServerIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AppearanceTab } from "~/ui/components/dialogs/settings/AppearanceTab";
 import { DevicesTab } from "~/ui/components/dialogs/settings/DevicesTab";
 import { LoginsTab } from "~/ui/components/dialogs/settings/LoginsTab";
+import { McpServersTab } from "~/ui/components/dialogs/settings/McpServersTab";
 import { NotificationsTab } from "~/ui/components/dialogs/settings/NotificationsTab";
 import { ProjectTab } from "~/ui/components/dialogs/settings/ProjectTab";
 import { useOpenWorkspaceDetail } from "~/ui/components/dialogs/settings/useOpenWorkspace";
@@ -31,6 +33,12 @@ const PERSONAL = [
     icon: BellIcon,
   },
   { id: "logins", label: "Logins", description: "Manage agent logins and API keys.", icon: KeyRoundIcon },
+  {
+    id: "mcp",
+    label: "MCP servers",
+    description: "MCP servers for every agent and project.",
+    icon: ServerIcon,
+  },
   {
     id: "appearance",
     label: "Appearance",
@@ -201,6 +209,7 @@ export function SettingsPage() {
           </p>
           {tab === "general" && <NotificationsTab />}
           {tab === "logins" && <LoginsTab />}
+          {tab === "mcp" && <McpServersTab />}
           {tab === "appearance" && <AppearanceTab />}
           {tab === "shortcuts" && <ShortcutsTab />}
           {tab === "devices" && <DevicesTab />}

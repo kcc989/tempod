@@ -48,6 +48,12 @@ export const SHARED = {
   Usage: P.Usage,
   Attachment: P.Attachment,
   Capabilities: P.Capabilities,
+  McpTransport: P.McpTransport,
+  McpEnvVar: P.McpEnvVar,
+  McpHeader: P.McpHeader,
+  McpServer: P.McpServer,
+  McpHeaderInput: P.McpHeaderInput,
+  McpServerInput: P.McpServerInput,
 
   RunScript: P.RunScript,
   CustomInstance: P.CustomInstance,

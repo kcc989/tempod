@@ -284,6 +284,25 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 
 Spike S7 MUST confirm the bin name `mcp-server-playwright` and these flags for the pinned `@playwright/mcp` version.
 
+**User MCP servers.** The owner adds MCP servers in Settings → MCP servers (02, `mcp_servers`). Each `session/new` and `session/load` passes Playwright first, then every enabled user server. The WorkspaceDO reads the user's enabled servers from D1 at session start and sends them in `session.start` as `mcpServers: McpServerSpec[]`:
+
+- `{name, transport: "stdio", command, args, env: [{name, value}]}`
+- `{name, transport: "http" | "sse", url, headers: [{name, value}]}`
+
+A secret header (02, `saveMcpServer`) has the value `tempo-placeholder:mcp:<serverId>:<header name in lowercase>`. The real value never enters the container; `TempoOutbound` rule 11 swaps it. A stdio server runs inside the container; its `env` values are not secret and are stored in D1. A key that a stdio server needs belongs in an `http` or `sse` server or a project secret, not in `env`.
+
+`tempod` maps each spec to the agent's `initialize` result, `agentCapabilities.mcpCapabilities`:
+
+| Spec | Agent supports the transport | Agent does not |
+| --- | --- | --- |
+| `stdio` | ACP stdio server | (all agents support stdio) |
+| `http` | ACP `{type: "http", name, url, headers}` | The bridge, as an ACP stdio server |
+| `sse` | ACP `{type: "sse", name, url, headers}` | The bridge, as an ACP stdio server |
+
+The bridge is `tempod` itself: `command` is `/usr/local/bin/tempod`, `args` are `["mcp-bridge", "--transport", "http" | "sse", "--url", <url>]` plus `["--header", "<name>: <value>"]` per header, and `env` is the CA env from startup step 2. It reads newline-delimited JSON-RPC on stdin and writes it on stdout. For `http` it uses the MCP streamable HTTP transport: it POSTs each message with `Accept: application/json, text/event-stream`, keeps the `Mcp-Session-Id` header, and writes each JSON body or SSE `message` event. For `sse` it uses the MCP SSE transport: it opens the `GET` event stream, POSTs to the URL of the `endpoint` event, and writes each `message` event. It exits when stdin closes. All its requests go through `TempoOutbound`.
+
+**Pi.** `pi-acp` accepts `mcpServers` but does not pass them to pi. Pi has its own MCP client, which reads `~/.pi/agent/mcp.json` (stdio and streamable HTTP; no SSE). Before it starts `pi-acp`, `tempod` writes that file, mode 0600, as `{"mcpServers": {<name>: entry}}` with Playwright and every user server: stdio as `{command, args, env}`, `http` as `{url, headers}`, and `sse` as the bridge stdio entry. It replaces the whole file on each Pi session start.
+
 **ACP version.** Use ACP v1 (stable) through `@agentclientprotocol/sdk` 1.8.0. MUST NOT use v2; it is still a draft. ACP v1 mode config options (category `mode`, type `select`) define the available modes and current selection when advertised. Flatten grouped choices into Tempo’s `modes` and copy `currentValue` into `modeId`; refresh both on config updates. Use `session/set_config_option` to change that mode. Agents exposing the ACP session modes interface use `session/set_mode`. ACP v1 has no `session/set_model`. Set the model with `session/set_config_option` on the option whose category is `model`.
 
 ## Credentials and egress
@@ -310,7 +329,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, { workspaceId: string; 
 
 Rules, checked in this order. The first match wins.
 
-Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, policy, allowlist}` and caches it for 60 s. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 get keys from the user's CredentialDO with `getSecret`.
+Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, policy, allowlist, mcp}` and caches it for 60 s. `mcp` lists the owner's enabled `http` and `sse` servers as `{serverId, host, secretHeaders}`; `secretHeaders` are the lowercase names of their secret headers. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 and 11 get keys from the user's CredentialDO with `getSecret`.
 
 **Rule 0** runs before all of these: a request whose host is `APP_HOST` returns 403 (05, Egress control).
 
@@ -322,9 +341,10 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 | 4 | Host `openrouter.ai`, header `Authorization: Bearer tempo-placeholder` | Replace with the real OpenRouter key |
 | 5 | Host `api.anthropic.com`, header `x-api-key: tempo-placeholder` | Replace with the real Anthropic key |
 | 6 | Host `api.openai.com`, header `Authorization: Bearer tempo-placeholder` | Replace with the real OpenAI key |
+| 11 | Checked after rule 6. Host equals the `host` of a server in `mcp`, and a header named in that server's `secretHeaders` has exactly the value `tempo-placeholder:mcp:<serverId>:<name>` | Replace each such header with the value of `mcp.<serverId>.header.<name>`. If one is not set, return 403, body `tempo: credential not set`. |
 | 7 | Any request that still carries `tempo-placeholder` | Return 403. MUST NOT forward the placeholder. |
 | 8 | Egress policy `open` | Pass through unchanged |
-| 9 | Egress policy `allowlist`, host matches a project pattern or the built-in agent list | Pass through unchanged |
+| 9 | Egress policy `allowlist`, host matches a project pattern, the built-in agent list, or the `host` of a server in `mcp` | Pass through unchanged |
 | 10 | Anything else | Return 403, body `tempo: egress blocked for <host>` |
 
 - Return the upstream `Response` as is. MUST NOT buffer bodies; model responses stream.
