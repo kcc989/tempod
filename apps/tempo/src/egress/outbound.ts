@@ -44,10 +44,10 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         decision = decide(url, request.headers, this.env.APP_HOST, config);
       }
       rule = decision.rule;
-      const response = await this.act(decision, request, config, userId);
-      status = response.status;
-      if (decision.action === "swap" && status === 403 && response.headers.get("x-tempo-refused")) rule = 7;
-      return response;
+      const acted = await this.act(decision, request, config, userId);
+      rule = acted.rule ?? rule;
+      status = acted.response.status;
+      return acted.response;
     } catch {
       status = 502;
       log("warn", "egress fetch failed", { workspaceId, host: url.hostname, rule });
@@ -69,33 +69,33 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     }
   }
 
-  private async act(decision: Decision, request: Request, config: EgressConfig, userId: string) {
+  /** Carries out a decision. `rule` is set when the logged rule differs from the decision's. */
+  private async act(
+    decision: Decision,
+    request: Request,
+    config: EgressConfig,
+    userId: string,
+  ): Promise<{ response: Response; rule?: number }> {
     switch (decision.action) {
       case "block":
-        return block(decision.status, decision.body);
+        return { response: block(decision.status, decision.body) };
       case "inject":
-        return this.runInjector(decision.injector, request, config);
+        return { response: await this.runInjector(decision.injector, request, config) };
       case "swap": {
         const values = await this.environmentSecrets(config, decision.names, userId);
-        if (!values) {
-          return new Response("tempo: placeholder credential refused", {
-            status: 403,
-            headers: { "x-tempo-refused": "1" },
-          });
-        }
+        if (!values) return { response: block(403, "tempo: placeholder credential refused"), rule: 7 };
         const swapped = swapSecrets(new URL(request.url), request.headers, values);
-        // Manual redirects: a redirect to another host must not carry the secret (05).
-        return fetch(
-          new Request(swapped.url, new Request(request, { headers: swapped.headers, redirect: "manual" })),
-        );
+        // Manual redirects, so a redirect cannot carry the value to another host (01, rule 12).
+        const init = new Request(request, { headers: swapped.headers, redirect: "manual" });
+        return { response: await fetch(new Request(swapped.url, init)) };
       }
       case "forward": {
-        if (!decision.set) return fetch(request);
+        if (!decision.set) return { response: await fetch(request) };
         const value = await this.credential(decision.set.value, userId);
-        if (value === null) return block(403, "tempo: credential not set");
+        if (value === null) return { response: block(403, "tempo: credential not set") };
         const headers = new Headers(request.headers);
         headers.set(decision.set.name, value);
-        return fetch(new Request(request, { headers }));
+        return { response: await fetch(new Request(request, { headers })) };
       }
     }
   }

@@ -435,7 +435,8 @@ An environment is a named, reusable set of egress rules and secrets. The owner m
 - Find every match of `tempo-secret-([A-Z_][A-Z0-9_]*)` in the URL (path and query) and in each header value. For `Authorization: Basic <b64>`, also look inside the decoded `user:password` and encode again after the swap.
 - All matches MUST name a secret of the environment that has a stored value and whose `hosts` match the request host. Otherwise rule 12 does not match, and rule 7 returns 403.
 - MUST NOT look in or change the body. Bodies stream.
-- Rule 12 forwards without the policy check (rules 8 to 10), as rules 2 to 6 do.
+- Rule 12 forwards without the policy check (rules 8 to 10), as rules 2 to 6 do. It sends the request with `redirect: "manual"`, so a redirect cannot carry a value to another host; the container follows the redirect with a new request.
+- A secret value that is not stored makes the request fail with rule 7.
 
 **Rule 11, injectors.** An injector is code the owner approved. It handles auth schemes that a swap cannot do, for example AWS SigV4 or HMAC request signing.
 
