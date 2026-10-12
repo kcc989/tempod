@@ -163,6 +163,25 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "listModels": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentModelOptions.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listWorkspaces": {
       "type": "object",
       "properties": {
@@ -342,17 +361,49 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "rotatePreviewToken": {
+    "openPreview": {
       "type": "object",
       "properties": {
         "method": {
           "const": "POST"
         },
         "input": {
-          "$ref": "RotatePreviewTokenIn.json"
+          "$ref": "OpenPreviewIn.json"
         },
         "output": {
-          "$ref": "RotatePreviewTokenOut.json"
+          "$ref": "OpenPreviewOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rotatePreviewKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RotatePreviewKeyIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getBrowserLiveView": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "GetBrowserLiveViewIn.json"
+        },
+        "output": {
+          "$ref": "GetBrowserLiveViewOut.json"
         }
       },
       "required": ["method", "input", "output"],
@@ -1158,6 +1209,7 @@
     "listBranches",
     "listOpenPullRequests",
     "createWorkspace",
+    "listModels",
     "listWorkspaces",
     "getWorkspace",
     "renameWorkspace",
@@ -1169,7 +1221,9 @@
     "archiveWorkspace",
     "restoreWorkspace",
     "deleteWorkspace",
-    "rotatePreviewToken",
+    "openPreview",
+    "rotatePreviewKey",
+    "getBrowserLiveView",
     "setBaseBranch",
     "getDiagnostics",
     "createSession",

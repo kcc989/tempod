@@ -31,7 +31,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |
 | Sidebar, hover card, right-click menu, History | Same |  |
-| New workspace dialog | Same | First prompt is text only, as on the web |
+| New workspace dialog | Same | Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model and mode pickers | Same |  |
@@ -101,7 +101,7 @@ The Worker gets a small JSON API, bearer-token sign-in and a download route. The
 | Bearer and device plugins | 05, Authentication | Better Auth `bearer()` and `deviceAuthorization()`; `/api/v1` accepts only bearer tokens |
 | WebSocket auth | 02, Hub and terminal channels | Upgrades also accept `Authorization: Bearer` with no `Origin` header |
 | `/device` page | 04, Dialogs | Where the owner approves a Mac sign-in |
-| Settings: Devices | 04, Dialogs | Lists sign-in sessions, with Revoke |
+| Settings: Devices | 04, Settings | Lists sign-in sessions, with Revoke |
 | Mac downloads | 02, R2 layout | `clients/mac/` in R2, served at `GET /downloads/mac/<version>`, owner only |
 | Shared types | 06, Repo layout | `bun run protocol:gen` writes the JSON Schema and the Rust types |
 
@@ -141,6 +141,8 @@ The Mac stores apply the same messages with the same rules as the web stores (02
 - A socket down for more than 2 s shows the `Reconnecting…` bar from 04.
 
 ## Window layout and components
+
+The Mac shell uses a 13 pt base size, matching the dense web shell. Sidebar actions, the Projects header, the scrolling project list and the fixed History/Settings footer follow 04, including empty, loading and error states. The sidebar uses the theme sidebar surface; project headers and workspace rows have distinct type weight and spacing. With no workspace selected, the center offers New workspace and Add project. Review controls are compact, the empty changes list fills the available space, and the commit form sits in a padded, bordered footer. Process controls use consistent padding and spacing.
 
 The main window has the five regions of 04. Each region uses the GPUI Kit components below. Where no component fits, Tempo builds its own, marked **custom**.
 
@@ -215,7 +217,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Setup and Run.** Same as 04: output from `script.output`, Start and Stop, and ⌘R to start or stop the default run script.
 
-**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click opens the preview URL in the default browser. There is no in-app Browser tab in this version (C7). Rotate preview link works as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
+**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. There is no in-app Browser tab in this version (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` calls `getBrowserLiveView` and opens the URL in the default browser. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
 
 ## macOS integration
 

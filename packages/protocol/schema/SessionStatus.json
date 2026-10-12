@@ -2,5 +2,5 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SessionStatus",
   "type": "string",
-  "enum": ["starting", "idle", "running", "closed", "broken"]
+  "enum": ["starting", "idle", "running", "closed"]
 }

@@ -29,7 +29,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Requirement | Implementation audit | Automated evidence | Manual/deployed evidence needed |
 | --- | --- | --- | --- |
 | Title edit, copy branch, base picker until PR exists | Present | topbar logic | Rename, branch choices and PR lock |
-| Port links; Alt-click Browser tab | Present: PortLinks, BrowserTab | browser-model logic | AT-16 real preview and hot reload |
+| Port links (openPreview); Alt-click Browser tab | Present: PortLinks, BrowserTab | browser-model logic; preview component tests | AT-16 real preview and hot reload |
 | Container pill for every state, current step/instance | Present: indicators/pillText | foundation/topbar/banner tests | Real lifecycle progression and instance names |
 | Exactly one primary action, first matching row | Present: primaryAction/topPrimary | topbar-logic tests | Dirty/ahead/pushed/failed checks/merged scenarios |
 | Commit/popover, PR creation, merge, checks, archive | Present; existing shared API functions used | topbar logic, commit requests | AT-17/18 with real GitHub |
@@ -43,7 +43,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Four-agent new-chat menu, unavailable login disabled | Present; models/modes come from agent config | chat-tabs/dialog models | AT-10 and all real login combinations |
 | Rename, close confirmation while running, closed reading | Present | chat-tabs logic; closed-chat fixture browser | Live cancellation/close and archived reading |
 | User bubbles, mentions, timestamps and checkpoint revert | Present | transcript model/permission components | AT-13 exact tree/safety checkpoint |
-| User attachment thumbnails | Same-browser cache present; reload/other-browser thumbnails blocked by missing read contract | attachment/block/composer tests | Authenticated attachment retrieval contract, then reload |
+| User attachment thumbnails | Present: same-browser upload cache first, then the owner-only `GET /api/workspaces/<id>/attachments/<id>` route for PNG, JPEG, GIF and WebP; name chip on error or other types | attachment-cache tests | Reload and other-browser check against a deployed route |
 | Agent GFM, lazy Shiki, code copy, streaming caret | Present; remote images/HTML never rendered | Markdown component/security and highlighting tests; streamed fixture | AT-3/4; clipboard and actual inline media |
 | Thought and handoff collapsed text | Present | transcript-model tests | Real agent thoughts and restart handoff |
 | Tool icon/title/status, expand, diffs/terminal text/file locations | Present; ACP terminal IDs have no output contract, and 01 advertises terminal=false | transcript/tool-content/expand helpers | AT-4; real adapter tool payloads |
@@ -78,8 +78,8 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Line/range/file draft comments, send to agent | Present | diff-model; composer/phone browser | AT-12 line drag and real sent payload |
 | All files tree, read-only Shiki file tabs | Present | file-tree/highlight logic; file-dialog browser | Large real repo, binary/error/sleeping paths |
 | Cmd-P fuzzy picker and Cmd-Shift-F search | Present; hosts now remain when right side is hidden; retry and phone explanation added | fixture browser hidden-panel journey; search/model tests | Real file failures, regex/limits, all macOS browsers |
-| Checks number/title/state/GitHub/check rows | Present for open PR; closed/merged title blocked by contract | checks-model | AT-17/18; core PR-title contract |
-| Browser address/reload/new tab, iframe restrictions | Present; excludes allow-top-navigation | browser-model tests | AT-16 real dev server/HMR and preview rotation |
+| Checks number/title/state/GitHub/check rows | Present for every PR state: title from `WorkspaceDetail.prTitle` or the `refreshPullRequest` result | checks-model | AT-17/18 |
+| Browser address/reload/new tab, iframe restrictions | Present; excludes allow-top-navigation; loads the openPreview link | browser-model and preview component tests | AT-16 real dev server/HMR and Reset preview access |
 | Right-side/bottom toggles and panel persistence | Present | workspace-ui/layout/shortcuts tests | All macOS browsers and reload |
 | Setup live/history, rerun, continue anyway, settings issues | Present | script-runs/settings models | AT-14 real setup failure and warnings |
 | Run scripts/default shortcut/Start/Stop/live/history | Present; default shortcut registration moved out of hidden panel | script-runs tests; hidden-panel browser | AT-14 real concurrent/nonconcurrent scripts |
@@ -94,7 +94,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Keep open dispatcher behavior | Present | dialog models | Create multiple real workspaces |
 | Add project installations/repos, Link, empty install action | Present | first-run/dialog models | AT-1/2 real GitHub App installations |
 | First-run five-step live checklist until complete | Present | first-run tests | Real setup manifest/install/login/repo/workspace |
-| Settings Logins, commands, status/update time, never show stored values | Present | credentials-model/auth tests | Real login uploads and secret inspection |
+| Settings Logins, Codex device-code login with auth.json fallback, commands, status/update time, never show stored values | Present | credentials-model/auth tests; codex-login component and Worker tests | Real Codex device-code sign-in, login uploads and secret inspection |
 | Project scripts/env/secrets/instance/sleep/egress/git/prompts/source | Present | settings-model tests | Real precedence/settings propagation and AT-14/20 |
 | Theme system/light/dark | Present | theme tests | Both themes in every screen/phone |
 | Notifications enabled/sound, permission only in Settings | Present | notify logic | Real browser permission and hidden-tab notifications |
@@ -119,7 +119,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Phone Workspaces/Chat/Changes, chat menu, primary git at Changes | Present | fixture phone journey | AT-21 real live workspace/permission/reply |
 | Phone unified diff and review comments | Present | phone fixture | AT-12/21 real comment delivery |
 | Phone no terminal/Run/file tree, explanatory states | Present; search dialogs now explain width restriction | phone/component models | Phone shortcut/menu and rotate screen |
-| Phone previews open externally | Present: phone overflow port links | browser/topbar models | Real device/new-tab preview |
+| Phone previews open externally | Present: phone overflow port links through openPreview | preview component tests | Real device/new-tab preview |
 
 ## Every keyboard binding
 
@@ -157,7 +157,7 @@ All bindings match `KeyboardEvent.code`, use exact modifiers, prevent handled de
 | Alt-M | TopBar | Primary-action tests |
 | Alt-A | TopBar | Archive-availability tests |
 | Alt-R | WorkspaceLayout/useScripts | Hidden-panel default-script browser |
-| Alt-, | AppShell/SettingsDialog | Matching/registry tests |
+| Alt-, | AppShell/SettingsPage | Matching/registry tests |
 | Cmd-Enter dialogs | DialogContent | Platform matching; submit composition guard |
 
 ## Gate status

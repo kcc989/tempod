@@ -111,15 +111,21 @@ describe("session.start with mcpServers", () => {
     const state = tmpDir("fake-agent-");
     await c.ok<SessionStartResult>(
       "session.start",
-      { sessionId: "s1", agent, env: { FAKE_STATE_DIR: state, ...env }, mcpServers: [fs, linear] },
+      {
+        sessionId: "s1",
+        agent,
+        env: { FAKE_STATE_DIR: state, ...env },
+        browser: "local",
+        mcpServers: [fs, linear],
+      },
       20_000,
     );
     const line = readFileSync(join(state, "calls.log"), "utf8")
       .split("\n")
-      .find((l) => l.includes(" mcp "))!;
+      .find((l) => l.includes(" mcpjson "))!;
     return {
       config,
-      servers: JSON.parse(line.slice(line.indexOf(" mcp ") + 5)) as Array<Record<string, unknown>>,
+      servers: JSON.parse(line.slice(line.indexOf(" mcpjson ") + 9)) as Array<Record<string, unknown>>,
     };
   };
 

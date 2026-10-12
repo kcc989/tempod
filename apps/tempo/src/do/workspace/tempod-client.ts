@@ -44,6 +44,7 @@ export class TempodClient {
   private chain: Promise<void> = Promise.resolve();
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private unacked = 0;
+  private catalogAck = 0;
   closed = false;
 
   constructor(
@@ -51,6 +52,7 @@ export class TempodClient {
     private readonly socket: WebSocket,
     private readonly onEvent: EventHandler,
     private readonly onClose: (client: TempodClient, code: number) => void,
+    private readonly catalogUserId?: string,
   ) {
     socket.addEventListener("message", (e) => this.onMessage(e.data));
     socket.addEventListener("close", (e) => this.handleClose(e.code));
@@ -170,6 +172,17 @@ export class TempodClient {
 
   private async applyEvent(envelope: TempodEventEnvelope): Promise<void> {
     if (this.closed) return;
+    if (this.catalogUserId) {
+      const decoded = decodeEvent(envelope.event);
+      if (decoded._tag === "Success" && decoded.value.kind === "credential.changed") {
+        await this.core
+          .credentials()
+          .offerCodexAuth(decoded.value.content, decoded.value.lastRefresh, this.core.workspaceId);
+      }
+      this.catalogAck = envelope.seq;
+      this.queueAck(true);
+      return;
+    }
     const row = this.core.ws();
     const kind = (envelope.event as { kind?: unknown })?.kind;
     const isIncarnation = kind === "incarnation.changed";
@@ -235,7 +248,12 @@ export class TempodClient {
     if (this.unacked === 0 || this.closed) return;
     this.unacked = 0;
     try {
-      this.socket.send(JSON.stringify({ type: "ack", upTo: this.core.ws().tempodAckedSeq }));
+      this.socket.send(
+        JSON.stringify({
+          type: "ack",
+          upTo: this.catalogUserId ? this.catalogAck : this.core.ws().tempodAckedSeq,
+        }),
+      );
     } catch {
       // socket closing
     }
@@ -258,7 +276,7 @@ export class TempodClient {
 export const tempodFetch = (core: WorkspaceCore, path: string, init: RequestInit = {}): Promise<Response> => {
   const container = core.container;
   if (!container) throw new TempoError("CONTAINER_NOT_READY");
-  const token = core.ws().tempodToken;
+  const token = core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken");
   if (!token) throw new TempoError("CONTAINER_NOT_READY");
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);

@@ -1,12 +1,13 @@
 import { desc } from "drizzle-orm";
 import { TempoError, type ChangedFile, type ChangesSummary, type FnOutput } from "@tempo/protocol";
+import { EMPTY_PROMPT, json } from "../../db/json.ts";
 import { turns } from "../../db/workspace-do.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
 import { mintInstallationToken } from "../../github/api.ts";
 import { checksStateOf, github, prStateOf } from "../../github/provider.ts";
 import { errorText, log } from "../../log.ts";
 import { requireTempod } from "./container.ts";
-import { parseJson, type WorkspaceCore } from "./core.ts";
+import type { WorkspaceCore } from "./core.ts";
 
 const TOKEN_MARGIN_MS = 5 * 60_000;
 
@@ -78,7 +79,7 @@ export const defaultPrBody = (core: WorkspaceCore): string => {
     .orderBy(desc(turns.seq))
     .all()
     .reverse()
-    .map((t) => parseJson<{ text?: string }>(t.promptJson, {}).text?.split("\n")[0]?.trim() ?? "")
+    .map((t) => json.prompt.read(t.promptJson, EMPTY_PROMPT).text.split("\n")[0]?.trim() ?? "")
     .filter((l) => l.length > 0)
     .slice(0, 20);
   return ["Created with Tempo.", "", ...lines.map((l) => `- ${l}`)].join("\n");

@@ -12,7 +12,7 @@ export interface StoredEnv {
   readonly value: string;
 }
 
-/** What TempoOutbound needs to know about one server (01, rule 11). */
+/** What TempoOutbound needs to know about one server (01, rule 12). */
 export interface McpEgress {
   readonly serverId: string;
   readonly host: string;

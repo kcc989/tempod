@@ -1,7 +1,12 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { McpServer } from "@agentclientprotocol/sdk";
-import { PLAYWRIGHT_MCP_SERVER, type McpServerSpec } from "@tempo/protocol";
+import {
+  BROWSER_RUN_CDP_ENDPOINT,
+  PLAYWRIGHT_MCP_SERVER,
+  type BrowserMode,
+  type McpServerSpec,
+} from "@tempo/protocol";
 import { isObj } from "./convert.ts";
 
 /** How tempod runs its own MCP bridge: the command line and the CA env from startup step 2. */
@@ -13,10 +18,11 @@ export interface Bridge {
 type Remote = Extract<McpServerSpec, { transport: "http" | "sse" }>;
 type Stdio = Extract<McpServer, { command: string }>;
 
-export const playwrightServer = (): Stdio => ({
+/** 01 Browser Run: with `"run"`, Playwright MCP drives the Browser Run session instead of local Chromium. */
+export const playwrightServer = (browser: BrowserMode = "local"): Stdio => ({
   name: PLAYWRIGHT_MCP_SERVER.name,
   command: PLAYWRIGHT_MCP_SERVER.command,
-  args: [...PLAYWRIGHT_MCP_SERVER.args],
+  args: browser === "run" ? ["--cdp-endpoint", BROWSER_RUN_CDP_ENDPOINT] : [...PLAYWRIGHT_MCP_SERVER.args],
   env: PLAYWRIGHT_MCP_SERVER.env.map((e) => ({ ...e })),
 });
 
@@ -49,10 +55,11 @@ export const acpMcpServers = (
   specs: ReadonlyArray<McpServerSpec>,
   capabilities: Record<string, unknown>,
   bridge: Bridge,
+  browser: BrowserMode = "local",
 ): McpServer[] => {
   const supports = mcpTransports(capabilities);
   return [
-    playwrightServer(),
+    playwrightServer(browser),
     ...specs.map((spec): McpServer => {
       if (spec.transport === "stdio")
         return {
@@ -90,9 +97,10 @@ const stdioEntry = (s: {
 export const piMcpConfig = (
   specs: ReadonlyArray<McpServerSpec>,
   bridge: Bridge,
+  browser: BrowserMode = "local",
 ): { mcpServers: Record<string, PiEntry> } => {
   const servers: Record<string, PiEntry> = {};
-  const playwright = playwrightServer();
+  const playwright = playwrightServer(browser);
   servers[playwright.name] = stdioEntry(playwright);
   for (const spec of specs) {
     if (spec.transport === "stdio") servers[spec.name] = stdioEntry(spec);
@@ -110,9 +118,10 @@ export const writePiMcpConfig = (
   piAgentDir: string,
   specs: ReadonlyArray<McpServerSpec>,
   bridge: Bridge,
+  browser: BrowserMode = "local",
 ): void => {
   mkdirSync(piAgentDir, { recursive: true });
   const path = join(piAgentDir, "mcp.json");
-  writeFileSync(path, `${JSON.stringify(piMcpConfig(specs, bridge), null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(path, `${JSON.stringify(piMcpConfig(specs, bridge, browser), null, 2)}\n`, { mode: 0o600 });
   chmodSync(path, 0o600);
 };

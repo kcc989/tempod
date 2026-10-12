@@ -1,4 +1,4 @@
-import { mcpPlaceholder, PLACEHOLDER, type EgressPolicy } from "@tempo/protocol";
+import { BROWSER_RUN_HOST, mcpPlaceholder, PLACEHOLDER, type EgressPolicy } from "@tempo/protocol";
 import { mcpHeaderKey, type McpEgress } from "../lib/mcp.ts";
 
 /** Built-in agent hosts for the `allowlist` policy (01). */
@@ -50,6 +50,7 @@ export const carriesPlaceholder = (headers: Headers): boolean => {
 
 export type Decision =
   | { readonly rule: number; readonly action: "block"; readonly status: number; readonly body: string }
+  | { readonly rule: 11; readonly action: "browser" }
   | {
       readonly rule: number;
       readonly action: "forward";
@@ -57,18 +58,20 @@ export type Decision =
         readonly name: string;
         readonly value: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai";
       };
-      /** Rule 11: headers to replace with the CredentialDO value under `key`. */
+      /** Rule 12: headers to replace with the CredentialDO value under `key`. */
       readonly mcp?: ReadonlyArray<{ readonly name: string; readonly key: string }>;
     };
 
 /**
- * Rules 0 to 11 (01 and 05), first match wins; rule 11 is checked after rule 6. Pure: credential lookup happens in the caller.
+ * Rules 0 to 12 (01 and 05), first match wins; rule 11 is checked right after rule 0 and rule 12 right after rule 6.
+ * Pure: credential lookup happens in the caller.
  * `set` names the credential to add; the caller fetches it and replaces the header.
  */
 export const decide = (url: URL, headers: Headers, appHost: string, config: EgressConfig): Decision => {
   const host = url.hostname.toLowerCase();
   if (host === appHost.toLowerCase())
     return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
+  if (host === BROWSER_RUN_HOST) return { rule: 11, action: "browser" };
   if (url.protocol === "http:") return policy(8, host, config);
   if (
     (host === "github.com" || host === "codeload.github.com") &&
@@ -89,14 +92,14 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
     return { rule: 6, action: "forward", set: { name: "authorization", value: "openai" } };
   }
   const mcp = mcpSwaps(host, headers, config);
-  if (mcp.length > 0) return { rule: 11, action: "forward", mcp };
+  if (mcp.length > 0) return { rule: 12, action: "forward", mcp };
   if (carriesPlaceholder(headers) || url.href.includes(PLACEHOLDER)) {
     return { rule: 7, action: "block", status: 403, body: "tempo: placeholder credential refused" };
   }
   return policy(8, host, config);
 };
 
-/** Rule 11 (01): secret MCP headers, only for the host of the server that owns them. */
+/** Rule 12 (01): secret MCP headers, only for the host of the server that owns them. */
 export const mcpSwaps = (
   host: string,
   headers: Headers,

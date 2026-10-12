@@ -10,6 +10,7 @@ import {
   ServerIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { SECTIONS, sectionPage } from "~/ui/components/dialogs/settings-model";
 import { AppearanceTab } from "~/ui/components/dialogs/settings/AppearanceTab";
 import { DevicesTab } from "~/ui/components/dialogs/settings/DevicesTab";
 import { LoginsTab } from "~/ui/components/dialogs/settings/LoginsTab";
@@ -53,7 +54,7 @@ const PERSONAL = [
   },
   { id: "devices", label: "Devices", description: "Manage devices signed in to Tempo.", icon: MonitorIcon },
 ] as const;
-const PROJECT_SECTIONS = ["Agent", "Scripts", "Environment", "Git", "Prompts", "Secrets", "General"];
+const PROJECT_SECTIONS = [...new Set(SECTIONS.map(sectionPage)), "Secrets", "General"];
 
 export function SettingsPage() {
   const settings = useSettings();

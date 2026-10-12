@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { eq, like } from "drizzle-orm";
 import { credentialSchema, codexLeases, secrets } from "../db/credential-do.ts";
+import { json, type SecretMeta } from "../db/json.ts";
 import { CREDENTIAL_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
 import type { Env } from "../env.ts";
 import { deriveKey, open, seal } from "../lib/crypto.ts";
@@ -46,7 +47,7 @@ export interface GithubAppConfig {
 export interface SecretStatus {
   readonly key: string;
   readonly updatedAt: number;
-  readonly meta: { readonly lastRefresh?: number };
+  readonly meta: SecretMeta;
 }
 
 /**
@@ -176,20 +177,13 @@ export class CredentialDO extends DurableObject<Env> {
     }
   }
 
-  async putSecret(
-    key: string,
-    value: string,
-    meta: Record<string, unknown> = {},
-  ): Promise<{ version: number }> {
+  async putSecret(key: string, value: string, meta: SecretMeta = {}): Promise<{ version: number }> {
     const sealed = await seal(await this.key(), key, value);
     return { version: this.storeSealedSecret(key, sealed, meta) };
   }
 
-  private storeSealedSecret(
-    key: string,
-    sealed: Awaited<ReturnType<typeof seal>>,
-    meta: Record<string, unknown>,
-  ): number {
+  private storeSealedSecret(key: string, sealed: Awaited<ReturnType<typeof seal>>, meta: SecretMeta): number {
+    const metaJson = json.secretMeta.write(meta);
     const now = Date.now();
     const prev = this.db.select({ version: secrets.version }).from(secrets).where(eq(secrets.key, key)).get();
     const version = (prev?.version ?? 0) + 1;
@@ -200,18 +194,12 @@ export class CredentialDO extends DurableObject<Env> {
         ciphertext: sealed.ciphertext,
         iv: sealed.iv,
         version,
-        metaJson: JSON.stringify(meta),
+        metaJson,
         updatedAt: now,
       })
       .onConflictDoUpdate({
         target: secrets.key,
-        set: {
-          ciphertext: sealed.ciphertext,
-          iv: sealed.iv,
-          version,
-          metaJson: JSON.stringify(meta),
-          updatedAt: now,
-        },
+        set: { ciphertext: sealed.ciphertext, iv: sealed.iv, version, metaJson, updatedAt: now },
       })
       .run();
     return version;
@@ -230,7 +218,7 @@ export class CredentialDO extends DurableObject<Env> {
       .map((r) => ({
         key: r.key,
         updatedAt: r.updatedAt,
-        meta: JSON.parse(r.metaJson) as { lastRefresh?: number },
+        meta: json.secretMeta.read(r.metaJson, {}),
       }));
   }
 
@@ -274,7 +262,7 @@ export class CredentialDO extends DurableObject<Env> {
     fromWorkspaceId: string | null,
   ): Promise<{ accepted: boolean; version: number }> {
     const row = this.db.select().from(secrets).where(eq(secrets.key, SECRET_KEYS.codex)).get();
-    const current = row ? ((JSON.parse(row.metaJson) as { lastRefresh?: number }).lastRefresh ?? 0) : -1;
+    const current = row ? (json.secretMeta.read(row.metaJson, {}).lastRefresh ?? 0) : -1;
     if (row && !(lastRefresh > current)) return { accepted: false, version: row.version };
     const { version } = await this.putSecret(SECRET_KEYS.codex, content, { lastRefresh });
     const leases = this.db.select().from(codexLeases).all();
@@ -312,7 +300,7 @@ export class CredentialDO extends DurableObject<Env> {
     if (!row) return null;
     const content = await this.getSecret(SECRET_KEYS.codex);
     if (content === null) return null;
-    const meta = JSON.parse(row.metaJson) as { lastRefresh?: number };
+    const meta = json.secretMeta.read(row.metaJson, {});
     return { content, version: row.version, lastRefresh: meta.lastRefresh ?? 0 };
   }
 

@@ -2,7 +2,7 @@ import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protoco
 import * as credentials from "./handlers/credentials.ts";
 import * as mcp from "./handlers/mcp.ts";
 import * as projects from "./handlers/projects.ts";
-import { createWorkspace, listWorkspaces, viaWorkspace } from "./handlers/workspaces.ts";
+import { createWorkspace, listModels, listWorkspaces, viaWorkspace } from "./handlers/workspaces.ts";
 import type { Handler } from "./run.ts";
 
 type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
@@ -18,6 +18,7 @@ const own: { [K in NonWorkspace]: Handler<K> } = {
   listOpenPullRequests: projects.listOpenPullRequests,
   createWorkspace,
   listWorkspaces,
+  listModels,
   getCredentialStatus: credentials.getCredentialStatus,
   setClaudeToken: credentials.setClaudeToken,
   setCodexAuth: credentials.setCodexAuth,

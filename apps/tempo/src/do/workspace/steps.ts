@@ -1,21 +1,14 @@
 import { and, desc, eq, gt, inArray, isNotNull, lt, lte, ne } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { pickSlug } from "@tempo/cities";
-import {
-  TempoError,
-  newId,
-  revertNote,
-  type CheckpointReason,
-  type OpKind,
-  type Source,
-} from "@tempo/protocol";
+import { TempoError, newId, revertNote, type CheckpointReason, type OpKind } from "@tempo/protocol";
 import { workspaces } from "../../db/d1.ts";
+import { json } from "../../db/json.ts";
 import {
   checkpoints,
   events,
   homeBackups,
   egressLog,
-  items,
   ops,
   permissions,
   scriptRuns,
@@ -23,6 +16,7 @@ import {
   snapshots,
   turns,
   type CheckpointRow,
+  type OpRow,
 } from "../../db/workspace-do.ts";
 import { github } from "../../github/provider.ts";
 import { errorText, log } from "../../log.ts";
@@ -30,6 +24,7 @@ import {
   connectTempod,
   containerRunning,
   destroyContainer,
+  dropCodexLease,
   startContainer,
   tempodFor,
   usableSnapshot,
@@ -52,6 +47,7 @@ import {
 } from "./durability.ts";
 import { sendEnv } from "./events.ts";
 import { getGithubToken, refreshChanges } from "./git.ts";
+import { closeBrowser } from "./browser.ts";
 import { finishTurn } from "./queue.ts";
 import {
   OpRunner,
@@ -79,6 +75,29 @@ const markBranchGone = (core: WorkspaceCore): void => {
   core.broadcastDetailSoon();
 };
 
+/**
+ * A create that never finished: no create or wake op has completed yet. Its Retry is a wake (03 Transitions),
+ * which still needs the create checkout and push state (03, repo.clone).
+ */
+const firstStart = (core: WorkspaceCore, op: OpRow): boolean =>
+  op.kind === "create" ||
+  (op.kind === "wake" &&
+    !core.db
+      .select({ id: ops.id })
+      .from(ops)
+      .where(and(inArray(ops.kind, ["create", "wake"]), eq(ops.status, "done")))
+      .get());
+
+/** Steps of create and wake that need the container that container.start brought up. */
+const CONTAINER_STEPS = [
+  "tempod.connect",
+  "repo.clone",
+  "repo.applyCheckpoint",
+  "home.restore",
+  "settings.read",
+  "setup.run",
+] as const;
+
 /** A snapshot wake skips repo.clone, so it asks GitHub whether a pushed branch still exists. */
 const checkPushedBranch = async (core: WorkspaceCore): Promise<void> => {
   const row = core.ws();
@@ -103,7 +122,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       () => undefined,
       () => undefined,
     );
-  return {
+  const steps: Record<string, StepFn> = {
     "container.start": async (sc) => {
       const { core, op, state, signal } = sc;
       const row = core.ws();
@@ -170,7 +189,8 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       }
       const row = core.ws();
       const project = await core.project();
-      const source = parseJson<Source>(row.sourceJson, { kind: "new" });
+      const source = json.source.read(row.sourceJson, { kind: "new" });
+      const asCreate = firstStart(core, op);
       const res = await (
         await tempodFor(core, handlers)
       ).request(
@@ -181,13 +201,14 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
           baseBranch: row.baseBranch,
           source,
           author: core.author(),
-          mode: op.kind === "create" ? "create" : "wake",
+          mode: asCreate ? "create" : "wake",
         },
         { signal },
       );
-      if (op.kind === "create" && source.kind !== "new" && res.remoteHeadSha) {
-        core.updateWs({ pushed: 1, lastPushedSha: res.remoteHeadSha });
-      } else if (op.kind === "wake" && row.pushed === 1 && !res.remoteHeadSha) {
+      if (asCreate) {
+        if (source.kind !== "new" && res.remoteHeadSha)
+          core.updateWs({ pushed: 1, lastPushedSha: res.remoteHeadSha });
+      } else if (row.pushed === 1 && !res.remoteHeadSha) {
         markBranchGone(core);
       }
       return "next";
@@ -221,7 +242,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       const res = await (
         await tempodFor(core, handlers)
       ).request("settings.read", { overrides: project.overrides });
-      core.updateWs({ settingsJson: JSON.stringify(res.effective) });
+      core.updateWs({ settingsJson: json.settings.write(res.effective) });
       core.setKv("settingsIssues", {
         warnings: res.warnings,
         errors: res.errors,
@@ -282,7 +303,13 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       return "next";
     },
 
-    "turns.cancel": async ({ core }) => {
+    "turns.cancel": async ({ core, signal }) => {
+      // A turn start in flight (up to 120 s of session.start) is aborted before its prompt goes out, then awaited.
+      if (core.queueWork) {
+        core.turnStartAbort?.abort();
+        await core.queueWork;
+        signal.throwIfAborted();
+      }
       if (core.queueBusy) throw new TempoError("WORKSPACE_BUSY");
       // Read before finishTurn, which marks the running turn's requests cancelled without telling tempod.
       const pending = core.db.select().from(permissions).where(eq(permissions.status, "pending")).all();
@@ -293,11 +320,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
           .catch(() => undefined);
         finishTurn(core, running.id, "cancelled", { stopReason: "cancelled" });
       }
-      for (const t of core.queuedTurns()) {
-        core.db.delete(items).where(eq(items.turnId, t.id)).run();
-        core.db.delete(turns).where(eq(turns.id, t.id)).run();
-        core.broadcast({ type: "turn.deleted", turnId: t.id });
-      }
+      for (const t of core.queuedTurns()) core.deleteTurn(t.id);
       for (const p of pending) {
         await core.tempod
           ?.request("permission.respond", { requestId: p.requestId, optionId: null })
@@ -309,6 +332,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
           .run();
       }
       core.recomputeAttention();
+      core.broadcastDetailSoon();
       return "next";
     },
 
@@ -568,6 +592,16 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       return "next";
     },
   };
+  // The container stopped while a create or wake op used it (03 Transitions): the op is cancelled and its
+  // onCancelled hook restarts it the way the heartbeat does, within the 3-per-hour limit.
+  for (const name of CONTAINER_STEPS) {
+    const step = steps[name]!;
+    steps[name] = (sc) =>
+      (sc.op.kind === "create" || sc.op.kind === "wake") && !containerRunning(sc.core)
+        ? Promise.resolve("cancel")
+        : step(sc);
+  }
+  return steps;
 };
 
 /**
@@ -601,36 +635,42 @@ const toReady = (core: WorkspaceCore) => {
   core.ctx.waitUntil(core.files.sync());
 };
 
-const dropLease = (core: WorkspaceCore) => {
-  if (!core.kv<boolean>("codexLease")) return;
-  core.setKv("codexLease", undefined);
-  core.ctx.waitUntil(
-    core
-      .credentials()
-      .dropCodexLease(core.workspaceId)
-      .catch(() => undefined),
-  );
-};
-
 const toError = (core: WorkspaceCore, code: string, detail: string | null) => {
   if (core.state !== "archived") core.setState("error", { code, detail });
 };
 
-export const makeHooks = (scheduleHousekeeping: () => void): Record<OpKind, OpHooks> => ({
-  create: { onDone: (core) => toReady(core), onFailed: (core, _op, e) => toError(core, e.code, e.detail) },
-  wake: { onDone: (core) => toReady(core), onFailed: (core, _op, e) => toError(core, e.code, e.detail) },
+export const makeHooks = (
+  scheduleHousekeeping: () => void,
+  containerLost: () => Promise<void>,
+): Record<OpKind, OpHooks> => ({
+  create: {
+    onDone: (core) => toReady(core),
+    onFailed: (core, _op, e) => toError(core, e.code, e.detail),
+    onCancelled: () => containerLost(),
+  },
+  wake: {
+    onDone: (core) => toReady(core),
+    onFailed: (core, _op, e) => toError(core, e.code, e.detail),
+    onCancelled: () => containerLost(),
+  },
   sleep: {
     onDone: (core) => {
       if (core.state === "stopping") core.setState("sleeping");
-      dropLease(core);
+      dropCodexLease(core);
+      closeBrowser(core);
     },
-    onFailed: (core, _op, e) => toError(core, e.code, e.detail),
+    onFailed: (core, _op, e) => {
+      toError(core, e.code, e.detail);
+      dropCodexLease(core);
+      closeBrowser(core);
+    },
   },
   archive: {
     onDone: (core) => {
       core.updateWs({ archivedAt: Date.now() });
       core.setState("archived");
-      dropLease(core);
+      dropCodexLease(core);
+      closeBrowser(core);
       core.publish();
     },
     onFailed: (core, _op, e) => toError(core, e.code, e.detail),

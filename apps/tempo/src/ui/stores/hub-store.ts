@@ -9,7 +9,7 @@ import {
   type HubState,
   type NotifyEvent,
 } from "./hub-state";
-import { parseHubMessage } from "./parse";
+import { isUnknownVersionHello, parseHubMessage } from "./parse";
 
 export interface HubSnapshot extends HubState {
   readonly status: SocketStatus;
@@ -69,6 +69,7 @@ export class HubStore {
   }
 
   receive(raw: string): void {
+    if (isUnknownVersionHello(raw)) return this.socket.rejectVersion();
     const msg = parseHubMessage(raw);
     if (!msg) return;
     const next = applyHubMessage(this.snapshot, msg);

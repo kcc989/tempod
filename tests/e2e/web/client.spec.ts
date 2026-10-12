@@ -181,7 +181,10 @@ test("announces completed live messages once and leaves the historical backlog q
   await expect(announcement).toHaveText("Live response");
 });
 
-test("new workspace uses the selected project and text prompt", async ({ page, fixture }) => {
+test("new workspace uses the selected project, discovered model and text prompt", async ({
+  page,
+  fixture,
+}) => {
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
   if (test.info().project.name.startsWith("phone")) {
     await page
@@ -192,12 +195,17 @@ test("new workspace uses the selected project and text prompt", async ({ page, f
   } else await page.keyboard.press("Alt+n");
   const dialog = page.getByRole("dialog", { name: "New workspace" });
   await expect(dialog).toBeVisible();
-  await dialog.getByPlaceholder("What should the agent do?").fill("Update keeled documentation");
+  const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
+  await expect(prompt).toBeFocused();
+  await prompt.fill("Update keeled documentation");
+  await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
+  await page.getByRole("option", { name: "Fixture Sonnet · Claude", exact: true }).click();
   await dialog.getByRole("button", { name: /^Create/ }).click();
   await expect.poll(() => fixture.inputs("createWorkspace").length).toBe(1);
   expect(fixture.inputs("createWorkspace")[0]).toMatchObject({
     projectId: "p1",
     agent: "claude",
+    model: "fixture-sonnet",
     source: { kind: "new", baseBranch: "main" },
     prompt: { text: "Update keeled documentation" },
   });

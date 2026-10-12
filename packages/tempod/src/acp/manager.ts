@@ -1,6 +1,7 @@
 import {
   TempoError,
   type AgentId,
+  type BrowserMode,
   type ConfigOption,
   type McpServerSpec,
   type SessionStartResult,
@@ -30,6 +31,7 @@ export interface StartParams {
   readonly modeId?: string | null | undefined;
   readonly model?: string | null | undefined;
   readonly acpSessionId?: string | null | undefined;
+  readonly browser?: BrowserMode | undefined;
   readonly mcpServers?: ReadonlyArray<McpServerSpec> | undefined;
 }
 
@@ -92,7 +94,7 @@ export class SessionManager {
     const bridge: Bridge = { command: config.selfCommand, env: { ...this.deps.caEnv } };
     if (p.agent === "pi") {
       try {
-        writePiMcpConfig(config.piAgentDir, p.mcpServers ?? [], bridge);
+        writePiMcpConfig(config.piAgentDir, p.mcpServers ?? [], bridge, p.browser);
       } catch (e) {
         log.warn("writing pi mcp.json failed", { sessionId: p.sessionId, error: errorText(e) });
       }
