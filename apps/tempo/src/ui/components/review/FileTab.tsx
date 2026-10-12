@@ -22,12 +22,17 @@ const LINE_HEIGHT = 20;
 export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
   const state = useWorkspaceStateValue(workspaceId);
   const live = isLive(state);
+  const available = live || state === "sleeping";
   useInvalidateOnChanges(workspaceId, READ_FILE);
   const file = useCallQuery(
     "readFile",
     { workspaceId, path: tab.path },
-    { enabled: live, retry: false, staleTime: 5_000, refetchInterval: retryWhileWaking },
+    { enabled: available, retry: false, staleTime: 5_000, refetchInterval: live ? retryWhileWaking : false },
   );
+  const { refetch } = file;
+  useEffect(() => {
+    if (available) void refetch();
+  }, [available, state, refetch]);
 
   let body;
   if (file.data) {
@@ -37,7 +42,10 @@ export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
       ) : (
         <EmptyState icon={FileIcon} title="Binary file." description={formatBytes(file.data.size)} />
       );
-  } else if (!live) {
+  } else if (
+    !available ||
+    (state === "sleeping" && file.isError && errorCode(file.error) === "CONTAINER_NOT_READY")
+  ) {
     body = isComingUp(state) ? (
       <div className="flex h-full items-center justify-center">
         <LoadingText label={ERROR_MESSAGES.CONTAINER_NOT_READY} />
@@ -72,6 +80,9 @@ export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
         {file.data && <span className="shrink-0">{formatBytes(file.data.size)}</span>}
         <span className="ml-auto shrink-0">Read only</span>
       </div>
+      {state === "sleeping" && file.data && (
+        <p className="px-3 py-1 text-xs text-muted-foreground">Last synced file. May be out of date.</p>
+      )}
       <div className="min-h-0 flex-1">{body}</div>
     </div>
   );
