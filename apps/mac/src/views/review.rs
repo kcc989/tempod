@@ -1,14 +1,16 @@
 use super::diff::{DiffEvent, DiffView};
 use super::tokens::{Token, color};
 use crate::stores::workspace::WorkspaceStore;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{
     Editor, EditorState, Input, InputEvent, InputState, Textarea, TextareaState,
 };
 use gpui_kit::component::list::ListItem;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tree::{Tree, TreeState};
-use gpui_kit::component::{Disableable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Icon, IconName, Sizable as _, h_flex, v_flex};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, EventEmitter, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
@@ -55,7 +57,14 @@ pub struct ReviewPanel {
     _query_changed: Subscription,
     tree: Entity<TreeState>,
     checks: Vec<p::CheckRun>,
-    pr_title: Option<String>,
+    checks_loading: bool,
+    checks_error: Option<String>,
+    refreshing_pr: bool,
+    /// `prTitle` from `refreshPullRequest`, until the workspace detail carries it.
+    refreshed_title: Option<String>,
+    checks_seen: (Option<f64>, Option<p::PrState>, Option<p::ChecksState>),
+    /// The agent of the chat that review comments go to; the workspace's default agent if unset.
+    pub agent: Option<p::AgentId>,
     pub diff: Option<Entity<DiffView>>,
     pub file: Option<Entity<EditorState>>,
     pub document_title: Option<String>,
@@ -109,8 +118,17 @@ impl ReviewPanel {
                 for doc in &mut this.documents {
                     doc.stale = true;
                 }
-                if this.tab == 2 {
-                    this.load_checks(cx);
+                let seen = this
+                    .store
+                    .read(cx)
+                    .state
+                    .workspace
+                    .as_ref()
+                    .map(|w| (w.pr_number, w.pr_state, w.checks_state))
+                    .unwrap_or((None, None, None));
+                if this.tab == 2 && seen != this.checks_seen {
+                    let new_pr = seen.0 != this.checks_seen.0;
+                    this.load_checks(new_pr, cx);
                 }
                 this.initialized = true;
                 this.changes_seq = seq;
@@ -148,7 +166,12 @@ impl ReviewPanel {
             _query_changed: query_changed,
             tree: cx.new(|cx| TreeState::new(cx)),
             checks: vec![],
-            pr_title: None,
+            checks_loading: false,
+            checks_error: None,
+            refreshing_pr: false,
+            refreshed_title: None,
+            checks_seen: (None, None, None),
+            agent: None,
             diff: None,
             file: None,
             document_title: None,
@@ -243,7 +266,7 @@ impl ReviewPanel {
                             this.files.sort_by(|a, b| a.path.cmp(&b.path));
                         }
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 if let Ok(comments) = comments {
                     this.comments = comments;
@@ -307,7 +330,7 @@ impl ReviewPanel {
                     .background_executor()
                     .spawn(async move { super::diff_model::parse(&out.diff) })
                     .await),
-                Err(e) => Err(e.to_string()),
+                Err(e) => Err(super::toast::error_text(&e, None)),
             };
             let _ = this.update_in(cx, |this, window, cx| {
                 if generation != this.document_generation {
@@ -401,7 +424,7 @@ impl ReviewPanel {
                         this.cache_document();
                     }
                     Ok(_) => this.error = Some("This file is binary.".into()),
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
@@ -570,65 +593,67 @@ impl ReviewPanel {
                         this.tree
                             .update(cx, |state, cx| state.set_items(tree.items(), cx));
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
         })
         .detach();
     }
-    fn load_checks(&mut self, cx: &mut Context<Self>) {
-        if let Some((project_id, number)) = self
+    /// 04, Checks: `refreshPullRequest` when the tab opens and on Refresh, and the check runs.
+    fn load_checks(&mut self, refresh_pr: bool, cx: &mut Context<Self>) {
+        let pr = self
             .store
             .read(cx)
             .state
             .workspace
             .as_ref()
-            .and_then(|w| w.pr_number.map(|number| (w.project_id.clone(), number)))
-        {
+            .map(|w| (w.pr_number, w.pr_state, w.checks_state));
+        self.checks_seen = pr.unwrap_or((None, None, None));
+        if self.checks_seen.0.is_none() {
+            self.checks.clear();
+            self.checks_error = None;
+            cx.notify();
+            return;
+        }
+        let id = self.id(cx);
+        if refresh_pr && !self.refreshing_pr {
+            self.refreshing_pr = true;
             let request = self
                 .client
-                .call::<api::ListOpenPullRequests>(p::ListOpenPullRequestsIn { project_id });
+                .call::<api::RefreshPullRequest>(p::RefreshPullRequestIn {
+                    workspace_id: id.clone(),
+                });
             cx.spawn(async move |this, cx| {
                 let result = request.await;
                 let _ = this.update(cx, |this, cx| {
-                    if this
-                        .store
-                        .read(cx)
-                        .state
-                        .workspace
-                        .as_ref()
-                        .and_then(|w| w.pr_number)
-                        != Some(number)
-                    {
-                        return;
-                    }
-                    if let Ok(prs) = result
-                        && let Some(pr) = prs.into_iter().find(|pr| pr.number == number)
-                    {
-                        this.pr_title = Some(pr.title);
+                    this.refreshing_pr = false;
+                    if let Ok(out) = result {
+                        this.refreshed_title = out.pr_title;
                     }
                     cx.notify();
                 });
             })
             .detach();
         }
-        let request = self.client.call::<api::ListCheckRuns>(p::ListCheckRunsIn {
-            workspace_id: self.id(cx),
-        });
-        self.loading = true;
+        let request = self
+            .client
+            .call::<api::ListCheckRuns>(p::ListCheckRunsIn { workspace_id: id });
+        self.checks_loading = true;
+        self.checks_error = None;
         cx.spawn(async move |this, cx| {
             let result = request.await;
             let _ = this.update(cx, |this, cx| {
-                this.loading = false;
+                this.checks_loading = false;
                 match result {
-                    Ok(out) => this.checks = out,
-                    Err(e) => this.error = Some(e.to_string()),
+                    Ok(out) => this.checks = sort_runs(out),
+                    Err(e) => this.checks_error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
         })
         .detach();
+        cx.notify();
     }
     pub fn request_commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.tab = 0;
@@ -654,10 +679,12 @@ impl ReviewPanel {
             let result = request.await;
             let _ = this.update(cx, |this, cx| {
                 this.pending = false;
-                if let Err(e) = result {
-                    this.error = Some(e.to_string());
-                } else {
-                    this.refresh(cx);
+                match result {
+                    Err(e) => super::toast::error_in_main_window(&e, None, cx),
+                    Ok(_) => {
+                        super::toast::success_in_main_window("Committed and pushed.", cx);
+                        this.refresh(cx);
+                    }
                 }
                 cx.notify();
             });
@@ -696,7 +723,7 @@ impl ReviewPanel {
                         this.draft = None;
                         this.comment.update(cx, |i, cx| i.set_value("", window, cx));
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => super::toast::error(&e, None, window, cx),
                 }
                 cx.notify();
             });
@@ -731,7 +758,7 @@ impl ReviewPanel {
                         this.comments.retain(|c| c.id != id);
                         cx.emit(ReviewEvent::CommentDeleted(id));
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => super::toast::error_in_main_window(&e, None, cx),
                 }
                 cx.notify();
             });
@@ -760,7 +787,7 @@ impl ReviewPanel {
                             this.search = out;
                         }
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
@@ -777,10 +804,234 @@ impl ReviewPanel {
     }
     pub fn show_checks(&mut self, cx: &mut Context<Self>) {
         self.tab = 2;
-        self.load_checks(cx);
+        self.load_checks(true, cx);
         cx.notify();
     }
+    pub fn set_agent(&mut self, agent: Option<p::AgentId>, cx: &mut Context<Self>) {
+        if self.agent != agent {
+            self.agent = agent;
+            cx.notify();
+        }
+    }
 }
+impl ReviewPanel {
+    /// 04, Checks: PR number, title, state and a link to GitHub; one row per check run.
+    fn render_checks(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(w) = self.store.read(cx).state.workspace.clone() else {
+            return super::skeleton_rows(4).into_any_element();
+        };
+        let muted = color(Token::MutedForeground, cx);
+        let Some(number) = w.pr_number else {
+            return div()
+                .p_3()
+                .text_color(muted)
+                .child("No pull request yet.")
+                .into_any_element();
+        };
+        let url = crate::app::AppState::try_global(cx).and_then(|a| {
+            a.read(cx)
+                .hub
+                .read(cx)
+                .projects
+                .iter()
+                .find(|p| p.id == w.project_id)
+                .map(|p| super::indicators::github_pull_url(&p.owner, &p.name, number))
+        });
+        let tag = |tint: gpui_kit::Hsla, label: &'static str| {
+            Tag::custom(tint.opacity(0.15), tint, tint.opacity(0.))
+                .xsmall()
+                .child(label)
+        };
+        let title = w.pr_title.clone().or_else(|| self.refreshed_title.clone());
+        let header = v_flex()
+            .gap_1p5()
+            .px_3()
+            .py_2()
+            .border_b_1()
+            .border_color(color(Token::Border, cx))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(match url {
+                        Some(url) => Button::new("checks-pr")
+                            .ghost()
+                            .small()
+                            .label(format!("#{}", number as u64))
+                            .icon(IconName::ExternalLink)
+                            .accessibility_label(format!(
+                                "Open pull request #{} on GitHub",
+                                number as u64
+                            ))
+                            .on_click(move |_, _, cx| cx.open_url(&url))
+                            .into_any_element(),
+                        None => div()
+                            .child(format!("#{}", number as u64))
+                            .into_any_element(),
+                    })
+                    .children(w.pr_state.map(|state| {
+                        tag(
+                            color(super::indicators::pr_token(Some(state)), cx),
+                            super::indicators::pr_state_label(state),
+                        )
+                    }))
+                    .children(w.checks_state.map(|state| {
+                        tag(
+                            color(super::indicators::checks_token(state), cx),
+                            super::indicators::checks_label(state),
+                        )
+                    }))
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("refresh-checks")
+                            .ghost()
+                            .small()
+                            .icon(IconName::RefreshCw)
+                            .loading(self.refreshing_pr)
+                            .disabled(self.refreshing_pr)
+                            .accessibility_label("Refresh")
+                            .tooltip("Refresh")
+                            .on_click(cx.listener(|this, _, _, cx| this.load_checks(true, cx))),
+                    ),
+            )
+            .children(title.map(|t| div().text_sm().truncate().child(t)));
+        let body = if self.checks_loading && self.checks.is_empty() {
+            super::skeleton_rows(4).into_any_element()
+        } else if let Some(error) = self.checks_error.clone() {
+            h_flex()
+                .p_3()
+                .gap_2()
+                .child(div().text_color(color(Token::Destructive, cx)).child(error))
+                .child(
+                    Button::new("retry-checks")
+                        .label("Retry")
+                        .on_click(cx.listener(|this, _, _, cx| this.load_checks(false, cx))),
+                )
+                .into_any_element()
+        } else if self.checks.is_empty() {
+            div()
+                .p_3()
+                .text_color(muted)
+                .child("No checks yet.")
+                .into_any_element()
+        } else {
+            v_flex()
+                .id("check-runs")
+                .role(gpui_kit::Role::List)
+                .aria_label("Check runs")
+                .p_1()
+                .children(self.checks.iter().enumerate().map(|(ix, run)| {
+                    let outcome = run_outcome(run);
+                    let (icon, token) = match outcome {
+                        RunOutcome::Success => (IconName::CircleCheck, Token::Success),
+                        RunOutcome::Failure => (IconName::CircleX, Token::Destructive),
+                        RunOutcome::Pending => (IconName::Loader, Token::Warning),
+                        RunOutcome::Neutral => (IconName::Minus, Token::MutedForeground),
+                    };
+                    let href = safe_http_url(&run.url);
+                    let label = run_label(run);
+                    h_flex()
+                        .id(("check-run", ix))
+                        .role(if href.is_some() {
+                            gpui_kit::Role::Link
+                        } else {
+                            gpui_kit::Role::ListItem
+                        })
+                        .aria_label(format!("{}, {label}", run.name))
+                        .h(gpui_kit::px(28.))
+                        .px_2()
+                        .gap_2()
+                        .rounded_sm()
+                        .child(Icon::new(icon).small().text_color(color(token, cx)))
+                        .child(div().flex_1().min_w_0().truncate().child(run.name.clone()))
+                        .child(div().text_xs().text_color(muted).child(label))
+                        .when_some(href, |row, href| {
+                            row.child(Icon::new(IconName::ExternalLink).xsmall().text_color(muted))
+                                .cursor_pointer()
+                                .on_click(move |_, _, cx| cx.open_url(&href))
+                        })
+                }))
+                .into_any_element()
+        };
+        v_flex()
+            .size_full()
+            .child(header)
+            .child(div().flex_1().min_h_0().child(body))
+            .into_any_element()
+    }
+
+    fn send_label(&self, n: usize, cx: &gpui_kit::App) -> String {
+        let agent = self.agent.or_else(|| {
+            self.store
+                .read(cx)
+                .state
+                .workspace
+                .as_ref()
+                .map(|w| w.default_agent)
+        });
+        send_label(n, agent)
+    }
+}
+
+/// `Send <n> comments to <agent>`.
+pub fn send_label(n: usize, agent: Option<p::AgentId>) -> String {
+    format!(
+        "Send {n} {} to {}",
+        if n == 1 { "comment" } else { "comments" },
+        agent.map_or("the agent", crate::errors::agent_error_label)
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunOutcome {
+    Success,
+    Failure,
+    Pending,
+    Neutral,
+}
+
+/// 03, Status polling: queued or in progress is pending; these conclusions are failures.
+pub fn run_outcome(run: &p::CheckRun) -> RunOutcome {
+    match (run.status.as_str(), run.conclusion.as_deref()) {
+        (
+            "completed",
+            Some("failure" | "cancelled" | "timed_out" | "action_required" | "startup_failure"),
+        ) => RunOutcome::Failure,
+        ("completed", Some("success")) => RunOutcome::Success,
+        ("completed", Some(_)) => RunOutcome::Neutral,
+        _ => RunOutcome::Pending,
+    }
+}
+
+/// The conclusion, or the status while the run is not done.
+pub fn run_label(run: &p::CheckRun) -> String {
+    let text = match (run.status.as_str(), run.conclusion.as_deref()) {
+        ("completed", Some(conclusion)) => conclusion,
+        (status, _) => status,
+    }
+    .replace('_', " ");
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => text,
+    }
+}
+
+/// Failures first, then running checks, then the rest; by name within each.
+pub fn sort_runs(mut runs: Vec<p::CheckRun>) -> Vec<p::CheckRun> {
+    let rank = |run: &p::CheckRun| match run_outcome(run) {
+        RunOutcome::Failure => 0,
+        RunOutcome::Pending => 1,
+        RunOutcome::Success => 2,
+        RunOutcome::Neutral => 3,
+    };
+    runs.sort_by(|a, b| rank(a).cmp(&rank(b)).then_with(|| a.name.cmp(&b.name)));
+    runs
+}
+
+fn safe_http_url(url: &str) -> Option<String> {
+    (url.starts_with("https://") || url.starts_with("http://")).then(|| url.to_string())
+}
+
 fn language(path: &str) -> &'static str {
     match path.rsplit('.').next().unwrap_or("") {
         "rs" => "rust",
@@ -885,6 +1136,11 @@ impl Render for ReviewPanel {
                                             let (file_ix, folder) = &changed_rows[ix];
                                             let Some(file_ix) = file_ix else {
                                                 return div()
+                                                    .id(SharedString::from(format!(
+                                                        "change-folder-{folder}"
+                                                    )))
+                                                    .role(gpui_kit::Role::Heading)
+                                                    .aria_label(folder.clone())
                                                     .p_2()
                                                     .text_color(color(Token::MutedForeground, cx))
                                                     .child(folder.clone())
@@ -897,6 +1153,12 @@ impl Render for ReviewPanel {
                                                     "change-{}",
                                                     f.path
                                                 )))
+                                                .role(gpui_kit::Role::ListItem)
+                                                .aria_label(format!(
+                                                    "{} {}, {} added, {} removed",
+                                                    f.status, f.path, f.additions, f.deletions
+                                                ))
+                                                .cursor_pointer()
                                                 .p_2()
                                                 .child(format!(
                                                     "{} {}  +{} −{}",
@@ -995,6 +1257,9 @@ impl Render for ReviewPanel {
                                     let path = paths[ix].clone();
                                     div()
                                         .id(SharedString::from(format!("file-{path}")))
+                                        .role(gpui_kit::Role::ListItem)
+                                        .aria_label(format!("Open {path}"))
+                                        .cursor_pointer()
                                         .p_2()
                                         .child(path.clone())
                                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -1009,53 +1274,7 @@ impl Render for ReviewPanel {
                     .into_any_element()
                 })
                 .into_any_element(),
-            _ => v_flex()
-                .p_3()
-                .gap_2()
-                .children(self.store.read(cx).state.workspace.as_ref().and_then(|w| {
-                    w.pr_number.map(|number| {
-                        let project = crate::app::AppState::try_global(cx).and_then(|a| {
-                            a.read(cx)
-                                .hub
-                                .read(cx)
-                                .projects
-                                .iter()
-                                .find(|p| p.id == w.project_id)
-                                .cloned()
-                        });
-                        let url = project.map(|p| {
-                            format!("https://github.com/{}/{}/pull/{}", p.owner, p.name, number)
-                        });
-                        Button::new("checks-pr")
-                            .label(format!(
-                                "PR #{number} · {} · {}",
-                                self.pr_title.as_deref().unwrap_or(""),
-                                w.pr_state.map(|s| s.to_string()).unwrap_or_default()
-                            ))
-                            .on_click(move |_, _, cx| {
-                                if let Some(url) = &url {
-                                    cx.open_url(url);
-                                }
-                            })
-                    })
-                }))
-                .child(
-                    Button::new("refresh-checks")
-                        .label("Refresh checks")
-                        .on_click(cx.listener(|this, _, _, cx| this.load_checks(cx))),
-                )
-                .children(self.checks.iter().enumerate().map(|(ix, c)| {
-                    let url = c.url.clone();
-                    Button::new(("check", ix))
-                        .label(format!(
-                            "{} · {}",
-                            c.name,
-                            c.conclusion.as_ref().unwrap_or(&c.status)
-                        ))
-                        .on_click(move |_, _, cx| cx.open_url(&url))
-                }))
-                .children(self.checks.is_empty().then(|| div().child("No checks.")))
-                .into_any_element(),
+            _ => self.render_checks(cx),
         };
         let draft_ids: Vec<_> = self
             .comments
@@ -1074,7 +1293,7 @@ impl Render for ReviewPanel {
                             this.load_paths(cx);
                         }
                         if *ix == 2 {
-                            this.load_checks(cx);
+                            this.load_checks(true, cx);
                         }
                         cx.notify();
                     }))
@@ -1131,10 +1350,57 @@ impl Render for ReviewPanel {
             )
             .children((!draft_ids.is_empty()).then(|| {
                 Button::new("send-comments")
-                    .label(format!("Send {} comments to agent", draft_ids.len()))
+                    .label(self.send_label(draft_ids.len(), cx))
                     .on_click(cx.listener(move |_, _, _, cx| {
                         cx.emit(ReviewEvent::Comments(draft_ids.clone()))
                     }))
             }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run(name: &str, status: &str, conclusion: Option<&str>) -> p::CheckRun {
+        serde_json::from_value(serde_json::json!({
+            "name": name, "status": status, "conclusion": conclusion,
+            "url": "https://github.com/acme/api/runs/1"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn runs_sort_failures_first_then_running() {
+        let runs = sort_runs(vec![
+            run("lint", "completed", Some("success")),
+            run("docs", "completed", Some("skipped")),
+            run("test", "in_progress", None),
+            run("build", "completed", Some("timed_out")),
+        ]);
+        let names: Vec<_> = runs.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["build", "test", "lint", "docs"]);
+        assert_eq!(run_label(&runs[0]), "Timed out");
+        assert_eq!(run_label(&runs[1]), "In progress");
+        assert_eq!(run_outcome(&runs[3]), RunOutcome::Neutral);
+    }
+
+    #[test]
+    fn send_label_names_the_agent() {
+        assert_eq!(
+            send_label(1, Some(p::AgentId::Codex)),
+            "Send 1 comment to Codex"
+        );
+        assert_eq!(
+            send_label(3, Some(p::AgentId::Opencode)),
+            "Send 3 comments to OpenCode"
+        );
+        assert_eq!(send_label(2, None), "Send 2 comments to the agent");
+    }
+
+    #[test]
+    fn only_web_links_open() {
+        assert!(safe_http_url("https://github.com/x").is_some());
+        assert!(safe_http_url("javascript:alert(1)").is_none());
     }
 }

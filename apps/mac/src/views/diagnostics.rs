@@ -58,7 +58,7 @@ impl DiagnosticsView {
                         this.data = Some(data);
                         this.error = None;
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });

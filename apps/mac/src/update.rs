@@ -262,6 +262,32 @@ pub fn available_text(version: &Version) -> String {
     format!("Tempo {version} is available.")
 }
 
+/// Check for Updates… when nothing is newer than this app.
+pub const UP_TO_DATE: &str = "Tempo is up to date.";
+pub const CHECK_FAILED: &str = "Could not check for updates.";
+pub const INVALID_META: &str = "The server returned invalid update information.";
+
+/// The version `Tempo <version> is available.` offers: only one newer than this app.
+pub fn offered_version(check: &UpdateCheck) -> Option<String> {
+    match check {
+        UpdateCheck::Available(latest)
+        | UpdateCheck::Required {
+            latest: Some(latest),
+            ..
+        } => Some(latest.to_string()),
+        _ => None,
+    }
+}
+
+/// What Check for Updates… says once the check is done. The update screen speaks for itself.
+pub fn manual_check_message(check: &UpdateCheck) -> Option<String> {
+    match check {
+        UpdateCheck::UpToDate => Some(UP_TO_DATE.into()),
+        UpdateCheck::Available(latest) => Some(available_text(latest)),
+        UpdateCheck::Required { .. } => None,
+    }
+}
+
 /// `GET /downloads/mac/<version>` on the Tempo at `server_url`.
 pub fn download_url(server_url: &str, version: &Version) -> String {
     format!(
@@ -442,6 +468,42 @@ mod tests {
         );
         assert!(check("0.1.0", "next", None).is_err());
         assert!(check("0.1.0", "0.1.0", Some("")).is_err());
+    }
+
+    #[test]
+    fn only_a_newer_version_is_offered() {
+        let offered = |current, min, latest| offered_version(&check(current, min, latest).unwrap());
+        assert_eq!(offered("0.2.0", "0.1.0", Some("0.2.0")), None);
+        assert_eq!(offered("0.2.0", "0.1.0", Some("0.1.9")), None);
+        assert_eq!(offered("0.2.0", "0.1.0", None), None);
+        assert_eq!(
+            offered("0.2.0", "0.1.0", Some("0.10.0")).as_deref(),
+            Some("0.10.0")
+        );
+        assert_eq!(
+            offered("0.1.0", "0.3.0", Some("0.3.1")).as_deref(),
+            Some("0.3.1")
+        );
+        assert_eq!(offered("0.1.0", "0.3.0", None), None);
+    }
+
+    #[test]
+    fn manual_check_always_answers() {
+        assert_eq!(
+            manual_check_message(&UpdateCheck::UpToDate).as_deref(),
+            Some(UP_TO_DATE)
+        );
+        assert_eq!(
+            manual_check_message(&UpdateCheck::Available(v("0.4.0"))).as_deref(),
+            Some("Tempo 0.4.0 is available.")
+        );
+        assert_eq!(
+            manual_check_message(&UpdateCheck::Required {
+                min: v("0.4.0"),
+                latest: None
+            }),
+            None
+        );
     }
 
     #[test]

@@ -56,6 +56,7 @@ gpui_kit::actions!(
         NextFile,
         PreviousFile,
         MarkFileViewed,
+        ViewChecks,
     ]
 );
 

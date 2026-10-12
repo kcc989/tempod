@@ -85,10 +85,7 @@ impl Render for SettingsWindow {
                     .selected_index(self.tab)
                     .on_click(cx.listener(|this, ix: &usize, _, cx| {
                         this.tab = *ix;
-                        this.form.update(cx, |f, cx| {
-                            f.tab = *ix;
-                            cx.notify();
-                        });
+                        this.form.update(cx, |f, cx| f.show_tab(*ix, cx));
                         cx.notify();
                     }))
                     .children(TABS.map(|t| Tab::new().label(t))),

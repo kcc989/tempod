@@ -65,7 +65,7 @@ impl ProcessPanel {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(runs) => this.history = runs,
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
             });
@@ -135,7 +135,7 @@ impl ProcessPanel {
                 let _ = this.update(cx, |this, cx| {
                     this.pending = false;
                     if let Err(e) = result {
-                        this.error = Some(e.to_string());
+                        super::toast::error_in_main_window(&e, None, cx);
                     }
                     this.refresh(cx);
                     cx.notify();
@@ -153,7 +153,7 @@ impl ProcessPanel {
                     this.pending = false;
                     match result {
                         Ok(run) => this.run = Some(run.id),
-                        Err(e) => this.error = Some(e.to_string()),
+                        Err(e) => super::toast::error_in_main_window(&e, None, cx),
                     }
                     this.refresh(cx);
                     cx.notify();
@@ -176,7 +176,7 @@ impl ProcessPanel {
                 this.pending = false;
                 match result {
                     Ok(run) => this.run = Some(run.id),
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) => super::toast::error_in_main_window(&e, None, cx),
                 }
                 this.refresh(cx);
                 cx.notify();
@@ -199,7 +199,7 @@ impl ProcessPanel {
             let _ = this.update(cx, |this, cx| {
                 this.pending = false;
                 if let Err(e) = result {
-                    this.error = Some(e.to_string());
+                    super::toast::error_in_main_window(&e, None, cx);
                 }
                 cx.notify();
             });
