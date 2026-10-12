@@ -2475,6 +2475,10 @@ describe("environments (01, Environments; 02, Environments)", () => {
     expect(ok(await call("getWorkspace", o, { workspaceId })).environmentId).toBe(second.id);
     ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: null }));
     expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId });
+    // A deleted override falls back to the project's environment (01, Which environment applies).
+    ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: second.id }));
+    ok(await call("deleteEnvironment", o, { environmentId: second.id }));
+    expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId });
   });
 
   it("puts placeholders for bound secrets and values for unbound ones in env.set, and sends environment.set", async () => {

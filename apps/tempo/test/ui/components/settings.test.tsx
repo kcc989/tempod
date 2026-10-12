@@ -5,7 +5,9 @@ import { SettingsPage } from "../../../src/ui/components/settings/SettingsPage";
 import { call } from "../../../src/ui/lib/api";
 import { dialogStore, openDialog, resetUiState, settingsStore } from "../../../src/ui/state/workspace-ui";
 
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn(async () => ({ names: [] })) }));
+vi.mock("~/ui/lib/api", () => ({
+  call: vi.fn(async (name: string) => (name === "listEnvironments" ? [] : { names: [] })),
+}));
 vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
 const projects = [
   { id: "p1", owner: "tempo", name: "first", settings: {}, sortOrder: 0 },
@@ -33,6 +35,24 @@ describe("settings page", () => {
     openDialog({ kind: "settings" });
     fireEvent.keyDown(screen.getByRole("main"), { code: "Escape" });
     expect(settingsStore.getSnapshot()).toBeNull();
+  });
+  it("lists Environments after Logins in Personal", () => {
+    openDialog({ kind: "settings" });
+    show();
+    const nav = screen.getByRole("navigation", { name: "Settings" });
+    const labels = within(nav)
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels.slice(0, 6)).toEqual([
+      "General",
+      "Logins",
+      "Environments",
+      "Appearance",
+      "Shortcuts",
+      "Devices",
+    ]);
+    fireEvent.click(within(nav).getByRole("button", { name: "Environments" }));
+    expect(screen.getByRole("heading", { name: "Environments" })).toBeTruthy();
   });
   it("filters navigation and focuses search with the find shortcut", () => {
     openDialog({ kind: "settings" });
@@ -63,6 +83,7 @@ describe("settings page", () => {
     ).toEqual([
       "General",
       "Logins",
+      "Environments",
       "Appearance",
       "Shortcuts",
       "Devices",

@@ -426,7 +426,7 @@ An environment is a named, reusable set of egress rules and secrets. The owner m
 | `secrets` | `[{name, hosts}]`. `name` matches `^[A-Z_][A-Z0-9_]*$`. `hosts` are host patterns, at most 20. At most 50 secrets. Values live in CredentialDO under `environment.<environmentId>.secret.<NAME>`. |
 | `injectors` | `[{name, hosts, code, sha256}]`. `name` matches `^[a-z][a-z0-9-]{0,31}$`. `hosts` are host patterns, 1 to 20. `code` is at most 64 KiB. `sha256` is the hex SHA-256 of `code`, set by the server. At most 10 injectors. |
 
-**Which environment applies.** The workspace's override, else the project's `environment_id`, else none. An id that no longer exists counts as none. With none, the project's `environment.egress_policy` and `environment.egress_allowlist` settings apply (Tempo overrides only), with no environment secrets and no injectors.
+**Which environment applies.** The workspace's override, else the project's `environment_id`, else none. An id that no longer exists is skipped: a deleted override falls back to the project's environment. With none, the project's `environment.egress_policy` and `environment.egress_allowlist` settings apply (Tempo overrides only), with no environment secrets and no injectors.
 
 Browser Run (below) is on only when the egress policy that applies, the environment's or else the project's, is `open`. The `browser.run` settings warning sees only the project's settings.
 

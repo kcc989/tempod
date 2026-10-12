@@ -286,14 +286,16 @@ export class WorkspaceCore {
   async environment(fresh = false): Promise<EnvironmentConfig | null> {
     const project = await this.project(fresh);
     const row = this.ws();
-    const id = row.environmentId ?? project.environmentId;
-    if (!id) return null;
-    const env = await drizzleD1(this.env.DB)
-      .select()
-      .from(environments)
-      .where(and(eq(environments.id, id), eq(environments.userId, row.userId)))
-      .get();
-    return env ? parseEnvironment(env) : null;
+    for (const id of [row.environmentId, project.environmentId]) {
+      if (!id) continue;
+      const env = await drizzleD1(this.env.DB)
+        .select()
+        .from(environments)
+        .where(and(eq(environments.id, id), eq(environments.userId, row.userId)))
+        .get();
+      if (env) return parseEnvironment(env);
+    }
+    return null;
   }
 
   /** Environment secrets for the container: placeholders when bound to hosts, else values (01). */
