@@ -54,6 +54,13 @@ impl ProcessPanel {
     fn id(&self, cx: &gpui_kit::App) -> String {
         self.store.read(cx).workspace_id.clone()
     }
+    /// Selects the Setup tab (04: `setting_up` and `View output` open it).
+    pub fn show_setup(&mut self, cx: &mut Context<Self>) {
+        if self.tab != 0 {
+            self.tab = 0;
+            cx.notify();
+        }
+    }
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         let request = self
             .client

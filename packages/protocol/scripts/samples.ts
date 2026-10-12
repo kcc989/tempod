@@ -170,6 +170,10 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { kind: "branch", branch: "feature/search" },
     { kind: "pr", number: 42 },
   ],
+  AppSetupStatus: [
+    { configured: false, installUrl: null },
+    { configured: true, installUrl: "https://github.com/apps/tempo-example/installations/new" },
+  ],
   ApiMeta: [
     { protocol: 1, serverVersion: "0.1.0", minMacClient: "0.1.0", latestMacClient: null },
     { protocol: 1, serverVersion: "0.2.0", minMacClient: "0.1.0", latestMacClient: "0.2.1" },

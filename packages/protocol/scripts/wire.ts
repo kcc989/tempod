@@ -89,6 +89,7 @@ export const SHARED = {
   Diagnostics: P.Diagnostics,
   NewSource: P.NewSource,
   ApiMeta: P.ApiMeta,
+  AppSetupStatus: P.AppSetupStatus,
 } as const satisfies Record<string, Schema.Top>;
 
 export const WORKSPACE_CHANNEL = {

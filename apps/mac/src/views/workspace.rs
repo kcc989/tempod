@@ -381,6 +381,7 @@ impl WorkspaceView {
 
     /// The bottom panel holds the Setup tab (04, `setting_up` and `View output`): show it.
     fn show_setup_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.processes.update(cx, |p, cx| p.show_setup(cx));
         let Some(panels) = cx
             .try_global::<crate::storage::Local>()
             .map(|local| local.state().panels)
@@ -1490,6 +1491,12 @@ impl WorkspaceView {
         if let Some(id) = self.active.clone() {
             self.ensure_chat(&id, window, cx);
         }
+        let agent = self
+            .active
+            .as_ref()
+            .and_then(|id| self.store.read(cx).state.sessions.get(id))
+            .map(|s| s.agent);
+        self.review.update(cx, |r, cx| r.set_agent(agent, cx));
         for (id, chat) in &self.chats {
             let state = &self.store.read(cx).state;
             let read_only = state

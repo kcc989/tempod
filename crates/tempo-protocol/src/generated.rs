@@ -250,6 +250,16 @@ impl<'de> ::serde::Deserialize<'de> for ApiMetaProtocol {
             .map_err(|e| <D::Error as ::serde::de::Error>::custom(e.to_string()))
     }
 }
+///`AppSetupStatus`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AppSetupStatus {
+    pub configured: bool,
+    #[serde(
+        rename = "installUrl",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub install_url: ::std::option::Option<::std::string::String>,
+}
 ///`ArchiveWorkspaceIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ArchiveWorkspaceIn {
@@ -6295,6 +6305,7 @@ pub mod wire {
         "AgentThoughtContent",
         "ApiKeyProvider",
         "ApiMeta",
+        "AppSetupStatus",
         "ArchiveWorkspaceIn",
         "Attachment",
         "Attention",
@@ -6482,6 +6493,7 @@ pub mod wire {
             "AgentThoughtContent" => crate::roundtrip::<crate::AgentThoughtContent>(text),
             "ApiKeyProvider" => crate::roundtrip::<crate::ApiKeyProvider>(text),
             "ApiMeta" => crate::roundtrip::<crate::ApiMeta>(text),
+            "AppSetupStatus" => crate::roundtrip::<crate::AppSetupStatus>(text),
             "ArchiveWorkspaceIn" => crate::roundtrip::<crate::ArchiveWorkspaceIn>(text),
             "Attachment" => crate::roundtrip::<crate::Attachment>(text),
             "Attention" => crate::roundtrip::<crate::Attention>(text),

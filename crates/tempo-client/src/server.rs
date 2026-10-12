@@ -10,7 +10,7 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, Header
 use reqwest::{RequestBuilder, Response, Url};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use tempo_protocol::{ApiMeta, ErrorBody, ErrorCode, Function, PROTOCOL_VERSION};
+use tempo_protocol::{ApiMeta, AppSetupStatus, ErrorBody, ErrorCode, Function, PROTOCOL_VERSION};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
@@ -263,6 +263,21 @@ impl Server {
                 .await
                 .map_err(|e| ApiError::Network(network_error(e)))?;
             read_api::<ApiMeta>(response).await
+        });
+        async move { run.await.unwrap_or(Err(ApiError::Cancelled)) }
+    }
+
+    /// `GET /api/setup/status`, no auth: whether the GitHub App exists, and its install page.
+    pub fn setup_status(
+        &self,
+    ) -> impl Future<Output = Result<AppSetupStatus, ApiError>> + Send + 'static {
+        let request = self.http().get(self.url(&["api", "setup", "status"]));
+        let run = self.inner.rt.run(async move {
+            let response = request
+                .send()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?;
+            read_api::<AppSetupStatus>(response).await
         });
         async move { run.await.unwrap_or(Err(ApiError::Cancelled)) }
     }

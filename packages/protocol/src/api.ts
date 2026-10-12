@@ -244,3 +244,10 @@ export const ApiMeta = Schema.Struct({
   latestMacClientSha256: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 });
 export type ApiMeta = typeof ApiMeta.Type;
+
+/** `GET /api/setup/status`, no auth: whether the GitHub App exists, and its install page. */
+export const AppSetupStatus = Schema.Struct({
+  configured: Schema.Boolean,
+  installUrl: Schema.NullOr(S),
+});
+export type AppSetupStatus = typeof AppSetupStatus.Type;

@@ -1,3 +1,4 @@
+import type { AppSetupStatus } from "@tempo/protocol";
 import { SYSTEM_CREDENTIALS } from "../do/credential.ts";
 import type { Env } from "../env.ts";
 import { clearGithubAppConfigCache, getGithubAppConfig } from "../github/app.ts";
@@ -118,8 +119,9 @@ const setupPage = (env: Env, token: string): Response => {
 /** Unauthenticated: whether the App exists, and its install link (both public facts). */
 export const handleSetupStatus = async (env: Env): Promise<Response> => {
   const config = await getGithubAppConfig(env);
-  return Response.json({
+  const status: AppSetupStatus = {
     configured: config !== null,
     installUrl: config ? `https://github.com/apps/${config.slug}/installations/new` : null,
-  });
+  };
+  return Response.json(status);
 };

@@ -152,6 +152,35 @@ async fn meta_sends_no_token() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn setup_status_sends_no_token_and_reads_the_install_link() {
+    let server = fake_http(|_, _| {
+        (
+            200,
+            json!({"configured": true, "installUrl": "https://github.com/apps/t/installations/new"})
+                .to_string(),
+        )
+    })
+    .await;
+    let rt = RuntimeHandle::current();
+    let status = Server::new(&rt, &server.base, APP_VERSION)
+        .expect("server")
+        .setup_status()
+        .await
+        .expect("setup status");
+    assert!(status.configured);
+    assert_eq!(
+        status.install_url.as_deref(),
+        Some("https://github.com/apps/t/installations/new")
+    );
+    let r = &server.requests()[0];
+    assert_eq!(
+        (r.method.as_str(), r.path.as_str()),
+        ("GET", "/api/setup/status")
+    );
+    assert_eq!(r.header("authorization"), None);
+}
+
+#[tokio::test(start_paused = true)]
 async fn upload_attachment_sends_one_multipart_file_with_the_bearer_token() {
     let server = fake_http(|_, _| {
         (

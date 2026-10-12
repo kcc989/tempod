@@ -151,6 +151,16 @@ impl Dialogs {
         };
         self.installations_loading = true;
         self.error = None;
+        let status = client.server().setup_status();
+        cx.spawn(async move |this, cx| {
+            if let Ok(status) = status.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.install_url = status.install_url;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
         let request = client.call::<api::ListInstallations>(Default::default());
         cx.spawn(async move |this, cx| {
             let result = request.await;
