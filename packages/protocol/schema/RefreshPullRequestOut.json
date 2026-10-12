@@ -40,6 +40,23 @@
           "type": "null"
         }
       ]
+    },
+    "prTitle": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["prNumber", "prState", "checksState"],

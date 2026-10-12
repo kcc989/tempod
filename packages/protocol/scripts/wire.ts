@@ -46,6 +46,7 @@ export const SHARED = {
   ToolLocation: P.ToolLocation,
   ContentBlock: P.ContentBlock,
   Usage: P.Usage,
+  Attachment: P.Attachment,
   Capabilities: P.Capabilities,
 
   RunScript: P.RunScript,

@@ -1,0 +1,53 @@
+{
+  "agent": "opencode",
+  "bin": "/usr/local/bin/opencode",
+  "live": false,
+  "agentInfo": {
+    "name": "OpenCode",
+    "version": "1.18.35"
+  },
+  "agentCapabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "promptCapabilities": {
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "close": {},
+      "fork": {},
+      "list": {},
+      "resume": {}
+    }
+  },
+  "authMethods": [
+    "opencode-login"
+  ],
+  "modes": [
+    "build",
+    "plan"
+  ],
+  "currentModeId": "build",
+  "configOptions": [
+    {
+      "id": "model",
+      "type": "select",
+      "category": "model"
+    },
+    {
+      "id": "mode",
+      "type": "select",
+      "category": "mode"
+    }
+  ],
+  "setMode": "build",
+  "loadBeforeAnyTurn": {
+    "ok": true,
+    "replayedUpdates": 0
+  },
+  "environment": "complete production Linux image; no real agent credentials; CONFORMANCE_LIVE=0",
+  "imageId": "sha256:2928ec1c55dce72aeef9f1e2bf37ee622d853e9245aa9d36cbb2ca25a26cc343"
+}
