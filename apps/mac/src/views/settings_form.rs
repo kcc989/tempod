@@ -32,6 +32,7 @@ pub const TAB_PROJECT: usize = 1;
 pub const TAB_GENERAL: usize = 3;
 pub const TAB_ENVIRONMENTS: usize = 5;
 pub const TAB_MCP: usize = 6;
+pub const TAB_AGENTS: usize = 7;
 
 /// The pages of a project (04), each with the field sections of [`model::SECTIONS`] it shows.
 pub const PROJECT_PAGES: [(&str, &[&str]); 7] = [

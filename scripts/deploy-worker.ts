@@ -139,6 +139,7 @@ const config = {
   r2_buckets: [{ binding: "DATA", bucket_name: env("TEMPO_R2_BUCKET_NAME") }],
   browser: { binding: "BROWSER" },
   worker_loaders: [{ binding: "LOADER" }],
+  artifacts: [{ binding: "AGENTS", namespace: "tempo-agents" }],
   routes: [
     { pattern: env("APP_HOST"), custom_domain: true },
     { pattern: `*.${env("PREVIEW_DOMAIN")}/*`, zone_name: env("PREVIEW_DOMAIN") },

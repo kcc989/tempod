@@ -339,3 +339,4 @@ export const defaultRunScriptId = (settings: Settings): string | null => {
   const entries = Object.entries(settings.scripts.run);
   return entries.find(([, s]) => s.default)?.[0] ?? null;
 };
+export * from "./agent-file.ts";

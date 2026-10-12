@@ -4,6 +4,7 @@ import {
   type AgentId,
   type AgentModelOptions,
   type CredentialStatus,
+  type CustomAgentSummary,
   type FnInput,
   type NewSource,
   type Project,
@@ -61,12 +62,32 @@ export const initialAgent = (
   );
 };
 
+/** Custom agents whose base agent has a login, after the plain agents (04, New workspace). */
+export const customAgentsWithLogin = (
+  agents: ReadonlyArray<CustomAgentSummary> | undefined,
+  available: ReadonlyArray<AgentId>,
+): CustomAgentSummary[] => (agents ?? []).filter((a) => available.includes(a.baseAgent));
+
+const CUSTOM_PREFIX = "custom:";
+/** The agent select's value: an agent id, or `custom:<customAgentId>`. */
+export const customAgentValue = (customAgentId: string): string => `${CUSTOM_PREFIX}${customAgentId}`;
+
+/** The custom agent a select value stands for; null for a model choice or one no longer offered. */
+export const customAgentOf = (
+  value: string | null,
+  custom: ReadonlyArray<CustomAgentSummary>,
+): CustomAgentSummary | null =>
+  value?.startsWith(CUSTOM_PREFIX)
+    ? (custom.find((a) => a.id === value.slice(CUSTOM_PREFIX.length)) ?? null)
+    : null;
+
 export const createInput = (
   project: Pick<Project, "id" | "defaultBranch">,
   draft: SourceDraft,
   agent: AgentId | null,
   prompt: string,
   model?: string,
+  customAgentId?: string,
 ): FnInput<"createWorkspace"> | null => {
   const source = buildSource(draft, project);
   if (!source) return null;
@@ -76,6 +97,7 @@ export const createInput = (
     source,
     ...(agent ? { agent } : {}),
     ...(model ? { model } : {}),
+    ...(customAgentId ? { customAgentId } : {}),
     ...(text ? { prompt: { text } } : {}),
   };
 };

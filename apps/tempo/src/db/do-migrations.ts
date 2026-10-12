@@ -373,6 +373,17 @@ FROM review_comments`,
 )`,
     ],
   },
+  {
+    tag: "0007_custom_agents",
+    when: 1792267200000,
+    statements: [
+      "ALTER TABLE sessions ADD COLUMN custom_agent_id TEXT",
+      "ALTER TABLE sessions ADD COLUMN custom_agent_name TEXT",
+      "ALTER TABLE sessions ADD COLUMN custom_agent_commit TEXT",
+      "ALTER TABLE sessions ADD COLUMN profile_json TEXT",
+      "ALTER TABLE sessions ADD COLUMN profile_issues_json TEXT NOT NULL DEFAULT '[]'",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

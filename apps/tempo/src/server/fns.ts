@@ -280,6 +280,22 @@ export const listScriptRuns = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listScriptRuns">) => data)
   .handler(({ data }) => run("listScriptRuns", data));
 
+export const listCustomAgents = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listCustomAgents">) => data)
+  .handler(({ data }) => run("listCustomAgents", data));
+
+export const getCustomAgent = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getCustomAgent">) => data)
+  .handler(({ data }) => run("getCustomAgent", data));
+
+export const saveCustomAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"saveCustomAgent">) => data)
+  .handler(({ data }) => run("saveCustomAgent", data));
+
+export const deleteCustomAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteCustomAgent">) => data)
+  .handler(({ data }) => run("deleteCustomAgent", data));
+
 export const getCredentialStatus = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getCredentialStatus">) => data)
   .handler(({ data }) => run("getCredentialStatus", data));

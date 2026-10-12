@@ -1,8 +1,10 @@
 //! Settings (04, Settings; 07): its own window with sidebar navigation.
 //! Devices is web only (07, Scope).
+use super::agents_settings::AgentsSettings;
 use super::environments::EnvironmentsPage;
 use super::settings_form::{
-    PROJECT_PAGES, SettingsForm, TAB_ENVIRONMENTS, TAB_GENERAL, TAB_LOGINS, TAB_MCP, TAB_PROJECT,
+    PROJECT_PAGES, SettingsForm, TAB_AGENTS, TAB_ENVIRONMENTS, TAB_GENERAL, TAB_LOGINS, TAB_MCP,
+    TAB_PROJECT,
 };
 use super::tokens::{Token, color};
 use gpui_kit::base::Root;
@@ -13,7 +15,7 @@ use gpui_kit::{
     ParentElement as _, Render, SharedString, Styled as _, Window, WindowOptions, div, px, size,
 };
 
-pub const TABS: [&str; 7] = [
+pub const TABS: [&str; 8] = [
     "Logins",
     "Project",
     "Appearance",
@@ -21,6 +23,7 @@ pub const TABS: [&str; 7] = [
     "Shortcuts",
     "Environments",
     "MCP servers",
+    "Agents",
 ];
 
 /// The shortcut table of 04 with its Conductor column, read-only.
@@ -62,6 +65,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
 pub struct SettingsWindow {
     form: Entity<SettingsForm>,
     environments: Entity<EnvironmentsPage>,
+    agents: Entity<AgentsSettings>,
 }
 
 impl Render for SettingsWindow {
@@ -83,6 +87,8 @@ impl Render for SettingsWindow {
                 .into_any_element()
         } else if tab == TAB_ENVIRONMENTS {
             self.environments.clone().into_any_element()
+        } else if tab == TAB_AGENTS {
+            self.agents.clone().into_any_element()
         } else {
             self.form.clone().into_any_element()
         };
@@ -95,7 +101,16 @@ impl Render for SettingsWindow {
             .border_color(color(Token::Border, cx))
             .child(div().text_color(muted).child("Personal"))
             .children(
-                [TAB_GENERAL, TAB_LOGINS, TAB_ENVIRONMENTS, TAB_MCP, 2, 4].map(|ix| {
+                [
+                    TAB_GENERAL,
+                    TAB_LOGINS,
+                    TAB_AGENTS,
+                    TAB_ENVIRONMENTS,
+                    TAB_MCP,
+                    2,
+                    4,
+                ]
+                .map(|ix| {
                     Button::new(SharedString::from(format!("settings-nav-{ix}")))
                         .ghost()
                         .label(TABS[ix])
@@ -151,6 +166,11 @@ pub fn open_logins(cx: &mut App) {
     show(Some(TAB_LOGINS), cx);
 }
 
+/// Opens Settings on Agents, for `Manage agents…` in New chat (04, Tabs).
+pub fn open_agents(cx: &mut App) {
+    show(Some(TAB_AGENTS), cx);
+}
+
 fn show(tab: Option<usize>, cx: &mut App) {
     if let Some(handle) =
         crate::app::AppState::try_global(cx).and_then(|a| a.read(cx).settings_window)
@@ -184,7 +204,12 @@ fn show(tab: Option<usize>, cx: &mut App) {
             });
             cx.observe(&form, |_, _, cx| cx.notify()).detach();
             let environments = cx.new(|cx| EnvironmentsPage::new(window, cx));
-            SettingsWindow { form, environments }
+            let agents = cx.new(|cx| AgentsSettings::new(window, cx));
+            SettingsWindow {
+                form,
+                environments,
+                agents,
+            }
         })
     });
     if let Ok((handle, _)) = opened

@@ -853,6 +853,11 @@ pub struct CreatePullRequestOut {
 pub struct CreateSessionIn {
     pub agent: AgentId,
     #[serde(
+        rename = "customAgentId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub custom_agent_id: ::std::option::Option<::std::string::String>,
+    #[serde(
         rename = "modeId",
         skip_serializing_if = "::std::option::Option::is_none"
     )]
@@ -867,6 +872,11 @@ pub struct CreateSessionIn {
 pub struct CreateWorkspaceIn {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub agent: ::std::option::Option<AgentId>,
+    #[serde(
+        rename = "customAgentId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub custom_agent_id: ::std::option::Option<::std::string::String>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub model: ::std::option::Option<::std::string::String>,
     #[serde(rename = "projectId")]
@@ -1027,6 +1037,382 @@ pub struct CredentialStatusCodex {
     )]
     pub updated_at: ::std::option::Option<f64>,
 }
+///`CustomAgent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CustomAgent {
+    #[serde(rename = "baseAgent")]
+    pub base_agent: AgentId,
+    #[serde(rename = "commitSha")]
+    pub commit_sha: ::std::string::String,
+    pub description: CustomAgentDescription,
+    pub id: ::std::string::String,
+    pub mcp: CustomAgentMcp,
+    pub model: ::std::string::String,
+    pub name: CustomAgentName,
+    #[serde(rename = "systemPrompt")]
+    pub system_prompt: CustomAgentSystemPrompt,
+    #[serde(rename = "thoughtLevel")]
+    pub thought_level: ::std::string::String,
+    pub tools: CustomAgentTools,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: f64,
+}
+///`CustomAgentDefinition`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CustomAgentDefinition {
+    #[serde(rename = "baseAgent")]
+    pub base_agent: AgentId,
+    pub description: CustomAgentDefinitionDescription,
+    pub mcp: CustomAgentDefinitionMcp,
+    pub model: ::std::string::String,
+    pub name: CustomAgentDefinitionName,
+    #[serde(rename = "systemPrompt")]
+    pub system_prompt: CustomAgentDefinitionSystemPrompt,
+    #[serde(rename = "thoughtLevel")]
+    pub thought_level: ::std::string::String,
+    pub tools: CustomAgentDefinitionTools,
+}
+///`CustomAgentDefinitionDescription`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CustomAgentDefinitionDescription(::std::string::String);
+impl ::std::ops::Deref for CustomAgentDefinitionDescription {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CustomAgentDefinitionDescription> for ::std::string::String {
+    fn from(value: CustomAgentDefinitionDescription) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CustomAgentDefinitionDescription {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 200usize {
+            return Err("longer than 200 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CustomAgentDefinitionDescription {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDefinitionDescription {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CustomAgentDefinitionDescription {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`CustomAgentDefinitionMcp`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CustomAgentDefinitionMcp {
+    pub playwright: bool,
+    pub servers: ::std::vec::Vec<McpServerDef>,
+}
+///`CustomAgentDefinitionName`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CustomAgentDefinitionName(::std::string::String);
+impl ::std::ops::Deref for CustomAgentDefinitionName {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CustomAgentDefinitionName> for ::std::string::String {
+    fn from(value: CustomAgentDefinitionName) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CustomAgentDefinitionName {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 60usize {
+            return Err("longer than 60 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CustomAgentDefinitionName {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDefinitionName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CustomAgentDefinitionName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`CustomAgentDefinitionSystemPrompt`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CustomAgentDefinitionSystemPrompt(::std::string::String);
+impl ::std::ops::Deref for CustomAgentDefinitionSystemPrompt {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CustomAgentDefinitionSystemPrompt> for ::std::string::String {
+    fn from(value: CustomAgentDefinitionSystemPrompt) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CustomAgentDefinitionSystemPrompt {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 32000usize {
+            return Err("longer than 32000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CustomAgentDefinitionSystemPrompt {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDefinitionSystemPrompt {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CustomAgentDefinitionSystemPrompt {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`CustomAgentDefinitionTools`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CustomAgentDefinitionTools {
+    pub allow: ::std::vec::Vec<::std::string::String>,
+    pub deny: ::std::vec::Vec<::std::string::String>,
+}
+///`CustomAgentDescription`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CustomAgentDescription(::std::string::String);
+impl ::std::ops::Deref for CustomAgentDescription {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CustomAgentDescription> for ::std::string::String {
+    fn from(value: CustomAgentDescription) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CustomAgentDescription {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 200usize {
+            return Err("longer than 200 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CustomAgentDescription {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDescription {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CustomAgentDescription {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`CustomAgentMcp`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CustomAgentMcp {
+    pub playwright: bool,
+    pub servers: ::std::vec::Vec<McpServerDef>,
+}
+///`CustomAgentName`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CustomAgentName(::std::string::String);
+impl ::std::ops::Deref for CustomAgentName {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CustomAgentName> for ::std::string::String {
+    fn from(value: CustomAgentName) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CustomAgentName {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 60usize {
+            return Err("longer than 60 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CustomAgentName {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CustomAgentName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CustomAgentName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`CustomAgentSummary`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CustomAgentSummary {
+    #[serde(rename = "baseAgent")]
+    pub base_agent: AgentId,
+    pub description: ::std::string::String,
+    pub id: ::std::string::String,
+    pub name: ::std::string::String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: f64,
+}
+///`CustomAgentSystemPrompt`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CustomAgentSystemPrompt(::std::string::String);
+impl ::std::ops::Deref for CustomAgentSystemPrompt {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CustomAgentSystemPrompt> for ::std::string::String {
+    fn from(value: CustomAgentSystemPrompt) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CustomAgentSystemPrompt {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 32000usize {
+            return Err("longer than 32000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CustomAgentSystemPrompt {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CustomAgentSystemPrompt {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CustomAgentSystemPrompt {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`CustomAgentTools`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CustomAgentTools {
+    pub allow: ::std::vec::Vec<::std::string::String>,
+    pub deny: ::std::vec::Vec<::std::string::String>,
+}
 ///`CustomInstance`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CustomInstance {
@@ -1040,6 +1426,12 @@ pub struct CustomInstance {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeleteCredentialIn {
     pub key: ::std::string::String,
+}
+///`DeleteCustomAgentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeleteCustomAgentIn {
+    #[serde(rename = "customAgentId")]
+    pub custom_agent_id: ::std::string::String,
 }
 ///`DeleteEnvironmentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -1614,6 +2006,12 @@ pub enum ErrorCode {
     EnvironmentExists,
     #[serde(rename = "EGRESS_BLOCKED")]
     EgressBlocked,
+    #[serde(rename = "CUSTOM_AGENT_EXISTS")]
+    CustomAgentExists,
+    #[serde(rename = "CUSTOM_AGENT_LIMIT")]
+    CustomAgentLimit,
+    #[serde(rename = "ARTIFACTS_ERROR")]
+    ArtifactsError,
     #[serde(rename = "INTERNAL")]
     Internal,
 }
@@ -1660,6 +2058,9 @@ impl ::std::fmt::Display for ErrorCode {
             Self::SettingsInvalid => f.write_str("SETTINGS_INVALID"),
             Self::EnvironmentExists => f.write_str("ENVIRONMENT_EXISTS"),
             Self::EgressBlocked => f.write_str("EGRESS_BLOCKED"),
+            Self::CustomAgentExists => f.write_str("CUSTOM_AGENT_EXISTS"),
+            Self::CustomAgentLimit => f.write_str("CUSTOM_AGENT_LIMIT"),
+            Self::ArtifactsError => f.write_str("ARTIFACTS_ERROR"),
             Self::Internal => f.write_str("INTERNAL"),
         }
     }
@@ -1708,6 +2109,9 @@ impl ::std::str::FromStr for ErrorCode {
             "SETTINGS_INVALID" => Ok(Self::SettingsInvalid),
             "ENVIRONMENT_EXISTS" => Ok(Self::EnvironmentExists),
             "EGRESS_BLOCKED" => Ok(Self::EgressBlocked),
+            "CUSTOM_AGENT_EXISTS" => Ok(Self::CustomAgentExists),
+            "CUSTOM_AGENT_LIMIT" => Ok(Self::CustomAgentLimit),
+            "ARTIFACTS_ERROR" => Ok(Self::ArtifactsError),
             "INTERNAL" => Ok(Self::Internal),
             _ => Err("invalid value".into()),
         }
@@ -1761,6 +2165,12 @@ pub struct GetChangesOut {
     pub files: ::std::vec::Vec<ChangedFile>,
     #[serde(rename = "headSha")]
     pub head_sha: ::std::string::String,
+}
+///`GetCustomAgentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetCustomAgentIn {
+    #[serde(rename = "customAgentId")]
+    pub custom_agent_id: ::std::string::String,
 }
 ///`GetDiagnosticsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -2533,6 +2943,66 @@ pub struct McpHeaderInput {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub value: ::std::option::Option<::std::string::String>,
 }
+///`McpRemoteServer`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct McpRemoteServer {
+    pub headers: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+    pub name: ::std::string::String,
+    #[serde(rename = "type")]
+    pub type_: McpRemoteServerType,
+    pub url: ::std::string::String,
+}
+///`McpRemoteServerType`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum McpRemoteServerType {
+    #[serde(rename = "http")]
+    Http,
+    #[serde(rename = "sse")]
+    Sse,
+}
+impl ::std::fmt::Display for McpRemoteServerType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Http => f.write_str("http"),
+            Self::Sse => f.write_str("sse"),
+        }
+    }
+}
+impl ::std::str::FromStr for McpRemoteServerType {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "http" => Ok(Self::Http),
+            "sse" => Ok(Self::Sse),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for McpRemoteServerType {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for McpRemoteServerType {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`McpServer`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct McpServer {
@@ -2552,6 +3022,23 @@ pub struct McpServer {
     #[serde(deserialize_with = "::std::option::Option::deserialize")]
     pub url: ::std::option::Option<::std::string::String>,
 }
+///`McpServerDef`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum McpServerDef {
+    StdioServer(McpStdioServer),
+    RemoteServer(McpRemoteServer),
+}
+impl ::std::convert::From<McpStdioServer> for McpServerDef {
+    fn from(value: McpStdioServer) -> Self {
+        Self::StdioServer(value)
+    }
+}
+impl ::std::convert::From<McpRemoteServer> for McpServerDef {
+    fn from(value: McpRemoteServer) -> Self {
+        Self::RemoteServer(value)
+    }
+}
 ///`McpServerInput`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct McpServerInput {
@@ -2570,6 +3057,113 @@ pub struct McpServerInput {
     pub transport: McpTransport,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub url: ::std::option::Option<::std::string::String>,
+}
+///`McpStdioServer`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct McpStdioServer {
+    pub args: ::std::vec::Vec<::std::string::String>,
+    pub command: McpStdioServerCommand,
+    pub env: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+    pub name: ::std::string::String,
+    #[serde(rename = "type")]
+    pub type_: McpStdioServerType,
+}
+///`McpStdioServerCommand`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct McpStdioServerCommand(::std::string::String);
+impl ::std::ops::Deref for McpStdioServerCommand {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<McpStdioServerCommand> for ::std::string::String {
+    fn from(value: McpStdioServerCommand) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for McpStdioServerCommand {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for McpStdioServerCommand {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for McpStdioServerCommand {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for McpStdioServerCommand {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`McpStdioServerType`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum McpStdioServerType {
+    #[serde(rename = "stdio")]
+    Stdio,
+}
+impl ::std::fmt::Display for McpStdioServerType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Stdio => f.write_str("stdio"),
+        }
+    }
+}
+impl ::std::str::FromStr for McpStdioServerType {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "stdio" => Ok(Self::Stdio),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for McpStdioServerType {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for McpStdioServerType {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`McpTransport`
 #[derive(
@@ -3287,6 +3881,69 @@ impl ::std::convert::TryFrom<::std::string::String> for PrState {
         value.parse()
     }
 }
+///`ProfileIssue`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ProfileIssue {
+    #[serde(rename = "systemPrompt")]
+    SystemPrompt,
+    #[serde(rename = "tools")]
+    Tools,
+    #[serde(rename = "mcpServers")]
+    McpServers,
+    #[serde(rename = "model")]
+    Model,
+    #[serde(rename = "thoughtLevel")]
+    ThoughtLevel,
+}
+impl ::std::fmt::Display for ProfileIssue {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::SystemPrompt => f.write_str("systemPrompt"),
+            Self::Tools => f.write_str("tools"),
+            Self::McpServers => f.write_str("mcpServers"),
+            Self::Model => f.write_str("model"),
+            Self::ThoughtLevel => f.write_str("thoughtLevel"),
+        }
+    }
+}
+impl ::std::str::FromStr for ProfileIssue {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "systemPrompt" => Ok(Self::SystemPrompt),
+            "tools" => Ok(Self::Tools),
+            "mcpServers" => Ok(Self::McpServers),
+            "model" => Ok(Self::Model),
+            "thoughtLevel" => Ok(Self::ThoughtLevel),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ProfileIssue {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ProfileIssue {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`Project`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Project {
@@ -3783,6 +4440,16 @@ pub struct RunScriptIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`SaveCustomAgentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SaveCustomAgentIn {
+    #[serde(
+        rename = "customAgentId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub custom_agent_id: ::std::option::Option<::std::string::String>,
+    pub definition: CustomAgentDefinition,
+}
 ///`ScriptKind`
 #[derive(
     ::serde::Deserialize,
@@ -4104,6 +4771,11 @@ pub struct Session {
     pub config: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
     #[serde(rename = "configOptions")]
     pub config_options: ::std::vec::Vec<ConfigOption>,
+    #[serde(
+        rename = "customAgent",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub custom_agent: ::std::option::Option<SessionCustomAgent>,
     pub id: ::std::string::String,
     #[serde(
         rename = "modeId",
@@ -4111,6 +4783,11 @@ pub struct Session {
     )]
     pub mode_id: ::std::option::Option<::std::string::String>,
     pub modes: ::std::vec::Vec<SessionMode>,
+    #[serde(
+        rename = "profileIssues",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub profile_issues: ::std::option::Option<::std::vec::Vec<ProfileIssue>>,
     #[serde(rename = "sortOrder")]
     pub sort_order: f64,
     pub status: SessionStatus,
@@ -4118,6 +4795,14 @@ pub struct Session {
     pub steering: ::std::option::Option<bool>,
     pub title: ::std::string::String,
     pub usage: Usage,
+}
+///`SessionCustomAgent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SessionCustomAgent {
+    #[serde(rename = "commitSha")]
+    pub commit_sha: ::std::string::String,
+    pub id: ::std::string::String,
+    pub name: ::std::string::String,
 }
 ///`SessionMode`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6637,6 +7322,15 @@ pub mod api {
         type Input = crate::DeleteCredentialIn;
         type Output = crate::Empty;
     }
+    /// `deleteCustomAgent`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DeleteCustomAgent;
+    impl crate::Function for DeleteCustomAgent {
+        const NAME: &'static str = "deleteCustomAgent";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::DeleteCustomAgentIn;
+        type Output = crate::Empty;
+    }
     /// `deleteEnvironment`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteEnvironment;
@@ -6736,6 +7430,15 @@ pub mod api {
         type Input = crate::Empty;
         type Output = crate::CredentialStatus;
     }
+    /// `getCustomAgent`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetCustomAgent;
+    impl crate::Function for GetCustomAgent {
+        const NAME: &'static str = "getCustomAgent";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetCustomAgentIn;
+        type Output = crate::CustomAgent;
+    }
     /// `getDiagnostics`
     #[derive(Clone, Copy, Debug)]
     pub struct GetDiagnostics;
@@ -6798,6 +7501,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListCheckpointsIn;
         type Output = ::std::vec::Vec<crate::CheckpointInfo>;
+    }
+    /// `listCustomAgents`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListCustomAgents;
+    impl crate::Function for ListCustomAgents {
+        const NAME: &'static str = "listCustomAgents";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = ::std::vec::Vec<crate::CustomAgentSummary>;
     }
     /// `listEnvironments`
     #[derive(Clone, Copy, Debug)]
@@ -7069,6 +7781,15 @@ pub mod api {
         type Input = crate::RunScriptIn;
         type Output = crate::ScriptRun;
     }
+    /// `saveCustomAgent`
+    #[derive(Clone, Copy, Debug)]
+    pub struct SaveCustomAgent;
+    impl crate::Function for SaveCustomAgent {
+        const NAME: &'static str = "saveCustomAgent";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::SaveCustomAgentIn;
+        type Output = crate::CustomAgent;
+    }
     /// `saveMcpServer`
     #[derive(Clone, Copy, Debug)]
     pub struct SaveMcpServer;
@@ -7272,6 +7993,7 @@ pub mod api {
         ("createSession", crate::Method::Post),
         ("createWorkspace", crate::Method::Post),
         ("deleteCredential", crate::Method::Post),
+        ("deleteCustomAgent", crate::Method::Post),
         ("deleteEnvironment", crate::Method::Post),
         ("deleteEnvironmentSecret", crate::Method::Post),
         ("deleteMcpServer", crate::Method::Post),
@@ -7283,6 +8005,7 @@ pub mod api {
         ("getBrowserLiveView", crate::Method::Post),
         ("getChanges", crate::Method::Get),
         ("getCredentialStatus", crate::Method::Get),
+        ("getCustomAgent", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
         ("getWorkspace", crate::Method::Get),
@@ -7290,6 +8013,7 @@ pub mod api {
         ("listBranches", crate::Method::Get),
         ("listCheckRuns", crate::Method::Get),
         ("listCheckpoints", crate::Method::Get),
+        ("listCustomAgents", crate::Method::Get),
         ("listEnvironments", crate::Method::Get),
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
@@ -7320,6 +8044,7 @@ pub mod api {
         ("revertToCheckpoint", crate::Method::Post),
         ("rotatePreviewKey", crate::Method::Post),
         ("runScript", crate::Method::Post),
+        ("saveCustomAgent", crate::Method::Post),
         ("saveMcpServer", crate::Method::Post),
         ("searchFiles", crate::Method::Get),
         ("sendPrompt", crate::Method::Post),
@@ -7386,8 +8111,12 @@ pub mod wire {
         "CredentialProvider",
         "CredentialState",
         "CredentialStatus",
+        "CustomAgent",
+        "CustomAgentDefinition",
+        "CustomAgentSummary",
         "CustomInstance",
         "DeleteCredentialIn",
+        "DeleteCustomAgentIn",
         "DeleteEnvironmentIn",
         "DeleteEnvironmentSecretIn",
         "DeleteMcpServerIn",
@@ -7411,6 +8140,7 @@ pub mod wire {
         "GetBrowserLiveViewOut",
         "GetChangesIn",
         "GetChangesOut",
+        "GetCustomAgentIn",
         "GetDiagnosticsIn",
         "GetFileDiffIn",
         "GetFileDiffOut",
@@ -7451,8 +8181,11 @@ pub mod wire {
         "McpEnvVar",
         "McpHeader",
         "McpHeaderInput",
+        "McpRemoteServer",
         "McpServer",
+        "McpServerDef",
         "McpServerInput",
+        "McpStdioServer",
         "McpTransport",
         "Mention",
         "MergeMethod",
@@ -7475,6 +8208,7 @@ pub mod wire {
         "PollCodexLoginIn",
         "PollCodexLoginOut",
         "PrState",
+        "ProfileIssue",
         "Project",
         "ReadFileIn",
         "ReadFileOut",
@@ -7497,6 +8231,7 @@ pub mod wire {
         "RunMode",
         "RunScript",
         "RunScriptIn",
+        "SaveCustomAgentIn",
         "ScriptKind",
         "ScriptRun",
         "ScriptRunStatus",
@@ -7506,6 +8241,7 @@ pub mod wire {
         "SecretBinding",
         "SendPromptIn",
         "Session",
+        "SessionCustomAgent",
         "SessionMode",
         "SessionStatus",
         "SetApiKeyIn",
@@ -7607,8 +8343,12 @@ pub mod wire {
             "CredentialProvider" => crate::roundtrip::<crate::CredentialProvider>(text),
             "CredentialState" => crate::roundtrip::<crate::CredentialState>(text),
             "CredentialStatus" => crate::roundtrip::<crate::CredentialStatus>(text),
+            "CustomAgent" => crate::roundtrip::<crate::CustomAgent>(text),
+            "CustomAgentDefinition" => crate::roundtrip::<crate::CustomAgentDefinition>(text),
+            "CustomAgentSummary" => crate::roundtrip::<crate::CustomAgentSummary>(text),
             "CustomInstance" => crate::roundtrip::<crate::CustomInstance>(text),
             "DeleteCredentialIn" => crate::roundtrip::<crate::DeleteCredentialIn>(text),
+            "DeleteCustomAgentIn" => crate::roundtrip::<crate::DeleteCustomAgentIn>(text),
             "DeleteEnvironmentIn" => crate::roundtrip::<crate::DeleteEnvironmentIn>(text),
             "DeleteEnvironmentSecretIn" => {
                 crate::roundtrip::<crate::DeleteEnvironmentSecretIn>(text)
@@ -7634,6 +8374,7 @@ pub mod wire {
             "GetBrowserLiveViewOut" => crate::roundtrip::<crate::GetBrowserLiveViewOut>(text),
             "GetChangesIn" => crate::roundtrip::<crate::GetChangesIn>(text),
             "GetChangesOut" => crate::roundtrip::<crate::GetChangesOut>(text),
+            "GetCustomAgentIn" => crate::roundtrip::<crate::GetCustomAgentIn>(text),
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
@@ -7678,8 +8419,11 @@ pub mod wire {
             "McpEnvVar" => crate::roundtrip::<crate::McpEnvVar>(text),
             "McpHeader" => crate::roundtrip::<crate::McpHeader>(text),
             "McpHeaderInput" => crate::roundtrip::<crate::McpHeaderInput>(text),
+            "McpRemoteServer" => crate::roundtrip::<crate::McpRemoteServer>(text),
             "McpServer" => crate::roundtrip::<crate::McpServer>(text),
+            "McpServerDef" => crate::roundtrip::<crate::McpServerDef>(text),
             "McpServerInput" => crate::roundtrip::<crate::McpServerInput>(text),
+            "McpStdioServer" => crate::roundtrip::<crate::McpStdioServer>(text),
             "McpTransport" => crate::roundtrip::<crate::McpTransport>(text),
             "Mention" => crate::roundtrip::<crate::Mention>(text),
             "MergeMethod" => crate::roundtrip::<crate::MergeMethod>(text),
@@ -7704,6 +8448,7 @@ pub mod wire {
             "PollCodexLoginIn" => crate::roundtrip::<crate::PollCodexLoginIn>(text),
             "PollCodexLoginOut" => crate::roundtrip::<crate::PollCodexLoginOut>(text),
             "PrState" => crate::roundtrip::<crate::PrState>(text),
+            "ProfileIssue" => crate::roundtrip::<crate::ProfileIssue>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
             "ReadFileOut" => crate::roundtrip::<crate::ReadFileOut>(text),
@@ -7728,6 +8473,7 @@ pub mod wire {
             "RunMode" => crate::roundtrip::<crate::RunMode>(text),
             "RunScript" => crate::roundtrip::<crate::RunScript>(text),
             "RunScriptIn" => crate::roundtrip::<crate::RunScriptIn>(text),
+            "SaveCustomAgentIn" => crate::roundtrip::<crate::SaveCustomAgentIn>(text),
             "ScriptKind" => crate::roundtrip::<crate::ScriptKind>(text),
             "ScriptRun" => crate::roundtrip::<crate::ScriptRun>(text),
             "ScriptRunStatus" => crate::roundtrip::<crate::ScriptRunStatus>(text),
@@ -7737,6 +8483,7 @@ pub mod wire {
             "SecretBinding" => crate::roundtrip::<crate::SecretBinding>(text),
             "SendPromptIn" => crate::roundtrip::<crate::SendPromptIn>(text),
             "Session" => crate::roundtrip::<crate::Session>(text),
+            "SessionCustomAgent" => crate::roundtrip::<crate::SessionCustomAgent>(text),
             "SessionMode" => crate::roundtrip::<crate::SessionMode>(text),
             "SessionStatus" => crate::roundtrip::<crate::SessionStatus>(text),
             "SetApiKeyIn" => crate::roundtrip::<crate::SetApiKeyIn>(text),

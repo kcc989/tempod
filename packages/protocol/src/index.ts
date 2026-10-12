@@ -3,6 +3,7 @@ export * from "./enums.ts";
 export * from "./errors.ts";
 export * from "./acp.ts";
 export * from "./settings.ts";
+export * from "./agents.ts";
 export * from "./types.ts";
 export * from "./channels.ts";
 export * from "./tempod.ts";

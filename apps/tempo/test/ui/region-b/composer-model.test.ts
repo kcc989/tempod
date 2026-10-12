@@ -187,12 +187,14 @@ describe("pickers and usage", () => {
     expect(contextUsage({ used: 1, size: 0 })).toBeNull();
   });
 
-  it("splits config options into the model picker, a mode option and the rest", () => {
+  it("splits config options into the model, reasoning level and mode pickers, and the rest", () => {
     const s = session({ configOptions: [model, effort, fast, modeOption] });
     const p = configPickers(s);
     expect(p.model?.id).toBe("model");
+    expect(p.thoughtLevel?.id).toBe("effort");
     expect(p.modeOption?.id).toBe("mode");
-    expect(p.others.map((o) => o.id)).toEqual(["effort", "fast"]);
+    expect(p.others.map((o) => o.id)).toEqual(["fast"]);
+    expect(configPickers(session({ configOptions: [model] })).thoughtLevel).toBeUndefined();
     const withModes = configPickers(
       session({ configOptions: [modeOption], modes: [{ id: "plan", name: "Plan" }] }),
     );

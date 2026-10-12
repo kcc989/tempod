@@ -37,7 +37,13 @@ import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { BROWSER_IDLE_MS, browserConnect, browserFetch, browserIdleCheck, closeBrowser } from "./browser.ts";
 import { newPreviewKey, previewEnter, previewFetch } from "./preview.ts";
 import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
-import { makeMethods, type MethodInput, type Methods } from "./rpc.ts";
+import {
+  customSessionColumns,
+  makeMethods,
+  type MethodInput,
+  type Methods,
+  type SessionAgentProfile,
+} from "./rpc.ts";
 import { OpRunner } from "./runner.ts";
 import { closeOpenRuns } from "./scripts.ts";
 import { afterSkipWithState, makeHooks, makeSteps } from "./steps.ts";
@@ -66,6 +72,8 @@ export interface InitInput {
   readonly prompt: { readonly text: string } | null;
   /** For `source.kind = "pr"`: the PR as createWorkspace read it (03, Create a workspace). */
   readonly pr?: { readonly number: number; readonly state: PrState; readonly title: string } | null;
+  /** The first session starts from this custom agent (02, createWorkspace). */
+  readonly custom?: SessionAgentProfile | null;
   readonly author: Author;
   readonly createdAt: number;
 }
@@ -195,7 +203,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               acpSessionId: null,
               status: input.prompt ? "starting" : "idle",
               modeId: null,
-              configJson: json.config.write(input.model ? { model: input.model } : {}),
+              configJson: json.config.write(
+                input.model || input.custom?.model ? { model: input.model || input.custom!.model } : {},
+              ),
               modesJson: "[]",
               configOptionsJson: "[]",
               commandsJson: "[]",
@@ -204,6 +214,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               handoffPending: 0,
               pendingNote: null,
               generalPromptSent: 0,
+              ...customSessionColumns(input.custom),
               sortOrder: 1,
               createdAt: now,
               updatedAt: now,

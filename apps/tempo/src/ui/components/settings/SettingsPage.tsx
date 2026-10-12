@@ -1,6 +1,7 @@
 import {
   ArrowLeftIcon,
   BellIcon,
+  BotIcon,
   FolderGit2Icon,
   KeyboardIcon,
   KeyRoundIcon,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SECTIONS, sectionPage } from "~/ui/components/dialogs/settings-model";
+import { AgentsTab } from "~/ui/components/dialogs/settings/AgentsTab";
 import { AppearanceTab } from "~/ui/components/dialogs/settings/AppearanceTab";
 import { DevicesTab } from "~/ui/components/dialogs/settings/DevicesTab";
 import { EnvironmentsTab } from "~/ui/components/dialogs/settings/EnvironmentsTab";
@@ -36,6 +38,12 @@ const PERSONAL = [
     icon: BellIcon,
   },
   { id: "logins", label: "Logins", description: "Manage agent logins and API keys.", icon: KeyRoundIcon },
+  {
+    id: "agents",
+    label: "Agents",
+    description: "Custom agents with their own prompt, tools, model and reasoning level.",
+    icon: BotIcon,
+  },
   {
     id: "environments",
     label: "Environments",
@@ -218,6 +226,7 @@ export function SettingsPage() {
           </p>
           {tab === "general" && <NotificationsTab />}
           {tab === "logins" && <LoginsTab />}
+          {tab === "agents" && <AgentsTab />}
           {tab === "environments" && <EnvironmentsTab />}
           {tab === "mcp" && <McpServersTab />}
           {tab === "appearance" && <AppearanceTab />}

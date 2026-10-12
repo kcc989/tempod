@@ -7,7 +7,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { sessionTitle } from "~/ui/components/chat/chat-tabs-model";
+import { sessionTitle, sessionTooltip } from "~/ui/components/chat/chat-tabs-model";
 import { Composer } from "~/ui/components/chat/Composer";
 import { Transcript } from "~/ui/components/chat/Transcript";
 import { BrowserTab } from "~/ui/components/review/BrowserTab";
@@ -36,7 +36,8 @@ export interface CenterTabKindDef<K extends CenterTabKind> {
 
 function ChatTitle({ workspaceId, tab }: CenterTabProps<"chat">) {
   const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[tab.sessionId]);
-  return <>{sessionTitle(session)}</>;
+  const tooltip = sessionTooltip(session);
+  return tooltip ? <span title={tooltip}>{sessionTitle(session)}</span> : <>{sessionTitle(session)}</>;
 }
 
 function ChatBody({ workspaceId, tab }: CenterTabProps<"chat">) {

@@ -12,6 +12,7 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, DismissEvent, Entity, Focusable as _, InteractiveElement as _,
@@ -77,6 +78,8 @@ pub struct WorkspaceView {
     viewing_closed: Vec<String>,
     chats: HashMap<String, Chat>,
     credentials: Option<p::CredentialStatus>,
+    custom_agents: Vec<p::CustomAgentSummary>,
+    custom_agents_rev: u64,
     credentials_rev: u64,
     credential_generation: u64,
     _credentials_changed: Option<Subscription>,
@@ -181,6 +184,11 @@ impl WorkspaceView {
             .unwrap_or(0);
         let credential_changed = app.map(|app| {
             cx.observe_in(&app, window, |this, app, window, cx| {
+                let agents_rev = app.read(cx).custom_agents_rev;
+                if agents_rev != this.custom_agents_rev {
+                    this.custom_agents_rev = agents_rev;
+                    this.load_custom_agents(window, cx);
+                }
                 let app = app.read(cx);
                 if app.credentials_rev != this.credentials_rev
                     && matches!(app.auth, crate::app::AuthState::SignedIn)
@@ -212,6 +220,8 @@ impl WorkspaceView {
             viewing_closed: Vec::new(),
             chats: HashMap::new(),
             credentials: None,
+            custom_agents: vec![],
+            custom_agents_rev: 0,
             credentials_rev,
             credential_generation: 0,
             _credentials_changed: credential_changed,
@@ -244,7 +254,24 @@ impl WorkspaceView {
             _store_changed: changed,
         };
         view.sync(window, cx);
+        view.load_custom_agents(window, cx);
         view
+    }
+
+    fn load_custom_agents(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let request = self.client.call::<api::ListCustomAgents>(p::Empty {});
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(agents) = request.await {
+                let _ = this.update_in(cx, |this, window, cx| {
+                    this.custom_agents = agents;
+                    if this.new_chat_menu.is_some() {
+                        this.open_new_chat(window, cx);
+                    }
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
     }
 
     fn refresh_credentials(
@@ -2468,9 +2495,11 @@ impl WorkspaceView {
             .workspace
             .as_ref()
             .map(|w| w.settings.clone());
+        let custom =
+            super::agents_model::menu_entries(&self.custom_agents, self.credentials.as_ref());
         let weak = cx.weak_entity();
         let menu = PopupMenu::build(window, cx, move |menu, _, _| {
-            chat_model::AGENTS.iter().fold(menu, |menu, agent| {
+            let menu = chat_model::AGENTS.iter().fold(menu, |menu, agent| {
                 let agent = *agent;
                 let hint =
                     chat_model::new_chat_hint(agent, credentials.as_ref(), settings.as_ref());
@@ -2482,10 +2511,33 @@ impl WorkspaceView {
                     })
                     .disabled(hint.is_some())
                     .on_click(move |_, window, cx| {
-                        let _ = weak.update(cx, |this, cx| this.create_chat(agent, window, cx));
+                        let _ =
+                            weak.update(cx, |this, cx| this.create_chat(agent, None, window, cx));
                     }),
                 )
-            })
+            });
+            let menu = if custom.is_empty() {
+                menu
+            } else {
+                menu.separator()
+            };
+            let menu = custom.iter().fold(menu, |menu, entry| {
+                let weak = weak.clone();
+                let (agent, id) = (entry.agent, entry.id.clone());
+                menu.item(
+                    PopupMenuItem::new(entry.label.clone())
+                        .disabled(!entry.enabled)
+                        .on_click(move |_, window, cx| {
+                            let id = Some(id.clone());
+                            let _ =
+                                weak.update(cx, |this, cx| this.create_chat(agent, id, window, cx));
+                        }),
+                )
+            });
+            menu.separator().item(
+                PopupMenuItem::new("Manage agents…")
+                    .on_click(|_, _, cx| super::settings::open_agents(cx)),
+            )
         });
         self.new_chat_dismiss =
             Some(
@@ -2518,11 +2570,18 @@ impl WorkspaceView {
         }
     }
 
-    fn create_chat(&mut self, agent: p::AgentId, window: &mut Window, cx: &mut Context<Self>) {
+    fn create_chat(
+        &mut self,
+        agent: p::AgentId,
+        custom_agent_id: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.new_chat_menu = None;
         let request = self.client.call::<api::CreateSession>(p::CreateSessionIn {
             workspace_id: self.store.read(cx).workspace_id.clone(),
             agent,
+            custom_agent_id,
             model: None,
             mode_id: None,
         });
@@ -2593,7 +2652,7 @@ impl Render for WorkspaceView {
         let titles: Vec<_> = ids
             .iter()
             .filter_map(|id| store.state.sessions.get(id))
-            .map(chat_model::session_title)
+            .map(|s| (chat_model::session_title(s), chat_model::session_tooltip(s)))
             .collect();
         let closed: Vec<_> = chat_model::sessions(&store.state, true)
             .into_iter()
@@ -2942,20 +3001,34 @@ impl Render for WorkspaceView {
                                         .update(cx, |r, cx| r.select_document(key, window, cx));
                                 }
                             }))
-                            .children(titles.into_iter().zip(tab_ids).map(|(title, id)| {
-                                let button_id = SharedString::from(format!("close-chat-{id}"));
-                                Tab::new().label(SharedString::from(title)).suffix(
-                                    Button::new(button_id)
-                                        .icon(gpui_kit::assets::IconName::X)
-                                        .accessibility_label("Close chat")
-                                        .tooltip("Close chat")
-                                        .disabled(self.closing.is_some())
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            cx.stop_propagation();
-                                            this.close_chat(&id, window, cx);
-                                        })),
-                                )
-                            }))
+                            .children(titles.into_iter().zip(tab_ids).map(
+                                |((title, about), id)| {
+                                    let button_id = SharedString::from(format!("close-chat-{id}"));
+                                    let tab = Tab::new().label(SharedString::from(title));
+                                    let tab = match about {
+                                        Some(about) => {
+                                            let tip = SharedString::from(about);
+                                            tab.aria_label(tip.clone()).tooltip(
+                                                move |window, cx| {
+                                                    Tooltip::new(tip.clone()).build(window, cx)
+                                                },
+                                            )
+                                        }
+                                        None => tab,
+                                    };
+                                    tab.suffix(
+                                        Button::new(button_id)
+                                            .icon(gpui_kit::assets::IconName::X)
+                                            .accessibility_label("Close chat")
+                                            .tooltip("Close chat")
+                                            .disabled(self.closing.is_some())
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                cx.stop_propagation();
+                                                this.close_chat(&id, window, cx);
+                                            })),
+                                    )
+                                },
+                            ))
                             .children(documents.into_iter().map(|(key, title)| {
                                 let close_key = key.clone();
                                 Tab::new().label(SharedString::from(title)).suffix(

@@ -9,6 +9,7 @@ import {
   SecretBindings,
 } from "./environments.ts";
 import { McpServer, McpServerInput } from "./mcp.ts";
+import { CustomAgent, CustomAgentDefinition, CustomAgentSummary } from "./agents.ts";
 import { EnvName } from "./settings.ts";
 import {
   AgentModelOptions,
@@ -127,6 +128,7 @@ export const API = {
       source: NewSource,
       agent: opt(AgentId),
       model: opt(S),
+      customAgentId: opt(S),
       prompt: opt(Schema.Struct({ text: NonEmpty })),
     }),
     WorkspaceSummary,
@@ -162,7 +164,11 @@ export const API = {
   ),
 
   // Sessions and turns
-  createSession: fn("POST", Schema.Struct({ ...W, agent: AgentId, model: opt(S), modeId: opt(S) }), Session),
+  createSession: fn(
+    "POST",
+    Schema.Struct({ ...W, agent: AgentId, customAgentId: opt(S), model: opt(S), modeId: opt(S) }),
+    Session,
+  ),
   closeSession: fn("POST", Schema.Struct({ ...W, sessionId: S }), Empty),
   renameSession: fn("POST", Schema.Struct({ ...W, sessionId: S, title: S }), Empty),
   sendPrompt: fn(
@@ -251,6 +257,16 @@ export const API = {
   listTerminals: fn("GET", Schema.Struct(W), Schema.Array(Schema.Struct({ terminalId: S }))),
   /** Additive: script history for the Setup and Run tabs. */
   listScriptRuns: fn("GET", Schema.Struct(W), Schema.Array(ScriptRunWithLog)),
+
+  // Custom agents (01, Custom agents)
+  listCustomAgents: fn("GET", Empty, Schema.Array(CustomAgentSummary)),
+  getCustomAgent: fn("GET", Schema.Struct({ customAgentId: S }), CustomAgent),
+  saveCustomAgent: fn(
+    "POST",
+    Schema.Struct({ customAgentId: opt(S), definition: CustomAgentDefinition }),
+    CustomAgent,
+  ),
+  deleteCustomAgent: fn("POST", Schema.Struct({ customAgentId: S }), Empty),
 
   // Credentials
   getCredentialStatus: fn("GET", Empty, CredentialStatus),

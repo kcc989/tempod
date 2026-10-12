@@ -17,6 +17,8 @@ pub struct AppState {
     /// Collapsed sidebar sections: `pinned` or a project id.
     pub collapsed_sections: std::collections::BTreeSet<String>,
     pub credentials_rev: u64,
+    /// Bumped when Settings → Agents saves or deletes, so New chat menus reload (01, Custom agents).
+    pub custom_agents_rev: u64,
     pub credential_changed: Option<tempo_protocol::CredentialProvider>,
     pub settings_window: Option<gpui_kit::AnyWindowHandle>,
     pub auth: AuthState,
@@ -52,6 +54,7 @@ impl AppState {
             workspace_focused: false,
             collapsed_sections: Default::default(),
             credentials_rev: 0,
+            custom_agents_rev: 0,
             credential_changed: None,
             settings_window: None,
             server_url: url.clone(),

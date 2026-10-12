@@ -2,6 +2,7 @@ import {
   TempoError,
   type AgentId,
   type BrowserMode,
+  type AgentProfile,
   type ConfigOption,
   type McpServerSpec,
   type SessionStartResult,
@@ -12,6 +13,7 @@ import type { TempodDb } from "../db.ts";
 import { errorText, type Logger } from "../log.ts";
 import { agentEnv } from "./agents.ts";
 import { writePiMcpConfig, type Bridge } from "./mcp.ts";
+import { prepareProfile, profileDir, removeProfile } from "./profile.ts";
 import { AgentSession } from "./session.ts";
 
 export interface ManagerDeps {
@@ -30,6 +32,7 @@ export interface StartParams {
   readonly env: Record<string, string>;
   readonly modeId?: string | null | undefined;
   readonly model?: string | null | undefined;
+  readonly profile?: AgentProfile | undefined;
   readonly acpSessionId?: string | null | undefined;
   readonly browser?: BrowserMode | undefined;
   readonly mcpServers?: ReadonlyArray<McpServerSpec> | undefined;
@@ -101,6 +104,8 @@ export class SessionManager {
     }
     let session: AgentSession;
     try {
+      if (p.profile)
+        Object.assign(env, prepareProfile(p.agent, p.profile, profileDir(config.stateDir, p.sessionId)));
       session = new AgentSession(p.sessionId, p.agent, command, env, {
         workspace: config.workspace,
         attachments: config.attachments,
@@ -212,9 +217,9 @@ export class SessionManager {
 
   async close(p: { sessionId: string }): Promise<void> {
     const s = this.sessions.get(p.sessionId);
-    if (!s) return;
-    if (s.busy) throw new TempoError("SESSION_BUSY");
-    await s.close("requested", true);
+    if (s?.busy) throw new TempoError("SESSION_BUSY");
+    await s?.close("requested", true);
+    removeProfile(profileDir(this.deps.config.stateDir, p.sessionId));
   }
 
   respondPermission(p: { requestId: string; optionId: string | null }): void {

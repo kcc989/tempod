@@ -39,6 +39,7 @@ import {
   applyInsertions,
   canSend,
   configPickers,
+  profileIssuesText,
   contextUsage,
   mentionTrigger,
   moveIndex,
@@ -51,7 +52,9 @@ import {
   AttachmentChip,
   ContextRing,
   LoginBanner,
+  ProfileIssuesNotice,
   MentionChip,
+  LevelPicker,
   ModelPicker,
   ModePicker,
   OptionsMenu,
@@ -71,6 +74,9 @@ export interface ComposerProps {
 }
 
 /** 04, Composer. Archived workspaces show `Restore to continue`; closed chats are read-only. */
+/** Sessions whose profile-issues notice was dismissed; kept in memory only (04, browser storage). */
+const dismissedProfileIssues = new Set<string>();
+
 export function Composer({ workspaceId, sessionId }: ComposerProps) {
   const state = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state);
   const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[sessionId]);
@@ -156,6 +162,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       },
     }) > 0;
   const [caret, setCaret] = useState(0);
+  const [, rerender] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [active, setActive] = useState({ key: "", index: 0 });
   const [modelOpen, setModelOpen] = useState(false);
@@ -439,12 +446,22 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     : missing
       ? `Add your ${label} login in Settings.`
       : null;
+  const issuesText = profileIssuesText(session);
   const hasChips = mentions.length > 0 || reviewCommentIds.length > 0 || attachments.length > 0;
 
   return (
     <div className="shrink-0">
       <EnvironmentProposalBanner workspaceId={workspaceId} />
       {loginText && <LoginBanner text={loginText} />}
+      {issuesText && !dismissedProfileIssues.has(sessionId) && (
+        <ProfileIssuesNotice
+          text={issuesText}
+          onDismiss={() => {
+            dismissedProfileIssues.add(sessionId);
+            rerender((n) => n + 1);
+          }}
+        />
+      )}
       <div
         className="relative px-3 pt-2 pb-3"
         onDragOver={(e) => {
@@ -587,6 +604,14 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   onOpenChange={setModelOpen}
                   disabled={pickersDisabled}
                   onPick={(v) => onConfig(pickers.model!, v)}
+                  onClosed={refocus}
+                />
+              )}
+              {pickers.thoughtLevel && (
+                <LevelPicker
+                  option={pickers.thoughtLevel}
+                  disabled={pickersDisabled}
+                  onPick={(v) => onConfig(pickers.thoughtLevel!, v)}
                   onClosed={refocus}
                 />
               )}
