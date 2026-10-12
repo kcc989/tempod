@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { sessionQueryOptions } from "~/ui/auth";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { SettingsPage } from "~/ui/components/settings/SettingsPage";
 import { DialogHost } from "~/ui/components/shell/DialogHost";
 import { GlobalChrome } from "~/ui/components/shell/GlobalChrome";
 import { PhoneNav } from "~/ui/components/shell/PhoneNav";
@@ -13,7 +14,7 @@ import { useGlobalShortcuts } from "~/ui/hooks/useGlobalShortcuts";
 import { useHubConnection } from "~/ui/hooks/useHub";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useReconnectRules } from "~/ui/hooks/useReconnectRules";
-import { useLayout } from "~/ui/hooks/useWorkspaceUi";
+import { useLayout, useSettings } from "~/ui/hooks/useWorkspaceUi";
 import { readJson, writeJson } from "~/ui/lib/storage";
 import { errorCode, onUnauthenticated, toastError } from "~/ui/lib/toast";
 import {
@@ -46,6 +47,7 @@ const readSidebarWidth = (): number =>
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const isPhone = useIsPhone();
+  const settings = useSettings();
   const navigate = useNavigate();
   useHubConnection();
   useReconnectRules();
@@ -90,14 +92,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
       <ReconnectingBar />
-      {isPhone ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
-          <PhoneNav />
-        </div>
-      ) : (
-        <DesktopFrame>{children}</DesktopFrame>
-      )}
+      <div className={settings ? "hidden" : "flex min-h-0 flex-1 flex-col"} inert={settings !== null}>
+        {isPhone ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+            <PhoneNav />
+          </div>
+        ) : (
+          <DesktopFrame>{children}</DesktopFrame>
+        )}
+      </div>
+      {settings && <SettingsPage />}
       <GlobalChrome />
       <DialogHost />
     </div>

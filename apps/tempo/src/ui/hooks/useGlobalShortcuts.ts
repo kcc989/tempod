@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { isEditableTarget, isMacPlatform, isPlainCombo, matchGlobal } from "~/ui/lib/shortcuts";
+import { settingsStore } from "~/ui/state/workspace-ui";
 import { runAction } from "~/ui/state/actions";
 import { modalOpen } from "~/ui/lib/modal";
 
@@ -17,6 +18,7 @@ export function useGlobalShortcuts(): void {
       if (!binding) return;
       if (isPlainCombo(binding.key) && isEditableTarget(e.target)) return;
       if (binding.id !== "palette" && modalOpen()) return;
+      if (settingsStore.getSnapshot() && binding.id !== "settings" && binding.id !== "palette") return;
       if (runAction(binding.id)) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);

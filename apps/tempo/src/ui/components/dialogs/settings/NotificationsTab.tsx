@@ -35,9 +35,9 @@ export function NotificationsTab() {
   };
 
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-1.5">
-        <div className="flex items-center gap-2">
+    <div className="divide-y border-t">
+      <div className="grid gap-3 py-6">
+        <div className="flex flex-row-reverse items-center justify-between gap-4">
           <Switch
             id="notify-enabled"
             checked={prefs.enabled}
@@ -63,14 +63,17 @@ export function NotificationsTab() {
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-row-reverse items-center justify-between gap-4 py-6">
         <Switch
           id="notify-sound"
           checked={prefs.sound}
           disabled={!prefs.enabled || permission === "unsupported"}
           onCheckedChange={(on) => setPrefs((p) => ({ ...p, sound: on }))}
         />
-        <Label htmlFor="notify-sound">Sound</Label>
+        <div>
+          <Label htmlFor="notify-sound">Sound</Label>
+          <p className="mt-2 text-xs text-muted-foreground">Play a sound with browser notifications.</p>
+        </div>
       </div>
     </div>
   );
