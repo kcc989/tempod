@@ -85,7 +85,9 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
   const quiet = useWorkspaceSelector(workspaceId, (s) => {
     const w = s.workspace;
     if (!w) return false;
-    return w.state === "sleeping" || ((w.changes?.files.length ?? 0) === 0 && w.prNumber === null);
+    return (
+      w.state === "sleeping" || (((s.changes ?? w.changes)?.files.length ?? 0) === 0 && w.prNumber === null)
+    );
   });
   useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
   const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
