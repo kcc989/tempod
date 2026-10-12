@@ -309,7 +309,10 @@ export const installFakes = async (
   let container!: FakeContainer;
   await runInDurableObject(stub, (instance: WorkspaceDO) => {
     const core = internals(instance).core;
-    container = new FakeContainer(tempod, () => core.wsOrNull()?.tempodToken ?? null);
+    container = new FakeContainer(
+      tempod,
+      () => core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken") ?? null,
+    );
     core.container = container as unknown as Container;
   });
   return { tempod, container };

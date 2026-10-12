@@ -6,6 +6,13 @@ const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+  AgentModelOptions: [
+    {
+      agent: "claude",
+      currentValue: "reported-model",
+      options: [{ value: "reported-model", name: "Reported model" }],
+    },
+  ],
   ErrorBody: [
     { code: "NOT_FOUND", message: "Not found." },
     {
@@ -262,6 +269,7 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
       projectId: PROJECT_ID,
       source: { kind: "pr", number: 42 },
       agent: "codex",
+      model: "reported-model",
       prompt: { text: "Fix the flaky test" },
     },
   ],
@@ -341,6 +349,7 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   continueAfterSetupFailure: [ws],
   listTerminals: [ws],
   listScriptRuns: [ws],
+  listModels: [{}],
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
   setCodexAuth: [{ authJson: '{"tokens":{"note":"fixture"}}' }],

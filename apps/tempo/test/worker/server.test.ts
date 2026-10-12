@@ -28,6 +28,8 @@ import {
   OWNER_GITHUB_ID,
   internals,
   seedCredentials,
+  installFakes,
+  FakeTempod,
   seedProject,
   seedWorkspace,
   waitFor,
@@ -745,6 +747,62 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
 // 02, Workspaces; 03, Create a workspace
 // ======================================================================
 
+describe("listModels", () => {
+  it("discovers the configured agent's models before any workspace or chat exists", async () => {
+    const o = await owner();
+    await env.CREDENTIALS.getByName(o.userId).putSecret("claude.oauth_token", "token");
+    const stub = env.WORKSPACE.getByName(`models:${o.userId}`);
+    const tempod = new FakeTempod();
+    tempod.on("session.start", () => ({
+      acpSessionId: "discovery",
+      modes: [],
+      availableCommands: [],
+      capabilities: {},
+      reloaded: false,
+      handoff: false,
+      configOptions: [
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: "a",
+          options: [
+            {
+              group: "group",
+              name: "Group",
+              options: [
+                { value: "a", name: "Model A" },
+                { value: "b", name: "Model B" },
+              ],
+            },
+          ],
+        },
+      ],
+    }));
+    const { container } = await installFakes(stub, tempod);
+    expect(ok(await call("listModels", o, {}))).toEqual([
+      {
+        agent: "claude",
+        currentValue: "a",
+        options: [
+          { value: "a", name: "Model A" },
+          { value: "b", name: "Model B" },
+        ],
+      },
+    ]);
+    expect(await d1Rows("SELECT id FROM workspaces WHERE user_id = ?", o.userId)).toEqual([]);
+    expect(await doRows(stub, "SELECT id FROM sessions")).toEqual([]);
+    expect(tempod.requestsOf("session.prompt")).toEqual([]);
+    expect(tempod.requestsOf("session.close")).toHaveLength(1);
+    expect(container.destroyed).toBe(1);
+    await call("listModels", o, {});
+    expect(tempod.requestsOf("session.start")).toHaveLength(1);
+    const other = await owner();
+    expect(ok(await call("listModels", other, {}))).toEqual([]);
+  });
+});
+
 describe("createWorkspace (03, Create a workspace)", () => {
   it("picks the first unused city and the branch <branch_prefix><slug>, and returns a starting summary", async () => {
     const o = await owner();
@@ -821,11 +879,15 @@ describe("createWorkspace (03, Create a workspace)", () => {
         projectId: o.projectId,
         source: { kind: "new", baseBranch: "main" },
         agent: "codex",
+        model: "chosen-model",
         prompt: { text },
       }),
     );
     expect(ws.title).toBe(text.trim().slice(0, 60));
     expect(ws.defaultAgent).toBe("codex");
+    const chat = await doRows(env.WORKSPACE.getByName(ws.id), "SELECT agent, config_json FROM sessions");
+    expect(chat).toHaveLength(1);
+    expect(JSON.parse(chat[0]!["config_json"])).toEqual({ model: "chosen-model" });
   });
 
   it("defaults the agent to the project's agent.default", async () => {

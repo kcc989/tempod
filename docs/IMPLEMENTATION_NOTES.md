@@ -221,6 +221,11 @@ The next native milestone wires workspace channels and cached chat views to the 
 
 The owner requested both queueing and live steering, and selected delivery during the active turn where supported. Specs 01–04 and 07 now define the ACP v1 steering extension, optional send delivery, capability/progress flags and the durable `turns.steering_pending` reservation. Unsupported or settled delivery stays queued. An ambiguous acknowledgement or interrupted reservation becomes a failed turn with an explicit check-before-retry message. No new library or adapter version was added. Primary reference: [Claude ACP steering example](https://github.com/agentclientprotocol/claude-agent-acp/blob/main/examples/steering.ts). Real logged-in adapter conformance remains open.
 
+## Prompt-focused workspace creation (2026-10-12)
+
+New workspace defaults to a new branch, places branch/source and Keep open controls in a secondary menu, and chooses a model rather than an agent. `listModels` discovers every configured agent's ACP model option in a short-lived private container, before any workspace or chat is created. The discovery instance reuses the existing WorkspaceDO container binding under `models:<userId>`, without a workspace row. Credentials and egress use the existing guarded paths, and refreshed Codex auth returns to CredentialDO. The picker shows loading/retry states and never substitutes a default-only model list. Model metadata caches for fifteen minutes and refreshes when credentials or the pinned image change.
+
+The selected model passes through `createWorkspace` into the initial session config. Workspace initialization always creates a first chat, including when no prompt is supplied, and only queues a turn when a prompt exists. The native New workspace dialog uses the same discovery endpoint, submits the selected model, focuses the prompt, and hides branch/source settings behind Workspace options.
 
 ## Native implementation continuation (cloud, 2026-10-11)
 

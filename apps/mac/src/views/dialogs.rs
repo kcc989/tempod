@@ -1,5 +1,6 @@
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::{Disableable as _, Selectable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
@@ -19,7 +20,10 @@ pub struct Dialogs {
     branch: Entity<InputState>,
     prompt: Entity<TextareaState>,
     agent: Option<p::AgentId>,
-    credentials: Option<p::CredentialStatus>,
+    models: Vec<p::AgentModelOptions>,
+    model: Option<String>,
+    models_loading: bool,
+    workspace_options: bool,
     branches: Vec<p::ListBranchesItem>,
     branch_search: Option<gpui_kit::Task<()>>,
     prs: Vec<p::ListOpenPullRequestsItem>,
@@ -61,9 +65,14 @@ impl Dialogs {
             project: None,
             source: 0,
             branch,
-            prompt: cx.new(|cx| TextareaState::new(window, cx).placeholder("First prompt")),
+            prompt: cx.new(|cx| {
+                TextareaState::new(window, cx).placeholder("What do you want to work on?")
+            }),
             agent: None,
-            credentials: None,
+            models: vec![],
+            model: None,
+            models_loading: false,
+            workspace_options: false,
             branches: vec![],
             branch_search: None,
             prs: vec![],
@@ -106,26 +115,21 @@ impl Dialogs {
                     });
                 })
         });
-        window.focus(&self.branch.read(cx).focus_handle(cx), cx);
+        if kind == "New workspace" {
+            self.source = 0;
+            self.workspace_options = false;
+            window.focus(&self.prompt.read(cx).focus_handle(cx), cx);
+        } else {
+            window.focus(&self.branch.read(cx).focus_handle(cx), cx);
+        }
         self.error = None;
         self.delete = None;
         if let Some(project) = self.projects.first().cloned() {
             self.select_project(project.id, window, cx);
         }
-        let Some(client) = &self.client else {
-            return;
-        };
-        let request = client.call::<api::GetCredentialStatus>(Default::default());
-        cx.spawn(async move |this, cx| {
-            let result = request.await;
-            let _ = this.update(cx, |this, cx| {
-                if let Ok(status) = result {
-                    this.credentials = Some(status);
-                }
-                cx.notify();
-            });
-        })
-        .detach();
+        if kind == "New workspace" {
+            self.load_models(cx);
+        }
         if kind == "Rename workspace" {
             let title = app
                 .read(cx)
@@ -144,6 +148,54 @@ impl Dialogs {
             self.load_history(cx);
         }
         cx.notify();
+    }
+    fn load_models(&mut self, cx: &mut Context<Self>) {
+        let Some(client) = &self.client else {
+            return;
+        };
+        let request = client.call::<api::ListModels>(Default::default());
+        self.models_loading = true;
+        self.error = None;
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.models_loading = false;
+                match result {
+                    Ok(models) => {
+                        this.models = models;
+                        let preferred = this
+                            .projects
+                            .iter()
+                            .find(|p| Some(&p.id) == this.project.as_ref())
+                            .and_then(|p| p.settings.agent.as_ref())
+                            .and_then(|a| a.default);
+                        let entry = this
+                            .models
+                            .iter()
+                            .find(|m| Some(m.agent) == preferred)
+                            .or_else(|| this.models.first());
+                        if let Some(entry) = entry {
+                            this.agent = Some(entry.agent);
+                            this.model = entry
+                                .options
+                                .iter()
+                                .find(|o| o.value == entry.current_value)
+                                .or_else(|| entry.options.first())
+                                .map(|o| o.value.clone());
+                        } else {
+                            this.agent = None;
+                            this.model = None;
+                        }
+                    }
+                    Err(e) => {
+                        this.model = None;
+                        this.error = Some(e.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
     fn load_installations(&mut self, cx: &mut Context<Self>) {
         let Some(client) = &self.client else {
@@ -268,7 +320,7 @@ impl Dialogs {
         .detach();
     }
     fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.pending {
+        if self.pending || self.models_loading || self.model.is_none() {
             return;
         }
         let Some(client) = &self.client else {
@@ -309,6 +361,7 @@ impl Dialogs {
             project_id,
             source,
             agent: self.agent,
+            model: self.model.clone(),
             prompt,
         });
         self.pending = true;
@@ -458,6 +511,48 @@ impl Render for Dialogs {
         let Some(kind) = self.kind else {
             return div().into_any_element();
         };
+        let choices: Vec<_> = self
+            .models
+            .iter()
+            .flat_map(|entry| {
+                entry.options.iter().map(|option| {
+                    (
+                        entry.agent,
+                        option.value.clone(),
+                        format!(
+                            "{} · {}",
+                            option.name,
+                            super::chat_model::agent_label(entry.agent)
+                        ),
+                    )
+                })
+            })
+            .collect();
+        let model_label = choices
+            .iter()
+            .find(|(agent, value, _)| {
+                Some(*agent) == self.agent && Some(value) == self.model.as_ref()
+            })
+            .map(|(_, _, label)| label.clone())
+            .unwrap_or_else(|| "Select model".into());
+        let weak = cx.weak_entity();
+        let model_picker = Button::new("workspace-model")
+            .label(model_label)
+            .disabled(self.pending || self.models_loading)
+            .dropdown_menu(move |menu, _, _| {
+                choices.iter().fold(menu, |menu, (agent, value, label)| {
+                    let weak = weak.clone();
+                    let agent = *agent;
+                    let value = value.clone();
+                    menu.item(PopupMenuItem::new(label.clone()).on_click(move |_, _, cx| {
+                        let _ = weak.update(cx, |this, cx| {
+                            this.agent = Some(agent);
+                            this.model = Some(value.clone());
+                            cx.notify();
+                        });
+                    }))
+                })
+            });
         let body = match kind {
             "New workspace" => v_flex()
                 .gap_2()
@@ -471,74 +566,65 @@ impl Render for Dialogs {
                         }))
                 }))
                 .child(
-                    h_flex().gap_2().children(
-                        ["New branch", "Existing branch", "Pull request"]
-                            .into_iter()
-                            .enumerate()
-                            .map(|(ix, label)| {
-                                Button::new(label).label(label).on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        this.source = ix;
-                                        cx.notify();
-                                    },
-                                ))
-                            }),
-                    ),
+                    Button::new("workspace-options")
+                        .label("Workspace options")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.workspace_options = !this.workspace_options;
+                            cx.notify();
+                        })),
                 )
-                .child(Input::new(&self.branch))
-                .children((self.source != 2).then(|| {
-                    h_flex().gap_1().children(self.branches.iter().map(|b| {
-                        let name = b.name.clone();
-                        Button::new(SharedString::from(format!("branch-{name}")))
-                            .label(name.clone())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.branch
-                                    .update(cx, |i, cx| i.set_value(name.clone(), window, cx))
+                .children(self.workspace_options.then(|| {
+                    v_flex()
+                        .child(
+                            h_flex().gap_2().children(
+                                ["New branch", "Existing branch", "Pull request"]
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(ix, label)| {
+                                        Button::new(label).label(label).on_click(cx.listener(
+                                            move |this, _, _, cx| {
+                                                this.source = ix;
+                                                cx.notify();
+                                            },
+                                        ))
+                                    }),
+                            ),
+                        )
+                        .child(Input::new(&self.branch))
+                        .children((self.source != 2).then(|| {
+                            h_flex().gap_1().children(self.branches.iter().map(|b| {
+                                let name = b.name.clone();
+                                Button::new(SharedString::from(format!("branch-{name}")))
+                                    .label(name.clone())
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.branch.update(cx, |i, cx| {
+                                            i.set_value(name.clone(), window, cx)
+                                        })
+                                    }))
                             }))
-                    }))
-                }))
-                .children((self.source == 2).then(|| {
-                    v_flex().children(self.prs.iter().map(|p| {
-                        let number = p.number;
-                        Button::new(SharedString::from(format!("pr-{number}")))
-                            .label(format!("#{} {}", p.number, p.title))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.branch
-                                    .update(cx, |i, cx| i.set_value(number.to_string(), window, cx))
+                        }))
+                        .children((self.source == 2).then(|| {
+                            v_flex().children(self.prs.iter().map(|p| {
+                                let number = p.number;
+                                Button::new(SharedString::from(format!("pr-{number}")))
+                                    .label(format!("#{} {}", p.number, p.title))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.branch.update(cx, |i, cx| {
+                                            i.set_value(number.to_string(), window, cx)
+                                        })
+                                    }))
                             }))
-                    }))
+                        }))
                 }))
-                .child("Agent")
-                .child(
-                    h_flex().gap_2().children(
-                        [
-                            p::AgentId::Claude,
-                            p::AgentId::Codex,
-                            p::AgentId::Opencode,
-                            p::AgentId::Pi,
-                        ]
-                        .map(|agent| {
-                            let allowed = self
-                                .credentials
-                                .as_ref()
-                                .is_some_and(|s| super::chat_model::has_login(agent, s));
-                            Button::new(SharedString::from(agent.to_string()))
-                                .label(super::chat_model::agent_label(agent))
-                                .disabled(!allowed)
-                                .tooltip(if allowed {
-                                    "Start with this agent"
-                                } else {
-                                    "Add login in Settings"
-                                })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.agent = Some(agent);
-                                    cx.notify();
-                                }))
-                        }),
-                    ),
-                )
                 .child(Textarea::new(&self.prompt))
-                .child(
+                .children(self.models_loading.then(|| div().child("Loading models…")))
+                .child(model_picker)
+                .children((!self.models_loading && self.model.is_none()).then(|| {
+                    Button::new("retry-models")
+                        .label("Retry loading models")
+                        .on_click(cx.listener(|this, _, _, cx| this.load_models(cx)))
+                }))
+                .children(self.workspace_options.then(|| {
                     Button::new("keep-open")
                         .label(if self.keep_open {
                             "Keep open ✓"
@@ -548,12 +634,17 @@ impl Render for Dialogs {
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.keep_open = !this.keep_open;
                             cx.notify();
-                        })),
-                )
+                        }))
+                }))
                 .child(
                     Button::new("create-workspace")
                         .label("Create")
-                        .disabled(self.pending || self.project.is_none())
+                        .disabled(
+                            self.pending
+                                || self.models_loading
+                                || self.model.is_none()
+                                || self.project.is_none(),
+                        )
                         .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),
                 )
                 .into_any_element(),

@@ -128,7 +128,7 @@ The server function does the checks and the D1 insert; the WorkspaceDO does ever
 **In `WorkspaceDO.init`**
 
 1. Write the `workspace` row. Make `preview_key` (32 random bytes from `crypto.getRandomValues`, base64url). For `source.kind = "pr"`, set `pr_number` and `pr_state`, and keep the PR title as `refreshPullRequest` does, from the server function's values, so the workspace shows the PR at once and status polling starts. Set `title` to the first 60 characters of the prompt, or to the slug.
-2. If there is a prompt: create a session (`starting`, agent = input agent or project default), a turn (`queued`, `seq = 1`) and its `user_message` item.
+2. Always create the first session (agent = input agent or project default, selected model in `config_json`). With a prompt, its status is `starting`; create a turn (`queued`, `seq = 1`) and its `user_message` item. Without a prompt, its status is `idle`; do not create a turn or message.
 3. Insert the `create` op. Set state `starting`. Set the alarm to now.
 4. Publish the summary to UserHubDO.
 

@@ -3,6 +3,7 @@ import {
   AvailableCommand,
   Capabilities,
   ConfigOption,
+  ConfigSelectOption,
   ContentBlock,
   PermissionOption,
   PlanEntry,
@@ -138,6 +139,13 @@ export const Session = Schema.Struct({
   steering: Schema.optional(Schema.Boolean),
 });
 export type Session = typeof Session.Type;
+
+export const AgentModelOptions = Schema.Struct({
+  agent: AgentId,
+  options: Schema.Array(ConfigSelectOption),
+  currentValue: Schema.String,
+});
+export type AgentModelOptions = typeof AgentModelOptions.Type;
 
 export const Mention = Schema.Struct({ path: Schema.String });
 export type Mention = typeof Mention.Type;

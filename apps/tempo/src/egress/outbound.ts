@@ -8,6 +8,7 @@ import { decide, type EgressConfig } from "./rules.ts";
 export interface OutboundProps {
   readonly workspaceId: string;
   readonly userId: string;
+  readonly catalog?: boolean;
 }
 
 const CONFIG_TTL_MS = 60_000;
@@ -26,7 +27,9 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     let rule = 10;
     let status = 0;
     try {
-      const config = await this.config(workspaceId);
+      const config: EgressConfig = this.ctx.props.catalog
+        ? { owner: "", repo: "", policy: "allowlist", allowlist: [] }
+        : await this.config(workspaceId);
       const decision = decide(url, request.headers, this.env.APP_HOST, config);
       rule = decision.rule;
       if (decision.action === "browser") {
@@ -58,19 +61,20 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
       log("warn", "egress fetch failed", { workspaceId, host: url.hostname, rule });
       return new Response(`tempo: upstream error for ${url.hostname}`, { status: 502 });
     } finally {
-      this.ctx.waitUntil(
-        workspace
-          .logEgress({
-            ts: started,
-            method: request.method,
-            host: url.hostname,
-            path: url.pathname,
-            status,
-            ms: Date.now() - started,
-            rule,
-          })
-          .catch(() => undefined),
-      );
+      if (!this.ctx.props.catalog)
+        this.ctx.waitUntil(
+          workspace
+            .logEgress({
+              ts: started,
+              method: request.method,
+              host: url.hostname,
+              path: url.pathname,
+              status,
+              ms: Date.now() - started,
+              rule,
+            })
+            .catch(() => undefined),
+        );
     }
   }
 

@@ -58,7 +58,7 @@ const inlineOrToast = (e: unknown, setError: (s: string) => void) => {
 function LoginCard({ row, status }: { row: LoginRow; status: CredentialStatus }) {
   const state = loginState(status, row.provider);
   const remove = useCallMutation("deleteCredential", {
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => toast.success(`${row.label} removed`),
   });
   const lastRefresh = row.provider === "codex" ? status.codex.lastRefresh : null;
@@ -135,7 +135,7 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const save = useCallMutation("setClaudeToken", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setToken("");
       setError(null);
@@ -305,7 +305,7 @@ function CodexUploadForm({ row, replacing }: { row: LoginRow; replacing: boolean
   const fileInput = useRef<HTMLInputElement>(null);
   const save = useCallMutation("setCodexAuth", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setPasted("");
       setFile(null);
@@ -399,7 +399,7 @@ function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const save = useCallMutation("setApiKey", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setKey("");
       setError(null);

@@ -140,7 +140,7 @@ const author = { name: "Owner", email: `${OWNER_GITHUB_ID}+owner@users.noreply.g
 
 const initInput = (
   w: { workspaceId: string; seeded: Seeded; slug: string; branch: string },
-  opts: { prompt?: string; agent?: AgentId } = {},
+  opts: { prompt?: string; agent?: AgentId; model?: string } = {},
 ) => ({
   workspaceId: w.workspaceId,
   projectId: w.seeded.projectId,
@@ -151,6 +151,7 @@ const initInput = (
   source: { kind: "new" as const },
   defaultAgent: "claude" as const,
   agent: opts.agent ?? "claude",
+  model: opts.model,
   prompt: opts.prompt ? { text: opts.prompt } : null,
   author,
   createdAt: Date.now(),
@@ -186,7 +187,7 @@ const insertD1Workspace = async (
  * `container.start`, so the state stays `starting` and queued turns stay queued.
  */
 const seedHeld = async (
-  opts: { prompt?: string; agent?: AgentId; credentials?: boolean } = {},
+  opts: { prompt?: string; agent?: AgentId; model?: string; credentials?: boolean } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
   if (opts.credentials !== false) await seedCredentials(seeded.userId);
@@ -386,12 +387,15 @@ describe("init", { timeout: 30_000 }, () => {
     await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) !== null, 5000, "hub summary");
   });
 
-  it("uses the slug as the title and creates no session, turn or item without a prompt", async () => {
-    const w = await seedHeld();
+  it("creates an idle first chat with the selected model and no turn or item without a prompt", async () => {
+    const w = await seedHeld({ agent: "codex", model: "reported-model" });
     const d = await detail(w.stub);
     expect(d.title).toBe(w.slug);
     expect(d.state).toBe("starting");
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(0);
+    const sessions = await rows(w.stub, "SELECT * FROM sessions");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ agent: "codex", status: "idle" });
+    expect(JSON.parse(sessions[0]!["config_json"])).toEqual({ model: "reported-model" });
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(0);
     expect(await rows(w.stub, "SELECT id FROM items")).toHaveLength(0);
     expect(await opsOf(w.stub, "create")).toHaveLength(1);
@@ -899,7 +903,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("WORKSPACE_ARCHIVED");
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("WORKSPACE_ARCHIVED");
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(0);
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
+    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(2);
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "archive")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("archived");
@@ -1061,7 +1065,7 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     expect(codeOf(await w.stub.createSession({ agent: "claude" }))).toBe("CREDENTIAL_MISSING");
     await env.CREDENTIALS.getByName(w.seeded.userId).putSecret("openrouter.api_key", "sk-or-test");
     expect(codeOf(await w.stub.createSession({ agent: "codex" }))).toBe("CREDENTIAL_MISSING");
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(0);
+    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
     const s = ok(await w.stub.createSession({ agent: "opencode" }));
     expect(s).toMatchObject({ agent: "opencode", status: "starting" });
   });
@@ -2235,7 +2239,15 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
     ]);
     expect(diag.egress).toEqual([]);
     // Sessions: each session's agent, ACP session id, capabilities and live or not
+    const initial = (await rows(w.stub, "SELECT id FROM sessions WHERE id != ?", s.id))[0]!;
     expect(diag.sessions).toEqual([
+      {
+        id: initial["id"],
+        agent: "claude",
+        acpSessionId: null,
+        capabilities: {},
+        live: false,
+      },
       {
         id: s.id,
         agent: "claude",

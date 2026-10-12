@@ -28,6 +28,7 @@ import {
   scheduleReconnect,
   type ConnectHandlers,
 } from "./container.ts";
+import { discoverModels } from "./model-catalog.ts";
 import { WorkspaceCore, type Author } from "./core.ts";
 import { applyTempodEvent } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
@@ -60,6 +61,7 @@ export interface InitInput {
   readonly source: Source;
   readonly defaultAgent: AgentId;
   readonly agent: AgentId;
+  readonly model?: string;
   readonly prompt: { readonly text: string } | null;
   /** For `source.kind = "pr"`: the PR as createWorkspace read it (03, Create a workspace). */
   readonly pr?: { readonly number: number; readonly state: PrState; readonly title: string } | null;
@@ -81,6 +83,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   private lastHeartbeat = 0;
   private lastIdleCheck = 0;
   private lastPrPoll = 0;
+  private modelDiscovery: Promise<FnOutput<"listModels">> | null = null;
   private lastBrowserCheck = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -180,9 +183,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
           .run();
         core.setKv("author", input.author);
         if (input.pr) core.setKv("prTitle", input.pr.title);
-        if (input.prompt) {
+        {
           const sessionId = newId();
-          const turnId = newId();
           core.db
             .insert(sessions)
             .values({
@@ -190,9 +192,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               agent: input.agent,
               title: "",
               acpSessionId: null,
-              status: "starting",
+              status: input.prompt ? "starting" : "idle",
               modeId: null,
-              configJson: "{}",
+              configJson: json.config.write(input.model ? { model: input.model } : {}),
               modesJson: "[]",
               configOptionsJson: "[]",
               commandsJson: "[]",
@@ -207,31 +209,34 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               closedAt: null,
             })
             .run();
-          core.db
-            .insert(turns)
-            .values({
-              id: turnId,
-              sessionId,
-              seq: 1,
-              queuePos: 1,
-              status: "queued",
-              promptJson: json.prompt.write({
-                text: input.prompt.text,
-                mentions: [],
-                attachmentIds: [],
-                reviewCommentIds: [],
-              }),
-              stopReason: null,
-              errorCode: null,
-              errorDetail: null,
-              checkpointId: null,
-              reverted: 0,
-              queuedAt: now,
-              startedAt: null,
-              endedAt: null,
-            })
-            .run();
-          first.turn = { sessionId, turnId };
+          if (input.prompt) {
+            const turnId = newId();
+            core.db
+              .insert(turns)
+              .values({
+                id: turnId,
+                sessionId,
+                seq: 1,
+                queuePos: 1,
+                status: "queued",
+                promptJson: json.prompt.write({
+                  text: input.prompt.text,
+                  mentions: [],
+                  attachmentIds: [],
+                  reviewCommentIds: [],
+                }),
+                stopReason: null,
+                errorCode: null,
+                errorDetail: null,
+                checkpointId: null,
+                reverted: 0,
+                queuedAt: now,
+                startedAt: null,
+                endedAt: null,
+              })
+              .run();
+            first.turn = { sessionId, turnId };
+          }
         }
       });
       const firstTurn = first.turn;
@@ -250,6 +255,17 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       core.setState("starting");
       await this.armAlarm();
       return core.summary();
+    });
+  }
+
+  async discoverModels(userId: string): Promise<Result<FnOutput<"listModels">>> {
+    return capture(async () => {
+      if (this.ctx.id.name !== `models:${userId}`) throw new TempoError("NOT_FOUND");
+      if (this.modelDiscovery) await this.modelDiscovery;
+      this.modelDiscovery ??= discoverModels(this.core, userId).finally(() => {
+        this.modelDiscovery = null;
+      });
+      return this.modelDiscovery;
     });
   }
 
@@ -406,7 +422,16 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
   override async alarm(): Promise<void> {
     const core = this.core;
-    if (!core.wsOrNull()) return;
+    if (!core.wsOrNull()) {
+      if (core.kv("catalogUserId")) {
+        core.tempod?.close();
+        core.tempod = null;
+        if (core.container?.running) await core.container.destroy();
+        await core.credentials().dropCodexLease(core.workspaceId);
+        core.setKv("catalogToken", null);
+      }
+      return;
+    }
     await this.runner.runDue();
     const now = Date.now();
     if (this.containerExpected() && now - this.lastHeartbeat >= HEARTBEAT_MS - 500) {
