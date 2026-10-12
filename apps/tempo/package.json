@@ -11,7 +11,8 @@
     "test": "vitest run && vitest run -c vitest.ui.config.ts && vitest run -c vitest.components.config.ts",
     "cf-typegen": "wrangler types --include-env=false ./worker-runtime.d.ts",
     "db:generate": "drizzle-kit generate",
-    "auth:generate": "auth generate --config scripts/auth.cli.ts --output src/db/auth-schema.ts -y"
+    "auth:generate": "auth generate --config scripts/auth.cli.ts --output src/db/auth-schema.ts -y",
+    "dev:web-test": "vite --config vite.web-test.config.ts"
   },
   "dependencies": {
     "@cloudflare/sandbox": "1.0.0",

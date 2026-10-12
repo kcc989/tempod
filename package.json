@@ -26,7 +26,8 @@
     "mac:dev": "cargo run -p tempo-mac",
     "mac:test": "cargo test --workspace",
     "mac:release": "bash scripts/mac/release.sh",
-    "test:tempod:container": "bun scripts/test-tempod-container.ts"
+    "test:tempod:container": "bun scripts/test-tempod-container.ts",
+    "test:web": "bun run --cwd tests/e2e test:web"
   },
   "devDependencies": {
     "@effect/platform-bun": "4.0.3",

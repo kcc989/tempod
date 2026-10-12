@@ -255,14 +255,16 @@ function useAnnouncement(
   backlogDone: boolean,
 ): { key: string; text: string } {
   const seen = useRef<Set<string> | null>(null);
+  const initialized = useRef(false);
   const [text, setText] = useState({ key: "", text: "" });
   useEffect(() => {
-    if (seen.current === null || !backlogDone) {
+    if (!backlogDone || !initialized.current) {
       seen.current ??= new Set();
       messagesToAnnounce(seen.current, order, items);
+      initialized.current = backlogDone;
       return;
     }
-    const ids = messagesToAnnounce(seen.current, order, items);
+    const ids = messagesToAnnounce(seen.current!, order, items);
     if (ids.length > 0)
       setText({
         key: ids.join(":"),
