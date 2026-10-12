@@ -1,7 +1,7 @@
 use crate::stores::workspace::WorkspaceStore;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Disableable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString,
     Styled as _, Subscription, Task, Window, div, uniform_list,
@@ -468,6 +468,8 @@ impl Render for ProcessPanel {
         } else {
             v_flex()
                 .size_full()
+                .p_3()
+                .gap_2()
                 .children((self.tab == 0).then(|| {
                     div().child(format!(
                         "Setup: {}",
@@ -482,6 +484,7 @@ impl Render for ProcessPanel {
                         .gap_2()
                         .child(
                             Button::new("rerun-setup")
+                                .small()
                                 .label("Rerun setup")
                                 .disabled(self.pending)
                                 .on_click(cx.listener(|this, _, _, cx| this.rerun_setup(cx))),
@@ -492,6 +495,7 @@ impl Render for ProcessPanel {
                                 .is_some_and(|w| w.setup_status == p::SetupStatus::Failed)
                                 .then(|| {
                                     Button::new("continue-setup")
+                                        .small()
                                         .label("Continue anyway")
                                         .disabled(self.pending)
                                         .on_click(
@@ -514,6 +518,7 @@ impl Render for ProcessPanel {
                         }))
                         .child(
                             Button::new("toggle-script")
+                                .small()
                                 .label("Start / Stop")
                                 .disabled(self.pending)
                                 .on_click(cx.listener(|this, _, _, cx| this.toggle_run(cx))),

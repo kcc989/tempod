@@ -1180,6 +1180,7 @@ impl Render for ReviewPanel {
                         .p_2()
                         .child(
                             Button::new("scope")
+                                .small()
                                 .label(if self.scope == p::DiffScope::Branch {
                                     "Branch"
                                 } else {
@@ -1193,6 +1194,7 @@ impl Render for ReviewPanel {
                         )
                         .child(
                             Button::new("group")
+                                .small()
                                 .label("Group by folder")
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.grouped = !this.grouped;
@@ -1201,6 +1203,7 @@ impl Render for ReviewPanel {
                         )
                         .child(
                             Button::new("refresh-changes")
+                                .small()
                                 .label("Refresh")
                                 .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
                         ),
@@ -1208,7 +1211,16 @@ impl Render for ReviewPanel {
                 .child(if self.loading {
                     super::skeleton_rows(4).into_any_element()
                 } else if self.files.is_empty() {
-                    div().p_3().child("No changes.").into_any_element()
+                    v_flex()
+                        .flex_1()
+                        .items_center()
+                        .justify_center()
+                        .gap_2()
+                        .p_3()
+                        .text_color(color(Token::MutedForeground, cx))
+                        .child(Icon::new(IconName::Check).small())
+                        .child("No changes.")
+                        .into_any_element()
                 } else {
                     div()
                         .id("changes-list")
@@ -1276,12 +1288,21 @@ impl Render for ReviewPanel {
                         )
                         .into_any_element()
                 })
-                .child(Input::new(&self.commit))
                 .child(
-                    Button::new("commit-push")
-                        .label("Commit and push")
-                        .disabled(self.pending)
-                        .on_click(cx.listener(|this, _, _, cx| this.commit(cx))),
+                    v_flex()
+                        .p_3()
+                        .gap_2()
+                        .border_t_1()
+                        .border_color(color(Token::Border, cx))
+                        .child(Input::new(&self.commit))
+                        .child(
+                            Button::new("commit-push")
+                                .small()
+                                .w_full()
+                                .label("Commit and push")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(|this, _, _, cx| this.commit(cx))),
+                        ),
                 )
                 .into_any_element(),
             1 => v_flex()

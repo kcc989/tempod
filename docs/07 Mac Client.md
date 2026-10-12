@@ -142,6 +142,8 @@ The Mac stores apply the same messages with the same rules as the web stores (02
 
 ## Window layout and components
 
+The Mac shell uses a 13 pt base size, matching the dense web shell. Sidebar actions, the Projects header, the scrolling project list and the fixed History/Settings footer follow 04, including empty, loading and error states. The sidebar uses the theme sidebar surface; project headers and workspace rows have distinct type weight and spacing. With no workspace selected, the center offers New workspace and Add project. Review controls are compact, the empty changes list fills the available space, and the commit form sits in a padded, bordered footer. Process controls use consistent padding and spacing.
+
 The main window has the five regions of 04. Each region uses the GPUI Kit components below. Where no component fits, Tempo builds its own, marked **custom**.
 
 | Region (04) | GPUI Kit components |

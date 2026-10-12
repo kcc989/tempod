@@ -244,7 +244,7 @@ fn header(cx: &App) -> impl IntoElement {
         crate::storage::SortMode::Created => "Created",
     };
     h_flex()
-        .h(px(40.))
+        .h(px(36.))
         .pl_3()
         .pr_2()
         .gap_1()
@@ -254,7 +254,9 @@ fn header(cx: &App) -> impl IntoElement {
             div()
                 .flex_1()
                 .font_weight(gpui_kit::FontWeight::MEDIUM)
-                .child("Workspaces"),
+                .text_size(px(11.))
+                .text_color(color(Token::MutedForeground, cx))
+                .child("Projects"),
         )
         .child(
             Button::new("sidebar-sort")
@@ -285,7 +287,7 @@ fn header(cx: &App) -> impl IntoElement {
             Button::new("add-project-header")
                 .ghost()
                 .small()
-                .icon(IconName::Plus)
+                .icon(IconName::Folder)
                 .accessibility_label("Add project")
                 .tooltip("Add project")
                 .on_click(|_, window, cx| {
@@ -294,74 +296,147 @@ fn header(cx: &App) -> impl IntoElement {
         )
 }
 
-impl RenderOnce for WorkspaceSidebar {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        if self.sections.is_empty() {
-            return v_flex()
-                .size_full()
-                .child(header(cx))
+fn navigation(cx: &App) -> impl IntoElement {
+    v_flex()
+        .flex_none()
+        .p_2()
+        .gap_1()
+        .border_b_1()
+        .border_color(color(Token::Border, cx))
+        .child(
+            Button::new("sidebar-new-workspace")
+                .ghost()
+                .small()
+                .w_full()
+                .accessibility_label("New workspace")
                 .child(
-                    v_flex()
-                        .flex_1()
-                        .items_center()
-                        .justify_center()
-                        .gap_3()
-                        .text_color(color(Token::MutedForeground, cx))
-                        .child("Link a repo to start.")
+                    h_flex()
+                        .w_full()
+                        .gap_2()
+                        .child(Icon::new(IconName::Plus).small())
+                        .child("New workspace")
                         .child(
-                            Button::new("add-project")
-                                .primary()
-                                .label("Add project")
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(Box::new(crate::actions::AddProject), cx)
-                                }),
+                            div()
+                                .ml_auto()
+                                .text_xs()
+                                .text_color(color(Token::MutedForeground, cx))
+                                .child("⌘N"),
                         ),
                 )
-                .into_any_element();
-        }
-        let groups = self.sections.into_iter().map(|section| {
-            let select = self.on_select.clone();
-            let active = self.active.clone();
-            SidebarRows(Rc::new(move |_: &mut Window, cx: &mut App| {
-                render_section(&section, active.as_ref(), select.clone(), cx)
-            }))
-        });
-        v_flex()
-            .size_full()
-            .child(header(cx))
-            .child(
-                Sidebar::new("sidebar")
-                    .collapsible(false)
-                    .w_full()
-                    .flex_1()
-                    .children(groups)
-                    .footer(
-                        h_flex()
-                            .w_full()
-                            .justify_between()
-                            .child(Button::new("history").ghost().label("History").on_click(
-                                |_, window, cx| {
-                                    window
-                                        .dispatch_action(Box::new(crate::actions::ShowHistory), cx)
-                                },
-                            ))
-                            .child(
-                                Button::new("sidebar-settings")
-                                    .ghost()
-                                    .small()
-                                    .icon(IconName::Settings)
-                                    .accessibility_label("Settings")
-                                    .tooltip("Settings")
-                                    .on_click(|_, window, cx| {
-                                        window.dispatch_action(
-                                            Box::new(crate::actions::OpenSettings),
-                                            cx,
-                                        )
-                                    }),
-                            ),
-                    ),
-            )
-            .into_any_element()
+                .tooltip("New workspace (⌘N)")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::NewWorkspace), cx)
+                }),
+        )
+        .child(
+            Button::new("sidebar-search")
+                .ghost()
+                .small()
+                .w_full()
+                .accessibility_label("Search workspaces")
+                .child(
+                    h_flex()
+                        .w_full()
+                        .gap_2()
+                        .child(Icon::new(IconName::Search).small())
+                        .child("Search workspaces")
+                        .child(
+                            div()
+                                .ml_auto()
+                                .text_xs()
+                                .text_color(color(Token::MutedForeground, cx))
+                                .child("⌘K"),
+                        ),
+                )
+                .tooltip("Search workspaces and actions (⌘K)")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::CommandPalette), cx)
+                }),
+        )
+}
+
+fn footer(cx: &App) -> impl IntoElement {
+    h_flex()
+        .flex_none()
+        .w_full()
+        .px_2()
+        .py_2()
+        .justify_between()
+        .border_t_1()
+        .border_color(color(Token::Border, cx))
+        .child(
+            Button::new("history")
+                .ghost()
+                .small()
+                .label("History")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::ShowHistory), cx)
+                }),
+        )
+        .child(
+            Button::new("sidebar-settings")
+                .ghost()
+                .small()
+                .icon(IconName::Settings)
+                .accessibility_label("Settings")
+                .tooltip("Settings (⌘,)")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::OpenSettings), cx)
+                }),
+        )
+}
+
+pub fn shell(content: impl IntoElement, cx: &App) -> AnyElement {
+    v_flex()
+        .size_full()
+        .min_h_0()
+        .text_size(px(13.))
+        .bg(color(Token::Sidebar, cx))
+        .border_r_1()
+        .border_color(color(Token::Border, cx))
+        .child(navigation(cx))
+        .child(header(cx))
+        .child(div().flex_1().min_h_0().child(content))
+        .child(footer(cx))
+        .into_any_element()
+}
+
+impl RenderOnce for WorkspaceSidebar {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let content = if self.sections.is_empty() {
+            v_flex()
+                .size_full()
+                .p_3()
+                .items_center()
+                .justify_center()
+                .gap_3()
+                .text_color(color(Token::MutedForeground, cx))
+                .child("Link a repo to start.")
+                .child(
+                    Button::new("add-project")
+                        .primary()
+                        .label("Add project")
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(Box::new(crate::actions::AddProject), cx)
+                        }),
+                )
+                .into_any_element()
+        } else {
+            let groups = self.sections.into_iter().map(|section| {
+                let select = self.on_select.clone();
+                let active = self.active.clone();
+                SidebarRows(Rc::new(move |_: &mut Window, cx: &mut App| {
+                    render_section(&section, active.as_ref(), select.clone(), cx)
+                }))
+            });
+            Sidebar::new("sidebar")
+                .collapsible(false)
+                .w_full()
+                .h_full()
+                .children(groups)
+                .into_any_element()
+        };
+        shell(content, cx)
     }
 }
 
@@ -377,7 +452,7 @@ fn render_section(
     let key = section.key.clone();
     let label = section.label.clone();
     let header = h_flex()
-        .h(px(28.))
+        .h(px(32.))
         .gap_1()
         .child(
             h_flex()
@@ -391,8 +466,11 @@ fn render_section(
                 .min_w_0()
                 .gap_1()
                 .px_1()
-                .text_xs()
+                .text_size(px(12.))
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
                 .text_color(muted)
+                .rounded_md()
+                .hover(move |style| style.bg(muted.opacity(0.08)))
                 .child(
                     Icon::new(if collapsed {
                         IconName::ChevronRight
@@ -401,8 +479,11 @@ fn render_section(
                     })
                     .xsmall(),
                 )
-                .child(div().truncate().child(label.clone()))
-                .when(collapsed && !section.rows.is_empty(), |this| {
+                .when(section.project_id.is_some(), |this| {
+                    this.child(Icon::new(IconName::Folder).small())
+                })
+                .child(div().flex_1().min_w_0().truncate().child(label.clone()))
+                .when(!section.rows.is_empty(), |this| {
                     this.child(section.rows.len().to_string())
                 })
                 .on_click(move |_, _, cx| {
@@ -460,7 +541,12 @@ fn render_section(
             )
             .into_any_element()
     };
-    v_flex().child(header).child(body).into_any_element()
+    v_flex()
+        .gap_1()
+        .pb_2()
+        .child(header)
+        .child(body)
+        .into_any_element()
 }
 
 /// The status icon of 04's Indicators table, with its tooltip as the accessible name.
@@ -646,14 +732,15 @@ fn render_row(
                 .join(" · "),
         )
         .px_2()
-        .py_1()
+        .py_1p5()
         .w_full()
         .rounded_md()
+        .hover(move |style| style.bg(muted.opacity(0.08)))
         .child(line)
         .child(
             div()
                 .pl(px(20.))
-                .text_xs()
+                .text_size(px(11.))
                 .truncate()
                 .text_color(muted)
                 .child(row.detail.clone()),
