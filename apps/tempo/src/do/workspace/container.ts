@@ -62,6 +62,7 @@ export const startContainer = async (core: WorkspaceCore, snapshot: SnapshotRow 
   core.updateWs({ tempodToken: token });
   const props = { workspaceId: row.workspaceId, userId: row.userId };
   const sleepAfterMs = core.settings().environment.sleep_after_idle_minutes * 60_000;
+  core.tempodStopping = false;
   container.start({
     ...(snapshot
       ? { containerSnapshot: { id: snapshot.id } }
@@ -124,6 +125,21 @@ export const destroyContainer = async (core: WorkspaceCore, reason: string): Pro
   core.updateWs({ tempodToken: null });
   core.liveSessions.clear();
   core.closingTempod = false;
+  dropCodexLease(core);
+};
+
+/** 01 Codex auth.json sync: the lease lasts while the container runs; the next Codex session start adds it again. */
+export const dropCodexLease = (core: WorkspaceCore): void => {
+  if (!core.kv<boolean>("codexLease")) return;
+  core.setKv("codexLease", undefined);
+  core.ctx.waitUntil(
+    core
+      .credentials()
+      .dropCodexLease(core.workspaceId)
+      .catch((e) =>
+        log("warn", "codex lease drop failed", { workspaceId: core.workspaceId, error: errorText(e) }),
+      ),
+  );
 };
 
 export interface ConnectHandlers {

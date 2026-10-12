@@ -14,6 +14,7 @@ import {
   seedProject,
   waitFor,
   type FakeContainer,
+  type Internals,
   type Seeded,
 } from "./fakes.ts";
 
@@ -174,6 +175,8 @@ const seedWs = async (
     source?: Source;
     branch?: string;
     prepare?: (tempod: FakeTempod, container: FakeContainer) => void;
+    /** Runs inside the DO before init, with its internals. */
+    inside?: (x: Internals) => void;
   } = {},
 ): Promise<Ws> => {
   const seeded = await seedProject();
@@ -195,6 +198,7 @@ const seedWs = async (
   opts.prepare?.(tempod, container);
   const states: string[] = [];
   await runInDurableObject(stub, (i: WorkspaceDO) => {
+    opts.inside?.(internals(i));
     const core = internals(i).core;
     const original = core.setState.bind(core);
     core.setState = (next, error) => {
@@ -492,6 +496,42 @@ describe("create op", { timeout: 60_000 }, () => {
       source: { kind: "branch" },
       branch: "feature/x",
     });
+  });
+
+  it("a Retry of a create that never finished clones like the create: a branch source gets pushed and last_pushed_sha", async () => {
+    const w = await seedWs({
+      source: { kind: "branch" },
+      branch: "feature/retry",
+      prepare: (t) => t.fail("repo.clone", "INTERNAL", "fatal: unable to access"),
+    });
+    await driveOp(w.stub, "create", "failed");
+    expect(await wsRow(w.stub)).toMatchObject({ state: "error", error_code: "CLONE_FAILED", pushed: 0 });
+    w.tempod.failures.delete("repo.clone");
+    w.tempod.on("repo.clone", () => ({ headSha: "a".repeat(40), remoteHeadSha: "7".repeat(40) }));
+    // 03 Transitions: the UI's Retry is a wake. The workspace was never created, so 03 repo.clone still applies:
+    // the create checkout per source, and "For branch and pr, set pushed = 1 and last_pushed_sha to the remote head."
+    expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
+    await driveToState(w.stub, "ready");
+    await driveOp(w.stub, "wake", "done");
+    expect(w.tempod.requestsOf("repo.clone").at(-1)).toMatchObject({
+      mode: "create",
+      source: { kind: "branch" },
+      branch: "feature/retry",
+    });
+    expect(await wsRow(w.stub)).toMatchObject({
+      pushed: 1,
+      last_pushed_sha: "7".repeat(40),
+      error_code: null,
+    });
+
+    // Once a start has completed, a fresh-disk wake tracks the branch (IMPLEMENTATION_NOTES, repo.clone mode).
+    expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("OK");
+    await driveToState(w.stub, "sleeping");
+    await exec(w.stub, "DELETE FROM snapshots");
+    expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
+    await driveToState(w.stub, "ready");
+    expect(w.tempod.requestsOf("repo.clone").at(-1)).toMatchObject({ mode: "wake" });
+    expect((await wsRow(w.stub))["pushed"]).toBe(1);
   });
 
   it("retries a transient repo.clone error with backoff, then fails for good with CLONE_FAILED after 3 attempts", async () => {
@@ -1294,6 +1334,72 @@ describe("archive and restore ops", { timeout: 60_000 }, () => {
     );
   });
 
+  it("archive while a turn is starting aborts the start before its prompt and deletes the queued turn", async () => {
+    // session.start may take up to 120 s (02); turns.cancel must not fail the archive while it runs.
+    const w = await readyWs({
+      prompt: "Slow agent",
+      credentials: true,
+      prepare: (t) => t.on("session.start", () => new Promise(() => undefined)),
+    });
+    await waitFor(() => w.tempod.requestsOf("session.start").length === 1, 5000, "session.start sent");
+    const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+    expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
+    await driveToState(w.stub, "archived");
+    // 03 Archive 1: "turns.cancel: cancel the running turn and delete queued turns."
+    expect((await opOf(w.stub, "archive"))!["status"]).toBe("done");
+    expect(await turnOf(w.stub, turnId)).toBeUndefined();
+    expect(await rows(w.stub, "SELECT id FROM items WHERE turn_id = ?", turnId)).toHaveLength(0);
+    expect(w.tempod.requestsOf("session.prompt")).toHaveLength(0);
+    // 03 Transitions: the starting turn never moves the workspace on from archiving.
+    expect(w.states.slice(w.states.indexOf("archiving"))).toEqual(["archiving", "archived"]);
+  });
+
+  it("a prompt accepted after archiving began is cancelled at once and never moves the workspace to working", async () => {
+    let inner: Internals | null = null;
+    const w = await seedWs({
+      prompt: "Racing the archive",
+      credentials: true,
+      inside: (x) => (inner = x),
+      prepare: (t) =>
+        t.on("session.prompt", () => {
+          // archiveWorkspace while session.prompt is in flight.
+          inner!.core.setState("archiving");
+          inner!.runner.insert("archive");
+          return { accepted: true };
+        }),
+    });
+    await driveToState(w.stub, "archived");
+    const p = w.tempod.requestsOf("session.prompt")[0];
+    // The turn never counts as running: it is cancelled where it would have started.
+    expect(await turnOf(w.stub, p.turnId)).toMatchObject({ status: "cancelled", started_at: null });
+    expect(w.tempod.requestsOf("session.cancel")).toContainEqual({
+      sessionId: p.sessionId,
+      turnId: p.turnId,
+    });
+    expect(w.states).not.toContain("working");
+    expect(w.states).not.toContain("error");
+    expect((await opOf(w.stub, "archive"))!["status"]).toBe("done");
+  });
+
+  it("deleting queued turns during an archive raises items_rev (02 Rules)", async () => {
+    const w = await asleep();
+    await insertSession(w.stub, "s-archive");
+    await insertTurn(w.stub, "t-archive", "s-archive", 1, "queued");
+    const before = (await wsRow(w.stub))["items_rev"];
+    await exec(
+      w.stub,
+      "INSERT INTO items (id, session_id, turn_id, kind, status, content_json, rev, created_at, updated_at) VALUES ('i-archive', 's-archive', 't-archive', 'user_message', 'completed', ?, ?, 1, 1)",
+      JSON.stringify({ text: "queued", mentions: [], attachments: [], reviewCommentIds: [] }),
+      before + 1,
+    );
+    await exec(w.stub, "UPDATE workspace SET items_rev = ?", before + 1);
+    expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
+    await driveToState(w.stub, "archived");
+    expect(await turnOf(w.stub, "t-archive")).toBeUndefined();
+    expect(await rows(w.stub, "SELECT id FROM items WHERE turn_id = 't-archive'")).toHaveLength(0);
+    expect((await wsRow(w.stub))["items_rev"]).toBe(before + 2);
+  });
+
   it("archive from ready runs the archive script; a non-zero exit is a warning notice and the archive goes on", async () => {
     const w = await readyWs({ effective: settingsWith({ scripts: { archive: "./bin/cleanup" } }) });
     const sessionId = newId();
@@ -1989,6 +2095,82 @@ describe("tempod reconnect during a create or wake op", { timeout: 60_000 }, () 
   });
 });
 
+describe("container stops during a create or wake op", { timeout: 60_000 }, () => {
+  /** repo.clone stops the container on its first call, the way an out-of-memory kill would. */
+  const stopOnFirstClone = (remoteHeadSha: string | null) => (t: FakeTempod, c: FakeContainer) => {
+    let clones = 0;
+    t.on("repo.clone", () => {
+      clones++;
+      if (clones === 1) {
+        c.running = false;
+        t.close(1011);
+        return new Promise(() => undefined);
+      }
+      return { headSha: "a".repeat(40), remoteHeadSha };
+    });
+  };
+
+  it("a stop during repo.clone cancels the create and a wake restarts it, still cloning like the create", async () => {
+    const w = await seedWs({
+      source: { kind: "branch" },
+      branch: "feature/stop",
+      prepare: stopOnFirstClone("7".repeat(40)),
+    });
+    await driveToState(w.stub, "ready");
+    await driveOp(w.stub, "wake", "done");
+    // 03 Transitions: "ready, working, setting_up | Container stopped without Tempo asking | starting | wake"
+    expect((await opOf(w.stub, "create"))!["status"]).toBe("cancelled");
+    expect(w.states).toEqual(["starting", "setting_up", "starting", "setting_up", "ready"]);
+    expect(w.container.starts).toHaveLength(2);
+    // 03 Unplanned restarts: tracked in workspace.auto_restarts_json.
+    expect(JSON.parse((await wsRow(w.stub))["auto_restarts_json"])).toHaveLength(1);
+    expect(w.tempod.requestsOf("repo.clone").map((r) => r.mode)).toEqual(["create", "create"]);
+    expect(await wsRow(w.stub)).toMatchObject({
+      pushed: 1,
+      last_pushed_sha: "7".repeat(40),
+      error_code: null,
+    });
+  });
+
+  it("the 4th unplanned stop within an hour during a create step goes to error / CONTAINER_START_FAILED", async () => {
+    const now = Date.now();
+    const w = await seedWs({ prepare: stopOnFirstClone(null) });
+    await exec(
+      w.stub,
+      "UPDATE workspace SET auto_restarts_json = ?",
+      JSON.stringify([now - 50 * MIN, now - 30 * MIN, now - 10 * MIN]),
+    );
+    await driveToState(w.stub, "error");
+    // 03 Unplanned restarts: "At most 3 in any 60 minutes ... The 4th goes to error with CONTAINER_START_FAILED."
+    expect((await wsRow(w.stub))["error_code"]).toBe("CONTAINER_START_FAILED");
+    expect(await opsOf(w.stub, "wake")).toHaveLength(0);
+    expect(w.container.starts).toHaveLength(1);
+  });
+
+  it("the heartbeat sees a stop while a create step waits for its retry, cancels the op and wakes", async () => {
+    const w = await seedWs({ prepare: (t) => t.fail("settings.read", "INTERNAL", "busy") });
+    await drive(
+      w.stub,
+      async () => {
+        const op = await opOf(w.stub, "create");
+        return op?.["step"] === "settings.read" && op["attempt"] >= 1;
+      },
+      "settings.read in backoff",
+      { fast: false },
+    );
+    w.container.running = false;
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      await (i as unknown as { heartbeat(): Promise<void> }).heartbeat();
+    });
+    expect((await opOf(w.stub, "create"))!["status"]).toBe("cancelled");
+    expect(await stateOf(w.stub)).toBe("starting");
+    expect(await opsOf(w.stub, "wake")).toHaveLength(1);
+    w.tempod.failures.delete("settings.read");
+    await driveToState(w.stub, "ready");
+    expect(w.container.starts).toHaveLength(2);
+  });
+});
+
 describe("housekeeping op", { timeout: 60_000 }, () => {
   it("prunes events older than 7 days, trims egress_log to the newest 10,000 rows and schedules the next run", async () => {
     const w = await readyWs();
@@ -2212,6 +2394,47 @@ describe("unplanned container stop", { timeout: 60_000 }, () => {
     expect(row["state"]).toBe("starting");
     await driveToState(w.stub, "setting_up", "ready");
     expect(w.container.starts).toHaveLength(2);
+  });
+
+  it("after a SIGTERM and a restart, a later interrupted turn ends normally and the state returns to ready", async () => {
+    const w = await workingWs();
+    await emit(w, { kind: "tempod.stopping", reason: "sigterm" });
+    await waitFor(() => w.tempod.requestsOf("shutdown").length === 1, 5000, "shutdown");
+    expect(await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.tempodStopping)).toBe(true);
+    // 03 Failure handling: "When the container stops, the row above applies."
+    w.container.running = false;
+    await heartbeat(w);
+    await driveToState(w.stub, "ready");
+    await driveOp(w.stub, "wake", "done");
+    expect(await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.tempodStopping)).toBe(
+      false,
+    );
+    const turn = ok(
+      await w.stub.sendPrompt({
+        sessionId: w.sessionId,
+        text: "Again",
+        mentions: [],
+        attachmentIds: [],
+        reviewCommentIds: [],
+      }),
+    ) as { id: string };
+    await waitFor(
+      async () => (await turnOf(w.stub, turn.id))?.["status"] === "running",
+      5000,
+      "turn running",
+    );
+    const checkpoints = w.tempod.requestsOf("git.checkpoint").length;
+    await emit(w, {
+      kind: "turn.ended",
+      sessionId: w.sessionId,
+      turnId: turn.id,
+      stopReason: "cancelled",
+      interrupted: true,
+    });
+    // 03 turn.ended: checkpoint, then the queue runner; with nothing queued the state goes back to ready.
+    await waitFor(async () => (await stateOf(w.stub)) === "ready", 5000, "ready");
+    expect((await turnOf(w.stub, turn.id))!["status"]).toBe("interrupted");
+    expect(w.tempod.requestsOf("git.checkpoint").length).toBe(checkpoints + 1);
   });
 
   it("the 4th unplanned restart within an hour goes to error / CONTAINER_START_FAILED instead of waking", async () => {

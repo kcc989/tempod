@@ -241,6 +241,11 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
       "ALTER TABLE turns ADD COLUMN steering_pending INTEGER NOT NULL DEFAULT 0 CHECK (steering_pending IN (0, 1))",
     ],
   },
+  {
+    tag: "0002_turn_usage",
+    when: 1791835200000,
+    statements: ["ALTER TABLE turns ADD COLUMN usage_json TEXT"],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

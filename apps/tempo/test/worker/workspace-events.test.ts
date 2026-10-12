@@ -835,6 +835,45 @@ describe("turn.ended", () => {
   );
 
   it(
+    "usage from the prompt response is stored on the turn and sent on the wire; bad counts are dropped",
+    async () => {
+      // 02 turns.usage_json and Turn.usage; 04 Transcript: "if the agent sends usage, tokens".
+      const ctx = await runningTurn();
+      await endTurn(ctx, ctx.sessionId, ctx.turnId, {
+        stopReason: "end_turn",
+        usage: { totalTokens: 1500, inputTokens: 1200, outputTokens: 300, thoughtTokens: -5 },
+      });
+      const row = (await turnRow(ctx.stub, ctx.turnId))!;
+      expect(JSON.parse(String(row.usage_json))).toEqual({
+        totalTokens: 1500,
+        inputTokens: 1200,
+        outputTokens: 300,
+      });
+      const wire = await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
+        const core = internals(i).core;
+        return core.turnToWire(core.turnRow(ctx.turnId));
+      });
+      expect(wire.usage).toEqual({ totalTokens: 1500, inputTokens: 1200, outputTokens: 300 });
+    },
+    T,
+  );
+
+  it(
+    "a turn without usage has no usage field",
+    async () => {
+      const ctx = await runningTurn();
+      await endTurn(ctx, ctx.sessionId, ctx.turnId);
+      const wire = await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
+        const core = internals(i).core;
+        return core.turnToWire(core.turnRow(ctx.turnId));
+      });
+      expect("usage" in wire).toBe(false);
+      expect((await turnRow(ctx.stub, ctx.turnId))!.usage_json).toBeNull();
+    },
+    T,
+  );
+
+  it(
     "interrupted:true wins over the stop reason → interrupted, open items cancelled",
     async () => {
       // 03 turn.ended table: "turn.ended carries interrupted: true (check this first) → interrupted".

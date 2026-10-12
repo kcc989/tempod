@@ -16,6 +16,7 @@ import {
   type WorkspaceFnName,
 } from "@tempo/protocol";
 import { workspaces } from "../../db/d1.ts";
+import { EMPTY_PROMPT, json, readItemContent } from "../../db/json.ts";
 import {
   attachments,
   checkpoints,
@@ -233,6 +234,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     rotatePreviewToken: async () => {
       const previewToken = newPreviewToken();
       core.updateWs({ previewToken });
+      // 05 Preview access: old links stop working at once, open preview sockets included.
+      core.closePreviews(1008, "preview token rotated");
       core.broadcastDetailSoon();
       return { previewToken };
     },
@@ -317,7 +320,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             id: s.id,
             agent: s.agent as AgentId,
             acpSessionId: s.acpSessionId,
-            capabilities: parseJson(s.capabilitiesJson, {}),
+            capabilities: json.capabilities.read(s.capabilitiesJson, {}),
             live: core.liveSessions.has(s.id),
           })),
       };
@@ -340,7 +343,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           acpSessionId: null,
           status: "starting",
           modeId: modeId ?? null,
-          configJson: JSON.stringify(model ? { model } : {}),
+          configJson: json.config.write(model ? { model } : {}),
           modesJson: "[]",
           configOptionsJson: "[]",
           commandsJson: "[]",
@@ -413,6 +416,15 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         : [];
       if (atts.length !== new Set(attachmentIds).size)
         throw new TempoError("VALIDATION_FAILED", undefined, "unknown attachment");
+      const drafts = reviewCommentIds.length
+        ? core.db
+            .select({ id: reviewComments.id })
+            .from(reviewComments)
+            .where(and(inArray(reviewComments.id, [...reviewCommentIds]), eq(reviewComments.status, "draft")))
+            .all()
+        : [];
+      if (drafts.length !== new Set(reviewCommentIds).size)
+        throw new TempoError("VALIDATION_FAILED", undefined, "unknown or already sent review comment");
       const now = Date.now();
       const turnId = newId();
       const prompt = {
@@ -430,7 +442,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             seq: core.nextTurnSeq(),
             queuePos: core.nextQueuePos(),
             status: "queued",
-            promptJson: JSON.stringify(prompt),
+            promptJson: json.prompt.write(prompt),
             stopReason: null,
             errorCode: null,
             errorDetail: null,
@@ -500,33 +512,28 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     editQueuedTurn: async ({ turnId, text }): Promise<Turn> => {
       const turn = core.turnRow(turnId);
       if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
-      const prompt = { ...parseJson<Record<string, unknown>>(turn.promptJson, {}), text };
-      const updated = core.updateTurn(turnId, { promptJson: JSON.stringify(prompt) });
+      const prompt = { ...json.prompt.read(turn.promptJson, EMPTY_PROMPT), text };
+      const updated = core.updateTurn(turnId, { promptJson: json.prompt.write(prompt) });
       const item = core.db
         .select()
         .from(items)
         .where(and(eq(items.turnId, turnId), eq(items.kind, "user_message")))
         .get();
       if (item)
-        core.updateItem(item.id, {
-          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), text },
-        });
+        core.updateItem(item.id, { content: { ...readItemContent(item.kind, item.contentJson), text } });
       return updated;
     },
 
     deleteQueuedTurn: async ({ turnId }) => {
       const turn = core.turnRow(turnId);
       if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
-      core.ctx.storage.transactionSync(() => {
-        core.db.delete(items).where(eq(items.turnId, turnId)).run();
-        core.db.delete(turns).where(eq(turns.id, turnId)).run();
+      core.deleteTurn(turnId, () =>
         core.db
           .update(reviewComments)
           .set({ status: "draft", sentTurnId: null })
           .where(eq(reviewComments.sentTurnId, turnId))
-          .run();
-      });
-      core.broadcast({ type: "turn.deleted", turnId });
+          .run(),
+      );
       core.broadcastDetailSoon();
       return {};
     },
@@ -557,24 +564,24 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     setSessionConfig: async ({ sessionId, configId, value }) => {
       const s = core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
-      const options = parseJson<Array<{ id: string; category?: string | null }>>(s.configOptionsJson, []);
+      const options = json.configOptions.read(s.configOptionsJson, []);
       const isModel = options.find((o) => o.id === configId)?.category === "model";
-      const config = { ...parseJson<Record<string, unknown>>(s.configJson, {}), [configId]: value };
+      const config: Record<string, unknown> = { ...json.config.read(s.configJson, {}), [configId]: value };
       if (isModel && typeof value === "string") config["model"] = value;
       if (core.liveSessions.has(sessionId)) {
         const res = await requireTempod(core).request("session.setConfig", { sessionId, configId, value });
         core.updateSession(sessionId, {
-          configJson: JSON.stringify(config),
-          configOptionsJson: JSON.stringify(res.configOptions),
+          configJson: json.config.write(config),
+          configOptionsJson: json.configOptions.write(res.configOptions),
         });
-      } else core.updateSession(sessionId, { configJson: JSON.stringify(config) });
+      } else core.updateSession(sessionId, { configJson: json.config.write(config) });
       return {};
     },
 
     respondPermission: async ({ requestId, optionId }) => {
       const p = core.db.select().from(permissions).where(eq(permissions.requestId, requestId)).get();
       if (!p || p.status !== "pending") throw new TempoError("NOT_FOUND");
-      const options = parseJson<Array<{ optionId: string }>>(p.optionsJson, []);
+      const options = json.permissionOptions.read(p.optionsJson, []);
       if (!options.some((o) => o.optionId === optionId))
         throw new TempoError("VALIDATION_FAILED", undefined, "unknown option");
       await requireTempod(core).request("permission.respond", { requestId, optionId });
@@ -586,7 +593,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const item = core.itemRow(p.itemId);
       if (item)
         core.updateItem(item.id, {
-          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), chosenOptionId: optionId },
+          content: { ...readItemContent(item.kind, item.contentJson), chosenOptionId: optionId },
         });
       core.recomputeAttention();
       return {};
@@ -668,8 +675,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
 
     commitAndPush: async ({ message }) => {
       notArchived(core);
-      if (runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
       rt.requireReady();
+      // 03 Step runner: the op waits as pending behind other ops and starts in creation order.
       const msg = message.trim() || core.ws().title || "Update from Tempo";
       return awaitOp<{ commitSha: string }>("commit_push", { message: msg });
     },

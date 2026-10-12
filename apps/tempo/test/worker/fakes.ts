@@ -23,6 +23,8 @@ export class FakeTempod {
   readonly handlers = new Map<string, RequestHandler>();
   /** Requests that throw: op → {code, message}. */
   readonly failures = new Map<string, { code: string; message: string }>();
+  /** The tempod side of each preview WebSocket proxied through /v1/proxy, with its close code once closed. */
+  readonly proxySockets: Array<{ socket: WebSocket; closed: number | null }> = [];
   healthy = true;
 
   constructor() {
@@ -127,14 +129,27 @@ export class FakeTempod {
           return Response.json({ ok: true, version: this.version, incarnation: this.incarnation });
         }
         if (url.pathname === "/v1/connect") return this.accept();
-        if (url.pathname.startsWith("/v1/proxy/"))
+        if (url.pathname.startsWith("/v1/proxy/")) {
+          if (req.headers.get("Upgrade")?.toLowerCase() === "websocket") return this.acceptProxy();
           return new Response(`proxied ${url.pathname}${url.search}`, { status: 200 });
+        }
         return new Response("not found", { status: 404 });
       },
       connect: () => {
         throw new Error("not supported");
       },
     } as unknown as Fetcher;
+  }
+
+  private acceptProxy(): Response {
+    const pair = new WebSocketPair();
+    const entry = { socket: pair[1], closed: null as number | null };
+    entry.socket.accept();
+    entry.socket.addEventListener("close", (e) => {
+      entry.closed = e.code;
+    });
+    this.proxySockets.push(entry);
+    return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
   private accept(): Response {

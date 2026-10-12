@@ -94,6 +94,7 @@ export const turns = sqliteTable("turns", {
   queuedAt: integer("queued_at").notNull(),
   startedAt: integer("started_at"),
   endedAt: integer("ended_at"),
+  usageJson: text("usage_json"),
 });
 
 export const items = sqliteTable("items", {

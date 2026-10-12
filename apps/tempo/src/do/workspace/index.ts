@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, lte } from "drizzle-orm";
 import {
   TempoError,
   capture,
@@ -14,6 +14,7 @@ import {
 import { resolveSettings } from "@tempo/settings";
 import { attachments, egressLog, ops, sessions, turns, workspace } from "../../db/workspace-do.ts";
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
+import { json } from "../../db/json.ts";
 import type { Env } from "../../env.ts";
 import type { EgressConfig } from "../../egress/rules.ts";
 import { PREVIEW_HEADER } from "../../http/preview.ts";
@@ -23,10 +24,11 @@ import {
   connectTempod,
   containerRunning,
   destroyContainer,
+  dropCodexLease,
   scheduleReconnect,
   type ConnectHandlers,
 } from "./container.ts";
-import { WorkspaceCore, parseJson, type Author } from "./core.ts";
+import { WorkspaceCore, type Author } from "./core.ts";
 import { applyTempodEvent } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
@@ -44,6 +46,7 @@ const IDLE_CHECK_MS = 60_000;
 const PR_POLL_MS = 60_000;
 const HOUSEKEEPING_MS = 24 * 60 * 60_000;
 const RESTARTS_PER_HOUR = 3;
+const EGRESS_LOG_ROWS = 10_000;
 const TERMINAL_PATH = /^\/api\/ws\/terminal\/[0-9a-hjkmnp-tv-z]{26}\/(t[1-9])$/;
 
 export interface InitInput {
@@ -87,7 +90,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     this.runner = new OpRunner(
       core,
       makeSteps(this.handlers),
-      makeHooks(() => this.scheduleHousekeeping()),
+      makeHooks(
+        () => this.scheduleHousekeeping(),
+        () => this.onUnplannedStop("The container stopped unexpectedly."),
+      ),
       (step, state) => afterSkipWithState(core, step, state),
     );
     core.kickQueue = () => this.kickQueue();
@@ -142,7 +148,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
             archivedAt: null,
             branch: input.branch,
             baseBranch: input.baseBranch,
-            sourceJson: JSON.stringify(input.source),
+            sourceJson: json.source.write(input.source),
             state: "creating",
             stateSince: now,
             errorCode: null,
@@ -150,7 +156,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
             attention: "none",
             setupStatus: "none",
             previewToken: newPreviewToken(),
-            settingsJson: JSON.stringify(preliminary),
+            settingsJson: json.settings.write(preliminary),
             pushed: 0,
             prNumber: null,
             prState: null,
@@ -204,7 +210,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               seq: 1,
               queuePos: 1,
               status: "queued",
-              promptJson: JSON.stringify({
+              promptJson: json.prompt.write({
                 text: input.prompt.text,
                 mentions: [],
                 attachmentIds: [],
@@ -273,7 +279,13 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     rule: number;
   }): Promise<void> {
     if (!this.core.wsOrNull()) return;
-    this.core.db.insert(egressLog).values(row).run();
+    const [inserted] = this.core.db.insert(egressLog).values(row).returning({ id: egressLog.id }).all();
+    // 02 egress_log: newest 10,000 rows only. Ids only grow, so one indexed range delete keeps the bound.
+    if (inserted && inserted.id > EGRESS_LOG_ROWS)
+      this.core.db
+        .delete(egressLog)
+        .where(lte(egressLog.id, inserted.id - EGRESS_LOG_ROWS))
+        .run();
   }
 
   async pushCodexAuth(content: string, version: number): Promise<void> {
@@ -317,7 +329,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     try {
       const project = await core.project(true);
       const res = await core.tempod.request("settings.read", { overrides: project.overrides });
-      core.updateWs({ settingsJson: JSON.stringify(res.effective) });
+      core.updateWs({ settingsJson: json.settings.write(res.effective) });
       core.setKv("settingsIssues", {
         warnings: res.warnings,
         errors: res.errors,
@@ -457,16 +469,12 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const core = this.core;
     const state = core.state;
     if (!(CONTAINER_STATES as ReadonlyArray<string>).includes(state)) return;
-    // During setting_up the create or wake op only waits for script.exited; a stopped container ends that wait.
-    const setupWait =
-      state === "setting_up" && !containerRunning(core) ? this.runner.waitingOn("setup.run") : null;
-    if (!setupWait && this.runner.hasPendingOrRunning(["create", "wake", "sleep", "archive"])) {
-      // The op owns the container, but a lost socket (a DO restart, a deploy) still needs a reconnect.
-      if (containerRunning(core) && !core.tempod?.open) this.onTempodLost();
-      return;
-    }
+    const starting = this.runner.find("create") ?? this.runner.find("wake");
     if (!containerRunning(core)) {
-      if (setupWait) this.runner.cancel(setupWait.id);
+      // container.start owns the container while it (re)starts it; sleep and archive skip what needs it.
+      if (starting?.step === "container.start") return;
+      if (starting) this.runner.cancel(starting.id);
+      else if (this.runner.hasPendingOrRunning(["sleep", "archive"])) return;
       await this.onUnplannedStop("The container stopped unexpectedly.");
       return;
     }
@@ -521,19 +529,23 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     core.closeTerminals(1001, "container stopped");
     core.tempod?.close(1000, "container stopped");
     core.tempod = null;
+    core.tempodStopping = false;
     core.liveSessions.clear();
     core.updateWs({ tempodToken: null });
+    dropCodexLease(core);
     const now = Date.now();
-    const recent = parseJson<number[]>(core.ws().autoRestartsJson, []).filter((t) => now - t < 60 * 60_000);
+    const recent = json.autoRestarts
+      .read(core.ws().autoRestartsJson, [])
+      .filter((t) => now - t < 60 * 60_000);
     if (recent.length >= RESTARTS_PER_HOUR) {
-      core.updateWs({ autoRestartsJson: JSON.stringify(recent) });
+      core.updateWs({ autoRestartsJson: json.autoRestarts.write(recent) });
       core.setState("error", {
         code: "CONTAINER_START_FAILED",
         detail: "The container stopped 3 times in an hour.",
       });
       return;
     }
-    core.updateWs({ autoRestartsJson: JSON.stringify([...recent, now]) });
+    core.updateWs({ autoRestartsJson: json.autoRestarts.write([...recent, now]) });
     core.setState("starting");
     if (!this.runner.find("wake")) this.runner.insert("wake");
   }

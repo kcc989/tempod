@@ -677,6 +677,41 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     );
   });
 
+  it("publishes the summary to the hub even when the D1 write fails", async () => {
+    const w = await readyWs();
+    const brokenD1 = {
+      prepare: () => {
+        throw new Error("D1 unavailable");
+      },
+    };
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      const core = internals(i).core as unknown as { env: object; realEnv?: object };
+      core.realEnv = core.env;
+      core.env = new Proxy(core.env, {
+        get: (target, key) => (key === "DB" ? brokenD1 : Reflect.get(target, key)),
+      });
+    });
+    try {
+      ok(await w.stub.renameWorkspace({ title: "Renamed while D1 is down" }));
+      const rev = (await wsRow(w.stub))["summary_rev"];
+      // 02 Hub: "The WorkspaceDO calls UserHubDO.publish(summary) every time it increments summary_rev."
+      await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) === rev, 5000, "hub rev");
+      expect((await d1Row(w.workspaceId))!["title"]).not.toBe("Renamed while D1 is down");
+    } finally {
+      await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+        const core = internals(i).core as unknown as { env: object; realEnv?: object };
+        core.env = core.realEnv!;
+      });
+    }
+    // The next publish brings D1 up to date.
+    ok(await w.stub.setPinned({ pinned: true }));
+    await waitFor(
+      async () => (await d1Row(w.workspaceId))?.["title"] === "Renamed while D1 is down",
+      5000,
+      "D1 caught up",
+    );
+  });
+
   it("a stale summary write changes nothing in D1", async () => {
     const w = await seedHeld();
     const rev = (await detail(w.stub)).rev;
@@ -969,6 +1004,52 @@ describe("rotatePreviewToken", { timeout: 30_000 }, () => {
   });
 });
 
+describe("rotatePreviewToken and open previews", { timeout: 30_000 }, () => {
+  const previewFetch = (w: Ws, token: string, init: { upgrade?: boolean } = {}) =>
+    w.stub.fetch(`https://3000-${w.workspaceId}-${token}.previews.test/live`, {
+      headers: {
+        "x-tempo-preview": `3000:${token}`,
+        ...(init.upgrade ? { Upgrade: "websocket" } : {}),
+      },
+    });
+
+  it("closes preview WebSockets that are already open, and the old token stops working", async () => {
+    const w = await readyWs();
+    const token = (await detail(w.stub)).previewToken;
+    const res = await previewFetch(w, token, { upgrade: true });
+    expect(res.status).toBe(101);
+    const socket = res.webSocket!;
+    let closed: number | null = null;
+    socket.addEventListener("close", (e) => {
+      closed = e.code;
+    });
+    socket.accept();
+    await waitFor(() => w.tempod.proxySockets.length === 1, 3000, "proxied socket");
+    ok(await w.stub.rotatePreviewToken({}));
+    // 05 Preview access: "rotatePreviewToken makes a new token; old links stop working at once."
+    await waitFor(() => closed === 1008, 5000, "browser side closed");
+    await waitFor(() => w.tempod.proxySockets[0]!.closed !== null, 5000, "tempod side closed");
+    expect((await previewFetch(w, token)).status).toBe(404);
+  });
+
+  it("leaves open preview WebSockets alone until the token rotates", async () => {
+    const w = await readyWs();
+    const token = (await detail(w.stub)).previewToken;
+    const socket = (await previewFetch(w, token, { upgrade: true })).webSocket!;
+    let closed = false;
+    socket.addEventListener("close", () => {
+      closed = true;
+    });
+    socket.accept();
+    await waitFor(() => w.tempod.proxySockets.length === 1, 3000, "proxied socket");
+    ok(await w.stub.renameWorkspace({ title: "Still previewing" }));
+    await sleep(200);
+    expect(closed).toBe(false);
+    expect(w.tempod.proxySockets[0]!.closed).toBeNull();
+    socket.close(1000, "done");
+  });
+});
+
 describe("createSession, renameSession and closeSession", { timeout: 30_000 }, () => {
   it("returns CREDENTIAL_MISSING when the agent has no login, and creates nothing", async () => {
     const w = await seedHeld({ credentials: false });
@@ -1117,6 +1198,26 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
       status: "draft",
       sentTurnId: null,
     });
+  });
+
+  it("returns VALIDATION_FAILED for review comment ids that do not exist or were already sent, and queues nothing", async () => {
+    const w = await seedHeld({ prompt: "First" });
+    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 1, body: "Rename" }));
+    ok(await prompt(w, sessionId, "Uses c1", { reviewCommentIds: [c1.id] }));
+    const count = async () => (await rows(w.stub, "SELECT id FROM turns")).length;
+    const before = await count();
+    // 02 sendPrompt: VALIDATION_FAILED; 03 sendPrompt 3 marks only draft review comments sent.
+    expect(codeOf(await prompt(w, sessionId, "Again", { reviewCommentIds: [c1.id] }))).toBe(
+      "VALIDATION_FAILED",
+    );
+    expect(codeOf(await prompt(w, sessionId, "Ghost", { reviewCommentIds: [newId()] }))).toBe(
+      "VALIDATION_FAILED",
+    );
+    expect(await count()).toBe(before);
+    const c2 = ok(await w.stub.addReviewComment({ path: "src/app.ts", body: "Draft" }));
+    ok(await prompt(w, sessionId, "Uses c2 twice", { reviewCommentIds: [c2.id, c2.id] }));
+    expect(await count()).toBe(before + 1);
   });
 
   it("broadcasts turn and item.upsert to the workspace channel", async () => {
@@ -1308,6 +1409,18 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
       "turn.deleted",
     );
     socket.close();
+  });
+
+  it("deleteQueuedTurn raises items_rev with the deleted items; a refused delete leaves it alone", async () => {
+    const w = await seedHeld({ prompt: "Keep me" });
+    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const t2 = ok(await prompt(w, sessionId, "Delete me"));
+    const before = (await wsRow(w.stub))["items_rev"];
+    expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("OK");
+    // 02 Rules: "Every change to items increments workspace.items_rev by 1"
+    expect((await wsRow(w.stub))["items_rev"]).toBe(before + 1);
+    expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("NOT_FOUND");
+    expect((await wsRow(w.stub))["items_rev"]).toBe(before + 1);
   });
 
   it("reorderQueue sets the order of the queued turns", async () => {
@@ -1662,6 +1775,34 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
   });
 });
 
+describe("commitAndPush behind other ops", { timeout: 30_000 }, () => {
+  it("waits as pending behind an op instead of returning WORKSPACE_BUSY, then runs in creation order", async () => {
+    const w = await readyWs();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
+    });
+    const call = w.stub.commitAndPush({ message: "Second" });
+    // 03 Step runner: "Ops wait as pending and start in creation order."
+    await waitFor(async () => (await opsOf(w.stub, "commit_push")).length === 2, 3000, "queued op");
+    expect((await opsOf(w.stub, "commit_push")).map((o) => o.status)).toEqual(["pending", "pending"]);
+    const res = await whileDriving(w.stub, call);
+    expect(ok(res)).toEqual({ commitSha: "f".repeat(40) });
+    expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);
+  });
+
+  it("returns its own op's error code once the queued op runs", async () => {
+    const w = await readyWs();
+    w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
+    });
+    const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Second" }));
+    // 02 commitAndPush errors: NOTHING_TO_COMMIT, PUSH_REJECTED.
+    expect(codeOf(res)).toBe("PUSH_REJECTED");
+    expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);
+  });
+});
+
 describe("files and changes", { timeout: 30_000 }, () => {
   it("pass through to tempod when the container is ready", async () => {
     const w = await readyWs();
@@ -1886,6 +2027,26 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
       error = e;
     }
     expect(String(error)).toMatch(/not found/i);
+  });
+
+  it("logEgress keeps only the newest 10,000 rows on every insert", async () => {
+    const w = await seedHeld();
+    await exec(
+      w.stub,
+      "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 10000) INSERT INTO egress_log (ts, method, host, path, status, ms, rule) SELECT i, 'GET', 'example.com', '/' || i, 200, 1, 9 FROM n",
+    );
+    await w.stub.logEgress({ ts: 20_000, method: "GET", host: "x", path: "/", status: 200, ms: 1, rule: 8 });
+    // 02 egress_log: "Newest 10,000 rows only."
+    expect(await one(w.stub, "SELECT count(*) AS n, min(ts) AS lo, max(ts) AS hi FROM egress_log")).toEqual({
+      n: 10_000,
+      lo: 2,
+      hi: 20_000,
+    });
+    await w.stub.logEgress({ ts: 20_001, method: "GET", host: "x", path: "/", status: 200, ms: 1, rule: 8 });
+    expect((await one(w.stub, "SELECT count(*) AS n, min(ts) AS lo FROM egress_log"))!).toEqual({
+      n: 10_000,
+      lo: 3,
+    });
   });
 
   it("logEgress appends rows that Diagnostics shows newest first; an unknown workspace ignores it", async () => {

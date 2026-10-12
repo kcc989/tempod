@@ -66,6 +66,9 @@ export const previewFetch = async (
   const pair = new WebSocketPair();
   const [client, server] = [pair[0], pair[1]];
   server.accept();
+  // rotatePreviewToken closes every open relay (05 Preview access).
+  core.previewSockets.add(server);
+  core.previewSockets.add(remote);
   const relay = (from: WebSocket, to: WebSocket) => {
     from.addEventListener("message", (e) => {
       try {
@@ -76,6 +79,8 @@ export const previewFetch = async (
       core.lastPreviewAt = Date.now();
     });
     from.addEventListener("close", (e) => {
+      core.previewSockets.delete(from);
+      core.previewSockets.delete(to);
       try {
         to.close(e.code === 1005 ? 1000 : e.code, e.reason);
       } catch {
