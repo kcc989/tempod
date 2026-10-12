@@ -4,6 +4,7 @@ import {
   closeDialog,
   dialogStore,
   layoutStore,
+  settingsStore,
   openDialog,
   workspaceUiStore,
   type ConfirmRequest,
@@ -62,4 +63,8 @@ export function useConfirmRequest(): ConfirmRequest | null {
     () => dialogStore.getSnapshot().confirm,
     () => null,
   );
+}
+
+export function useSettings(): DialogOf<"settings"> | null {
+  return useStore(settingsStore);
 }

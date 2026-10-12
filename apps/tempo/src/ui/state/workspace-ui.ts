@@ -404,7 +404,14 @@ export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePan
 // ---------------------------------------------------------------------------------------------
 // App dialogs
 
-export type SettingsTab = "logins" | "project" | "appearance" | "notifications" | "shortcuts" | "devices";
+export type SettingsTab =
+  | "general"
+  | "logins"
+  | "project"
+  | "appearance"
+  | "notifications"
+  | "shortcuts"
+  | "devices";
 
 export type DialogState =
   | { readonly kind: "newWorkspace"; readonly projectId?: string; readonly prompt?: string }
@@ -439,10 +446,21 @@ export interface DialogStoreState {
 
 export const dialogStore = new Store<DialogStoreState>({ dialog: null, confirm: null });
 
-export const openDialog = (dialog: DialogState): void => dialogStore.update({ dialog });
+export const settingsStore = new Store<DialogOf<"settings"> | null>(null);
+
+export const openDialog = (dialog: DialogState): void => {
+  if (dialog.kind === "settings") {
+    settingsStore.set(dialog);
+    dialogStore.update({ dialog: null });
+  } else dialogStore.update({ dialog });
+};
 
 /** Closes the open dialog; with a kind, only when that dialog is the open one. */
 export const closeDialog = (kind?: DialogKind): void => {
+  if (kind === "settings") {
+    settingsStore.set(null);
+    return;
+  }
   const cur = dialogStore.getSnapshot().dialog;
   if (cur && (kind === undefined || cur.kind === kind)) dialogStore.update({ dialog: null });
 };
@@ -503,4 +521,5 @@ export const resetUiState = (): void => {
   for (const resolve of confirmResolvers.values()) resolve(false);
   confirmResolvers.clear();
   dialogStore.set({ dialog: null, confirm: null });
+  settingsStore.set(null);
 };

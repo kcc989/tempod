@@ -298,8 +298,8 @@ test("desktop shortcuts, settings, live scripts and terminal", async ({ page, fi
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+Comma");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
-  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
   await expect(page.getByText("Theme", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+r");

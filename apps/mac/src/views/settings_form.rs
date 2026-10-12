@@ -18,6 +18,7 @@ struct Field {
 }
 pub struct SettingsForm {
     pub tab: usize,
+    pub section: usize,
     client: Option<tempo_client::Client>,
     credentials: Option<p::CredentialStatus>,
     secret_inputs: BTreeMap<String, Entity<InputState>>,
@@ -82,6 +83,7 @@ impl SettingsForm {
             .collect();
         let mut this = Self {
             tab: 0,
+            section: 0,
             client,
             credentials: None,
             secret_inputs,
@@ -694,7 +696,17 @@ impl Render for SettingsForm {
                         .is_none()
                         .then(|| div().child("Link a project to edit its settings.")),
                 )
-                .children(self.fields.iter().enumerate().map(|(ix, f)| {
+                .children(self.fields.iter().enumerate().filter(|(_, field)| {
+                    let group = field.path.first().map(String::as_str);
+                    match self.section {
+                        0 => group == Some("agent"),
+                        1 => group == Some("scripts"),
+                        2 => matches!(group, Some("environment" | "environment_variables")),
+                        3 => group == Some("git"),
+                        4 => group == Some("prompts"),
+                        _ => false,
+                    }
+                }).map(|(ix, f)| {
                     let mut path = f.path.clone();
                     if path.len() > 3 && path[0] == "scripts" && path[1] == "run" {
                         path.truncate(3);
@@ -729,60 +741,66 @@ impl Render for SettingsForm {
                                 })),
                         )
                 }))
-                .child(
+                .children((self.section < 5).then(|| {
                     Button::new("save-project")
                         .label("Save project settings")
                         .disabled(self.project.is_none() || self.pending)
-                        .on_click(cx.listener(|this, _, window, cx| this.save_project(window, cx))),
-                )
-                .child(Input::new(&self.add_name))
-                .child(Input::new(&self.add_value))
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Button::new("add-run-setting")
-                                .label("Add run script")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.add_setting(true, window, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new("add-env-setting")
-                                .label("Add environment variable")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.add_setting(false, window, cx)
-                                })),
-                        ),
-                )
-                .child("Project secrets")
-                .children(self.secret_names.iter().map(|name| {
-                    let name = name.clone();
-                    let label = name.clone();
-                    Button::new(SharedString::from(format!("remove-secret-{name}")))
-                        .label(format!("Remove {label}"))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            if let Some(project_id) = this.project_id.clone() {
-                                this.mutate::<api::DeleteProjectSecret>(
-                                    p::DeleteProjectSecretIn {
-                                        project_id,
-                                        name: name.clone(),
-                                    },
-                                    None,
-                                    window,
-                                    cx,
-                                );
-                            }
-                        }))
+                        .on_click(cx.listener(|this, _, window, cx| this.save_project(window, cx)))
                 }))
-                .child(Input::new(&self.secret_name))
-                .child(Input::new(&self.secret_value))
-                .child(
-                    Button::new("set-secret")
-                        .label("Set secret")
-                        .disabled(self.pending)
-                        .on_click(cx.listener(|this, _, window, cx| this.set_secret(window, cx))),
-                )
+                .children((self.section == 1 || self.section == 2).then(|| {
+                    v_flex()
+                        .child(Input::new(&self.add_name))
+                        .child(Input::new(&self.add_value))
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .child(
+                                    Button::new("add-run-setting")
+                                        .label("Add run script")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.add_setting(true, window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new("add-env-setting")
+                                        .label("Add environment variable")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.add_setting(false, window, cx)
+                                        })),
+                                ),
+                        )
+                }))
+                .children((self.section == 5).then(|| {
+                    v_flex()
+                        .child("Project secrets")
+                        .children(self.secret_names.iter().map(|name| {
+                            let name = name.clone();
+                            let label = name.clone();
+                            Button::new(SharedString::from(format!("remove-secret-{name}")))
+                                .label(format!("Remove {label}"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if let Some(project_id) = this.project_id.clone() {
+                                        this.mutate::<api::DeleteProjectSecret>(
+                                            p::DeleteProjectSecretIn {
+                                                project_id,
+                                                name: name.clone(),
+                                            },
+                                            None,
+                                            window,
+                                            cx,
+                                        );
+                                    }
+                                }))
+                        }))
+                        .child(Input::new(&self.secret_name))
+                        .child(Input::new(&self.secret_value))
+                        .child(
+                            Button::new("set-secret")
+                                .label("Set secret")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(|this, _, window, cx| this.set_secret(window, cx))),
+                        )
+                }))
                 .into_any_element(),
             2 => h_flex()
                 .gap_2()
