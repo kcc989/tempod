@@ -372,12 +372,18 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Send a prompt**
 
 - The WorkspaceDO sends `session.prompt {sessionId, turnId, content}`. `content` is a list of ACP content blocks built in this order:
-  1. On the first prompt of a session only: a text block with the project's `prompts.general`, if it is set.
+  1. On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set.
   2. On the first prompt after a handoff only: the handoff text block (below); then clear `handoff_pending`. On any prompt: `sessions.pending_note`, if set (for example, the revert note in 03); then clear it.
   3. One text block per review comment group: `Review comments:` followed by one line per comment, `<path>:<line>: <text>`.
   4. The user's text.
   5. One `resource_link` per @-mentioned file: `uri` = `file:///workspace/<path>`, `name` = the file name.
   6. Images: an `image` block if `promptCapabilities.image` is true; else a `resource_link` to the file saved at `/home/tempo/attachments/<turnId>/<name>`.
+- The turn-summary rule is this fixed text. The web and Mac clients show the last agent message of a turn as its answer (04, Work row), so it must stand alone:
+
+  ```text
+  Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that says what you changed, which checks you ran and their results, and what is left to do. Name the command for each check. Link each file you name as file:///workspace/<path>.
+  ```
+
 - `tempod` calls `session/prompt` and turns every `session/update` into items (02). When `session/prompt` returns, it sends `turn.ended {turnId, stopReason}`.
 - Only one turn runs per workspace at a time, across all its sessions. Other prompts wait in the queue.
 

@@ -148,6 +148,7 @@ Who registers what: shell fallbacks (above); `WorkspaceLayout` (above); region A
 - `api.ts`: `call(name, input)`.
 - `toast.ts`: `toastError(e, {skip?})` (error-table text; skips banner codes; `UNAUTHENTICATED` goes to sign-in), `errorText(e)`, `errorCode(e)`, `errorDetail(e)`, `showBanner(codes)`, `onUnauthenticated(listener)`.
 - `theme.ts`: `ThemePreference`, `setThemePreference`, `themeStore`, `startThemeSync`, `THEME_BOOT_SCRIPT`.
+- `transcript-detail.ts`: `setTranscriptDetail`, `useTranscriptDetail` (Settings → Appearance → Transcript detail, per browser).
 - `first-run.ts`: `firstRunSteps(input)`, `isFirstRunDone(steps)`.
 - `links.ts`: `workspacePath`, `workspaceUrl`, `macWorkspaceUrl` (`tempo://workspace/<id>`), `githubRepoUrl`, `githubBranchUrl`, `githubPullUrl`, `githubChecksUrl`.
 - `shortcuts.ts`: the 04 table (`SHORTCUT_ROWS`, `BINDINGS`), `matches`, `matchAction`, `formatBinding`, `formatRow`, `isEditableTarget`, `isPlainCombo`.

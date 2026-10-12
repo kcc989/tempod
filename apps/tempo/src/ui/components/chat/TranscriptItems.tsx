@@ -5,7 +5,6 @@ import {
   BanIcon,
   BrainIcon,
   CheckCircle2Icon,
-  CheckIcon,
   ChevronRightIcon,
   CircleDashedIcon,
   CircleIcon,
@@ -35,12 +34,13 @@ import { useShortcuts } from "~/ui/hooks/useShortcuts";
 import { formatDuration, formatTime } from "~/ui/lib/format";
 import { isEditableTarget } from "~/ui/lib/shortcuts";
 import { cn } from "~/ui/lib/utils";
-import { CONFIRM_TEXT, confirm, openFile } from "~/ui/state/workspace-ui";
+import { CONFIRM_TEXT, confirm, openFile, setPhonePane, showRightTab } from "~/ui/state/workspace-ui";
 import { thumbnailSrc } from "./attachment-cache";
 import { reviewChipLabel } from "./composer-model";
 import { BlockViewer, UnifiedDiff } from "./ContentBlocks";
 import { toggleExpanded, useExpanded } from "./expand-store";
 import { MessageMarkdown } from "./Markdown";
+import { currentStep, editCounts, toolLabel, workSummary, workType } from "./work-model";
 import {
   blockView,
   errorItemMessage,
@@ -245,7 +245,7 @@ function StatusIcon({ status }: { status: Item["status"] }) {
     case "streaming":
       return <Spinner aria-label={label} className="text-primary" />;
     case "completed":
-      return <CheckIcon aria-label={label} className="size-3.5 text-success" />;
+      return null;
     case "failed":
       return <XCircleIcon aria-label={label} className="size-3.5 text-destructive" />;
     case "cancelled":
@@ -258,35 +258,62 @@ function StatusIcon({ status }: { status: Item["status"] }) {
 const MAX_LOCATIONS = 5;
 
 function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }) {
-  const open = useExpanded(ctx.sessionId, item.id);
+  const failed = item.status === "failed";
+  const open = useExpanded(ctx.sessionId, item.id, failed);
   const { title, toolKind, locations, content, rawInput } = item.content;
   const Icon = TOOL_ICONS[toolIcon(toolKind)];
   const mono = toolKind === "execute";
   const hasBody = content.length > 0 || rawInput !== undefined;
+  const label = toolLabel(item);
+  const edit = workType(item) === "edit" ? editCounts(item) : null;
   return (
-    <div className="rounded-md border">
-      <button
-        type="button"
-        aria-expanded={hasBody ? open : undefined}
-        onClick={() => hasBody && toggleExpanded(ctx.sessionId, item.id)}
-        className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm",
-          hasBody ? "hover:bg-accent/60" : "cursor-default",
+    <div className={cn("rounded-md border", failed && "border-destructive/40")}>
+      <div className="flex items-center">
+        <button
+          type="button"
+          aria-expanded={hasBody ? open : undefined}
+          onClick={() => hasBody && toggleExpanded(ctx.sessionId, item.id, failed)}
+          title={title || undefined}
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm",
+            hasBody ? "hover:bg-accent/60" : "cursor-default",
+          )}
+        >
+          <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className={cn("min-w-0 flex-1 truncate", label.mono && "font-mono text-xs")}>
+            {edit?.path ? workspacePath(edit.path).split("/").pop() || label.text : label.text}
+          </span>
+          {edit && (
+            <span className="shrink-0 font-mono text-xs">
+              <span className="text-success">+{edit.added}</span>{" "}
+              <span className="text-destructive">−{edit.removed}</span>
+            </span>
+          )}
+          <StatusIcon status={item.status} />
+          {hasBody && (
+            <ChevronRightIcon
+              className={cn(
+                "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-90",
+              )}
+            />
+          )}
+        </button>
+        {edit && (
+          <Button
+            size="sm"
+            variant="link"
+            className="h-6 shrink-0 px-2 text-xs"
+            onClick={() => {
+              showRightTab(ctx.workspaceId, "changes");
+              setPhonePane("changes");
+            }}
+          >
+            Changes
+          </Button>
         )}
-      >
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate">{title || "Tool call"}</span>
-        <StatusIcon status={item.status} />
-        {hasBody && (
-          <ChevronRightIcon
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform",
-              open && "rotate-90",
-            )}
-          />
-        )}
-      </button>
-      {locations.length > 0 && (
+      </div>
+      {locations.length > 0 && !edit && (
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-2 pb-1 pl-7.5">
           {locations.slice(0, open ? undefined : MAX_LOCATIONS).map((loc, i) => (
             <button
@@ -543,9 +570,12 @@ function AttachmentThumb({
   );
 }
 
-/** Under each turn: its duration, its tokens when the agent sent usage, and how it ended when that is not plain success. */
-export function TurnFooter({ turn }: { turn: Turn }) {
-  const ms = turnDuration(turn);
+/**
+ * Under each turn: its duration, unless its work row shows it, its tokens when the agent sent usage,
+ * and how it ended when that is not plain success.
+ */
+export function TurnFooter({ turn, worked = false }: { turn: Turn; worked?: boolean }) {
+  const ms = worked ? null : turnDuration(turn);
   const tokens = turnTokens(turn);
   const outcome = turnOutcome(turn);
   if (ms === null && tokens === null && outcome === null) return null;
@@ -556,18 +586,59 @@ export function TurnFooter({ turn }: { turn: Turn }) {
   );
 }
 
-/** The running turn: a spinner with the time so far. */
-export function WorkingRow({ turn }: { turn: Turn }) {
+/** Seconds since `since`, ticking while mounted. */
+function useElapsed(since: number | null, live: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
+    if (!live) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, []);
-  const since = turn.startedAt ?? now;
+  }, [live]);
+  return Math.max(1000, Math.floor((now - (since ?? now)) / 1000) * 1000);
+}
+
+/** One row per turn for its reads, commands and thoughts (04, Work row). */
+export function WorkRow({ ctx, turn, items }: { ctx: ItemContext; turn: Turn; items: ReadonlyArray<Item> }) {
+  const id = `work:${turn.id}`;
+  const running = turn.status === "running";
+  const open = useExpanded(ctx.sessionId, id, running);
+  const elapsed = useElapsed(turn.startedAt, running);
+  const text = running
+    ? [currentStep(items) ?? "Working", formatDuration(elapsed)].join(" · ")
+    : workSummary(items, turnDuration(turn));
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => toggleExpanded(ctx.sessionId, id, running)}
+        className="flex max-w-full items-center gap-1.5 rounded-sm py-0.5 text-left text-xs text-muted-foreground hover:text-foreground"
+      >
+        {running ? (
+          <Spinner aria-label="Running" className="text-primary" />
+        ) : (
+          <ChevronRightIcon className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")} />
+        )}
+        <span className="min-w-0 truncate">{text}</span>
+      </button>
+      {open && (
+        <div className="mt-1 flex flex-col gap-1.5 border-l-2 pl-3">
+          {items.map((item) => (
+            <ItemView key={item.id} ctx={ctx} item={item} turn={turn} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The running turn: a spinner with the time so far. */
+export function WorkingRow({ turn }: { turn: Turn }) {
+  const elapsed = useElapsed(turn.startedAt, true);
   return (
     <p className="flex items-center gap-2 text-xs text-muted-foreground">
       <Spinner aria-hidden className="text-primary" />
-      Working {formatDuration(Math.max(1000, Math.floor((now - since) / 1000) * 1000))}
+      Working {formatDuration(elapsed)}
     </p>
   );
 }

@@ -56,6 +56,7 @@ pub enum ComposerEvent {
 
 pub struct Composer {
     input: Entity<TextareaState>,
+    placeholder: String,
     mentions: Vec<p::Mention>,
     attachments: Vec<(String, String)>,
     pub uploading: bool,
@@ -141,6 +142,7 @@ impl Composer {
         });
         Self {
             input,
+            placeholder: String::new(),
             mentions: vec![],
             attachments: vec![],
             uploading: false,
@@ -171,6 +173,15 @@ impl Composer {
             configuring: false,
             _picker_events: vec![model_events, mode_events],
             _input_changed: changed,
+        }
+    }
+
+    pub fn set_placeholder(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.placeholder != text {
+            self.placeholder = text.into();
+            let text = SharedString::from(text.to_string());
+            self.input
+                .update(cx, |input, cx| input.set_placeholder(text, window, cx));
         }
     }
 

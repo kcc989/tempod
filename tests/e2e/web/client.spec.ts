@@ -261,7 +261,9 @@ test("permission keyboard replies close the live card", async ({ page, fixture }
 test("sleep and archive expose the correct read-only and restore states", async ({ page, fixture }) => {
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
   fixture.updateWorkspace({ state: "sleeping" });
-  await expect(page.getByText("Sleeping. Sending a message wakes it.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sleeping", exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder(/to wake this workspace$/)).toBeVisible();
+  await expect(page.getByText("Sleeping. Sending a message wakes it.")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Message", exact: true }).fill("Wake and continue");
   await page.getByRole("textbox", { name: "Message", exact: true }).press("Enter");
   await expect.poll(() => fixture.inputs("sendPrompt").length).toBe(1);

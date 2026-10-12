@@ -131,6 +131,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     return p ? `${p.done}/${p.total}` : null;
   });
   const workspaceBusy = useWorkspaceSelector(workspaceId, (s) => s.workspace?.runningTurnId ?? null) !== null;
+  const sleeping = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state === "sleeping");
   const focusSeq = useWorkspaceUiSelector(workspaceId, (s) => s.composerFocusSeq);
 
   const { draft: savedDraft, update, clearSent } = useComposerDraft(workspaceId, sessionId);
@@ -520,7 +521,13 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
               ref={textRef}
               value={draft}
               rows={1}
-              placeholder={workspaceBusy ? `Queue a message for ${label}` : `Message ${label}`}
+              placeholder={
+                workspaceBusy
+                  ? `Queue a message for ${label}`
+                  : sleeping
+                    ? `Message ${label} to wake this workspace`
+                    : `Message ${label}`
+              }
               aria-label="Message"
               aria-autocomplete="list"
               aria-expanded={pickerOpen}

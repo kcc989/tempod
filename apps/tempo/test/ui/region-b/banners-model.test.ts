@@ -36,8 +36,8 @@ describe("workspace banners", () => {
     ]);
   });
 
-  it("shows sleeping, error and setup failed", () => {
-    expect(workspaceBanners(detail({ state: "sleeping" }))).toEqual([{ kind: "sleeping" }]);
+  it("shows error and setup failed; no banner while sleeping (the pill wakes)", () => {
+    expect(workspaceBanners(detail({ state: "sleeping" }))).toEqual([]);
     expect(
       workspaceBanners(detail({ state: "error", errorCode: "CONTAINER_START_FAILED", errorDetail: "boom" })),
     ).toEqual([
@@ -56,7 +56,7 @@ describe("workspace banners", () => {
       { kind: "setupFailed" },
     ]);
     expect(workspaceBanners(detail({ state: "sleeping", setupStatus: "failed" })).map((b) => b.kind)).toEqual(
-      ["setupFailed", "sleeping"],
+      ["setupFailed"],
     );
   });
 

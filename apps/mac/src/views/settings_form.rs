@@ -3,7 +3,7 @@
 use super::settings_model::{self as model, EditValue, FieldState, Kind};
 use super::tokens::{Token, color};
 use crate::platform::Permission;
-use crate::storage::{Local, Theme as SavedTheme};
+use crate::storage::{Local, Theme as SavedTheme, TranscriptDetail};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
@@ -1652,33 +1652,53 @@ impl Render for SettingsForm {
             TAB_PROJECT => self.render_project(cx),
             2 => {
                 let current = cx.global::<Local>().config().theme;
-                h_flex()
+                let detail = cx.global::<Local>().config().transcript_detail;
+                v_flex()
                     .gap_2()
-                    .children(
-                        [
-                            ("System", SavedTheme::System),
-                            ("Light", SavedTheme::Light),
-                            ("Dark", SavedTheme::Dark),
-                        ]
-                        .map(|(label, theme)| {
-                            Button::new(label)
-                                .label(label)
-                                .selected(current == theme)
-                                .on_click(move |_, window, cx| {
-                                    cx.global_mut::<Local>().update_config(|c| c.theme = theme);
-                                    match theme {
-                                        SavedTheme::System => {
-                                            Theme::sync_system_appearance(Some(window), cx)
+                    .child(
+                        h_flex().gap_2().child("Theme").children(
+                            [
+                                ("System", SavedTheme::System),
+                                ("Light", SavedTheme::Light),
+                                ("Dark", SavedTheme::Dark),
+                            ]
+                            .map(|(label, theme)| {
+                                Button::new(label)
+                                    .label(label)
+                                    .selected(current == theme)
+                                    .on_click(move |_, window, cx| {
+                                        cx.global_mut::<Local>().update_config(|c| c.theme = theme);
+                                        match theme {
+                                            SavedTheme::System => {
+                                                Theme::sync_system_appearance(Some(window), cx)
+                                            }
+                                            SavedTheme::Light => {
+                                                Theme::change(ThemeMode::Light, Some(window), cx)
+                                            }
+                                            SavedTheme::Dark => {
+                                                Theme::change(ThemeMode::Dark, Some(window), cx)
+                                            }
                                         }
-                                        SavedTheme::Light => {
-                                            Theme::change(ThemeMode::Light, Some(window), cx)
-                                        }
-                                        SavedTheme::Dark => {
-                                            Theme::change(ThemeMode::Dark, Some(window), cx)
-                                        }
-                                    }
-                                })
-                        }),
+                                    })
+                            }),
+                        ),
+                    )
+                    .child(
+                        h_flex().gap_2().child("Transcript detail").children(
+                            [
+                                ("Default", TranscriptDetail::Default),
+                                ("Detailed", TranscriptDetail::Detailed),
+                            ]
+                            .map(|(label, value)| {
+                                Button::new(SharedString::from(format!("detail-{label}")))
+                                    .label(label)
+                                    .selected(detail == value)
+                                    .on_click(move |_, _, cx| {
+                                        cx.global_mut::<Local>()
+                                            .update_config(|c| c.transcript_detail = value);
+                                    })
+                            }),
+                        ),
                     )
                     .into_any_element()
             }

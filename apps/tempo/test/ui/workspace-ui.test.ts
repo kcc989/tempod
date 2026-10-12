@@ -11,6 +11,7 @@ import {
   getLayout,
   getWorkspaceUi,
   insertIntoComposer,
+  isRightOpen,
   moveTab,
   openDialog,
   openDiff,
@@ -20,7 +21,9 @@ import {
   parseTabRef,
   resetUiState,
   resolveConfirm,
+  setLayout,
   setPhonePane,
+  setRightQuiet,
   showBottomTab,
   showRightTab,
   syncChatTabs,
@@ -310,5 +313,37 @@ describe("dialogs and confirmations", () => {
     expect(CONFIRM_TEXT.resetPreviewAccess().description).toBe(
       "Open previews will stop working. Open them again from Tempo.",
     );
+  });
+});
+
+describe("right side starts closed (04, Right and bottom panels)", () => {
+  it("stays closed while quiet until the user opens it for that workspace", () => {
+    setLayout({ lastWorkspaceId: W });
+    setRightQuiet(W, true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(false);
+    toggleRight();
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(true);
+    setRightQuiet("w2", true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(false);
+    toggleRight();
+    expect(getLayout().rightOpen).toBe(false);
+  });
+
+  it("opens by itself when the workspace stops being quiet", () => {
+    setRightQuiet(W, true);
+    setRightQuiet(W, false);
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(true);
+  });
+
+  it("⌥J and showing a tab pin it open", () => {
+    setLayout({ lastWorkspaceId: W });
+    setRightQuiet(W, true);
+    toggleBottom();
+    expect(getWorkspaceUi(W).rightPinned).toBe(true);
+    expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: true });
+    setRightQuiet("w2", true);
+    showRightTab("w2", "changes");
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(true);
   });
 });

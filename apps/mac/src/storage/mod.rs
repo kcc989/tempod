@@ -5,7 +5,7 @@ mod file;
 mod saver;
 mod state;
 
-pub use config::{Config, Theme};
+pub use config::{Config, Theme, TranscriptDetail};
 pub use file::{LoadOutcome, Loaded, bad_path, load_or_recover, write_atomic};
 pub use saver::{Debounce, STATE_SAVE_DELAY, STATE_SAVE_MAX_WAIT, Saver};
 pub use state::{DiffViewMode, PaneSizes, Panels, SortMode, State, WindowFrame};

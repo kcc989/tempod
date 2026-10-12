@@ -5,6 +5,7 @@ import {
   HANDOFF_MAX_CHARS,
   PLACEHOLDER,
   TempoError,
+  TURN_SUMMARY_RULE,
   type AgentId,
   type ContentBlock,
   type Settings,
@@ -240,6 +241,7 @@ export const buildContent = async (
   const patch: Partial<SessionRow> = {};
   let handoff: string | null = null;
   if (session.generalPromptSent === 0) {
+    blocks.push(text(TURN_SUMMARY_RULE));
     if (settings.prompts.general) blocks.push(text(settings.prompts.general));
     patch.generalPromptSent = 1;
   }
