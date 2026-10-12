@@ -1488,6 +1488,7 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
   /** A ready workspace with an open session, three ended turns and a checkpoint at the end of turn 1. */
   const withHistory = async () => {
     const w = await readyWs();
+    const initialId = (await rows(w.stub, "SELECT id FROM sessions"))[0]!["id"];
     const sessionId = newId();
     const closedId = newId();
     await insertSession(w.stub, sessionId);
@@ -1497,7 +1498,7 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
     const c1 = newId();
     await insertCheckpoint(w.stub, c1, turnIds[0]!, "turn_end", Date.now() - MIN);
     w.tempod.on("git.checkpoint", checkpointResult);
-    return { ...w, sessionId, closedId, turnIds, c1 };
+    return { ...w, initialId, sessionId, closedId, turnIds, c1 };
   };
 
   it("takes a pre_revert safety checkpoint, reverts, marks later turns and notes the sessions", async () => {
@@ -1537,9 +1538,9 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
       w.stub,
       "SELECT session_id, content_json FROM items WHERE kind = 'revert_marker'",
     );
-    expect(markers).toHaveLength(1);
-    expect(markers[0]!["session_id"]).toBe(w.sessionId);
-    expect(JSON.parse(markers[0]!["content_json"])).toEqual({ checkpointId: w.c1, toTurnSeq: 1 });
+    expect(markers.map((marker) => marker["session_id"]).sort()).toEqual([w.initialId, w.sessionId].sort());
+    for (const marker of markers)
+      expect(JSON.parse(marker["content_json"])).toEqual({ checkpointId: w.c1, toTurnSeq: 1 });
     // 03 Revert 5: exactly this note, for every non-closed session
     expect((await sessionOf(w.stub, w.sessionId))!["pending_note"]).toBe(
       "Note: the user reverted the files to the state after turn 1. Changes made after that point are gone.",
@@ -1643,7 +1644,11 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
       [0, 0, 1],
     );
     const markers = (
-      await rows(w.stub, "SELECT content_json FROM items WHERE kind = 'revert_marker' ORDER BY rev")
+      await rows(
+        w.stub,
+        "SELECT content_json FROM items WHERE kind = 'revert_marker' AND session_id = ? ORDER BY rev",
+        w.sessionId,
+      )
     ).map((r) => JSON.parse(r["content_json"]));
     expect(markers).toEqual([
       { checkpointId: pointed, toTurnSeq: 3 },

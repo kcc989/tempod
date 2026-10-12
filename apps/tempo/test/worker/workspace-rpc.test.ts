@@ -2056,7 +2056,15 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
     ]);
     expect(diag.egress).toEqual([]);
     // Sessions: each session's agent, ACP session id, capabilities and live or not
+    const initial = (await rows(w.stub, "SELECT id FROM sessions WHERE id != ?", s.id))[0]!;
     expect(diag.sessions).toEqual([
+      {
+        id: initial["id"],
+        agent: "claude",
+        acpSessionId: null,
+        capabilities: {},
+        live: false,
+      },
       {
         id: s.id,
         agent: "claude",

@@ -171,6 +171,17 @@ export class WebFixture {
         return this.workspace;
       case "listInstallationRepos":
         return [{ repoId: 1, owner: "kcc989", name: "keeled", defaultBranch: "main", private: false }];
+      case "listModels":
+        return [
+          {
+            agent: "claude",
+            currentValue: "fixture-opus",
+            options: [
+              { value: "fixture-opus", name: "Fixture Opus" },
+              { value: "fixture-sonnet", name: "Fixture Sonnet" },
+            ],
+          },
+        ];
       case "getCredentialStatus":
         return {
           claude: { set: true, updatedAt: 1000 },
