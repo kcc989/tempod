@@ -1,6 +1,10 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
+  applyProposal,
+  hostMatches,
+  InjectorInput,
+  isHostPattern,
   AGENT_IDS,
   API,
   DEFAULT_SETTINGS,
@@ -116,12 +120,14 @@ describe("contract", () => {
     expect(TEMPOD_REQUESTS["repo.clone"].timeoutMs).toBe(600_000);
     expect(TEMPOD_REQUESTS["session.start"].timeoutMs).toBe(120_000);
     expect(TEMPOD_REQUESTS.shutdown.timeoutMs).toBe(45_000);
+    expect(TEMPOD_REQUESTS["environment.set"].timeoutMs).toBe(10_000);
     expect(Object.keys(TEMPOD_REQUESTS).sort()).toEqual(
       [
         "repo.clone",
         "repo.applyCheckpoint",
         "settings.read",
         "env.set",
+        "environment.set",
         "script.start",
         "script.stop",
         "session.start",
@@ -194,5 +200,54 @@ describe("helpers", () => {
     expect(revertNote(3)).toBe(
       "Note: the user reverted the files to the state after turn 3. Changes made after that point are gone.",
     );
+  });
+});
+
+describe("environments (01, Environments)", () => {
+  it("checks host patterns", () => {
+    expect(isHostPattern("api.stripe.com")).toBe(true);
+    expect(isHostPattern("*.stripe.com")).toBe(true);
+    expect(isHostPattern("API.stripe.com")).toBe(false);
+    expect(isHostPattern("api.stripe.com:443")).toBe(false);
+    expect(isHostPattern("*")).toBe(false);
+  });
+  it("matches wildcard hosts below the domain only", () => {
+    expect(hostMatches("a.example.com", "*.example.com")).toBe(true);
+    expect(hostMatches("b.a.example.com", "*.example.com")).toBe(true);
+    expect(hostMatches("example.com", "*.example.com")).toBe(false);
+    expect(hostMatches("EXAMPLE.com", "example.com")).toBe(true);
+  });
+  it("applies a proposal by adding or replacing, never removing", () => {
+    const next = applyProposal(
+      {
+        egressPolicy: "open",
+        egressAllowlist: ["a.com"],
+        secrets: [
+          { name: "A", hosts: ["a.com"] },
+          { name: "B", hosts: [] },
+        ],
+        injectors: [{ name: "x", hosts: ["x.com"], code: "1" }],
+      },
+      {
+        note: "",
+        egressPolicy: "allowlist",
+        allowlistAdd: ["a.com", "b.com"],
+        secrets: [{ name: "B", hosts: ["b.com"] }],
+        injectors: [{ name: "y", hosts: ["y.com"], code: "2" }],
+      },
+    );
+    expect(next.egressPolicy).toBe("allowlist");
+    expect(next.egressAllowlist).toEqual(["a.com", "b.com"]);
+    expect(next.secrets).toEqual([
+      { name: "A", hosts: ["a.com"] },
+      { name: "B", hosts: ["b.com"] },
+    ]);
+    expect(next.injectors.map((i) => i.name)).toEqual(["x", "y"]);
+  });
+  it("limits injector code to 64 KiB", () => {
+    const decode = Schema.decodeUnknownExit(InjectorInput);
+    expect(decode({ name: "a", hosts: ["a.com"], code: "x".repeat(64 * 1024) })._tag).toBe("Success");
+    expect(decode({ name: "a", hosts: ["a.com"], code: "x".repeat(64 * 1024 + 1) })._tag).toBe("Failure");
+    expect(decode({ name: "a", hosts: [], code: "x" })._tag).toBe("Failure");
   });
 });

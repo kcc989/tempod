@@ -360,6 +360,19 @@ FROM review_comments`,
     when: 1792094400000,
     statements: ["ALTER TABLE workspace ADD COLUMN browser_session_id TEXT"],
   },
+  {
+    tag: "0006_environments",
+    when: 1792180800000,
+    statements: [
+      "ALTER TABLE workspace ADD COLUMN environment_id TEXT",
+      `CREATE TABLE environment_proposals (
+  id             TEXT PRIMARY KEY,
+  created_at     INTEGER NOT NULL,
+  status         TEXT NOT NULL CHECK (status IN ('pending','applied','dismissed')),
+  proposal_json  TEXT NOT NULL
+)`,
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

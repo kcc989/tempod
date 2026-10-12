@@ -1,6 +1,9 @@
 import {
   API,
   Capabilities,
+  EnvironmentProposal,
+  Injector,
+  SecretBinding,
   ITEM_CONTENT,
   PermissionOption,
   Session,
@@ -88,6 +91,10 @@ export const json = {
   summary: jsonColumn("summaries.summary_json", WorkspaceSummary),
   secretMeta: jsonColumn("secrets.meta_json", SecretMeta),
   fileResponse: jsonColumn("file_cache.response_json", API.readFile.output),
+  egressAllowlist: jsonColumn("environments.egress_allowlist_json", Schema.Array(Schema.String)),
+  environmentSecrets: jsonColumn("environments.secrets_json", Schema.Array(SecretBinding)),
+  environmentInjectors: jsonColumn("environments.injectors_json", Schema.Array(Injector)),
+  environmentProposal: jsonColumn("environment_proposals.proposal_json", EnvironmentProposal),
 } as const;
 
 export const EMPTY_PROMPT: TurnPrompt = { text: "", mentions: [], attachmentIds: [], reviewCommentIds: [] };

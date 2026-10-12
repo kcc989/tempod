@@ -52,4 +52,5 @@
   ],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }],
   "browser": { "binding": "BROWSER" },
+  "worker_loaders": [{ "binding": "LOADER" }],
 }

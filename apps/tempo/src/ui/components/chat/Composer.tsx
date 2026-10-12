@@ -63,6 +63,7 @@ import {
   type PendingAttachment,
   type PickerRow,
 } from "./ComposerParts";
+import { EnvironmentProposalBanner } from "./EnvironmentProposals";
 
 export interface ComposerProps {
   readonly workspaceId: string;
@@ -442,6 +443,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
 
   return (
     <div className="shrink-0">
+      <EnvironmentProposalBanner workspaceId={workspaceId} />
       {loginText && <LoginBanner text={loginText} />}
       <div
         className={cn("relative border-t px-3 pt-2 pb-2", dragging && "bg-accent/40")}

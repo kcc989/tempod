@@ -60,7 +60,7 @@ const saved = () => vi.mocked(call).mock.calls.filter(([n]) => n === "saveMcpSer
 afterEach(resetUiState);
 
 describe("MCP servers settings", () => {
-  it("is listed under Personal after Logins", () => {
+  it("is listed under Personal after Environments (04)", () => {
     vi.mocked(call).mockResolvedValue([]);
     openDialog({ kind: "settings", tab: "mcp" });
     render(
@@ -73,7 +73,7 @@ describe("MCP servers settings", () => {
     const labels = within(nav)
       .getAllByRole("button")
       .map((b) => b.textContent);
-    expect(labels.indexOf("MCP servers")).toBe(labels.indexOf("Logins") + 1);
+    expect(labels.indexOf("MCP servers")).toBe(labels.indexOf("Environments") + 1);
   });
 
   it("lists each server with transport, command or URL and an Enabled switch", async () => {

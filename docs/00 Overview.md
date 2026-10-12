@@ -22,7 +22,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | D10 | GitHub and API-key credentials | Injected by the TempoOutbound egress handler. They never enter the container. | The documented Sandbox pattern for secrets |
 | D11 | Claude and Codex credentials | Placed in the container: the Claude token as a process env var, the Codex auth.json as a file. Codex token refreshes sync back through CredentialDO. | Each CLI owns its own login and token refresh |
 | D12 | Mac client | Tempo for Mac, a native app built with GPUI Kit. It is a client of the same Worker, through a JSON API and the same WebSocket channels. | Native speed and Conductor's ⌘ shortcuts, with one source of truth (07) |
-| D13 | Agent artifacts | Agents publish files with the `publish_artifact` tool of Tempo's own MCP server. Tempo copies each version to R2 and shows it in the transcript. HTML runs offline, on its own host under `PREVIEW_DOMAIN`. | The owner can read plans, screenshots, diagrams and reports, also while the workspace sleeps. Agent HTML never runs on `APP_HOST`. |
+| D13 | Agent artifacts | Agents publish files with the `publish_artifact` tool of the `tempo` MCP server in `tempod`. Tempo copies each version to R2 and shows it in the transcript. HTML runs offline, on its own host under `PREVIEW_DOMAIN`. | The owner can read plans, screenshots, diagrams and reports, also while the workspace sleeps. Agent HTML never runs on `APP_HOST`. |
 
 **Rules for agents that build from this doc set**
 
@@ -143,7 +143,7 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 | `UserHubDO` | Durable Object | 1 per user | UI WebSocket fan-out for the sidebar; workspace summaries | Browser, `WorkspaceDO` |
 | `CredentialDO` | Durable Object | 1 per user | Encrypted secrets; Codex `auth.json` versions and fan-out | `WorkspaceDO` |
 | `TempoOutbound` | `WorkerEntrypoint` used as the container egress handler | Per request, with props workspaceId and userId | Egress policy, credential injection, egress log | GitHub, model APIs, the internet |
-| `tempod` | Bun-compiled binary, container entrypoint | 1 per running container | ACP client for agents, scripts, git, port detection, preview proxy, the Tempo MCP server, local outbox | `WorkspaceDO` (inbound WebSocket), agent processes |
+| `tempod` | Bun-compiled binary, container entrypoint | 1 per running container | ACP client for agents, scripts, git, port detection, preview proxy, the `tempo` MCP server, local outbox | `WorkspaceDO` (inbound WebSocket), agent processes |
 | Tempo for Mac | Rust app on GPUI Kit (07) | 0 or more per owner | Window layout, drafts, its Keychain token | Tempo Worker (`/api/v1`, WebSockets) |
 | Image `workspace` | Container image (Debian trixie, Node 24) | 1 image, many containers | Agents, Chromium, Playwright, dev tools | — |
 | D1 database `tempo` | SQLite (D1) | 1 | Users, GitHub installations, projects, workspace summaries | — |
@@ -217,7 +217,7 @@ Agents test in a real Chromium inside their own container; you see the same app 
 
 An agent can show you a file it made: a plan, a screenshot, a diagram, a PDF report or a small HTML app. Details are in 01, Artifacts.
 
-- Every session gets Tempo's own MCP server, with one tool: `publish_artifact {path, title, summary?}`.
+- Every session gets the `tempo` MCP server. Its tool `publish_artifact {path, title, summary?}` publishes a file.
 - `tempod` copies the file, and the WorkspaceDO uploads it to R2. Each publish of the same path in the same session is a new version of the same artifact.
 - The transcript shows each publish as an artifact card. The card opens an Artifact tab. The right panel has an Artifacts tab that lists all of them.
 - Images, Markdown (with Mermaid diagrams) and text show inside the Tempo UI. PDFs and HTML show from their own owner-only host under `PREVIEW_DOMAIN`, in an iframe. HTML runs offline: it cannot load or send anything over the network.
@@ -270,7 +270,7 @@ Build in six phases. Each phase ends at a gate: gate A is the spike results, and
 3. **Phase 2, parallel work.** Many workspaces, the live sidebar, Codex, OpenCode and Pi, the diff view, scripts, terminal, previews and revert.
 4. **Phase 3, ship.** Commit and push, pull requests, checks, merge, archive and restore, settings, and optional Browser Run.
 5. **Phase 4, Mac client.** The native API and device sign-in on the server, then Tempo for Mac on GPUI Kit (07).
-6. **Phase 5, artifacts.** The Tempo MCP server, artifact storage in R2, the artifact host, the Artifact and Artifacts tabs, image and Markdown views in file and diff tabs, and Mermaid diagrams, in the web UI and the Mac app.
+6. **Phase 5, artifacts.** The `publish_artifact` tool, artifact storage in R2, the artifact host, the Artifact and Artifacts tabs, image and Markdown views in file and diff tabs, and Mermaid diagrams, in the web UI and the Mac app.
 
 ## Risks and open questions
 

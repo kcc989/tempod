@@ -5,6 +5,7 @@ import {
   LaptopIcon,
   LinkIcon,
   MoonIcon,
+  NetworkIcon,
   PowerIcon,
   RotateCwIcon,
   StethoscopeIcon,
@@ -30,7 +31,7 @@ import type { WorkspaceActions } from "./useWorkspaceActions";
 
 /**
  * 04, Overflow menu: Wake or Sleep, Reset preview access, Open on GitHub, Copy workspace link,
- * Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links and `Live` here.
+ * Environment…, Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links and `Live` here.
  */
 export function OverflowMenu({
   view,
@@ -104,6 +105,10 @@ export function OverflowMenu({
         <DropdownMenuItem onSelect={() => void actions.copyLink()}>
           <LinkIcon />
           Copy workspace link
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => openDialog({ kind: "environment", workspaceId: w.id })}>
+          <NetworkIcon />
+          Environment…
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openDialog({ kind: "diagnostics", workspaceId: w.id })}>
           <StethoscopeIcon />

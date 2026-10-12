@@ -142,7 +142,9 @@ describe("session.start", () => {
         .map((l) => l.slice(l.indexOf(" mcp ") + 5));
       expect(mcp).toEqual([
         "playwright --headless --isolated --browser chromium",
+        "tempo mcp",
         "playwright --cdp-endpoint wss://browser.tempo.internal/",
+        "tempo mcp",
       ]);
     },
     T,

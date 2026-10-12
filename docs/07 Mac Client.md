@@ -45,7 +45,8 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Image and Markdown file tabs, image diffs, plan proposals | Same | Mermaid blocks show as code |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
-| Settings: General, Logins, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
+| Environment… dialog and environment proposal review | Same |  |
+| Settings: General, Logins, Environments, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |
@@ -180,6 +181,8 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 ## Transcript, composer and permissions
 
 Behavior follows 04, Center. These rules are for the Mac app only.
+
+Tool calls use a borderless disclosure with indented content. Tool text renders as Markdown; unfenced execute output preserves literal lines in a code block, matching 04.
 
 - **No raw HTML (05).** Render agent text with `TextView::markdown`. MUST NOT render raw HTML. If spike S11 shows that `TextView` renders HTML blocks, escape `<` outside code before the text reaches it.
 - **No remote images (05).** Wrap the transcript in an `ImageCache` whose `load` refuses `http://` and `https://` URIs, and show those images as links. Images from ACP `image` blocks load from their inline data.

@@ -11,7 +11,16 @@ import {
   redact,
   type WorkspaceState,
 } from "@tempo/protocol";
-import { AGENT_HOSTS, decide, hostMatches, isRepoPath, type EgressConfig } from "../../src/egress/rules.ts";
+import {
+  AGENT_HOSTS,
+  decide,
+  decideForInjector,
+  hostMatches,
+  isRepoPath,
+  secretPlaceholderNames,
+  swapSecrets,
+  type EgressConfig,
+} from "../../src/egress/rules.ts";
 import { IllegalTransition, assertTransition, canTransition } from "../../src/do/workspace/transitions.ts";
 import { checksStateOf, prStateOf } from "../../src/github/provider.ts";
 import { appJwt, pkcs1ToPkcs8 } from "../../src/github/app.ts";
@@ -1571,5 +1580,91 @@ describe("Better Auth options (05, Secrets and Observability)", () => {
     expect(line.msg).toBe("auth: oauth failed");
     expect(line.args).toEqual([{ accessToken: "[redacted]", status: 401 }, "boom"]);
     expect(JSON.stringify(line)).not.toContain("gho_secret");
+  });
+});
+
+// egress/rules.ts — 01 "Environments": rules 13 and 14
+describe("egress rules 13 and 14 (01, Environments)", () => {
+  const APP = "tempo.test";
+  const injector = { name: "sign", hosts: ["*.amazonaws.com"], code: "x", sha256: "s" };
+  const config: EgressConfig = {
+    owner: "acme",
+    repo: "app",
+    policy: "allowlist",
+    allowlist: [],
+    environmentId: "env1",
+    secrets: [
+      { name: "STRIPE_KEY", hosts: ["api.stripe.com"] },
+      { name: "S3_KEY", hosts: ["*.amazonaws.com"] },
+      { name: "LOCAL", hosts: [] },
+    ],
+    injectors: [injector],
+    mcp: [],
+  };
+  const d = (url: string, headers: Record<string, string> = {}) =>
+    decide(new URL(url), new Headers(headers), APP, config);
+
+  it("rule 14 matches when every placeholder is bound to the host", () => {
+    expect(d("https://api.stripe.com/v1", { authorization: "Bearer tempo-secret-STRIPE_KEY" })).toEqual({
+      rule: 14,
+      action: "swap",
+      names: ["STRIPE_KEY"],
+    });
+  });
+  it("rule 7 refuses a placeholder for another host, an unbound secret, or a mix", () => {
+    const refused = { rule: 7, action: "block" };
+    expect(d("https://evil.example/", { authorization: "Bearer tempo-secret-STRIPE_KEY" })).toMatchObject(
+      refused,
+    );
+    expect(d("https://api.stripe.com/", { "x-key": "tempo-secret-LOCAL" })).toMatchObject(refused);
+    expect(
+      d("https://api.stripe.com/", { a: "tempo-secret-STRIPE_KEY", b: "tempo-secret-LOCAL" }),
+    ).toMatchObject(refused);
+    expect(
+      d("https://api.stripe.com/", { a: "tempo-secret-STRIPE_KEY", b: "tempo-placeholder" }),
+    ).toMatchObject(refused);
+    expect(d(`https://evil.example/?k=tempo-secret-STRIPE_KEY`)).toMatchObject(refused);
+    expect(
+      d("https://evil.example/", { authorization: `Basic ${btoa("tempo-secret-STRIPE_KEY:")}` }),
+    ).toMatchObject(refused);
+  });
+  it("rule 13 runs before rule 14 for an injector host, and rule 14 does not need the allowlist", () => {
+    expect(d("https://s3.amazonaws.com/b/k")).toEqual({ rule: 13, action: "inject", injector });
+    expect(d("https://api.stripe.com/", { authorization: "Bearer tempo-secret-STRIPE_KEY" }).rule).toBe(14);
+  });
+  it("rule 1 still wins for http: (no swap, no injector)", () => {
+    expect(d("http://s3.amazonaws.com/").rule).toBe(10);
+  });
+  it("finds placeholder names without merging prefixes", () => {
+    expect(
+      secretPlaceholderNames(
+        new URL("https://x/a?b=tempo-secret-A_B"),
+        new Headers({ h: "tempo-secret-A" }),
+      ).sort(),
+    ).toEqual(["A", "A_B"]);
+  });
+  it("swaps in the path, query, headers and Basic auth, and encodes URL values", () => {
+    const { url, headers } = swapSecrets(
+      new URL("https://h/x/tempo-secret-K?q=tempo-secret-K"),
+      new Headers({ authorization: `Basic ${btoa("u:tempo-secret-K")}`, "x-k": "tempo-secret-K" }),
+      { K: "a b/c" },
+    );
+    expect(url.pathname).toBe("/x/a%20b%2Fc");
+    expect(url.searchParams.get("q")).toBe("a b/c");
+    expect(atob(headers.get("authorization")!.replace("Basic ", ""))).toBe("u:a b/c");
+    expect(headers.get("x-k")).toBe("a b/c");
+  });
+  it("an injector subrequest may reach only its hosts and never runs rule 13 again", () => {
+    const sub = (url: string, headers: Record<string, string> = {}) =>
+      decideForInjector(new URL(url), new Headers(headers), APP, config, injector);
+    expect(sub("https://s3.amazonaws.com/")).toEqual({ rule: 13, action: "forward" });
+    expect(sub("https://evil.example/")).toMatchObject({ rule: 13, action: "block", status: 403 });
+    expect(sub("https://tempo.test/")).toMatchObject({ rule: 0, action: "block" });
+    expect(sub("https://s3.amazonaws.com/", { "x-k": "tempo-secret-S3_KEY" })).toEqual({
+      rule: 14,
+      action: "swap",
+      names: ["S3_KEY"],
+    });
+    expect(sub("https://s3.amazonaws.com/", { "x-k": "tempo-secret-STRIPE_KEY" })).toMatchObject({ rule: 7 });
   });
 });

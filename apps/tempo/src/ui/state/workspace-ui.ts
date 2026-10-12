@@ -461,6 +461,7 @@ export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePan
 export type SettingsTab =
   | "general"
   | "logins"
+  | "environments"
   | "mcp"
   | "project"
   | "appearance"
@@ -473,6 +474,7 @@ export type DialogState =
   | { readonly kind: "addProject" }
   | { readonly kind: "settings"; readonly tab?: SettingsTab; readonly projectId?: string }
   | { readonly kind: "diagnostics"; readonly workspaceId: string }
+  | { readonly kind: "environment"; readonly workspaceId: string }
   | { readonly kind: "palette" }
   | { readonly kind: "openFile"; readonly workspaceId: string }
   | { readonly kind: "searchFiles"; readonly workspaceId: string };

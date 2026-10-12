@@ -15,6 +15,13 @@
       "when": 1791830258734,
       "tag": "0001_mcp_servers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791838067185,
+      "tag": "0002_environments",
+      "breakpoints": true
     }
   ]
 }

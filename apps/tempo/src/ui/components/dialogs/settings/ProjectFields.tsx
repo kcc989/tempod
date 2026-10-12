@@ -43,14 +43,35 @@ export function FieldRow({
   onChange,
   ctx,
   error,
+  locked,
 }: {
   def: FieldDef;
   state: FieldState;
   onChange: (next: FieldState) => void;
   ctx: EffectiveContext;
   error?: string | undefined;
+  /** Read-only: the value comes from a named environment (04, Project → Environment). */
+  locked?: { readonly by: string; readonly text: string } | undefined;
 }) {
   const id = fieldId(def);
+  if (locked) {
+    return (
+      <div role="group" aria-labelledby={`${id}-label`} className="grid gap-3 py-6">
+        <div className="min-w-0">
+          <span id={`${id}-label`} className="text-sm font-medium">
+            {def.label}
+          </span>
+          <p className="text-xs text-muted-foreground">Set by environment {locked.by}</p>
+        </div>
+        <div className="flex items-start gap-2 text-xs">
+          <span className="text-muted-foreground">In effect</span>
+          <span className={cn("min-w-0 flex-1 break-words", def.kind === "hosts" && "font-mono")}>
+            {locked.text}
+          </span>
+        </div>
+      </div>
+    );
+  }
   const isRecord = def.kind === "run" || def.kind === "env";
   const setValue = (value: EditValue) => onChange({ set: true, value });
   const savedOverride = getAt(ctx.layer, def.path) !== undefined;

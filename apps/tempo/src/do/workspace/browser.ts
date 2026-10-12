@@ -1,4 +1,4 @@
-import { TempoError } from "@tempo/protocol";
+import { TempoError, type EgressPolicy } from "@tempo/protocol";
 import { browserRunOn } from "@tempo/settings";
 import { stripInternalHeaders } from "../../http/preview.ts";
 import { errorText, log } from "../../log.ts";
@@ -13,9 +13,18 @@ export const BROWSER_IDLE_MS = 60_000;
 const notFound = () => new Response("Not found", { status: 404 });
 const closed = (state: string) => state === "archived" || state === "archiving";
 
-/** 01 Browser Run is on: the setting, the `open` egress policy and the `BROWSER` binding. */
-export const browserRunEnabled = (core: WorkspaceCore): boolean =>
-  core.browser !== undefined && browserRunOn(core.settings());
+/**
+ * 01 Browser Run is on: the setting, the `open` egress policy and the `BROWSER` binding. The policy
+ * is the environment's when one applies; getEgressConfig records it before rule 11 runs.
+ */
+export const browserRunEnabled = (core: WorkspaceCore): boolean => {
+  const settings = core.settings();
+  const policy = core.kv<EgressPolicy>("egressPolicy") ?? settings.environment.egress_policy;
+  return (
+    core.browser !== undefined &&
+    browserRunOn({ ...settings, environment: { ...settings.environment, egress_policy: policy } })
+  );
+};
 
 const clearBrowser = (core: WorkspaceCore): void => {
   core.setKv("browserIdleSince", undefined);

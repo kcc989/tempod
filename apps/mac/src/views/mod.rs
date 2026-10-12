@@ -9,6 +9,8 @@ pub mod diagnostics;
 pub mod dialogs;
 pub mod diff;
 pub mod diff_model;
+pub mod environments;
+pub mod environments_model;
 pub mod file_picker;
 pub mod file_tree;
 pub mod files;

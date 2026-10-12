@@ -1,5 +1,8 @@
-//! Settings pages (04, Settings): General, Logins, MCP servers, Project and Appearance. Server
-//! data changes with the same functions as the web (07, Local storage and settings).
+//! Settings pages (04, Settings): General, Logins, Environments, MCP servers, Project and
+//! Appearance. Server data changes with the same functions as the web (07, Local storage and
+//! settings).
+use super::environments::{self, EnvironmentSelect};
+use super::environments_model as env_model;
 use super::mcp_model::{self, McpForm};
 use super::settings_model::{self as model, EditValue, FieldState, Kind};
 use super::tokens::{Token, color};
@@ -27,7 +30,8 @@ use tempo_protocol::{self as p, api};
 pub const TAB_LOGINS: usize = 0;
 pub const TAB_PROJECT: usize = 1;
 pub const TAB_GENERAL: usize = 3;
-pub const TAB_MCP: usize = 5;
+pub const TAB_ENVIRONMENTS: usize = 5;
+pub const TAB_MCP: usize = 6;
 
 /// The pages of a project (04), each with the field sections of [`model::SECTIONS`] it shows.
 pub const PROJECT_PAGES: [(&str, &[&str]); 7] = [
@@ -39,6 +43,7 @@ pub const PROJECT_PAGES: [(&str, &[&str]); 7] = [
     ("Secrets", &[]),
     ("General", &[]),
 ];
+const PAGE_ENVIRONMENT: usize = 2;
 const PAGE_SECRETS: usize = 5;
 
 struct RunEditor {
@@ -339,6 +344,10 @@ pub struct SettingsForm {
     codex_busy: bool,
     codex_login_task: Option<Task<()>>,
     codex_upload: bool,
+    environments: Option<Vec<p::Environment>>,
+    environment_select: Entity<EnvironmentSelect>,
+    environment_pending: bool,
+    _environment_selected: gpui_kit::Subscription,
     mcp_servers: Option<Vec<p::McpServer>>,
     mcp_editor: Option<McpEditor>,
 }
@@ -372,6 +381,21 @@ impl SettingsForm {
                 )
             })
             .collect();
+        let environment_select =
+            cx.new(|cx| gpui_kit::component::select::SelectState::new(vec![], None, window, cx));
+        let environment_selected = cx.subscribe_in(
+            &environment_select,
+            window,
+            |this,
+             _,
+             event: &gpui_kit::component::select::SelectEvent<Vec<environments::Choice>>,
+             window,
+             cx| {
+                if let gpui_kit::component::select::SelectEvent::Confirm(Some(value)) = event {
+                    this.set_project_environment(env_model::selected_id(value), window, cx);
+                }
+            },
+        );
         let mut this = Self {
             tab: 0,
             section: 0,
@@ -401,6 +425,10 @@ impl SettingsForm {
             codex_busy: false,
             codex_login_task: None,
             codex_upload: false,
+            environments: None,
+            environment_select,
+            environment_pending: false,
+            _environment_selected: environment_selected,
             mcp_servers: None,
             mcp_editor: None,
         };
@@ -408,8 +436,93 @@ impl SettingsForm {
             this.load_project(project, window, cx);
         }
         this.refresh(cx);
+        this.load_environments(window, cx);
         this.refresh_permission(cx);
         this
+    }
+
+    fn load_environments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(client) = &self.client else {
+            return;
+        };
+        let request = client.call::<api::ListEnvironments>(p::Empty {});
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                match result {
+                    Ok(list) => {
+                        this.environments = Some(list);
+                        this.sync_environment_select(window, cx);
+                    }
+                    Err(e) => this.load_error = Some(super::toast::error_text(&e, None)),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn sync_environment_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(list) = &self.environments else {
+            return;
+        };
+        let current = self.project.as_ref().and_then(|p| p.environment_id.clone());
+        environments::sync_select(
+            &self.environment_select,
+            "None".into(),
+            list,
+            current.as_deref(),
+            window,
+            cx,
+        );
+    }
+
+    /// The environment selected for the project, if it still exists.
+    fn project_environment(&self) -> Option<&p::Environment> {
+        env_model::find(
+            self.environments.as_deref()?,
+            self.project.as_ref()?.environment_id.as_deref(),
+        )
+    }
+
+    /// `setProjectEnvironment`, saved at once and not with the Save bar (04). Unsaved field
+    /// edits stay.
+    fn set_project_environment(
+        &mut self,
+        environment_id: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(client), Some(project)) = (&self.client, &self.project) else {
+            return;
+        };
+        if self.environment_pending || project.environment_id == environment_id {
+            return;
+        }
+        self.environment_pending = true;
+        let request = client.call::<api::SetProjectEnvironment>(p::SetProjectEnvironmentIn {
+            project_id: project.id.clone(),
+            environment_id,
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.environment_pending = false;
+                match result {
+                    Ok(project) => {
+                        if let Some(current) = this.project.as_mut().filter(|p| p.id == project.id)
+                        {
+                            current.environment_id = project.environment_id.clone();
+                        }
+                        environments::store_project(project, cx);
+                    }
+                    Err(e) => super::toast::error(&e, None, window, cx),
+                }
+                this.sync_environment_select(window, cx);
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Selects a settings tab; the General tab reads the macOS permission again.
@@ -502,6 +615,7 @@ impl SettingsForm {
             return;
         }
         self.load_project(project, window, cx);
+        self.sync_environment_select(window, cx);
         self.refresh(cx);
     }
 
@@ -1675,6 +1789,38 @@ impl SettingsForm {
                 .child(self.source_tag(source, cx))
                 .into_any_element()
         };
+        let locked = env_model::is_egress_setting(def.path)
+            .then(|| self.project_environment())
+            .flatten();
+        let effective = match locked {
+            Some(env) => {
+                let value = if def.path == "environment.egress_policy" {
+                    env.egress_policy.to_string()
+                } else {
+                    env.egress_allowlist.join(", ")
+                };
+                v_flex()
+                    .gap_0p5()
+                    .text_xs()
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(div().text_color(muted).child("In effect"))
+                            .child(div().flex_1().min_w_0().child(value)),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("{id}-set-by")))
+                            .role(gpui_kit::Role::Status)
+                            .aria_label(env_model::set_by(&env.name))
+                            .text_color(muted)
+                            .child(env_model::set_by(&env.name)),
+                    )
+                    .into_any_element()
+            }
+            None => effective,
+        };
+        let locked = locked.is_some();
         let error = self.field_errors.get(def.path).cloned();
         v_flex()
             .id(SharedString::from(format!("setting-{id}")))
@@ -1699,21 +1845,23 @@ impl SettingsForm {
                             )
                             .children(def.hint.map(|h| div().text_xs().text_color(muted).child(h))),
                     )
-                    .child(
-                        Switch::new(SharedString::from(format!("{id}-set")))
-                            .checked(field.set)
-                            .label("Set in Tempo")
-                            .accessibility_label(format!("Set {} in Tempo", def.label))
-                            .disabled(self.pending)
-                            .on_click(cx.listener(move |this, on: &bool, _, cx| {
-                                this.fields[ix].set = *on;
-                                this.field_errors.remove(model::FIELDS[ix].path);
-                                cx.notify();
-                            })),
-                    ),
+                    .when(!locked, |row| {
+                        row.child(
+                            Switch::new(SharedString::from(format!("{id}-set")))
+                                .checked(field.set)
+                                .label("Set in Tempo")
+                                .accessibility_label(format!("Set {} in Tempo", def.label))
+                                .disabled(self.pending)
+                                .on_click(cx.listener(move |this, on: &bool, _, cx| {
+                                    this.fields[ix].set = *on;
+                                    this.field_errors.remove(model::FIELDS[ix].path);
+                                    cx.notify();
+                                })),
+                        )
+                    }),
             )
             .child(effective)
-            .when(field.set, |row| {
+            .when(field.set && !locked, |row| {
                 row.child(
                     div()
                         .p_2()
@@ -2141,6 +2289,31 @@ impl SettingsForm {
                                     this.select_project(p.clone(), window, cx)
                                 }))
                         })),
+                )
+            })
+            .when(self.section == PAGE_ENVIRONMENT, |col| {
+                col.child(
+                    v_flex()
+                        .id("project-environment")
+                        .role(gpui_kit::Role::Group)
+                        .aria_label("Environment")
+                        .gap_1()
+                        .pb_2()
+                        .border_b_1()
+                        .border_color(color(Token::Border, cx))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                .child("Environment"),
+                        )
+                        .child(
+                            gpui_kit::component::select::Select::new(&self.environment_select)
+                                .id("project-environment-select")
+                                .accessibility_label("Environment")
+                                .placeholder("None")
+                                .disabled(self.environments.is_none() || self.environment_pending),
+                        ),
                 )
             })
             .when(self.section == PROJECT_PAGES.len() - 1, |col| {

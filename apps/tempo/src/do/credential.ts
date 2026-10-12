@@ -6,6 +6,7 @@ import { json, type SecretMeta } from "../db/json.ts";
 import { CREDENTIAL_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
 import type { Env } from "../env.ts";
 import { deriveKey, open, seal } from "../lib/crypto.ts";
+import { environmentSecretKey, environmentSecretPrefix } from "../lib/environments.ts";
 import { log } from "../log.ts";
 import { TempoError, capture, type Result, type FnOutput } from "@tempo/protocol";
 import {
@@ -222,30 +223,32 @@ export class CredentialDO extends DurableObject<Env> {
       }));
   }
 
-  async listProjectEnv(projectId: string): Promise<Record<string, string>> {
-    const prefix = `project.${projectId}.env.`;
-    const rows = this.db
-      .select({ key: secrets.key })
-      .from(secrets)
-      .where(like(secrets.key, `${prefix}%`))
-      .all();
+  private async valuesWithPrefix(prefix: string): Promise<Record<string, string>> {
     const out: Record<string, string> = {};
-    for (const r of rows) {
-      const value = await this.getSecret(r.key);
-      if (value !== null) out[r.key.slice(prefix.length)] = value;
+    for (const name of this.namesWithPrefix(prefix)) {
+      const value = await this.getSecret(prefix + name);
+      if (value !== null) out[name] = value;
     }
     return out;
   }
 
-  async listProjectEnvNames(projectId: string): Promise<string[]> {
-    const prefix = `project.${projectId}.env.`;
+  private namesWithPrefix(prefix: string): string[] {
     return this.db
       .select({ key: secrets.key })
       .from(secrets)
       .where(like(secrets.key, `${prefix}%`))
       .all()
+      .filter((r) => r.key.startsWith(prefix))
       .map((r) => r.key.slice(prefix.length))
       .sort();
+  }
+
+  async listProjectEnv(projectId: string): Promise<Record<string, string>> {
+    return this.valuesWithPrefix(`project.${projectId}.env.`);
+  }
+
+  async listProjectEnvNames(projectId: string): Promise<string[]> {
+    return this.namesWithPrefix(`project.${projectId}.env.`);
   }
 
   async deleteProjectEnv(projectId: string): Promise<void> {
@@ -253,6 +256,42 @@ export class CredentialDO extends DurableObject<Env> {
       .delete(secrets)
       .where(like(secrets.key, `project.${projectId}.env.%`))
       .run();
+  }
+
+  /** WorkspaceDO only (02): values for the container's env. */
+  async listEnvironmentSecrets(environmentId: string): Promise<Record<string, string>> {
+    return this.valuesWithPrefix(environmentSecretPrefix(environmentId));
+  }
+
+  async listEnvironmentSecretNames(environmentId: string): Promise<string[]> {
+    return this.namesWithPrefix(environmentSecretPrefix(environmentId));
+  }
+
+  async deleteEnvironmentSecrets(environmentId: string): Promise<void> {
+    this.db
+      .delete(secrets)
+      .where(like(secrets.key, `${environmentSecretPrefix(environmentId)}%`))
+      .run();
+  }
+
+  /** TempoOutbound only (01, rule 11): an injector gets the MAC, never the value. */
+  async hmacEnvironmentSecret(
+    environmentId: string,
+    name: string,
+    data: string | ArrayBuffer,
+    hash: "SHA-1" | "SHA-256" | "SHA-512",
+    prefix: string,
+  ): Promise<ArrayBuffer | null> {
+    const value = await this.getSecret(environmentSecretKey(environmentId, name));
+    if (value === null) return null;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(prefix + value),
+      { name: "HMAC", hash },
+      false,
+      ["sign"],
+    );
+    return crypto.subtle.sign("HMAC", key, typeof data === "string" ? new TextEncoder().encode(data) : data);
   }
 
   /** Stores a Codex auth.json only if it is newer, then pushes it to every other lease holder (01). */

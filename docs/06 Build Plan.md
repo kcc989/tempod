@@ -28,7 +28,7 @@ tempo/
   packages/
     protocol/                   Effect Schemas: shared types, channels, tempod protocol, errors
     tempod/                     the daemon: main.ts, server.ts, outbox.ts, acp/, scripts.ts,
-                                git.ts, ports.ts, watcher.ts, proxy.ts, mcp.ts, artifacts.ts
+                                git.ts, ports.ts, watcher.ts, proxy.ts, artifacts.ts
     settings/                   settings.toml parsing and Conductor mapping (used by tempod and the Worker)
     cities/                     the fixed slug list
   container/

