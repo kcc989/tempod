@@ -52,6 +52,7 @@ const args = process.argv.slice(2);
 if (existingStore && !args.includes("--no-input")) args.push("--no-input");
 args.push("--stage", "production", "--profile", "tempo");
 const result = Bun.spawnSync(["bunx", "alchemy", "deploy", "./alchemy.run.ts", ...args], {
+  env: { ...process.env },
   stdin: "inherit",
   stdout: "inherit",
   stderr: "inherit",

@@ -206,3 +206,10 @@ The current follow-up adds `WorkspaceDetail.prTitle` and `refreshPullRequest.prT
 Alchemy beta.81 imports its optional `@effect/platform-node` peer while loading Cloudflare providers; the existing Effect stack now pins that peer at 4.0.3. A preflight wrapper prevents unavailable existing state-store probes from entering automatic bootstrap. See the deployment guide and CORE-RESULTS.md for the historical failed attempt. The dedicated Tempo store is isolated by a pinned Bun SDK patch; unrelated store recovery is separate from Tempo deployment.
 
 The native PR imports this core follow-up for compatibility. Its earlier attachment-read and closed/merged PR-title requests are now available in the shared contracts; consuming those additions in the native UI remains follow-up work.
+
+
+## Dedicated Tempo deployment tooling
+
+Alchemy 2.0.0-beta.81 is patched reproducibly through Bun's pinned `patchedDependencies` for Tempo's Worker/DO, bootstrap stack, auth/encryption secret names and credential cache. All deployment runs use stage `production` and profile `tempo`. Unrelated state-store recovery is separate. Preflight refuses unavailable existing Tempo state, unfinished bootstrap, or orphaned dedicated secrets; it never treats an unreachable store as absent.
+
+Wrangler's pinned builder cannot pass a BuildKit CA secret. `TEMPO_BUILD_CA` selects an explicit full-image build with the existing temporary trust mount and an image digest tag, followed by Wrangler registry push and Worker deployment. Deployment disables command memoization so fresh ephemeral VMs recreate the private mode-0600 setup-link file from the unchanged remote token. Workers invocation logs redact URL query strings. These deployment changes do not change the shared wire contracts, ACP v1, OpenCode 1.18.35 or turn-token semantics.

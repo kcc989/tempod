@@ -66,6 +66,7 @@ export default Alchemy.Stack(
 
     yield* Command.Exec("WranglerDeploy", {
       command: "bun scripts/deploy-worker.ts",
+      memo: false,
       timeout: "45 minutes",
       env: {
         APP_HOST,

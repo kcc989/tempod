@@ -20,11 +20,25 @@ export const preflightDeployment = async (
     return body.result;
   };
   const scripts = (await api("workers/scripts")) as Array<{ id: string }>;
-  if (!scripts.some((script) => script.id === "tempo-state-store")) return false;
   if (pendingBootstrap)
     throw new Error(
       "An existing Alchemy state store has an unfinished local bootstrap. Preserve its files and verify and finish the dedicated Tempo bootstrap before resuming; do not replay generated secrets.",
     );
+  if (!scripts.some((script) => script.id === "tempo-state-store")) {
+    const stores = (await api("secrets_store/stores")) as Array<{ id: string }>;
+    for (const store of stores) {
+      const secrets = (await api(`secrets_store/stores/${store.id}/secrets`)) as Array<{ name: string }>;
+      if (
+        secrets.some((secret) =>
+          ["TempoStateStoreToken", "TempoStateStoreEncryptionKey"].includes(secret.name),
+        )
+      )
+        throw new Error(
+          "Dedicated Tempo secrets exist without its Worker. Preserve them and recover the dedicated bootstrap; do not bootstrap or rotate secrets.",
+        );
+    }
+    return false;
+  }
   const { subdomain } = (await api("workers/subdomain")) as { subdomain?: string };
   if (!subdomain)
     throw new Error("Existing Alchemy state store has no workers.dev subdomain. Stop before bootstrap.");

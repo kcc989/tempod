@@ -38,6 +38,7 @@ describe("deployment preflight", () => {
       const fake = async (url: string | URL | Request) => {
         if (String(url).endsWith("workers/scripts")) return api(exists ? [{ id: "tempo-state-store" }] : []);
         if (String(url).endsWith("workers/subdomain")) return api({ subdomain: "account" });
+        if (String(url).endsWith("secrets_store/stores")) return api([]);
         return Response.json({ version: "2" });
       };
       expect(await preflightDeployment(env, fake)).toBe(exists);
@@ -50,8 +51,18 @@ it("ignores the unrelated account-wide store", async () => {
   expect(
     await preflightDeployment(env, async (url) => {
       paths.push(String(url));
-      return api([{ id: "alchemy-state-store" }]);
+      return api(String(url).endsWith("workers/scripts") ? [{ id: "alchemy-state-store" }] : []);
     }),
   ).toBe(false);
-  expect(paths).toHaveLength(1);
+  expect(paths).toHaveLength(2);
+});
+
+it("refuses a missing Worker when dedicated remote secrets or local bootstrap survive", async () => {
+  const fake = async (url: string | URL | Request) => {
+    if (String(url).endsWith("workers/scripts")) return api([]);
+    if (String(url).endsWith("secrets_store/stores")) return api([{ id: "store" }]);
+    return api([{ name: "TempoStateStoreEncryptionKey" }]);
+  };
+  await expect(preflightDeployment(env, fake)).rejects.toThrow("do not bootstrap or rotate secrets");
+  await expect(preflightDeployment(env, fake, true)).rejects.toThrow("do not replay generated secrets");
 });

@@ -44,13 +44,48 @@ const baseImage = pinned.base_image_digest
   : pinned.base_image;
 
 // 2. The deploy config. No `migrations` array: it conflicts with `exports` (01).
+let workspaceImage: { image: string } | undefined;
+if (process.env.TEMPO_BUILD_CA && !process.argv.includes("--prepare")) {
+  // Wrangler beta's Docker builder cannot pass BuildKit secrets. Build with CA trust here.
+  const tag = "tempo-workspace:production";
+  run(
+    "docker",
+    [
+      "build",
+      "--platform",
+      "linux/amd64",
+      "-f",
+      "container/Dockerfile",
+      "--secret",
+      `id=proxy_ca,src=${process.env.TEMPO_BUILD_CA}`,
+      "-t",
+      tag,
+      ...Object.entries({ ...pinned.build_args, BASE_IMAGE: baseImage }).flatMap(([key, value]) => [
+        "--build-arg",
+        `${key}=${value}`,
+      ]),
+      ".",
+    ],
+    root,
+  );
+  const inspected = spawnSync("docker", ["image", "inspect", "--format", "{{.Id}}", tag], {
+    encoding: "utf8",
+  });
+  const digest = inspected.stdout?.trim();
+  if (inspected.status !== 0 || !/^sha256:[a-f0-9]{64}$/.test(digest ?? ""))
+    throw new Error("Cannot identify the built production image.");
+  const immutableTag = `tempo-workspace:${digest.slice(7)}`;
+  run("docker", ["tag", tag, immutableTag], root);
+  run("bunx", ["wrangler", "containers", "push", immutableTag], app);
+  workspaceImage = { image: immutableTag };
+}
 const DO = { type: "durable-object", storage: "sqlite" } as const;
 const config = {
   name: "tempo",
   main: "./src/worker.ts",
   compatibility_date: "2026-10-10",
   compatibility_flags: ["nodejs_compat"],
-  observability: { enabled: true },
+  observability: { enabled: true, redact_query_string: true },
   vars: {
     APP_HOST: env("APP_HOST"),
     PREVIEW_DOMAIN: env("PREVIEW_DOMAIN"),
@@ -62,7 +97,7 @@ const config = {
       class_name: "WorkspaceDO",
       scheduling_policy: "durable_object",
       images: {
-        workspace: {
+        workspace: workspaceImage ?? {
           dockerfile: "../../container/Dockerfile",
           build_context: "../..",
           build_vars: { ...pinned.build_args, BASE_IMAGE: baseImage },
@@ -117,4 +152,5 @@ fs.mkdirSync(path.dirname(setupLink), { recursive: true, mode: 0o700 });
 fs.writeFileSync(setupLink, `https://${env("APP_HOST")}/setup/github?token=${env("TEMPO_SETUP_TOKEN")}\n`, {
   mode: 0o600,
 });
+fs.chmodSync(setupLink, 0o600);
 console.log("Private setup link saved to .alchemy/tempo-setup-link.txt; open it locally. Do not publish it.");
