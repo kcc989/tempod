@@ -1,6 +1,13 @@
 import { DEFAULT_SETTINGS } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
-import { readConductorJson, readConductorToml, resolveSettings, validateOverrides } from "../src/index.ts";
+import {
+  BROWSER_RUN_ALLOWLIST_WARNING,
+  browserRunOn,
+  readConductorJson,
+  readConductorToml,
+  resolveSettings,
+  validateOverrides,
+} from "../src/index.ts";
 
 describe("resolveSettings", () => {
   it("returns defaults with no files", () => {
@@ -74,6 +81,19 @@ describe("resolveSettings", () => {
       resolveSettings({ browser: { run: false } }, { tempoToml: `[browser]\nrun = true\n` }).effective.browser
         .run,
     ).toBe(false);
+  });
+
+  it("turns Browser Run off under the allowlist egress policy, with a warning (01)", () => {
+    const open = resolveSettings({}, { tempoToml: `[browser]\nrun = true\n` });
+    expect(browserRunOn(open.effective)).toBe(true);
+    expect(open.warnings).not.toContain(BROWSER_RUN_ALLOWLIST_WARNING);
+    const allow = resolveSettings(
+      { environment: { egress_policy: "allowlist" } },
+      { tempoToml: `[browser]\nrun = true\n` },
+    );
+    expect(browserRunOn(allow.effective)).toBe(false);
+    expect(allow.warnings).toContain(BROWSER_RUN_ALLOWLIST_WARNING);
+    expect(resolveSettings({ environment: { egress_policy: "allowlist" } }, {}).warnings).toEqual([]);
   });
 
   it("treats the old agent.model key as unknown", () => {

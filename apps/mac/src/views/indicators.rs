@@ -312,6 +312,25 @@ pub fn pr_link(
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PreviewLink {
+    Port(f64),
+    Live,
+}
+
+/// 04 Top bar, middle: one `<port> ↗` per detected port, then `Live` while a Browser Run session
+/// is open.
+pub fn preview_links(
+    ports: &[p::WorkspaceDetailPortsItem],
+    browser_active: bool,
+) -> Vec<PreviewLink> {
+    ports
+        .iter()
+        .map(|port| PreviewLink::Port(port.port))
+        .chain(browser_active.then_some(PreviewLink::Live))
+        .collect()
+}
+
 /// Open on GitHub: the PR, else the branch.
 pub fn github_url_for(owner: &str, name: &str, pr_number: Option<f64>, branch: &str) -> String {
     match pr_number {
@@ -518,6 +537,28 @@ mod tests {
             Some(Token::Destructive)
         );
         assert_eq!(pr_link("acme", "api", None, None), None);
+    }
+
+    #[test]
+    fn live_follows_the_port_links_only_while_browser_run_is_active() {
+        let ports = [3000., 5173.].map(|port| p::WorkspaceDetailPortsItem {
+            port,
+            url: format!("https://{port}-w.example-previews.com"),
+        });
+        assert_eq!(
+            preview_links(&ports, false),
+            [PreviewLink::Port(3000.), PreviewLink::Port(5173.)]
+        );
+        assert_eq!(
+            preview_links(&ports, true),
+            [
+                PreviewLink::Port(3000.),
+                PreviewLink::Port(5173.),
+                PreviewLink::Live
+            ]
+        );
+        assert_eq!(preview_links(&[], true), [PreviewLink::Live]);
+        assert!(preview_links(&[], false).is_empty());
     }
 
     #[test]

@@ -189,6 +189,9 @@
         "additionalProperties": true
       }
     },
+    "browserActive": {
+      "type": "boolean"
+    },
     "settings": {
       "$ref": "Settings.json"
     },
@@ -318,6 +321,7 @@
     "setupStatus",
     "pushed",
     "ports",
+    "browserActive",
     "settings",
     "runningTurnId",
     "queue",

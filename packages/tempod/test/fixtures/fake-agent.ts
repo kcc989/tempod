@@ -19,6 +19,7 @@ import {
   type InitializeResponse,
   type LoadSessionRequest,
   type LoadSessionResponse,
+  type NewSessionRequest,
   type NewSessionResponse,
   type PromptRequest,
   type PromptResponse,
@@ -144,10 +145,11 @@ class FakeAgent implements Agent {
     return { outcome: env["FAKE_STEERING_IDLE"] === "1" ? "promptRequired" : "injected" };
   }
 
-  newSession(): NewSessionResponse {
+  newSession(p: NewSessionRequest): NewSessionResponse {
     const sessionId = `acp-${Math.random().toString(36).slice(2, 10)}`;
     saveRec(sessionId, { modeId: "default", model: "m1", history: [] });
     record(`new ${sessionId}`);
+    for (const s of p.mcpServers) if ("command" in s) record(`mcp ${s.name} ${s.args.join(" ")}`);
     return {
       sessionId,
       ...(env["FAKE_MODE_CONFIG"] === "1" ? {} : { modes: modes("default") }),

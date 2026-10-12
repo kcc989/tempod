@@ -47,6 +47,7 @@ import {
   requireCredential,
   steerQueued,
 } from "./queue.ts";
+import { browserLiveView } from "./browser.ts";
 import { openPreview, rotatePreviewKey } from "./preview.ts";
 import type { OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
@@ -252,6 +253,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       rotatePreviewKey(core);
       return {};
     },
+
+    getBrowserLiveView: () => browserLiveView(core),
 
     setBaseBranch: async ({ baseBranch }) => {
       const row = core.ws();

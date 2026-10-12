@@ -278,6 +278,7 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   deleteWorkspace: [ws],
   openPreview: [{ ...ws, port: 3000 }],
   rotatePreviewKey: [ws],
+  getBrowserLiveView: [ws],
   setBaseBranch: [{ ...ws, baseBranch: "develop" }],
   getDiagnostics: [ws],
   createSession: [
@@ -395,4 +396,8 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     },
   ],
   ListProjectSecretNamesOut: [{ names: ["DATABASE_URL", "STRIPE_KEY"] }],
+  GetBrowserLiveViewOut: [
+    { url: "https://live.browser.run/ui/view?wss=live.browser.run/api/devtools/browser/s1/page/p1?jwt=x" },
+    { url: null },
+  ],
 };

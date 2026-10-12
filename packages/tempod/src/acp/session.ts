@@ -13,12 +13,14 @@ import {
   type WriteTextFileRequest,
 } from "@agentclientprotocol/sdk";
 import {
+  BROWSER_RUN_CDP_ENDPOINT,
   modelOption,
   newId,
   PLAYWRIGHT_MCP_SERVER,
   TempoError,
   toTurnUsage,
   type AgentId,
+  type BrowserMode,
   type PermissionOption,
   type SessionStartResult,
   type TempodEvent,
@@ -38,10 +40,11 @@ const STDERR_LINE_CHARS = 2_000;
 const START_STEP_MS = 90_000;
 const CLOSE_REQUEST_MS = 3_000;
 
-export const playwrightServer = (): McpServer => ({
+/** 01 Browser Run: with `"run"`, Playwright MCP drives the Browser Run session instead of local Chromium. */
+export const playwrightServer = (browser: BrowserMode = "local"): McpServer => ({
   name: PLAYWRIGHT_MCP_SERVER.name,
   command: PLAYWRIGHT_MCP_SERVER.command,
-  args: [...PLAYWRIGHT_MCP_SERVER.args],
+  args: browser === "run" ? ["--cdp-endpoint", BROWSER_RUN_CDP_ENDPOINT] : [...PLAYWRIGHT_MCP_SERVER.args],
   env: PLAYWRIGHT_MCP_SERVER.env.map((e) => ({ ...e })),
 });
 
@@ -354,6 +357,7 @@ export class AgentSession {
   async start(p: {
     modeId?: string | null;
     model?: string | null;
+    browser?: BrowserMode;
     acpSessionId?: string | null;
   }): Promise<SessionStartResult> {
     const init = await this.request<{
@@ -380,7 +384,7 @@ export class AgentSession {
           const res = await this.request<unknown>("session/load", {
             sessionId: wanted,
             cwd: this.deps.workspace,
-            mcpServers: [playwrightServer()],
+            mcpServers: [playwrightServer(p.browser)],
           });
           this.acpSessionId = wanted;
           this.applySessionResponse(res);
@@ -400,7 +404,7 @@ export class AgentSession {
     if (!reloaded) {
       const res = await this.request<{ sessionId?: unknown }>("session/new", {
         cwd: this.deps.workspace,
-        mcpServers: [playwrightServer()],
+        mcpServers: [playwrightServer(p.browser)],
       });
       if (typeof res.sessionId !== "string") throw new Error("session/new returned no sessionId");
       this.acpSessionId = res.sessionId;

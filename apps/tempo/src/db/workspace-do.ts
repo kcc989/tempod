@@ -28,6 +28,7 @@ export const workspace = sqliteTable("workspace", {
     .notNull()
     .$defaultFn(() => ""),
   previewKey: text("preview_key").notNull(),
+  browserSessionId: text("browser_session_id"),
   settingsJson: text("settings_json").notNull(),
   pushed: integer("pushed").notNull(),
   prNumber: integer("pr_number"),

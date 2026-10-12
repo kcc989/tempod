@@ -1,6 +1,7 @@
 use super::chat::{TranscriptEvent, TranscriptRow, TranscriptView};
 use super::chat_model;
 use super::composer::{Composer, ComposerEvent};
+use super::indicators::PreviewLink;
 use super::tokens::{Token, color};
 use crate::actions::*;
 use crate::stores::workspace::WorkspaceStore;
@@ -57,6 +58,8 @@ struct BranchPicker {
 
 /// Error toasts with the same code replace each other, as the web's `error:<code>` toast id.
 struct ErrorToast;
+
+const BROWSER_SESSION_ENDED: &str = "Browser session ended.";
 
 pub struct WorkspaceView {
     pub store: Entity<WorkspaceStore>,
@@ -366,15 +369,19 @@ impl WorkspaceView {
     }
 
     fn toast(&mut self, key: String, message: String, cx: &mut Context<Self>) {
+        self.push_notification(
+            Notification::error(message).id1::<ErrorToast>(SharedString::from(key)),
+            cx,
+        );
+    }
+
+    fn push_notification(&mut self, notification: Notification, cx: &mut Context<Self>) {
         let Some(handle) = self.window_handle else {
             return;
         };
         cx.defer(move |cx| {
             let _ = handle.update(cx, |_, window, cx| {
-                window.push_notification(
-                    Notification::error(message).id1::<ErrorToast>(SharedString::from(key)),
-                    cx,
-                )
+                window.push_notification(notification, cx)
             });
         });
     }
@@ -651,6 +658,27 @@ impl WorkspaceView {
             let result = request.await;
             let _ = this.update(cx, |this, cx| match result {
                 Ok(out) => cx.open_url(&out.url),
+                Err(e) => this.toast_error(&e, cx),
+            });
+        })
+        .detach();
+    }
+
+    /// 07 Previews: `Live` opens a new Live View link in the default browser. The link is a
+    /// secret: it is never logged or kept.
+    fn open_live_view(&mut self, cx: &mut Context<Self>) {
+        let request = self
+            .client
+            .call::<api::GetBrowserLiveView>(p::GetBrowserLiveViewIn {
+                workspace_id: self.store.read(cx).workspace_id.clone(),
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(p::GetBrowserLiveViewOut { url: Some(url) }) => cx.open_url(&url),
+                Ok(p::GetBrowserLiveViewOut { url: None }) => {
+                    this.push_notification(Notification::info(BROWSER_SESSION_ENDED), cx)
+                }
                 Err(e) => this.toast_error(&e, cx),
             });
         })
@@ -998,11 +1026,29 @@ impl WorkspaceView {
                     .accessibility_label("Open the pull request on GitHub")
                     .on_click(move |_, _, cx| cx.open_url(&url))
             }))
-            .children(w.ports.into_iter().map(|port| {
-                Button::new(SharedString::from(format!("port-{}", port.port)))
-                    .label(format!("{} ↗", port.port))
-                    .on_click(cx.listener(move |this, _, _, cx| this.open_preview(port.port, cx)))
-            }))
+            .children(
+                super::indicators::preview_links(&w.ports, w.browser_active)
+                    .into_iter()
+                    .map(|link| match link {
+                        PreviewLink::Port(port) => {
+                            Button::new(SharedString::from(format!("port-{port}")))
+                                .label(format!("{port} ↗"))
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.open_preview(port, cx)),
+                                )
+                        }
+                        PreviewLink::Live => Button::new("live-view")
+                            .accessibility_label("Live")
+                            .child(
+                                div()
+                                    .size(gpui_kit::px(6.))
+                                    .rounded_full()
+                                    .bg(color(Token::Destructive, cx)),
+                            )
+                            .child("Live")
+                            .on_click(cx.listener(|this, _, _, cx| this.open_live_view(cx))),
+                    }),
+            )
             .child(div().flex_1())
             .child(
                 div()
@@ -2864,6 +2910,8 @@ mod tests {
     struct LocalServer {
         url: String,
         requests: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
+        /// What getBrowserLiveView returns as `url`.
+        live_view: Arc<Mutex<Option<String>>>,
         stop: Arc<AtomicBool>,
         worker: Option<std::thread::JoinHandle<()>>,
     }
@@ -2876,6 +2924,8 @@ mod tests {
             let log = requests.clone();
             let stop = Arc::new(AtomicBool::new(false));
             let stopping = stop.clone();
+            let live_view = Arc::new(Mutex::new(Some(LIVE_VIEW_LINK.to_string())));
+            let live = live_view.clone();
             let response = serde_json::to_string(turn).unwrap();
             let worker = std::thread::spawn(move || {
                 while !stopping.load(Ordering::Relaxed) {
@@ -2969,6 +3019,15 @@ mod tests {
                         } else {
                             (200, format!(r#"{{"url":"{PREVIEW_LINK}"}}"#))
                         }
+                    } else if path.ends_with("/getBrowserLiveView") {
+                        if fail {
+                            (404, r#"{"code":"NOT_FOUND","message":"Not found."}"#.into())
+                        } else {
+                            (
+                                200,
+                                serde_json::json!({"url": *live.lock().unwrap()}).to_string(),
+                            )
+                        }
                     } else if path.ends_with("/getCredentialStatus") {
                         (200,r#"{"claude":{"set":true,"updatedAt":null},"anthropic":{"set":true,"updatedAt":null},"openai":{"set":true,"updatedAt":null},"openrouter":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null}}"#.into())
                     } else {
@@ -2989,6 +3048,7 @@ mod tests {
             Self {
                 url,
                 requests,
+                live_view,
                 stop,
                 worker: Some(worker),
             }
@@ -3001,6 +3061,8 @@ mod tests {
         }
     }
     const PREVIEW_LINK: &str = "https://3000-01k7000000000000000000000b.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9";
+    const LIVE_VIEW_LINK: &str =
+        "https://live.example-browser.com/devtools/inspector.html?wss=session&jwt=live-view-token";
 
     fn fixture() -> tempo_client::state::workspace::WorkspaceState {
         let mut state = tempo_client::state::workspace::WorkspaceState::new();
@@ -3925,6 +3987,52 @@ mod tests {
                 assert_eq!(cx.opened_url().as_deref(), Some(PREVIEW_LINK));
                 assert_eq!(toasts(cx, window), 0);
             }
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn live_opens_a_new_live_view_link_in_the_default_browser(cx: &mut TestAppContext) {
+        assert_eq!(BROWSER_SESSION_ENDED, "Browser session ended.");
+        // The opened URL stays recorded on `cx`, so the case that opens one runs last.
+        for (fail, link) in [(true, None), (false, None), (false, Some(LIVE_VIEW_LINK))] {
+            let mut state = fixture();
+            state.workspace.as_mut().unwrap().browser_active = true;
+            let id = state.workspace.as_ref().unwrap().id.clone();
+            let turn = state.turns.values().next().unwrap().clone();
+            let server = LocalServer::new(&turn, fail);
+            *server.live_view.lock().unwrap() = link.map(String::from);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            view.update(cx, |view, cx| view.open_live_view(cx));
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/getBrowserLiveView"))
+                || (cx.opened_url().is_none() && toasts(cx, window) == 0)
+            {
+                cx.run_until_parked();
+                assert!(
+                    Instant::now() < deadline,
+                    "getBrowserLiveView did not finish"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let requests = server.requests.lock().unwrap().clone();
+            let call = requests
+                .iter()
+                .find(|(path, _)| path.ends_with("/getBrowserLiveView"))
+                .unwrap();
+            assert_eq!(call.1, serde_json::json!({"workspaceId": id}));
+            assert_eq!(cx.opened_url().as_deref(), link);
+            assert_eq!(toasts(cx, window), usize::from(link.is_none()));
             cx.update_window(window, |_, window, _| window.remove_window())
                 .unwrap();
         }

@@ -153,6 +153,13 @@ export class WorkspaceCore {
 
   /** The container API (ctx.container). A field, so tests can put a fake in its place. */
   container: Container | undefined;
+  /** The Browser Run binding (01, Browser Run). A field, so tests can put a fake in its place. */
+  browser: BrowserRun | undefined;
+  /** BrowserOutbound for this workspace: Browser Run's route to `localhost`. */
+  browserOutbound: () => Fetcher = () =>
+    this.ctx.exports.BrowserOutbound({ props: { workspaceId: this.workspaceId } });
+  /** The Browser Run acquire in flight, shared by concurrent CDP connections. */
+  browserAcquire: Promise<string | null> | null = null;
 
   constructor(
     readonly ctx: DurableObjectState,
@@ -160,6 +167,7 @@ export class WorkspaceCore {
   ) {
     this.db = drizzle(ctx.storage, { schema: workspaceSchema });
     this.container = ctx.container;
+    this.browser = env.BROWSER;
   }
 
   // ---------- workspace row ----------
@@ -363,6 +371,7 @@ export class WorkspaceCore {
         .orderBy(asc(ports.port))
         .all()
         .map((p) => ({ port: p.port, url: this.previewUrl(p.port, row) })),
+      browserActive: row.browserSessionId !== null,
       settings: this.settings(),
       runningTurnId: running?.id ?? null,
       queue,

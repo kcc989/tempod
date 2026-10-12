@@ -1,7 +1,7 @@
 import { and, eq, gt, lte } from "drizzle-orm";
 import { TEMPOD_PORT, TempoError, randomToken } from "@tempo/protocol";
 import { ports, previewCodes } from "../../db/workspace-do.ts";
-import { PREVIEW_HEADER, previewNotFound } from "../../http/preview.ts";
+import { previewNotFound, stripInternalHeaders } from "../../http/preview.ts";
 import {
   base64UrlToBytes,
   hmacSha256Base64Url,
@@ -23,7 +23,7 @@ const COOKIE_VALUE = /^(\d{1,12})\.([A-Za-z0-9_-]{43})$/;
 /** 03 init 1: 32 random bytes from crypto.getRandomValues, base64url. */
 export const newPreviewKey = (): string => randomBase64Url(32);
 
-const validPort = (port: number) =>
+export const validPort = (port: number): boolean =>
   Number.isInteger(port) && port >= 1024 && port <= 65535 && port !== TEMPOD_PORT;
 
 const closed = (state: string) => state === "archived" || state === "archiving";
@@ -125,6 +125,22 @@ export const previewFetch = async (
   if (!(await verifyPreviewCookie(key, port, cookie))) return previewNotFound();
   const row = core.wsOrNull();
   if (!row || row.previewKey !== key || closed(row.state)) return previewNotFound();
+  return proxyToPort(core, request, port, ensureAwake, true);
+};
+
+/**
+ * Preview request path steps 4–7, shared with Browser Run's `localhost` requests (01): wake if
+ * needed, then forward through tempod's /v1/proxy. WebSocket upgrades are bridged frame by frame;
+ * `resettable` relays close when the preview key is reset.
+ */
+export const proxyToPort = async (
+  core: WorkspaceCore,
+  request: Request,
+  port: number,
+  ensureAwake: () => void,
+  resettable: boolean,
+): Promise<Response> => {
+  const row = core.ws();
   core.lastPreviewAt = Date.now();
   core.touchActivity();
   if (
@@ -143,7 +159,7 @@ export const previewFetch = async (
   }
   const url = new URL(request.url);
   const headers = new Headers(request.headers);
-  headers.delete(PREVIEW_HEADER);
+  stripInternalHeaders(headers);
   headers.delete("Authorization");
   headers.set("X-Forwarded-Host", url.host);
   headers.set("X-Forwarded-Proto", "https");
@@ -164,9 +180,11 @@ export const previewFetch = async (
   const pair = new WebSocketPair();
   const [client, server] = [pair[0], pair[1]];
   server.accept();
-  // rotatePreviewKey closes every open relay (05 Preview access).
-  core.previewSockets.add(server);
-  core.previewSockets.add(remote);
+  // rotatePreviewKey closes every open preview relay (05 Preview access).
+  if (resettable) {
+    core.previewSockets.add(server);
+    core.previewSockets.add(remote);
+  }
   const relay = (from: WebSocket, to: WebSocket) => {
     from.addEventListener("message", (e) => {
       try {

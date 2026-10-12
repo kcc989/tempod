@@ -17,7 +17,7 @@ import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import { json } from "../../db/json.ts";
 import type { Env } from "../../env.ts";
 import type { EgressConfig } from "../../egress/rules.ts";
-import { PREVIEW_HEADER } from "../../http/preview.ts";
+import { BROWSER_APP_HEADER, BROWSER_CDP_HEADER, PREVIEW_HEADER } from "../../http/preview.ts";
 import { errorText, log } from "../../log.ts";
 import { openUiChannel } from "./channel.ts";
 import {
@@ -32,6 +32,7 @@ import { WorkspaceCore, type Author } from "./core.ts";
 import { applyTempodEvent } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
+import { BROWSER_IDLE_MS, browserConnect, browserFetch, browserIdleCheck, closeBrowser } from "./browser.ts";
 import { newPreviewKey, previewEnter, previewFetch } from "./preview.ts";
 import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
 import { makeMethods, type MethodInput, type Methods } from "./rpc.ts";
@@ -80,6 +81,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   private lastHeartbeat = 0;
   private lastIdleCheck = 0;
   private lastPrPoll = 0;
+  private lastBrowserCheck = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -368,6 +370,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       const sep = preview.indexOf(":");
       return this.previewFetch(request, Number(preview.slice(0, sep)), sep < 0 ? "" : preview.slice(sep + 1));
     }
+    if (request.headers.has(BROWSER_CDP_HEADER)) return browserConnect(this.core, request);
+    const browserPort = request.headers.get(BROWSER_APP_HEADER);
+    if (browserPort)
+      return browserFetch(this.core, request, Number(browserPort), () => this.tryEnsureAwake());
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/ws/workspace/")) return openUiChannel(this.core, request);
     const term = TERMINAL_PATH.exec(url.pathname);
@@ -419,6 +425,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       this.lastPrPoll = now;
       await pollPullRequestSafe(core);
     }
+    if (core.ws().browserSessionId !== null && now - this.lastBrowserCheck >= BROWSER_IDLE_MS - 500) {
+      this.lastBrowserCheck = now;
+      await browserIdleCheck(core, now);
+    }
     await this.armAlarm();
   }
 
@@ -437,6 +447,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     if (containerRunning(core)) candidates.push(this.lastIdleCheck + IDLE_CHECK_MS);
     if (core.uiSockets().length > 0 && core.ws().prNumber !== null)
       candidates.push(this.lastPrPoll + PR_POLL_MS);
+    if (core.ws().browserSessionId !== null) candidates.push(this.lastBrowserCheck + BROWSER_IDLE_MS);
     if (candidates.length === 0) {
       await core.ctx.storage.deleteAlarm();
       return;
@@ -541,6 +552,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     core.liveSessions.clear();
     core.updateWs({ tempodToken: null });
     dropCodexLease(core);
+    closeBrowser(core);
     const now = Date.now();
     const recent = json.autoRestarts
       .read(core.ws().autoRestartsJson, [])

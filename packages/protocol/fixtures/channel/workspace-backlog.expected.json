@@ -10518,6 +10518,7 @@
       "attention": "unread",
       "baseBranch": "main",
       "branch": "tempo/lisbon",
+      "browserActive": false,
       "checksState": null,
       "createdAt": 1791622800000,
       "defaultAgent": "claude",

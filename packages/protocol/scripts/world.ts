@@ -149,6 +149,7 @@ export const detail = (
   setupStatus: "succeeded",
   pushed: false,
   ports: [],
+  browserActive: false,
   settings,
   runningTurnId: null,
   queue: [],

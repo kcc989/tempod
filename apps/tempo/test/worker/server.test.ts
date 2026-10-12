@@ -1572,6 +1572,21 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
     sock.ws.close(1000);
   });
 
+  it("drops client x-tempo-* headers, so a forged Browser Run header still opens the channel", async () => {
+    const o = await owner();
+    const { workspaceId } = await seedWorkspace(o);
+    const res = (await upgrade(`/api/ws/workspace/${workspaceId}?sinceRev=0`, {
+      Authorization: `Bearer ${o.token}`,
+      "x-tempo-browser-app": "3000",
+      "x-tempo-browser-cdp": "1",
+    }))!;
+    expect(res.status).toBe(101);
+    const sock = accept(res);
+    await waitFor(() => sock.messages.length > 0, 5000, "workspace hello");
+    expect(sock.messages[0]).toMatchObject({ type: "hello", v: 1 });
+    sock.ws.close(1000);
+  });
+
   it("upgrades, then closes with 4404 for a workspace the user does not own", async () => {
     const o = await owner();
     const other = await owner();

@@ -14,11 +14,12 @@ export type CenterTab =
   | { readonly kind: "chat"; readonly sessionId: string }
   | { readonly kind: "file"; readonly path: string; readonly line: number | null }
   | { readonly kind: "diff"; readonly path: string | null }
-  | { readonly kind: "browser"; readonly url: string };
+  | { readonly kind: "browser"; readonly url: string }
+  | { readonly kind: "liveView" };
 
 export type CenterTabKind = CenterTab["kind"];
 
-/** Identity: one tab per session, one per file path, one diff tab, one per browser URL. */
+/** Identity: one tab per session, one per file path, one diff tab, one per browser URL, one Live View. */
 export const tabKey = (t: CenterTab): string => {
   switch (t.kind) {
     case "chat":
@@ -29,10 +30,15 @@ export const tabKey = (t: CenterTab): string => {
       return "diff";
     case "browser":
       return `browser:${t.url}`;
+    case "liveView":
+      return "liveView";
   }
 };
 
-/** Serialized form: `chat:<sessionId>`, `file:<path>:<line?>`, `diff:<path?>`, `browser:<url>`. */
+/**
+ * Serialized form: `chat:<sessionId>`, `file:<path>:<line?>`, `diff:<path?>`, `browser:<url>`,
+ * `liveView:`.
+ */
 export const tabRef = (t: CenterTab): string => {
   switch (t.kind) {
     case "chat":
@@ -43,6 +49,8 @@ export const tabRef = (t: CenterTab): string => {
       return `diff:${t.path ?? ""}`;
     case "browser":
       return `browser:${t.url}`;
+    case "liveView":
+      return "liveView:";
   }
 };
 
@@ -67,6 +75,8 @@ export const parseTabRef = (ref: string): CenterTab | null => {
       return { kind: "diff", path: rest === "" ? null : rest };
     case "browser":
       return rest ? { kind: "browser", url: rest } : null;
+    case "liveView":
+      return rest === "" ? { kind: "liveView" } : null;
     default:
       return null;
   }
@@ -241,6 +251,9 @@ export const openDiff = (workspaceId: string, path: string | null = null): strin
 
 export const openBrowser = (workspaceId: string, url: string): string =>
   openTab(workspaceId, { kind: "browser", url });
+
+/** The tab holds no link: a Live View link is a secret, so the tab asks for its own (04, Browser tabs). */
+export const openLiveView = (workspaceId: string): string => openTab(workspaceId, { kind: "liveView" });
 
 /** The session of the active chat tab, else of the chat shown most recently. */
 export const targetChatSession = (s: WorkspaceUiState): string | null => {

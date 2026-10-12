@@ -343,6 +343,11 @@ FROM review_comments`,
       "ALTER TABLE review_comments_new RENAME TO review_comments",
     ],
   },
+  {
+    tag: "0005_browser_run",
+    when: 1792094400000,
+    statements: ["ALTER TABLE workspace ADD COLUMN browser_session_id TEXT"],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

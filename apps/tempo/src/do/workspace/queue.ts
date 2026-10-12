@@ -25,6 +25,7 @@ import {
 import { SECRET_KEYS } from "../credential.ts";
 import { errorText, log } from "../../log.ts";
 import { bytesToBase64 } from "../../lib/crypto.ts";
+import { browserRunEnabled } from "./browser.ts";
 import { requireTempod } from "./container.ts";
 import type { WorkspaceCore } from "./core.ts";
 import { backupHomeIfDue, takeCheckpoint, uploadBundleWithRetry } from "./durability.ts";
@@ -152,6 +153,7 @@ export const ensureSessionLive = async (
       env,
       modeId: session.modeId ?? DEFAULT_MODE[agent],
       ...(model ? { model } : {}),
+      browser: browserRunEnabled(core) ? "run" : "local",
       acpSessionId: session.acpSessionId,
     },
     opts,

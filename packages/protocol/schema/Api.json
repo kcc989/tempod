@@ -374,6 +374,22 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getBrowserLiveView": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "GetBrowserLiveViewIn.json"
+        },
+        "output": {
+          "$ref": "GetBrowserLiveViewOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "setBaseBranch": {
       "type": "object",
       "properties": {
@@ -1088,6 +1104,7 @@
     "deleteWorkspace",
     "openPreview",
     "rotatePreviewKey",
+    "getBrowserLiveView",
     "setBaseBranch",
     "getDiagnostics",
     "createSession",

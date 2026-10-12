@@ -70,7 +70,7 @@ Each spike is throwaway code in its own branch that answers one question. Its re
 | S8 | Do previews work for real dev servers? | A Vite dev server bound to `127.0.0.1` loads through the preview URL, and hot reload over WebSocket works. A sleeping workspace shows the wake page. | — |
 | S9 | Do OpenCode and Pi work through ACP? | `opencode acp` and `pi-acp` complete 3 turns each with OpenRouter via the placeholder swap. Record whether `session/load` works for each. | R6 |
 | S10 | Does the terminal work through the DO? | PTY `exec` with tmux over the DO WebSocket. Resize works. A reconnect gets the same session and scrollback. | — |
-| S11 | Does Browser Run work as 01 uses it? | Playwright MCP in the container connects over `wss://browser.tempo.internal/` through `TempoOutbound` to a session from `env.BROWSER.acquire`. The remote browser loads `http://localhost:<port>` through `outboundByHost`. Live View shows the page in an iframe on `APP_HOST`. `closeSession` ends it. | — |
+| S17 | Does Browser Run work as 01 uses it? | Playwright MCP in the container connects over `wss://browser.tempo.internal/` through `TempoOutbound` to a session from `env.BROWSER.acquire`. The remote browser loads `http://localhost:<port>` through `outboundByHost`. Live View shows the page in an iframe on `APP_HOST`. `closeSession` ends it. | — |
 
 ## Acceptance tests
 

@@ -302,8 +302,15 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
     for (const key of Object.keys(sources)) if (sources[key] === "tempo") delete sources[key];
     return { effective, warnings, errors, sources };
   }
+  if (final.value.browser.run && !browserRunOn(final.value)) warnings.push(BROWSER_RUN_ALLOWLIST_WARNING);
   return { effective: final.value, warnings, errors, sources };
 };
+
+export const BROWSER_RUN_ALLOWLIST_WARNING = "Browser Run is off: it does not pass the egress allowlist.";
+
+/** 01 Browser Run: on only with the `open` egress policy, because Browser Run does not pass TempoOutbound. */
+export const browserRunOn = (settings: Settings): boolean =>
+  settings.browser.run && settings.environment.egress_policy === "open";
 
 /** Validates UI overrides on their own (updateProjectSettings). */
 export const validateOverrides = (

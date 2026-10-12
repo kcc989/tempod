@@ -32,6 +32,7 @@ import {
   isPreviewHost,
   parsePreviewHost,
   PREVIEW_NOT_FOUND_TEXT,
+  stripInternalHeaders,
   takePreviewCookie,
 } from "../../src/http/preview.ts";
 import { previewCookie, verifyPreviewCookie } from "../../src/do/workspace/preview.ts";
@@ -58,6 +59,17 @@ describe("egress decide()", () => {
   };
   const d = (url: string, headers: Record<string, string> = {}, config: EgressConfig = open_) =>
     decide(new URL(url), new Headers(headers), APP, config);
+
+  describe("rule 11: Browser Run CDP (01, Browser Run)", () => {
+    it("routes browser.tempo.internal to the WorkspaceDO under both policies, right after rule 0", () => {
+      expect(d("https://browser.tempo.internal/")).toEqual({ rule: 11, action: "browser" });
+      expect(d("https://Browser.Tempo.Internal/", {}, allow)).toEqual({ rule: 11, action: "browser" });
+      expect(d("http://browser.tempo.internal/", { authorization: "Bearer tempo-placeholder" })).toEqual({
+        rule: 11,
+        action: "browser",
+      });
+    });
+  });
 
   describe("rule 0: APP_HOST", () => {
     // 05 Egress control: "Rule 0 ... a request whose host is APP_HOST returns 403."
@@ -1168,6 +1180,20 @@ describe("parsePreviewHost", () => {
   });
   it("returns null for the bare preview domain", () => {
     expect(parsePreviewHost("previews.test", penv)).toBeNull();
+  });
+});
+
+describe("stripInternalHeaders", () => {
+  it("removes every x-tempo- header the WorkspaceDO's fetch() trusts, and keeps the rest", () => {
+    const h = stripInternalHeaders(
+      new Headers({
+        "X-Tempo-Preview": "3000:x",
+        "x-tempo-browser-app": "3000",
+        Cookie: "a=1",
+        Accept: "*/*",
+      }),
+    );
+    expect([...h.keys()].sort()).toEqual(["accept", "cookie"]);
   });
 });
 

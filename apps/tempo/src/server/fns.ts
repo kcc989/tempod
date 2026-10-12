@@ -100,6 +100,10 @@ export const rotatePreviewKey = createServerFn({ method: "POST" })
   .validator((data: FnInput<"rotatePreviewKey">) => data)
   .handler(({ data }) => run("rotatePreviewKey", data));
 
+export const getBrowserLiveView = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"getBrowserLiveView">) => data)
+  .handler(({ data }) => run("getBrowserLiveView", data));
+
 export const setBaseBranch = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setBaseBranch">) => data)
   .handler(({ data }) => run("setBaseBranch", data));

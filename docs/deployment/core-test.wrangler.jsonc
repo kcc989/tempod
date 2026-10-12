@@ -80,6 +80,9 @@
       "bucket_name": "tempo-data"
     }
   ],
+  "browser": {
+    "binding": "BROWSER"
+  },
   "routes": [
     {
       "pattern": "tempo-core-test.example.invalid",

@@ -58,6 +58,12 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("rotatePreviewKey", input);
   }
 
+  getBrowserLiveView(
+    input: MethodInput<"getBrowserLiveView">,
+  ): Promise<Result<FnOutput<"getBrowserLiveView">>> {
+    return this.rpc("getBrowserLiveView", input);
+  }
+
   setBaseBranch(input: MethodInput<"setBaseBranch">): Promise<Result<FnOutput<"setBaseBranch">>> {
     return this.rpc("setBaseBranch", input);
   }

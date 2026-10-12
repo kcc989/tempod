@@ -47,7 +47,10 @@ beforeEach(() => {
 });
 
 describe("port links (04, Top bar middle)", () => {
-  const show = () => wrap(createElement(PortLinks, { workspaceId: WS, ports: [{ port: 3000, url: BARE }] }));
+  const show = () =>
+    wrap(
+      createElement(PortLinks, { workspaceId: WS, ports: [{ port: 3000, url: BARE }], browserActive: false }),
+    );
 
   it("opens the tab on the click, then sends it to the link from openPreview", async () => {
     const tab = fakeTab();

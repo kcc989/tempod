@@ -1,4 +1,4 @@
-import { PLACEHOLDER, type EgressPolicy } from "@tempo/protocol";
+import { BROWSER_RUN_HOST, PLACEHOLDER, type EgressPolicy } from "@tempo/protocol";
 
 /** Built-in agent hosts for the `allowlist` policy (01). */
 export const AGENT_HOSTS = [
@@ -48,6 +48,7 @@ export const carriesPlaceholder = (headers: Headers): boolean => {
 
 export type Decision =
   | { readonly rule: number; readonly action: "block"; readonly status: number; readonly body: string }
+  | { readonly rule: 11; readonly action: "browser" }
   | {
       readonly rule: number;
       readonly action: "forward";
@@ -58,13 +59,14 @@ export type Decision =
     };
 
 /**
- * Rules 0 to 10 (01 and 05), first match wins. Pure: credential lookup happens in the caller.
+ * Rules 0 to 11 (01 and 05), first match wins; rule 11 is checked right after rule 0. Pure: credential lookup happens in the caller.
  * `set` names the credential to add; the caller fetches it and replaces the header.
  */
 export const decide = (url: URL, headers: Headers, appHost: string, config: EgressConfig): Decision => {
   const host = url.hostname.toLowerCase();
   if (host === appHost.toLowerCase())
     return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
+  if (host === BROWSER_RUN_HOST) return { rule: 11, action: "browser" };
   if (url.protocol === "http:") return policy(8, host, config);
   if (
     (host === "github.com" || host === "codeload.github.com") &&

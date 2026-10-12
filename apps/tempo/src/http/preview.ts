@@ -2,6 +2,16 @@ import type { Env } from "../env.ts";
 import { log } from "../log.ts";
 
 export const PREVIEW_HEADER = "x-tempo-preview";
+/** 01 Browser Run: TempoOutbound rule 11 (CDP) and BrowserOutbound (the app on `localhost`). */
+export const BROWSER_CDP_HEADER = "x-tempo-browser-cdp";
+export const BROWSER_APP_HEADER = "x-tempo-browser-app";
+
+/** Removes the headers the WorkspaceDO's fetch() trusts. Every caller sets its own after this. */
+export const stripInternalHeaders = (headers: Headers): Headers => {
+  const internal = Array.from(headers.keys()).filter((n) => n.toLowerCase().startsWith("x-tempo-"));
+  for (const name of internal) headers.delete(name);
+  return headers;
+};
 export const PREVIEW_COOKIE = "__Host-tempo_preview";
 export const PREVIEW_NOT_FOUND_TEXT = "This preview opens only from Tempo.";
 
@@ -79,7 +89,7 @@ export const handlePreview = async (request: Request, env: Env, url: URL): Promi
     }
     const { value, rest } = takePreviewCookie(request.headers.get("Cookie"));
     if (!value) return previewNotFound();
-    const headers = new Headers(request.headers);
+    const headers = stripInternalHeaders(new Headers(request.headers));
     if (rest === "") headers.delete("Cookie");
     else headers.set("Cookie", rest);
     // previewFetch runs inside the DO's fetch(), because RPC cannot carry a WebSocket upgrade.

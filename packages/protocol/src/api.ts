@@ -109,6 +109,8 @@ export const API = {
   deleteWorkspace: fn("POST", Schema.Struct(W), Empty),
   openPreview: fn("POST", Schema.Struct({ ...W, port: N }), Schema.Struct({ url: S })),
   rotatePreviewKey: fn("POST", Schema.Struct(W), Empty),
+  /** POST: each call mints a new Live View link, which is a secret (01, Browser Run). */
+  getBrowserLiveView: fn("POST", Schema.Struct(W), Schema.Struct({ url: Schema.NullOr(S) })),
   setBaseBranch: fn("POST", Schema.Struct({ ...W, baseBranch: NonEmpty }), Empty),
   /** `egressHost`: text the host contains, any case. `egressStatus` defaults to `all`. */
   getDiagnostics: fn(

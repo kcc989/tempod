@@ -87,6 +87,7 @@ const config = {
     { binding: "DB", database_name: env("TEMPO_D1_DATABASE_NAME"), database_id: env("TEMPO_D1_DATABASE_ID") },
   ],
   r2_buckets: [{ binding: "DATA", bucket_name: env("TEMPO_R2_BUCKET_NAME") }],
+  browser: { binding: "BROWSER" },
   routes: [
     { pattern: env("APP_HOST"), custom_domain: true },
     { pattern: `*.${env("PREVIEW_DOMAIN")}/*`, zone_name: env("PREVIEW_DOMAIN") },

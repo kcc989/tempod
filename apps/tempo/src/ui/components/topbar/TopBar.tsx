@@ -26,8 +26,9 @@ export interface TopBarProps {
 }
 
 /**
- * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`, the PR link. Middle: preview ports.
- * Right: container pill, the primary git action and the overflow menu.
+ * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`, the PR link. Middle: preview
+ * ports, then `Live` during a Browser Run session. Right: container pill, the primary git action and the
+ * overflow menu.
  */
 export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
   const summary = useHubWorkspace(workspaceId);
@@ -99,7 +100,12 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
         />
         <PrLinkAnchor workspace={w} />
       </div>
-      <PortLinks workspaceId={w.id} ports={d?.ports ?? []} className="flex-1 justify-center" />
+      <PortLinks
+        workspaceId={w.id}
+        ports={d?.ports ?? []}
+        browserActive={d?.browserActive ?? false}
+        className="flex-1 justify-center"
+      />
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <ContainerPill pill={pillFor(view)} />
         <PrimaryActionButton workspaceId={w.id} />

@@ -1446,6 +1446,18 @@ pub struct ErrorContent {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub detail: ::std::option::Option<::std::string::String>,
 }
+///`GetBrowserLiveViewIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetBrowserLiveViewIn {
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`GetBrowserLiveViewOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetBrowserLiveViewOut {
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub url: ::std::option::Option<::std::string::String>,
+}
 ///`GetChangesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetChangesIn {
@@ -4510,6 +4522,8 @@ pub struct WorkspaceDetail {
     #[serde(rename = "baseBranch")]
     pub base_branch: ::std::string::String,
     pub branch: ::std::string::String,
+    #[serde(rename = "browserActive")]
+    pub browser_active: bool,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub changes: ::std::option::Option<ChangesSummary>,
     #[serde(
@@ -5906,6 +5920,15 @@ pub mod api {
         type Input = crate::EditQueuedTurnIn;
         type Output = crate::Turn;
     }
+    /// `getBrowserLiveView`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetBrowserLiveView;
+    impl crate::Function for GetBrowserLiveView {
+        const NAME: &'static str = "getBrowserLiveView";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::GetBrowserLiveViewIn;
+        type Output = crate::GetBrowserLiveViewOut;
+    }
     /// `getChanges`
     #[derive(Clone, Copy, Debug)]
     pub struct GetChanges;
@@ -6364,6 +6387,7 @@ pub mod api {
         ("deleteReviewComment", crate::Method::Post),
         ("deleteWorkspace", crate::Method::Post),
         ("editQueuedTurn", crate::Method::Post),
+        ("getBrowserLiveView", crate::Method::Post),
         ("getChanges", crate::Method::Get),
         ("getCredentialStatus", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
@@ -6470,6 +6494,8 @@ pub mod wire {
         "ErrorBody",
         "ErrorCode",
         "ErrorContent",
+        "GetBrowserLiveViewIn",
+        "GetBrowserLiveViewOut",
         "GetChangesIn",
         "GetChangesOut",
         "GetDiagnosticsIn",
@@ -6662,6 +6688,8 @@ pub mod wire {
             "ErrorBody" => crate::roundtrip::<crate::ErrorBody>(text),
             "ErrorCode" => crate::roundtrip::<crate::ErrorCode>(text),
             "ErrorContent" => crate::roundtrip::<crate::ErrorContent>(text),
+            "GetBrowserLiveViewIn" => crate::roundtrip::<crate::GetBrowserLiveViewIn>(text),
+            "GetBrowserLiveViewOut" => crate::roundtrip::<crate::GetBrowserLiveViewOut>(text),
             "GetChangesIn" => crate::roundtrip::<crate::GetChangesIn>(text),
             "GetChangesOut" => crate::roundtrip::<crate::GetChangesOut>(text),
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),

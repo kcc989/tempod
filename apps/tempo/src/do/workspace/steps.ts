@@ -47,6 +47,7 @@ import {
 } from "./durability.ts";
 import { sendEnv } from "./events.ts";
 import { getGithubToken, refreshChanges } from "./git.ts";
+import { closeBrowser } from "./browser.ts";
 import { finishTurn } from "./queue.ts";
 import {
   OpRunner,
@@ -654,10 +655,12 @@ export const makeHooks = (
     onDone: (core) => {
       if (core.state === "stopping") core.setState("sleeping");
       dropCodexLease(core);
+      closeBrowser(core);
     },
     onFailed: (core, _op, e) => {
       toError(core, e.code, e.detail);
       dropCodexLease(core);
+      closeBrowser(core);
     },
   },
   archive: {
@@ -665,6 +668,7 @@ export const makeHooks = (
       core.updateWs({ archivedAt: Date.now() });
       core.setState("archived");
       dropCodexLease(core);
+      closeBrowser(core);
       core.publish();
     },
     onFailed: (core, _op, e) => toError(core, e.code, e.detail),

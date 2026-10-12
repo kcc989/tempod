@@ -13,6 +13,7 @@ import {
 import { Schema } from "effect";
 import { snapshots, type SnapshotRow } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
+import { closeBrowser } from "./browser.ts";
 import type { WorkspaceCore } from "./core.ts";
 import { TempodClient, openTempodSocket, tempodFetch } from "./tempod-client.ts";
 import { CONTAINER_STATES } from "./transitions.ts";
@@ -126,6 +127,7 @@ export const destroyContainer = async (core: WorkspaceCore, reason: string): Pro
   core.liveSessions.clear();
   core.closingTempod = false;
   dropCodexLease(core);
+  closeBrowser(core);
 };
 
 /** 01 Codex auth.json sync: the lease lasts while the container runs; the next Codex session start adds it again. */

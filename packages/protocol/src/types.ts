@@ -107,6 +107,8 @@ export const WorkspaceDetail = Schema.Struct({
   pushed: Schema.Boolean,
   prTitle: Schema.optional(N(Schema.String)),
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
+  /** A Browser Run session is open (01, Browser Run). */
+  browserActive: Schema.Boolean,
   settings: Settings,
   runningTurnId: N(Schema.String),
   queue: Schema.Array(Schema.String),

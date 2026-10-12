@@ -15,6 +15,7 @@ import {
   openDialog,
   openDiff,
   openFile,
+  openLiveView,
   openTab,
   parseTabRef,
   resetUiState,
@@ -59,9 +60,10 @@ describe("tab refs", () => {
     [{ kind: "diff", path: "README.md" }, "diff:README.md"],
     [{ kind: "diff", path: null }, "diff:"],
     [{ kind: "browser", url: "https://p-1.example.com:3000/x" }, "browser:https://p-1.example.com:3000/x"],
+    [{ kind: "liveView" }, "liveView:"],
   ];
 
-  it("serializes as chat:<id>, file:<path>:<line?>, diff:<path?>, browser:<url> and parses back", () => {
+  it("serializes as chat:<id>, file:<path>:<line?>, diff:<path?>, browser:<url>, liveView: and parses back", () => {
     for (const [tab, ref] of cases) {
       expect(tabRef(tab)).toBe(ref);
       expect(parseTabRef(ref)).toEqual(tab);
@@ -73,6 +75,7 @@ describe("tab refs", () => {
     expect(parseTabRef("file:a.ts:0")).toBeNull();
     expect(parseTabRef("file:a.ts:x")).toBeNull();
     expect(parseTabRef("chat:")).toBeNull();
+    expect(parseTabRef("liveView:https://live.example.com/x")).toBeNull();
     expect(parseTabRef("nope:1")).toBeNull();
     expect(parseTabRef("plain")).toBeNull();
   });
@@ -99,6 +102,18 @@ describe("center tabs", () => {
     expect(again.tab).toEqual({ kind: "file", path: "a.ts", line: 40 });
     expect(again.seq).toBeGreaterThan(seq);
     expect(active()).toBe("file:a.ts");
+  });
+
+  it("keeps one Live View tab, which holds no link (04, Browser tabs)", () => {
+    openTab(W, { kind: "chat", sessionId: "s1" });
+    const key = openLiveView(W);
+    const seq = getWorkspaceUi(W).tabs[1]!.seq;
+    activateTab(W, "chat:s1");
+    expect(openLiveView(W)).toBe(key);
+    expect(keys()).toEqual(["chat:s1", "liveView"]);
+    expect(getWorkspaceUi(W).tabs[1]!.tab).toEqual({ kind: "liveView" });
+    expect(getWorkspaceUi(W).tabs[1]!.seq).toBeGreaterThan(seq);
+    expect(active()).toBe("liveView");
   });
 
   it("can open without activating, except when nothing is active", () => {

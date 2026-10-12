@@ -52,7 +52,7 @@ const setup = async (opts: { maxLiveAgents?: number } = {}) => {
   const start = (sessionId: string, extra: Record<string, unknown> = {}, env: Record<string, string> = {}) =>
     c.ok<SessionStartResult>(
       "session.start",
-      { sessionId, agent: "claude", env: { FAKE_STATE_DIR: state, ...env }, ...extra },
+      { sessionId, agent: "claude", env: { FAKE_STATE_DIR: state, ...env }, browser: "local", ...extra },
       20_000,
     );
   const prompt = (sessionId: string, turnId: string, text: string) =>
@@ -131,6 +131,24 @@ describe("session.start", () => {
   );
 
   test(
+    "Playwright MCP uses local Chromium, or the Browser Run CDP endpoint with browser run (01)",
+    async () => {
+      const { start, calls } = await setup();
+      await start("local");
+      await start("remote", { browser: "run" });
+      const mcp = calls()
+        .split("\n")
+        .filter((l) => l.includes(" mcp "))
+        .map((l) => l.slice(l.indexOf(" mcp ") + 5));
+      expect(mcp).toEqual([
+        "playwright --headless --isolated --browser chromium",
+        "playwright --cdp-endpoint wss://browser.tempo.internal/",
+      ]);
+    },
+    T,
+  );
+
+  test(
     "reload: session/load with replay dropped, reloaded: true",
     async () => {
       const { c, start, prompt, ended, h } = await setup();
@@ -189,7 +207,11 @@ describe("session.start", () => {
       h = startTempod(config);
       const c = new DoClient(h.base);
       await c.hello();
-      const res = await c.req("session.start", { sessionId: "s1", agent: "claude", env: {} }, 20_000);
+      const res = await c.req(
+        "session.start",
+        { sessionId: "s1", agent: "claude", env: {}, browser: "local" },
+        20_000,
+      );
       expect(res).toMatchObject({ ok: false, error: { code: "AGENT_START_FAILED" } });
     },
     T,
@@ -600,7 +622,12 @@ describe("cancel, eviction and crashes", () => {
       await start("a");
       await prompt("a", "ta", "slow");
       await c.waitEvent("item.created", (e) => e.turnId === "ta");
-      const result = await c.req("session.start", { sessionId: "b", agent: "claude", env: {} });
+      const result = await c.req("session.start", {
+        sessionId: "b",
+        agent: "claude",
+        env: {},
+        browser: "local",
+      });
       expect(result).toMatchObject({ ok: false, error: { code: "AGENT_START_FAILED" } });
       expect(h.app.agents.liveCount).toBe(1);
       expect(h.app.agents.get("a")?.busy).toBe(true);

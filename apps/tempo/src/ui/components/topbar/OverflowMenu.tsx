@@ -23,13 +23,14 @@ import { useProject } from "~/ui/hooks/useProjects";
 import { macWorkspaceUrl } from "~/ui/lib/links";
 import { formatBinding } from "~/ui/lib/shortcuts";
 import { openDialog } from "~/ui/state/workspace-ui";
-import { openPreviewTab } from "./open-preview";
+import { openLiveViewTab, openPreviewTab } from "./open-preview";
+import { LiveDot } from "./PortLinks";
 import { canArchive, githubUrlFor, powerAction, type WorkspaceView } from "./topbar-logic";
 import type { WorkspaceActions } from "./useWorkspaceActions";
 
 /**
  * 04, Overflow menu: Wake or Sleep, Reset preview access, Open on GitHub, Copy workspace link,
- * Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links here.
+ * Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links and `Live` here.
  */
 export function OverflowMenu({
   view,
@@ -44,6 +45,7 @@ export function OverflowMenu({
   const project = useProject(w.projectId);
   const power = powerAction(w.state);
   const ports = phone ? (d?.ports ?? []) : [];
+  const live = phone && (d?.browserActive ?? false);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -52,7 +54,7 @@ export function OverflowMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
-        {ports.length > 0 && (
+        {(ports.length > 0 || live) && (
           <>
             <DropdownMenuLabel>Previews</DropdownMenuLabel>
             {ports.map((p) => (
@@ -61,6 +63,14 @@ export function OverflowMenu({
                 <span className="font-mono tabular-nums">{p.port} ↗</span>
               </DropdownMenuItem>
             ))}
+            {live && (
+              <DropdownMenuItem onSelect={() => void openLiveViewTab(w.id)}>
+                <span className="flex size-4 items-center justify-center">
+                  <LiveDot />
+                </span>
+                Live
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
           </>
         )}
