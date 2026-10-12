@@ -133,6 +133,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "alchemy@2.0.0-beta.81": "patches/alchemy@2.0.0-beta.81.patch",
+  },
   "packages": {
     "@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@1.8.0", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-fbP7qHZsFyTJVT0/RPrcWJ8An26qLXHEuGCHHEKDyxD1xpXV+Ejyh2LAE6vBAFePkpVjZeeohnbgvuEhZ7wLMg=="],
 

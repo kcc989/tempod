@@ -329,6 +329,28 @@ Validation and the per-acceptance local checklist accompany the implementation. 
 
 The current follow-up adds `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle`, persisted by the WorkspaceDO for any PR state, and owner-authenticated attachment reads at the route documented in 02. `Attachment` metadata is shared in TypeScript/Rust and fixtures. Active formats download as binary; raster previews use private/no-store responses. ACP v1 and OpenCode 1.18.35 stay pinned. Turn token accounting now uses ACP v1 `PromptResponse.usage` per turn (`Turn.usage`, 02); the session context ring remains unchanged.
 
-Alchemy beta.81 imports its optional `@effect/platform-node` peer while loading Cloudflare providers; the existing Effect stack now pins that peer at 4.0.3. A preflight wrapper prevents unavailable existing state-store probes from entering automatic bootstrap. See the deployment guide and CORE-RESULTS.md for the actual failed attempt and state-store recovery requirement.
+Alchemy beta.81 imports its optional `@effect/platform-node` peer while loading Cloudflare providers; the existing Effect stack now pins that peer at 4.0.3. A preflight wrapper prevents unavailable existing state-store probes from entering automatic bootstrap. See the deployment guide and CORE-RESULTS.md for the historical failed attempt. The dedicated Tempo store is isolated by a pinned Bun SDK patch; unrelated store recovery is separate from Tempo deployment.
 
 The native PR imports this core follow-up for compatibility. Both clients now consume the attachment-read route and `prTitle`.
+
+## Dedicated Tempo deployment tooling
+
+Alchemy 2.0.0-beta.81 is patched reproducibly through Bun's pinned `patchedDependencies` for Tempo's Worker/DO, bootstrap stack, auth/encryption secret names and credential cache. All deployment runs use stage `production` and profile `tempo`. Unrelated state-store recovery is separate. Preflight refuses unavailable existing Tempo state, unfinished bootstrap, or orphaned dedicated secrets; it never treats an unreachable store as absent.
+
+Wrangler's pinned builder cannot pass a BuildKit CA secret. `TEMPO_BUILD_CA` selects an explicit full-image build with the existing temporary trust mount and an image digest tag, followed by Wrangler registry push and Worker deployment. Deployment disables command memoization so fresh ephemeral VMs recreate the private mode-0600 setup-link file from the unchanged remote token. Workers invocation logs redact URL query strings. These deployment changes do not change the shared wire contracts, ACP v1, OpenCode 1.18.35 or turn-token semantics.
+
+
+The managed credential proxy accepted a small authenticated Worker upload but rejected a 12 MiB multipart probe with an integration-authentication error. Explicit Vite Oxc minification plus excluding browser-only Shiki grammars from SSR reduced the Worker from 355 modules / 15,484 KiB to 46 modules / 2,185 KiB, after which deployment succeeded. The exact proxy size limit is not inferred. The browser still loads the same grammars lazily in its existing effects; native rendering and shared contracts do not change. Cloudflare list APIs are paginated during preflight so surviving dedicated secrets on later pages also block bootstrap.
+
+
+The web-only first-run message now directs the owner to the private setup link instead of obsolete printed output. Per 07's feature table, GitHub App first-run setup is web-only; the native client connects after this step and needs no corresponding setup flow.
+
+
+## GitHub App private-email sign-in
+
+An owner sign-in returned `email_not_found` after OAuth. The configured App exists and sign-in initiation returns 200, but the owner has no public GitHub email. Better Auth 1.7.7 reads `/user/emails` and requires an email for its callback; the original manifest omitted the GitHub App account permission needed by that endpoint. The manifest and 05 now request `email_addresses: read`, covered by the manifest-form Worker regression. Existing Apps need the same permission enabled in GitHub settings and renewed user consent if prompted. No identity fallback, synthetic email, public-email requirement, owner-check change or credential rotation was added.
+
+
+## Existing workspace migration ordering
+
+The first hosted existing-workspace check exposed `DrizzleError: Rollback` on workspace reads and WebSocket upgrades. The file-cache release already recorded migration timestamp 1791849600000, while merged turn usage had been inserted before it at 1791835200000. Drizzle uses the latest timestamp, so it skipped adding `turns.usage_json`; the later status-table rebuild then rolled back. The turn-usage entry now follows the existing file-cache timestamp, before its consumers. Already-upgraded workspaces have later journal entries and do not reapply it. Regression tests reproduce both released schemas, preserve sessions/turns/cached files and verify a second migration run. No workspace state is deleted or manually rewritten, and this fix does not change token accounting semantics.
