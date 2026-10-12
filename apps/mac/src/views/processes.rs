@@ -400,7 +400,30 @@ impl Render for ProcessPanel {
             .as_ref()
             .and_then(|w| w.settings_errors.clone())
             .unwrap_or_default();
-        let body = if self.tab == 2 {
+        let no_setup_script = workspace
+            .as_ref()
+            .is_some_and(|w| w.settings.scripts.setup.trim().is_empty());
+        let body = if self.tab == 0 && no_setup_script {
+            v_flex()
+                .size_full()
+                .gap_2()
+                .p_3()
+                .children(
+                    warnings
+                        .iter()
+                        .chain(&errors)
+                        .map(|w| div().p_1().child(w.clone())),
+                )
+                .child("No setup script.")
+                .child(
+                    Button::new("open-project-settings")
+                        .label("Open project settings")
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(Box::new(crate::actions::OpenSettings), cx)
+                        }),
+                )
+                .into_any_element()
+        } else if self.tab == 2 {
             v_flex()
                 .size_full()
                 .child(

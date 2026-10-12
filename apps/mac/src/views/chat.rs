@@ -2,7 +2,7 @@
 //! per message. Agent text is escaped before it reaches `TextView` (`crate::markdown`); each row
 //! sits in the transcript's `LocalImageCache` (`crate::image_policy`); link clicks follow
 //! `crate::links`. A streamed delta appends to its row and remeasures only that row.
-use super::chat_model::RowContent;
+use super::chat_model::{self, RowContent, WorkType};
 use super::tokens::{Token, color};
 use crate::image_policy::LocalImageCache;
 use crate::links::{self, LinkTarget};
@@ -10,6 +10,7 @@ use crate::markdown::escape_raw_html;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Disableable as _, h_flex, v_flex};
 use gpui_kit::{
@@ -18,7 +19,7 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, Window, div, image_cache,
 };
 use std::collections::{HashMap, HashSet};
-use tempo_protocol::{ItemContent, ItemStatus, NoticeLevel};
+use tempo_protocol::{ItemContent, ItemStatus, NoticeLevel, TurnStatus};
 
 /// Opens a file tab at a workspace path (07, Links). Handled by the workspace view in M3.
 #[derive(Clone, PartialEq, Eq, Debug, Action)]
@@ -30,6 +31,10 @@ pub struct OpenWorkspaceFileAt {
     pub path: SharedString,
     pub line: u32,
 }
+/// Shows the Changes tab on the right side (04, Edit rows).
+#[derive(Clone, PartialEq, Eq, Debug, Default, Action)]
+#[action(namespace = tempo, no_json)]
+pub struct ShowChanges;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TranscriptRow {
@@ -88,7 +93,8 @@ pub struct TranscriptView {
     rows: Vec<TranscriptRow>,
     scroller: Entity<MessageScrollerState>,
     images: Entity<LocalImageCache>,
-    expanded: HashSet<String>,
+    open: HashMap<String, bool>,
+    ticker: Option<gpui_kit::Task<()>>,
     inline_images: HashMap<String, std::sync::Arc<gpui_kit::Image>>,
     media_pending: HashSet<String>,
     permission_focus: HashMap<String, FocusHandle>,
@@ -102,7 +108,8 @@ impl TranscriptView {
             rows,
             scroller: cx.new(|cx| MessageScrollerState::new(count, cx)),
             images: LocalImageCache::new(cx),
-            expanded: HashSet::new(),
+            open: HashMap::new(),
+            ticker: None,
             inline_images: HashMap::new(),
             media_pending: HashSet::new(),
             permission_focus: HashMap::new(),
@@ -120,44 +127,52 @@ impl TranscriptView {
                     .or_insert_with(|| cx.focus_handle());
             }
         }
-        for row in &rows {
-            if let Some(RowContent::Item { item, .. }) = &row.native
-                && let ItemContent::ToolCall(tool) = &item.content
-            {
-                for (index, block) in tool.content.iter().enumerate() {
-                    let key = format!("{}:block:{index}", row.id);
-                    if self.inline_images.contains_key(&key) || self.media_pending.contains(&key) {
-                        continue;
-                    }
-                    let block = serde_json::Value::Object(block.0.clone());
-                    let inner = if block["type"] == "content" {
-                        &block["content"]
-                    } else {
-                        &block
-                    };
-                    if inner["type"] != "image" {
-                        continue;
-                    }
-                    self.media_pending.insert(key.clone());
-                    let row_id = row.id.clone();
-                    cx.spawn(async move |this, cx| {
-                        let image = cx
-                            .background_executor()
-                            .spawn(async move { crate::inline_media::image(&block) })
-                            .await;
-                        let _ = this.update(cx, |this, cx| {
-                            if let Some(image) = image {
-                                this.inline_images.insert(key, image);
-                            }
-                            if let Some(ix) = this.rows.iter().position(|r| r.id == row_id) {
-                                this.scroller
-                                    .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
-                            }
-                            cx.notify();
-                        });
-                    })
-                    .detach();
+        let tools: Vec<_> = rows
+            .iter()
+            .flat_map(|row| row_items(row.native.as_ref()))
+            .filter_map(|item| match &item.content {
+                ItemContent::ToolCall(tool) => Some((item.id.clone(), tool.clone())),
+                _ => None,
+            })
+            .collect();
+        for (item_id, tool) in tools {
+            for (index, block) in tool.content.iter().enumerate() {
+                let key = format!("{item_id}:block:{index}");
+                if self.inline_images.contains_key(&key) || self.media_pending.contains(&key) {
+                    continue;
                 }
+                let block = serde_json::Value::Object(block.0.clone());
+                let inner = if block["type"] == "content" {
+                    &block["content"]
+                } else {
+                    &block
+                };
+                if inner["type"] != "image" {
+                    continue;
+                }
+                self.media_pending.insert(key.clone());
+                let item_id = item_id.clone();
+                cx.spawn(async move |this, cx| {
+                    let image = cx
+                        .background_executor()
+                        .spawn(async move { crate::inline_media::image(&block) })
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        if let Some(image) = image {
+                            this.inline_images.insert(key, image);
+                        }
+                        if let Some(ix) = this
+                            .rows
+                            .iter()
+                            .position(|r| row_items(r.native.as_ref()).any(|i| i.id == item_id))
+                        {
+                            this.scroller
+                                .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                        }
+                        cx.notify();
+                    });
+                })
+                .detach();
             }
         }
         let common = self
@@ -179,7 +194,28 @@ impl TranscriptView {
             }
         }
         self.rows = rows;
+        let running = self.rows.iter().any(|row| {
+            matches!(&row.native, Some(RowContent::Work { turn, .. }) if turn.status == TurnStatus::Running)
+        });
+        if !running {
+            self.ticker = None;
+        } else if self.ticker.is_none() {
+            self.ticker = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_secs(1))
+                        .await;
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            }));
+        }
         cx.notify();
+    }
+
+    fn is_open(&self, key: &str, default: bool) -> bool {
+        self.open.get(key).copied().unwrap_or(default)
     }
 
     pub fn focus_permission(&self, request_id: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -196,30 +232,24 @@ impl TranscriptView {
         self.rows.len()
     }
 
+    /// ⌃O: expands or collapses every work row and every tool call (04, Work row).
     pub fn toggle_tools(&mut self, cx: &mut Context<Self>) {
-        let tools: Vec<_> = self
-            .rows
-            .iter()
-            .enumerate()
-            .filter_map(|(ix, row)| match &row.native {
-                Some(RowContent::Item { item, .. })
-                    if matches!(item.content, ItemContent::ToolCall(_)) =>
-                {
-                    Some((ix, row.id.to_string()))
-                }
-                _ => None,
-            })
-            .collect();
-        let collapse = !tools.is_empty() && tools.iter().all(|(_, id)| self.expanded.contains(id));
-        for (ix, id) in tools {
-            if collapse {
-                self.expanded.remove(&id);
-            } else {
-                self.expanded.insert(id);
+        let mut keys = Vec::new();
+        for row in &self.rows {
+            if let Some(RowContent::Work { turn, .. }) = &row.native {
+                keys.push((work_key(turn), turn.status == TurnStatus::Running));
             }
-            self.scroller
-                .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+            for item in row_items(row.native.as_ref()) {
+                if matches!(item.content, ItemContent::ToolCall(_)) {
+                    keys.push((item.id.clone(), item.status == ItemStatus::Failed));
+                }
+            }
         }
+        let collapse = !keys.is_empty() && keys.iter().all(|(k, d)| self.is_open(k, *d));
+        for (key, _) in keys {
+            self.open.insert(key, !collapse);
+        }
+        self.scroller.update(cx, |s, cx| s.remeasure(cx));
         cx.notify();
     }
 
@@ -249,6 +279,7 @@ impl Render for TranscriptView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.weak_entity();
         let images = self.images.clone();
+        let background = color(Token::Background, cx);
         MessageScroller::new("transcript", self.scroller.clone(), move |ix, _, cx| {
             let row = view
                 .upgrade()
@@ -265,8 +296,36 @@ impl Render for TranscriptView {
                     }
                 }))
         })
+        .with_jump_button_transition(std::time::Duration::ZERO)
+        .with_jump_button_renderer(move |button| {
+            button.label("Jump to latest").bg(background).shadow_md()
+        })
         .size_full()
     }
+}
+
+fn work_key(turn: &tempo_protocol::Turn) -> String {
+    let phase = if turn.status == TurnStatus::Running {
+        "running"
+    } else {
+        "done"
+    };
+    format!("work:{}:{phase}", turn.id)
+}
+
+fn row_items(row: Option<&RowContent>) -> Box<dyn Iterator<Item = &tempo_protocol::Item> + '_> {
+    match row {
+        Some(RowContent::Item { item, .. }) => Box::new(std::iter::once(item.as_ref())),
+        Some(RowContent::Work { items, .. }) => Box::new(items.iter()),
+        _ => Box::new(std::iter::empty()),
+    }
+}
+
+fn now_ms() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or_default()
 }
 
 fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
@@ -331,11 +390,83 @@ fn render_native_row(
             .text_color(color(Token::MutedForeground, cx))
             .child("Working…")
             .into_any_element(),
-        RowContent::Footer { turn } => {
+        RowContent::Work { turn, items, dim } => {
+            let running = turn.status == TurnStatus::Running;
+            let header = if running {
+                let elapsed = turn
+                    .started_at
+                    .map(|start| chat_model::format_duration(now_ms() - start))
+                    .unwrap_or_default();
+                h_flex()
+                    .gap_2()
+                    .child(Spinner::new())
+                    .child(div().flex_1().min_w_0().truncate().child(
+                        chat_model::current_step(&items).unwrap_or_else(|| "Working".into()),
+                    ))
+                    .child(
+                        div()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(elapsed),
+                    )
+                    .into_any_element()
+            } else {
+                let duration = turn
+                    .started_at
+                    .zip(turn.ended_at)
+                    .map(|(start, end)| end - start);
+                div()
+                    .text_color(color(Token::MutedForeground, cx))
+                    .child(chat_model::work_summary(&items, duration))
+                    .into_any_element()
+            };
+            let content = v_flex()
+                .children(items.into_iter().map(|item| {
+                    render_native_row(
+                        TranscriptRow::from_native(RowContent::Item {
+                            item: Box::new(item),
+                            dim: false,
+                        }),
+                        ix,
+                        view.clone(),
+                        cx,
+                    )
+                }))
+                .into_any_element();
+            let key = work_key(&turn);
+            let open = view
+                .upgrade()
+                .is_some_and(|v| v.read(cx).is_open(&key, running));
+            div()
+                .opacity(if dim { 0.5 } else { 1. })
+                .child(
+                    Collapsible::new()
+                        .open(open)
+                        .child(
+                            Button::new(SharedString::from(format!("{id}:toggle")))
+                                .ghost()
+                                .w_full()
+                                .accessibility_label("Work")
+                                .child(header)
+                                .on_click(move |_, _, cx| {
+                                    let _ = view.update(cx, |this, cx| {
+                                        let open = this.is_open(&key, running);
+                                        this.open.insert(key.clone(), !open);
+                                        this.scroller
+                                            .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                                        cx.notify();
+                                    });
+                                }),
+                        )
+                        .content(content),
+                )
+                .into_any_element()
+        }
+        RowContent::Footer { turn, work_row } => {
             let duration = turn
                 .started_at
                 .zip(turn.ended_at)
-                .map(|(start, end)| format!("{:.1}s · ", (end - start).max(0.) / 1000.))
+                .filter(|_| !work_row)
+                .map(|(start, end)| format!("{} · ", chat_model::format_duration(end - start)))
                 .unwrap_or_default();
             div()
                 .px_4()
@@ -389,7 +520,7 @@ fn render_native_row(
                     .into_any_element(),
                 ItemContent::AgentThought(c) => disclosure(
                     id.clone(),
-                    "Thinking".into(),
+                    Disclosure::new("Thinking"),
                     markdown(id.clone(), &c.text),
                     ix,
                     view.clone(),
@@ -397,7 +528,7 @@ fn render_native_row(
                 ),
                 ItemContent::Handoff(c) => disclosure(
                     id.clone(),
-                    "Session restarted; transcript handed to the agent".into(),
+                    Disclosure::new("Session restarted; transcript handed to the agent"),
                     markdown(id.clone(), &c.text),
                     ix,
                     view.clone(),
@@ -497,20 +628,58 @@ fn render_native_row(
                                     }
                                 })
                         }));
-                    disclosure(
-                        id.clone(),
-                        format!(
-                            "{} {} · {}",
-                            tool_icon(c.tool_kind.as_deref()),
-                            c.title,
-                            item.status
+                    let kind = chat_model::work_type(c);
+                    let status = match item.status {
+                        ItemStatus::Pending
+                        | ItemStatus::InProgress
+                        | ItemStatus::Failed
+                        | ItemStatus::Cancelled => format!(" · {}", item.status),
+                        _ => String::new(),
+                    };
+                    let (label, mono) = if kind == WorkType::Edit {
+                        let counts = chat_model::edit_counts(c);
+                        let name = if counts.path.is_empty() {
+                            c.title.as_str()
+                        } else {
+                            counts.file_name()
+                        };
+                        (
+                            format!("{name} +{} −{}", counts.added, counts.removed),
+                            false,
                         )
-                        .into(),
+                    } else {
+                        chat_model::tool_label(c)
+                    };
+                    let row = disclosure(
+                        id.clone(),
+                        Disclosure {
+                            title: format!("{} {label}{status}", work_icon(kind)).into(),
+                            tooltip: Some(c.title.clone().into()),
+                            mono,
+                            default_open: item.status == ItemStatus::Failed,
+                        },
                         details.into_any_element(),
                         ix,
                         view.clone(),
                         cx,
-                    )
+                    );
+                    if kind == WorkType::Edit {
+                        v_flex()
+                            .child(row)
+                            .child(
+                                div().px_4().child(
+                                    Button::new(SharedString::from(format!("{id}:changes")))
+                                        .ghost()
+                                        .label("Changes")
+                                        .on_click(|_, window, cx| {
+                                            window.dispatch_action(Box::new(ShowChanges), cx)
+                                        }),
+                                ),
+                            )
+                            .into_any_element()
+                    } else {
+                        row
+                    }
                 }
                 ItemContent::Plan(c) => v_flex()
                     .px_4()
@@ -641,49 +810,71 @@ fn render_native_row(
     }
 }
 
+struct Disclosure {
+    title: SharedString,
+    tooltip: Option<SharedString>,
+    mono: bool,
+    default_open: bool,
+}
+
+impl Disclosure {
+    fn new(title: &'static str) -> Self {
+        Self {
+            title: title.into(),
+            tooltip: None,
+            mono: false,
+            default_open: false,
+        }
+    }
+}
+
 fn disclosure(
     id: SharedString,
-    title: SharedString,
+    header: Disclosure,
     content: AnyElement,
     ix: usize,
     view: gpui_kit::WeakEntity<TranscriptView>,
     cx: &mut gpui_kit::App,
 ) -> AnyElement {
+    let key = id.to_string();
+    let default = header.default_open;
     let expanded = view
         .upgrade()
-        .is_some_and(|v| v.read(cx).expanded.contains(id.as_ref()));
-    let key = id.to_string();
+        .is_some_and(|v| v.read(cx).is_open(&key, default));
+    let mut button = Button::new(SharedString::from(format!("{id}:disclosure")))
+        .ghost()
+        .label(header.title)
+        .on_click(move |_, _, cx| {
+            let _ = view.update(cx, |this, cx| {
+                let open = this.is_open(&key, default);
+                this.open.insert(key.clone(), !open);
+                this.scroller.update(cx, |s, cx| {
+                    s.remeasure_items(ix..ix + 1, cx);
+                });
+                cx.notify();
+            });
+        });
+    if let Some(tooltip) = header.tooltip {
+        button = button.tooltip(tooltip);
+    }
+    if header.mono {
+        button = button.font_family("monospace");
+    }
     Collapsible::new()
         .open(expanded)
-        .child(
-            Button::new(SharedString::from(format!("{id}:disclosure")))
-                .ghost()
-                .label(title)
-                .on_click(move |_, _, cx| {
-                    let _ = view.update(cx, |this, cx| {
-                        if !this.expanded.remove(&key) {
-                            this.expanded.insert(key.clone());
-                        }
-                        this.scroller.update(cx, |s, cx| {
-                            s.remeasure_items(ix..ix + 1, cx);
-                        });
-                        cx.notify();
-                    });
-                }),
-        )
+        .child(div().min_w_0().truncate().child(button))
         .content(content)
         .into_any_element()
 }
 
-fn tool_icon(kind: Option<&str>) -> &'static str {
+fn work_icon(kind: WorkType) -> &'static str {
     match kind {
-        Some("read") => "⌕",
-        Some("edit") => "✎",
-        Some("execute") => ">_",
-        Some("search") => "⌕",
-        Some("delete") => "−",
-        Some("fetch") => "↗",
-        _ => "◇",
+        WorkType::Explore => "⌕",
+        WorkType::Edit => "✎",
+        WorkType::Run => ">_",
+        WorkType::Web => "↗",
+        WorkType::SubAgent => "◎",
+        WorkType::Other => "◇",
     }
 }
 
@@ -700,6 +891,39 @@ mod tests {
             row.rendered().as_ref(),
             "Hello &lt;img src=https://x.test/p.png> and `Vec<u8>`"
         );
+    }
+
+    #[gpui_kit::test]
+    fn expand_all_toggles_work_rows_and_folded_tool_calls(cx: &mut gpui_kit::TestAppContext) {
+        let mut state = tempo_client::state::workspace::WorkspaceState::new();
+        for line in include_str!(
+            "../../../../packages/protocol/fixtures/channel/workspace-first-load.jsonl"
+        )
+        .lines()
+        {
+            state.apply(serde_json::from_str(line).unwrap());
+        }
+        let rows: Vec<_> = state
+            .sessions
+            .keys()
+            .flat_map(|id| {
+                chat_model::transcript_rows(&state, id, chat_model::TranscriptDetail::Default)
+            })
+            .map(TranscriptRow::from_native)
+            .collect();
+        let work = rows
+            .iter()
+            .filter(|r| matches!(r.native, Some(RowContent::Work { .. })))
+            .count();
+        assert!(work > 0);
+        let view = cx.new(|cx| TranscriptView::new(rows, cx));
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| {
+            assert!(view.open.keys().filter(|k| k.starts_with("work:")).count() == work);
+            assert!(view.open.values().all(|open| *open));
+        });
+        view.update(cx, |view, cx| view.toggle_tools(cx));
+        view.read_with(cx, |view, _| assert!(view.open.values().all(|open| !open)));
     }
 
     #[gpui_kit::test]
@@ -728,8 +952,11 @@ mod tests {
         let count = rows.len();
         let view = cx.new(|cx| TranscriptView::new(rows, cx));
         view.update(cx, |view, cx| view.toggle_tools(cx));
-        view.read_with(cx, |view, _| assert_eq!(view.expanded.len(), count));
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.open.len(), count);
+            assert!(view.open.values().all(|open| *open));
+        });
         view.update(cx, |view, cx| view.toggle_tools(cx));
-        view.read_with(cx, |view, _| assert!(view.expanded.is_empty()));
+        view.read_with(cx, |view, _| assert!(view.open.values().all(|open| !open)));
     }
 }
