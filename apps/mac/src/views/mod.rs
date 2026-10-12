@@ -13,6 +13,7 @@ pub mod file_picker;
 pub mod file_tree;
 pub mod files;
 pub mod main_window;
+pub mod mcp_model;
 pub mod palette;
 pub mod processes;
 pub mod review;

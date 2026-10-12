@@ -1,13 +1,19 @@
+use super::mcp_model::{self, McpForm};
+use super::tokens::{Token, color};
 use crate::storage::{Local, Theme as SavedTheme, TranscriptDetail};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
-use gpui_kit::component::{Disableable as _, Selectable as _, Theme, ThemeMode, h_flex, v_flex};
+use gpui_kit::component::switch::Switch;
+use gpui_kit::component::{
+    Disableable as _, Selectable as _, Theme, ThemeMode, WindowExt as _, h_flex, v_flex,
+};
 use gpui_kit::{
-    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task, Window, div,
+    AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
+    Window, div,
 };
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use tempo_protocol::{self as p, api};
 
@@ -16,6 +22,116 @@ struct Field {
     original: Value,
     input: Entity<TextareaState>,
     source: String,
+}
+struct McpRow {
+    name: Entity<InputState>,
+    value: Entity<InputState>,
+    secret: bool,
+}
+struct McpEditor {
+    server: Option<p::McpServer>,
+    stored: BTreeSet<String>,
+    name: Entity<InputState>,
+    enabled: bool,
+    transport: p::McpTransport,
+    command: Entity<InputState>,
+    args: Entity<TextareaState>,
+    env: Vec<McpRow>,
+    url: Entity<InputState>,
+    headers: Vec<McpRow>,
+    error: Option<String>,
+}
+fn text_input(
+    value: &str,
+    placeholder: &str,
+    masked: bool,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<InputState> {
+    let (value, placeholder) = (value.to_string(), placeholder.to_string());
+    cx.new(|cx| {
+        InputState::new(window, cx)
+            .placeholder(placeholder)
+            .masked(masked)
+            .default_value(value)
+    })
+}
+fn header_placeholder(secret: bool, name: &str, stored: &BTreeSet<String>) -> &'static str {
+    if secret && stored.contains(&name.trim().to_lowercase()) {
+        "Saved — leave empty to keep"
+    } else {
+        "Value"
+    }
+}
+impl McpEditor {
+    fn new(server: Option<p::McpServer>, window: &mut Window, cx: &mut App) -> Self {
+        let form = server.as_ref().map(McpForm::of).unwrap_or_default();
+        let stored = mcp_model::stored_secrets(server.as_ref());
+        let env = form
+            .env
+            .iter()
+            .map(|r| McpRow {
+                name: text_input(&r.name, "LOG_LEVEL", false, window, cx),
+                value: text_input(&r.value, "Value", false, window, cx),
+                secret: false,
+            })
+            .collect();
+        let headers = form
+            .headers
+            .iter()
+            .map(|r| McpRow {
+                name: text_input(&r.name, "Authorization", false, window, cx),
+                value: text_input(
+                    &r.value,
+                    header_placeholder(r.secret, &r.name, &stored),
+                    r.secret,
+                    window,
+                    cx,
+                ),
+                secret: r.secret,
+            })
+            .collect();
+        let args = form.args.clone();
+        Self {
+            name: text_input(&form.name, "github", false, window, cx),
+            enabled: form.enabled,
+            transport: form.transport,
+            command: text_input(&form.command, "npx", false, window, cx),
+            args: cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .auto_grow(2, 12)
+                    .default_value(args)
+            }),
+            env,
+            url: text_input(&form.url, "https://mcp.example.com/mcp", false, window, cx),
+            headers,
+            error: None,
+            server,
+            stored,
+        }
+    }
+    fn form(&self, cx: &App) -> McpForm {
+        let rows = |rows: &[McpRow]| {
+            rows.iter()
+                .map(|r| mcp_model::Row {
+                    name: r.name.read(cx).value().to_string(),
+                    value: r.value.read(cx).value().to_string(),
+                    secret: r.secret,
+                })
+                .collect()
+        };
+        McpForm {
+            id: self.server.as_ref().map(|s| s.id.clone()),
+            name: self.name.read(cx).value().to_string(),
+            enabled: self.enabled,
+            transport: self.transport,
+            command: self.command.read(cx).value().to_string(),
+            args: self.args.read(cx).value().to_string(),
+            env: rows(&self.env),
+            url: self.url.read(cx).value().to_string(),
+            headers: rows(&self.headers),
+        }
+    }
 }
 pub struct SettingsForm {
     pub tab: usize,
@@ -39,6 +155,8 @@ pub struct SettingsForm {
     codex_busy: bool,
     codex_login_task: Option<Task<()>>,
     codex_upload: bool,
+    mcp_servers: Option<Vec<p::McpServer>>,
+    mcp_editor: Option<McpEditor>,
 }
 impl SettingsForm {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -112,6 +230,8 @@ impl SettingsForm {
             codex_busy: false,
             codex_login_task: None,
             codex_upload: false,
+            mcp_servers: None,
+            mcp_editor: None,
         };
         this.refresh(cx);
         this
@@ -146,6 +266,18 @@ impl SettingsForm {
                 let _ = this.update(cx, |this, cx| {
                     match result {
                         Ok(status) => this.credentials = Some(status),
+                        Err(e) => this.error = Some(e.to_string()),
+                    }
+                    cx.notify();
+                });
+            })
+            .detach();
+            let request = client.call::<api::ListMcpServers>(p::Empty {});
+            cx.spawn(async move |this, cx| {
+                let result = request.await;
+                let _ = this.update(cx, |this, cx| {
+                    match result {
+                        Ok(servers) => this.mcp_servers = Some(servers),
                         Err(e) => this.error = Some(e.to_string()),
                     }
                     cx.notify();
@@ -657,6 +789,365 @@ impl SettingsForm {
         }
         cx.notify();
     }
+    fn edit_mcp(
+        &mut self,
+        server: Option<p::McpServer>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.mcp_editor = Some(McpEditor::new(server, window, cx));
+        cx.notify();
+    }
+    fn save_mcp(&mut self, cx: &mut Context<Self>) {
+        let Some(editor) = &mut self.mcp_editor else {
+            return;
+        };
+        let input = editor.form(cx).input();
+        editor.error = mcp_model::input_problem(&input, &editor.stored);
+        if editor.error.is_none() {
+            self.send_mcp(input, true, cx);
+        }
+        cx.notify();
+    }
+    fn send_mcp(&mut self, input: p::McpServerInput, from_editor: bool, cx: &mut Context<Self>) {
+        if self.pending {
+            return;
+        }
+        let Some(client) = &self.client else {
+            return;
+        };
+        self.pending = true;
+        let request = client.call::<api::SaveMcpServer>(input);
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.pending = false;
+                match result {
+                    Ok(_) => {
+                        if from_editor {
+                            this.mcp_editor = None;
+                        }
+                        this.error = None;
+                        this.refresh(cx);
+                    }
+                    Err(tempo_client::ApiError::Server { error, .. })
+                        if from_editor && error.code == p::ErrorCode::ValidationFailed =>
+                    {
+                        if let Some(editor) = &mut this.mcp_editor {
+                            editor.error = Some(match error.detail {
+                                Some(detail) => format!("{} {detail}", error.message),
+                                None => error.message,
+                            });
+                        }
+                    }
+                    Err(e) => this.error = Some(e.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+    fn delete_mcp(&mut self, server: &p::McpServer, window: &mut Window, cx: &mut Context<Self>) {
+        let Ok(id) = p::DeleteMcpServerInId::try_from(server.id.clone()) else {
+            return;
+        };
+        let weak = cx.weak_entity();
+        let title = format!("Delete {}?", server.name);
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let weak = weak.clone();
+            let id = id.clone();
+            alert
+                .title(title.clone())
+                .description(
+                    "New sessions no longer get this server. Its secret headers are deleted.",
+                )
+                .confirm()
+                .ok_text("Delete")
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let _ = weak.update(cx, |this, cx| {
+                        if this
+                            .mcp_editor
+                            .as_ref()
+                            .and_then(|e| e.server.as_ref())
+                            .is_some_and(|s| s.id == *id)
+                        {
+                            this.mcp_editor = None;
+                        }
+                        this.mutate::<api::DeleteMcpServer>(
+                            p::DeleteMcpServerIn { id: id.clone() },
+                            None,
+                            window,
+                            cx,
+                        );
+                    });
+                    true
+                })
+        });
+    }
+    fn mcp_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let muted = color(Token::MutedForeground, cx);
+        let mut tab =
+            v_flex()
+                .gap_3()
+                .child(div().text_sm().text_color(muted).child(
+                    "Agents get these servers in every project. Changes apply to new sessions.",
+                ));
+        tab = match &self.mcp_editor {
+            Some(editor) => tab.child(self.mcp_editor_view(editor, cx)),
+            None => tab.child(
+                Button::new("mcp-add")
+                    .label("Add server")
+                    .on_click(cx.listener(|this, _, window, cx| this.edit_mcp(None, window, cx))),
+            ),
+        };
+        let Some(servers) = &self.mcp_servers else {
+            return tab.child(super::skeleton_rows(3)).into_any_element();
+        };
+        if servers.is_empty() {
+            return tab.child("No MCP servers.").into_any_element();
+        }
+        tab.children(servers.iter().enumerate().map(|(ix, s)| {
+            let (toggle, edit, delete) = (s.clone(), s.clone(), s.clone());
+            h_flex()
+                .gap_3()
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .child(
+                            h_flex().gap_2().child(s.name.clone()).child(
+                                div()
+                                    .text_sm()
+                                    .text_color(muted)
+                                    .child(s.transport.to_string()),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_family("monospace")
+                                .text_color(muted)
+                                .truncate()
+                                .child(mcp_model::target(s)),
+                        ),
+                )
+                .child(
+                    Switch::new(("mcp-enabled", ix))
+                        .checked(s.enabled)
+                        .accessibility_label(format!("Enable {}", s.name))
+                        .disabled(self.pending)
+                        .on_change(cx.listener(move |this, enabled: &bool, _, cx| {
+                            let mut form = McpForm::of(&toggle);
+                            form.enabled = *enabled;
+                            this.send_mcp(form.input(), false, cx);
+                        })),
+                )
+                .child(
+                    Button::new(("mcp-edit", ix))
+                        .ghost()
+                        .label("Edit")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.edit_mcp(Some(edit.clone()), window, cx)
+                        })),
+                )
+                .child(
+                    Button::new(("mcp-delete", ix))
+                        .ghost()
+                        .label("Delete")
+                        .disabled(self.pending)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.delete_mcp(&delete, window, cx)
+                        })),
+                )
+        }))
+        .into_any_element()
+    }
+    fn mcp_editor_view(&self, e: &McpEditor, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = color(Token::MutedForeground, cx);
+        let hint = |text: &'static str| div().text_sm().text_color(muted).child(text);
+        let mut form = v_flex()
+            .gap_3()
+            .p_4()
+            .border_1()
+            .rounded_lg()
+            .border_color(color(Token::Border, cx))
+            .child(div().text_lg().child(match &e.server {
+                Some(s) => format!("Edit {}", s.name),
+                None => "Add MCP server".into(),
+            }))
+            .child("Name")
+            .child(Input::new(&e.name).aria_label("Name"))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child("Transport")
+                    .children(mcp_model::TRANSPORTS.map(|t| {
+                        Button::new(SharedString::from(format!("mcp-transport-{t}")))
+                            .label(t.to_string())
+                            .selected(e.transport == t)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(e) = &mut this.mcp_editor {
+                                    e.transport = t;
+                                }
+                                cx.notify();
+                            }))
+                    })),
+            );
+        if e.transport == p::McpTransport::Stdio {
+            form = form
+                .child("Command")
+                .child(Input::new(&e.command).aria_label("Command"))
+                .child("Arguments")
+                .child(hint("One per line."))
+                .child(Textarea::new(&e.args))
+                .child("Env vars")
+                .child(hint("Stored as plain text, not as secrets."))
+                .children(e.env.iter().enumerate().map(|(ix, r)| {
+                    h_flex()
+                        .gap_2()
+                        .child(div().w_40().child(
+                            Input::new(&r.name).aria_label(format!("Env var {} name", ix + 1)),
+                        ))
+                        .child(div().flex_1().child(
+                            Input::new(&r.value).aria_label(format!("Env var {} value", ix + 1)),
+                        ))
+                        .child(
+                            Button::new(("mcp-env-remove", ix))
+                                .ghost()
+                                .label("Remove")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(e) = &mut this.mcp_editor {
+                                        e.env.remove(ix);
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                }))
+                .child(
+                    Button::new("mcp-env-add")
+                        .label("Add env var")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let row = McpRow {
+                                name: text_input("", "LOG_LEVEL", false, window, cx),
+                                value: text_input("", "Value", false, window, cx),
+                                secret: false,
+                            };
+                            if let Some(e) = &mut this.mcp_editor {
+                                e.env.push(row);
+                            }
+                            cx.notify();
+                        })),
+                );
+        } else {
+            form = form
+                .child("URL")
+                .child(Input::new(&e.url).aria_label("URL"))
+                .child("Headers")
+                .child(hint("Secret values are never shown again."))
+                .children(e.headers.iter().enumerate().map(|(ix, r)| {
+                    h_flex()
+                        .gap_2()
+                        .child(div().w_40().child(
+                            Input::new(&r.name).aria_label(format!("Header {} name", ix + 1)),
+                        ))
+                        .child(div().flex_1().child(
+                            Input::new(&r.value).aria_label(format!("Header {} value", ix + 1)),
+                        ))
+                        .child(
+                            Switch::new(("mcp-header-secret", ix))
+                                .checked(r.secret)
+                                .label("Secret")
+                                .on_change(cx.listener(move |this, secret: &bool, window, cx| {
+                                    let Some(e) = &mut this.mcp_editor else {
+                                        return;
+                                    };
+                                    let Some(row) = e.headers.get_mut(ix) else {
+                                        return;
+                                    };
+                                    row.secret = *secret;
+                                    let name = row.name.read(cx).value().to_string();
+                                    let placeholder = header_placeholder(*secret, &name, &e.stored);
+                                    row.value.update(cx, |i, cx| {
+                                        i.set_masked(*secret, window, cx);
+                                        i.set_placeholder(placeholder, window, cx);
+                                    });
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            Button::new(("mcp-header-remove", ix))
+                                .ghost()
+                                .label("Remove")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(e) = &mut this.mcp_editor {
+                                        e.headers.remove(ix);
+                                    }
+                                    cx.notify();
+                                })),
+                        )
+                }))
+                .child(
+                    Button::new("mcp-header-add")
+                        .label("Add header")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let row = McpRow {
+                                name: text_input("", "Authorization", false, window, cx),
+                                value: text_input("", "Value", true, window, cx),
+                                secret: true,
+                            };
+                            if let Some(e) = &mut this.mcp_editor {
+                                e.headers.push(row);
+                            }
+                            cx.notify();
+                        })),
+                );
+        }
+        form.child(
+            Switch::new("mcp-form-enabled")
+                .checked(e.enabled)
+                .label("Enabled")
+                .on_change(cx.listener(|this, enabled: &bool, _, cx| {
+                    if let Some(e) = &mut this.mcp_editor {
+                        e.enabled = *enabled;
+                    }
+                    cx.notify();
+                })),
+        )
+        .children(
+            e.error
+                .clone()
+                .map(|error| div().text_color(color(Token::Destructive, cx)).child(error)),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .flex_1()
+                        .text_sm()
+                        .text_color(muted)
+                        .child("Changes apply to new sessions."),
+                )
+                .child(
+                    Button::new("mcp-cancel")
+                        .ghost()
+                        .label("Cancel")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.mcp_editor = None;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    Button::new("mcp-save")
+                        .primary()
+                        .disabled(self.pending)
+                        .label(if self.pending { "Saving…" } else { "Save" })
+                        .on_click(cx.listener(|this, _, _, cx| this.save_mcp(cx))),
+                ),
+        )
+    }
     fn set_secret(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(project_id) = self.project_id.clone() else {
             return;
@@ -1078,6 +1569,7 @@ impl Render for SettingsForm {
                     ),
                 )
                 .into_any_element(),
+            5 => self.mcp_tab(cx),
             _ => {
                 let config = cx.global::<Local>().config().clone();
                 v_flex()

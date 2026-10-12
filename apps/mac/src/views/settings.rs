@@ -8,12 +8,13 @@ use gpui_kit::{
     ParentElement as _, Render, SharedString, Styled as _, Window, WindowOptions, div, px, size,
 };
 
-pub const TABS: [&str; 5] = [
+pub const TABS: [&str; 6] = [
     "Logins",
     "Project",
     "Appearance",
     "General",
     "Shortcuts",
+    "MCP servers",
 ];
 
 /// The shortcut table of 04 with its Conductor column, read-only.
@@ -82,7 +83,7 @@ impl Render for SettingsWindow {
             .border_r_1()
             .border_color(color(Token::Border, cx))
             .child(div().text_color(muted).child("Personal"))
-            .children([3, 0, 2, 4].map(|ix| {
+            .children([3, 0, 5, 2, 4].map(|ix| {
                 Button::new(SharedString::from(format!("settings-nav-{ix}")))
                     .ghost()
                     .label(TABS[ix])
