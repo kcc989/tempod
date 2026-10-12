@@ -23,11 +23,12 @@ import { useProject } from "~/ui/hooks/useProjects";
 import { macWorkspaceUrl } from "~/ui/lib/links";
 import { formatBinding } from "~/ui/lib/shortcuts";
 import { openDialog } from "~/ui/state/workspace-ui";
+import { openPreviewTab } from "./open-preview";
 import { canArchive, githubUrlFor, powerAction, type WorkspaceView } from "./topbar-logic";
 import type { WorkspaceActions } from "./useWorkspaceActions";
 
 /**
- * 04, Overflow menu: Wake or Sleep, Rotate preview link, Open on GitHub, Copy workspace link,
+ * 04, Overflow menu: Wake or Sleep, Reset preview access, Open on GitHub, Copy workspace link,
  * Diagnostics, Open in Tempo for Mac (07), Archive. Phones also list the preview links here.
  */
 export function OverflowMenu({
@@ -55,11 +56,9 @@ export function OverflowMenu({
           <>
             <DropdownMenuLabel>Previews</DropdownMenuLabel>
             {ports.map((p) => (
-              <DropdownMenuItem key={p.port} asChild>
-                <a href={p.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLinkIcon />
-                  <span className="font-mono tabular-nums">{p.port} ↗</span>
-                </a>
+              <DropdownMenuItem key={p.port} onSelect={() => void openPreviewTab(w.id, p.port)}>
+                <ExternalLinkIcon />
+                <span className="font-mono tabular-nums">{p.port} ↗</span>
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
@@ -74,10 +73,10 @@ export function OverflowMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={w.state === "archived" || w.state === "archiving"}
-          onSelect={() => void actions.rotatePreview()}
+          onSelect={() => void actions.resetPreviewAccess()}
         >
           <RotateCwIcon />
-          Rotate preview link
+          Reset preview access
         </DropdownMenuItem>
         {project ? (
           <DropdownMenuItem asChild>

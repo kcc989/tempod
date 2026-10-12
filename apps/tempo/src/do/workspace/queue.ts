@@ -7,6 +7,7 @@ import {
   TempoError,
   type AgentId,
   type ContentBlock,
+  type Settings,
   type Turn,
   type TurnUsage,
 } from "@tempo/protocol";
@@ -110,6 +111,26 @@ export const agentEnv = async (
   }
 };
 
+/** Agents whose sessions need `agent.models.<agent>` (01, Agents: Model choice). */
+export const MODEL_REQUIRED_AGENTS: ReadonlySet<AgentId> = new Set(["opencode", "pi"]);
+
+/**
+ * The `model` of session.start (01, Start a session 2): the session's own choice, else
+ * `agent.models.<agent>`, else none. OpenCode and Pi without one fail with MODEL_REQUIRED.
+ */
+export const sessionModel = (
+  agent: AgentId,
+  config: Readonly<Record<string, unknown>>,
+  settings: Settings,
+): string | null => {
+  const own = typeof config["model"] === "string" ? config["model"] : "";
+  const model = own || settings.agent.models[agent];
+  if (model) return model;
+  if (MODEL_REQUIRED_AGENTS.has(agent))
+    throw new TempoError("MODEL_REQUIRED", undefined, `agent.models.${agent} is empty`);
+  return null;
+};
+
 /** Starts (or reloads) the session's adapter in tempod and stores what the agent reports. */
 export const ensureSessionLive = async (
   core: WorkspaceCore,
@@ -119,16 +140,10 @@ export const ensureSessionLive = async (
   if (core.liveSessions.has(session.id)) return;
   const tempod = requireTempod(core);
   const agent = session.agent as AgentId;
+  const config = json.config.read(session.configJson, {});
+  const model = sessionModel(agent, config, core.settings());
   const env = await agentEnv(core, agent, signal);
   const opts = signal ? { signal } : {};
-  const config = json.config.read(session.configJson, {});
-  const settings = core.settings();
-  const model =
-    typeof config["model"] === "string"
-      ? (config["model"] as string)
-      : agent === settings.agent.default && settings.agent.model
-        ? settings.agent.model
-        : null;
   const res = await tempod.request(
     "session.start",
     {
@@ -136,7 +151,7 @@ export const ensureSessionLive = async (
       agent,
       env,
       modeId: session.modeId ?? DEFAULT_MODE[agent],
-      model,
+      ...(model ? { model } : {}),
       acpSessionId: session.acpSessionId,
     },
     opts,

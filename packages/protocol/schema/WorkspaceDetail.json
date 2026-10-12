@@ -165,9 +165,6 @@
         }
       ]
     },
-    "previewToken": {
-      "type": "string"
-    },
     "ports": {
       "type": "array",
       "items": {
@@ -320,7 +317,6 @@
     "errorDetail",
     "setupStatus",
     "pushed",
-    "previewToken",
     "ports",
     "settings",
     "runningTurnId",

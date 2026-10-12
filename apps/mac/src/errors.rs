@@ -38,6 +38,7 @@ pub fn error_text(code: &str) -> &'static str {
         "FILE_TOO_LARGE" => "This file is too large to show.",
         "PATH_OUTSIDE_WORKSPACE" => "That path is outside the workspace.",
         "CHECKPOINT_NOT_FOUND" => "That checkpoint no longer exists.",
+        "MODEL_REQUIRED" => "Set a default model for this agent in Settings → Project.",
         "SETTINGS_INVALID" => "Settings are not valid.",
         "EGRESS_BLOCKED" => "(Shown only in the egress log.)",
         _ => "Something went wrong.",
@@ -81,6 +82,10 @@ mod tests {
         assert_eq!(
             error_message("CREDENTIAL_MISSING", None),
             "Add your login in Settings."
+        );
+        assert_eq!(
+            error_message("MODEL_REQUIRED", Some(AgentId::Pi)),
+            "Set a default model for this agent in Settings → Project."
         );
         assert_eq!(
             error_message("SOMETHING_NEW", None),

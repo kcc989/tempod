@@ -1,3 +1,4 @@
+import type { WorkspaceSummary } from "@tempo/protocol";
 import { CopyIcon, GitBranchIcon } from "lucide-react";
 import { useState } from "react";
 import { ContainerPill, StatusIcon } from "~/ui/components/sidebar/indicators";
@@ -5,15 +6,17 @@ import { Button } from "~/ui/components/ui/button";
 import { Skeleton } from "~/ui/components/ui/skeleton";
 import { useAction } from "~/ui/hooks/useActions";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
+import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { pillText } from "~/ui/lib/indicators";
+import { cn } from "~/ui/lib/utils";
 import { BaseBranchPicker } from "./BaseBranchPicker";
 import { requestCommit } from "./commit-request";
 import { InlineEdit } from "./InlineEdit";
 import { OverflowMenu } from "./OverflowMenu";
 import { PortLinks } from "./PortLinks";
 import { PrimaryActionButton } from "./PrimaryAction";
-import { shortcutAvailability, workspaceView, type WorkspaceView } from "./topbar-logic";
+import { prLink, shortcutAvailability, workspaceView, type WorkspaceView } from "./topbar-logic";
 import { useWorkspaceActions, type WorkspaceActions } from "./useWorkspaceActions";
 
 export interface TopBarProps {
@@ -23,7 +26,7 @@ export interface TopBarProps {
 }
 
 /**
- * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`. Middle: preview ports.
+ * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`, the PR link. Middle: preview ports.
  * Right: container pill, the primary git action and the overflow menu.
  */
 export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
@@ -94,6 +97,7 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
           baseBranch={w.baseBranch}
           locked={w.prNumber !== null || w.state === "archived" || w.state === "archiving"}
         />
+        <PrLinkAnchor workspace={w} />
       </div>
       <PortLinks workspaceId={w.id} ports={d?.ports ?? []} className="flex-1 justify-center" />
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -102,6 +106,25 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
         <OverflowMenu view={view} actions={actions} />
       </div>
     </header>
+  );
+}
+
+function PrLinkAnchor({ workspace: w }: { workspace: WorkspaceSummary }) {
+  const link = prLink(useProject(w.projectId), w);
+  if (!link) return null;
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={link.ariaLabel}
+      className={cn(
+        "shrink-0 rounded-md px-1 font-mono text-xs tabular-nums outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        link.className,
+      )}
+    >
+      {link.label}
+    </a>
   );
 }
 

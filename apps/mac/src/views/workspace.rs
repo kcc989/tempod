@@ -641,6 +641,22 @@ impl WorkspaceView {
         }
     }
 
+    /// 07 Previews: openPreview's one-time entry link opens in the default browser.
+    fn open_preview(&mut self, port: f64, cx: &mut Context<Self>) {
+        let request = self.client.call::<api::OpenPreview>(p::OpenPreviewIn {
+            workspace_id: self.store.read(cx).workspace_id.clone(),
+            port,
+        });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(out) => cx.open_url(&out.url),
+                Err(e) => this.toast_error(&e, cx),
+            });
+        })
+        .detach();
+    }
+
     fn mutate<F: p::Function>(&mut self, input: F::Input, cx: &mut Context<Self>) {
         if self.operation_pending {
             return;
@@ -752,8 +768,8 @@ impl WorkspaceView {
                         }),
                 );
             }
-            if name == "Rotate preview link" {
-                dialog = dialog.child("Old preview links will stop working.");
+            if name == "Reset preview access" {
+                dialog = dialog.child(RESET_PREVIEW_CONFIRM);
             }
             if name == "Merge" {
                 dialog = dialog.child("Squash merge this pull request?");
@@ -873,10 +889,9 @@ impl WorkspaceView {
                 },
                 cx,
             ),
-            Some("Rotate preview link") => self.mutate::<api::RotatePreviewToken>(
-                p::RotatePreviewTokenIn { workspace_id: id },
-                cx,
-            ),
+            Some("Reset preview access") => {
+                self.mutate::<api::RotatePreviewKey>(p::RotatePreviewKeyIn { workspace_id: id }, cx)
+            }
             _ => {}
         }
     }
@@ -920,6 +935,11 @@ impl WorkspaceView {
         };
         let branch = w.branch.clone();
         let base_branch = self.base_branch_picker(&w, cx);
+        let pr_link = crate::app::AppState::try_global(cx).and_then(|app| {
+            let hub = app.read(cx).hub.read(cx);
+            let project = hub.projects.iter().find(|p| p.id == w.project_id)?;
+            super::indicators::pr_link(&project.owner, &project.name, w.pr_number, w.pr_state)
+        });
         let id = w.id.clone();
         let sleep = w.state == p::WorkspaceState::Sleeping;
         let weak = cx.weak_entity();
@@ -970,10 +990,18 @@ impl WorkspaceView {
                     }),
             )
             .child(base_branch)
+            .children(pr_link.map(|link| {
+                let url = link.url;
+                Button::new("pr-link")
+                    .label(link.label)
+                    .text_color(color(link.token, cx))
+                    .accessibility_label("Open the pull request on GitHub")
+                    .on_click(move |_, _, cx| cx.open_url(&url))
+            }))
             .children(w.ports.into_iter().map(|port| {
                 Button::new(SharedString::from(format!("port-{}", port.port)))
                     .label(format!("{} ↗", port.port))
-                    .on_click(move |_, _, cx| cx.open_url(&port.url))
+                    .on_click(cx.listener(move |this, _, _, cx| this.open_preview(port.port, cx)))
             }))
             .child(div().flex_1())
             .child(
@@ -1034,7 +1062,7 @@ impl WorkspaceView {
                             "Open on GitHub",
                             "Copy workspace link",
                             "Rename chat",
-                            "Rotate preview link",
+                            "Reset preview access",
                             "Diagnostics",
                             "Archive",
                         ] {
@@ -2292,29 +2320,26 @@ impl WorkspaceView {
             return;
         }
         let credentials = self.credentials.clone();
+        let settings = self
+            .store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .map(|w| w.settings.clone());
         let weak = cx.weak_entity();
         let menu = PopupMenu::build(window, cx, move |menu, _, _| {
             chat_model::AGENTS.iter().fold(menu, |menu, agent| {
                 let agent = *agent;
-                let enabled = credentials
-                    .as_ref()
-                    .is_some_and(|c| chat_model::has_login(agent, c));
+                let hint =
+                    chat_model::new_chat_hint(agent, credentials.as_ref(), settings.as_ref());
                 let weak = weak.clone();
                 menu.item(
-                    PopupMenuItem::new(if enabled {
-                        chat_model::agent_label(agent).to_string()
-                    } else {
-                        format!(
-                            "{} · {}",
-                            chat_model::agent_label(agent),
-                            if credentials.is_none() {
-                                "Loading logins…"
-                            } else {
-                                "Add login in Settings"
-                            }
-                        )
+                    PopupMenuItem::new(match hint {
+                        None => chat_model::agent_label(agent).to_string(),
+                        Some(hint) => format!("{} · {hint}", chat_model::agent_label(agent)),
                     })
-                    .disabled(!enabled)
+                    .disabled(hint.is_some())
                     .on_click(move |_, window, cx| {
                         let _ = weak.update(cx, |this, cx| this.create_chat(agent, window, cx));
                     }),
@@ -2788,6 +2813,8 @@ impl Render for WorkspaceView {
 }
 
 const TOO_LARGE: &str = "Each attachment must be at most 10 MiB.";
+/// 04, Confirmations: Reset preview access.
+const RESET_PREVIEW_CONFIRM: &str = "Open previews will stop working. Open them again from Tempo.";
 
 /// The toast text for a failed server function, as the web `errorText`: the server's message,
 /// else the error table's.
@@ -2936,6 +2963,12 @@ mod tests {
                             r#"{"code":"PR_EXISTS","message":"A pull request already exists."}"#
                                 .into(),
                         )
+                    } else if path.ends_with("/openPreview") {
+                        if fail {
+                            (404, r#"{"code":"NOT_FOUND","message":"Not found."}"#.into())
+                        } else {
+                            (200, format!(r#"{{"url":"{PREVIEW_LINK}"}}"#))
+                        }
                     } else if path.ends_with("/getCredentialStatus") {
                         (200,r#"{"claude":{"set":true,"updatedAt":null},"anthropic":{"set":true,"updatedAt":null},"openai":{"set":true,"updatedAt":null},"openrouter":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null}}"#.into())
                     } else {
@@ -2967,6 +3000,8 @@ mod tests {
             self.worker.take().unwrap().join().unwrap();
         }
     }
+    const PREVIEW_LINK: &str = "https://3000-01k7000000000000000000000b.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9";
+
     fn fixture() -> tempo_client::state::workspace::WorkspaceState {
         let mut state = tempo_client::state::workspace::WorkspaceState::new();
         for line in include_str!(
@@ -3847,5 +3882,92 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[gpui_kit::test]
+    fn port_click_opens_the_link_from_open_preview_in_the_default_browser(cx: &mut TestAppContext) {
+        for fail in [false, true] {
+            let state = fixture();
+            let id = state.workspace.as_ref().unwrap().id.clone();
+            let turn = state.turns.values().next().unwrap().clone();
+            let server = LocalServer::new(&turn, fail);
+            let runtime = tempo_client::Runtime::start().unwrap();
+            let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+            let (window, view) = mount(cx, state, client);
+            view.update(cx, |view, cx| view.open_preview(3000., cx));
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/openPreview"))
+                || (!fail && cx.opened_url().is_none())
+            {
+                cx.run_until_parked();
+                assert!(Instant::now() < deadline, "openPreview did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let requests = server.requests.lock().unwrap().clone();
+            let call = requests
+                .iter()
+                .find(|(path, _)| path.ends_with("/openPreview"))
+                .unwrap();
+            assert_eq!(
+                call.1,
+                serde_json::json!({"workspaceId": id, "port": 3000.0})
+            );
+            if fail {
+                assert_eq!(toasts(cx, window), 1);
+            } else {
+                assert_eq!(cx.opened_url().as_deref(), Some(PREVIEW_LINK));
+                assert_eq!(toasts(cx, window), 0);
+            }
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn reset_preview_access_confirms_then_rotates_the_key(cx: &mut TestAppContext) {
+        assert_eq!(
+            RESET_PREVIEW_CONFIRM,
+            "Open previews will stop working. Open them again from Tempo."
+        );
+        let state = fixture();
+        let id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.operation("Reset preview access", window, cx)
+            })
+        })
+        .unwrap();
+        assert!(
+            !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/rotatePreviewKey")),
+            "nothing is reset before the confirmation"
+        );
+        view.update(cx, |view, cx| view.submit_operation(cx));
+        wait_until(cx, &view, |view, _| !view.operation_pending);
+        let requests = server.requests.lock().unwrap().clone();
+        let call = requests
+            .iter()
+            .find(|(path, _)| path.ends_with("/rotatePreviewKey"))
+            .unwrap();
+        assert_eq!(call.1, serde_json::json!({"workspaceId": id}));
+        assert!(view.read_with(cx, |view, _| view.operation.is_none()));
     }
 }

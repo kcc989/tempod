@@ -109,6 +109,7 @@ CREATE TABLE workspace (
   attention           TEXT NOT NULL DEFAULT 'none',
   setup_status        TEXT NOT NULL DEFAULT 'none'
                       CHECK (setup_status IN ('none','running','succeeded','failed','skipped')),
+  preview_token       TEXT NOT NULL,   -- unused since preview_key; kept because 05 Upgrades forbids dropping a column
   preview_key         TEXT NOT NULL,   -- HMAC key for preview cookies (05, Preview access)
   browser_session_id  TEXT,            -- open Browser Run session (01); null when none
   settings_json       TEXT NOT NULL DEFAULT '{}',  -- effective settings, last read

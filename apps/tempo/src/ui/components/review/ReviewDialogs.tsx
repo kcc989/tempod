@@ -17,6 +17,7 @@ import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { Toggle } from "~/ui/components/ui/toggle";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useCallQuery } from "~/ui/hooks/useCall";
+import { useDebounced } from "~/ui/hooks/useDebounced";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
 import { fuzzyFilter } from "~/ui/lib/fuzzy";
 import { Store } from "~/ui/lib/store";
@@ -142,15 +143,6 @@ function SearchFilesDialog({ workspaceId }: { workspaceId: string }) {
       {mine && <SearchBody workspaceId={workspaceId} />}
     </CommandDialog>
   );
-}
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
 }
 
 function SearchBody({ workspaceId }: { workspaceId: string }) {

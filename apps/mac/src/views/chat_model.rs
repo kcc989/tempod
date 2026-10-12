@@ -27,6 +27,33 @@ pub fn has_login(agent: AgentId, status: &CredentialStatus) -> bool {
         AgentId::Opencode | AgentId::Pi => status.openrouter.set,
     }
 }
+pub const NO_LOGIN_HINT: &str = "Add login in Settings";
+pub const NO_MODEL_HINT: &str = "Set a model in Settings → Project";
+pub const LOADING_LOGINS_HINT: &str = "Loading logins…";
+
+/// OpenCode and Pi need `agent.models.<agent>` to start (01, Agents: Model choice).
+pub fn needs_model(agent: AgentId, settings: &p::Settings) -> bool {
+    let models = &settings.agent.models;
+    match agent {
+        AgentId::Claude | AgentId::Codex => false,
+        AgentId::Opencode => models.opencode.is_empty(),
+        AgentId::Pi => models.pi.is_empty(),
+    }
+}
+
+/// Why New chat shows `agent` disabled (04, Tabs), or `None` when it can start.
+pub fn new_chat_hint(
+    agent: AgentId,
+    credentials: Option<&CredentialStatus>,
+    settings: Option<&p::Settings>,
+) -> Option<&'static str> {
+    match credentials {
+        None => Some(LOADING_LOGINS_HINT),
+        Some(c) if !has_login(agent, c) => Some(NO_LOGIN_HINT),
+        _ if settings.is_some_and(|s| needs_model(agent, s)) => Some(NO_MODEL_HINT),
+        _ => None,
+    }
+}
 pub fn session_title(session: &Session) -> String {
     if session.title.trim().is_empty() {
         agent_label(session.agent).into()
@@ -487,6 +514,44 @@ pub fn turn_footer(turn: &Turn) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn new_chat_disables_opencode_and_pi_without_a_model() {
+        let mut credentials: CredentialStatus = serde_json::from_value(serde_json::json!({
+            "claude": {"set": true, "updatedAt": 1},
+            "codex": {"set": true, "updatedAt": 1, "lastRefresh": 1},
+            "openrouter": {"set": true, "updatedAt": 1},
+            "anthropic": {"set": false, "updatedAt": null},
+            "openai": {"set": false, "updatedAt": null}
+        }))
+        .unwrap();
+        let mut settings: p::Settings = serde_json::from_str(
+            include_str!("../../../../packages/protocol/fixtures/types/Settings.jsonl")
+                .lines()
+                .next()
+                .unwrap(),
+        )
+        .unwrap();
+        settings.agent.models.pi = "openrouter/pi".into();
+        let hints = |c: Option<&CredentialStatus>, s: Option<&p::Settings>| {
+            AGENTS.map(|a| new_chat_hint(a, c, s))
+        };
+        assert_eq!(
+            hints(Some(&credentials), Some(&settings)),
+            [None, None, Some("Set a model in Settings → Project"), None]
+        );
+        assert_eq!(hints(Some(&credentials), None), [None, None, None, None]);
+        credentials.openrouter.set = false;
+        assert_eq!(
+            hints(Some(&credentials), Some(&settings)),
+            [
+                None,
+                None,
+                Some("Add login in Settings"),
+                Some("Add login in Settings")
+            ]
+        );
+        assert_eq!(hints(None, Some(&settings)), [Some("Loading logins…"); 4]);
+    }
     #[test]
     fn turn_footer_matches_the_web_copy() {
         let mut turn = state().turns.into_values().next().unwrap();

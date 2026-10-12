@@ -2,9 +2,9 @@ import { eq, lte } from "drizzle-orm";
 import {
   TempoError,
   capture,
-  newPreviewToken,
   type AgentId,
   type FnOutput,
+  type PrState,
   type Result,
   type Source,
   type WorkspaceFnName,
@@ -32,7 +32,7 @@ import { WorkspaceCore, type Author } from "./core.ts";
 import { applyTempodEvent } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
-import { previewFetch } from "./preview.ts";
+import { newPreviewKey, previewEnter, previewFetch } from "./preview.ts";
 import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
 import { makeMethods, type MethodInput, type Methods } from "./rpc.ts";
 import { OpRunner } from "./runner.ts";
@@ -60,6 +60,8 @@ export interface InitInput {
   readonly defaultAgent: AgentId;
   readonly agent: AgentId;
   readonly prompt: { readonly text: string } | null;
+  /** For `source.kind = "pr"`: the PR as createWorkspace read it (03, Create a workspace). */
+  readonly pr?: { readonly number: number; readonly state: PrState; readonly title: string } | null;
   readonly author: Author;
   readonly createdAt: number;
 }
@@ -155,11 +157,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
             errorDetail: null,
             attention: "none",
             setupStatus: "none",
-            previewToken: newPreviewToken(),
+            previewKey: newPreviewKey(),
             settingsJson: json.settings.write(preliminary),
             pushed: 0,
-            prNumber: null,
-            prState: null,
+            prNumber: input.pr?.number ?? null,
+            prState: input.pr?.state ?? null,
             checksState: null,
             lastActivityAt: now,
             lastViewedAt: now,
@@ -175,6 +177,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
           })
           .run();
         core.setKv("author", input.author);
+        if (input.pr) core.setKv("prTitle", input.pr.title);
         if (input.prompt) {
           const sessionId = newId();
           const turnId = newId();
@@ -348,8 +351,13 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     await this.core.tempod.request("env.set", { env: await this.core.scriptEnv() }).catch(() => undefined);
   }
 
-  async previewFetch(request: Request, port: number, token: string): Promise<Response> {
-    return previewFetch(this.core, request, port, token, () => this.tryEnsureAwake());
+  async previewFetch(request: Request, port: number, cookie: string): Promise<Response> {
+    return previewFetch(this.core, request, port, cookie, () => this.tryEnsureAwake());
+  }
+
+  /** 05 Enter: the preview cookie value for a good code, else null. */
+  async previewEnter(port: number, code: string): Promise<string | null> {
+    return previewEnter(this.core, port, code);
   }
 
   // ---------- fetch: UI channel, terminal, preview ----------
@@ -357,8 +365,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   override async fetch(request: Request): Promise<Response> {
     const preview = request.headers.get(PREVIEW_HEADER);
     if (preview) {
-      const [port, token] = preview.split(":");
-      return this.previewFetch(request, Number(port), token ?? "");
+      const sep = preview.indexOf(":");
+      return this.previewFetch(request, Number(preview.slice(0, sep)), sep < 0 ? "" : preview.slice(sep + 1));
     }
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/ws/workspace/")) return openUiChannel(this.core, request);

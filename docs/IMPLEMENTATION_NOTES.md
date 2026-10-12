@@ -69,7 +69,9 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | Monorepo | Bun workspaces with Turborepo (`turbo.json`), as requested. TypeScript 6.0.3: TypeScript 7 is the native compiler, and some tools still need the JS API. |
 | Server functions | Each function returns its `Result` envelope as JSON text. TanStack Start's serializability check rejects the `unknown` fields that ACP data carries. The client helper `call()` parses and unwraps it. |
 | DO RPC | Every WorkspaceDO method returns a `Result` envelope, because a thrown error loses its code across RPC. The methods are generated into `methods.gen.ts` (Workers RPC exposes prototype methods only). |
-| Preview | The Worker hands preview requests to the DO with `stub.fetch()` and an internal header, because RPC cannot carry a WebSocket upgrade. `previewFetch` still exists as an RPC method. |
+| Preview | The Worker hands preview requests to the DO with `stub.fetch()` and an internal header carrying the port and the preview cookie value, because RPC cannot carry a WebSocket upgrade. `previewFetch` still exists as an RPC method. `previewEnter` is a plain RPC call. A request without the preview cookie gets the preview 404 page from the Worker without reaching the DO. |
+| Preview `/__tempo/` paths | Any request under `/__tempo/` other than `GET /__tempo/enter` gets the preview 404 page. A code used on another port's host is refused and stays usable on its own port until it expires. |
+| `preview_key` migration | `0003_preview_access` adds `preview_key` with `DEFAULT ''` (SQLite needs a default to add a `NOT NULL` column to a table with rows), fills each existing row with a fresh key from `crypto.getRandomValues`, and creates `preview_codes`. An empty or undecodable key never verifies. `preview_token` stays, unused, because 05 Upgrades forbids dropping a column; new rows store `''`. |
 | Images in prompts | An image goes inline only up to 512 KiB, because tempod messages are capped at 1 MiB. Larger images go as a `resource_link` to the copied file. |
 | Sleep op | The state becomes `stopping` only after `turns.check` passes. `stopping → ready` is not a legal transition, so a cancelled sleep must not leave `ready` first. |
 | Archive | Queued turns are deleted with their `user_message` items (03: "delete queued turns"). |
@@ -104,18 +106,21 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | Phone Setup output | Phones have no bottom panel, so `View output` and `Open Setup tab` open a Setup pane with `Back to chat`. It has no bottom-navigation entry. |
 | Shortcuts tab | Shows the Tempo and the Conductor column of the 04 table. |
 | JSON columns | Every JSON column is decoded with Effect Schema on read (a bad value logs `warn` and uses a fallback) and checked on write (`INTERNAL`). Item content from `tempod` that fails its kind's schema keeps each field that still decodes; the others take the kind's empty value. |
-| Preview token rotation | Open preview WebSocket relays close with code 1008. |
+| Reset preview access | `rotatePreviewKey` also deletes unused entry codes, so a link made before the reset cannot start a cookie. Open preview WebSocket relays close with code 1008. |
 | Queued commit | `commitAndPush` waits behind pending ops; behind a sleep it returns `CONTAINER_NOT_READY`. |
 | Container stop during create or wake | The op is cancelled and the workspace restarts through the unplanned-stop path, so it counts toward 3 restarts an hour. |
 | `container.start` step timeout | 150 s, not 60 s: the health poll is 60 s, and the rest covers a failed snapshot start falling back to the image. Attempts stay at 3. |
 | Channel backpressure (02, 4008) | Workers `WebSocket` has no `bufferedAmount`, so the 4 MiB check reads 0 and never closes a socket. A deployed check should confirm this; a different mechanism needs a spec change. |
 | OAuth tokens (05, Secrets) | Better Auth's `account` rows never keep GitHub `access_token`, `refresh_token` or `id_token`: database hooks null them on create and update. Sign-in needs only the GitHub profile. |
 | Better Auth logs | Its logger writes through `log()`, so the redact rule applies. |
-| Worker invocation logs | Off (`observability.logs.invocation_logs: false`): they record request URLs, which hold preview tokens and the setup token. Structured logs stay on. |
+| Worker invocation logs | Off (`observability.logs.invocation_logs: false`): they record request URLs, which hold preview entry codes and the setup token. Structured logs stay on. |
 | Build id | The deploy sets one id, `<version>+<git sha>[.dirty]`, as the Worker's `TEMPO_VERSION` and inlines it into `tempod` (`TEMPO_BUILD_ID`), so the version warning in 05 fires only for different builds. |
 | `setup_url` redirect | When the owner is signed in, `/setup/github/installed` syncs installations at once. Otherwise the Add project dialog syncs them after sign-in. |
 | Attachment upload Origin | A cookie-authenticated upload must send `Origin: https://<APP_HOST>`. Bearer uploads send none. Reads stay Origin-free so `<img>` works. |
 | Transcript thumbnails | PNG, JPEG, GIF and WebP load from the owner-only attachment route. The web uses this browser's upload preview first. The Mac app keeps at most 32 MiB of thumbnails in memory per transcript and never writes them to disk. |
+| DO migration `0004_drop_unused_statuses` | SQLite cannot change a CHECK, so `sessions`, `turns` and `review_comments` are rebuilt (new table, copy, drop, rename, `turns_by_status` again). `turns` is rebuilt because DO SQLite enforces foreign keys and `sessions` cannot be dropped while `turns` refers to it. A stored `broken` becomes `closed` and `resolved` becomes `sent`, so old rows cannot fail the new CHECK; no code ever wrote either value. |
+| Diagnostics egress filters | Both clients trim the host text and leave out an empty host and `all`. The count reads `<n> shown`, because the server returns only the matches. The web keeps the last rows on screen while a filtered request runs. |
+| PR link | Only the desktop top bar shows `#<number> ↗`; the phone bar stays `branch → base`. |
 
 ## Spec ambiguities found by the tests
 

@@ -106,7 +106,6 @@ export const WorkspaceDetail = Schema.Struct({
   setupStatus: SetupStatus,
   pushed: Schema.Boolean,
   prTitle: Schema.optional(N(Schema.String)),
-  previewToken: Schema.String,
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
   settings: Settings,
   runningTurnId: N(Schema.String),

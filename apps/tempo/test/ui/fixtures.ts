@@ -34,7 +34,6 @@ export const detail = (over: Partial<WorkspaceDetail> = {}): WorkspaceDetail => 
   errorDetail: null,
   setupStatus: "succeeded",
   pushed: false,
-  previewToken: "abcdefghijklmnop",
   ports: [],
   settings: DEFAULT_SETTINGS,
   runningTurnId: null,

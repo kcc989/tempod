@@ -1161,6 +1161,73 @@ impl ::std::convert::TryFrom<::std::string::String> for EgressPolicy {
         value.parse()
     }
 }
+///`EgressStatusFilter`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum EgressStatusFilter {
+    #[serde(rename = "all")]
+    All,
+    #[serde(rename = "blocked")]
+    Blocked,
+    #[serde(rename = "2xx")]
+    X2xx,
+    #[serde(rename = "3xx")]
+    X3xx,
+    #[serde(rename = "4xx")]
+    X4xx,
+    #[serde(rename = "5xx")]
+    X5xx,
+}
+impl ::std::fmt::Display for EgressStatusFilter {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::All => f.write_str("all"),
+            Self::Blocked => f.write_str("blocked"),
+            Self::X2xx => f.write_str("2xx"),
+            Self::X3xx => f.write_str("3xx"),
+            Self::X4xx => f.write_str("4xx"),
+            Self::X5xx => f.write_str("5xx"),
+        }
+    }
+}
+impl ::std::str::FromStr for EgressStatusFilter {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "all" => Ok(Self::All),
+            "blocked" => Ok(Self::Blocked),
+            "2xx" => Ok(Self::X2xx),
+            "3xx" => Ok(Self::X3xx),
+            "4xx" => Ok(Self::X4xx),
+            "5xx" => Ok(Self::X5xx),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for EgressStatusFilter {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for EgressStatusFilter {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`ErrorBody`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ErrorBody {
@@ -1255,6 +1322,8 @@ pub enum ErrorCode {
     PathOutsideWorkspace,
     #[serde(rename = "CHECKPOINT_NOT_FOUND")]
     CheckpointNotFound,
+    #[serde(rename = "MODEL_REQUIRED")]
+    ModelRequired,
     #[serde(rename = "SETTINGS_INVALID")]
     SettingsInvalid,
     #[serde(rename = "EGRESS_BLOCKED")]
@@ -1301,6 +1370,7 @@ impl ::std::fmt::Display for ErrorCode {
             Self::FileTooLarge => f.write_str("FILE_TOO_LARGE"),
             Self::PathOutsideWorkspace => f.write_str("PATH_OUTSIDE_WORKSPACE"),
             Self::CheckpointNotFound => f.write_str("CHECKPOINT_NOT_FOUND"),
+            Self::ModelRequired => f.write_str("MODEL_REQUIRED"),
             Self::SettingsInvalid => f.write_str("SETTINGS_INVALID"),
             Self::EgressBlocked => f.write_str("EGRESS_BLOCKED"),
             Self::Internal => f.write_str("INTERNAL"),
@@ -1347,6 +1417,7 @@ impl ::std::str::FromStr for ErrorCode {
             "FILE_TOO_LARGE" => Ok(Self::FileTooLarge),
             "PATH_OUTSIDE_WORKSPACE" => Ok(Self::PathOutsideWorkspace),
             "CHECKPOINT_NOT_FOUND" => Ok(Self::CheckpointNotFound),
+            "MODEL_REQUIRED" => Ok(Self::ModelRequired),
             "SETTINGS_INVALID" => Ok(Self::SettingsInvalid),
             "EGRESS_BLOCKED" => Ok(Self::EgressBlocked),
             "INTERNAL" => Ok(Self::Internal),
@@ -1394,6 +1465,16 @@ pub struct GetChangesOut {
 ///`GetDiagnosticsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetDiagnosticsIn {
+    #[serde(
+        rename = "egressHost",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub egress_host: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "egressStatus",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub egress_status: ::std::option::Option<EgressStatusFilter>,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
@@ -2472,6 +2553,18 @@ impl ::std::convert::TryFrom<::std::string::String> for OpStatus {
         value.parse()
     }
 }
+///`OpenPreviewIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct OpenPreviewIn {
+    pub port: f64,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`OpenPreviewOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct OpenPreviewOut {
+    pub url: ::std::string::String,
+}
 ///`PermissionContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct PermissionContent {
@@ -2964,15 +3057,12 @@ pub enum ReviewStatus {
     Draft,
     #[serde(rename = "sent")]
     Sent,
-    #[serde(rename = "resolved")]
-    Resolved,
 }
 impl ::std::fmt::Display for ReviewStatus {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
             Self::Draft => f.write_str("draft"),
             Self::Sent => f.write_str("sent"),
-            Self::Resolved => f.write_str("resolved"),
         }
     }
 }
@@ -2982,7 +3072,6 @@ impl ::std::str::FromStr for ReviewStatus {
         match value {
             "draft" => Ok(Self::Draft),
             "sent" => Ok(Self::Sent),
-            "resolved" => Ok(Self::Resolved),
             _ => Err("invalid value".into()),
         }
     }
@@ -3001,17 +3090,11 @@ impl ::std::convert::TryFrom<::std::string::String> for ReviewStatus {
         value.parse()
     }
 }
-///`RotatePreviewTokenIn`
+///`RotatePreviewKeyIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RotatePreviewTokenIn {
+pub struct RotatePreviewKeyIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
-}
-///`RotatePreviewTokenOut`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RotatePreviewTokenOut {
-    #[serde(rename = "previewToken")]
-    pub preview_token: ::std::string::String,
 }
 ///`RunMode`
 #[derive(
@@ -3439,8 +3522,6 @@ pub enum SessionStatus {
     Running,
     #[serde(rename = "closed")]
     Closed,
-    #[serde(rename = "broken")]
-    Broken,
 }
 impl ::std::fmt::Display for SessionStatus {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -3449,7 +3530,6 @@ impl ::std::fmt::Display for SessionStatus {
             Self::Idle => f.write_str("idle"),
             Self::Running => f.write_str("running"),
             Self::Closed => f.write_str("closed"),
-            Self::Broken => f.write_str("broken"),
         }
     }
 }
@@ -3461,7 +3541,6 @@ impl ::std::str::FromStr for SessionStatus {
             "idle" => Ok(Self::Idle),
             "running" => Ok(Self::Running),
             "closed" => Ok(Self::Closed),
-            "broken" => Ok(Self::Broken),
             _ => Err("invalid value".into()),
         }
     }
@@ -3768,6 +3847,7 @@ pub struct SetSessionModeIn {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Settings {
     pub agent: SettingsAgent,
+    pub browser: SettingsBrowser,
     pub environment: SettingsEnvironment,
     pub environment_variables:
         ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
@@ -3779,7 +3859,20 @@ pub struct Settings {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct SettingsAgent {
     pub default: AgentId,
-    pub model: ::std::string::String,
+    pub models: SettingsAgentModels,
+}
+///`SettingsAgentModels`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SettingsAgentModels {
+    pub claude: ::std::string::String,
+    pub codex: ::std::string::String,
+    pub opencode: ::std::string::String,
+    pub pi: ::std::string::String,
+}
+///`SettingsBrowser`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SettingsBrowser {
+    pub run: bool,
 }
 ///`SettingsEnvironment`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3802,6 +3895,8 @@ pub struct SettingsLayer {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub agent: ::std::option::Option<SettingsLayerAgent>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub browser: ::std::option::Option<SettingsLayerBrowser>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub environment: ::std::option::Option<SettingsLayerEnvironment>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub environment_variables: ::std::option::Option<
@@ -3820,7 +3915,25 @@ pub struct SettingsLayerAgent {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub default: ::std::option::Option<AgentId>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub model: ::std::option::Option<::std::string::String>,
+    pub models: ::std::option::Option<SettingsLayerAgentModels>,
+}
+///`SettingsLayerAgentModels`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct SettingsLayerAgentModels {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub claude: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub codex: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub opencode: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub pi: ::std::option::Option<::std::string::String>,
+}
+///`SettingsLayerBrowser`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct SettingsLayerBrowser {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub run: ::std::option::Option<bool>,
 }
 ///`SettingsLayerEnvironment`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
@@ -4450,8 +4563,6 @@ pub struct WorkspaceDetail {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub pr_title: ::std::option::Option<::std::string::String>,
-    #[serde(rename = "previewToken")]
-    pub preview_token: ::std::string::String,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
     pub pushed: bool,
@@ -5984,6 +6095,15 @@ pub mod api {
         type Input = crate::MergePullRequestIn;
         type Output = crate::Empty;
     }
+    /// `openPreview`
+    #[derive(Clone, Copy, Debug)]
+    pub struct OpenPreview;
+    impl crate::Function for OpenPreview {
+        const NAME: &'static str = "openPreview";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::OpenPreviewIn;
+        type Output = crate::OpenPreviewOut;
+    }
     /// `readFile`
     #[derive(Clone, Copy, Debug)]
     pub struct ReadFile;
@@ -6074,14 +6194,14 @@ pub mod api {
         type Input = crate::RevertToCheckpointIn;
         type Output = crate::Empty;
     }
-    /// `rotatePreviewToken`
+    /// `rotatePreviewKey`
     #[derive(Clone, Copy, Debug)]
-    pub struct RotatePreviewToken;
-    impl crate::Function for RotatePreviewToken {
-        const NAME: &'static str = "rotatePreviewToken";
+    pub struct RotatePreviewKey;
+    impl crate::Function for RotatePreviewKey {
+        const NAME: &'static str = "rotatePreviewKey";
         const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::RotatePreviewTokenIn;
-        type Output = crate::RotatePreviewTokenOut;
+        type Input = crate::RotatePreviewKeyIn;
+        type Output = crate::Empty;
     }
     /// `runScript`
     #[derive(Clone, Copy, Debug)]
@@ -6265,6 +6385,7 @@ pub mod api {
         ("listWorkspaces", crate::Method::Get),
         ("markViewed", crate::Method::Post),
         ("mergePullRequest", crate::Method::Post),
+        ("openPreview", crate::Method::Post),
         ("readFile", crate::Method::Get),
         ("refreshPullRequest", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
@@ -6275,7 +6396,7 @@ pub mod api {
         ("respondPermission", crate::Method::Post),
         ("restoreWorkspace", crate::Method::Post),
         ("revertToCheckpoint", crate::Method::Post),
-        ("rotatePreviewToken", crate::Method::Post),
+        ("rotatePreviewKey", crate::Method::Post),
         ("runScript", crate::Method::Post),
         ("searchFiles", crate::Method::Get),
         ("sendPrompt", crate::Method::Post),
@@ -6344,6 +6465,7 @@ pub mod wire {
         "DiffScope",
         "EditQueuedTurnIn",
         "EgressPolicy",
+        "EgressStatusFilter",
         "Empty",
         "ErrorBody",
         "ErrorCode",
@@ -6394,6 +6516,8 @@ pub mod wire {
         "OpKind",
         "OpProgress",
         "OpStatus",
+        "OpenPreviewIn",
+        "OpenPreviewOut",
         "PermissionContent",
         "PermissionOption",
         "PermissionRequest",
@@ -6418,8 +6542,7 @@ pub mod wire {
         "ReviewComment",
         "ReviewSide",
         "ReviewStatus",
-        "RotatePreviewTokenIn",
-        "RotatePreviewTokenOut",
+        "RotatePreviewKeyIn",
         "RunMode",
         "RunScript",
         "RunScriptIn",
@@ -6534,6 +6657,7 @@ pub mod wire {
             "DiffScope" => crate::roundtrip::<crate::DiffScope>(text),
             "EditQueuedTurnIn" => crate::roundtrip::<crate::EditQueuedTurnIn>(text),
             "EgressPolicy" => crate::roundtrip::<crate::EgressPolicy>(text),
+            "EgressStatusFilter" => crate::roundtrip::<crate::EgressStatusFilter>(text),
             "Empty" => crate::roundtrip::<crate::Empty>(text),
             "ErrorBody" => crate::roundtrip::<crate::ErrorBody>(text),
             "ErrorCode" => crate::roundtrip::<crate::ErrorCode>(text),
@@ -6588,6 +6712,8 @@ pub mod wire {
             "OpKind" => crate::roundtrip::<crate::OpKind>(text),
             "OpProgress" => crate::roundtrip::<crate::OpProgress>(text),
             "OpStatus" => crate::roundtrip::<crate::OpStatus>(text),
+            "OpenPreviewIn" => crate::roundtrip::<crate::OpenPreviewIn>(text),
+            "OpenPreviewOut" => crate::roundtrip::<crate::OpenPreviewOut>(text),
             "PermissionContent" => crate::roundtrip::<crate::PermissionContent>(text),
             "PermissionOption" => crate::roundtrip::<crate::PermissionOption>(text),
             "PermissionRequest" => crate::roundtrip::<crate::PermissionRequest>(text),
@@ -6612,8 +6738,7 @@ pub mod wire {
             "ReviewComment" => crate::roundtrip::<crate::ReviewComment>(text),
             "ReviewSide" => crate::roundtrip::<crate::ReviewSide>(text),
             "ReviewStatus" => crate::roundtrip::<crate::ReviewStatus>(text),
-            "RotatePreviewTokenIn" => crate::roundtrip::<crate::RotatePreviewTokenIn>(text),
-            "RotatePreviewTokenOut" => crate::roundtrip::<crate::RotatePreviewTokenOut>(text),
+            "RotatePreviewKeyIn" => crate::roundtrip::<crate::RotatePreviewKeyIn>(text),
             "RunMode" => crate::roundtrip::<crate::RunMode>(text),
             "RunScript" => crate::roundtrip::<crate::RunScript>(text),
             "RunScriptIn" => crate::roundtrip::<crate::RunScriptIn>(text),

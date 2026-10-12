@@ -333,7 +333,7 @@ export class WorkspaceCore {
   }
 
   previewUrl(port: number, row: WorkspaceRowDO = this.ws()): string {
-    return `https://${port}-${row.workspaceId}-${row.previewToken}.${this.env.PREVIEW_DOMAIN}`;
+    return `https://${port}-${row.workspaceId}.${this.env.PREVIEW_DOMAIN}`;
   }
 
   /** Set by the op runner: the running op, else the next pending op. */
@@ -357,7 +357,6 @@ export class WorkspaceCore {
       setupStatus: row.setupStatus as WorkspaceDetail["setupStatus"],
       pushed: row.pushed === 1,
       prTitle: row.prNumber === null ? null : (this.kv<string>("prTitle") ?? null),
-      previewToken: row.previewToken,
       ports: this.db
         .select()
         .from(ports)

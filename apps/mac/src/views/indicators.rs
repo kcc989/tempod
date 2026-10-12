@@ -290,6 +290,28 @@ pub fn github_pull_url(owner: &str, name: &str, number: f64) -> String {
     format!("https://github.com/{owner}/{name}/pull/{}", number as u64)
 }
 
+#[derive(Debug, PartialEq)]
+pub struct PrLink {
+    pub label: String,
+    pub url: String,
+    pub token: Token,
+}
+
+/// 04 Top bar, left: `#<number> ↗` after the base branch, coloured by prState, to the PR on GitHub.
+pub fn pr_link(
+    owner: &str,
+    name: &str,
+    pr_number: Option<f64>,
+    pr_state: Option<p::PrState>,
+) -> Option<PrLink> {
+    let number = pr_number?;
+    Some(PrLink {
+        label: format!("#{} ↗", number as u64),
+        url: github_pull_url(owner, name, number),
+        token: pr_token(pr_state),
+    })
+}
+
 /// Open on GitHub: the PR, else the branch.
 pub fn github_url_for(owner: &str, name: &str, pr_number: Option<f64>, branch: &str) -> String {
     match pr_number {
@@ -475,6 +497,27 @@ mod tests {
             github_url_for("acme", "api", None, "tempo/fix #1"),
             "https://github.com/acme/api/tree/tempo/fix%20%231"
         );
+    }
+
+    #[test]
+    fn pr_link_follows_the_pr_number_and_state() {
+        assert_eq!(
+            pr_link("acme", "api", Some(12.), Some(p::PrState::Merged)),
+            Some(PrLink {
+                label: "#12 ↗".into(),
+                url: "https://github.com/acme/api/pull/12".into(),
+                token: Token::Merged,
+            })
+        );
+        assert_eq!(
+            pr_link("acme", "api", Some(3.), Some(p::PrState::Draft)).map(|l| l.token),
+            Some(Token::MutedForeground)
+        );
+        assert_eq!(
+            pr_link("acme", "api", Some(3.), Some(p::PrState::Closed)).map(|l| l.token),
+            Some(Token::Destructive)
+        );
+        assert_eq!(pr_link("acme", "api", None, None), None);
     }
 
     #[test]

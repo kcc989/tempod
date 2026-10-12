@@ -92,9 +92,13 @@ export const deleteWorkspace = createServerFn({ method: "POST" })
   .validator((data: FnInput<"deleteWorkspace">) => data)
   .handler(({ data }) => run("deleteWorkspace", data));
 
-export const rotatePreviewToken = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"rotatePreviewToken">) => data)
-  .handler(({ data }) => run("rotatePreviewToken", data));
+export const openPreview = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"openPreview">) => data)
+  .handler(({ data }) => run("openPreview", data));
+
+export const rotatePreviewKey = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"rotatePreviewKey">) => data)
+  .handler(({ data }) => run("rotatePreviewKey", data));
 
 export const setBaseBranch = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setBaseBranch">) => data)

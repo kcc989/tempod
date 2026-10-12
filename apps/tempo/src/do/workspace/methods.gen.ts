@@ -50,10 +50,12 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("deleteWorkspace", input);
   }
 
-  rotatePreviewToken(
-    input: MethodInput<"rotatePreviewToken">,
-  ): Promise<Result<FnOutput<"rotatePreviewToken">>> {
-    return this.rpc("rotatePreviewToken", input);
+  openPreview(input: MethodInput<"openPreview">): Promise<Result<FnOutput<"openPreview">>> {
+    return this.rpc("openPreview", input);
+  }
+
+  rotatePreviewKey(input: MethodInput<"rotatePreviewKey">): Promise<Result<FnOutput<"rotatePreviewKey">>> {
+    return this.rpc("rotatePreviewKey", input);
   }
 
   setBaseBranch(input: MethodInput<"setBaseBranch">): Promise<Result<FnOutput<"setBaseBranch">>> {

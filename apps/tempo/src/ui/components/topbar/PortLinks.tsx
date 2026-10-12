@@ -2,10 +2,11 @@ import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { isMacPlatform } from "~/ui/lib/shortcuts";
 import { cn } from "~/ui/lib/utils";
 import { openBrowser } from "~/ui/state/workspace-ui";
+import { openPreviewTab } from "./open-preview";
 
 /**
- * 04, Top bar middle: one `<port> ↗` link per detected port. A click opens the preview in a new
- * browser tab; ⌥-click opens it in a Browser tab inside Tempo.
+ * 04, Top bar middle: one `<port> ↗` link per detected port. A click opens the entry link from
+ * openPreview in a new browser tab; ⌥-click opens the preview in a Browser tab inside Tempo.
  */
 export function PortLinks({
   workspaceId,
@@ -27,9 +28,14 @@ export function PortLinks({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
-              if (!e.altKey) return;
               e.preventDefault();
-              openBrowser(workspaceId, p.url);
+              if (e.altKey) openBrowser(workspaceId, p.url);
+              else void openPreviewTab(workspaceId, p.port);
+            }}
+            onAuxClick={(e) => {
+              if (e.button !== 1) return;
+              e.preventDefault();
+              void openPreviewTab(workspaceId, p.port);
             }}
             className="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-muted-foreground tabular-nums outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >

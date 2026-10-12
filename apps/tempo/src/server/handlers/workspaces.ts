@@ -13,9 +13,10 @@ import {
 import { resolveSettings } from "@tempo/settings";
 import { workspaces } from "../../db/d1.ts";
 import { getUserById } from "../../github/api.ts";
-import { github } from "../../github/provider.ts";
+import { github, prStateOf } from "../../github/provider.ts";
 import { getOwnedWorkspace } from "../../http/common.ts";
 import { summaryFromD1Row } from "../../lib/summary.ts";
+import type { InitInput } from "../../do/workspace/index.ts";
 import { isValidBranch } from "../../do/workspace/rpc.ts";
 import type { Handler, HandlerCtx } from "../run.ts";
 import { d1, projectToWire, projectToken, repoOf, requireProject } from "./common.ts";
@@ -57,6 +58,7 @@ export const createWorkspace = async (
   let branch: string;
   let baseBranch: string;
   let wsSource: Source;
+  let pr: InitInput["pr"] = null;
   if (source.kind === "new") {
     baseBranch = source.baseBranch;
     wsSource = { kind: "new" };
@@ -68,13 +70,14 @@ export const createWorkspace = async (
     baseBranch = p.defaultBranch;
     wsSource = { kind: "branch" };
   } else {
-    const pr = await github.getPullRequest(token, repo, source.number);
-    if (pr.head.repo?.id !== p.repoId) {
+    const ghPr = await github.getPullRequest(token, repo, source.number);
+    if (ghPr.head.repo?.id !== p.repoId) {
       throw new TempoError("VALIDATION_FAILED", "Pull requests from forks are not supported.");
     }
-    branch = pr.head.ref;
-    baseBranch = pr.base.ref || p.defaultBranch;
+    branch = ghPr.head.ref;
+    baseBranch = ghPr.base.ref || p.defaultBranch;
     wsSource = { kind: "pr", number: source.number };
+    pr = { number: source.number, state: prStateOf(ghPr), title: ghPr.title };
   }
 
   const db = d1(env);
@@ -105,6 +108,8 @@ export const createWorkspace = async (
           state: "creating",
           attention: "none",
           defaultAgent,
+          prNumber: pr?.number ?? null,
+          prState: pr?.state ?? null,
           pinned: 0,
           lastActivityAt: now,
           createdAt: now,
@@ -127,6 +132,7 @@ export const createWorkspace = async (
       defaultAgent,
       agent: defaultAgent,
       prompt: prompt ? { text: prompt.text } : null,
+      pr,
       author,
       createdAt: now,
     });

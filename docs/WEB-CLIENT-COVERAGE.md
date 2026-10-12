@@ -29,7 +29,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Requirement | Implementation audit | Automated evidence | Manual/deployed evidence needed |
 | --- | --- | --- | --- |
 | Title edit, copy branch, base picker until PR exists | Present | topbar logic | Rename, branch choices and PR lock |
-| Port links; Alt-click Browser tab | Present: PortLinks, BrowserTab | browser-model logic | AT-16 real preview and hot reload |
+| Port links (openPreview); Alt-click Browser tab | Present: PortLinks, BrowserTab | browser-model logic; preview component tests | AT-16 real preview and hot reload |
 | Container pill for every state, current step/instance | Present: indicators/pillText | foundation/topbar/banner tests | Real lifecycle progression and instance names |
 | Exactly one primary action, first matching row | Present: primaryAction/topPrimary | topbar-logic tests | Dirty/ahead/pushed/failed checks/merged scenarios |
 | Commit/popover, PR creation, merge, checks, archive | Present; existing shared API functions used | topbar logic, commit requests | AT-17/18 with real GitHub |
@@ -79,7 +79,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | All files tree, read-only Shiki file tabs | Present | file-tree/highlight logic; file-dialog browser | Large real repo, binary/error/sleeping paths |
 | Cmd-P fuzzy picker and Cmd-Shift-F search | Present; hosts now remain when right side is hidden; retry and phone explanation added | fixture browser hidden-panel journey; search/model tests | Real file failures, regex/limits, all macOS browsers |
 | Checks number/title/state/GitHub/check rows | Present for every PR state: title from `WorkspaceDetail.prTitle` or the `refreshPullRequest` result | checks-model | AT-17/18 |
-| Browser address/reload/new tab, iframe restrictions | Present; excludes allow-top-navigation | browser-model tests | AT-16 real dev server/HMR and preview rotation |
+| Browser address/reload/new tab, iframe restrictions | Present; excludes allow-top-navigation; loads the openPreview link | browser-model and preview component tests | AT-16 real dev server/HMR and Reset preview access |
 | Right-side/bottom toggles and panel persistence | Present | workspace-ui/layout/shortcuts tests | All macOS browsers and reload |
 | Setup live/history, rerun, continue anyway, settings issues | Present | script-runs/settings models | AT-14 real setup failure and warnings |
 | Run scripts/default shortcut/Start/Stop/live/history | Present; default shortcut registration moved out of hidden panel | script-runs tests; hidden-panel browser | AT-14 real concurrent/nonconcurrent scripts |
@@ -119,7 +119,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Phone Workspaces/Chat/Changes, chat menu, primary git at Changes | Present | fixture phone journey | AT-21 real live workspace/permission/reply |
 | Phone unified diff and review comments | Present | phone fixture | AT-12/21 real comment delivery |
 | Phone no terminal/Run/file tree, explanatory states | Present; search dialogs now explain width restriction | phone/component models | Phone shortcut/menu and rotate screen |
-| Phone previews open externally | Present: phone overflow port links | browser/topbar models | Real device/new-tab preview |
+| Phone previews open externally | Present: phone overflow port links through openPreview | preview component tests | Real device/new-tab preview |
 
 ## Every keyboard binding
 

@@ -280,7 +280,7 @@ describe("dialogs and confirmations", () => {
   });
 
   it("a newer confirm cancels the older one", async () => {
-    const first = confirm(CONFIRM_TEXT.rotatePreview());
+    const first = confirm(CONFIRM_TEXT.resetPreviewAccess());
     const second = confirm(CONFIRM_TEXT.closeRunningChat());
     await expect(first).resolves.toBe(false);
     expect(dialogStore.getSnapshot().confirm?.title).toBe("Stop the agent and close this chat?");
@@ -292,6 +292,8 @@ describe("dialogs and confirmations", () => {
     expect(CONFIRM_TEXT.revert(3).description).toBe(
       "Files go back to the end of turn 3. A safety checkpoint is saved first.",
     );
-    expect(CONFIRM_TEXT.rotatePreview().description).toBe("Old preview links will stop working.");
+    expect(CONFIRM_TEXT.resetPreviewAccess().description).toBe(
+      "Open previews will stop working. Open them again from Tempo.",
+    );
   });
 });

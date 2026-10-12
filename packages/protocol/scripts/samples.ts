@@ -276,7 +276,8 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   archiveWorkspace: [ws],
   restoreWorkspace: [ws],
   deleteWorkspace: [ws],
-  rotatePreviewToken: [ws],
+  openPreview: [{ ...ws, port: 3000 }],
+  rotatePreviewKey: [ws],
   setBaseBranch: [{ ...ws, baseBranch: "develop" }],
   getDiagnostics: [ws],
   createSession: [
@@ -388,6 +389,10 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   SearchFilesItem: [{ path: "src/theme/toggle.tsx", line: 3, text: "export const useTheme = () => {" }],
   ListTerminalsItem: [{ terminalId: "t1" }, { terminalId: "t2" }],
-  RotatePreviewTokenOut: [{ previewToken: "q8w7e5r1k3j9x2m4" }],
+  OpenPreviewOut: [
+    {
+      url: `https://3000-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
+    },
+  ],
   ListProjectSecretNamesOut: [{ names: ["DATABASE_URL", "STRIPE_KEY"] }],
 };

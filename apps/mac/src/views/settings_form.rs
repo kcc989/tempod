@@ -1490,6 +1490,20 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             assert_eq!(window.find("git-branch_prefix-set").checked(), Some(true));
+            for id in [
+                "agent-models-claude-set",
+                "agent-models-codex-set",
+                "agent-models-opencode-set",
+                "agent-models-pi-set",
+                "browser-run-set",
+            ] {
+                assert_eq!(window.find(id).checked(), Some(false), "{id}");
+            }
+            window.scroll(
+                "agent-default-set",
+                gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-400.))),
+                cx,
+            );
             window.click("environment-sleep_after_idle_minutes-set", cx);
         })
         .unwrap();

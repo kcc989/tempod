@@ -7,7 +7,6 @@ import {
   TempoError,
   WORKSPACE_STATES,
   newId,
-  newPreviewToken,
   reconnectDelay,
   redact,
   type WorkspaceState,
@@ -28,7 +27,14 @@ import {
 import { isValidBranch } from "../../src/do/workspace/rpc.ts";
 import { parseCodexAuth } from "../../src/server/handlers/credentials.ts";
 import { OP_STEPS, backoffMs, limitOf } from "../../src/do/workspace/runner.ts";
-import { handlePreview, isPreviewHost, parsePreviewHost } from "../../src/http/preview.ts";
+import {
+  handlePreview,
+  isPreviewHost,
+  parsePreviewHost,
+  PREVIEW_NOT_FOUND_TEXT,
+  takePreviewCookie,
+} from "../../src/http/preview.ts";
+import { previewCookie, verifyPreviewCookie } from "../../src/do/workspace/preview.ts";
 import { sanitizeName } from "../../src/http/attachments.ts";
 
 import { HOME_EXCLUDES } from "../../src/do/workspace/durability.ts";
@@ -1123,54 +1129,119 @@ describe("limitOf (03 Step limits)", () => {
 // ---------------------------------------------------------------------------------------------
 
 describe("parsePreviewHost", () => {
-  // 01: "It matches the first label against ^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})-([a-z0-9]{16})$. No match returns 404."
+  // 01: "It matches the first label against ^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})$."
   const penv = { PREVIEW_DOMAIN: "previews.test" } as never;
   const ws = newId();
-  const token = newPreviewToken();
 
-  it("parses port, workspace id and token", () => {
-    expect(parsePreviewHost(`3000-${ws}-${token}.previews.test`, penv)).toEqual({
-      port: 3000,
-      workspaceId: ws,
-      token,
-    });
+  it("parses port and workspace id", () => {
+    expect(parsePreviewHost(`3000-${ws}.previews.test`, penv)).toEqual({ port: 3000, workspaceId: ws });
   });
   it("parses a 5-digit port", () => {
-    expect(parsePreviewHost(`65535-${ws}-${token}.previews.test`, penv)).toMatchObject({ port: 65535 });
+    expect(parsePreviewHost(`65535-${ws}.previews.test`, penv)).toMatchObject({ port: 65535 });
   });
   it("parses a host in upper case (DNS is case-insensitive)", () => {
-    expect(parsePreviewHost(`5173-${ws}-${token}.previews.test`.toUpperCase(), penv)).toEqual({
+    expect(parsePreviewHost(`5173-${ws}.previews.test`.toUpperCase(), penv)).toEqual({
       port: 5173,
       workspaceId: ws,
-      token,
     });
   });
   it("uses the real PREVIEW_DOMAIN binding", () => {
-    expect(parsePreviewHost(`8080-${ws}-${token}.previews.test`, env as never)).toMatchObject({ port: 8080 });
+    expect(parsePreviewHost(`8080-${ws}.previews.test`, env as never)).toMatchObject({ port: 8080 });
   });
   it.each([
-    ["3-digit port", `808-${ws}-${token}`],
-    ["6-digit port", `100000-${ws}-${token}`],
-    ["25-char id", `3000-${ws.slice(1)}-${token}`],
-    ["27-char id", `3000-${ws}0-${token}`],
-    ["id with i", `3000-${ws.slice(0, 25)}i-${token}`],
-    ["id with l", `3000-${ws.slice(0, 25)}l-${token}`],
-    ["id with o", `3000-${ws.slice(0, 25)}o-${token}`],
-    ["id with u", `3000-${ws.slice(0, 25)}u-${token}`],
-    ["15-char token", `3000-${ws}-${token.slice(1)}`],
-    ["17-char token", `3000-${ws}-${token}a`],
-    ["token with _", `3000-${ws}-${token.slice(1)}_`],
-    ["missing token", `3000-${ws}`],
-    ["non-digit port", `30a0-${ws}-${token}`],
-    ["extra part", `3000-${ws}-${token}-x`],
+    ["3-digit port", `808-${ws}`],
+    ["6-digit port", `100000-${ws}`],
+    ["25-char id", `3000-${ws.slice(1)}`],
+    ["27-char id", `3000-${ws}0`],
+    ["id with i", `3000-${ws.slice(0, 25)}i`],
+    ["id with l", `3000-${ws.slice(0, 25)}l`],
+    ["id with o", `3000-${ws.slice(0, 25)}o`],
+    ["id with u", `3000-${ws.slice(0, 25)}u`],
+    ["the old token part", `3000-${ws}-k3j9x2m4q8w7e5r1`],
+    ["non-digit port", `30a0-${ws}`],
+    ["extra part", `3000-${ws}-x`],
   ])("returns null for %s", (_label, label) => {
     expect(parsePreviewHost(`${label}.previews.test`, penv)).toBeNull();
   });
   it("returns null when the label is not the first label under PREVIEW_DOMAIN", () => {
-    expect(parsePreviewHost(`x.3000-${ws}-${token}.previews.test`, penv)).toBeNull();
+    expect(parsePreviewHost(`x.3000-${ws}.previews.test`, penv)).toBeNull();
   });
   it("returns null for the bare preview domain", () => {
     expect(parsePreviewHost("previews.test", penv)).toBeNull();
+  });
+});
+
+describe("takePreviewCookie", () => {
+  // 01 step 2: the Worker removes the __Host-tempo_preview cookie before the request reaches the app.
+  it("takes the preview cookie and keeps the app's other cookies", () => {
+    expect(takePreviewCookie("a=1; __Host-tempo_preview=1700000000.mac; b=x=y")).toEqual({
+      value: "1700000000.mac",
+      rest: "a=1; b=x=y",
+    });
+  });
+  it("returns no value and no cookies for a missing header", () => {
+    expect(takePreviewCookie(null)).toEqual({ value: null, rest: "" });
+    expect(takePreviewCookie("session=abc")).toEqual({ value: null, rest: "session=abc" });
+  });
+  it("removes every preview cookie and keeps the last one's value", () => {
+    expect(takePreviewCookie("__Host-tempo_preview=old;x=1;__Host-tempo_preview=new")).toEqual({
+      value: "new",
+      rest: "x=1",
+    });
+  });
+  it("does not match a cookie that only starts with the same name", () => {
+    expect(takePreviewCookie("__Host-tempo_preview2=v")).toEqual({
+      value: null,
+      rest: "__Host-tempo_preview2=v",
+    });
+  });
+});
+
+describe("preview cookie value (05, Cookie value)", () => {
+  const key = "S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U";
+  const now = 1_800_000_000_000;
+
+  it("is <expiresAt>.<base64url HMAC-SHA256 over <port>.<expiresAt>>, 24 hours ahead", async () => {
+    const value = (await previewCookie(key, 3000, now))!;
+    const [expiresAt, mac] = value.split(".");
+    expect(Number(expiresAt)).toBe(now / 1000 + 86_400);
+    const raw = Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+    const k = await crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const sig = new Uint8Array(
+      await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`3000.${expiresAt}`)),
+    );
+    const expected = btoa(String.fromCharCode(...sig))
+      .replace(/=+$/, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
+    expect(mac).toBe(expected);
+    expect(await verifyPreviewCookie(key, 3000, value, now)).toBe(true);
+  });
+  it("fails for another port, another key, a changed MAC or after it expires", async () => {
+    const value = (await previewCookie(key, 3000, now))!;
+    expect(await verifyPreviewCookie(key, 3001, value, now)).toBe(false);
+    expect(await verifyPreviewCookie(`A${key.slice(1)}`, 3000, value, now)).toBe(false);
+    const flipped = value.endsWith("A") ? `${value.slice(0, -1)}B` : `${value.slice(0, -1)}A`;
+    expect(await verifyPreviewCookie(key, 3000, flipped, now)).toBe(false);
+    expect(await verifyPreviewCookie(key, 3000, value, now + 86_400_000)).toBe(false);
+    expect(await verifyPreviewCookie(key, 3000, value, now + 86_399_000)).toBe(true);
+  });
+  it("fails for a value that is not <seconds>.<mac>", async () => {
+    const [expiresAt, mac] = (await previewCookie(key, 3000, now))!.split(".");
+    for (const bad of [
+      "",
+      mac!,
+      `${expiresAt}.`,
+      `${expiresAt}.${mac}=`,
+      `x${expiresAt}.${mac}`,
+      `${expiresAt}.${mac}.x`,
+    ]) {
+      expect(await verifyPreviewCookie(key, 3000, bad, now), bad).toBe(false);
+    }
+  });
+  it("never accepts anything with an empty or broken key", async () => {
+    expect(await previewCookie("", 3000, now)).toBeNull();
+    expect(await previewCookie("!!", 3000, now)).toBeNull();
   });
 });
 
@@ -1189,37 +1260,63 @@ describe("isPreviewHost", () => {
 });
 
 describe("handlePreview without a match", () => {
-  // 01: "No match returns 404." 05: "A wrong token or an unknown workspace returns 404, never 403."
-  it("returns 404 for a label that does not match", async () => {
+  // 01: "No match returns the preview 404 page (05)."
+  const notFound = async (res: Response) => {
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain(PREVIEW_NOT_FOUND_TEXT);
+    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+  };
+  it("returns the preview 404 page for a label that does not match", async () => {
     const url = new URL("https://not-a-preview.previews.test/");
-    const res = await handlePreview(new Request(url), env as never, url);
-    expect(res.status).toBe(404);
+    await notFound(await handlePreview(new Request(url), env as never, url));
   });
-  it("returns 404 for a port below 1024", async () => {
-    const url = new URL(`https://0080-${newId()}-${newPreviewToken()}.previews.test/`);
-    const res = await handlePreview(new Request(url), env as never, url);
-    expect(res.status).toBe(404);
+  it("returns the preview 404 page for a port below 1024", async () => {
+    const url = new URL(`https://0080-${newId()}.previews.test/`);
+    await notFound(await handlePreview(new Request(url), env as never, url));
   });
-  it("returns 404 for a port above 65535", async () => {
-    const url = new URL(`https://70000-${newId()}-${newPreviewToken()}.previews.test/`);
-    const res = await handlePreview(new Request(url), env as never, url);
-    expect(res.status).toBe(404);
+  it("returns the preview 404 page for a port above 65535", async () => {
+    const url = new URL(`https://70000-${newId()}.previews.test/`);
+    await notFound(await handlePreview(new Request(url), env as never, url));
   });
-  it("answers 502 with the privacy headers when the WorkspaceDO throws, without logging the hostname", async () => {
-    const token = newPreviewToken();
-    const url = new URL(`https://5173-${newId()}-${token}.previews.test/`);
+  it("answers 502 with the privacy headers when the WorkspaceDO throws, without logging the URL or cookie", async () => {
+    const cookie = "1800000000.secretmacsecretmacsecretmacsecretmacsecret";
+    const url = new URL(`https://5173-${newId()}.previews.test/private/path?q=hidden`);
     const throwing = {
       ...env,
-      WORKSPACE: { getByName: () => ({ fetch: () => Promise.reject(new Error("boom")) }) },
+      WORKSPACE: {
+        getByName: () => ({ fetch: () => Promise.reject(new Error(`boom ${url.href} ${cookie}`)) }),
+      },
+    };
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await handlePreview(
+      new Request(url, { headers: { Cookie: `__Host-tempo_preview=${cookie}` } }),
+      throwing as never,
+      url,
+    );
+    const logged = spy.mock.calls.map((c) => String(c[0])).join("\n");
+    spy.mockRestore();
+    expect(res.status).toBe(502);
+    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    expect(logged).toContain("preview request failed");
+    expect(logged).not.toContain(cookie);
+    expect(logged).not.toContain("private/path");
+    expect(logged).not.toContain("hidden");
+  });
+  it("answers 502 without logging the code when previewEnter throws", async () => {
+    const code = "c".repeat(32);
+    const url = new URL(`https://5173-${newId()}.previews.test/__tempo/enter?code=${code}`);
+    const throwing = {
+      ...env,
+      WORKSPACE: { getByName: () => ({ previewEnter: () => Promise.reject(new Error(`boom ${code}`)) }) },
     };
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const res = await handlePreview(new Request(url), throwing as never, url);
     const logged = spy.mock.calls.map((c) => String(c[0])).join("\n");
     spy.mockRestore();
     expect(res.status).toBe(502);
-    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
-    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-    expect(logged).not.toContain(token);
+    expect(logged).not.toContain(code);
   });
 });
 

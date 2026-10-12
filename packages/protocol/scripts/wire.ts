@@ -30,6 +30,7 @@ export const SHARED = {
   CredentialProvider: P.CredentialProvider,
   InstanceName: P.InstanceName,
   EgressPolicy: P.EgressPolicy,
+  EgressStatusFilter: P.EgressStatusFilter,
   RunMode: P.RunMode,
   LogLevel: P.LogLevel,
   NoticeLevel: P.NoticeLevel,

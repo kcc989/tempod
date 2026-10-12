@@ -489,10 +489,10 @@ export const CONFIRM_TEXT = {
     confirmLabel: "Stop and close",
     destructive: true,
   }),
-  rotatePreview: (): ConfirmOptions => ({
-    title: "Rotate preview link?",
-    description: "Old preview links will stop working.",
-    confirmLabel: "Rotate",
+  resetPreviewAccess: (): ConfirmOptions => ({
+    title: "Reset preview access?",
+    description: "Open previews will stop working. Open them again from Tempo.",
+    confirmLabel: "Reset",
     destructive: true,
   }),
   deleteWorkspace: (slug: string): ConfirmOptions => ({

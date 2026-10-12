@@ -1,13 +1,14 @@
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, ne, sql, type SQL } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
+  EGRESS_BLOCK_RULES,
   TempoError,
   instanceLabel,
   newId,
-  newPreviewToken,
   type AgentId,
   type CheckpointInfo,
   type Diagnostics,
+  type EgressStatusFilter,
   type FnInput,
   type FnOutput,
   type ReviewComment,
@@ -46,6 +47,7 @@ import {
   requireCredential,
   steerQueued,
 } from "./queue.ts";
+import { openPreview, rotatePreviewKey } from "./preview.ts";
 import type { OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
 
@@ -70,6 +72,19 @@ const BRANCH_RE =
 // oxlint-enable no-control-regex
 export const isValidBranch = (b: string): boolean =>
   b.length > 0 && b.length <= 250 && BRANCH_RE.test(b) && b !== "@";
+
+/** 02 getDiagnostics: host contains the text (any case) and the status matches, over every stored row. */
+const egressFilter = (host?: string, status: EgressStatusFilter = "all"): SQL | undefined => {
+  const conds: SQL[] = [];
+  const q = host?.toLowerCase() ?? "";
+  if (q !== "") conds.push(sql`instr(lower(${egressLog.host}), ${q}) > 0`);
+  if (status === "blocked") conds.push(inArray(egressLog.rule, [...EGRESS_BLOCK_RULES]));
+  else if (status !== "all") {
+    const floor = Number(status[0]) * 100;
+    conds.push(gte(egressLog.status, floor), lt(egressLog.status, floor + 100));
+  }
+  return conds.length > 0 ? and(...conds) : undefined;
+};
 
 const reviewToWire = (r: ReviewCommentRow): ReviewComment => ({
   id: r.id,
@@ -231,13 +246,11 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       return {};
     },
 
-    rotatePreviewToken: async () => {
-      const previewToken = newPreviewToken();
-      core.updateWs({ previewToken });
-      // 05 Preview access: old links stop working at once, open preview sockets included.
-      core.closePreviews(1008, "preview token rotated");
-      core.broadcastDetailSoon();
-      return { previewToken };
+    openPreview: ({ port }) => openPreview(core, port),
+
+    rotatePreviewKey: async () => {
+      rotatePreviewKey(core);
+      return {};
     },
 
     setBaseBranch: async ({ baseBranch }) => {
@@ -256,7 +269,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       return {};
     },
 
-    getDiagnostics: async (): Promise<Diagnostics> => {
+    getDiagnostics: async ({ egressHost, egressStatus }): Promise<Diagnostics> => {
       const row = core.ws();
       return {
         ops: runner.recent(50).map((o) => ({
@@ -307,6 +320,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         egress: core.db
           .select()
           .from(egressLog)
+          .where(egressFilter(egressHost, egressStatus))
           .orderBy(desc(egressLog.id))
           .limit(500)
           .all()

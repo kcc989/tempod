@@ -58,8 +58,41 @@ pub const FIELDS: &[FieldDef] = &[
         ..field("agent.default", "Agent", "Default agent", Kind::Select)
     },
     FieldDef {
-        hint: Some("The agent's model value. OpenCode and Pi need one."),
-        ..field("agent.model", "Agent", "Model", Kind::Text)
+        hint: Some("The agent's model value. Empty uses the agent's own default."),
+        ..field(
+            "agent.models.claude",
+            "Agent",
+            "Claude default model",
+            Kind::Text,
+        )
+    },
+    FieldDef {
+        hint: Some("The agent's model value. Empty uses the agent's own default."),
+        ..field(
+            "agent.models.codex",
+            "Agent",
+            "Codex default model",
+            Kind::Text,
+        )
+    },
+    FieldDef {
+        hint: Some("The agent's model value. Required to start an OpenCode chat."),
+        ..field(
+            "agent.models.opencode",
+            "Agent",
+            "OpenCode default model",
+            Kind::Text,
+        )
+    },
+    FieldDef {
+        hint: Some("The agent's model value. Required to start a Pi chat."),
+        ..field("agent.models.pi", "Agent", "Pi default model", Kind::Text)
+    },
+    FieldDef {
+        hint: Some(
+            "Agents use Browser Run, watched in Live View. Ignored under the allowlist egress policy.",
+        ),
+        ..field("browser.run", "Browser", "Browser Run", Kind::Bool)
     },
     field("scripts.setup", "Scripts", "Setup script", Kind::Multiline),
     field("scripts.run", "Scripts", "Run scripts", Kind::Run),
@@ -145,7 +178,14 @@ pub const FIELDS: &[FieldDef] = &[
     },
 ];
 
-pub const SECTIONS: [&str; 5] = ["Agent", "Scripts", "Environment", "Git", "Prompts"];
+pub const SECTIONS: [&str; 6] = [
+    "Agent",
+    "Browser",
+    "Scripts",
+    "Environment",
+    "Git",
+    "Prompts",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstanceEdit {
@@ -783,6 +823,109 @@ mod tests {
         assert_eq!(
             errors.keys().copied().collect::<Vec<_>>(),
             ["agent.default"]
+        );
+    }
+
+    #[test]
+    fn defaults_match_the_protocol_defaults() {
+        let fixture = include_str!("../../../../packages/protocol/fixtures/types/Settings.jsonl");
+        let first: Value = serde_json::from_str(fixture.lines().next().unwrap()).unwrap();
+        assert_eq!(defaults(), first);
+        let typed: tempo_protocol::Settings = serde_json::from_value(defaults()).unwrap();
+        assert_eq!(typed.agent.models.opencode, "");
+        assert!(!typed.browser.run);
+    }
+
+    #[test]
+    fn every_settings_leaf_has_one_field() {
+        fn leaves(value: &Value, prefix: &str, out: &mut Vec<String>) {
+            for (key, v) in value.as_object().unwrap() {
+                let path = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                if v.is_object() && path != "scripts.run" && path != "environment_variables" {
+                    leaves(v, &path, out);
+                } else {
+                    out.push(path);
+                }
+            }
+        }
+        let mut expected = vec![];
+        leaves(&defaults(), "", &mut expected);
+        expected.sort();
+        let mut paths: Vec<String> = FIELDS.iter().map(|f| f.path.to_string()).collect();
+        paths.sort();
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn agent_models_and_browser_run_save_as_a_layer() {
+        let layer = json!({"agent": {"models": {"codex": "gpt-5-codex"}}});
+        let mut form = form_from_layer(&layer, &defaults());
+        assert!(form[ix("agent.models.codex")].set);
+        assert_eq!(
+            form[ix("agent.models.pi")],
+            FieldState {
+                set: false,
+                value: EditValue::Text(String::new())
+            }
+        );
+        assert_eq!(form[ix("browser.run")].value, EditValue::Bool(false));
+        form[ix("agent.models.pi")] = FieldState {
+            set: true,
+            value: EditValue::Text(" openrouter/pi ".into()),
+        };
+        form[ix("browser.run")] = FieldState {
+            set: true,
+            value: EditValue::Bool(true),
+        };
+        let (layer, errors) = layer_from_form(&form);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            layer,
+            json!({
+                "agent": {"models": {"codex": "gpt-5-codex", "pi": "openrouter/pi"}},
+                "browser": {"run": true}
+            })
+        );
+        let decoded: tempo_protocol::SettingsLayer = serde_json::from_value(layer).unwrap();
+        assert_eq!(
+            decoded.agent.unwrap().models.unwrap().pi.as_deref(),
+            Some("openrouter/pi")
+        );
+        assert_eq!(decoded.browser.unwrap().run, Some(true));
+    }
+
+    #[test]
+    fn agent_models_show_their_effective_value_and_source() {
+        let defaults = defaults();
+        let mut settings = defaults.clone();
+        settings["agent"]["models"]["pi"] = json!("openrouter/pi");
+        settings["browser"]["run"] = json!(true);
+        let sources = BTreeMap::from([
+            ("agent.models.pi".to_string(), SettingsSource::Xtempo),
+            ("browser.run".to_string(), SettingsSource::Tempo),
+        ]);
+        let layer = json!({"browser": {"run": true}});
+        let open = EffectiveContext {
+            settings: Some(&settings),
+            sources: Some(&sources),
+            layer: &layer,
+            defaults: &defaults,
+        };
+        assert_eq!(
+            effective_leaf(def("agent.models.pi"), &open),
+            ("openrouter/pi".into(), SettingsSource::Xtempo)
+        );
+        assert_eq!(
+            effective_leaf(def("agent.models.opencode"), &open),
+            ("Empty".into(), SettingsSource::Default)
+        );
+        assert_eq!(
+            effective_leaf(def("browser.run"), &open),
+            ("On".into(), SettingsSource::Tempo)
         );
     }
 

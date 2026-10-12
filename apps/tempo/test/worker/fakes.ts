@@ -25,6 +25,8 @@ export class FakeTempod {
   readonly failures = new Map<string, { code: string; message: string }>();
   /** The tempod side of each preview WebSocket proxied through /v1/proxy, with its close code once closed. */
   readonly proxySockets: Array<{ socket: WebSocket; closed: number | null }> = [];
+  /** Every request proxied through /v1/proxy, with the headers tempod received. */
+  readonly proxyRequests: Array<{ path: string; headers: Headers }> = [];
   healthy = true;
 
   constructor() {
@@ -130,6 +132,7 @@ export class FakeTempod {
         }
         if (url.pathname === "/v1/connect") return this.accept();
         if (url.pathname.startsWith("/v1/proxy/")) {
+          this.proxyRequests.push({ path: `${url.pathname}${url.search}`, headers: req.headers });
           if (req.headers.get("Upgrade")?.toLowerCase() === "websocket") return this.acceptProxy();
           return new Response(`proxied ${url.pathname}${url.search}`, { status: 200 });
         }
@@ -216,7 +219,8 @@ export class FakeTempod {
 }
 
 export const DEFAULT_EFFECTIVE = {
-  agent: { default: "claude", model: "" },
+  agent: { default: "claude", models: { claude: "", codex: "", opencode: "", pi: "" } },
+  browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
   environment: {
     instance: "standard-3",

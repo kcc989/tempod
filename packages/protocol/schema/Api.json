@@ -342,17 +342,33 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "rotatePreviewToken": {
+    "openPreview": {
       "type": "object",
       "properties": {
         "method": {
           "const": "POST"
         },
         "input": {
-          "$ref": "RotatePreviewTokenIn.json"
+          "$ref": "OpenPreviewIn.json"
         },
         "output": {
-          "$ref": "RotatePreviewTokenOut.json"
+          "$ref": "OpenPreviewOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rotatePreviewKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RotatePreviewKeyIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
         }
       },
       "required": ["method", "input", "output"],
@@ -1070,7 +1086,8 @@
     "archiveWorkspace",
     "restoreWorkspace",
     "deleteWorkspace",
-    "rotatePreviewToken",
+    "openPreview",
+    "rotatePreviewKey",
     "setBaseBranch",
     "getDiagnostics",
     "createSession",
