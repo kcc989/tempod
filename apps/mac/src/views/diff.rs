@@ -103,10 +103,20 @@ impl DiffView {
             if side.is_some_and(|s| s != gutter_side) {
                 continue;
             }
+            if number.is_none() {
+                row = row.child(div().w(px(48.)).child(label));
+                continue;
+            }
             let id: SharedString = format!("{}-{:?}-{number:?}", self.path, gutter_side).into();
             row = row.child(
                 div()
                     .id(id)
+                    .role(gpui_kit::Role::Button)
+                    .aria_label(format!(
+                        "Comment on {} line {}",
+                        gutter_side,
+                        number.unwrap_or_default()
+                    ))
                     .w(px(48.))
                     .text_color(color(Token::MutedForeground, cx))
                     .child(label)

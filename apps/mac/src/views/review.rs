@@ -863,6 +863,8 @@ impl Render for ReviewPanel {
                 } else {
                     div()
                         .id("changes-list")
+                        .role(gpui_kit::Role::List)
+                        .aria_label("Changed files")
                         .key_context(crate::keymap::DIFF)
                         .track_focus(&self.changes_focus)
                         .on_mouse_down(
@@ -947,6 +949,8 @@ impl Render for ReviewPanel {
                                     let m = this.search[ix].clone();
                                     div()
                                         .id(("search-match", ix))
+                                        .role(gpui_kit::Role::Button)
+                                        .aria_label(format!("Open {} at line {}", m.path, m.line))
                                         .p_2()
                                         .child(format!("{}:{} {}", m.path, m.line, m.text))
                                         .on_click(cx.listener(move |this, _, window, cx| {

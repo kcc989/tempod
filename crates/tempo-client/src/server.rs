@@ -511,7 +511,24 @@ impl Client {
         version: &str,
         expected_size: u64,
     ) -> impl Future<Output = Result<Vec<u8>, ApiError>> + Send + 'static {
-        let valid = crate::parse_version(version).is_some() && expected_size > 0;
+        self.download_mac_inner(version, expected_size, Some(expected_size))
+    }
+
+    pub fn download_mac_bounded(
+        &self,
+        version: &str,
+        maximum_size: u64,
+    ) -> impl Future<Output = Result<Vec<u8>, ApiError>> + Send + 'static {
+        self.download_mac_inner(version, maximum_size, None)
+    }
+
+    fn download_mac_inner(
+        &self,
+        version: &str,
+        maximum_size: u64,
+        exact_size: Option<u64>,
+    ) -> impl Future<Output = Result<Vec<u8>, ApiError>> + Send + 'static {
+        let valid = crate::parse_version(version).is_some() && maximum_size > 0;
         let request = with_bearer(
             self.server
                 .http()
@@ -532,10 +549,10 @@ impl Client {
                     status: response.status().as_u16(),
                 });
             }
-            if response
-                .content_length()
-                .is_some_and(|size| size != expected_size)
-            {
+            let declared_size = response.content_length();
+            if declared_size.is_some_and(|size| {
+                size > maximum_size || exact_size.is_some_and(|expected| size != expected)
+            }) {
                 return Err(ApiError::Decode(
                     "The download size does not match the release".into(),
                 ));
@@ -546,14 +563,18 @@ impl Client {
                 .await
                 .map_err(|e| ApiError::Network(network_error(e)))?
             {
-                if bytes.len() as u64 + chunk.len() as u64 > expected_size {
+                if bytes.len() as u64 + chunk.len() as u64 > maximum_size {
                     return Err(ApiError::Decode(
                         "The download is larger than the release".into(),
                     ));
                 }
                 bytes.extend_from_slice(&chunk);
             }
-            if bytes.len() as u64 != expected_size {
+            if bytes.is_empty()
+                || exact_size
+                    .or(declared_size)
+                    .is_some_and(|size| bytes.len() as u64 != size)
+            {
                 return Err(ApiError::Decode("The download is incomplete".into()));
             }
             Ok(bytes)

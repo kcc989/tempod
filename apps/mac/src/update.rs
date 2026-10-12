@@ -2,7 +2,7 @@
 //! app with `minMacClient` and `latestMacClient` from `GET /api/v1/meta`; Download fetches
 //! `GET /downloads/mac/<version>`, checks its SHA-256 and saves `~/Downloads/Tempo-<version>.dmg`.
 //!
-//! `ApiMeta` has no hash yet (IMPLEMENTATION_NOTES MQ-1), so the expected SHA-256 is a parameter.
+//! Trusted hashes come from the generated ApiMeta contract. Verify before writing or opening.
 use sha2::{Digest as _, Sha256};
 use std::cmp::Ordering;
 use std::fmt;
@@ -12,6 +12,33 @@ use std::time::{Duration, SystemTime};
 
 pub const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 pub const DOWNLOAD_LABEL: &str = "Download";
+pub const MAX_DOWNLOAD_BYTES: u64 = 1024 * 1024 * 1024;
+
+pub fn download_release(meta: &tempo_protocol::ApiMeta) -> Result<(Version, String), &'static str> {
+    let version: Version = meta
+        .latest_mac_client
+        .as_deref()
+        .ok_or("The server has not published an update.")?
+        .parse()
+        .map_err(|_| "The release version is invalid.")?;
+    let minimum: Version = meta
+        .min_mac_client
+        .parse()
+        .map_err(|_| "The minimum version is invalid.")?;
+    let current: Version = crate::VERSION
+        .parse()
+        .map_err(|_| "The app version is invalid.")?;
+    if version <= current || version < minimum || !version.pre.is_empty() || version.build.is_some()
+    {
+        return Err("The server has not published a compatible stable update.");
+    }
+    let hash = meta
+        .latest_mac_client_sha256
+        .as_ref()
+        .filter(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+        .ok_or("The server has not published a verified update hash.")?;
+    Ok((version, hash.clone()))
+}
 
 /// A SemVer 2.0.0 version. Build metadata is kept for display but ignored when comparing.
 #[derive(Clone, Debug)]
@@ -508,5 +535,27 @@ mod tests {
         let path = save_dmg(&dir, &ver, b"dmg bytes", &hash).unwrap();
         assert_eq!(path, dir.join("Tempo-0.4.0.dmg"));
         assert_eq!(std::fs::read(path).unwrap(), b"dmg bytes");
+    }
+}
+
+#[cfg(test)]
+mod trusted_release_tests {
+    use super::*;
+    #[test]
+    fn download_requires_a_matching_compatible_stable_version_and_published_hash() {
+        let mut meta: tempo_protocol::ApiMeta = serde_json::from_value(serde_json::json!({"protocol":1,"serverVersion":"0.1.0","minMacClient":"0.2.0","latestMacClient":"0.3.0","latestMacClientSha256":"a".repeat(64)})).unwrap();
+        assert_eq!(download_release(&meta).unwrap().0.to_string(), "0.3.0");
+        meta.latest_mac_client_sha256 = None;
+        assert!(download_release(&meta).is_err());
+        meta.latest_mac_client_sha256 = Some("invalid".into());
+        assert!(download_release(&meta).is_err());
+        meta.latest_mac_client_sha256 = Some("a".repeat(64));
+        for version in ["0.1.0", "0.0.1", "0.3.0-beta.1", "0.3.0+build", "garbage"] {
+            meta.latest_mac_client = Some(version.into());
+            assert!(download_release(&meta).is_err(), "{version}");
+        }
+        meta.latest_mac_client = Some("0.3.0".into());
+        meta.min_mac_client = "0.4.0".into();
+        assert!(download_release(&meta).is_err());
     }
 }

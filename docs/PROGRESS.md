@@ -159,7 +159,7 @@ All 18 review findings are fixed, and 109 tests pass.
 - [x] Native source integration: lifecycle/Keychain tasks, shared stores and cache, shell/sidebar/dialogs, rich transcript, attachments, queue/steering, model/mode, review/files/checks, git/workspace operations, scripts/remote terminal, Settings and Diagnostics.
 - [x] Linux verification: Rust workspace tests, formatting and strict Clippy; required root Bun checks. Native acceptance remains a separate result.
 - [x] Release helpers: local ad-hoc bundle, explicit signed/notarized release and publish modes, final-artifact metadata and publish-last checks. No Mac bundle or release was produced by the cloud task.
-- [ ] Complete update Download once core provides trusted SHA-256 and size (MQ-1). Attachment thumbnail retrieval and absent display metadata are recorded in IMPLEMENTATION_NOTES.
+- [x] Connect update Download to the published core hash contract, including bounded authenticated transfer, verify-before-save and saved-session required updates. First-launch required-update authentication, attachment thumbnail retrieval and absent display metadata are recorded in IMPLEMENTATION_NOTES.
 - [ ] Run Gate E, native shortcut/focus/rendering/performance, Keychain, notifications, deep links, real logins, interactive terminal and clean-Mac installation locally. See `tests/mac-e2e/CHECKLIST.md`.
 
 The owner elected to test locally. These source milestones do not claim an M1–M5 or Gate E acceptance pass. Earlier Mac baseline evidence above remains historical; this continuation ran on Debian 13 x86_64.

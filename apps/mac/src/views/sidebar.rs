@@ -144,6 +144,8 @@ impl RenderOnce for WorkspaceSidebar {
                         }
                         let mut trigger = div()
                             .id(gpui_kit::ElementId::Name(format!("workspace-{id}").into()))
+                            .role(gpui_kit::Role::ListItem)
+                            .aria_label(format!("{} · {} · {}", row.title, row.detail, tooltip))
                             .px_3()
                             .py_1()
                             .w_full()

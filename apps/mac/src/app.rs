@@ -30,6 +30,9 @@ pub struct AppState {
     session_monitor: Option<Task<()>>,
     update_monitor: Option<Task<()>>,
     pub available_update: Option<String>,
+    pub update_meta: Option<tempo_protocol::ApiMeta>,
+    pub downloading_update: bool,
+    download_task: Option<Task<()>>,
     pub update_error: Option<String>,
     auth_task: Option<Task<()>>,
 }
@@ -60,6 +63,9 @@ impl AppState {
             session_monitor: None,
             update_monitor: None,
             available_update: None,
+            update_meta: None,
+            downloading_update: false,
+            download_task: None,
             update_error: None,
             auth_task: None,
         }
@@ -160,7 +166,53 @@ impl AppState {
                 None
             };
             let result = async {
-                server.check_server().await?;
+                let meta = server.meta().await.map_err(|error| {
+                    if matches!(error, tempo_client::ApiError::Cancelled) {
+                        tempo_client::SignInError::Cancelled
+                    } else {
+                        tempo_client::SignInError::NotTempo
+                    }
+                })?;
+                if *meta.protocol != 1. {
+                    return Err(tempo_client::SignInError::NotTempo);
+                }
+                let update = crate::update::check_this_app(
+                    &meta.min_mac_client,
+                    meta.latest_mac_client.as_deref(),
+                )
+                .map_err(|_| tempo_client::SignInError::NotTempo)?;
+                let required = matches!(update, crate::update::UpdateCheck::Required { .. });
+                let _ = this.update(cx, |state, cx| {
+                    state.available_update = meta.latest_mac_client.clone();
+                    state.update_meta = Some(meta.clone());
+                    cx.notify();
+                });
+                if required {
+                    if let Some(token) = saved.as_ref() {
+                        match server.get_session(token).await {
+                            Ok(TokenStatus::Valid) => {
+                                let _ = this.update(cx, |state, _| {
+                                    state.session =
+                                        Some(Session::new(server.clone(), token.clone()))
+                                });
+                            }
+                            Ok(TokenStatus::Revoked) => {
+                                let tokens = tokens.clone();
+                                let host = server.host().to_string();
+                                cx.background_executor()
+                                    .spawn(async move {
+                                        tokens.delete(&host);
+                                    })
+                                    .await;
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    return Err(tempo_client::SignInError::UpdateRequired {
+                        min_mac_client: meta.min_mac_client,
+                        latest_mac_client: meta.latest_mac_client,
+                    });
+                }
                 if let Some(token) = saved {
                     match server.get_session(&token).await? {
                         TokenStatus::Valid => return Ok(token),
@@ -238,6 +290,9 @@ impl AppState {
                 Err(tempo_client::SignInError::Cancelled) => {}
                 Err(error) => {
                     state.auth = error_state(state.server_url.clone(), &error);
+                    if matches!(state.auth, AuthState::UpdateRequired) && state.session.is_some() {
+                        state.start_monitors(cx);
+                    }
                     cx.notify();
                 }
             });
@@ -274,25 +329,31 @@ impl AppState {
                 if this
                     .update(cx, |s, cx| {
                         match result {
-                            Ok(meta) => match crate::update::check_this_app(
-                                &meta.min_mac_client,
-                                meta.latest_mac_client.as_deref(),
-                            ) {
-                                Ok(crate::update::UpdateCheck::Required { .. }) => {
-                                    s.stop_for_update(cx);
+                            Ok(meta) => {
+                                s.update_meta = Some(meta.clone());
+                                s.update_error = None;
+                                match crate::update::check_this_app(
+                                    &meta.min_mac_client,
+                                    meta.latest_mac_client.as_deref(),
+                                ) {
+                                    Ok(crate::update::UpdateCheck::Required { .. }) => {
+                                        s.available_update = meta.latest_mac_client.clone();
+                                        s.stop_for_update(cx);
+                                    }
+                                    Ok(crate::update::UpdateCheck::Available(v)) => {
+                                        s.available_update = Some(v.to_string())
+                                    }
+                                    Ok(crate::update::UpdateCheck::UpToDate) => {
+                                        s.available_update = None
+                                    }
+                                    Err(_) => {
+                                        s.update_error = Some(
+                                            "The server returned invalid update information."
+                                                .into(),
+                                        )
+                                    }
                                 }
-                                Ok(crate::update::UpdateCheck::Available(v)) => {
-                                    s.available_update = Some(v.to_string())
-                                }
-                                Ok(crate::update::UpdateCheck::UpToDate) => {
-                                    s.available_update = None
-                                }
-                                Err(_) => {
-                                    s.update_error = Some(
-                                        "The server returned invalid update information.".into(),
-                                    )
-                                }
-                            },
+                            }
                             Err(_) => s.update_error = Some("Could not check for updates.".into()),
                         }
                         cx.notify();
@@ -307,6 +368,86 @@ impl AppState {
             }
         }));
     }
+    pub fn has_download_session(&self) -> bool {
+        self.session.is_some()
+    }
+
+    pub fn download_update(&mut self, window: &mut gpui_kit::Window, cx: &mut Context<Self>) {
+        use gpui_kit::component::WindowExt as _;
+        if self.downloading_update {
+            return;
+        }
+        let release = self
+            .update_meta
+            .as_ref()
+            .ok_or("Update information is unavailable.")
+            .and_then(crate::update::download_release);
+        let (version, hash) = match release {
+            Ok(release) => release,
+            Err(error) => {
+                self.update_error = Some(error.into());
+                window.push_notification(
+                    gpui_kit::component::notification::Notification::error(error),
+                    cx,
+                );
+                cx.notify();
+                return;
+            }
+        };
+        let Some(client) = self.session.as_ref().map(|s| s.client.clone()) else {
+            self.update_error =
+                Some("A saved owner session is required to download this update.".into());
+            cx.notify();
+            return;
+        };
+        let Some(downloads) = crate::update::downloads_dir() else {
+            self.update_error = Some("The Downloads folder is unavailable.".into());
+            cx.notify();
+            return;
+        };
+        self.downloading_update = true;
+        self.update_error = None;
+        self.download_task = Some(cx.spawn_in(window, async move |this, cx| {
+            let result = match client
+                .download_mac_bounded(&version.to_string(), crate::update::MAX_DOWNLOAD_BYTES)
+                .await
+            {
+                Ok(bytes) => {
+                    cx.background_executor()
+                        .spawn(async move {
+                            crate::update::save_dmg(&downloads, &version, &bytes, &hash)
+                                .map_err(|e| e.to_string())
+                        })
+                        .await
+                }
+                Err(error) => Err(error.to_string()),
+            };
+            let _ = this.update_in(cx, |state, window, cx| {
+                state.downloading_update = false;
+                match result {
+                    Ok(path) => {
+                        cx.open_with_system(&path);
+                        window.push_notification(
+                            gpui_kit::component::notification::Notification::success(
+                                "Update verified and saved to Downloads.",
+                            ),
+                            cx,
+                        );
+                    }
+                    Err(error) => {
+                        state.update_error = Some(error.clone());
+                        window.push_notification(
+                            gpui_kit::component::notification::Notification::error(error),
+                            cx,
+                        );
+                    }
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
     pub fn check_updates(&mut self, cx: &mut Context<Self>) {
         self.update_monitor.take();
         self.start_monitors(cx);
@@ -353,6 +494,9 @@ impl AppState {
         self.session_monitor.take();
         self.update_monitor.take();
         self.available_update = None;
+        self.update_meta = None;
+        self.download_task.take();
+        self.downloading_update = false;
         self.update_error = None;
         let session = self.session.take();
         if let Some(session) = &session {
@@ -742,6 +886,33 @@ mod auth_tests {
                 }
             );
         });
+    }
+
+    #[gpui_kit::test]
+    fn required_update_keeps_a_valid_saved_download_session_without_opening_normal_channels(
+        cx: &mut TestAppContext,
+    ) {
+        let server = FakeServer::new("update");
+        let state = state(cx);
+        state.update(cx, |state, cx| {
+            state.tokens.set("127.0.0.1", "test-token").unwrap();
+            state.connect(&server.url, true, cx);
+        });
+        until(cx, &state, |auth| *auth == AuthState::UpdateRequired);
+        state.read_with(cx, |state, cx| {
+            assert!(state.has_download_session());
+            assert!(state.client().is_none());
+            assert_eq!(state.tokens.get("127.0.0.1").as_deref(), Some("test-token"));
+            assert!(!state.hub.read(cx).state.ready);
+        });
+        assert!(
+            !server
+                .paths
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|path| path == "/api/auth/device/code")
+        );
     }
 
     #[gpui_kit::test]

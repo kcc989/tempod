@@ -80,7 +80,7 @@ impl Render for SignInView {
                         .on_click(cx.listener(|this, _, _, cx| this.connect(cx))),
                 )
                 .into_any_element(),
-            AuthState::ClearingSession=>div().child("Returning to sign-in…").into_any_element(),
+            AuthState::ClearingSession => div().child("Returning to sign-in…").into_any_element(),
             AuthState::Connecting => div().child("Connecting to Tempo…").into_any_element(),
             AuthState::AwaitingApproval {
                 user_code,
@@ -97,12 +97,16 @@ impl Render for SignInView {
                         .on_click(move |_, _, cx| cx.open_url(&verification_uri_complete)),
                 )
                 .into_any_element(),
-            AuthState::UpdateRequired => v_flex()
-                .gap_3()
-                .child(div().text_xl().child("Update Tempo"))
-                .child("This server requires a newer version of Tempo for Mac.")
-                .child("The server must supply verified download information before Tempo can download the update.")
-                .into_any_element(),
+            AuthState::UpdateRequired => {
+                let app = AppState::global(cx);
+                v_flex().gap_3().child(div().text_xl().child("Update Tempo"))
+                    .child("This server requires a newer version of Tempo for Mac.")
+                    .children(app.read(cx).available_update.clone().map(|version|div().child(format!("Tempo {version} is available."))))
+                    .child(Button::new("required-download").label(if app.read(cx).downloading_update { "Downloading…" } else { "Download" }).disabled(app.read(cx).downloading_update || !app.read(cx).has_download_session()).on_click(|_,window,cx|AppState::global(cx).update(cx,|a,cx|a.download_update(window,cx))))
+                    .children((!app.read(cx).has_download_session()).then(||div().child("A saved owner session is required to download this update. Install the current client through Tempo in your browser, then connect.")))
+                    .children(app.read(cx).update_error.clone().map(|e|div().text_color(color(Token::Destructive,cx)).child(e)))
+                    .into_any_element()
+            }
             AuthState::SignedIn => div().into_any_element(),
         };
         v_flex()

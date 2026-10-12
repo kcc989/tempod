@@ -283,3 +283,27 @@ async fn release_download_is_authenticated_size_bound_and_revocation_closes_the_
     );
     assert!(c.is_unauthorized());
 }
+
+#[tokio::test(start_paused = true)]
+async fn hash_metadata_download_honors_a_hard_size_bound_without_an_exact_manifest_size() {
+    let server = fake_http(|_, _| (200, "dmg bytes".into())).await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    assert_eq!(
+        c.download_mac_bounded("0.2.0", 1024).await.unwrap(),
+        b"dmg bytes"
+    );
+    assert!(matches!(
+        c.download_mac_bounded("0.2.0", 8).await,
+        Err(ApiError::Decode(_))
+    ));
+    assert!(matches!(
+        c.download_mac_bounded("0.2.0", 0).await,
+        Err(ApiError::Decode(_))
+    ));
+    assert_eq!(server.requests().len(), 2);
+    assert_eq!(
+        server.requests()[0].header("authorization"),
+        Some("Bearer test-session-token")
+    );
+}

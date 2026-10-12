@@ -11,7 +11,7 @@ use crate::keymap::WORKSPACE;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel, v_resizable};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Theme, TitleBar, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Theme, TitleBar, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     AnyElement, AnyWindowHandle, App, AppContext as _, Context, Entity, FocusHandle, Focusable,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
@@ -554,7 +554,8 @@ impl Render for MainWindow {
         let right = self.render_right(cx);
 
         v_flex()
-            .size_full().text_size(px(13.))
+            .size_full()
+            .text_size(px(13.))
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
             .bg(color(Token::Background, cx))
@@ -589,9 +590,14 @@ impl Render for MainWindow {
                 this.dialogs
                     .update(cx, |d, cx| d.show("History", window, cx))
             }))
-            .on_action(cx.listener(|this, action: &NewWorkspaceForProject, window, cx| {
-                this.dialogs.update(cx, |d,cx| { d.show("New workspace",window,cx); d.select_project(action.0.clone(),window,cx); });
-            }))
+            .on_action(
+                cx.listener(|this, action: &NewWorkspaceForProject, window, cx| {
+                    this.dialogs.update(cx, |d, cx| {
+                        d.show("New workspace", window, cx);
+                        d.select_project(action.0.clone(), window, cx);
+                    });
+                }),
+            )
             .on_action(cx.listener(|this, _: &NewWorkspace, window, cx| {
                 this.dialogs
                     .update(cx, |d, cx| d.show("New workspace", window, cx))
@@ -614,8 +620,38 @@ impl Render for MainWindow {
             .on_action(
                 cx.listener(|this, _: &NextWorkspaceNeedingYou, _, cx| this.next_attention(cx)),
             )
-            .children(crate::app::AppState::try_global(cx).and_then(|a|a.read(cx).available_update.clone()).map(|version|h_flex().p_2().gap_2().child(format!("Tempo {version} is available.")).child(Button::new("download-update").label("Download").on_click(|_,window,cx|window.push_notification(gpui_kit::component::notification::Notification::error("The server has not supplied verified download information."),cx)))))
-
+            .children(
+                crate::app::AppState::try_global(cx)
+                    .and_then(|a| a.read(cx).available_update.clone())
+                    .map(|version| {
+                        h_flex()
+                            .p_2()
+                            .gap_2()
+                            .child(format!("Tempo {version} is available."))
+                            .child(
+                                Button::new("download-update")
+                                    .label(
+                                        if crate::app::AppState::global(cx)
+                                            .read(cx)
+                                            .downloading_update
+                                        {
+                                            "Downloading…"
+                                        } else {
+                                            "Download"
+                                        },
+                                    )
+                                    .disabled(
+                                        crate::app::AppState::global(cx)
+                                            .read(cx)
+                                            .downloading_update,
+                                    )
+                                    .on_click(|_, window, cx| {
+                                        crate::app::AppState::global(cx)
+                                            .update(cx, |a, cx| a.download_update(window, cx))
+                                    }),
+                            )
+                    }),
+            )
             .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
                 this.panes.sidebar = !this.panes.sidebar;
                 cx.notify();
