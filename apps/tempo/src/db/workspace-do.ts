@@ -213,7 +213,15 @@ export const egressLog = sqliteTable("egress_log", {
   rule: integer("rule").notNull(),
 });
 
+export const fileCache = sqliteTable("file_cache", {
+  path: text("path").primaryKey(),
+  responseJson: text("response_json"),
+  bytes: integer("bytes").notNull().default(0),
+  updatedAt: integer("updated_at").notNull().default(0),
+});
+
 export const workspaceSchema = {
+  fileCache,
   workspace,
   ops,
   sessions,

@@ -383,6 +383,7 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     "tempod.shutdown": async (sc) => {
       await reconnect(sc.core);
       if (!sc.core.tempod?.open) return skip(sc);
+      await sc.core.files.sync();
       await sc.core.tempod.request("shutdown", { reason: sc.op.kind });
       return "next";
     },
@@ -597,6 +598,7 @@ export const checkpointTurnSeq = (core: WorkspaceCore, ckpt: CheckpointRow): num
 const toReady = (core: WorkspaceCore) => {
   const state = core.state;
   if (state === "starting" || state === "setting_up") core.setState("ready");
+  core.ctx.waitUntil(core.files.sync());
 };
 
 const dropLease = (core: WorkspaceCore) => {

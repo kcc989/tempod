@@ -79,7 +79,7 @@ function OpenFileDialog({ workspaceId }: { workspaceId: string }) {
 function OpenFileBody({ workspaceId }: { workspaceId: string }) {
   const phone = useIsPhone();
   const [query, setQuery] = useState("");
-  const { query: files, live } = useFileList(workspaceId);
+  const { query: files, available } = useFileList(workspaceId);
   const paths = files.data?.paths;
   const results = useMemo(() => fuzzyFilter(query, paths ?? [], (p) => p, 50), [query, paths]);
   const pick = (path: string) => {
@@ -92,7 +92,7 @@ function OpenFileBody({ workspaceId }: { workspaceId: string }) {
       <CommandList>
         {phone ? (
           <PhoneUnavailable />
-        ) : !live ? (
+        ) : !available || (files.isError && !paths && errorCode(files.error) === "CONTAINER_NOT_READY") ? (
           <div className="flex justify-center p-4">
             <WakeButton workspaceId={workspaceId} label="Wake to browse files" />
           </div>
