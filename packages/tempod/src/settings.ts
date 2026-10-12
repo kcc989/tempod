@@ -13,13 +13,11 @@ const readOrNull = (path: string): string | null => {
 
 export const readSettingsFiles = (workspace: string): SettingsFiles => ({
   tempoYaml: readOrNull(join(workspace, SETTINGS_PATHS.tempoYaml)),
-  conductorJson: readOrNull(join(workspace, SETTINGS_PATHS.conductorJson)),
 });
 
 export const SETTINGS_FILE_PATHS: ReadonlyArray<string> = Object.values(SETTINGS_PATHS);
 
-const fingerprint = (files: SettingsFiles): string =>
-  JSON.stringify([files.tempoYaml ?? null, files.conductorJson ?? null]);
+const fingerprint = (files: SettingsFiles): string => JSON.stringify([files.tempoYaml ?? null]);
 
 /** Last settings overrides and file contents, so the watcher can re-read settings when a file changes. */
 export class SettingsState {
@@ -46,7 +44,7 @@ export class SettingsState {
     return resolveSettings(overrides, files);
   }
 
-  /** Re-resolves with the last overrides when either settings file changed since the last read. */
+  /** Re-resolves with the last overrides when the settings file changed since the last read. */
   reReadIfChanged(): SettingsReadResult | null {
     const files = readSettingsFiles(this.workspace);
     const fp = fingerprint(files);

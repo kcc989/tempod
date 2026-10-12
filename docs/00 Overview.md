@@ -91,7 +91,7 @@ Use these words exactly, in code, UI and docs.
 | Event | One normalized message about a session, stored in order | `event` |
 | Checkpoint | A hidden git commit of the full working tree, made at the end of each turn | `checkpoint` |
 | Preview | An owner-only URL to one port inside a container | `preview` |
-| Setup, run, archive scripts | Per-project shell scripts, as in Conductor | `setupScript`, `runScript`, `archiveScript` |
+| Setup, run, archive scripts | Per-project shell scripts | `setupScript`, `runScript`, `archiveScript` |
 | `tempod` | The daemon inside each container. It runs agents and talks to the WorkspaceDO. | `tempod` |
 | Lifecycle event, change, role, role run, result | Defined in 08, Vocabulary | `lifecycleEvent`, `change`, `role`, `roleRun`, `result` |
 

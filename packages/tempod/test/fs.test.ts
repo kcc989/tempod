@@ -179,10 +179,9 @@ describe("fs.list, fs.read, fs.search", () => {
 describe("settings.read", () => {
   test("resolves overrides and files; a later file change sends settings.changed", async () => {
     const { c, ws, h } = await setup();
-    writeFile(join(ws, ".tempo", "settings.yaml"), "scripts:\n  setup: bun install\n");
-    writeFileSync(
-      join(ws, "conductor.json"),
-      JSON.stringify({ scripts: { archive: "echo bye" }, spotlight_testing: true }),
+    writeFile(
+      join(ws, ".tempo", "settings.yaml"),
+      "scripts:\n  setup: bun install\n  archive: echo bye\nspotlight_testing: true\n",
     );
     const r = await c.ok<{
       effective: { scripts: { setup: string; archive: string }; agent: { default: string } };

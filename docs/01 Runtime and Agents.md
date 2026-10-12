@@ -409,7 +409,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 
 ## Scripts, ports and previews
 
-Scripts work as in Conductor: one setup script, any number of run scripts, one archive script. Every container has its own network, so every workspace uses the same port numbers.
+Each project has one setup script, any number of run scripts and one archive script. Every container has its own network, so every workspace uses the same port numbers.
 
 **Script env.** `tempod` gives every script and every agent these vars, plus the project's `environment_variables` and secrets:
 
@@ -420,7 +420,6 @@ Scripts work as in Conductor: one setup script, any number of run scripts, one a
 | `TEMPO_WORKSPACE_PATH` | `/workspace` |
 | `TEMPO_DEFAULT_BRANCH` | The workspace's base branch |
 | `TEMPO_PORT` | `3000`. Ports 3000 to 3009 are for the project. |
-| `CONDUCTOR_WORKSPACE_NAME`, `CONDUCTOR_WORKSPACE_PATH`, `CONDUCTOR_ROOT_PATH`, `CONDUCTOR_DEFAULT_BRANCH`, `CONDUCTOR_PORT` | Same values as the `TEMPO_` vars, so Conductor scripts run unchanged. `CONDUCTOR_ROOT_PATH` is `/workspace`. |
 
 **Setup script**
 
@@ -576,7 +575,7 @@ A snapshot is usable only if both are true:
 
 ## Project settings file
 
-A repo MAY hold `.tempo/settings.yaml`. Tempo also reads Conductor's `conductor.json`, so a repo set up with it works with no changes.
+A repo MAY hold `.tempo/settings.yaml`. It is the only settings file Tempo reads from a repo.
 
 ```yaml
 agent:
@@ -623,28 +622,17 @@ prompts:
 
 1. Project overrides set in the Tempo UI (D1 `projects.settings_json`).
 2. `.tempo/settings.yaml` on the workspace branch.
-3. `conductor.json`, mapped as below.
-4. Defaults (the values shown above, with all scripts empty).
+3. Defaults (the values shown above, with all scripts empty).
 
-Tempo does not read `.conductor/settings.toml`. Tempo uses no TOML of its own; the only TOML files are ones other tools require (Codex `config.toml`, Rust `Cargo.toml` and `rust-toolchain.toml`).
-
-**Conductor mapping**
-
-| Conductor key | Tempo key |
-| --- | --- |
-| `conductor.json` `scripts.setup`, `scripts.archive` | Same |
-| `conductor.json` `scripts.run` (one string) | `scripts.run.default.command`, with `default = true` |
-| `conductor.json` `runScriptMode` | `scripts.run_mode` |
-
-Other Conductor keys (for example `spotlight_testing`, `file_include_globs`, `preview_urls`) are ignored. The Setup tab shows one warning that lists them.
+Tempo reads no Conductor files (`conductor.json`, `.conductor/`) and sets no `CONDUCTOR_*` env vars. Tempo uses no TOML of its own; the only TOML files are ones other tools require (Codex `config.toml`, Rust `Cargo.toml` and `rust-toolchain.toml`).
 
 **Rules**
 
 - Parse YAML with `yaml`. An empty file means no settings. Validate with an Effect Schema.
-- If a file fails to parse or validate, ignore the whole file, show the error in the Setup tab, and use the next source.
+- If the file fails to parse or validate, ignore the whole file, show the error in the Setup tab, and use the defaults.
 - Unknown keys are warnings, not errors.
 - Secrets MUST NOT be in the repo file. Set them in the UI; they live in CredentialDO and join `environment_variables` at runtime.
-- Read settings after the clone, and again when the file watcher sees a change to either file. A script uses the settings in effect when it starts.
+- Read settings after the clone, and again when the file watcher sees a change to it. A script uses the settings in effect when it starts.
 
 ## Sources
 
@@ -662,4 +650,3 @@ Other Conductor keys (for example `spotlight_testing`, `file_include_globs`, `pr
 - [claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp), [codex-acp](https://github.com/agentclientprotocol/codex-acp), [pi-acp](https://github.com/svkozak/pi-acp), [OpenCode ACP](https://opencode.ai/docs/acp)
 - [Claude Code env vars](https://code.claude.com/docs/en/env-vars) and [sessions](https://code.claude.com/docs/en/sessions)
 - [Codex config reference](https://learn.chatgpt.com/docs/config-file/config-reference) and [auth in CI/CD](https://learn.chatgpt.com/docs/auth/ci-cd-auth)
-- [Conductor settings reference](https://www.conductor.build/docs/reference/settings/reference) and [environment variables](https://www.conductor.build/docs/reference/environment-variables)

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   BROWSER_RUN_ALLOWLIST_WARNING,
   browserRunOn,
-  readConductorJson,
   resolveSettings,
   validateOverrides,
 } from "../src/index.ts";
@@ -15,33 +14,22 @@ describe("resolveSettings", () => {
     expect(r.errors).toEqual([]);
   });
 
-  it("applies precedence: overrides > .tempo > conductor.json", () => {
+  it("applies precedence: overrides > .tempo > defaults", () => {
     const r = resolveSettings(
       { scripts: { setup: "ui" } },
-      {
-        tempoYaml: `scripts:\n  setup: tempo\n  archive: t-archive\n`,
-        conductorJson: JSON.stringify({
-          scripts: { setup: "json", run: "npm run dev" },
-          runScriptMode: "nonconcurrent",
-        }),
-      },
+      { tempoYaml: `scripts:\n  setup: tempo\n  archive: t-archive\n` },
     );
     expect(r.effective.scripts.setup).toBe("ui");
     expect(r.effective.scripts.archive).toBe("t-archive");
-    expect(r.effective.scripts.run_mode).toBe("nonconcurrent");
-    expect(r.effective.scripts.run["default"]).toEqual({ command: "npm run dev", cwd: "", default: true });
+    expect(r.effective.scripts.run_mode).toBe(DEFAULT_SETTINGS.scripts.run_mode);
     expect(r.sources?.["scripts.setup"]).toBe("tempo");
     expect(r.sources?.["scripts.archive"]).toBe(".tempo");
-    expect(r.sources?.["scripts.run_mode"]).toBe("conductor.json");
-    expect(r.sources?.["scripts.run.default"]).toBe("conductor.json");
+    expect(r.sources?.["scripts.run_mode"]).toBeUndefined();
   });
 
   it("ignores a file that fails to parse and reports it", () => {
-    const r = resolveSettings(
-      {},
-      { tempoYaml: "scripts: [\nsetup:", conductorJson: JSON.stringify({ scripts: { setup: "c" } }) },
-    );
-    expect(r.effective.scripts.setup).toBe("c");
+    const r = resolveSettings({}, { tempoYaml: "scripts: [\nsetup:" });
+    expect(r.effective).toEqual(DEFAULT_SETTINGS);
     expect(r.errors[0]).toContain(".tempo/settings.yaml");
   });
 
@@ -110,25 +98,6 @@ describe("resolveSettings", () => {
     const r = resolveSettings({}, { tempoYaml: `scripts:\n  setup: x\n  foo: 1\n` });
     expect(r.effective.scripts.setup).toBe("x");
     expect(r.warnings.join()).toContain("scripts.foo");
-  });
-});
-
-describe("Conductor mapping", () => {
-  it("maps conductor.json", () => {
-    const r = readConductorJson(
-      JSON.stringify({
-        scripts: { setup: "a", archive: "b", run: "c" },
-        runScriptMode: "nonconcurrent",
-        preview_urls: [],
-      }),
-    );
-    expect(r.layer?.scripts).toEqual({
-      setup: "a",
-      archive: "b",
-      run: { default: { command: "c", default: true } },
-      run_mode: "nonconcurrent",
-    });
-    expect(r.warnings[0]).toContain("preview_urls");
   });
 });
 

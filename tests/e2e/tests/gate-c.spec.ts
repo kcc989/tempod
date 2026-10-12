@@ -336,34 +336,34 @@ test("AT-13 revert restores the exact tree of the chosen checkpoint, shows the m
   );
 });
 
-test("AT-14 a repo with only conductor.json runs its setup and run scripts with CONDUCTOR_PORT set", async () => {
+test("AT-14 a repo with only .tempo/settings.yaml runs its setup and run scripts with TEMPO_PORT set", async () => {
   await requireChannels();
   const project = await testProject();
   expect(
     project.settings.scripts ?? {},
-    "project overrides must not set scripts; they win over conductor.json",
+    "project overrides must not set scripts; they win over .tempo/settings.yaml",
   ).toEqual({});
   const tag = nonce();
   const { summary, watch } = await newWorkspace();
   await watch.waitState(["ready"], 15 * 60_000);
   const workspaceId = summary.id;
 
-  const setup = `echo E2E_SETUP_${tag}_PORT=$CONDUCTOR_PORT`;
-  const run = `echo E2E_RUN_${tag}_PORT=$CONDUCTOR_PORT && exec python3 -m http.server $CONDUCTOR_PORT --bind 127.0.0.1`;
-  // The workspace keeps only conductor.json: higher-precedence files go (01, Precedence).
-  const conductorJson = JSON.stringify({ scripts: { setup, run } });
+  const setup = `echo E2E_SETUP_${tag}_PORT=$TEMPO_PORT`;
+  const run = `echo E2E_RUN_${tag}_PORT=$TEMPO_PORT && exec python3 -m http.server $TEMPO_PORT --bind 127.0.0.1`;
+  // JSON is valid YAML, so the file can be written without a YAML library.
+  const settingsYaml = JSON.stringify({ scripts: { setup, run: { e2e: { command: run, default: true } } } });
   await sh(
     workspaceId,
-    ["rm -f .tempo/settings.yaml", `cat > conductor.json <<'EOF'`, conductorJson, "EOF"].join("\n"),
+    ["mkdir -p .tempo", `cat > .tempo/settings.yaml <<'EOF'`, settingsYaml, "EOF"].join("\n"),
   );
 
   const effective = await watch.until(
-    "the conductor.json settings in effect",
+    "the .tempo/settings.yaml settings in effect",
     () => (watch.detail?.settings.scripts.setup === setup ? watch.detail : undefined),
     2 * 60_000,
   );
-  expect(effective.settings.scripts.run["default"]?.command).toBe(run);
-  if (effective.settingsSources) expect(effective.settingsSources["scripts.setup"]).toBe("conductor.json");
+  expect(effective.settings.scripts.run["e2e"]?.command).toBe(run);
+  if (effective.settingsSources) expect(effective.settingsSources["scripts.setup"]).toBe(".tempo");
 
   const setupRun = await rpcRetry("rerunSetup", { workspaceId });
   expect(setupRun.kind).toBe("setup");
@@ -371,7 +371,7 @@ test("AT-14 a repo with only conductor.json runs its setup and run scripts with 
   expect(await scriptLog(watch, setupRun.id)).toContain(`E2E_SETUP_${tag}_PORT=3000`);
   await watch.until("setup_status succeeded", () => watch.detail?.setupStatus === "succeeded", 60_000);
 
-  const runRun = await rpcRetry("runScript", { workspaceId, scriptId: "default" });
+  const runRun = await rpcRetry("runScript", { workspaceId, scriptId: "e2e" });
   expect(runRun.kind).toBe("run");
   await watch.until(
     "the run script's output",

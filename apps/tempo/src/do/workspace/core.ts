@@ -274,7 +274,7 @@ export class WorkspaceCore {
     return this.env.CREDENTIALS.getByName(userId);
   }
 
-  /** Script env (01, Scripts): TEMPO_* and CONDUCTOR_* vars plus the project's env vars and secrets. */
+  /** Script env (01, Scripts): TEMPO_* vars plus the project's env vars and secrets. */
   async scriptEnv(): Promise<Record<string, string>> {
     const row = this.ws();
     const settings = this.settings();
@@ -285,11 +285,6 @@ export class WorkspaceCore {
       TEMPO_WORKSPACE_PATH: "/workspace",
       TEMPO_DEFAULT_BRANCH: row.baseBranch,
       TEMPO_PORT: "3000",
-      CONDUCTOR_WORKSPACE_NAME: row.slug,
-      CONDUCTOR_WORKSPACE_PATH: "/workspace",
-      CONDUCTOR_ROOT_PATH: "/workspace",
-      CONDUCTOR_DEFAULT_BRANCH: row.baseBranch,
-      CONDUCTOR_PORT: "3000",
     };
     return { ...settings.environment_variables, ...secrets, ...base };
   }

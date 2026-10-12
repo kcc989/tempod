@@ -13,12 +13,10 @@ import { parse as parseYaml } from "yaml";
 /** Settings files, as read from the workspace branch (01, Project settings file). */
 export interface SettingsFiles {
   readonly tempoYaml?: string | null;
-  readonly conductorJson?: string | null;
 }
 
 export const SETTINGS_PATHS = {
   tempoYaml: ".tempo/settings.yaml",
-  conductorJson: "conductor.json",
 } as const;
 
 type Obj = Record<string, unknown>;
@@ -97,40 +95,6 @@ export const readTempoYaml = (text: string): LayerResult => {
   return validate(file, parsed.value, []);
 };
 
-const CONDUCTOR_IGNORED_NOTE = "Conductor keys that Tempo ignores";
-
-/** Maps `conductor.json` to a Tempo layer (01, Conductor mapping). */
-export const readConductorJson = (text: string): LayerResult => {
-  const file = SETTINGS_PATHS.conductorJson;
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (e) {
-    return {
-      layer: null,
-      warnings: [],
-      errors: [`${file}: ${e instanceof Error ? e.message : "parse error"}; the file was ignored`],
-    };
-  }
-  if (!isObj(raw))
-    return { layer: null, warnings: [], errors: [`${file}: not an object; the file was ignored`] };
-  const ignored: string[] = [];
-  const scripts: Obj = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (k === "scripts" && isObj(v)) {
-      for (const [sk, sv] of Object.entries(v)) {
-        if (sk === "setup" || sk === "archive") scripts[sk] = sv;
-        else if (sk === "run" && typeof sv === "string")
-          scripts["run"] = { default: { command: sv, default: true } };
-        else ignored.push(`scripts.${sk}`);
-      }
-    } else if (k === "runScriptMode") scripts["run_mode"] = v;
-    else ignored.push(k);
-  }
-  const warnings = ignored.length ? [`${file}: ${CONDUCTOR_IGNORED_NOTE}: ${ignored.join(", ")}`] : [];
-  return validate(file, Object.keys(scripts).length ? { scripts } : {}, warnings);
-};
-
 type Sources = Record<string, SettingsSource>;
 
 const setSource = (sources: Sources, path: string, source: SettingsSource) => {
@@ -204,8 +168,7 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
 const decodeSettings = Schema.decodeUnknownExit(Settings);
 
 /**
- * Computes effective settings. Precedence, highest first: UI overrides, `.tempo/settings.yaml`,
- * `conductor.json`, defaults.
+ * Computes effective settings. Precedence, highest first: UI overrides, `.tempo/settings.yaml`, defaults.
  */
 export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles): SettingsReadResult => {
   const warnings: string[] = [];
@@ -218,7 +181,6 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
     errors.push(...r.errors);
     if (r.layer) layers.push([source, r.layer]);
   };
-  add("conductor.json", files.conductorJson, readConductorJson);
   add(".tempo", files.tempoYaml, readTempoYaml);
   const sources: Sources = {};
   let effective: Settings = DEFAULT_SETTINGS;
