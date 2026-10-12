@@ -147,8 +147,8 @@ function ProjectSettingsForm({
     >
       <p className="text-xs text-muted-foreground">
         {workspace
-          ? `Values in effect for ${workspace.title}. Set a key in Tempo to override the repo files.`
-          : "Open a workspace of this project to see values from its repo files. Set a key in Tempo to override them."}
+          ? `Values in effect for ${workspace.title}. Edit and save a value to override it in Tempo. Reset to inherited to use the repository or default value.`
+          : "Open a workspace of this project to see values from its repo files. Edit and save a value to override it in Tempo. Reset to inherited to use the repository or default value."}
       </p>
       {SECTIONS.map((section) => (
         <fieldset key={section} className="mt-3 border-t pt-2">

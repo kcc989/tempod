@@ -1,5 +1,6 @@
 //! Settings (04, Settings; 07): its own window, with GPUI Kit `Settings` in M4. Tabs as on the
 //! web except Devices, which is web only (07, Scope).
+//! Project fields in M4 use direct editing and Reset to inherited, as specified in 04 and 07.
 use super::tokens::{Token, color};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{TitleBar, h_flex, v_flex};

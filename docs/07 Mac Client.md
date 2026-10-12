@@ -252,6 +252,7 @@ The app stores no workspace data on disk. This table is the full list of what it
 - Write files atomically: temp file, then rename. If a file does not parse, rename it to `<name>.bad` and start from defaults.
 - Logs pass through the same redact rule as 05. MUST NOT log tokens, secrets, prompts or transcript text.
 - Project settings, logins and secrets are server data. The Settings window changes them with the same functions as the web.
+- Project settings follow 04's direct editing and `Reset to inherited` behavior, including explicit empty and Off overrides, source labels, and per-entry merging for run scripts and environment variables. There is no separate override toggle.
 - The bundle identifier is `dev.tempo.mac`. Change it only before the first release; the Keychain item and folders depend on it.
 
 ## Build, signing, distribution and updates
