@@ -37,9 +37,9 @@ Rules for every region:
 | `States.tsx`      |                 | `EmptyState {title, description?, icon?, action?}`, `ErrorState {error, onRetry?}` (error-table text), `SkeletonRows {rows?}`, `CenteredLoading {label}` (spinner gets words after 300 ms), `PhoneUnavailable` (`Open Tempo on a larger screen for this.`), `NotFoundState {action?}`.                                                                                                                                                                      |
 | `GlobalChrome`    | —               | **Region A.** App-wide effects with no slot: tab title `(<n>) Tempo` today; browser notifications go here.                                                                                                                                                                                                                                                                                                                                                  |
 
-## Region placeholders
+## Region components
 
-Each placeholder compiles and renders something minimal. Replace the body; keep the file path, export name and props.
+The four regions are implemented. Keep the file paths, export names and props when extending them. Local browser acceptance in `tests/e2e/web` mounts these components with protocol fixtures; deployed acceptance remains in `tests/e2e/tests`.
 
 ### Region A: sidebar, palette, top bar, global chrome
 

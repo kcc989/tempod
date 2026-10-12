@@ -26,7 +26,7 @@ The Mac app is a client of the cloud Tempo only. It does not run workspaces on t
 
 ## Scope
 
-The Mac app does what the web UI does, with the same names, copy and rules as 04. This table lists every area and says where the Mac app differs.
+The Mac app does what the web UI does, with the same names, copy and rules as 04. Pending prompt submissions keep their per-session guard across tab switches; repeated Enter or Send keeps the next draft without sending it again. This table lists every area and says where the Mac app differs.
 
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |

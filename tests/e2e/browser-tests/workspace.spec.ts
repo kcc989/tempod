@@ -60,7 +60,12 @@ test("file dialogs and Run shortcut remain available with the right side hidden"
   await page.keyboard.press(`${mod}+Shift+f`);
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Search files" })).toBeHidden();
   app.setRunScript();
+  await page.keyboard.press(`${mod}+k`);
+  await expect(page.getByRole("option", { name: /Start or stop the default run script/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Command palette" })).toBeHidden();
   await page.keyboard.press("Alt+r");
   await expect
     .poll(() => app.requests.some((r) => r.name === "runScript" && r.input["scriptId"] === "dev"))

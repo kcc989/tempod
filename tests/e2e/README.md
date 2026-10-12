@@ -24,6 +24,10 @@ Without `TEMPO_E2E_URL` every test is skipped, so `bun run test:e2e` is safe any
 Most tests drive the native JSON API and the channels, the same contract the web UI and the Mac
 app use. Tests marked `(browser)` drive the web UI and need `TEMPO_E2E_STORAGE_STATE`.
 
+## Local web acceptance
+
+`bun run test:web` from the repo root runs the production client with local protocol fixtures in Chromium, Firefox, WebKit, dark mode and phone width. It needs no deployment or credentials. See [`docs/WEB_ACCEPTANCE.md`](../../docs/WEB_ACCEPTANCE.md). The default `test` command below still runs the separate deployed acceptance gates.
+
 ## Environment
 
 | Variable                                                                  | Needed for                                                   | Value                                                                                                  |

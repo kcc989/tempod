@@ -1768,6 +1768,48 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn pending_send_keeps_the_next_draft_and_does_not_submit_again(cx: &mut TestAppContext) {
+        let state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.chats[&session].composer.update(cx, |c, cx| {
+                    c.sending = true;
+                    c.set_text("Next draft", window, cx);
+                    c.focus(window, cx);
+                });
+                view.send(&session, "Next draft", window, cx);
+            });
+            window.render_frame(cx);
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        view.read_with(cx, |view, cx| {
+            assert_eq!(
+                view.chats[&session].composer.read(cx).text(cx),
+                "Next draft"
+            );
+            assert!(view.chats[&session].composer.read(cx).sending);
+        });
+        assert!(
+            server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(path, _)| !path.ends_with("/sendPrompt"))
+        );
+    }
+
+    #[gpui_kit::test]
     fn enter_sends_rpc_and_clears_only_the_confirmed_draft(cx: &mut TestAppContext) {
         let state = fixture();
         let session = chat_model::sessions(&state, false)[0].id.clone();
