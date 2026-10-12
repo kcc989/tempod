@@ -38,6 +38,7 @@ export const ERROR_MESSAGES = {
   PATH_OUTSIDE_WORKSPACE: "That path is outside the workspace.",
   CHECKPOINT_NOT_FOUND: "That checkpoint no longer exists.",
   SETTINGS_INVALID: "Settings are not valid.",
+  ENVIRONMENT_EXISTS: "An environment with this name already exists.",
   EGRESS_BLOCKED: "(Shown only in the egress log.)",
   INTERNAL: "Something went wrong.",
 } as const;

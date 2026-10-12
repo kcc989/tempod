@@ -15,11 +15,12 @@ import {
   type Turn,
   type WorkspaceFnName,
 } from "@tempo/protocol";
-import { workspaces } from "../../db/d1.ts";
+import { environments, workspaces } from "../../db/d1.ts";
 import {
   attachments,
   checkpoints,
   egressLog,
+  environmentProposals,
   events,
   items,
   permissions,
@@ -147,6 +148,37 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       core.updateWs({ branch: next });
       core.publish();
       await rt.resendHello();
+      return {};
+    },
+
+    setWorkspaceEnvironment: async ({ environmentId }) => {
+      if (environmentId !== null) {
+        const found = await drizzleD1(core.env.DB)
+          .select({ id: environments.id })
+          .from(environments)
+          .where(and(eq(environments.id, environmentId), eq(environments.userId, core.ws().userId)))
+          .get();
+        if (!found) throw new TempoError("NOT_FOUND", undefined, "environment not found");
+      }
+      core.updateWs({ environmentId });
+      core.publish();
+      core.ctx.waitUntil(sendEnv(core));
+      return {};
+    },
+
+    resolveEnvironmentProposal: async ({ proposalId, status }) => {
+      const row = core.db
+        .select({ id: environmentProposals.id })
+        .from(environmentProposals)
+        .where(and(eq(environmentProposals.id, proposalId), eq(environmentProposals.status, "pending")))
+        .get();
+      if (!row) throw new TempoError("NOT_FOUND", undefined, "no pending proposal with that id");
+      core.db
+        .update(environmentProposals)
+        .set({ status })
+        .where(eq(environmentProposals.id, proposalId))
+        .run();
+      core.broadcastDetailSoon();
       return {};
     },
 

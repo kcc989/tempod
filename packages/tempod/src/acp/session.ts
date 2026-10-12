@@ -16,6 +16,7 @@ import {
   modelOption,
   newId,
   PLAYWRIGHT_MCP_SERVER,
+  TEMPO_MCP_SERVER,
   TempoError,
   type AgentId,
   type PermissionOption,
@@ -35,6 +36,13 @@ const STDERR_LINES = 200;
 const STDERR_LINE_CHARS = 2_000;
 const START_STEP_MS = 90_000;
 const CLOSE_REQUEST_MS = 3_000;
+
+export const tempoServer = (): McpServer => ({
+  name: TEMPO_MCP_SERVER.name,
+  command: TEMPO_MCP_SERVER.command,
+  args: [...TEMPO_MCP_SERVER.args],
+  env: [],
+});
 
 export const playwrightServer = (): McpServer => ({
   name: PLAYWRIGHT_MCP_SERVER.name,
@@ -378,7 +386,7 @@ export class AgentSession {
           const res = await this.request<unknown>("session/load", {
             sessionId: wanted,
             cwd: this.deps.workspace,
-            mcpServers: [playwrightServer()],
+            mcpServers: [playwrightServer(), tempoServer()],
           });
           this.acpSessionId = wanted;
           this.applySessionResponse(res);
@@ -398,7 +406,7 @@ export class AgentSession {
     if (!reloaded) {
       const res = await this.request<{ sessionId?: unknown }>("session/new", {
         cwd: this.deps.workspace,
-        mcpServers: [playwrightServer()],
+        mcpServers: [playwrightServer(), tempoServer()],
       });
       if (typeof res.sessionId !== "string") throw new Error("session/new returned no sessionId");
       this.acpSessionId = res.sessionId;

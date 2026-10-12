@@ -253,6 +253,19 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
 )`,
     ],
   },
+  {
+    tag: "0003_environments",
+    when: 1791936000000,
+    statements: [
+      "ALTER TABLE workspace ADD COLUMN environment_id TEXT",
+      `CREATE TABLE environment_proposals (
+  id             TEXT PRIMARY KEY,
+  created_at     INTEGER NOT NULL,
+  status         TEXT NOT NULL CHECK (status IN ('pending','applied','dismissed')),
+  proposal_json  TEXT NOT NULL
+)`,
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

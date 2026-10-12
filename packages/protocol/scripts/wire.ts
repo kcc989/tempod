@@ -89,6 +89,13 @@ export const SHARED = {
   Diagnostics: P.Diagnostics,
   NewSource: P.NewSource,
   ApiMeta: P.ApiMeta,
+  SecretBinding: P.SecretBinding,
+  InjectorInput: P.InjectorInput,
+  Injector: P.Injector,
+  EnvironmentSecret: P.EnvironmentSecret,
+  Environment: P.Environment,
+  EnvironmentProposal: P.EnvironmentProposal,
+  PendingEnvironmentProposal: P.PendingEnvironmentProposal,
 } as const satisfies Record<string, Schema.Top>;
 
 export const WORKSPACE_CHANNEL = {

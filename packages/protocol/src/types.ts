@@ -31,6 +31,7 @@ import {
 } from "./enums.ts";
 import { ErrorCodeSchema } from "./errors.ts";
 import { Settings, SettingsLayer, SettingsSource } from "./settings.ts";
+import { PendingEnvironmentProposal } from "./environments.ts";
 
 const N = Schema.NullOr;
 const Ms = Schema.Number;
@@ -44,6 +45,7 @@ export const Project = Schema.Struct({
   defaultBranch: Schema.String,
   settings: SettingsLayer,
   sortOrder: Schema.Number,
+  environmentId: Schema.optional(N(Schema.String)),
 });
 export type Project = typeof Project.Type;
 
@@ -118,6 +120,8 @@ export const WorkspaceDetail = Schema.Struct({
   settingsSources: Schema.optional(Schema.Record(Schema.String, SettingsSource)),
   changes: Schema.optional(N(ChangesSummary)),
   hasUnpushedCommits: Schema.optional(Schema.Boolean),
+  environmentId: Schema.optional(N(Schema.String)),
+  environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
 });
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
 

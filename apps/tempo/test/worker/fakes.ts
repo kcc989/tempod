@@ -36,6 +36,7 @@ export class FakeTempod {
       sources: {},
     }));
     this.on("env.set", ok);
+    this.on("environment.set", ok);
     this.on("script.start", () => ({ pid: 1234 }));
     this.on("script.stop", ok);
     this.on("session.start", () => ({

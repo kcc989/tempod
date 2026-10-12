@@ -21,6 +21,8 @@ export interface Config {
   readonly claudeConfigDir: string;
   readonly piSessionDir: string;
   readonly nssDb: string;
+  /** Unix socket of the `tempo` MCP server (01, Environments). */
+  readonly mcpSocket: string;
   /** Commands per agent; tests replace them with a fake adapter. */
   readonly agentCommands: Readonly<Record<AgentId, ReadonlyArray<string>>>;
   readonly limits: Limits;
@@ -101,6 +103,7 @@ export const loadConfig = (
     claudeConfigDir: join(home, ".claude"),
     piSessionDir: join(home, ".pi", "agent", "sessions"),
     nssDb: join(home, ".pki", "nssdb"),
+    mcpSocket: join(stateDir, "mcp.sock"),
     agentCommands: { ...agentCommandsFor(workspace), ...overrides.agentCommands },
     limits: { ...DEFAULT_LIMITS, ...overrides.limits },
   };

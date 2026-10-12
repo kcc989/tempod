@@ -1,4 +1,14 @@
-import { PLACEHOLDER, type EgressPolicy } from "@tempo/protocol";
+import {
+  PLACEHOLDER,
+  SECRET_PLACEHOLDER_PREFIX,
+  SECRET_PLACEHOLDER_RE,
+  hostMatches,
+  type EgressPolicy,
+  type Injector,
+  type SecretBinding,
+} from "@tempo/protocol";
+
+export { hostMatches };
 
 /** Built-in agent hosts for the `allowlist` policy (01). */
 export const AGENT_HOSTS = [
@@ -23,15 +33,11 @@ export interface EgressConfig {
   readonly repo: string;
   readonly policy: EgressPolicy;
   readonly allowlist: ReadonlyArray<string>;
+  /** The workspace's environment (01, Environments); absent or null means none. */
+  readonly environmentId?: string | null;
+  readonly secrets?: ReadonlyArray<SecretBinding>;
+  readonly injectors?: ReadonlyArray<Injector>;
 }
-
-/** `*.example.com` matches `a.example.com` but not `example.com` (05). */
-export const hostMatches = (host: string, pattern: string): boolean => {
-  const h = host.toLowerCase();
-  const p = pattern.toLowerCase();
-  if (p.startsWith("*.")) return h.endsWith(p.slice(1)) && h.length > p.length - 1;
-  return h === p;
-};
 
 export const isRepoPath = (path: string, owner: string, repo: string): boolean => {
   const prefix = `/${owner}/${repo}`.toLowerCase();
@@ -41,13 +47,78 @@ export const isRepoPath = (path: string, owner: string, repo: string): boolean =
   );
 };
 
-export const carriesPlaceholder = (headers: Headers): boolean => {
-  for (const [, value] of headers) if (value.includes(PLACEHOLDER)) return true;
-  return false;
+const BASIC = /^basic\s+/i;
+
+const decodeBasic = (value: string): string | null => {
+  if (!BASIC.test(value)) return null;
+  try {
+    return atob(value.replace(BASIC, "").trim());
+  } catch {
+    return null;
+  }
+};
+
+/** Header values to scan, plus the decoded `user:password` of `Authorization: Basic` (01, rule 12). */
+const scanTexts = (url: URL, headers: Headers): string[] => {
+  const out = [url.pathname, url.search];
+  for (const [name, value] of headers) {
+    out.push(value);
+    if (name === "authorization") {
+      const decoded = decodeBasic(value);
+      if (decoded !== null) out.push(decoded);
+    }
+  }
+  return out;
+};
+
+export const carriesPlaceholder = (headers: Headers, url?: URL): boolean =>
+  scanTexts(url ?? new URL("https://x/"), headers).some(
+    (t) => t.includes(PLACEHOLDER) || t.includes(SECRET_PLACEHOLDER_PREFIX),
+  );
+
+/** Names of every `tempo-secret-<NAME>` placeholder in the URL and headers. */
+export const secretPlaceholderNames = (url: URL, headers: Headers): string[] => {
+  const names = new Set<string>();
+  for (const t of scanTexts(url, headers))
+    for (const m of t.matchAll(SECRET_PLACEHOLDER_RE)) names.add(m[1]!);
+  return [...names];
+};
+
+/** Every name is a secret of the environment bound to this host. Values are checked by the caller. */
+const swappable = (host: string, names: ReadonlyArray<string>, secrets: ReadonlyArray<SecretBinding>) =>
+  names.length > 0 &&
+  names.every((n) => secrets.some((s) => s.name === n && s.hosts.some((p) => hostMatches(host, p))));
+
+/** Replaces each placeholder with its value in the URL and headers. Never touches the body. */
+export const swapSecrets = (
+  url: URL,
+  headers: Headers,
+  values: Readonly<Record<string, string>>,
+): { url: URL; headers: Headers } => {
+  const swap = (t: string, encode: (v: string) => string = (v) => v) =>
+    t.replace(SECRET_PLACEHOLDER_RE, (whole, n: string) =>
+      values[n] === undefined ? whole : encode(values[n]!),
+    );
+  const next = new URL(url);
+  next.pathname = swap(url.pathname, encodeURIComponent);
+  next.search = swap(url.search, encodeURIComponent);
+  const out = new Headers();
+  for (const [name, value] of headers) {
+    const decoded = name === "authorization" ? decodeBasic(value) : null;
+    out.set(
+      name,
+      decoded !== null && decoded.includes(SECRET_PLACEHOLDER_PREFIX)
+        ? `Basic ${btoa(swap(decoded))}`
+        : swap(value),
+    );
+  }
+  return { url: next, headers: out };
 };
 
 export type Decision =
   | { readonly rule: number; readonly action: "block"; readonly status: number; readonly body: string }
+  | { readonly rule: 11; readonly action: "inject"; readonly injector: Injector }
+  | { readonly rule: 12; readonly action: "swap"; readonly names: ReadonlyArray<string> }
   | {
       readonly rule: number;
       readonly action: "forward";
@@ -84,10 +155,52 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
   if (host === "api.openai.com" && headers.get("authorization") === `Bearer ${PLACEHOLDER}`) {
     return { rule: 6, action: "forward", set: { name: "authorization", value: "openai" } };
   }
-  if (carriesPlaceholder(headers) || url.href.includes(PLACEHOLDER)) {
-    return { rule: 7, action: "block", status: 403, body: "tempo: placeholder credential refused" };
-  }
+  const injector = (config.injectors ?? []).find((i) => i.hosts.some((p) => hostMatches(host, p)));
+  if (injector) return { rule: 11, action: "inject", injector };
+  const names = secretPlaceholderNames(url, headers);
+  if (swappable(host, names, config.secrets ?? []) && !carriesFixedPlaceholder(url, headers))
+    return { rule: 12, action: "swap", names };
+  if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
   return policy(8, host, config);
+};
+
+const PLACEHOLDER_REFUSED: Decision = {
+  rule: 7,
+  action: "block",
+  status: 403,
+  body: "tempo: placeholder credential refused",
+};
+
+const carriesFixedPlaceholder = (url: URL, headers: Headers) =>
+  scanTexts(url, headers).some((t) => t.includes(PLACEHOLDER));
+
+/**
+ * A subrequest from an injector (01, rule 11): rules 0 and 1, then only the injector's hosts,
+ * then rule 12, then rule 7. Never rule 11 again.
+ */
+export const decideForInjector = (
+  url: URL,
+  headers: Headers,
+  appHost: string,
+  config: EgressConfig,
+  injector: Injector,
+): Decision => {
+  const host = url.hostname.toLowerCase();
+  const blocked = {
+    rule: 11,
+    action: "block",
+    status: 403,
+    body: `tempo: egress blocked for ${host}`,
+  } as const;
+  if (host === appHost.toLowerCase())
+    return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
+  if (!injector.hosts.some((p) => hostMatches(host, p))) return blocked;
+  if (url.protocol === "http:") return { rule: 11, action: "forward" };
+  const names = secretPlaceholderNames(url, headers);
+  if (swappable(host, names, config.secrets ?? []) && !carriesFixedPlaceholder(url, headers))
+    return { rule: 12, action: "swap", names };
+  if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
+  return { rule: 11, action: "forward" };
 };
 
 const policy = (_from: number, host: string, config: EgressConfig): Decision => {

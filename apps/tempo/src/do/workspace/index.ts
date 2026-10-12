@@ -27,7 +27,7 @@ import {
   type ConnectHandlers,
 } from "./container.ts";
 import { WorkspaceCore, parseJson, type Author } from "./core.ts";
-import { applyTempodEvent } from "./events.ts";
+import { applyTempodEvent, sendEnv, sendEnvironment } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { previewFetch } from "./preview.ts";
@@ -254,12 +254,16 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
   async getEgressConfig(): Promise<EgressConfig> {
     const project = await this.core.project();
-    const env = this.core.settings().environment;
+    const environment = await this.core.environment();
+    const settings = this.core.settings().environment;
     return {
       owner: project.owner,
       repo: project.name,
-      policy: env.egress_policy,
-      allowlist: env.egress_allowlist,
+      environmentId: environment?.id ?? null,
+      policy: environment?.egressPolicy ?? settings.egress_policy,
+      allowlist: environment?.egressAllowlist ?? settings.egress_allowlist,
+      secrets: environment?.secrets ?? [],
+      injectors: environment?.injectors ?? [],
     };
   }
 
@@ -273,7 +277,24 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     rule: number;
   }): Promise<void> {
     if (!this.core.wsOrNull()) return;
+    const blocked = row.rule === 7 || row.rule === 10;
+    const known = blocked && this.core.blockedHosts().includes(row.host);
     this.core.db.insert(egressLog).values(row).run();
+    if (blocked && !known) this.scheduleEnvironmentPush();
+  }
+
+  private environmentPushTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastEnvironmentPushAt = 0;
+
+  /** environment.set at most every 5 s after a new blocked host (02). */
+  private scheduleEnvironmentPush(): void {
+    if (this.environmentPushTimer) return;
+    const wait = Math.max(0, this.lastEnvironmentPushAt + 5000 - Date.now());
+    this.environmentPushTimer = setTimeout(() => {
+      this.environmentPushTimer = null;
+      this.lastEnvironmentPushAt = Date.now();
+      this.ctx.waitUntil(sendEnvironment(this.core));
+    }, wait);
   }
 
   async pushCodexAuth(content: string, version: number): Promise<void> {
@@ -324,16 +345,19 @@ export class WorkspaceDO extends WorkspaceRpcBase {
         sources: res.sources ?? {},
       });
       core.broadcastDetailSoon();
-      await core.tempod.request("env.set", { env: await core.scriptEnv() });
+      await sendEnv(core);
     } catch (e) {
       log("warn", "settings refresh failed", { workspaceId: core.workspaceId, error: errorText(e) });
     }
   }
 
-  /** env.set after project env vars or secrets change (02). */
+  /** env.set and environment.set after project secrets or the environment change (02). */
   async refreshEnv(): Promise<void> {
-    if (!this.core.wsOrNull() || !this.core.tempod?.open) return;
-    await this.core.tempod.request("env.set", { env: await this.core.scriptEnv() }).catch(() => undefined);
+    if (!this.core.wsOrNull()) return;
+    await this.core.project(true).catch(() => undefined);
+    this.core.broadcastDetailSoon();
+    if (!this.core.tempod?.open) return;
+    await sendEnv(this.core);
   }
 
   async previewFetch(request: Request, port: number, token: string): Promise<Response> {

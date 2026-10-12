@@ -1,12 +1,15 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import {
+  ENVIRONMENT_LIMITS,
   ERROR_CODES,
+  TempoError,
+  newId,
   type AgentId,
   type ErrorCode,
   type TempodEvent,
   type TempodEventOf,
 } from "@tempo/protocol";
-import { permissions, ports, scriptRuns, turns } from "../../db/workspace-do.ts";
+import { environmentProposals, permissions, ports, scriptRuns, turns } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
 import { backupHome, takeCheckpoint, uploadBundleWithRetry } from "./durability.ts";
@@ -175,6 +178,9 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
     case "tempod.stopping":
       core.ctx.waitUntil(onSigterm(core));
       return;
+    case "environment.proposed":
+      storeProposal(core, event.proposal);
+      return;
     case "log":
       log(
         event.level === "error" ? "error" : event.level === "warn" ? "warn" : "info",
@@ -279,13 +285,43 @@ const onSigterm = async (core: WorkspaceCore): Promise<void> => {
   }
 };
 
-/** env.set after settings or secrets change (02). */
+/** env.set, then environment.set, after settings, secrets or the environment change (02). */
 export const sendEnv = async (core: WorkspaceCore): Promise<void> => {
   try {
     await core.tempod?.request("env.set", { env: await core.scriptEnv() });
   } catch (e) {
     log("warn", "env.set failed", { workspaceId: core.workspaceId, error: errorText(e) });
   }
+  await sendEnvironment(core);
+};
+
+export const sendEnvironment = async (core: WorkspaceCore): Promise<void> => {
+  if (!core.tempod?.open) return;
+  try {
+    await core.tempod.request("environment.set", { summary: await core.environmentSummary() });
+  } catch (e) {
+    // An older tempod image does not know the op; it gets the summary after its next restart.
+    if (e instanceof TempoError && e.code === "UNKNOWN_OP") return;
+    log("warn", "environment.set failed", { workspaceId: core.workspaceId, error: errorText(e) });
+  }
+};
+
+/** Stores an agent proposal as pending; over the limit, the oldest pending one is replaced (01). */
+const storeProposal = (core: WorkspaceCore, proposal: TempodEventOf<"environment.proposed">["proposal"]) => {
+  const pending = core.db
+    .select({ id: environmentProposals.id })
+    .from(environmentProposals)
+    .where(eq(environmentProposals.status, "pending"))
+    .orderBy(asc(environmentProposals.createdAt), asc(environmentProposals.id))
+    .all();
+  const over = pending.length - ENVIRONMENT_LIMITS.pendingProposalsMax + 1;
+  for (const p of pending.slice(0, Math.max(0, over)))
+    core.db.delete(environmentProposals).where(eq(environmentProposals.id, p.id)).run();
+  core.db
+    .insert(environmentProposals)
+    .values({ id: newId(), createdAt: Date.now(), status: "pending", proposalJson: JSON.stringify(proposal) })
+    .run();
+  core.broadcastDetailSoon();
 };
 
 export const pendingPermissionsOf = (core: WorkspaceCore, turnId: string) =>

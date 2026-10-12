@@ -1,7 +1,9 @@
+import { TEMPO_MCP_SOCKET } from "@tempo/protocol";
 import { Deferred, Effect } from "effect";
 import { setupCa } from "./ca.ts";
 import { loadConfig, VERSION, type Config } from "./config.ts";
 import { errorText, Logger } from "./log.ts";
+import { runMcpStdio } from "./mcp.ts";
 import { startServer } from "./server.ts";
 import { Tempod } from "./tempod.ts";
 
@@ -28,6 +30,12 @@ const program = (config: Config, log: Logger) =>
     process.on("SIGINT", () => app.onSigterm());
     return yield* Deferred.await(exitCode);
   }).pipe(Effect.scoped);
+
+// `tempod mcp`: the agent's tempo MCP server (01, Environments). It needs no token.
+if (process.argv.slice(2)[0] === "mcp") {
+  await runMcpStdio(TEMPO_MCP_SOCKET);
+  process.exit(0);
+}
 
 const log = new Logger();
 let config: Config;

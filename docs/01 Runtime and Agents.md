@@ -439,7 +439,7 @@ An environment is a named, reusable set of egress rules and secrets. The owner m
 
 **Rule 11, injectors.** An injector is code the owner approved. It handles auth schemes that a swap cannot do, for example AWS SigV4 or HMAC request signing.
 
-- `TempoOutbound` runs the injector as a Dynamic Worker through the Worker Loader binding `LOADER`: `env.LOADER.get("injector-" + sha256, ...)` with `mainModule: "injector.js"`, `compatibilityDate: "2026-08-01"`.
+- `TempoOutbound` runs the injector as a Dynamic Worker through the Worker Loader binding `LOADER`: `env.LOADER.get("injector-<sha256>-<workspaceId>-<environmentId>-<name>", ...)`, so a cached isolate never serves another workspace or changed code, with `mainModule: "injector.js"`, `compatibilityDate: "2026-08-01"`.
 - `code` is an ES module whose default export has `fetch(request, env)`. It gets the container's request unchanged and returns the response for the container.
 - `env.SECRETS` is an RPC binding with one method: `hmac(name, data, {hash, prefix?})`. `name` is a secret of the environment; `hash` is `SHA-1`, `SHA-256` or `SHA-512`; `data` is a string (UTF-8) or `ArrayBuffer`; the key is `prefix + value` as UTF-8. It returns the MAC as an `ArrayBuffer`. A missing secret throws. The injector never gets a raw value.
 - `globalOutbound` is `TempoOutbound` with the props `{workspaceId, userId, injector: <name>}`. For such a request, rule 0 and rule 1 apply, then only hosts that match the injector's `hosts` pass, then rule 12, then rule 7. Anything else returns 403. Rule 11 never runs again, so an injector cannot call another.
