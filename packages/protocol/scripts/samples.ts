@@ -200,6 +200,43 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   CredentialState: [w.credentialStatus.claude, w.credentialStatus.openrouter],
   CredentialStatus: [w.credentialStatus],
+  McpEnvVar: [{ name: "ROOT", value: "/workspace" }],
+  McpHeader: [
+    { name: "Authorization", secret: true, value: null, set: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpHeaderInput: [
+    { name: "Authorization", secret: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpServer: [
+    {
+      id: "01jmcp0000000000000000000a",
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      command: null,
+      args: [],
+      env: [],
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: null, set: true }],
+      createdAt: 1760000000000,
+      updatedAt: 1760000000000,
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: false,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+      env: [{ name: "ROOT", value: "/workspace" }],
+      url: null,
+      headers: [],
+      createdAt: 1760000000000,
+      updatedAt: 1760000100000,
+    },
+  ],
   Diagnostics: [w.diagnostics],
   NewSource: [
     { kind: "new", baseBranch: "main" },
@@ -445,6 +482,26 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
     { ...ws, proposalId: uid(903), status: "applied" },
     { ...ws, proposalId: uid(903), status: "dismissed" },
   ],
+  listMcpServers: [{}],
+  saveMcpServer: [
+    {
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: "Bearer lin_api_x" }],
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: true,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem"],
+      env: [],
+    },
+  ],
+  deleteMcpServer: [{ id: "01jmcp0000000000000000000b" }],
 };
 
 /** Outputs that are not shared types, by their wire type name. */

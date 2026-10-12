@@ -59,12 +59,13 @@ afterEach(() => {
 
 describe("egress decide()", () => {
   const APP = "tempo.test";
-  const open_: EgressConfig = { owner: "acme", repo: "app", policy: "open", allowlist: [] };
+  const open_: EgressConfig = { owner: "acme", repo: "app", policy: "open", allowlist: [], mcp: [] };
   const allow: EgressConfig = {
     owner: "acme",
     repo: "app",
     policy: "allowlist",
     allowlist: ["pypi.org", "*.example.com"],
+    mcp: [],
   };
   const d = (url: string, headers: Record<string, string> = {}, config: EgressConfig = open_) =>
     decide(new URL(url), new Headers(headers), APP, config);
@@ -237,6 +238,42 @@ describe("egress decide()", () => {
         rule: 7,
         action: "block",
       });
+    });
+  });
+
+  describe("rule 12: MCP secret headers", () => {
+    // 01: swap only the server's own placeholder, only for the server's own host.
+    const sid = "01jmcpserver0000000000000a";
+    const mcp = [{ serverId: sid, host: "mcp.linear.app", secretHeaders: ["authorization"] }];
+    const withMcp: EgressConfig = { ...allow, mcp };
+    const ph = `tempo-placeholder:mcp:${sid}:authorization`;
+    it("swaps the placeholder for the server host", () => {
+      expect(d("https://mcp.linear.app/mcp", { Authorization: ph }, withMcp)).toEqual({
+        rule: 12,
+        action: "forward",
+        mcp: [{ name: "authorization", key: `mcp.${sid}.header.authorization` }],
+      });
+    });
+    it("refuses the placeholder sent to another host", () => {
+      const r = d("https://evil.example.com/", { Authorization: ph }, { ...withMcp, policy: "open" });
+      expect(r).toMatchObject({ rule: 7, action: "block", status: 403 });
+    });
+    it("refuses another server's placeholder on this host", () => {
+      const other = `tempo-placeholder:mcp:01jother00000000000000000a:authorization`;
+      expect(d("https://mcp.linear.app/mcp", { Authorization: other }, withMcp)).toMatchObject({ rule: 7 });
+    });
+    it("refuses the placeholder in a header that is not secret", () => {
+      expect(d("https://mcp.linear.app/mcp", { "X-Key": ph }, withMcp)).toMatchObject({ rule: 7 });
+    });
+    it("never swaps over http:", () => {
+      expect(d("http://mcp.linear.app/mcp", { Authorization: ph }, withMcp)).toEqual({
+        rule: 9,
+        action: "forward",
+      });
+    });
+    it("allows MCP hosts under the allowlist policy (rule 9)", () => {
+      expect(d("https://mcp.linear.app/mcp", {}, withMcp)).toMatchObject({ rule: 9, action: "forward" });
+      expect(d("https://mcp.linear.app/mcp", {}, allow)).toMatchObject({ rule: 10, action: "block" });
     });
   });
 
@@ -1546,8 +1583,8 @@ describe("Better Auth options (05, Secrets and Observability)", () => {
   });
 });
 
-// egress/rules.ts — 01 "Environments": rules 12 and 13
-describe("egress rules 12 and 13 (01, Environments)", () => {
+// egress/rules.ts — 01 "Environments": rules 13 and 14
+describe("egress rules 13 and 14 (01, Environments)", () => {
   const APP = "tempo.test";
   const injector = { name: "sign", hosts: ["*.amazonaws.com"], code: "x", sha256: "s" };
   const config: EgressConfig = {
@@ -1562,13 +1599,14 @@ describe("egress rules 12 and 13 (01, Environments)", () => {
       { name: "LOCAL", hosts: [] },
     ],
     injectors: [injector],
+    mcp: [],
   };
   const d = (url: string, headers: Record<string, string> = {}) =>
     decide(new URL(url), new Headers(headers), APP, config);
 
-  it("rule 13 matches when every placeholder is bound to the host", () => {
+  it("rule 14 matches when every placeholder is bound to the host", () => {
     expect(d("https://api.stripe.com/v1", { authorization: "Bearer tempo-secret-STRIPE_KEY" })).toEqual({
-      rule: 13,
+      rule: 14,
       action: "swap",
       names: ["STRIPE_KEY"],
     });
@@ -1590,9 +1628,9 @@ describe("egress rules 12 and 13 (01, Environments)", () => {
       d("https://evil.example/", { authorization: `Basic ${btoa("tempo-secret-STRIPE_KEY:")}` }),
     ).toMatchObject(refused);
   });
-  it("rule 12 runs before rule 13 for an injector host, and rule 13 does not need the allowlist", () => {
-    expect(d("https://s3.amazonaws.com/b/k")).toEqual({ rule: 12, action: "inject", injector });
-    expect(d("https://api.stripe.com/", { authorization: "Bearer tempo-secret-STRIPE_KEY" }).rule).toBe(13);
+  it("rule 13 runs before rule 14 for an injector host, and rule 14 does not need the allowlist", () => {
+    expect(d("https://s3.amazonaws.com/b/k")).toEqual({ rule: 13, action: "inject", injector });
+    expect(d("https://api.stripe.com/", { authorization: "Bearer tempo-secret-STRIPE_KEY" }).rule).toBe(14);
   });
   it("rule 1 still wins for http: (no swap, no injector)", () => {
     expect(d("http://s3.amazonaws.com/").rule).toBe(10);
@@ -1616,14 +1654,14 @@ describe("egress rules 12 and 13 (01, Environments)", () => {
     expect(atob(headers.get("authorization")!.replace("Basic ", ""))).toBe("u:a b/c");
     expect(headers.get("x-k")).toBe("a b/c");
   });
-  it("an injector subrequest may reach only its hosts and never runs rule 12 again", () => {
+  it("an injector subrequest may reach only its hosts and never runs rule 13 again", () => {
     const sub = (url: string, headers: Record<string, string> = {}) =>
       decideForInjector(new URL(url), new Headers(headers), APP, config, injector);
-    expect(sub("https://s3.amazonaws.com/")).toEqual({ rule: 12, action: "forward" });
-    expect(sub("https://evil.example/")).toMatchObject({ rule: 12, action: "block", status: 403 });
+    expect(sub("https://s3.amazonaws.com/")).toEqual({ rule: 13, action: "forward" });
+    expect(sub("https://evil.example/")).toMatchObject({ rule: 13, action: "block", status: 403 });
     expect(sub("https://tempo.test/")).toMatchObject({ rule: 0, action: "block" });
     expect(sub("https://s3.amazonaws.com/", { "x-k": "tempo-secret-S3_KEY" })).toEqual({
-      rule: 13,
+      rule: 14,
       action: "swap",
       names: ["S3_KEY"],
     });

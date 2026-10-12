@@ -7,21 +7,18 @@ import {
   type AnyMessage,
   type ClientConnection,
   type ContentBlock as AcpContentBlock,
-  type McpServer,
   type ReadTextFileRequest,
   type RequestPermissionResponse,
   type WriteTextFileRequest,
 } from "@agentclientprotocol/sdk";
 import {
-  BROWSER_RUN_CDP_ENDPOINT,
   modelOption,
   newId,
-  PLAYWRIGHT_MCP_SERVER,
-  TEMPO_MCP_SERVER,
   TempoError,
   toTurnUsage,
   type AgentId,
   type BrowserMode,
+  type McpServerSpec,
   type PermissionOption,
   type SessionStartResult,
   type TempodEvent,
@@ -35,26 +32,12 @@ import { insideRoots } from "../fs.ts";
 import { errorText, type Logger } from "../log.ts";
 import { isObj, modeConfig, toConfigOptions, toModes } from "./convert.ts";
 import { SessionMapper, type TurnOutcome } from "./mapper.ts";
+import { acpMcpServers, type Bridge } from "./mcp.ts";
 
 const STDERR_LINES = 200;
 const STDERR_LINE_CHARS = 2_000;
 const START_STEP_MS = 90_000;
 const CLOSE_REQUEST_MS = 3_000;
-
-export const tempoServer = (): McpServer => ({
-  name: TEMPO_MCP_SERVER.name,
-  command: TEMPO_MCP_SERVER.command,
-  args: [...TEMPO_MCP_SERVER.args],
-  env: [],
-});
-
-/** 01 Browser Run: with `"run"`, Playwright MCP drives the Browser Run session instead of local Chromium. */
-export const playwrightServer = (browser: BrowserMode = "local"): McpServer => ({
-  name: PLAYWRIGHT_MCP_SERVER.name,
-  command: PLAYWRIGHT_MCP_SERVER.command,
-  args: browser === "run" ? ["--cdp-endpoint", BROWSER_RUN_CDP_ENDPOINT] : [...PLAYWRIGHT_MCP_SERVER.args],
-  env: PLAYWRIGHT_MCP_SERVER.env.map((e) => ({ ...e })),
-});
 
 export const CLIENT_CAPABILITIES = {
   fs: { readTextFile: true, writeTextFile: true },
@@ -73,6 +56,7 @@ export interface SessionDeps {
   readonly killGraceMs: number;
   readonly mergeMs: number;
   readonly maxBytes: number;
+  readonly bridge: Bridge;
   readonly onGone: (session: AgentSession) => void;
   readonly onProcess: (session: AgentSession, pid: number | null) => void;
 }
@@ -367,6 +351,7 @@ export class AgentSession {
     model?: string | null;
     browser?: BrowserMode;
     acpSessionId?: string | null;
+    mcpServers?: ReadonlyArray<McpServerSpec> | undefined;
   }): Promise<SessionStartResult> {
     const init = await this.request<{
       protocolVersion?: unknown;
@@ -382,6 +367,7 @@ export class AgentSession {
     this.capabilities = isObj(init.agentCapabilities) ? structuredClone(init.agentCapabilities) : {};
     const steering = isObj(init._meta) ? init._meta["steering"] : undefined;
     this.capabilities["steering"] = isObj(steering) && steering["supported"] === true;
+    const mcpServers = acpMcpServers(p.mcpServers ?? [], this.capabilities, this.deps.bridge, p.browser);
     let reloaded = false;
     let handoff = false;
     const wanted = p.acpSessionId ?? null;
@@ -392,7 +378,7 @@ export class AgentSession {
           const res = await this.request<unknown>("session/load", {
             sessionId: wanted,
             cwd: this.deps.workspace,
-            mcpServers: [playwrightServer(p.browser), tempoServer()],
+            mcpServers,
           });
           this.acpSessionId = wanted;
           this.applySessionResponse(res);
@@ -412,7 +398,7 @@ export class AgentSession {
     if (!reloaded) {
       const res = await this.request<{ sessionId?: unknown }>("session/new", {
         cwd: this.deps.workspace,
-        mcpServers: [playwrightServer(p.browser), tempoServer()],
+        mcpServers,
       });
       if (typeof res.sessionId !== "string") throw new Error("session/new returned no sessionId");
       this.acpSessionId = res.sessionId;

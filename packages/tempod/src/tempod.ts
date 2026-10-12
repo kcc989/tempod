@@ -19,7 +19,7 @@ import { findBinary, run } from "./exec.ts";
 import { listFiles, readWorkspaceFile, searchFiles } from "./fs.ts";
 import { Git, summarize } from "./git.ts";
 import { errorText, Logger } from "./log.ts";
-import { startMcpSocket } from "./mcp.ts";
+import { startMcpSocket } from "./tempo-mcp.ts";
 import { Outbox } from "./outbox.ts";
 import { PortScanner } from "./ports.ts";
 import { pruneLogs, ScriptManager } from "./scripts.ts";
@@ -127,6 +127,7 @@ export class Tempod {
       emit,
       baseEnv: () => this.baseEnv(),
       scriptEnv: () => this.scriptEnv,
+      caEnv: this.caEnv,
     });
     this.ports = new PortScanner({
       intervalMs: config.limits.portScanMs,

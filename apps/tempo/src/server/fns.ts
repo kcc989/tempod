@@ -323,3 +323,15 @@ export const deleteProjectSecret = createServerFn({ method: "POST" })
 export const listProjectSecretNames = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listProjectSecretNames">) => data)
   .handler(({ data }) => run("listProjectSecretNames", data));
+
+export const listMcpServers = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listMcpServers">) => data)
+  .handler(({ data }) => run("listMcpServers", data));
+
+export const saveMcpServer = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"saveMcpServer">) => data)
+  .handler(({ data }) => run("saveMcpServer", data));
+
+export const deleteMcpServer = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteMcpServer">) => data)
+  .handler(({ data }) => run("deleteMcpServer", data));

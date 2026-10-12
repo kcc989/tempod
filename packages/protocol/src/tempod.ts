@@ -9,6 +9,7 @@ import {
   TurnUsage,
 } from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
+import { McpServerSpec } from "./mcp.ts";
 import { ChangedFile } from "./types.ts";
 import { Settings, SettingsLayer, SettingsReadResult } from "./settings.ts";
 import { EnvironmentProposal, EnvironmentSummary } from "./environments.ts";
@@ -265,6 +266,7 @@ export const TEMPOD_REQUESTS = {
       model: Schema.optional(Schema.NullOr(Schema.String)),
       browser: BrowserMode,
       acpSessionId: Schema.optional(Schema.NullOr(Schema.String)),
+      mcpServers: Schema.optional(Schema.Array(McpServerSpec)),
     }),
     SessionStartResult,
     120_000,

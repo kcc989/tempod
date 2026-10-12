@@ -11,7 +11,7 @@ export interface OutboundProps {
   readonly workspaceId: string;
   readonly userId: string;
   readonly catalog?: boolean;
-  /** Set for a subrequest of this injector (01, rule 12). */
+  /** Set for a subrequest of this injector (01, rule 13). */
   readonly injector?: string;
 }
 
@@ -32,18 +32,18 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     const url = new URL(request.url);
     const { workspaceId, userId, injector: injectorName } = this.ctx.props;
     const workspace = this.env.WORKSPACE.getByName(workspaceId);
-    let rule = injectorName ? 12 : 10;
+    let rule = injectorName ? 13 : 10;
     let status = 0;
     try {
       const config: EgressConfig = this.ctx.props.catalog
-        ? { owner: "", repo: "", policy: "allowlist", allowlist: [] }
+        ? { owner: "", repo: "", policy: "allowlist", allowlist: [], mcp: [] }
         : await this.config(workspaceId);
       let decision: Decision;
       if (injectorName) {
         const injector = config.injectors?.find((i) => i.name === injectorName);
         decision = injector
           ? decideForInjector(url, request.headers, this.env.APP_HOST, config, injector)
-          : { rule: 12, action: "block", status: 403, body: `tempo: egress blocked for ${url.hostname}` };
+          : { rule: 13, action: "block", status: 403, body: `tempo: egress blocked for ${url.hostname}` };
       } else {
         decision = decide(url, request.headers, this.env.APP_HOST, config);
       }
@@ -97,16 +97,27 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         const values = await this.environmentSecrets(config, decision.names, userId);
         if (!values) return { response: block(403, "tempo: placeholder credential refused"), rule: 7 };
         const swapped = swapSecrets(new URL(request.url), request.headers, values);
-        // Manual redirects, so a redirect cannot carry the value to another host (01, rule 13).
+        // Manual redirects, so a redirect cannot carry the value to another host (01, rule 14).
         const init = new Request(request, { headers: swapped.headers, redirect: "manual" });
         return { response: await fetch(new Request(swapped.url, init)) };
       }
       case "forward": {
-        if (!decision.set) return { response: await fetch(request) };
-        const value = await this.credential(decision.set.value, userId);
-        if (value === null) return { response: block(403, "tempo: credential not set") };
+        if (!decision.set && !decision.mcp) return { response: await fetch(request) };
         const headers = new Headers(request.headers);
-        headers.set(decision.set.name, value);
+        if (decision.set) {
+          const value = await this.credential(decision.set.value, userId);
+          if (value === null) return { response: block(403, "tempo: credential not set") };
+          headers.set(decision.set.name, value);
+        }
+        if (decision.mcp) {
+          // Rule 12 (01, User MCP servers).
+          const creds = this.env.CREDENTIALS.getByName(userId);
+          for (const swap of decision.mcp) {
+            const value = await creds.getSecret(swap.key);
+            if (value === null) return { response: block(403, "tempo: credential not set") };
+            headers.set(swap.name, value);
+          }
+        }
         return { response: await fetch(new Request(request, { headers })) };
       }
     }
@@ -128,7 +139,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     return out;
   }
 
-  /** Rule 12: the owner-approved injector runs as a Dynamic Worker (01, Environments). */
+  /** Rule 13: the owner-approved injector runs as a Dynamic Worker (01, Environments). */
   private async runInjector(injector: Injector, request: Request, config: EgressConfig): Promise<Response> {
     const { workspaceId, userId } = this.ctx.props;
     const environmentId = config.environmentId ?? "";
@@ -182,7 +193,7 @@ export interface InjectorSecretsProps {
 
 const HASHES = new Set(["SHA-1", "SHA-256", "SHA-512"]);
 
-/** `env.SECRETS` inside an injector (01, rule 12): MACs, never raw values. */
+/** `env.SECRETS` inside an injector (01, rule 13): MACs, never raw values. */
 export class InjectorSecrets extends WorkerEntrypoint<Env, InjectorSecretsProps> {
   async hmac(
     name: string,

@@ -47,9 +47,9 @@ The owner asked for reusable named environments, proxied secrets, Dynamic Worker
 | --- | --- |
 | Placeholder form | `tempo-secret-<NAME>`: only URL-safe characters, so SDKs and URL encoding keep it intact. |
 | Swap locations | URL and header values, including inside `Authorization: Basic`. Never the body, because bodies stream. |
-| Rule numbers | New rules are 12 (injector) and 13 (secret swap) and run between 6 and 7, so existing `egress_log` rule numbers keep their meaning. Rule 11 is Browser Run. |
+| Rule numbers | New rules are 13 (injector) and 14 (secret swap). They run after rule 12 (MCP secret headers) and before rule 7, so existing `egress_log` rule numbers keep their meaning. Rule 11 is Browser Run. |
 | No environment | The project's Tempo egress overrides still apply, so existing projects keep working. |
-| Injector secrets | Injectors get HMACs through `env.SECRETS.hmac`, and placeholders that rule 13 swaps on their subrequests; never raw values. |
+| Injector secrets | Injectors get HMACs through `env.SECRETS.hmac`, and placeholders that rule 14 swaps on their subrequests; never raw values. |
 | Agent setup | A `tempo` MCP server in `tempod` with two tools. Proposals only add or replace; the owner applies them in the UI and types secret values there. |
 | Dependencies | No new library. The MCP server is a small hand-written JSON-RPC loop. Dynamic Workers use the built-in `worker_loaders` binding, which the owner approved. |
 
@@ -75,6 +75,19 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | `agent.exited` | `reason`: `crashed`, `evicted` (LRU close) or `cancelled` (killed after a cancel timeout) | 01 sends `agent.exited` only for an unexpected exit, but the DO must still learn that a planned exit ended the process, so the next prompt reloads the session. Only `crashed` makes a crash notice. |
 | `repo.clone` params | `mode`: `create` or `wake` | On create, 03's checkout per source applies (`new` always branches from `origin/<baseBranch>`; a `branch` or `pr` source missing on origin fails with `CLONE_FAILED`). On a fresh-disk wake, the branch is tracked from origin when it exists, else it branches from the base. A `repo.clone` with no `mode` behaves like `wake`. |
 | tempod | Full script logs at `$HOME/.tempod/logs/<runId>.log` | 01 says the DO writes the full log (up to 50 MiB) to R2 at exit. The DO reads this file with `Files` after `script.exited`. |
+
+## User MCP servers (owner request, 2026-10-12)
+
+The owner asked for MCP servers that work with every agent and with remote servers. The owner chose: servers per user, stdio plus remote `http` and `sse`, a tempod bridge for agents that lack a transport, and secret headers swapped at egress. 00, 01, 02, 04, 05 and 07 now describe it (01, User MCP servers; 02, `mcp_servers` and MCP servers functions; `TempoOutbound` rule 12).
+
+| # | Topic | Finding | What the code does |
+| --- | --- | --- | --- |
+| MCP-1 | 01 Pi | `pi-acp` 0.0.34 accepts `mcpServers` but does not pass them to pi (its README says so). So Pi had no Playwright MCP before this change. Pi 1.1.0 has its own MCP client that reads `~/.pi/agent/mcp.json` (stdio and streamable HTTP, no SSE). | `tempod` writes that file before each Pi session start, with Playwright and the user servers; `sse` servers use the bridge. No new dependency. |
+| MCP-2 | 01 Agents | Reported `mcpCapabilities`: Claude and OpenCode `http` and `sse`; Codex `http` only; Pi neither. | `tempod` maps each server from the agent's `initialize` result. Codex gets `sse` servers through the bridge. |
+| MCP-3 | 01 Bridge | The bridge is `tempod mcp-bridge`, so no MCP SDK is added. It implements the client half of streamable HTTP (POST, `Mcp-Session-Id`, `MCP-Protocol-Version`, JSON or SSE replies, optional GET stream, DELETE on exit) and of the SSE transport. | `packages/tempod/src/mcp-bridge.ts`; tests in `packages/tempod/test/mcp.test.ts`. |
+| MCP-4 | 02 `mcp_servers` | Rule 9 (no secrets in D1) means stdio `env` values must not be secret. A stdio server that needs a key cannot get one from Tempo yet. | The form says env values are not secret. Remote servers take secret headers. |
+| MCP-5 | 01 Pi | Pi expands `${VAR}` and runs a value that starts with `!` as a command in `env` and `headers` values. | Values are the owner's own, inside the owner's container, so this adds no access. Not escaped. |
+| MCP-6 | OAuth | MCP servers that need an OAuth sign-in are not supported; a bearer token in a secret header works. | Not built. |
 
 ## Choices where the spec is silent
 

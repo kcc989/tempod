@@ -21,9 +21,12 @@ export interface Config {
   readonly codexHome: string;
   readonly claudeConfigDir: string;
   readonly piSessionDir: string;
+  readonly piAgentDir: string;
   readonly nssDb: string;
   /** Unix socket of the `tempo` MCP server (01, Environments). */
   readonly mcpSocket: string;
+  /** How children run tempod itself, for `tempod mcp-bridge` (01, User MCP servers). */
+  readonly selfCommand: ReadonlyArray<string>;
   /** Commands per agent; tests replace them with a fake adapter. */
   readonly agentCommands: Readonly<Record<AgentId, ReadonlyArray<string>>>;
   readonly limits: Limits;
@@ -73,6 +76,7 @@ export class ConfigError extends Error {}
 export interface ConfigOverrides {
   readonly agentCommands?: Partial<Record<AgentId, ReadonlyArray<string>>>;
   readonly limits?: Partial<Limits>;
+  readonly selfCommand?: ReadonlyArray<string>;
 }
 
 export const loadConfig = (
@@ -103,8 +107,10 @@ export const loadConfig = (
     codexHome: join(home, ".codex"),
     claudeConfigDir: join(home, ".claude"),
     piSessionDir: join(home, ".pi", "agent", "sessions"),
+    piAgentDir: join(home, ".pi", "agent"),
     nssDb: join(home, ".pki", "nssdb"),
     mcpSocket: join(stateDir, "mcp.sock"),
+    selfCommand: overrides.selfCommand ?? ["/usr/local/bin/tempod"],
     agentCommands: { ...agentCommandsFor(workspace), ...overrides.agentCommands },
     limits: { ...DEFAULT_LIMITS, ...overrides.limits },
   };

@@ -66,6 +66,30 @@ export const projects = sqliteTable(
   (t) => [uniqueIndex("projects_user_repo").on(t.userId, t.repoId)],
 );
 
+export const mcpServers = sqliteTable(
+  "mcp_servers",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    transport: text("transport", { enum: ["stdio", "http", "sse"] }).notNull(),
+    enabled: integer("enabled").notNull().default(1),
+    command: text("command"),
+    argsJson: text("args_json").notNull().default("[]"),
+    envJson: text("env_json").notNull().default("[]"),
+    url: text("url"),
+    headersJson: text("headers_json").notNull().default("[]"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    check("mcp_servers_transport", sql`${t.transport} IN ('stdio','http','sse')`),
+    uniqueIndex("mcp_servers_user_name").on(t.userId, t.name),
+  ],
+);
+
 export const WORKSPACE_STATE_SQL = sql`('creating','starting','setting_up','ready','working','stopping','sleeping','archiving','archived','error')`;
 
 export const workspaces = sqliteTable(
@@ -116,4 +140,5 @@ export const workspaces = sqliteTable(
 export type ProjectRow = typeof projects.$inferSelect;
 export type WorkspaceRow = typeof workspaces.$inferSelect;
 export type EnvironmentRow = typeof environments.$inferSelect;
+export type McpServerRow = typeof mcpServers.$inferSelect;
 export type InstallationRow = typeof githubInstallations.$inferSelect;

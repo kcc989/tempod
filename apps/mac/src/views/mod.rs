@@ -16,6 +16,7 @@ pub mod file_tree;
 pub mod files;
 pub mod indicators;
 pub mod main_window;
+pub mod mcp_model;
 pub mod palette;
 pub mod processes;
 pub mod review;

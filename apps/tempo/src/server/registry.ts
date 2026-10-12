@@ -1,6 +1,7 @@
 import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protocol";
 import * as credentials from "./handlers/credentials.ts";
 import * as environments from "./handlers/environments.ts";
+import * as mcp from "./handlers/mcp.ts";
 import * as projects from "./handlers/projects.ts";
 import { createWorkspace, listModels, listWorkspaces, viaWorkspace } from "./handlers/workspaces.ts";
 import type { Handler } from "./run.ts";
@@ -37,6 +38,9 @@ const own: { [K in NonWorkspace]: Handler<K> } = {
   setProjectSecret: credentials.setProjectSecret,
   deleteProjectSecret: credentials.deleteProjectSecret,
   listProjectSecretNames: credentials.listProjectSecretNames,
+  listMcpServers: mcp.listMcpServers,
+  saveMcpServer: mcp.saveMcpServer,
+  deleteMcpServer: mcp.deleteMcpServer,
 };
 
 /** One handler per function in the API contract (07, One handler per function). */

@@ -1,5 +1,6 @@
 import {
   BROWSER_RUN_HOST,
+  mcpPlaceholder,
   PLACEHOLDER,
   SECRET_PLACEHOLDER_PREFIX,
   SECRET_PLACEHOLDER_RE,
@@ -10,6 +11,7 @@ import {
 } from "@tempo/protocol";
 
 export { hostMatches };
+import { mcpHeaderKey, type McpEgress } from "../lib/mcp.ts";
 
 /** Built-in agent hosts for the `allowlist` policy (01). */
 export const AGENT_HOSTS = [
@@ -34,6 +36,7 @@ export interface EgressConfig {
   readonly repo: string;
   readonly policy: EgressPolicy;
   readonly allowlist: ReadonlyArray<string>;
+  readonly mcp: ReadonlyArray<McpEgress>;
   /** The workspace's environment (01, Environments); absent or null means none. */
   readonly environmentId?: string | null;
   readonly secrets?: ReadonlyArray<SecretBinding>;
@@ -59,7 +62,7 @@ const decodeBasic = (value: string): string | null => {
   }
 };
 
-/** Header values to scan, plus the decoded `user:password` of `Authorization: Basic` (01, rule 13). */
+/** Header values to scan, plus the decoded `user:password` of `Authorization: Basic` (01, rule 14). */
 const scanTexts = (url: URL, headers: Headers): string[] => {
   const out = [url.pathname, url.search];
   for (const [name, value] of headers) {
@@ -119,8 +122,8 @@ export const swapSecrets = (
 export type Decision =
   | { readonly rule: number; readonly action: "block"; readonly status: number; readonly body: string }
   | { readonly rule: 11; readonly action: "browser" }
-  | { readonly rule: 12; readonly action: "inject"; readonly injector: Injector }
-  | { readonly rule: 13; readonly action: "swap"; readonly names: ReadonlyArray<string> }
+  | { readonly rule: 13; readonly action: "inject"; readonly injector: Injector }
+  | { readonly rule: 14; readonly action: "swap"; readonly names: ReadonlyArray<string> }
   | {
       readonly rule: number;
       readonly action: "forward";
@@ -128,10 +131,13 @@ export type Decision =
         readonly name: string;
         readonly value: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai";
       };
+      /** Rule 12: headers to replace with the CredentialDO value under `key`. */
+      readonly mcp?: ReadonlyArray<{ readonly name: string; readonly key: string }>;
     };
 
 /**
- * Rules 0 to 13 (01 and 05), first match wins; rule 11 is checked right after rule 0. Pure: credential lookup happens in the caller.
+ * Rules 0 to 14 (01 and 05), first match wins; rule 11 is checked right after rule 0, and rules 12,
+ * 13 and 14 right after rule 6. Pure: credential lookup happens in the caller.
  * `set` names the credential to add; the caller fetches it and replaces the header.
  */
 export const decide = (url: URL, headers: Headers, appHost: string, config: EgressConfig): Decision => {
@@ -158,11 +164,13 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
   if (host === "api.openai.com" && headers.get("authorization") === `Bearer ${PLACEHOLDER}`) {
     return { rule: 6, action: "forward", set: { name: "authorization", value: "openai" } };
   }
+  const mcp = mcpSwaps(host, headers, config);
+  if (mcp.length > 0) return { rule: 12, action: "forward", mcp };
   const injector = (config.injectors ?? []).find((i) => i.hosts.some((p) => hostMatches(host, p)));
-  if (injector) return { rule: 12, action: "inject", injector };
+  if (injector) return { rule: 13, action: "inject", injector };
   const names = secretPlaceholderNames(url, headers);
   if (swappable(host, names, config.secrets ?? []) && !carriesFixedPlaceholder(url, headers))
-    return { rule: 13, action: "swap", names };
+    return { rule: 14, action: "swap", names };
   if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
   return policy(8, host, config);
 };
@@ -178,8 +186,8 @@ const carriesFixedPlaceholder = (url: URL, headers: Headers) =>
   scanTexts(url, headers).some((t) => t.includes(PLACEHOLDER));
 
 /**
- * A subrequest from an injector (01, rule 12): rules 0 and 1, then only the injector's hosts,
- * then rule 13, then rule 7. Never rule 12 again.
+ * A subrequest from an injector (01, rule 13): rules 0 and 1, then only the injector's hosts,
+ * then rule 14, then rule 7. Never rule 13 again.
  */
 export const decideForInjector = (
   url: URL,
@@ -190,7 +198,7 @@ export const decideForInjector = (
 ): Decision => {
   const host = url.hostname.toLowerCase();
   const blocked = {
-    rule: 12,
+    rule: 13,
     action: "block",
     status: 403,
     body: `tempo: egress blocked for ${host}`,
@@ -198,17 +206,37 @@ export const decideForInjector = (
   if (host === appHost.toLowerCase())
     return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
   if (!injector.hosts.some((p) => hostMatches(host, p))) return blocked;
-  if (url.protocol === "http:") return { rule: 12, action: "forward" };
+  if (url.protocol === "http:") return { rule: 13, action: "forward" };
   const names = secretPlaceholderNames(url, headers);
   if (swappable(host, names, config.secrets ?? []) && !carriesFixedPlaceholder(url, headers))
-    return { rule: 13, action: "swap", names };
+    return { rule: 14, action: "swap", names };
   if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
-  return { rule: 12, action: "forward" };
+  return { rule: 13, action: "forward" };
+};
+
+/** Rule 12 (01): secret MCP headers, only for the host of the server that owns them. */
+export const mcpSwaps = (
+  host: string,
+  headers: Headers,
+  config: EgressConfig,
+): Array<{ name: string; key: string }> => {
+  const swaps: Array<{ name: string; key: string }> = [];
+  for (const server of config.mcp) {
+    if (server.host !== host) continue;
+    for (const name of server.secretHeaders) {
+      if (headers.get(name) === mcpPlaceholder(server.serverId, name))
+        swaps.push({ name, key: mcpHeaderKey(server.serverId, name) });
+    }
+  }
+  return swaps;
 };
 
 const policy = (_from: number, host: string, config: EgressConfig): Decision => {
   if (config.policy === "open") return { rule: 8, action: "forward" };
-  if ([...AGENT_HOSTS, ...config.allowlist].some((p) => hostMatches(host, p)))
+  if (
+    [...AGENT_HOSTS, ...config.allowlist].some((p) => hostMatches(host, p)) ||
+    config.mcp.some((m) => m.host === host)
+  )
     return { rule: 9, action: "forward" };
   return { rule: 10, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
 };

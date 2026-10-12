@@ -462,6 +462,7 @@ export type SettingsTab =
   | "general"
   | "logins"
   | "environments"
+  | "mcp"
   | "project"
   | "appearance"
   | "notifications"
