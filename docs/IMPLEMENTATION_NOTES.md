@@ -216,3 +216,6 @@ Wrangler's pinned builder cannot pass a BuildKit CA secret. `TEMPO_BUILD_CA` sel
 
 
 The managed credential proxy accepted a small authenticated Worker upload but rejected a 12 MiB multipart probe with an integration-authentication error. Explicit Vite Oxc minification plus excluding browser-only Shiki grammars from SSR reduced the Worker from 355 modules / 15,484 KiB to 46 modules / 2,185 KiB, after which deployment succeeded. The exact proxy size limit is not inferred. The browser still loads the same grammars lazily in its existing effects; native rendering and shared contracts do not change. Cloudflare list APIs are paginated during preflight so surviving dedicated secrets on later pages also block bootstrap.
+
+
+The web-only first-run message now directs the owner to the private setup link instead of obsolete printed output. Per 07's feature table, GitHub App first-run setup is web-only; the native client connects after this step and needs no corresponding setup flow.
