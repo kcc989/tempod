@@ -6,6 +6,7 @@ import { TempodClient, type EventHandler } from "../../src/do/workspace/tempod-c
 import { applyTempodEvent } from "../../src/do/workspace/events.ts";
 import {
   DEFAULT_EFFECTIVE,
+  driveToState,
   FakeTempod,
   installFakes,
   internals,
@@ -42,10 +43,13 @@ const transport = (stub: Stub, handler?: EventHandler) =>
   });
 const isolated = async () => {
   const w = await seedWorkspace(await seedProject());
-  await runInDurableObject(w.stub, (instance: WorkspaceDO, state: DurableObjectState) => {
+  await driveToState(w.stub, ["ready"]);
+  await runInDurableObject(w.stub, async (instance: WorkspaceDO, state: DurableObjectState) => {
     const { core } = internals(instance);
     core.closingTempod = true;
-    core.tempod?.close();
+    const client = core.tempod;
+    client?.close();
+    await client?.drained();
     core.tempod = null;
     state.storage.sql.exec("UPDATE ops SET status = 'cancelled'");
     state.storage.sql.exec("DELETE FROM events");
