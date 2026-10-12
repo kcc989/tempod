@@ -344,6 +344,9 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
   setCodexAuth: [{ authJson: '{"tokens":{"note":"fixture"}}' }],
+  startCodexLogin: [{}],
+  pollCodexLogin: [{ loginId: "fixture-login-id" }],
+  cancelCodexLogin: [{ loginId: "fixture-login-id" }],
   setApiKey: [{ provider: "openrouter", key: "fixture-openrouter-key" }],
   deleteCredential: [{ key: "codex" }],
   setProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL", value: "fixture-value" }],
@@ -354,6 +357,16 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
 /** Outputs that are not shared types, by their wire type name. */
 export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   Empty: [{}],
+  StartCodexLoginOut: [
+    {
+      loginId: "fixture-login-id",
+      verificationUrl: "https://auth.openai.com/codex/device",
+      userCode: "ABCD-EFGH",
+      expiresAt: 1_800_000_000_000,
+      intervalMs: 5000,
+    },
+  ],
+  PollCodexLoginOut: [{ status: "pending" }, { status: "connected" }, { status: "expired" }],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },
     { repoId: 812345679, owner: "acme", name: "docs", defaultBranch: "trunk", private: false },

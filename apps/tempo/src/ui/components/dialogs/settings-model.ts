@@ -155,6 +155,9 @@ export type FieldPath = (typeof FIELDS)[number]["path"];
 
 export const SECTIONS: ReadonlyArray<string> = [...new Set(FIELDS.map((f) => f.section))];
 
+/** The Settings → Project page (04) that shows a section. Browser Run is on Agents. */
+export const sectionPage = (section: string): string => (section === "Browser" ? "Agent" : section);
+
 export interface InstanceEdit {
   readonly preset: (typeof INSTANCE_PRESETS)[number] | "custom";
   readonly vcpu: string;

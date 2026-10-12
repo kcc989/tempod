@@ -7,10 +7,13 @@ import { isThemePreference } from "~/ui/lib/theme";
 export function AppearanceTab() {
   const { preference, setPreference } = useTheme();
   return (
-    <div className="grid gap-2">
-      <span id="theme-label" className="text-sm font-medium">
-        Theme
-      </span>
+    <div className="flex flex-wrap items-start justify-between gap-6 border-t py-6">
+      <div>
+        <span id="theme-label" className="text-sm font-medium">
+          Theme
+        </span>
+        <p className="mt-2 text-xs text-muted-foreground">System follows your device.</p>
+      </div>
       <ToggleGroup
         type="single"
         aria-labelledby="theme-label"
@@ -30,7 +33,6 @@ export function AppearanceTab() {
           Dark
         </ToggleGroupItem>
       </ToggleGroup>
-      <p className="text-xs text-muted-foreground">System follows your device.</p>
     </div>
   );
 }

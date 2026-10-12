@@ -94,7 +94,7 @@ Implementation sources are under [browser components](https://github.com/kcc989/
 | Keep open dispatcher behavior | Present | dialog models | Create multiple real workspaces |
 | Add project installations/repos, Link, empty install action | Present | first-run/dialog models | AT-1/2 real GitHub App installations |
 | First-run five-step live checklist until complete | Present | first-run tests | Real setup manifest/install/login/repo/workspace |
-| Settings Logins, commands, status/update time, never show stored values | Present | credentials-model/auth tests | Real login uploads and secret inspection |
+| Settings Logins, Codex device-code login with auth.json fallback, commands, status/update time, never show stored values | Present | credentials-model/auth tests; codex-login component and Worker tests | Real Codex device-code sign-in, login uploads and secret inspection |
 | Project scripts/env/secrets/instance/sleep/egress/git/prompts/source | Present | settings-model tests | Real precedence/settings propagation and AT-14/20 |
 | Theme system/light/dark | Present | theme tests | Both themes in every screen/phone |
 | Notifications enabled/sound, permission only in Settings | Present | notify logic | Real browser permission and hidden-tab notifications |
@@ -157,7 +157,7 @@ All bindings match `KeyboardEvent.code`, use exact modifiers, prevent handled de
 | Alt-M | TopBar | Primary-action tests |
 | Alt-A | TopBar | Archive-availability tests |
 | Alt-R | WorkspaceLayout/useScripts | Hidden-panel default-script browser |
-| Alt-, | AppShell/SettingsDialog | Matching/registry tests |
+| Alt-, | AppShell/SettingsPage | Matching/registry tests |
 | Cmd-Enter dialogs | DialogContent | Platform matching; submit composition guard |
 
 ## Gate status

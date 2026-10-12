@@ -1000,6 +1000,54 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "startCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "StartCodexLoginOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "pollCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "PollCodexLoginIn.json"
+        },
+        "output": {
+          "$ref": "PollCodexLoginOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelCodexLoginIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "setApiKey": {
       "type": "object",
       "properties": {
@@ -1142,6 +1190,9 @@
     "getCredentialStatus",
     "setClaudeToken",
     "setCodexAuth",
+    "startCodexLogin",
+    "pollCodexLogin",
+    "cancelCodexLogin",
     "setApiKey",
     "deleteCredential",
     "setProjectSecret",

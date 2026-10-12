@@ -38,7 +38,9 @@ Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: featur
   - `bun run typecheck`, `lint`, `format:check` and `test` pass: 762 Worker, 300 UI logic, 31 component, 203 protocol and 117 daemon tests. Conformance and deployed e2e tests skip.
   - The web and browser Playwright suites pass (35 and 7 cases) against the container's Chromium.
   - `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` and `cargo test --workspace` pass; `tempo-mac` has 194 tests.
-- **Not done:** Browser Run (Q-4) and private previews (Q-10) need owner decisions. Spikes, hosted gates B–E and Mac acceptance need a real account, logins and a Mac.
+- **Owner decisions:** Q-4 to Q-10 are answered and built: Browser Run with Live View, owner-only previews, PR workspaces and one default model per agent (`IMPLEMENTATION_NOTES.md`).
+- **Merged main `548417d`:** PR #10 replaces the Settings dialog with sidebar settings pages (web and Mac); a project's Agents page holds the per-agent models and Browser Run. PR #11 adds Codex device-code login (`startCodexLogin`, `pollCodexLogin`, `cancelCodexLogin`); `auth.json` upload stays as a fallback.
+- **Not done:** spikes, hosted gates B–E and Mac acceptance need a real account, logins and a Mac.
 
 ## Current state
 
@@ -81,7 +83,7 @@ Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: featur
 | Area | Spec | Done | State |
 | --- | --- | --- | --- |
 | Monorepo, tooling, CI | 06 | 85% | Turborepo + Bun, TS 6.0.3, oxlint, oxfmt, CI workflow. Local format check and published CI pass. |
-| `packages/protocol` | 02 | 95% | Effect Schema wire types, 63 API functions, channels, tempod envelopes. JSON Schema and fixtures are generated and checked; format check passes. |
+| `packages/protocol` | 02 | 95% | Effect Schema wire types, 68 API functions, channels, tempod envelopes. JSON Schema and fixtures are generated and checked; format check passes. |
 | `packages/settings`, `packages/cities` | 01, 03 | 100% | Done and tested. |
 | `tempod` daemon | 01 | 90% | Built; 109 tests pass. |
 | Worker: Durable Objects and ops | 01, 03 | 82% | Interim review fixes pass local Worker tests; live restart validation pending. |
@@ -92,8 +94,8 @@ Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: featur
 | Container image and deploy | 01, 05 | 85% | Dockerfile, versions.json, Alchemy + wrangler deploy. |
 | Web UI | 04 | implemented with contract gaps | Regions are present; local browser acceptance added. Historical usage, closed PR titles, attachment retrieval, hosted gates and macOS shortcut verification remain. |
 | Tempo for Mac | 07 | integrated source; native acceptance open | Review, file tabs, processes/remote terminal, settings, diagnostics, shell actions and local release helpers are wired. Native/hosted acceptance remains. |
-| Private previews + Browser Run | 00 Q3, 01 | design | Research done; decision brief not written. |
-| Spikes S1–S16, acceptance tests AT-1–AT-37 | 06 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
+| Owner-only previews + Browser Run | 00 Q3, 01, 05 | built | Owner decisions Q-4 and Q-10. Spike S17, AT-16 and AT-39 are not run. |
+| Spikes S1–S17, acceptance tests AT-1–AT-40 | 06, 07 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
 
 ## Done
 
@@ -201,23 +203,21 @@ The owner elected to test locally. These source milestones do not claim an M1–
 **Private previews and Browser Run (owner request, 2026-10-11)**
 - [x] Research: Browser Run, Protected Quick Tunnels, Cloudflare Access, code integration points.
 - [x] Three designs; two reviewed.
-- [ ] Review of the in-container cloudflared design. Research found that cloudflared needs port 7844, and only ports 80 and 443 leave the container (05).
-- [ ] Decision brief, then the owner's decisions (Q3 and Q-4).
-- [ ] Spec changes (00, 01, 02, 04, 05, 07), then the build.
+- [x] Review of the in-container cloudflared design. Rejected: cloudflared needs port 7844, and only ports 80 and 443 leave the container (05).
+- [x] The owner's decisions (00 Q3, Q-4 and Q-10).
+- [x] Spec changes (00, 01, 02, 04, 05, 07), then the build.
 
 **Needs a Cloudflare account and real logins**
-- [ ] Spikes S1–S16 (gate A).
-- [ ] Acceptance tests AT-1–AT-37, e2e and conformance runs.
+- [ ] Spikes S1–S17 (gate A).
+- [ ] Acceptance tests AT-1–AT-40, e2e and conformance runs.
 - [ ] First real deploy.
 
 ## Decisions waiting on the owner
 
 See `IMPLEMENTATION_NOTES.md`:
 - **S-1 to S-6:** spec changes to make.
-- **Q-1 to Q-4:** open questions.
 - **M-1:** remote-image blocking in the Mac app.
-- **00 Q1 to Q5 and 07 Q7:** open questions in the spec.
-- **Private previews:** the design choice, once the brief is ready.
+- **00 Q1, Q2, Q4 and Q5, and 07 Q7:** open questions in the spec.
 
 ## Core cloud implementation audit (2026-10-11)
 

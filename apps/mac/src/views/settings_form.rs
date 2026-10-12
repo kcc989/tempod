@@ -1,5 +1,5 @@
-//! Settings tabs (04, Settings): Logins, Project, Appearance and Notifications. Server data
-//! changes with the same functions as the web (07, Local storage and settings).
+//! Settings pages (04, Settings): General, Logins, Project and Appearance. Server data changes
+//! with the same functions as the web (07, Local storage and settings).
 use super::settings_model::{self as model, EditValue, FieldState, Kind};
 use super::tokens::{Token, color};
 use crate::platform::Permission;
@@ -15,14 +15,28 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
-    div, px,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
+    Window, div, px,
 };
 use std::collections::BTreeMap;
+use std::time::Duration;
 use tempo_protocol::{self as p, api};
 
+pub const TAB_LOGINS: usize = 0;
 pub const TAB_PROJECT: usize = 1;
-pub const TAB_NOTIFICATIONS: usize = 3;
+pub const TAB_GENERAL: usize = 3;
+
+/// The pages of a project (04), each with the field sections of [`model::SECTIONS`] it shows.
+pub const PROJECT_PAGES: [(&str, &[&str]); 7] = [
+    ("Agents", &["Agent", "Browser"]),
+    ("Scripts", &["Scripts"]),
+    ("Environment", &["Environment"]),
+    ("Git", &["Git"]),
+    ("Prompts", &["Prompts"]),
+    ("Secrets", &[]),
+    ("General", &[]),
+];
+const PAGE_SECRETS: usize = 5;
 
 struct RunEditor {
     id: Entity<InputState>,
@@ -186,6 +200,7 @@ fn field_editor(
 
 pub struct SettingsForm {
     pub tab: usize,
+    pub section: usize,
     client: Option<tempo_client::Client>,
     credentials: Option<p::CredentialStatus>,
     secret_inputs: BTreeMap<String, Entity<InputState>>,
@@ -204,6 +219,10 @@ pub struct SettingsForm {
     pending: bool,
     credential_changed: Option<p::CredentialProvider>,
     permission: Option<Permission>,
+    codex_login: Option<p::StartCodexLoginOut>,
+    codex_busy: bool,
+    codex_login_task: Option<Task<()>>,
+    codex_upload: bool,
 }
 
 impl SettingsForm {
@@ -237,6 +256,7 @@ impl SettingsForm {
             .collect();
         let mut this = Self {
             tab: 0,
+            section: 0,
             client,
             credentials: None,
             secret_inputs,
@@ -259,6 +279,10 @@ impl SettingsForm {
             pending: false,
             credential_changed: None,
             permission: None,
+            codex_login: None,
+            codex_busy: false,
+            codex_login_task: None,
+            codex_upload: false,
         };
         if let Some(project) = project {
             this.load_project(project, window, cx);
@@ -268,12 +292,19 @@ impl SettingsForm {
         this
     }
 
-    /// Selects a settings tab; the Notifications tab reads the macOS permission again.
+    /// Selects a settings tab; the General tab reads the macOS permission again.
     pub fn show_tab(&mut self, tab: usize, cx: &mut Context<Self>) {
         self.tab = tab;
-        if tab == TAB_NOTIFICATIONS {
+        if tab == TAB_GENERAL {
             self.refresh_permission(cx);
         }
+        cx.notify();
+    }
+
+    /// Selects a page of [`PROJECT_PAGES`]. Unsaved edits stay until saved or reset.
+    pub fn show_project_page(&mut self, section: usize, cx: &mut Context<Self>) {
+        self.tab = TAB_PROJECT;
+        self.section = section;
         cx.notify();
     }
 
@@ -497,6 +528,114 @@ impl SettingsForm {
         .detach();
     }
 
+    fn codex_connected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.codex_login = None;
+        self.codex_busy = false;
+        self.login_error = None;
+        if let Some(app) = crate::app::AppState::try_global(cx) {
+            app.update(cx, |a, cx| {
+                a.credentials_rev += 1;
+                a.credential_changed = Some(p::CredentialProvider::Codex);
+                cx.notify();
+            });
+        }
+        super::toast::success("Codex connected", window, cx);
+        self.refresh(cx);
+        cx.notify();
+    }
+
+    /// Codex device-code login (04, Logins): start, then poll until connected or expired.
+    fn connect_codex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        if self.codex_busy || self.pending {
+            return;
+        }
+        self.codex_busy = true;
+        self.login_error = None;
+        cx.notify();
+        self.codex_login_task = Some(cx.spawn_in(window, async move |this, cx| {
+            let result = client.call::<api::StartCodexLogin>(p::Empty {}).await;
+            let login = match result {
+                Ok(login) => login,
+                Err(error) => {
+                    let _ = this.update(cx, |this, cx| {
+                        this.codex_busy = false;
+                        this.login_error = Some(super::toast::error_text(&error, None));
+                        cx.notify();
+                    });
+                    return;
+                }
+            };
+            if this
+                .update(cx, |this, cx| {
+                    this.codex_login = Some(login.clone());
+                    cx.notify();
+                })
+                .is_err()
+            {
+                return;
+            }
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_secs_f64((login.interval_ms / 1000.).max(1.)))
+                    .await;
+                let Ok(login_id) = login.login_id.clone().try_into() else {
+                    return;
+                };
+                let result = client
+                    .call::<api::PollCodexLogin>(p::PollCodexLoginIn { login_id })
+                    .await;
+                match result {
+                    Ok(result) if result.status == p::PollCodexLoginOutStatus::Pending => continue,
+                    Ok(result) if result.status == p::PollCodexLoginOutStatus::Connected => {
+                        let _ =
+                            this.update_in(cx, |this, window, cx| this.codex_connected(window, cx));
+                    }
+                    result => {
+                        let _ = this.update(cx, |this, cx| {
+                            this.codex_login = None;
+                            this.codex_busy = false;
+                            this.login_error = Some(match result {
+                                Err(error) => super::toast::error_text(&error, None),
+                                _ => "Codex login expired. Connect again to get a new code.".into(),
+                            });
+                            cx.notify();
+                        });
+                    }
+                }
+                break;
+            }
+        }));
+    }
+
+    fn cancel_codex(&mut self, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let Some(login) = &self.codex_login else {
+            return;
+        };
+        let Ok(login_id) = login.login_id.clone().try_into() else {
+            return;
+        };
+        self.codex_login_task.take();
+        self.codex_login_task = Some(cx.spawn(async move |this, cx| {
+            let result = client
+                .call::<api::CancelCodexLogin>(p::CancelCodexLoginIn { login_id })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.codex_login = None;
+                this.codex_busy = false;
+                this.login_error = result
+                    .err()
+                    .map(|error| super::toast::error_text(&error, None));
+                cx.notify();
+            });
+        }));
+    }
+
     fn upload_codex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.pending {
             return;
@@ -606,6 +745,126 @@ impl SettingsForm {
         }
     }
 
+    /// The Codex login: device-code sign-in, with the auth.json upload as a fallback (04, Logins).
+    fn codex_card(&self, set: bool, updated: Option<f64>, cx: &mut Context<Self>) -> AnyElement {
+        let muted = color(Token::MutedForeground, cx);
+        let busy = self.codex_busy || self.pending;
+        let mut card = v_flex()
+            .gap_1()
+            .child(format!("Codex · {}", if set { "Set" } else { "Not set" }))
+            .children(updated.filter(|at| at.is_finite() && *at >= 0.).map(|at| {
+                div().text_sm().text_color(muted).child(format!(
+                    "Last updated {}",
+                    super::indicators::format_relative(at, super::indicators::now_ms())
+                ))
+            }))
+            .child(div().child(
+                "Sign in with ChatGPT using a one-time code. Enable device-code login in your ChatGPT security settings or ask your workspace admin.",
+            ));
+        if let Some(login) = &self.codex_login {
+            let uri = login.verification_url.clone();
+            card = card
+                .child("Open the sign-in page, then enter this code:")
+                .child(
+                    div()
+                        .text_3xl()
+                        .font_family("monospace")
+                        .child(login.user_code.clone()),
+                )
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(
+                            Button::new("codex-open-sign-in")
+                                .primary()
+                                .label("Open sign-in page")
+                                .on_click(move |_, _, cx| cx.open_url(&uri)),
+                        )
+                        .child(
+                            Button::new("codex-cancel")
+                                .label("Cancel")
+                                .on_click(cx.listener(|this, _, _, cx| this.cancel_codex(cx))),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_color(muted)
+                        .child("Waiting for sign-in… This code expires in 15 minutes."),
+                );
+        } else {
+            card = card.child(
+                Button::new("codex-connect")
+                    .primary()
+                    .disabled(busy)
+                    .label(if busy {
+                        "Connecting…"
+                    } else if set {
+                        "Reconnect Codex"
+                    } else {
+                        "Connect Codex"
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| this.connect_codex(window, cx))),
+            );
+        }
+        card = card.child(
+            Button::new("codex-upload-toggle")
+                .ghost()
+                .disabled(busy)
+                .label("Use auth.json instead")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.codex_upload = !this.codex_upload;
+                    cx.notify();
+                })),
+        );
+        if self.codex_upload {
+            card =
+                card.child("Run codex login, then paste ~/.codex/auth.json.")
+                    .child(
+                        Input::new(&self.secret_inputs["Codex"])
+                            .id("codex-auth-json")
+                            .aria_label("Codex auth.json"),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new("upload-codex-auth")
+                                    .label("Upload auth.json")
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.upload_codex(window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("codex-upload-save")
+                                    .disabled(busy)
+                                    .label("Save")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.save_login("Codex", window, cx)
+                                    })),
+                            ),
+                    );
+        }
+        card.child(
+            Button::new("delete-Codex")
+                .label("Remove")
+                .disabled(!set || busy)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.credential_changed = Some(p::CredentialProvider::Codex);
+                    this.mutate::<api::DeleteCredential>(
+                        p::DeleteCredentialIn {
+                            key: "codex.auth_json".into(),
+                        },
+                        None,
+                        Some("Codex removed".into()),
+                        window,
+                        cx,
+                    );
+                })),
+        )
+        .into_any_element()
+    }
+
     fn save_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(project) = self.project.clone() else {
             return;
@@ -614,6 +873,13 @@ impl SettingsForm {
         self.field_errors = errors;
         if !self.field_errors.is_empty() {
             self.problem = Some("Check the highlighted fields.".into());
+            if let Some(page) = model::FIELDS
+                .iter()
+                .find(|f| self.field_errors.contains_key(f.path))
+                .and_then(|f| PROJECT_PAGES.iter().position(|p| p.1.contains(&f.section)))
+            {
+                self.section = page;
+            }
             cx.notify();
             return;
         }
@@ -696,6 +962,9 @@ impl SettingsForm {
                         });
                         let set = status.is_some_and(|s| s.0);
                         let updated = status.and_then(|s| s.1);
+                        if name == "Codex" {
+                            return self.codex_card(set, updated, cx);
+                        }
                         v_flex()
                             .gap_1()
                             .child(format!("{name} · {}", if set { "Set" } else { "Not set" }))
@@ -708,27 +977,10 @@ impl SettingsForm {
                                     )
                                 ))
                             }))
-                            .children(
-                                match name {
-                                    "Claude" => {
-                                        Some("Run claude setup-token, then paste the token.")
-                                    }
-                                    "Codex" => {
-                                        Some("Run codex login, then paste ~/.codex/auth.json.")
-                                    }
-                                    _ => None,
-                                }
-                                .map(|s| div().child(s)),
-                            )
-                            .child(Input::new(&self.secret_inputs[name]))
-                            .children((name == "Codex").then(|| {
-                                Button::new("upload-codex-auth")
-                                    .label("Upload auth.json")
-                                    .disabled(self.pending)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.upload_codex(window, cx)
-                                    }))
+                            .children((name == "Claude").then(|| {
+                                div().child("Run claude setup-token, then paste the token.")
                             }))
+                            .child(Input::new(&self.secret_inputs[name]))
                             .child(
                                 h_flex()
                                     .gap_2()
@@ -747,7 +999,6 @@ impl SettingsForm {
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 let key = match name {
                                                     "Claude" => "claude.oauth_token",
-                                                    "Codex" => "codex.auth_json",
                                                     "OpenRouter" => "openrouter.api_key",
                                                     "Anthropic" => "anthropic.api_key",
                                                     _ => "openai.api_key",
@@ -764,6 +1015,7 @@ impl SettingsForm {
                                             })),
                                     ),
                             )
+                            .into_any_element()
                     }),
             )
             .into_any_element()
@@ -1046,7 +1298,7 @@ impl SettingsForm {
                     div()
                         .text_xs()
                         .text_color(muted)
-                        .child("Stored as plain text. Put keys and tokens in secrets below."),
+                        .child("Stored as plain text. Put keys and tokens in Secrets."),
                 )
                 .children(rows.iter().enumerate().map(|(row, r)| {
                     h_flex()
@@ -1129,163 +1381,180 @@ impl SettingsForm {
             defaults: &defaults,
         };
         let dirty = self.form(cx) != self.initial;
-        let sections = model::SECTIONS.map(|section| {
-            v_flex()
-                .mt_3()
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                        .text_color(muted)
-                        .child(section.to_uppercase()),
-                )
-                .children(
-                    model::FIELDS
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, f)| f.section == section)
-                        .map(|(ix, _)| self.render_field(ix, &ctx, cx))
-                        .collect::<Vec<_>>(),
-                )
-        });
+        let page = PROJECT_PAGES.get(self.section).map_or(&[][..], |p| p.1);
+        let sections = model::SECTIONS
+            .iter()
+            .filter(|section| page.contains(section))
+            .map(|&section| {
+                v_flex()
+                    .mt_3()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                            .text_color(muted)
+                            .child(section.to_uppercase()),
+                    )
+                    .children(
+                        model::FIELDS
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, f)| f.section == section)
+                            .map(|(ix, _)| self.render_field(ix, &ctx, cx))
+                            .collect::<Vec<_>>(),
+                    )
+            })
+            .collect::<Vec<_>>();
         let secret_names = self.secret_names.clone();
         let replace = secret_names
             .iter()
             .any(|n| n.as_str() == self.secret_name.read(cx).value().trim());
+        let fields = (!page.is_empty()).then(|| {
+            v_flex()
+                .gap_2()
+                .child(div().text_xs().text_color(muted).child(match &self.workspace {
+                    Some(w) => format!(
+                        "Values in effect for {}. Set a key in Tempo to override the repo files.",
+                        w.title
+                    ),
+                    None => "Open a workspace of this project to see values from its repo files. Set a key in Tempo to override them.".into(),
+                }))
+                .children(sections)
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .py_2()
+                        .children(self.problem.clone().map(|p| {
+                            div()
+                                .flex_1()
+                                .text_xs()
+                                .text_color(color(Token::Destructive, cx))
+                                .child(p)
+                        }))
+                        .child(div().flex_1())
+                        .child(
+                            Button::new("reset-project")
+                                .ghost()
+                                .small()
+                                .label("Reset")
+                                .disabled(!dirty || self.pending)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.reset_project(window, cx)),
+                                ),
+                        )
+                        .child(
+                            Button::new("save-project")
+                                .primary()
+                                .small()
+                                .label(if self.pending { "Saving…" } else { "Save" })
+                                .disabled(!dirty || self.pending)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.save_project(window, cx)),
+                                ),
+                        ),
+                )
+        });
+        let secrets = (self.section == PAGE_SECRETS).then(|| {
+            v_flex()
+                .gap_2()
+                .pt_3()
+                .border_t_1()
+                .border_color(color(Token::Border, cx))
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                        .child("Secrets"),
+                )
+                .child(div().text_xs().text_color(muted).child(
+                    "Added to the environment of scripts and agents. Values are never shown again.",
+                ))
+                .when(secret_names.is_empty(), |col| {
+                    col.child(div().text_xs().text_color(muted).child("No secrets."))
+                })
+                .children(secret_names.into_iter().map(|name| {
+                    let label = name.clone();
+                    h_flex()
+                        .id(SharedString::from(format!("secret-{name}")))
+                        .role(gpui_kit::Role::ListItem)
+                        .aria_label(name.clone())
+                        .gap_2()
+                        .child(div().flex_1().text_xs().child(name.clone()))
+                        .child(div().text_xs().text_color(muted).child("Set"))
+                        .child(
+                            Button::new(SharedString::from(format!("remove-secret-{name}")))
+                                .ghost()
+                                .small()
+                                .icon(IconName::Delete)
+                                .accessibility_label(format!("Delete {label}"))
+                                .disabled(self.pending)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if let Some(project_id) =
+                                        this.project.as_ref().map(|p| p.id.clone())
+                                    {
+                                        this.mutate::<api::DeleteProjectSecret>(
+                                            p::DeleteProjectSecretIn {
+                                                project_id,
+                                                name: name.clone(),
+                                            },
+                                            None,
+                                            Some(format!("{name} deleted")),
+                                            window,
+                                            cx,
+                                        );
+                                    }
+                                })),
+                        )
+                }))
+                .child(
+                    h_flex()
+                        .gap_1p5()
+                        .child(div().w(px(160.)).child(Input::new(&self.secret_name)))
+                        .child(div().flex_1().child(Input::new(&self.secret_value)))
+                        .child(
+                            Button::new("set-secret")
+                                .small()
+                                .outline()
+                                .label(if replace { "Replace" } else { "Add" })
+                                .disabled(self.pending)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.set_secret(window, cx)),
+                                ),
+                        ),
+                )
+                .children(self.secret_error.clone().map(|e| {
+                    div()
+                        .text_xs()
+                        .text_color(color(Token::Destructive, cx))
+                        .child(e)
+                }))
+        });
         v_flex()
             .gap_2()
             .when(projects.len() > 1, |col| {
                 col.child(
-                    h_flex().gap_1().flex_wrap().children(projects.into_iter().map(|p| {
-                        let selected = p.id == project.id;
-                        Button::new(SharedString::from(format!("project-settings-{}", p.id)))
-                            .small()
-                            .outline()
-                            .label(format!("{}/{}", p.owner, p.name))
-                            .selected(selected)
-                            .disabled(self.pending)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.select_project(p.clone(), window, cx)
-                            }))
-                    })),
+                    h_flex()
+                        .gap_1()
+                        .flex_wrap()
+                        .children(projects.into_iter().map(|p| {
+                            let selected = p.id == project.id;
+                            Button::new(SharedString::from(format!("project-settings-{}", p.id)))
+                                .small()
+                                .outline()
+                                .label(format!("{}/{}", p.owner, p.name))
+                                .selected(selected)
+                                .disabled(self.pending)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.select_project(p.clone(), window, cx)
+                                }))
+                        })),
                 )
             })
-            .child(div().text_xs().text_color(muted).child(match &self.workspace {
-                Some(w) => format!(
-                    "Values in effect for {}. Set a key in Tempo to override the repo files.",
-                    w.title
-                ),
-                None => "Open a workspace of this project to see values from its repo files. Set a key in Tempo to override them.".into(),
-            }))
-            .children(sections)
-            .child(
-                h_flex()
-                    .gap_2()
-                    .py_2()
-                    .children(self.problem.clone().map(|p| {
-                        div()
-                            .flex_1()
-                            .text_xs()
-                            .text_color(color(Token::Destructive, cx))
-                            .child(p)
-                    }))
-                    .child(div().flex_1())
-                    .child(
-                        Button::new("reset-project")
-                            .ghost()
-                            .small()
-                            .label("Reset")
-                            .disabled(!dirty || self.pending)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.reset_project(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("save-project")
-                            .primary()
-                            .small()
-                            .label(if self.pending { "Saving…" } else { "Save" })
-                            .disabled(!dirty || self.pending)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.save_project(window, cx)),
-                            ),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .gap_2()
-                    .pt_3()
-                    .border_t_1()
-                    .border_color(color(Token::Border, cx))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                            .child("Secrets"),
-                    )
-                    .child(div().text_xs().text_color(muted).child(
-                        "Added to the environment of scripts and agents. Values are never shown again.",
-                    ))
-                    .when(secret_names.is_empty(), |col| {
-                        col.child(div().text_xs().text_color(muted).child("No secrets."))
-                    })
-                    .children(secret_names.into_iter().map(|name| {
-                        let label = name.clone();
-                        h_flex()
-                            .id(SharedString::from(format!("secret-{name}")))
-                            .role(gpui_kit::Role::ListItem)
-                            .aria_label(name.clone())
-                            .gap_2()
-                            .child(div().flex_1().text_xs().child(name.clone()))
-                            .child(div().text_xs().text_color(muted).child("Set"))
-                            .child(
-                                Button::new(SharedString::from(format!("remove-secret-{name}")))
-                                    .ghost()
-                                    .small()
-                                    .icon(IconName::Delete)
-                                    .accessibility_label(format!("Delete {label}"))
-                                    .disabled(self.pending)
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        if let Some(project_id) =
-                                            this.project.as_ref().map(|p| p.id.clone())
-                                        {
-                                            this.mutate::<api::DeleteProjectSecret>(
-                                                p::DeleteProjectSecretIn {
-                                                    project_id,
-                                                    name: name.clone(),
-                                                },
-                                                None,
-                                                Some(format!("{name} deleted")),
-                                                window,
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            )
-                    }))
-                    .child(
-                        h_flex()
-                            .gap_1p5()
-                            .child(div().w(px(160.)).child(Input::new(&self.secret_name)))
-                            .child(div().flex_1().child(Input::new(&self.secret_value)))
-                            .child(
-                                Button::new("set-secret")
-                                    .small()
-                                    .outline()
-                                    .label(if replace { "Replace" } else { "Add" })
-                                    .disabled(self.pending)
-                                    .on_click(
-                                        cx.listener(|this, _, window, cx| this.set_secret(window, cx)),
-                                    ),
-                            ),
-                    )
-                    .children(self.secret_error.clone().map(|e| {
-                        div()
-                            .text_xs()
-                            .text_color(color(Token::Destructive, cx))
-                            .child(e)
-                    })),
-            )
+            .when(self.section == PROJECT_PAGES.len() - 1, |col| {
+                col.child(format!("{}/{}", project.owner, project.name))
+            })
+            .children(fields)
+            .children(secrets)
             .into_any_element()
     }
 
@@ -1452,6 +1721,14 @@ mod tests {
         );
     }
 
+    #[test]
+    fn every_field_section_is_on_one_project_page() {
+        for section in model::SECTIONS {
+            let pages = PROJECT_PAGES.iter().filter(|p| p.1.contains(&section));
+            assert_eq!(pages.count(), 1, "{section}");
+        }
+    }
+
     fn project() -> p::Project {
         serde_json::from_value(serde_json::json!({
             "id": "a", "installationId": 1, "repoId": 1, "owner": "acme", "name": "api",
@@ -1486,10 +1763,9 @@ mod tests {
             .iter()
             .position(|f| f.path == "git.branch_prefix")
             .unwrap();
-        form.update(cx, |f, cx| f.show_tab(TAB_PROJECT, cx));
+        form.update(cx, |f, cx| f.show_project_page(0, cx));
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            assert_eq!(window.find("git-branch_prefix-set").checked(), Some(true));
             for id in [
                 "agent-models-claude-set",
                 "agent-models-codex-set",
@@ -1499,15 +1775,23 @@ mod tests {
             ] {
                 assert_eq!(window.find(id).checked(), Some(false), "{id}");
             }
-            window.scroll(
-                "agent-default-set",
-                gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-400.))),
-                cx,
-            );
+            assert!(window.try_find("git-branch_prefix-set").is_none());
+        })
+        .unwrap();
+        form.update(cx, |f, cx| f.show_project_page(3, cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(window.find("git-branch_prefix-set").checked(), Some(true));
+        })
+        .unwrap();
+        form.update(cx, |f, cx| f.show_project_page(2, cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
             window.click("environment-sleep_after_idle_minutes-set", cx);
         })
         .unwrap();
         cx.run_until_parked();
+        form.update(cx, |f, cx| f.show_project_page(0, cx));
         cx.update_window(handle, |_, window, cx| {
             form.update(cx, |f, cx| {
                 assert!(f.fields[sleep].set);
@@ -1525,6 +1809,7 @@ mod tests {
                     Some("Use a whole number from 5 to 240.")
                 );
                 assert_eq!(f.problem.as_deref(), Some("Check the highlighted fields."));
+                assert_eq!(PROJECT_PAGES[f.section].0, "Environment");
                 let Editor::Line(input) = &f.fields[sleep].editor else {
                     unreachable!()
                 };
@@ -1540,6 +1825,38 @@ mod tests {
                 );
                 assert_ne!(f.form(cx), f.initial);
             });
+        })
+        .unwrap();
+    }
+
+    #[gpui_kit::test]
+    fn codex_login_offers_device_code_with_auth_json_fallback(cx: &mut gpui_kit::TestAppContext) {
+        use gpui_kit::test::TestWindowExt as _;
+        cx.background_executor.allow_parking();
+        let (handle, _) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_global(crate::storage::Local::load(None));
+            let runtime = crate::client::ClientRuntime::start().unwrap();
+            let state = cx.new(|cx| crate::app::AppState::new(runtime, cx));
+            crate::app::set_global_for_test(state, cx);
+            gpui_kit::open_window(Default::default(), cx, |window, cx| {
+                cx.new(|cx| SettingsForm::new(window, cx))
+            })
+            .unwrap()
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("codex-connect").is_some());
+            assert!(window.try_find("save-Claude").is_some());
+            assert!(window.try_find("codex-auth-json").is_none());
+            window.click("codex-upload-toggle", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("codex-auth-json").is_some());
+            assert!(window.try_find("upload-codex-auth").is_some());
         })
         .unwrap();
     }

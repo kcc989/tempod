@@ -252,6 +252,18 @@ export const setCodexAuth = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setCodexAuth">) => data)
   .handler(({ data }) => run("setCodexAuth", data));
 
+export const startCodexLogin = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"startCodexLogin">) => data)
+  .handler(({ data }) => run("startCodexLogin", data));
+
+export const pollCodexLogin = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"pollCodexLogin">) => data)
+  .handler(({ data }) => run("pollCodexLogin", data));
+
+export const cancelCodexLogin = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"cancelCodexLogin">) => data)
+  .handler(({ data }) => run("cancelCodexLogin", data));
+
 export const setApiKey = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setApiKey">) => data)
   .handler(({ data }) => run("setApiKey", data));

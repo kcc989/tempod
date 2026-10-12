@@ -2686,11 +2686,11 @@ impl Render for WorkspaceView {
                                 .border_t_1()
                                 .border_color(color(Token::Border, cx))
                                 .child(div().flex_1().min_w_0().child(text))
-                                .child(Button::new("add-login").label("Add login").on_click(
-                                    |_, window, cx| {
-                                        window.dispatch_action(Box::new(OpenSettings), cx)
-                                    },
-                                ))
+                                .child(
+                                    Button::new("add-login")
+                                        .label("Add login")
+                                        .on_click(|_, _, cx| super::settings::open_logins(cx)),
+                                )
                         }))
                         .children(plan.map(|(done, total)| {
                             let label = format!("Plan {done}/{total}");

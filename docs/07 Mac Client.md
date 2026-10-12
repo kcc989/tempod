@@ -43,7 +43,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Previews | Different | Open in the default browser; no Browser tab |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
-| Settings: Logins, Project, Appearance, Notifications, Shortcuts | Same | Notifications are macOS notifications |
+| Settings: General, Logins, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |
@@ -101,7 +101,7 @@ The Worker gets a small JSON API, bearer-token sign-in and a download route. The
 | Bearer and device plugins | 05, Authentication | Better Auth `bearer()` and `deviceAuthorization()`; `/api/v1` accepts only bearer tokens |
 | WebSocket auth | 02, Hub and terminal channels | Upgrades also accept `Authorization: Bearer` with no `Origin` header |
 | `/device` page | 04, Dialogs | Where the owner approves a Mac sign-in |
-| Settings: Devices | 04, Dialogs | Lists sign-in sessions, with Revoke |
+| Settings: Devices | 04, Settings | Lists sign-in sessions, with Revoke |
 | Mac downloads | 02, R2 layout | `clients/mac/` in R2, served at `GET /downloads/mac/<version>`, owner only |
 | Shared types | 06, Repo layout | `bun run protocol:gen` writes the JSON Schema and the Rust types |
 
@@ -162,7 +162,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Dialogs | `Dialog`, `AlertDialog`, `Form`, `Input`, `Select`, `Checkbox` |
 | Command palette | `Command` |
 | Toasts | `Notification` |
-| Settings | `Settings`, in its own window |
+| Settings | Its own window with left sidebar navigation for Personal and Project sections, matching 04 |
 | Loading | `Skeleton`, `Spinner` |
 | Shortcut hints | `Kbd` |
 

@@ -180,7 +180,7 @@ All four agents speak ACP v1 to `tempod`. Claude Code and Codex use your subscri
 | Agent | ACP adapter | Login | Billed to |
 | --- | --- | --- | --- |
 | Claude Code | `@agentclientprotocol/claude-agent-acp` (Claude Agent SDK, runs the native `claude` binary) | Token from `claude setup-token`, pasted once into Tempo | Your Claude Pro or Max plan |
-| Codex | `@agentclientprotocol/codex-acp` (runs the Codex app server) | `~/.codex/auth.json` from `codex login`, uploaded once | Your ChatGPT plan |
+| Codex | `@agentclientprotocol/codex-acp` (runs the Codex app server) | Device-code sign-in from Settings, or `~/.codex/auth.json` from `codex login`, uploaded once | Your ChatGPT plan |
 | OpenCode | `opencode acp` | OpenRouter API key, added by `TempoOutbound` | OpenRouter usage |
 | Pi | `pi-acp`, which runs `pi --mode rpc` | OpenRouter API key, added by `TempoOutbound` | OpenRouter usage |
 
@@ -266,7 +266,7 @@ The biggest risk is that the container platform is new: Sandbox SDK 1.0 shipped 
 | R2 | Alchemy v2 may not support `scheduling_policy: "durable_object"` or `exports` | Deploy blocked | If S1 finds a gap, deploy with wrangler and keep Alchemy for the rest | S1 |
 | R3 | Model streams and WebSockets through `TempoOutbound` | Agent calls break or time out | Test each agent through the proxy before phase 1 | S2, S3, S4 |
 | R4 | Claude and Codex credentials live inside the container | A hostile repo or prompt could leak them | One trusted user; egress log; later, test a placeholder token that `TempoOutbound` swaps for the real one | S3 |
-| R5 | Codex token refreshes from parallel containers can race | One refresh can break another container's login | CredentialDO keeps the newest `auth.json` and pushes it to every running container; auth errors ask the user to upload again | S4 |
+| R5 | Codex token refreshes from parallel containers can race | One refresh can break another container's login | CredentialDO keeps the newest `auth.json` and pushes it to every running container; auth errors ask the user to reconnect in Settings | S4 |
 | R6 | ACP adapters are young: `claude-agent-acp` 0.89.1, community `pi-acp` 0.0.34 | Breaking changes | Pin versions; adapter conformance tests in CI; Pi fallback is a Tempo adapter over `pi --mode rpc` | S3, S9 |
 | R7 | Anthropic or OpenAI change subscription rules | Login stops working | Every agent also accepts an API key | — |
 | R8 | Memory is billed on provisioned size | Monthly cost | Sleep after 15 idle minutes; instance size per project | S7 |

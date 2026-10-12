@@ -121,11 +121,11 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | DO migration `0004_drop_unused_statuses` | SQLite cannot change a CHECK, so `sessions`, `turns` and `review_comments` are rebuilt (new table, copy, drop, rename, `turns_by_status` again). `turns` is rebuilt because DO SQLite enforces foreign keys and `sessions` cannot be dropped while `turns` refers to it. A stored `broken` becomes `closed` and `resolved` becomes `sent`, so old rows cannot fail the new CHECK; no code ever wrote either value. |
 | Diagnostics egress filters | Both clients trim the host text and leave out an empty host and `all`. The count reads `<n> shown`, because the server returns only the matches. The web keeps the last rows on screen while a filtered request runs. |
 | PR link | Only the desktop top bar shows `#<number> ↗`; the phone bar stays `branch → base`. |
-
 | Browser Run idle check | The 60 s idle rule reads `connectionId`, `connectionStartTime` and `connectionEndTime` from `env.BROWSER.getSession`: connected means a `connectionId` and no `connectionEndTime` after the latest `connectionStartTime`. Spike S17 must confirm these fields. |
 | Browser Run Live View with no page | `getBrowserLiveView` fails with `INTERNAL` ("The browser has no page yet.") if the session lists no `page` target. A new Browser Run session starts with an `about:blank` page, so this should not happen. |
 | Live View tab | It calls `getBrowserLiveView` each time it mounts: on open, on Reload, and when the user switches back to it. It does not reload by itself when `browserActive` turns true again. On the Mac a null result shows an info toast `Browser session ended.` |
 | Browser Run binding absent | Local dev and tests have no `BROWSER` binding; Browser Run is then off, as if `browser.run` were false. |
+| Settings project pages | 04 lists the pages but not where `browser.run` goes. Both clients show the default agent, `agent.models` and Browser Run on the project's Agents page. |
 
 ## Spec ambiguities found by the tests
 
@@ -152,7 +152,7 @@ The test agents found these. The code makes the choice shown; none contradicts a
 | --- | --- |
 | Tempo for Mac (07, Rust on GPUI Kit) | In scope (the owner approved it on 2026-10-11). Built after the server side of M0 in its own build loop: `crates/tempo-protocol`, `crates/tempo-client`, `crates/tempo-terminal`, `crates/protocol-gen`, `apps/mac`. The build machine runs Linux, so macOS-only parts (Keychain, notifications, Dock badge, URL scheme, signing, notarization) sit behind `cfg(target_os = "macos")` and cannot be run here; everything else compiles and is tested here. Rust is pinned to 1.97.0 in `rust-toolchain.toml`. |
 | Spikes S1 to S17 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
-| Acceptance tests AT-1 to AT-37 | Not run, for the same reason. `tests/e2e` holds the plan. |
+| Acceptance tests AT-1 to AT-40 | Not run, for the same reason. `tests/e2e` holds the plan. |
 | Adapter conformance tests | `tests/conformance` holds the plan; they run inside the image. |
 | tempod tests in the image | Rule 14 says tempod tests run inside the container image. The build machine has no Docker, so `packages/tempod` tests run on the host; they need only the image's tools (git, rg, tmux, bash, coreutils). |
 | Browser checks of the web UI | 04 asks for every shortcut to be tested in Chrome, Safari and Firefox on macOS. There is no browser on the build machine. |

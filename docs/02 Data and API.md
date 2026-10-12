@@ -376,6 +376,9 @@ One more CredentialDO instance is named `system`. It holds the GitHub App config
 | `offerCodexAuth(content, lastRefresh, fromWorkspaceId)` | `{accepted, version}` |
 | `getCodexAuth()` | `{content, version, lastRefresh}` or `null`. WorkspaceDO only. |
 | `getGithubAppConfig()` | `{appId, slug, privateKey, clientId, clientSecret}` or `null`. On the `system` instance only. Only the Worker's `auth/` and `github/` modules call it. |
+| `startCodexLogin()` | `Result<{loginId, verificationUrl, userCode, expiresAt, intervalMs}>`; one active in-memory attempt per owner |
+| `pollCodexLogin(loginId)` | `Result<{status: "pending" \| "connected" \| "expired"}>`; tokens stay inside CredentialDO |
+| `cancelCodexLogin(loginId)` | `void`; idempotent and scoped to the matching attempt |
 | `addCodexLease(workspaceId)`, `dropCodexLease(workspaceId)` | `void` |
 
 **UserHubDO** (one per user)
@@ -465,7 +468,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, policy, allowlist}` for `TempoOutbound`), `logEgress(row)`, `pushCodexAuth(content, version)`.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, policy, allowlist}` for `TempoOutbound`), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
 
 **Projects and GitHub**
 
@@ -558,6 +561,9 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `getCredentialStatus` | `{}` | `{claude, codex, openrouter, anthropic, openai}`, each `{set, updatedAt}`; `codex` adds `lastRefresh` | — |
 | `setClaudeToken` | `{token}`: no spaces, 20 to 4096 chars | `{}` | `VALIDATION_FAILED` |
 | `setCodexAuth` | `{authJson}`: MUST parse and contain `tokens.access_token`, `tokens.refresh_token`, `last_refresh` | `{}` | `VALIDATION_FAILED` |
+| `startCodexLogin` | `{}` | `{loginId, verificationUrl, userCode, expiresAt, intervalMs}` | `CREDENTIAL_INVALID` |
+| `pollCodexLogin` | `{loginId}` | `{status: "pending" \| "connected" \| "expired"}` | `CREDENTIAL_INVALID` |
+| `cancelCodexLogin` | `{loginId}` | `{}` | — |
 | `setApiKey` | `{provider: "openrouter" or "anthropic" or "openai", key}` | `{}` | `VALIDATION_FAILED` |
 | `deleteCredential` | `{key}` | `{}` | — |
 | `setProjectSecret` | `{projectId, name, value}`; `name` matches `^[A-Z_][A-Z0-9_]*$` | `{}` | `VALIDATION_FAILED` |
