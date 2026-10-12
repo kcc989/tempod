@@ -219,3 +219,8 @@ The managed credential proxy accepted a small authenticated Worker upload but re
 
 
 The web-only first-run message now directs the owner to the private setup link instead of obsolete printed output. Per 07's feature table, GitHub App first-run setup is web-only; the native client connects after this step and needs no corresponding setup flow.
+
+
+## GitHub App private-email sign-in
+
+An owner sign-in returned `email_not_found` after OAuth. The configured App exists and sign-in initiation returns 200, but the owner has no public GitHub email. Better Auth 1.7.7 reads `/user/emails` and requires an email for its callback; the original manifest omitted the GitHub App account permission needed by that endpoint. The manifest and 05 now request `email_addresses: read`, covered by the manifest-form Worker regression. Existing Apps need the same permission enabled in GitHub settings and renewed user consent if prompted. No identity fallback, synthetic email, public-email requirement, owner-check change or credential rotation was added.

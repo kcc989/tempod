@@ -114,10 +114,12 @@ On TLS-proxied deployment runners, `TEMPO_BUILD_CA` supplies the temporary Build
 **GitHub App setup** (manifest flow)
 
 1. The setup page posts a manifest to `https://github.com/settings/apps/new` (or the org's `.../organizations/<org>/settings/apps/new`).
-2. Manifest: `name` = `Tempo (<APP_HOST>)`, `url` = `https://<APP_HOST>`, `callback_urls` = `["https://<APP_HOST>/api/auth/callback/github"]`, `redirect_url` = `https://<APP_HOST>/setup/github/callback`, `setup_url` = `https://<APP_HOST>/setup/github/installed`, `public: false`, `hook_attributes: {active: false}`, `default_permissions`: `contents: write`, `pull_requests: write`, `metadata: read`, `checks: read`, `actions: read`, `issues: read`.
+2. Manifest: `name` = `Tempo (<APP_HOST>)`, `url` = `https://<APP_HOST>`, `callback_urls` = `["https://<APP_HOST>/api/auth/callback/github"]`, `redirect_url` = `https://<APP_HOST>/setup/github/callback`, `setup_url` = `https://<APP_HOST>/setup/github/installed`, `public: false`, `hook_attributes: {active: false}`, `default_permissions`: `email_addresses: read` (account permission required for private-email sign-in), `contents: write`, `pull_requests: write`, `metadata: read`, `checks: read`, `actions: read`, `issues: read`.
 3. The callback exchanges the code with `POST https://api.github.com/app-manifests/<code>/conversions` and stores the id, slug, PEM, client id and client secret in the `system` CredentialDO.
 4. The page then links to `https://github.com/apps/<slug>/installations/new`.
 5. After install, GitHub redirects to `setup_url` with `installation_id`. Tempo stores it once the owner signs in. The Add project dialog also syncs installations with GET /app/installations (app JWT) before it lists repos, so installs on more accounts appear without this redirect.
+
+Existing Apps created without `email_addresses: read` must enable **Permissions & events → Account permissions → Email addresses → Read-only** in GitHub App settings. Save the change and sign in again, accepting updated authorization if GitHub prompts. Better Auth requires an email address; OAuth scopes do not grant GitHub App account permissions. Do not make the owner’s email public or synthesize an email to work around this.
 
 The GitHub App config is read from the `system` CredentialDO with getGithubAppConfig() and cached in isolate memory for 5 minutes.
 

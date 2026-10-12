@@ -61,3 +61,8 @@ The Wrangler command runs on every deployment (`memo: false`), including identic
 
 
 The deployment invokes the pinned Vite Oxc minifier and excludes browser-only syntax grammars from SSR. This keeps the Worker upload small enough for the managed credential proxy while preserving browser highlighting. Registry references use the pushed managed-registry manifest digest, as required for named container images. Do not substitute a mutable tag.
+
+
+## GitHub sign-in with a private email
+
+The manifest requests the account permission `email_addresses: read`. GitHub App user tokens require that permission to read `/user/emails`; requesting OAuth scope `user:email` alone does not grant it. Existing Apps created before this fix must enable **Permissions & events → Account permissions → Email addresses → Read-only**, save, and retry sign-in. Approve updated authorization if prompted. `email_not_found` indicates Better Auth could not obtain the required email. Preserve the existing App and deployment secrets.
