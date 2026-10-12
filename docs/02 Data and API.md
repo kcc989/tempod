@@ -240,7 +240,8 @@ CREATE TABLE items (
   session_id    TEXT NOT NULL,
   turn_id       TEXT,
   kind          TEXT NOT NULL CHECK (kind IN ('user_message','agent_message','agent_thought','tool_call',
-                                             'plan','permission','notice','handoff','revert_marker','error')),
+                                             'plan','permission','notice','handoff','revert_marker','error',
+                                             'artifact')),
   status        TEXT NOT NULL CHECK (status IN ('streaming','pending','in_progress','completed','failed','cancelled')),
   content_json  TEXT NOT NULL,
   rev           INTEGER NOT NULL,           -- workspace.items_rev at the last change
@@ -351,6 +352,37 @@ CREATE TABLE preview_codes (
   code_hash   TEXT PRIMARY KEY,        -- SHA-256 of the code, hex
   port        INTEGER NOT NULL,
   expires_at  INTEGER NOT NULL
+);
+
+-- One row per published artifact version (01, Artifacts).
+CREATE TABLE artifacts (
+  id           TEXT NOT NULL,              -- artifact id, made by tempod; the same for every version
+  version      INTEGER NOT NULL,           -- 1, 2, 3 … per artifact
+  session_id   TEXT NOT NULL,
+  turn_id      TEXT,
+  item_id      TEXT NOT NULL,              -- the artifact item of this version
+  path         TEXT NOT NULL,              -- resolved path in the container when published
+  name         TEXT NOT NULL,              -- file base name
+  title        TEXT NOT NULL,
+  summary      TEXT,
+  mime         TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('image','markdown','pdf','html','text')),
+  size_bytes   INTEGER NOT NULL,
+  sha256       TEXT NOT NULL,              -- hex
+  staged_path  TEXT NOT NULL,
+  status       TEXT NOT NULL CHECK (status IN ('uploading','ready','lost')),
+  attempt      INTEGER NOT NULL DEFAULT 0,
+  r2_key       TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (id, version)
+);
+
+-- One-time artifact entry codes (05, Artifact access). A row is deleted when used or after 60 s.
+CREATE TABLE artifact_codes (
+  code_hash    TEXT PRIMARY KEY,           -- SHA-256 of the code, hex
+  artifact_id  TEXT NOT NULL,
+  version      INTEGER NOT NULL,
+  expires_at   INTEGER NOT NULL
 );
 
 -- Newest 10,000 rows only.
@@ -464,9 +496,10 @@ One bucket, `tempo-data`, binding `DATA`. Keys are exact.
 | `homes/<workspaceId>/<recordId>.tar.zst` | `DirectoryBackup` of `/home/tempo` | `DirectoryBackup` | Newest 3 per workspace |
 | `attachments/<workspaceId>/<attachmentId>/<file name>` | Files the user attached to a prompt | Worker | Until the workspace is deleted |
 | `logs/<workspaceId>/<runId>.log` | Full script log, at most 50 MiB | WorkspaceDO | 30 days |
+| `artifacts/<workspaceId>/<artifactId>/<version>/<name>` | One published artifact version, at most 25 MiB (01, Artifacts) | WorkspaceDO | Until the workspace is deleted |
 
 - The daily `housekeeping` op in each WorkspaceDO applies these limits.
-- Deleting a workspace deletes every key under its id, in all four prefixes.
+- Deleting a workspace deletes every key under its id, in all five prefixes.
 
 ## Item model
 
@@ -486,6 +519,7 @@ The transcript is a list of items. `tempod` turns ACP updates into items; the Wo
 | `handoff` | `{text}`, the exact handoff block that was sent |
 | `revert_marker` | `{checkpointId, toTurnSeq}` |
 | `error` | `{code, detail}` |
+| `artifact` | `{artifactId, version, title, summary?, name, path, mime, artifactKind, size}`. `artifactKind` is the `kind` from 01, Allowed files. |
 
 `toolKind`, `ToolCallContent` (`content`, `diff`, `terminal`) and `ContentBlock` are the ACP v1 types, copied as is.
 
@@ -512,6 +546,7 @@ The transcript is a list of items. `tempod` turns ACP updates into items; the Wo
 - `agent_message` and `agent_thought` are `streaming` until the next item starts or the turn ends, then `completed`.
 - `tool_call` status copies the ACP status: `pending`, `in_progress`, `completed`, `failed`.
 - When a turn ends as `cancelled`, `failed` or `interrupted`, every open item in it becomes `cancelled`.
+- The WorkspaceDO makes `artifact` items itself (01, Artifacts). Their status follows the upload, not the turn: `pending` while `uploading`, `completed` when `ready`, `failed` when `lost`. A turn end does not change it.
 
 **Capabilities `tempod` advertises:** `fs.readTextFile`, `fs.writeTextFile`, `session.notices`. It MUST NOT advertise `terminal`, `elicitation` or `session.compaction` in version 1.
 
@@ -527,7 +562,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`, `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, version, code)`, `artifactFetch(request, artifactId, cookie)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`, `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
 
 **Projects and GitHub**
 
@@ -629,6 +664,21 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `rerunSetup` | `{workspaceId}` | `ScriptRun` | `WORKSPACE_BUSY` |
 | `continueAfterSetupFailure` | `{workspaceId}` | `{}` | — |
 | `listTerminals` | `{workspaceId}` | `[{terminalId}]` | — |
+| `readFileAt` | `{workspaceId, path, sha}`; `sha` is `baseSha` or `headSha` from `getChanges` | `{content, encoding: "utf8" or "base64", size}`: the file as it is in that commit | `FILE_TOO_LARGE` (over 1 MiB), `NOT_FOUND` (not in that commit) |
+
+**Artifacts** (01, Artifacts). These read only the DO and R2. They work while the workspace sleeps and after it is archived, and they never wake it.
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `listArtifacts` | `{workspaceId}` | `Artifact[]`: every version, newest first | — |
+| `openArtifact` | `{workspaceId, artifactId, version}` | `{url}`: a one-time entry link to the artifact host (05, Artifact access) | `NOT_FOUND`, `ARTIFACT_NOT_READY` |
+
+The artifact route is a plain route, like the attachment route: `GET /api/workspaces/<workspaceId>/artifacts/<artifactId>/<version>`. It returns the bytes of one version from R2, after the same cookie or bearer owner and workspace checks.
+
+- Unknown workspaces, artifacts and versions, versions with status `lost`, and missing objects return `NOT_FOUND`. A version still `uploading` returns `ARTIFACT_NOT_READY`.
+- Kinds `image`, `markdown` and `text` use their stored `mime` and inline disposition. Kinds `html` and `pdf` use `application/octet-stream` and attachment disposition: they render only from the artifact host.
+- Responses use `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff` and the CSP `default-src 'none'; style-src 'unsafe-inline'; sandbox`, as the attachment route.
+- `?download=1` gives every kind attachment disposition with the file `name`.
 
 **Credentials**
 
@@ -656,7 +706,7 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 
 `McpServerInput` is `{id?, name, enabled, transport, command?, args?, env?, url?, headers?}`. Each header is `{name, secret, value?}`. Validation, else `VALIDATION_FAILED`:
 
-- `name` matches `^[a-z0-9][a-z0-9_-]{0,31}$`, is not `playwright`, and is unique for the user. At most 20 servers per user.
+- `name` matches `^[a-z0-9][a-z0-9_-]{0,31}$`, is not `playwright` or `tempo`, and is unique for the user. At most 20 servers per user.
 - `stdio` needs `command` (1 to 1024 chars) and has no `url` or `headers`. At most 32 `args` and 32 `env` entries; env names match `^[A-Z_][A-Z0-9_]*$`.
 - `http` and `sse` need an absolute `https:` `url` (at most 2048 chars) and have no `command`, `args` or `env`. At most 16 headers; names match `^[A-Za-z0-9-]{1,64}$`, are unique without regard to case, and are not `host`, `content-length`, `connection` or `transfer-encoding`.
 - A header with `secret: false` needs `value`. A header with `secret: true` and a `value` stores that value in CredentialDO. Without `value`, it keeps the stored value; if none is stored, the call fails.
@@ -686,6 +736,7 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | `PermissionRequest` | `requestId, sessionId, turnId, itemId, title, options: [{optionId, name, kind}]` |
 | `McpServer` | `id, name, enabled, transport, command, args, env: [{name, value}], url, headers: [{name, secret, value}], createdAt, updatedAt`. A secret header has `value: null` and `set` (boolean); secret values are never returned. |
 | `OpProgress` | `kind, status, step, steps: [{name, status, ms}]`. `WorkspaceDetail.op` is the running op, else the next pending op, else `null`. |
+| `Artifact` | `id, version, sessionId, turnId, itemId, path, name, title, summary, mime, kind, size, sha256, status, createdAt` |
 
 **Workspace channel.** `GET /api/ws/workspace/<workspaceId>?sinceRev=<n>`, upgraded to a WebSocket and handed to the WorkspaceDO. `sinceRev` is the highest item `rev` the client has; `0` on first load.
 
@@ -786,6 +837,8 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `git.revert` | `{checkpointId}` | `{headSha}` | 2 min |
 | `git.commitAndPush` | `{message, branch, forceWithLeaseSha?}` | `{commitSha}` | 5 min |
 | `git.renameBranch` | `{from, to}` | `{}` | 30 s |
+| `git.readFile` | `{sha, path, maxBytes}` | `{content, encoding, size}`: `git show <sha>:<path>` | 10 s |
+| `artifact.release` | `{artifactId, version}` | `{}`, after it deletes the staged copy; also when it is already gone | 10 s |
 | `fs.list` | `{}` | `{paths}` | 30 s |
 | `fs.read` | `{path, maxBytes}` | `{content, encoding, size}` | 10 s |
 | `fs.search` | `{query, regex, maxResults}` | `{matches}` | 30 s |
@@ -808,6 +861,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `script.exited` | `runId, exitCode, signal, timedOut` |
 | `git.changed` | `files, additions, deletions` |
 | `ports.changed` | `ports` |
+| `artifact.published` | `sessionId, turnId, artifactId, version, path, name, title, summary?, mime, kind, size, sha256, stagedPath` (01, Artifacts) |
 | `settings.changed` | `effective, warnings, errors` |
 | `credential.changed` | `provider, content, lastRefresh` |
 | `credential.invalid` | `provider` |
@@ -866,6 +920,7 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `FILE_TOO_LARGE` | File over the read limit | This file is too large to show. |
 | `PATH_OUTSIDE_WORKSPACE` | Path escapes the allowed folders | That path is outside the workspace. |
 | `CHECKPOINT_NOT_FOUND` | No such checkpoint | That checkpoint no longer exists. |
+| `ARTIFACT_NOT_READY` | The artifact version is still uploading | This artifact is still being saved. Try again in a moment. |
 | `MODEL_REQUIRED` | An OpenCode or Pi session starts while `agent.models.<agent>` is empty | Set a default model for this agent in Settings → Project. |
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `ENVIRONMENT_EXISTS` | Another environment has that name | An environment with this name already exists. |

@@ -39,6 +39,19 @@ The owner answered Q-4 to Q-10. The spec now says:
 | Q-9 Egress rows | Store 10,000; Diagnostics shows the newest 500 matches, filtered on the server. | 02 `getDiagnostics`, 05 |
 | Q-10 Previews | Owner-only: no secret in the hostname; a one-time link from `openPreview` sets a `__Host-tempo_preview` cookie. Protected Quick Tunnels were rejected: containers can reach only ports 80 and 443 through `TempoOutbound`, and the tunnel needs port 7844. | 01, 02, 03, 04, 05, 06, 07 |
 
+## Artifacts (owner decisions 2026-10-12)
+
+The owner asked for agent artifacts: images, documents, HTML and mini apps, to understand plans and review PRs. Spec only; no code yet. It is phase 5 with gate F and spike S18.
+
+| Question | Decision | Spec |
+| --- | --- | --- |
+| How agents publish | An MCP tool, `publish_artifact`, added to the `tempo` MCP server of Environments (`tempod mcp`) | 01 Artifacts |
+| Where artifacts live | R2, every version, until the workspace is deleted; readable while sleeping and archived | 01, 02 R2 layout, 03 |
+| Network for HTML | None: offline only, enforced by CSP on a separate host per artifact | 05 Artifact access |
+| New libraries | Approved: `mermaid` 12.1.0 (web), `resvg` 0.48.1 (Mac). No MCP SDK: the `tempo` server stays a hand-written loop, as Environments made it. | 04, 07 |
+
+The owner also confirmed these choices: a 25 MiB limit per version; no version pruning; the allowed file types in 01; one self-contained HTML file per artifact (no folders); the Mac app shows Mermaid as code and opens HTML and PDF in the browser.
+
 ## Named environments (2026-10-12)
 
 The owner asked for reusable named environments, proxied secrets, Dynamic Worker injectors, a workspace override, and agent-assisted setup. 01 (Environments; Credentials and egress), 02, 04, 05 and 07 are updated in the same change. Choices the request left open:

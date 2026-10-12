@@ -41,6 +41,8 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Checks | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
 | Previews | Different | Open in the default browser; no Browser tab |
+| Artifact cards, Artifacts tab, Artifact tab | Different | Images, Markdown and text show in the app. HTML and PDF artifacts open in the default browser through `openArtifact`. Mermaid blocks show as code (Artifacts, below). |
+| Image and Markdown file tabs, image diffs, plan proposals | Same | Mermaid blocks show as code |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
 | Environment… dialog and environment proposal review | Same |  |
@@ -223,6 +225,14 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. There is no in-app Browser tab in this version (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` calls `getBrowserLiveView` and opens the URL in the default browser. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
 
+**Artifacts** (phase 5, 04 Artifacts tab and Artifact tab)
+
+- Artifact cards, the Artifacts tab and the Artifact tab follow 04, with the same copy.
+- Image and Markdown bytes come from the artifact route (02) through `tempo-client` with the bearer token. Images are drawn from those bytes, not through an `ImageCache` URI, so the remote-image rule still holds. SVG is rasterized with `resvg = "=0.48.1"` on the background executor; it never runs script.
+- Markdown renders with `TextView::markdown`, as the transcript. GPUI has no Mermaid renderer, so a `mermaid` block shows as a code block.
+- `pdf` and `html`: the Artifact tab shows the card details and `Open in browser`, which calls `openArtifact` and opens the link in the default browser (C7). No in-app web view.
+- File tabs and the Diff tab show images and Markdown previews as 04, with the same rules.
+
 ## macOS integration
 
 **Menus.** Set with GPUI's app menus. Every item is a GPUI action, so the menu item, the command palette entry and the shortcut run one handler.
@@ -326,6 +336,7 @@ Phase 4 starts after gate D passes. Server changes come first, so the web UI nev
 | M3 Review | Changes, diff, comments, files, checks, commit and push, PR, merge, archive | AT-29 and AT-30 pass |
 | M4 Processes | Setup, Run, terminal, previews, Diagnostics, Settings | AT-31 passes |
 | M5 Native and ship | Menus, shortcuts, notifications, Dock badge, URL scheme, `mac:release`, update check | AT-32 to AT-37 pass |
+| M6 Artifacts (phase 5) | Artifact cards and tabs, image and Markdown file tabs, image diffs, plan proposals | AT-47 passes, with the web UI's gate F |
 
 **Spikes.** Same rules as 06: throwaway code, results in `spikes/S<n>.md`, and the spec changes before M1 if a result differs. They run before M0 ends.
 
