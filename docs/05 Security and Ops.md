@@ -65,6 +65,7 @@ A container has no internet of its own. Every HTTP and HTTPS request goes throug
 - Containers start with `enableInternet: false`. Only ports 80 and 443 can leave, and only through the intercepts.
 - Git over SSH does not work. Repos use HTTPS only.
 - **Rule 0**, before the rules in 01: a request whose host is `APP_HOST` returns 403. Containers MUST NOT call the Tempo API.
+- Egress settings come only from Tempo. `egress_policy` and `egress_allowlist` in `.tempo/settings.toml`, `.conductor/settings.toml` or `conductor.json` are ignored with a warning, because the agent can write those files.
 - Policy `open`: every host passes, with credentials added only by rules 2 to 6.
 - Policy `allowlist` (default): only the built-in agent hosts (01) and the project's `egress_allowlist` patterns pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
 - Every request is logged to `egress_log`: host, path without query, status, time, rule number. The owner sees the newest 10,000 rows in Diagnostics.

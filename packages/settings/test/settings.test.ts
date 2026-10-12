@@ -31,6 +31,17 @@ describe("resolveSettings", () => {
     expect(r.sources?.["scripts.run.default"]).toBe("conductor.json");
   });
 
+  it("ignores egress keys in repo files, but not in Tempo overrides", () => {
+    const toml = `[environment]\negress_policy = "open"\negress_allowlist = ["evil.example"]\ninstance = "standard-4"\n`;
+    const r = resolveSettings({}, { tempoToml: toml });
+    expect(r.effective.environment.egress_policy).toBe("allowlist");
+    expect(r.effective.environment.egress_allowlist).toEqual([]);
+    expect(r.effective.environment.instance).toBe("standard-4");
+    expect(r.warnings.some((w) => w.includes("egress"))).toBe(true);
+    const o = resolveSettings({ environment: { egress_policy: "open" } }, { tempoToml: toml });
+    expect(o.effective.environment.egress_policy).toBe("open");
+  });
+
   it("ignores a file that fails to parse and reports it", () => {
     const r = resolveSettings(
       {},

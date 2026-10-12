@@ -587,8 +587,8 @@ default = true
 [environment]
 instance = "standard-3"         # standard-2 | standard-3 | standard-4
 sleep_after_idle_minutes = 15   # 5 to 240
-egress_policy = "allowlist"     # open | allowlist
-egress_allowlist = []           # host patterns; "*.example.com" is allowed
+egress_policy = "allowlist"     # open | allowlist; Tempo UI only, ignored in repo files
+egress_allowlist = []           # host patterns; "*.example.com" is allowed; Tempo UI only
 
 [environment_variables]
 NODE_ENV = "development"

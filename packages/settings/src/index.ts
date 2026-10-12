@@ -260,6 +260,15 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
 
 const decodeSettings = Schema.decodeUnknownExit(Settings);
 
+/** Repo files are writable by the agent, so they never set egress (05, Egress control). */
+const withoutEgress = (source: SettingsSource, layer: SettingsLayer, warnings: string[]): SettingsLayer => {
+  const e = layer.environment;
+  if (!e || (e.egress_policy === undefined && e.egress_allowlist === undefined)) return layer;
+  warnings.push(`${source}: egress settings in repo files are ignored; set them in Tempo`);
+  const { egress_policy: _p, egress_allowlist: _a, ...rest } = e;
+  return { ...layer, environment: rest };
+};
+
 /**
  * Computes effective settings. Precedence, highest first: UI overrides, `.tempo/settings.toml`,
  * `.conductor/settings.toml`, `conductor.json`, defaults.
@@ -273,7 +282,7 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
     const r = read(text);
     warnings.push(...r.warnings);
     errors.push(...r.errors);
-    if (r.layer) layers.push([source, r.layer]);
+    if (r.layer) layers.push([source, withoutEgress(source, r.layer, warnings)]);
   };
   add("conductor.json", files.conductorJson, readConductorJson);
   add(".conductor", files.conductorToml, readConductorToml);
