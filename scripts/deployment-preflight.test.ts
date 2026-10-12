@@ -66,3 +66,21 @@ it("refuses a missing Worker when dedicated remote secrets or local bootstrap su
   await expect(preflightDeployment(env, fake)).rejects.toThrow("do not bootstrap or rotate secrets");
   await expect(preflightDeployment(env, fake, true)).rejects.toThrow("do not replay generated secrets");
 });
+
+it("checks later secret pages before permitting bootstrap", async () => {
+  const paths: string[] = [];
+  const fake = async (url: string | URL | Request) => {
+    const path = String(url);
+    paths.push(path);
+    if (path.endsWith("workers/scripts")) return api([]);
+    if (path.endsWith("secrets_store/stores")) return api([{ id: "store" }]);
+    if (path.endsWith("secrets?page=2")) return api([{ name: "TempoStateStoreToken" }]);
+    return Response.json({
+      success: true,
+      result: [{ name: "foreign" }],
+      result_info: { page: 1, per_page: 1, total_count: 2 },
+    });
+  };
+  await expect(preflightDeployment(env, fake)).rejects.toThrow("do not bootstrap or rotate secrets");
+  expect(paths.some((url) => url.endsWith("secrets?page=2"))).toBe(true);
+});

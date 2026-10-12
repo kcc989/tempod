@@ -151,7 +151,9 @@ fs.writeFileSync(
   { mode: 0o600 },
 );
 try {
-  run("bunx", ["vite", "build"], app, { TEMPO_WRANGLER_CONFIG: "./wrangler.deploy.jsonc" });
+  run("bunx", ["vite", "build", "--minify", "oxc"], app, {
+    TEMPO_WRANGLER_CONFIG: "./wrangler.deploy.jsonc",
+  });
   run("bunx", ["wrangler", "deploy", "--secrets-file", secretsFile], app);
 } finally {
   fs.rmSync(secretsDir, { recursive: true, force: true });
