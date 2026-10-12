@@ -50,7 +50,7 @@ The owner asked for agent artifacts: images, documents, HTML and mini apps, to u
 | Network for HTML | None: offline only, enforced by CSP on a separate host per artifact | 05 Artifact access |
 | New libraries | Approved: `@modelcontextprotocol/sdk` 1.32.1 (tempod), `mermaid` 12.1.0 (web), `resvg` 0.48.1 (Mac) | 01, 04, 07 |
 
-Choices made in the spec that the owner may still change: a 25 MiB limit per version; no version pruning; the allowed file types in 01; one self-contained HTML file per artifact (no folders); the Mac app shows Mermaid as code and opens HTML and PDF in the browser.
+The owner also confirmed these choices: a 25 MiB limit per version; no version pruning; the allowed file types in 01; one self-contained HTML file per artifact (no folders); the Mac app shows Mermaid as code and opens HTML and PDF in the browser.
 
 ## ACP mode contract (resolved 2026-10-11)
 
