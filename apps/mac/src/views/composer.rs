@@ -1,9 +1,9 @@
 //! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 3 to 12 rows, in the
 //! `Composer` key context. Enter sends, ⇧Enter adds a line (the text field's own binding), Esc
 //! stops the turn, ⇧Tab toggles plan mode. Pickers use agent-reported modes and models.
-use super::tokens::{Token, color};
 use super::composer_model::{self, SlashEntry};
 use super::file_picker::{FilePicker, MentionTrigger};
+use super::tokens::{Token, color};
 use crate::actions::{
     DismissComposerChoice, NextComposerChoice, PreviousComposerChoice, Send, StopTurn,
     TogglePlanMode,
@@ -746,14 +746,14 @@ impl Render for Composer {
                             .text_color(color(Token::MutedForeground, cx))
                             .child("⌘L to focus"),
                     )
-            .child(
-                Button::new("attach-file")
-                    .label("+")
-                    .accessibility_label("Attach file")
-                    .tooltip("Attach file (⌘U)")
-                    .disabled(self.read_only || self.uploading || self.sending)
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![])))),
-            )
+                    .child(
+                        Button::new("attach-file")
+                            .label("+")
+                            .accessibility_label("Attach file")
+                            .tooltip("Attach file (⌘U)")
+                            .disabled(self.read_only || self.uploading || self.sending)
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![])))),
+                    )
                     .child(
                         Button::new("send-prompt")
                             .primary()
