@@ -179,6 +179,8 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 
 Behavior follows 04, Center. These rules are for the Mac app only.
 
+Tool calls use a borderless disclosure with indented content. Tool text renders as Markdown; unfenced execute output preserves literal lines in a code block, matching 04.
+
 - **No raw HTML (05).** Render agent text with `TextView::markdown`. MUST NOT render raw HTML. If spike S11 shows that `TextView` renders HTML blocks, escape `<` outside code before the text reaches it.
 - **No remote images (05).** Wrap the transcript in an `ImageCache` whose `load` refuses `http://` and `https://` URIs, and show those images as links. Images from ACP `image` blocks load from their inline data.
 - **Links.** Install `on_link_click`. Open `http` and `https` URLs in the default browser. A `file:///workspace/<path>` link opens a file tab at that path. Ignore every other scheme.
