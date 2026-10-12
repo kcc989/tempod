@@ -9,10 +9,12 @@ import {
   loginState,
 } from "~/ui/components/dialogs/credentials-model";
 import {
-  BLOCK_RULES,
   capabilityList,
+  diagnosticsInput,
+  EGRESS_STATUS_FILTERS,
   egressTone,
-  filterEgress,
+  hasEgressFilter,
+  isBlocked,
   isEgressStatusFilter,
   logTone,
   opTone,
@@ -185,13 +187,21 @@ describe("New workspace", () => {
       {
         agent: "codex" as const,
         currentValue: "same-id",
-        options: [{ value: "same-id", name: "Codex model" }],
+        options: [
+          { value: "same-id", name: "Codex model" },
+          { value: "custom", name: "Configured Codex model" },
+        ],
       },
     ];
-    const configured = { settings: { agent: { default: "codex" as const, model: "custom" } } };
+    const configured = { settings: { agent: { default: "codex" as const, models: { codex: "custom" } } } };
     const choices = modelChoices(["claude", "codex"], reports);
-    expect(new Set(choices.map((choice) => choice.key)).size).toBe(2);
-    expect(initialModel(choices, reports, configured)).toMatchObject({ agent: "codex", model: "same-id" });
+    expect(new Set(choices.map((choice) => choice.key)).size).toBe(3);
+    expect(initialModel(choices, reports, configured)).toMatchObject({ agent: "codex", model: "custom" });
+    expect(
+      initialModel(choices, reports, {
+        settings: { agent: { default: "codex", models: { codex: "unavailable" } } },
+      }),
+    ).toMatchObject({ agent: "codex", model: "same-id" });
     expect(modelChoices(["claude"], reports).map((choice) => choice.agent)).toEqual(["claude"]);
     expect(createInput(project, emptySource(), "codex", "Fix it", "same-id")).toMatchObject({
       agent: "codex",
@@ -221,19 +231,28 @@ describe("Diagnostics", () => {
     { ts: 5, method: "GET", host: "openrouter.ai", path: "/v1", status: 502, ms: 3, rule: 4 },
   ];
 
-  it("filters egress by host and status", () => {
-    expect(filterEgress(egress, "", "all")).toHaveLength(5);
-    expect(filterEgress(egress, "GITHUB", "all").map((r) => r.ts)).toEqual([1]);
-    expect(filterEgress(egress, "", "blocked").map((r) => r.ts)).toEqual([2, 4]);
-    expect(filterEgress(egress, "", "4xx").map((r) => r.ts)).toEqual([2, 3, 4]);
-    expect(filterEgress(egress, "example", "blocked").map((r) => r.ts)).toEqual([2, 4]);
-    expect(filterEgress(egress, "", "5xx").map((r) => r.ts)).toEqual([5]);
+  it("sends the egress filters to getDiagnostics and leaves the defaults out (02)", () => {
+    expect(diagnosticsInput("w1", "", "all")).toEqual({ workspaceId: "w1" });
+    expect(diagnosticsInput("w1", "  GitHub ", "all")).toEqual({ workspaceId: "w1", egressHost: "GitHub" });
+    expect(diagnosticsInput("w1", "", "blocked")).toEqual({ workspaceId: "w1", egressStatus: "blocked" });
+    expect(diagnosticsInput("w1", "npm", "4xx")).toEqual({
+      workspaceId: "w1",
+      egressHost: "npm",
+      egressStatus: "4xx",
+    });
+    expect(hasEgressFilter(" ", "all")).toBe(false);
+    expect(hasEgressFilter("a", "all")).toBe(true);
+    expect(hasEgressFilter("", "5xx")).toBe(true);
+  });
+
+  it("offers exactly the statuses getDiagnostics accepts", () => {
+    expect(EGRESS_STATUS_FILTERS.map((f) => f.value)).toEqual(["all", "blocked", "2xx", "3xx", "4xx", "5xx"]);
     expect(isEgressStatusFilter("2xx")).toBe(true);
     expect(isEgressStatusFilter("1xx")).toBe(false);
   });
 
   it("treats rules 0, 7 and 10 as blocks (01, TempoOutbound)", () => {
-    expect([...BLOCK_RULES].sort((a, b) => a - b)).toEqual([0, 7, 10]);
+    expect(egress.filter(isBlocked).map((r) => r.ts)).toEqual([2, 4]);
     expect(egress.map(egressTone)).toEqual(["ok", "bad", "warn", "bad", "bad"]);
   });
 

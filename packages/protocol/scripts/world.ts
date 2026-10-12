@@ -148,8 +148,8 @@ export const detail = (
   errorDetail: null,
   setupStatus: "succeeded",
   pushed: false,
-  previewToken: "k3j9x2m4q8w7e5r1",
   ports: [],
+  browserActive: false,
   settings,
   runningTurnId: null,
   queue: [],
@@ -159,7 +159,7 @@ export const detail = (
 });
 
 export const lisbonDetail = detail(lisbon, {
-  ports: [{ port: 3000, url: `https://3000-${W1}-k3j9x2m4q8w7e5r1.example-previews.com` }],
+  ports: [{ port: 3000, url: `https://3000-${W1}.example-previews.com` }],
   settingsWarnings: ["Unknown key scripts.watch in .tempo/settings.toml"],
   settingsErrors: [],
   settingsSources: { "agent.default": "tempo", "scripts.setup": ".tempo", "environment.instance": "default" },

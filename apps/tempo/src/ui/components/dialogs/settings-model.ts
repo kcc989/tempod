@@ -55,11 +55,39 @@ export const FIELDS = [
     options: AGENT_IDS.map((a) => ({ value: a, label: AGENT_LABELS[a] })),
   },
   {
-    path: "agent.model",
+    path: "agent.models.claude",
     section: "Agent",
-    label: "Model",
+    label: "Claude default model",
     kind: "text",
-    hint: "The agent's model value. OpenCode and Pi need one.",
+    hint: "The agent's model value. Empty uses the agent's own default.",
+  },
+  {
+    path: "agent.models.codex",
+    section: "Agent",
+    label: "Codex default model",
+    kind: "text",
+    hint: "The agent's model value. Empty uses the agent's own default.",
+  },
+  {
+    path: "agent.models.opencode",
+    section: "Agent",
+    label: "OpenCode default model",
+    kind: "text",
+    hint: "The agent's model value. Required to start an OpenCode chat.",
+  },
+  {
+    path: "agent.models.pi",
+    section: "Agent",
+    label: "Pi default model",
+    kind: "text",
+    hint: "The agent's model value. Required to start a Pi chat.",
+  },
+  {
+    path: "browser.run",
+    section: "Browser",
+    label: "Browser Run",
+    kind: "bool",
+    hint: "Agents use Browser Run, watched in Live View. Ignored under the allowlist egress policy.",
   },
   { path: "scripts.setup", section: "Scripts", label: "Setup script", kind: "multiline" },
   { path: "scripts.run", section: "Scripts", label: "Run scripts", kind: "run" },
@@ -126,6 +154,9 @@ export const FIELDS = [
 export type FieldPath = (typeof FIELDS)[number]["path"];
 
 export const SECTIONS: ReadonlyArray<string> = [...new Set(FIELDS.map((f) => f.section))];
+
+/** The Settings → Project page (04) that shows a section. Browser Run is on Agents. */
+export const sectionPage = (section: string): string => (section === "Browser" ? "Agent" : section);
 
 export interface InstanceEdit {
   readonly preset: (typeof INSTANCE_PRESETS)[number] | "custom";

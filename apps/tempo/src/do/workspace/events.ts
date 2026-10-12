@@ -1,11 +1,13 @@
 import { eq } from "drizzle-orm";
 import {
   ERROR_CODES,
+  toTurnUsage,
   type AgentId,
   type ErrorCode,
   type TempodEvent,
   type TempodEventOf,
 } from "@tempo/protocol";
+import { json } from "../../db/json.ts";
 import { permissions, ports, scriptRuns, turns } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
@@ -52,10 +54,10 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
       const p = event.patch;
       core.updateSession(event.sessionId, {
         ...(p.modeId !== undefined ? { modeId: p.modeId } : {}),
-        ...(p.modes ? { modesJson: JSON.stringify(p.modes) } : {}),
-        ...(p.configOptions ? { configOptionsJson: JSON.stringify(p.configOptions) } : {}),
-        ...(p.commands ? { commandsJson: JSON.stringify(p.commands) } : {}),
-        ...(p.usage ? { usageJson: JSON.stringify(p.usage) } : {}),
+        ...(p.modes ? { modesJson: json.modes.write(p.modes) } : {}),
+        ...(p.configOptions ? { configOptionsJson: json.configOptions.write(p.configOptions) } : {}),
+        ...(p.commands ? { commandsJson: json.commands.write(p.commands) } : {}),
+        ...(p.usage ? { usageJson: json.usage.write(p.usage) } : {}),
         ...(p.title ? { title: p.title } : {}),
       });
       return;
@@ -78,7 +80,7 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
           sessionId: event.sessionId,
           turnId: event.turnId,
           itemId: event.itemId,
-          optionsJson: JSON.stringify(event.options),
+          optionsJson: json.permissionOptions.write(event.options),
           status: "pending",
           chosenOptionId: null,
           createdAt: Date.now(),
@@ -142,7 +144,7 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
       return;
     }
     case "settings.changed":
-      core.updateWs({ settingsJson: JSON.stringify(event.effective) });
+      core.updateWs({ settingsJson: json.settings.write(event.effective) });
       core.setKv("settingsIssues", {
         warnings: event.warnings,
         errors: event.errors,
@@ -206,6 +208,7 @@ const onTurnEnded = (rt: EventRuntime, event: TempodEventOf<"turn.ended">): void
     stopReason: event.stopReason,
     errorCode,
     errorDetail: event.error?.message ?? null,
+    usage: toTurnUsage(event.usage),
   });
   if (status === "interrupted") {
     core.notice("warning", "The turn was interrupted.", turn.sessionId, turn.id);

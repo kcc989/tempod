@@ -59,9 +59,17 @@ export const runAction = (id: ActionId): boolean => {
   return true;
 };
 
-/** Global bindings that have an enabled handler, in table order (for the command palette). */
+/** Keys that only make sense typed in place (04: the palette runs actions, not text edits or card answers). */
+const NOT_IN_PALETTE: ReadonlySet<ActionId> = new Set([
+  "send",
+  "newLine",
+  "permissionAllow",
+  "permissionReject",
+]);
+
+/** Bindings that have an enabled handler, in table order (for the command palette). */
 export const availableActions = (): Binding[] =>
-  BINDINGS.filter((b) => b.scope === "global" && hasAction(b.id));
+  BINDINGS.filter((b) => !NOT_IN_PALETTE.has(b.id) && hasAction(b.id));
 
 export const subscribeActions = (listener: () => void): (() => void) => {
   listeners.add(listener);

@@ -18,6 +18,7 @@ import {
   isSecretName,
   layerFromForm,
   SECTIONS,
+  sectionPage,
   type EffectiveContext,
   type FieldErrors,
   type FieldPath,
@@ -146,7 +147,7 @@ function ProjectSettingsForm({
     if (Object.keys(found).length > 0) {
       setProblem("Check the highlighted fields.");
       const invalid = FIELDS.find((field) => found[field.path]);
-      if (invalid) onSectionChange?.(invalid.section);
+      if (invalid) onSectionChange?.(sectionPage(invalid.section));
       return;
     }
     setProblem(null);
@@ -171,7 +172,7 @@ function ProjectSettingsForm({
       {SECTIONS.map((group) => (
         <fieldset
           key={group}
-          hidden={section !== undefined && section !== group}
+          hidden={section !== undefined && section !== sectionPage(group)}
           className="mt-6 border-t pt-4"
         >
           <legend className="pr-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">

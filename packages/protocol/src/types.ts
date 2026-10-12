@@ -10,6 +10,7 @@ import {
   SessionMode,
   ToolCallContent,
   ToolLocation,
+  TurnUsage,
   Usage,
 } from "./acp.ts";
 import {
@@ -106,8 +107,9 @@ export const WorkspaceDetail = Schema.Struct({
   setupStatus: SetupStatus,
   pushed: Schema.Boolean,
   prTitle: Schema.optional(N(Schema.String)),
-  previewToken: Schema.String,
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
+  /** A Browser Run session is open (01, Browser Run). */
+  browserActive: Schema.Boolean,
   settings: Settings,
   runningTurnId: N(Schema.String),
   queue: Schema.Array(Schema.String),
@@ -138,12 +140,12 @@ export const Session = Schema.Struct({
 });
 export type Session = typeof Session.Type;
 
-export const AgentModels = Schema.Struct({
+export const AgentModelOptions = Schema.Struct({
   agent: AgentId,
   options: Schema.Array(ConfigSelectOption),
   currentValue: Schema.String,
 });
-export type AgentModels = typeof AgentModels.Type;
+export type AgentModelOptions = typeof AgentModelOptions.Type;
 
 export const Mention = Schema.Struct({ path: Schema.String });
 export type Mention = typeof Mention.Type;
@@ -171,6 +173,7 @@ export const Turn = Schema.Struct({
   queuedAt: Ms,
   startedAt: N(Ms),
   endedAt: N(Ms),
+  usage: Schema.optional(TurnUsage),
 });
 export type Turn = typeof Turn.Type;
 

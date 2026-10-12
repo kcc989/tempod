@@ -16,6 +16,7 @@ import {
   toUnifiedHunks,
   turnDuration,
   turnOutcome,
+  turnTokens,
   workspacePath,
 } from "~/ui/components/chat/transcript-model";
 import { diffLines } from "~/ui/lib/diff";
@@ -287,6 +288,13 @@ describe("turn footer", () => {
     expect(turnOutcome(turn({ status: "completed", stopReason: "end_turn" }))).toBeNull();
     expect(turnOutcome(turn({ status: "cancelled" }))).toBe("Stopped");
     expect(turnOutcome(turn({ status: "completed", stopReason: "max_tokens" }))).toBe("Hit the token limit");
+  });
+
+  it("shows tokens only when the agent sent usage for the turn", () => {
+    expect(turnTokens(turn({}))).toBeNull();
+    expect(
+      turnTokens(turn({ usage: { totalTokens: 15_300, inputTokens: 12_000, outputTokens: 3_300 } })),
+    ).toBe("15k tokens (12k in, 3.3k out)");
   });
 
   it("counts plan entries", () => {

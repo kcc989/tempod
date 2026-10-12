@@ -91,7 +91,13 @@ export const discoverModels = async (
     for (const agent of agents) {
       const sessionId = newId();
       const env = await agentEnv(core, agent);
-      const session = await client.request("session.start", { sessionId, agent, env, acpSessionId: null });
+      const session = await client.request("session.start", {
+        sessionId,
+        agent,
+        env,
+        browser: "local",
+        acpSessionId: null,
+      });
       try {
         const option = modelOption(session.configOptions);
         if (!option || typeof option.currentValue !== "string")

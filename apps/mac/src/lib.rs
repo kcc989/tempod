@@ -8,6 +8,7 @@ pub mod actions;
 pub mod app;
 pub mod auth;
 pub mod client;
+pub mod errors;
 pub mod image_policy;
 pub mod inline_media;
 pub mod keymap;

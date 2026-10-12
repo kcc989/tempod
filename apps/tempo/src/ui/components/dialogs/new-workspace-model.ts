@@ -2,7 +2,7 @@ import {
   AGENT_IDS,
   DEFAULT_SETTINGS,
   type AgentId,
-  type AgentModels,
+  type AgentModelOptions,
   type CredentialStatus,
   type FnInput,
   type NewSource,
@@ -104,7 +104,7 @@ export interface ModelChoice {
 
 export const modelChoices = (
   available: ReadonlyArray<AgentId>,
-  reported: ReadonlyArray<AgentModels>,
+  reported: ReadonlyArray<AgentModelOptions>,
 ): ModelChoice[] =>
   available.flatMap((agent) =>
     (reported.find((entry) => entry.agent === agent)?.options ?? []).map((option) => ({
@@ -117,17 +117,14 @@ export const modelChoices = (
 
 export const initialModel = (
   choices: ReadonlyArray<ModelChoice>,
-  reported: ReadonlyArray<AgentModels>,
+  reported: ReadonlyArray<AgentModelOptions>,
   project: Pick<Project, "settings">,
 ): ModelChoice | null => {
   const agent = initialAgent(
     choices.map((choice) => choice.agent),
     project,
   );
-  const preferred =
-    (project.settings.agent?.default ?? DEFAULT_SETTINGS.agent.default) === agent
-      ? project.settings.agent?.model
-      : undefined;
+  const preferred = agent ? project.settings.agent?.models?.[agent] : undefined;
   const current = reported.find((entry) => entry.agent === agent)?.currentValue;
   return (
     choices.find((choice) => choice.agent === agent && choice.model === preferred) ??

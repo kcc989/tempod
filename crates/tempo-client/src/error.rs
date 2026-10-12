@@ -2,8 +2,8 @@ use std::fmt;
 
 use tempo_protocol::{ErrorBody, ErrorCode};
 
-/// The error of an `/api/v1` call or an attachment upload. No variant carries a token, a request
-/// body or response text.
+/// The error of an `/api/v1` call or an attachment upload or download. No variant carries a
+/// token, a request body or response text.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ApiError {
     /// A non-200 answer with a Tempo error body `{code, message, detail?}` (02, Error codes).
@@ -15,7 +15,7 @@ pub enum ApiError {
     /// A 200 whose body does not match the function's output schema, or an input that does not
     /// encode.
     Decode(String),
-    /// An attachment over 10 MiB; it was not sent.
+    /// An attachment over 10 MiB; it was not sent, or its download stopped.
     TooLarge { size: u64 },
     /// The runtime shut down before the call finished.
     Cancelled,

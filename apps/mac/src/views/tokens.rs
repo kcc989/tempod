@@ -16,8 +16,10 @@ pub enum Token {
     /// `--warning` (04's custom token)
     Warning,
     Border,
-    /// Added lines in the diff view (07, Changes).
+    /// Added lines in the diff view (07, Changes); open PRs and passed checks (04, Indicators).
     Success,
+    /// `--merged`: merged PRs (04, Indicators).
+    Merged,
 }
 
 pub fn color(token: Token, cx: &App) -> Hsla {
@@ -34,6 +36,7 @@ pub fn from_theme(colors: &ThemeColor, token: Token) -> Hsla {
         Token::Warning => colors.warning,
         Token::Border => colors.border,
         Token::Success => colors.success,
+        Token::Merged => colors.magenta,
     }
 }
 
@@ -54,6 +57,7 @@ mod tests {
             Token::Warning,
             Token::Border,
             Token::Success,
+            Token::Merged,
         ];
         colors.background = hsla(0.0, 0.0, 0.0, 1.0);
         colors.foreground = hsla(0.1, 0.0, 0.0, 1.0);
@@ -63,6 +67,7 @@ mod tests {
         colors.warning = hsla(0.5, 0.0, 0.0, 1.0);
         colors.border = hsla(0.6, 0.0, 0.0, 1.0);
         colors.success = hsla(0.7, 0.0, 0.0, 1.0);
+        colors.magenta = hsla(0.8, 0.0, 0.0, 1.0);
         for (ix, token) in tokens.into_iter().enumerate() {
             assert_eq!(from_theme(&colors, token).h, ix as f32 / 10.0, "{token:?}");
         }

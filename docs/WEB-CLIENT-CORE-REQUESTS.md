@@ -17,4 +17,4 @@ The Mac goal should check draft/chip recovery, pending-send handling when switch
 
 ## Core continuation
 
-The follow-up core implements optional `prTitle` on workspace detail/refresh, including closed and merged PRs, and the owner-authenticated same-origin attachment GET route documented in 02. Both use shared generated TypeScript/Rust contracts. Client rendering can consume these contracts without a GitHub token or storage credential. Turn token accounting is being checked separately because ACP context usage is not consumed-token accounting.
+The follow-up core implements optional `prTitle` on workspace detail/refresh, including closed and merged PRs, and the owner-authenticated same-origin attachment GET route documented in 02. Both use shared generated TypeScript/Rust contracts. Client rendering can consume these contracts without a GitHub token or storage credential. Turn token accounting now uses ACP v1 `PromptResponse.usage` per turn as `Turn.usage` (02), and both clients show it under each turn.

@@ -1,4 +1,4 @@
-import type { WorkspaceDetail, WorkspaceState, WorkspaceSummary } from "@tempo/protocol";
+import type { PrState, WorkspaceDetail, WorkspaceState, WorkspaceSummary } from "@tempo/protocol";
 import {
   isContainerUp,
   primaryAction,
@@ -111,6 +111,34 @@ export const githubUrlFor = (
   if (w.prNumber !== null) return githubPullUrl(project.owner, project.name, w.prNumber);
   if (pushed === false) return githubRepoUrl(project.owner, project.name);
   return githubBranchUrl(project.owner, project.name, w.branch);
+};
+
+export interface PrLink {
+  readonly label: string;
+  readonly url: string;
+  readonly className: string;
+  readonly ariaLabel: string;
+}
+
+const PR_LINK_CLASS: Record<PrState, string> = {
+  open: "text-success",
+  draft: "text-muted-foreground",
+  merged: "text-merged",
+  closed: "text-destructive",
+};
+
+/** 04 Top bar, left: `#<number> ↗` after the base branch, coloured by prState, to the PR on GitHub. */
+export const prLink = (
+  project: { readonly owner: string; readonly name: string } | undefined,
+  w: Pick<WorkspaceSummary, "prNumber" | "prState">,
+): PrLink | null => {
+  if (!project || w.prNumber === null) return null;
+  return {
+    label: `#${w.prNumber} ↗`,
+    url: githubPullUrl(project.owner, project.name, w.prNumber),
+    className: w.prState ? PR_LINK_CLASS[w.prState] : "text-muted-foreground",
+    ariaLabel: `Pull request #${w.prNumber}${w.prState ? `, ${w.prState}` : ""}. Opens on GitHub`,
+  };
 };
 
 /** The title a rename should save, or null when nothing changes. */
