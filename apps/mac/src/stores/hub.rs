@@ -37,7 +37,49 @@ impl HubStore {
                     .update(cx, |hub, cx| {
                         match event {
                             ChannelEvent::Message(message) => {
-                                hub.state.apply(message);
+                                let events = hub.state.apply(message);
+                                let config = cx.global::<crate::storage::Local>().config();
+                                if config.notifications && !crate::platform::app_is_active() {
+                                    for event in events {
+                                        let kind = match event.kind {
+                                            tempo_client::state::hub::NotifyKind::Finished => {
+                                                crate::platform::NotifyKind::Finished
+                                            }
+                                            tempo_client::state::hub::NotifyKind::NeedsInput => {
+                                                crate::platform::NotifyKind::NeedsInput
+                                            }
+                                            tempo_client::state::hub::NotifyKind::Error => {
+                                                crate::platform::NotifyKind::Error
+                                            }
+                                        };
+                                        let notice =
+                                            crate::platform::notice(kind, &event.workspace);
+                                        let sound = config.sound;
+                                        let (tx, rx) = async_channel::bounded(1);
+                                        crate::platform::notification_permission(
+                                            move |permission| {
+                                                let _ = tx.try_send(permission);
+                                            },
+                                        );
+                                        cx.spawn(async move |this, cx| {
+                                            if let Ok(permission) = rx.recv().await {
+                                                let _ = this.update(cx, |_, cx| {
+                                                    let config = cx
+                                                        .global::<crate::storage::Local>()
+                                                        .config();
+                                                    if crate::platform::should_notify(
+                                                        crate::platform::app_is_active(),
+                                                        permission,
+                                                        config.notifications,
+                                                    ) {
+                                                        crate::platform::notify(&notice, sound);
+                                                    }
+                                                });
+                                            }
+                                        })
+                                        .detach();
+                                    }
+                                }
                             }
                             ChannelEvent::Status(status) => {
                                 hub.connection = match status {

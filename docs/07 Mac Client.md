@@ -26,7 +26,7 @@ The Mac app is a client of the cloud Tempo only. It does not run workspaces on t
 
 ## Scope
 
-The Mac app does what the web UI does, with the same names, copy and rules as 04. This table lists every area and says where the Mac app differs.
+The Mac app does what the web UI does, with the same names, copy and rules as 04. Pending prompt submissions keep their per-session guard across tab switches; repeated Enter or Send keeps the next draft without sending it again. This table lists every area and says where the Mac app differs.
 
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |
@@ -97,7 +97,7 @@ The Worker gets a small JSON API, bearer-token sign-in and a download route. The
 | Change | Where it is specified | Summary |
 | --- | --- | --- |
 | `POST /api/v1/rpc/<function>` | 02, Native client API | Same functions, inputs, outputs and errors as the server functions |
-| `GET /api/v1/meta` | 02, Native client API | `{protocol, serverVersion, minMacClient, latestMacClient}`, no auth |
+| `GET /api/v1/meta` | 02, Native client API | `{protocol, serverVersion, minMacClient, latestMacClient, latestMacClientSha256?}`, no auth |
 | Bearer and device plugins | 05, Authentication | Better Auth `bearer()` and `deviceAuthorization()`; `/api/v1` accepts only bearer tokens |
 | WebSocket auth | 02, Hub and terminal channels | Upgrades also accept `Authorization: Bearer` with no `Origin` header |
 | `/device` page | 04, Dialogs | Where the owner approves a Mac sign-in |
@@ -183,6 +183,8 @@ Behavior follows 04, Center. These rules are for the Mac app only.
 - **Streaming.** On `item.delta`, append the text to the item and call `remeasure_items` for that row only.
 - **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control. Each chat tab keeps its own scroll position.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
+- **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
+- **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.
 - **Attachments.** Paste an image, drag files from Finder, or press ⌘U. Each file is at most 10 MiB and is sent to `POST /api/workspaces/<workspaceId>/attachments` with the bearer token.
 - **Permissions.** A new card takes focus if the composer is empty. Enter picks the first `allow` option; ⌫ picks the first `reject` option.
 - **Copy.** ⌘C copies selected text. Each code block has a copy button.
@@ -268,9 +270,11 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 | `bun run mac:test` | `cargo test --workspace` |
 | `bun run protocol:gen` | Writes `packages/protocol/schema/*.json` (JSON Schema Draft-07) and `crates/tempo-protocol/src/generated.rs` |
 | `bun run protocol:fixtures` | Writes `packages/protocol/fixtures/` from the TypeScript schema tests |
-| `bun run mac:release` | Builds, bundles, signs, notarizes and uploads the app (below) |
+| `bun run mac:release -- --adhoc` | Builds a local ad-hoc bundle and DMG (default mode) |
+| `bun run mac:release -- --release` | Builds, signs and notarizes a release without uploading |
+| `bun run mac:release -- --publish` | Runs the signed release checks and publishes with `latest.json` last |
 
-**`mac:release`** (`scripts/mac/release.sh`). It MUST stop at the first failed step.
+**`mac:release`** (`scripts/mac/release.sh`). It MUST stop at the first failed step. The default ad-hoc mode performs local bundling only. The owner explicitly selects signed release or publication; the steps below apply to signed publication. Both signed modes first verify that the version is newer than the owner's existing manifest. The release script reads the uploaded DMG back and compares its bytes before publishing `latest.json`.
 
 1. Read the version from `apps/mac/Cargo.toml`. It MUST be newer than `clients/mac/latest.json`.
 2. `cargo build --release -p tempo-mac --target aarch64-apple-darwin`.
@@ -283,6 +287,8 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 - `TEMPO_MAC_SIGN_IDENTITY` is a "Developer ID Application" identity. `TEMPO_MAC_NOTARY_PROFILE` is made once with `xcrun notarytool store-credentials`. Both need a paid Apple Developer Program membership.
 - Without them, `mac:dev` and local builds use ad-hoc signing (`codesign --sign -`). Those builds are for the owner's own Mac only; macOS may ask again for Keychain access after each rebuild.
 - `Tempo.entitlements` turns on the hardened runtime with no exceptions. No App Sandbox in this version.
+
+`latestMacClientSha256` is the lowercase 64-character SHA-256 from the same `clients/mac/latest.json` record as `latestMacClient`. It is omitted when no valid hash is published. Clients MUST refuse an unverified download when the field is absent. This is additive under protocol version 1.
 
 **Updates.** On launch and every 24 h, read `latestMacClient` from `GET /api/v1/meta`. If it is newer than the app, show `Tempo <version> is available.` with **Download**. Download fetches `GET /downloads/mac/<version>` with the bearer token, checks the SHA-256 from `meta`, saves the DMG to `~/Downloads`, and opens it in Finder. The owner drags the app to Applications. If the app is older than `minMacClient`, it shows only this update screen.
 

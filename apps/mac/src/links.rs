@@ -34,6 +34,27 @@ pub fn classify(url: &str) -> LinkTarget {
     LinkTarget::Ignore
 }
 
+pub fn workspace_path(path: &str) -> Option<&str> {
+    let path = path.strip_prefix("/workspace/").unwrap_or(path);
+    (!path.is_empty()
+        && !path.chars().any(char::is_control)
+        && path
+            .split('/')
+            .all(|s| !s.is_empty() && s != "." && s != ".."))
+    .then_some(path)
+}
+pub fn line_number(url: &str) -> Option<u32> {
+    let fragment = url.split_once('#')?.1;
+    let line = fragment
+        .strip_prefix('L')
+        .unwrap_or(fragment)
+        .split('-')
+        .next()?
+        .parse()
+        .ok()?;
+    if line == 0 { None } else { Some(line) }
+}
+
 fn decode_path(path: &str) -> Option<String> {
     let mut decoded = Vec::with_capacity(path.len());
     let mut bytes = path.bytes();

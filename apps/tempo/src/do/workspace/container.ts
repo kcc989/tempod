@@ -91,13 +91,14 @@ export const waitHealthy = async (
   signal: AbortSignal,
 ): Promise<{ version: string; incarnation: string }> => {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
+  const probeSignal = AbortSignal.any([signal, AbortSignal.timeout(HEALTH_TIMEOUT_MS)]);
   let last = "";
   while (Date.now() < deadline) {
-    if (signal.aborted) break;
+    if (probeSignal.aborted) break;
     if (!containerRunning(core) && Date.now() > deadline - HEALTH_TIMEOUT_MS + 5000)
       last = "container is not running";
     try {
-      const res = await tempodFetch(core, "/v1/health");
+      const res = await tempodFetch(core, "/v1/health", { signal: probeSignal });
       if (res.status === 200) {
         const body = decodeHealth(await res.json());
         if (body._tag === "Some") {

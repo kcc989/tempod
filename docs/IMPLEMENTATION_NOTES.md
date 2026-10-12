@@ -21,10 +21,14 @@ The spec disagrees with itself here, or the work needs a dependency only you can
 
 | # | Spec | Question | What the code does now |
 | --- | --- | --- | --- |
-| Q-1 | 03 Revert, Step runner | "It never deletes data: a safety checkpoint is made first" disagrees with the step table, which says a failed `git.checkpoint` is skipped with a `warn` log. | The table wins: a revert can go ahead without its `pre_revert` checkpoint. The other choice is to fail the revert with `INTERNAL` when the safety checkpoint fails. |
+| Q-1 (resolved 2026-10-11) | 03 Revert, Step runner | Owner requires a successful safety checkpoint before reverting. | Revert fails with `INTERNAL` after three failed safety-checkpoint attempts and leaves files and transcript intact. Other checkpoint operations remain best effort. 03 is updated. |
 | Q-2 (resolved 2026-10-11) | 01 Container image | Orphaned agent and script processes need reaping. | Owner approved pinned `tini`. It runs as PID 1, forwards signals to `tempod`, and reaps orphaned children. 01 is updated. |
 | Q-3 (resolved 2026-10-11) | 04 Design and front-end rules, 06 Definition of done | React component tests need a DOM library. | Owner approved pinned `happy-dom` and `@testing-library/react`. Component tests are being added alongside the existing Node logic tests. |
 | Q-4 | 01 Browser Run (phase 3, optional) | 02 has no message or field that carries the Browser Run CDP URL to `tempod` or the Live View URL to the UI. | Not built (see **Not built**). |
+
+## ACP mode contract (resolved 2026-10-11)
+
+The owner approved using ACP v1’s advertised mode config option directly. OpenCode 1.18.35 and the evaluated experimental `0.0.0-tui-v2-202606261840` snapshot both expose category `mode` through `configOptions`. Tempo derives its session `modes`/`modeId` from that option and uses `session/set_config_option`; agents exposing session modes use their advertised `session/set_mode` interface. Config updates and reloads refresh the normalized fields. The experimental snapshot provided no protocol advantage and was not adopted. No deployed-client compatibility shim or new dependency was introduced.
 
 ## Additive protocol changes
 
@@ -128,7 +132,7 @@ The Mac build loop keeps these rows (07). The build machine is Linux x86_64, so 
 
 | # | Spec | Question | What the code does now |
 | --- | --- | --- | --- |
-| MQ-1 | 07 Updates | Download "checks the SHA-256 from `meta`", but `ApiMeta` (`packages/protocol/src/api.ts`) is `{protocol, serverVersion, minMacClient, latestMacClient}` and has no hash. The hash is only in R2's `clients/mac/latest.json`, which the app cannot read. | Not decided. Options: an optional `latestMacClientSha256` in `ApiMeta` (additive, 05) that `/api/v1/meta` copies from `latest.json`, or a header on `GET /downloads/mac/<version>`. The Mac update code takes the expected hash as a parameter until you decide. |
+| MQ-1 (resolved 2026-10-11) | 07 Updates | Owner approved an optional `latestMacClientSha256` in `ApiMeta`. | `/api/v1/meta` copies a valid lowercase SHA-256 from the same `latest.json` record as the version. TypeScript/Rust contracts and fixtures are regenerated. Mac clients must refuse an unverified download if the hash is absent. |
 
 ### Spike results (Mac)
 
@@ -174,3 +178,31 @@ The native continuation implements 07's existing sign-in contract: server/versio
 The next native milestone wires workspace channels and cached chat views to the same apply rules used by `tempo-client`. Reconnect and hidden-store tests share the web channel fixtures. Composer drafts survive failed sends; queue editing uses a separate field so it does not replace the unsent draft. Queue reordering sends every queued turn in the workspace, including other chats. Headless view tests use loopback RPC fixtures; rendered pixel quality and authenticated agent behavior still need acceptance.
 
 The owner requested both queueing and live steering, and selected delivery during the active turn where supported. Specs 01–04 and 07 now define the ACP v1 steering extension, optional send delivery, capability/progress flags and the durable `turns.steering_pending` reservation. Unsupported or settled delivery stays queued. An ambiguous acknowledgement or interrupted reservation becomes a failed turn with an explicit check-before-retry message. No new library or adapter version was added. Primary reference: [Claude ACP steering example](https://github.com/agentclientprotocol/claude-agent-acp/blob/main/examples/steering.ts). Real logged-in adapter conformance remains open.
+
+
+## Native implementation continuation (cloud, 2026-10-11)
+
+The owner requested implementation in the cloud and elected to perform native testing locally. The existing chat/channel foundation remains in use. Review/files/diff/comments, scripts/remote terminal, settings/diagnostics and shell actions are now connected to that foundation. Native file I/O, Keychain operations, diff parsing and fuzzy matching run off the main thread. No new library or version was added: the app now uses the existing terminal crate and its tests enable the existing pinned GPUI Kit test-support feature.
+
+The terminal implementation retains `gpui-terminal` 0.1.0 attribution/licenses and the pinned Alacritty parser. Its transport is the remote terminal channel, with selection, clipboard, query replies, resize/reconnect dimensions, synchronized updates, ANSI colors and scrollback. The earlier table describing terminal source as a stub is historical. Linux tests do not establish native terminal acceptance.
+
+Release tooling now defaults to `--adhoc`. `--release` requires authorized Developer ID/notary credentials and verifies a signed/stapled DMG without publishing. `--publish` additionally uploads, reads the DMG back and compares it before writing `latest.json` last. Signed modes require an existing published manifest; first-release bootstrap remains an owner/core release preparation step. No signing or publication was run here.
+
+### Exact shared-contract dependencies
+
+- **MQ-1 resolved and consumed:** the final task branch imports published core/web integration through `5e259d6`. Core's generated `ApiMeta.latestMacClientSha256` is bound to `latestMacClient` from the same R2 manifest. Native Download now uses that exact contract: bearer HTTP, a 1 GiB hard bound, declared transfer-size checks, SHA-256 verification before atomic save and macOS system opening. Missing/invalid hashes, incompatible/stale release versions, corrupted bytes and oversized downloads fail closed. The existing exact-size helper remains available for trusted manifest-size callers. Normal and required-update screens share this flow.
+- **First-launch required-update authentication:** a valid saved Keychain session is validated and retained for Download while normal channels stay closed. With no saved token, 07 stops device sign-in before the owner-only download can authenticate; the screen explains manual installation from the owner's browser. A future native authorization path in this state requires a core/spec policy decision. No unauthenticated download route or weakened integrity check was added.
+- **Attachment thumbnails:** the existing `POST /api/workspaces/<workspaceId>/attachments` accepts bearer uploads, but there is no owner-authorized GET by attachment ID. Request an additive `GET /api/workspaces/<workspaceId>/attachments/<attachmentId>` with owner/workspace authorization, bounded file bytes and stored Content-Type. This is a proposal for core, not a native-only route. Current native transcript shows attachment names; inline ACP images work from bounded embedded bytes.
+- **Display metadata:** `Turn` has no per-turn token counts, `CheckRun` has no start/completion/duration fields, and workspace detail/summary has no PR title for closed/merged PRs. These need optional shared fields/server projections to implement the corresponding displays accurately. Session context usage is displayed separately. No native-only wire fields were invented.
+- **Privacy wording:** 07 explicitly permits composer drafts in `state.json`, while AT-37 literally forbids any prompt text outside Keychain. The implementation follows the storage table: unsent drafts may persist, tokens remain in Keychain and transcripts/attachment bodies do not persist. The local audit must distinguish this specified draft storage from leaks and record the unresolved wording.
+
+The project settings fallback is a native resource copied from shared `DEFAULT_SETTINGS`; the final verification compares it to the canonical TypeScript value. Without an open workspace the UI labels file-derived settings as unavailable until a workspace opens, rather than inventing source information.
+
+Validation and the per-acceptance local checklist accompany the implementation. No claim is made for hosted agent behavior, rendering performance, macOS Keychain/notifications, signing, notarization or Gate E.
+## Core deployment continuation
+
+The current follow-up adds `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle`, persisted by the WorkspaceDO for any PR state, and owner-authenticated attachment reads at the route documented in 02. `Attachment` metadata is shared in TypeScript/Rust and fixtures. Active formats download as binary; raster previews use private/no-store responses. ACP v1 and OpenCode 1.18.35 stay pinned. Turn token accounting awaits the explicit choice between context snapshots and cumulative prompt-response totals; the existing session context ring remains unchanged.
+
+Alchemy beta.81 imports its optional `@effect/platform-node` peer while loading Cloudflare providers; the existing Effect stack now pins that peer at 4.0.3. A preflight wrapper prevents unavailable existing state-store probes from entering automatic bootstrap. See the deployment guide and CORE-RESULTS.md for the actual failed attempt and state-store recovery requirement.
+
+The native PR imports this core follow-up for compatibility. Its earlier attachment-read and closed/merged PR-title requests are now available in the shared contracts; consuming those additions in the native UI remains follow-up work.

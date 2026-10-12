@@ -205,6 +205,11 @@ pub struct ApiMeta {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub latest_mac_client: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "latestMacClientSha256",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub latest_mac_client_sha256: ::std::option::Option<::std::string::String>,
     #[serde(rename = "minMacClient")]
     pub min_mac_client: ::std::string::String,
     pub protocol: ApiMetaProtocol,
@@ -250,6 +255,14 @@ impl<'de> ::serde::Deserialize<'de> for ApiMetaProtocol {
 pub struct ArchiveWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`Attachment`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct Attachment {
+    pub id: ::std::string::String,
+    pub mime: ::std::string::String,
+    pub name: ::std::string::String,
+    pub size: f64,
 }
 ///`Attention`
 #[derive(
@@ -2892,6 +2905,11 @@ pub struct RefreshPullRequestOut {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub pr_state: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "prTitle",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub pr_title: ::std::option::Option<::std::string::String>,
 }
 ///`RenameBranchIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4576,6 +4594,11 @@ pub struct WorkspaceDetail {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub pr_state: ::std::option::Option<PrState>,
+    #[serde(
+        rename = "prTitle",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub pr_title: ::std::option::Option<::std::string::String>,
     #[serde(rename = "previewToken")]
     pub preview_token: ::std::string::String,
     #[serde(rename = "projectId")]
@@ -6462,6 +6485,7 @@ pub mod wire {
         "ApiKeyProvider",
         "ApiMeta",
         "ArchiveWorkspaceIn",
+        "Attachment",
         "Attention",
         "AvailableCommand",
         "CancelCodexLoginIn",
@@ -6652,6 +6676,7 @@ pub mod wire {
             "ApiKeyProvider" => crate::roundtrip::<crate::ApiKeyProvider>(text),
             "ApiMeta" => crate::roundtrip::<crate::ApiMeta>(text),
             "ArchiveWorkspaceIn" => crate::roundtrip::<crate::ArchiveWorkspaceIn>(text),
+            "Attachment" => crate::roundtrip::<crate::Attachment>(text),
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
             "CancelCodexLoginIn" => crate::roundtrip::<crate::CancelCodexLoginIn>(text),

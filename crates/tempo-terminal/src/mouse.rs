@@ -364,7 +364,10 @@ mod tests {
             TermMode::empty(),
         );
         assert_eq!(report, None);
-        assert!(!reports_mouse(TermMode::MOUSE_REPORT_CLICK, &mods(true, false, false)));
+        assert!(!reports_mouse(
+            TermMode::MOUSE_REPORT_CLICK,
+            &mods(true, false, false)
+        ));
         assert!(reports_mouse(TermMode::MOUSE_DRAG, &none));
     }
 

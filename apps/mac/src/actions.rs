@@ -1,6 +1,10 @@
 //! Every menu item, palette entry and shortcut runs one of these actions (07, macOS integration).
 use gpui_kit::Action;
 
+#[derive(Clone, Debug, PartialEq, Eq, Action)]
+#[action(namespace = tempo, no_json)]
+pub struct NewWorkspaceForProject(pub String);
+
 gpui_kit::actions!(
     tempo,
     [
@@ -11,6 +15,11 @@ gpui_kit::actions!(
         HideApp,
         Quit,
         NewWorkspace,
+        AddProject,
+        RenameWorkspace,
+        ShowHistory,
+        ConfirmDialog,
+        DismissDialog,
         NewChat,
         CloseTab,
         OpenFile,
@@ -34,6 +43,9 @@ gpui_kit::actions!(
         NextWorkspace,
         PreviousWorkspace,
         FocusComposer,
+        NextComposerChoice,
+        PreviousComposerChoice,
+        DismissComposerChoice,
         Send,
         StopTurn,
         TogglePlanMode,

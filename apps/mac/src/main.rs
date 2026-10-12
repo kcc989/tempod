@@ -2,7 +2,7 @@
 //! runtime, then GPUI: init, menus, key bindings, main window.
 use serde_json::json;
 use tempo_mac::{
-    app, client::ClientRuntime, image_policy, keymap, logging, menus, platform, storage, views,
+    app, client::ClientRuntime, image_policy, keymap, logging, menus, platform, storage,
 };
 
 fn main() {
@@ -41,6 +41,9 @@ fn main() {
     application.on_open_urls(move |urls| {
         let _ = url_tx.try_send(urls);
     });
+    application.on_reopen(|cx| {
+        let _ = app::ensure_main_window(cx);
+    });
     application.run(move |cx| {
         gpui_kit::init(cx);
         cx.set_global(local);
@@ -56,7 +59,7 @@ fn main() {
         app::init(runtime, url_rx, cx);
         keymap::bind(cx);
         menus::set(cx);
-        if let Err(err) = views::main_window::open(Default::default(), cx) {
+        if let Err(err) = app::ensure_main_window(cx) {
             logging::error("app", "main window did not open", json!({}));
             eprintln!("Tempo could not open its window: {err}");
             cx.quit();

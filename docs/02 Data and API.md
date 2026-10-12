@@ -510,6 +510,8 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 Attachments use a plain route, not a server function: `POST /api/workspaces/<workspaceId>/attachments`, multipart, one file, at most 10 MiB. It returns `{attachmentId, name, mime, size}`.
 
+`GET /api/workspaces/<workspaceId>/attachments/<attachmentId>` returns the original bytes after cookie/bearer owner and workspace checks. Unknown workspaces, attachments and missing objects return `NOT_FOUND`. Archived workspace attachments remain readable. The maximum is 10 MiB; the stored and actual sizes must match. PNG, JPEG, GIF and WebP use their stored image MIME and inline disposition; other types use `application/octet-stream` and attachment disposition. Responses use `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff` and a sandbox CSP. Clients construct this same-origin route from the workspace and attachment IDs; no object-storage credentials or agent remote URLs are sent. Metadata uses shared `Attachment {id, name, mime, size}`.
+
 **Review and git**
 
 | Function | Input | Output | Errors |
@@ -524,7 +526,7 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `commitAndPush` | `{workspaceId, message}` | `{commitSha}` | `NOTHING_TO_COMMIT`, `PUSH_REJECTED` |
 | `createPullRequest` | `{workspaceId, title, body, draft}` | `{number, url}` | `NOT_PUSHED`, `PR_EXISTS`, `GITHUB_API_ERROR` |
 | `mergePullRequest` | `{workspaceId, method: "squash" or "merge" or "rebase"}` | `{}` | `PR_NOT_MERGEABLE` |
-| `refreshPullRequest` | `{workspaceId}` | `{prNumber, prState, checksState}` | `GITHUB_API_ERROR` |
+| `refreshPullRequest` | `{workspaceId}` | `{prNumber, prState, checksState, prTitle?}` | `GITHUB_API_ERROR` |
 | `listCheckRuns` | `{workspaceId}` | `[{name, status, conclusion, url}]` for the PR head | `GITHUB_API_ERROR` |
 
 **Files, scripts, terminals**
@@ -566,7 +568,7 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | --- | --- |
 | `Project` | `id, installationId, repoId, owner, name, defaultBranch, settings, sortOrder` |
 | `WorkspaceSummary` | `id, projectId, slug, title, branch, baseBranch, state, attention, defaultAgent, prNumber, prState, checksState, pinned, lastActivityAt, createdAt, archivedAt, rev` |
-| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, previewToken, ports: [{port, url}], settings, runningTurnId, queue: [turnId], imageRef, op` |
+| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, previewToken, ports: [{port, url}], settings, runningTurnId, queue: [turnId], imageRef, op, prTitle?` |
 | `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported) |
 | `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false) |
 | `Item` | `id, sessionId, turnId, kind, status, content, rev, createdAt, updatedAt` |
@@ -706,7 +708,8 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 **Rules**
 
 - `tempod` MUST answer every request exactly once.
-- The DO MUST apply events in `seq` order and drop any `(incarnation, seq)` it has already stored.
+- `turn.started` is durable proof that the queued prompt was accepted. A later prompt acknowledgement MUST NOT resurrect a turn that already ended.
+- The DO MUST apply events in `seq` order and drop any `(incarnation, seq)` it has already stored. Local event mutations, their deduplication receipt and the applied sequence cursor commit in one SQLite transaction. If application fails, close the daemon socket and replay from the last committed cursor before applying later events. Credential refreshes are accepted by CredentialDO before their payload-free receipt and cursor commit.
 - `credential.changed` carries a secret. The DO MUST NOT store it in `events`; it goes straight to CredentialDO. The same applies to `credential.put` and to `env` in `hello` and `session.start`: never logged, never stored outside CredentialDO.
 
 ## Error codes
@@ -754,3 +757,5 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |
 | `INTERNAL` | Anything else | Something went wrong. |
+
+`WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle` are the GitHub PR title regardless of open, closed or merged state; null means no title has been fetched. The WorkspaceDO persists it and sends detail updates when the title changes.

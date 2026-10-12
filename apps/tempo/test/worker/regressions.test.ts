@@ -60,6 +60,48 @@ describe("regressions", () => {
     await runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => state.storage.deleteAlarm());
   });
 
+  it("keeps a fast turn completed when daemon lifecycle events arrive before the prompt acknowledgement", async () => {
+    const seeded = await seedProject();
+    await seedCredentials(seeded.userId);
+    const { stub, tempod } = await seedWorkspace(seeded);
+    await driveToReady(stub);
+    const session = await stub.createSession({ agent: "claude" });
+    const sessionId = (session as unknown as { value?: { id: string } }).value?.id;
+    if (!sessionId) throw new Error("session did not start");
+    await waitFor(() => tempod.requestsOf("session.start").length === 1);
+    tempod.on("session.prompt", async (params) => {
+      tempod.emit({ kind: "turn.started", sessionId: params.sessionId, turnId: params.turnId });
+      tempod.emit({
+        kind: "turn.ended",
+        sessionId: params.sessionId,
+        turnId: params.turnId,
+        stopReason: "end_turn",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return { accepted: true };
+    });
+    const sent = await stub.sendPrompt({
+      sessionId,
+      text: "fast",
+      mentions: [],
+      attachmentIds: [],
+      reviewCommentIds: [],
+    });
+    if (!sent.ok) throw new Error(sent.error.code);
+    await waitFor(async () => {
+      const rows = await runInDurableObject(stub, (_instance: WorkspaceDO, state: DurableObjectState) =>
+        state.storage.sql.exec("SELECT status FROM turns WHERE id = ?", sent.value.id).toArray(),
+      );
+      return rows[0]?.["status"] === "completed";
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const detail = await stub.getWorkspace({});
+    if (!detail.ok) throw new Error(detail.error.code);
+    expect(detail.value.runningTurnId).toBeNull();
+    expect(detail.value.state).toBe("ready");
+    expect(tempod.requestsOf("session.prompt")).toHaveLength(1);
+  });
+
   it("keeps the health detail when the container never becomes healthy", async () => {
     const seeded = await seedProject();
     const { stub, tempod } = await seedWorkspace(seeded);
