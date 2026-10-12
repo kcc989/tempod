@@ -366,6 +366,9 @@ One more CredentialDO instance is named `system`. It holds the GitHub App config
 | `offerCodexAuth(content, lastRefresh, fromWorkspaceId)` | `{accepted, version}` |
 | `getCodexAuth()` | `{content, version, lastRefresh}` or `null`. WorkspaceDO only. |
 | `getGithubAppConfig()` | `{appId, slug, privateKey, clientId, clientSecret}` or `null`. On the `system` instance only. Only the Worker's `auth/` and `github/` modules call it. |
+| `startCodexLogin()` | `Result<{loginId, verificationUrl, userCode, expiresAt, intervalMs}>`; one active in-memory attempt per owner |
+| `pollCodexLogin(loginId)` | `Result<{status: "pending" \| "connected" \| "expired"}>`; tokens stay inside CredentialDO |
+| `cancelCodexLogin(loginId)` | `void`; idempotent and scoped to the matching attempt |
 | `addCodexLease(workspaceId)`, `dropCodexLease(workspaceId)` | `void` |
 
 **UserHubDO** (one per user)
@@ -544,6 +547,9 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `getCredentialStatus` | `{}` | `{claude, codex, openrouter, anthropic, openai}`, each `{set, updatedAt}`; `codex` adds `lastRefresh` | — |
 | `setClaudeToken` | `{token}`: no spaces, 20 to 4096 chars | `{}` | `VALIDATION_FAILED` |
 | `setCodexAuth` | `{authJson}`: MUST parse and contain `tokens.access_token`, `tokens.refresh_token`, `last_refresh` | `{}` | `VALIDATION_FAILED` |
+| `startCodexLogin` | `{}` | `{loginId, verificationUrl, userCode, expiresAt, intervalMs}` | `CREDENTIAL_INVALID` |
+| `pollCodexLogin` | `{loginId}` | `{status: "pending" \| "connected" \| "expired"}` | `CREDENTIAL_INVALID` |
+| `cancelCodexLogin` | `{loginId}` | `{}` | — |
 | `setApiKey` | `{provider: "openrouter" or "anthropic" or "openai", key}` | `{}` | `VALIDATION_FAILED` |
 | `deleteCredential` | `{key}` | `{}` | — |
 | `setProjectSecret` | `{projectId, name, value}`; `name` matches `^[A-Z_][A-Z0-9_]*$` | `{}` | `VALIDATION_FAILED` |

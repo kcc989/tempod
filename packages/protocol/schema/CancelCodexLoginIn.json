@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CancelCodexLoginIn",
+  "type": "object",
+  "properties": {
+    "loginId": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["loginId"],
+  "additionalProperties": true
+}

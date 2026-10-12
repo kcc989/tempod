@@ -6,6 +6,14 @@ import { CREDENTIAL_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
 import type { Env } from "../env.ts";
 import { deriveKey, open, seal } from "../lib/crypto.ts";
 import { log } from "../log.ts";
+import { TempoError, capture, type Result, type FnOutput } from "@tempo/protocol";
+import {
+  CODEX_LOGIN_TTL_MS,
+  CODEX_VERIFICATION_URL,
+  exchangeCodexDeviceCode,
+  pollCodexDeviceCode,
+  requestCodexDeviceCode,
+} from "../lib/codex-login.ts";
 
 export const SYSTEM_CREDENTIALS = "system";
 
@@ -48,6 +56,97 @@ export interface SecretStatus {
 export class CredentialDO extends DurableObject<Env> {
   private readonly db: DrizzleSqliteDODatabase<typeof credentialSchema>;
   private keyPromise: Promise<CryptoKey> | null = null;
+  private codexLogin: {
+    public: FnOutput<"startCodexLogin">;
+    deviceAuthId: string;
+    nextPollAt: number;
+    connected: boolean;
+  } | null = null;
+  private loginWork: Promise<unknown> = Promise.resolve();
+
+  private withLoginLock<T>(work: () => Promise<T>): Promise<T> {
+    const result = this.loginWork.then(work, work);
+    this.loginWork = result.catch(() => undefined);
+    return result;
+  }
+
+  async startCodexLogin(): Promise<Result<FnOutput<"startCodexLogin">>> {
+    return capture(() =>
+      this.withLoginLock(async () => {
+        if (this.codexLogin && !this.codexLogin.connected && this.codexLogin.public.expiresAt > Date.now())
+          return this.codexLogin.public;
+        const attempt = {
+          public: {
+            loginId: crypto.randomUUID(),
+            verificationUrl: CODEX_VERIFICATION_URL,
+            userCode: "",
+            expiresAt: 0,
+            intervalMs: 5000,
+          },
+          deviceAuthId: "",
+          nextPollAt: 0,
+          connected: false,
+        };
+        this.codexLogin = attempt;
+        try {
+          const code = await requestCodexDeviceCode();
+          if (this.codexLogin !== attempt)
+            throw new TempoError("CREDENTIAL_INVALID", "Codex login was cancelled. Try again.");
+          attempt.public.userCode = code.userCode;
+          attempt.public.intervalMs = code.intervalMs;
+          attempt.public.expiresAt = Date.now() + CODEX_LOGIN_TTL_MS;
+          attempt.deviceAuthId = code.deviceAuthId;
+          return attempt.public;
+        } catch (error) {
+          if (this.codexLogin === attempt) this.codexLogin = null;
+          throw error;
+        }
+      }),
+    );
+  }
+
+  async pollCodexLogin(loginId: string): Promise<Result<FnOutput<"pollCodexLogin">>> {
+    return capture(() =>
+      this.withLoginLock(async () => {
+        const attempt = this.codexLogin;
+        if (!attempt || attempt.public.loginId !== loginId) return { status: "expired" };
+        if (attempt.public.expiresAt <= Date.now()) {
+          this.codexLogin = null;
+          return { status: "expired" };
+        }
+        if (attempt.connected) return { status: "connected" };
+        if (attempt.nextPollAt > Date.now()) return { status: "pending" };
+        attempt.nextPollAt = Date.now() + attempt.public.intervalMs;
+        try {
+          const code = await pollCodexDeviceCode(attempt.deviceAuthId, attempt.public.userCode);
+          if (this.codexLogin !== attempt) return { status: "expired" };
+          if (!code) return { status: "pending" };
+          const auth = await exchangeCodexDeviceCode(code.authorizationCode, code.codeVerifier);
+          if (this.codexLogin !== attempt || attempt.public.expiresAt <= Date.now())
+            return { status: "expired" };
+          // Encrypt before the final identity check so a cancellation during encryption cannot save a login.
+          const sealed = await seal(await this.key(), SECRET_KEYS.codex, auth.content);
+          if (this.codexLogin !== attempt || attempt.public.expiresAt <= Date.now())
+            return { status: "expired" };
+          const version = this.storeSealedSecret(SECRET_KEYS.codex, sealed, {
+            lastRefresh: auth.lastRefresh,
+          });
+          this.pushCodexAuth(auth.content, version);
+          attempt.connected = true;
+          attempt.deviceAuthId = "";
+          return { status: "connected" };
+        } catch (error) {
+          if (this.codexLogin !== attempt) return { status: "expired" };
+          this.codexLogin = null;
+          throw error;
+        }
+      }),
+    );
+  }
+
+  async cancelCodexLogin(loginId: string): Promise<void> {
+    if (this.codexLogin?.public.loginId === loginId) this.codexLogin = null;
+  }
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -83,6 +182,14 @@ export class CredentialDO extends DurableObject<Env> {
     meta: Record<string, unknown> = {},
   ): Promise<{ version: number }> {
     const sealed = await seal(await this.key(), key, value);
+    return { version: this.storeSealedSecret(key, sealed, meta) };
+  }
+
+  private storeSealedSecret(
+    key: string,
+    sealed: Awaited<ReturnType<typeof seal>>,
+    meta: Record<string, unknown>,
+  ): number {
     const now = Date.now();
     const prev = this.db.select({ version: secrets.version }).from(secrets).where(eq(secrets.key, key)).get();
     const version = (prev?.version ?? 0) + 1;
@@ -107,10 +214,11 @@ export class CredentialDO extends DurableObject<Env> {
         },
       })
       .run();
-    return { version };
+    return version;
   }
 
   async deleteSecret(key: string): Promise<void> {
+    if (key === SECRET_KEYS.codex) this.codexLogin = null;
     this.db.delete(secrets).where(eq(secrets.key, key)).run();
   }
 
@@ -181,9 +289,15 @@ export class CredentialDO extends DurableObject<Env> {
     return { accepted: true, version };
   }
 
-  /** The owner uploaded a new auth.json: store it as is and push it to every lease holder. */
+  /** The owner supplied a new login: store it as is and push it to every lease holder. */
   async replaceCodexAuth(content: string, lastRefresh: number): Promise<{ version: number }> {
+    this.codexLogin = null;
     const { version } = await this.putSecret(SECRET_KEYS.codex, content, { lastRefresh });
+    this.pushCodexAuth(content, version);
+    return { version };
+  }
+
+  private pushCodexAuth(content: string, version: number): void {
     for (const lease of this.db.select().from(codexLeases).all()) {
       this.ctx.waitUntil(
         this.env.WORKSPACE.getByName(lease.workspaceId)
@@ -191,7 +305,6 @@ export class CredentialDO extends DurableObject<Env> {
           .catch(() => log("warn", "codex auth push failed", { workspaceId: lease.workspaceId })),
       );
     }
-    return { version };
   }
 
   async getCodexAuth(): Promise<{ content: string; version: number; lastRefresh: number } | null> {

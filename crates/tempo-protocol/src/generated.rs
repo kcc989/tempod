@@ -319,6 +319,62 @@ pub struct AvailableCommand {
     pub input: ::std::option::Option<::serde_json::Value>,
     pub name: ::std::string::String,
 }
+///`CancelCodexLoginIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CancelCodexLoginIn {
+    #[serde(rename = "loginId")]
+    pub login_id: CancelCodexLoginInLoginId,
+}
+///`CancelCodexLoginInLoginId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CancelCodexLoginInLoginId(::std::string::String);
+impl ::std::ops::Deref for CancelCodexLoginInLoginId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CancelCodexLoginInLoginId> for ::std::string::String {
+    fn from(value: CancelCodexLoginInLoginId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CancelCodexLoginInLoginId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CancelCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CancelCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CancelCodexLoginInLoginId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`CancelTurnIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CancelTurnIn {
@@ -2556,6 +2612,122 @@ pub struct PlanEntry {
     pub priority: ::std::string::String,
     pub status: ::std::string::String,
 }
+///`PollCodexLoginIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PollCodexLoginIn {
+    #[serde(rename = "loginId")]
+    pub login_id: PollCodexLoginInLoginId,
+}
+///`PollCodexLoginInLoginId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PollCodexLoginInLoginId(::std::string::String);
+impl ::std::ops::Deref for PollCodexLoginInLoginId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PollCodexLoginInLoginId> for ::std::string::String {
+    fn from(value: PollCodexLoginInLoginId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PollCodexLoginInLoginId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PollCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PollCodexLoginInLoginId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PollCodexLoginInLoginId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`PollCodexLoginOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PollCodexLoginOut {
+    pub status: PollCodexLoginOutStatus,
+}
+///`PollCodexLoginOutStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum PollCodexLoginOutStatus {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "connected")]
+    Connected,
+    #[serde(rename = "expired")]
+    Expired,
+}
+impl ::std::fmt::Display for PollCodexLoginOutStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Pending => f.write_str("pending"),
+            Self::Connected => f.write_str("connected"),
+            Self::Expired => f.write_str("expired"),
+        }
+    }
+}
+impl ::std::str::FromStr for PollCodexLoginOutStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "connected" => Ok(Self::Connected),
+            "expired" => Ok(Self::Expired),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for PollCodexLoginOutStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PollCodexLoginOutStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`PrState`
 #[derive(
     ::serde::Deserialize,
@@ -4002,6 +4174,20 @@ impl ::std::convert::TryFrom<::std::string::String> for SetupStatus {
 pub struct SleepWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`StartCodexLoginOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StartCodexLoginOut {
+    #[serde(rename = "expiresAt")]
+    pub expires_at: f64,
+    #[serde(rename = "intervalMs")]
+    pub interval_ms: f64,
+    #[serde(rename = "loginId")]
+    pub login_id: ::std::string::String,
+    #[serde(rename = "userCode")]
+    pub user_code: ::std::string::String,
+    #[serde(rename = "verificationUrl")]
+    pub verification_url: ::std::string::String,
 }
 ///`StopScriptIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -5618,6 +5804,15 @@ pub mod api {
         type Input = crate::ArchiveWorkspaceIn;
         type Output = crate::Empty;
     }
+    /// `cancelCodexLogin`
+    #[derive(Clone, Copy, Debug)]
+    pub struct CancelCodexLogin;
+    impl crate::Function for CancelCodexLogin {
+        const NAME: &'static str = "cancelCodexLogin";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::CancelCodexLoginIn;
+        type Output = crate::Empty;
+    }
     /// `cancelTurn`
     #[derive(Clone, Copy, Debug)]
     pub struct CancelTurn;
@@ -5924,6 +6119,15 @@ pub mod api {
         type Input = crate::MergePullRequestIn;
         type Output = crate::Empty;
     }
+    /// `pollCodexLogin`
+    #[derive(Clone, Copy, Debug)]
+    pub struct PollCodexLogin;
+    impl crate::Function for PollCodexLogin {
+        const NAME: &'static str = "pollCodexLogin";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::PollCodexLoginIn;
+        type Output = crate::PollCodexLoginOut;
+    }
     /// `readFile`
     #[derive(Clone, Copy, Debug)]
     pub struct ReadFile;
@@ -6131,6 +6335,15 @@ pub mod api {
         type Input = crate::SleepWorkspaceIn;
         type Output = crate::Empty;
     }
+    /// `startCodexLogin`
+    #[derive(Clone, Copy, Debug)]
+    pub struct StartCodexLogin;
+    impl crate::Function for StartCodexLogin {
+        const NAME: &'static str = "startCodexLogin";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::Empty;
+        type Output = crate::StartCodexLoginOut;
+    }
     /// `stopScript`
     #[derive(Clone, Copy, Debug)]
     pub struct StopScript;
@@ -6171,6 +6384,7 @@ pub mod api {
     pub const ALL: &[(&str, crate::Method)] = &[
         ("addReviewComment", crate::Method::Post),
         ("archiveWorkspace", crate::Method::Post),
+        ("cancelCodexLogin", crate::Method::Post),
         ("cancelTurn", crate::Method::Post),
         ("closeSession", crate::Method::Post),
         ("commitAndPush", crate::Method::Post),
@@ -6205,6 +6419,7 @@ pub mod api {
         ("listWorkspaces", crate::Method::Get),
         ("markViewed", crate::Method::Post),
         ("mergePullRequest", crate::Method::Post),
+        ("pollCodexLogin", crate::Method::Post),
         ("readFile", crate::Method::Get),
         ("refreshPullRequest", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
@@ -6228,6 +6443,7 @@ pub mod api {
         ("setSessionConfig", crate::Method::Post),
         ("setSessionMode", crate::Method::Post),
         ("sleepWorkspace", crate::Method::Post),
+        ("startCodexLogin", crate::Method::Post),
         ("stopScript", crate::Method::Post),
         ("unlinkProject", crate::Method::Post),
         ("updateProjectSettings", crate::Method::Post),
@@ -6248,6 +6464,7 @@ pub mod wire {
         "ArchiveWorkspaceIn",
         "Attention",
         "AvailableCommand",
+        "CancelCodexLoginIn",
         "CancelTurnIn",
         "Capabilities",
         "ChangedFile",
@@ -6338,6 +6555,8 @@ pub mod wire {
         "PermissionStatus",
         "PlanContent",
         "PlanEntry",
+        "PollCodexLoginIn",
+        "PollCodexLoginOut",
         "PrState",
         "Project",
         "ReadFileIn",
@@ -6385,6 +6604,7 @@ pub mod wire {
         "SettingsSource",
         "SetupStatus",
         "SleepWorkspaceIn",
+        "StartCodexLoginOut",
         "StopScriptIn",
         "TerminalReady",
         "TerminalResize",
@@ -6434,6 +6654,7 @@ pub mod wire {
             "ArchiveWorkspaceIn" => crate::roundtrip::<crate::ArchiveWorkspaceIn>(text),
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
+            "CancelCodexLoginIn" => crate::roundtrip::<crate::CancelCodexLoginIn>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
             "Capabilities" => crate::roundtrip::<crate::Capabilities>(text),
             "ChangedFile" => crate::roundtrip::<crate::ChangedFile>(text),
@@ -6530,6 +6751,8 @@ pub mod wire {
             "PermissionStatus" => crate::roundtrip::<crate::PermissionStatus>(text),
             "PlanContent" => crate::roundtrip::<crate::PlanContent>(text),
             "PlanEntry" => crate::roundtrip::<crate::PlanEntry>(text),
+            "PollCodexLoginIn" => crate::roundtrip::<crate::PollCodexLoginIn>(text),
+            "PollCodexLoginOut" => crate::roundtrip::<crate::PollCodexLoginOut>(text),
             "PrState" => crate::roundtrip::<crate::PrState>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
@@ -6577,6 +6800,7 @@ pub mod wire {
             "SettingsSource" => crate::roundtrip::<crate::SettingsSource>(text),
             "SetupStatus" => crate::roundtrip::<crate::SetupStatus>(text),
             "SleepWorkspaceIn" => crate::roundtrip::<crate::SleepWorkspaceIn>(text),
+            "StartCodexLoginOut" => crate::roundtrip::<crate::StartCodexLoginOut>(text),
             "StopScriptIn" => crate::roundtrip::<crate::StopScriptIn>(text),
             "TerminalReady" => crate::roundtrip::<crate::TerminalReady>(text),
             "TerminalResize" => crate::roundtrip::<crate::TerminalResize>(text),
