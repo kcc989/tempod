@@ -6,11 +6,11 @@ The web client has implemented regions for the sidebar, top bar, chats, review, 
 
 ```sh
 bun install --frozen-lockfile
-./tests/e2e/node_modules/.bin/playwright install --with-deps chromium firefox webkit
+./tests/e2e/node_modules/.bin/playwright install --with-deps chromium
 bun run test:web
 ```
 
-The suite runs desktop Chromium, Firefox and WebKit, dark Chromium, and phone Chromium. Desktop-only tests skip on the phone; the phone navigation test skips on desktop. These skips are intentional coverage boundaries. No deployment, GitHub write or agent login is required.
+The suite runs desktop Chromium, dark Chromium, and phone Chromium. Desktop-only tests skip on the phone; the phone navigation test skips on desktop. These skips are intentional coverage boundaries. No deployment, GitHub write or agent login is required.
 
 The initial fixture run lacked the production Tailwind source scan and was discarded as visual evidence. The final harness loads production styles, asserts the app fills the viewport, and uses the production router and auth guard. The native pending-send regression was formatted with Rust 1.97 but could not be executed here because this workspace has no native build toolchain.
 
@@ -32,9 +32,9 @@ The harness loads the production shell, home/history views, workspace layout, co
 | Phone | Workspaces/Chat/Changes navigation, unified diff, primary git action and hidden terminal |
 | Workspace states | Sleeping banner, send-to-wake, archived composer and Restore |
 
-CI runs this suite and the existing 21 workspace browser regressions in the `web` job and retains traces on failure. Browser-engine tests on Linux do not satisfy the spec's manual shortcut check in the shipped Chrome, Safari and Firefox on macOS.
+CI runs this suite and the seven existing workspace browser regressions in Chromium in the `web` job and retains traces on failure. Browser-engine tests on Linux do not satisfy the spec's manual shortcut check in the shipped Chrome on macOS.
 
-Restricted Linux sandboxes may need `TEMPO_WEB_NO_SANDBOX=1` for the test Firefox profile, together with the host's Mozilla sandbox environment settings. This affects only the test browser. Ordinary development and CI use the default profile.
+The owner limited browser testing to Chromium. Firefox and WebKit projects and installation are removed; desktop, dark mode and phone coverage remain.
 
 ## Hosted acceptance with keeled
 

@@ -9,6 +9,7 @@ pub mod app;
 pub mod auth;
 pub mod client;
 pub mod image_policy;
+pub mod inline_media;
 pub mod keymap;
 pub mod links;
 pub mod logging;
