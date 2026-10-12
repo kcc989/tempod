@@ -333,6 +333,12 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 - Built-in agent hosts for `allowlist`: `api.anthropic.com`, `claude.ai`, `console.anthropic.com`, `chatgpt.com`, `auth.openai.com`, `api.openai.com`, `openrouter.ai`, `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `cdn.playwright.dev`, `storage.googleapis.com`. Spike S3 and S4 MUST confirm the full list each agent needs.
 - The default policy is `open`.
 
+**Codex device-code login**
+
+Settings uses device-code login by default, without a workspace or container. CredentialDO follows Codex's device-code exchange at `https://auth.openai.com`: request `/api/accounts/deviceauth/usercode` with the Codex public client ID, show `/codex/device` and the user code, poll `/api/accounts/deviceauth/token`, then exchange the authorization code and PKCE verifier at `/oauth/token` with redirect URI `/deviceauth/callback`. Pending poll responses are 403 or 404. Honor the returned interval (minimum one second), expire after 15 minutes, and bound each request to 15 seconds. Never return or log upstream bodies, device auth IDs, authorization codes, verifiers or tokens. This follows the open-source CLI implementation; upstream changes may require updates.
+
+CredentialDO holds one login attempt in memory per owner; a repeated start returns the active attempt. Eviction expires the attempt and the owner reconnects. Serialize start/poll calls; cancellation, removal or a manual upload invalidates the attempt, including an in-flight exchange. Successful login saves Codex-compatible `auth.json` (including ID/access/refresh tokens, account ID and `last_refresh`) encrypted under `codex.auth_json` and pushes it to existing lease holders. No credentials enter browser storage. Upload remains a fallback.
+
 **Codex `auth.json` sync**
 
 Codex rewrites `auth.json` when its token is about 8 days old or a request returns 401. Parallel containers each hold a copy, so Tempo keeps one newest version and pushes it everywhere.
@@ -343,7 +349,7 @@ Codex rewrites `auth.json` when its token is about 8 days old or a request retur
 4. The WorkspaceDO calls `CredentialDO.offerCodexAuth(content, lastRefresh, workspaceId)`. CredentialDO stores it only if `lastRefresh` is newer, then increments `version`.
 5. CredentialDO calls `pushCodexAuth` on every WorkspaceDO that holds a lease, except the sender. Each sends `credential.put` to its `tempod`.
 6. A WorkspaceDO takes a lease when a `codex` session starts and drops it when its container stops.
-7. If a `codex` turn fails with an error that contains `401` or `refresh_token`, `tempod` sends `credential.invalid {provider: "codex"}`. The UI shows a banner asking for a new upload.
+7. If a `codex` turn fails with an error that contains `401` or `refresh_token`, `tempod` sends `credential.invalid {provider: "codex"}`. The UI shows a banner asking the owner to reconnect in Settings.
 
 **Claude token.** The WorkspaceDO reads it from CredentialDO and sends it in `session.start` as part of the adapter env. `tempod` MUST NOT write it to disk or log it.
 
@@ -364,12 +370,18 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Send a prompt**
 
 - The WorkspaceDO sends `session.prompt {sessionId, turnId, content}`. `content` is a list of ACP content blocks built in this order:
-  1. On the first prompt of a session only: a text block with the project's `prompts.general`, if it is set.
+  1. On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set.
   2. On the first prompt after a handoff only: the handoff text block (below); then clear `handoff_pending`. On any prompt: `sessions.pending_note`, if set (for example, the revert note in 03); then clear it.
   3. One text block per review comment group: `Review comments:` followed by one line per comment, `<path>:<line>: <text>`.
   4. The user's text.
   5. One `resource_link` per @-mentioned file: `uri` = `file:///workspace/<path>`, `name` = the file name.
   6. Images: an `image` block if `promptCapabilities.image` is true; else a `resource_link` to the file saved at `/home/tempo/attachments/<turnId>/<name>`.
+- The turn-summary rule is this fixed text. The web and Mac clients show the last agent message of a turn as its answer (04, Work row), so it must stand alone:
+
+  ```text
+  Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that says what you changed, which checks you ran and their results, and what is left to do. Name the command for each check. Link each file you name as file:///workspace/<path>.
+  ```
+
 - `tempod` calls `session/prompt` and turns every `session/update` into items (02). When `session/prompt` returns, it sends `turn.ended {turnId, stopReason}`.
 - Only one turn runs per workspace at a time, across all its sessions. Other prompts wait in the queue.
 

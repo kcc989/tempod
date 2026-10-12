@@ -212,6 +212,17 @@ export const API = {
     Empty,
   ),
   setCodexAuth: fn("POST", Schema.Struct({ authJson: NonEmpty }), Empty),
+  startCodexLogin: fn(
+    "POST",
+    Empty,
+    Schema.Struct({ loginId: S, verificationUrl: S, userCode: S, expiresAt: N, intervalMs: N }),
+  ),
+  pollCodexLogin: fn(
+    "POST",
+    Schema.Struct({ loginId: NonEmpty }),
+    Schema.Struct({ status: Schema.Literals(["pending", "connected", "expired"]) }),
+  ),
+  cancelCodexLogin: fn("POST", Schema.Struct({ loginId: NonEmpty }), Empty),
   setApiKey: fn("POST", Schema.Struct({ provider: ApiKeyProvider, key: NonEmpty }), Empty),
   deleteCredential: fn("POST", Schema.Struct({ key: S }), Empty),
   setProjectSecret: fn("POST", Schema.Struct({ projectId: S, name: EnvName, value: S }), Empty),

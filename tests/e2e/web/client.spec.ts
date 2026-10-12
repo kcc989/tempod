@@ -261,7 +261,9 @@ test("permission keyboard replies close the live card", async ({ page, fixture }
 test("sleep and archive expose the correct read-only and restore states", async ({ page, fixture }) => {
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
   fixture.updateWorkspace({ state: "sleeping" });
-  await expect(page.getByText("Sleeping. Sending a message wakes it.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sleeping", exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder(/to wake this workspace$/)).toBeVisible();
+  await expect(page.getByText("Sleeping. Sending a message wakes it.")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Message", exact: true }).fill("Wake and continue");
   await page.getByRole("textbox", { name: "Message", exact: true }).press("Enter");
   await expect.poll(() => fixture.inputs("sendPrompt").length).toBe(1);
@@ -298,8 +300,8 @@ test("desktop shortcuts, settings, live scripts and terminal", async ({ page, fi
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+Comma");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
-  await page.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
   await expect(page.getByText("Theme", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Alt+r");

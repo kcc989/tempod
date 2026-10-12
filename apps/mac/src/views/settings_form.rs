@@ -1,13 +1,14 @@
-use crate::storage::{Local, Theme as SavedTheme};
-use gpui_kit::component::button::Button;
+use crate::storage::{Local, Theme as SavedTheme, TranscriptDetail};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
-use gpui_kit::component::{Disableable as _, Theme, ThemeMode, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Selectable as _, Theme, ThemeMode, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task, Window, div,
 };
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::time::Duration;
 use tempo_protocol::{self as p, api};
 
 struct Field {
@@ -18,6 +19,7 @@ struct Field {
 }
 pub struct SettingsForm {
     pub tab: usize,
+    pub section: usize,
     client: Option<tempo_client::Client>,
     credentials: Option<p::CredentialStatus>,
     secret_inputs: BTreeMap<String, Entity<InputState>>,
@@ -33,6 +35,10 @@ pub struct SettingsForm {
     error: Option<String>,
     pending: bool,
     credential_changed: Option<p::CredentialProvider>,
+    codex_login: Option<p::StartCodexLoginOut>,
+    codex_busy: bool,
+    codex_login_task: Option<Task<()>>,
+    codex_upload: bool,
 }
 impl SettingsForm {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -82,6 +88,7 @@ impl SettingsForm {
             .collect();
         let mut this = Self {
             tab: 0,
+            section: 0,
             client,
             credentials: None,
             secret_inputs,
@@ -101,6 +108,10 @@ impl SettingsForm {
             error: None,
             pending: false,
             credential_changed: None,
+            codex_login: None,
+            codex_busy: false,
+            codex_login_task: None,
+            codex_upload: false,
         };
         this.refresh(cx);
         this
@@ -225,6 +236,108 @@ impl SettingsForm {
         })
         .detach();
     }
+    fn codex_connected(&mut self, cx: &mut Context<Self>) {
+        self.codex_login = None;
+        self.codex_busy = false;
+        self.error = None;
+        if let Some(app) = crate::app::AppState::try_global(cx) {
+            app.update(cx, |a, cx| {
+                a.credentials_rev += 1;
+                a.credential_changed = Some(p::CredentialProvider::Codex);
+                cx.notify();
+            });
+        }
+        self.refresh(cx);
+        cx.notify();
+    }
+    fn connect_codex(&mut self, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        if self.codex_busy || self.pending {
+            return;
+        }
+        self.codex_busy = true;
+        self.error = None;
+        cx.notify();
+        self.codex_login_task = Some(cx.spawn(async move |this, cx| {
+            let result = client.call::<api::StartCodexLogin>(p::Empty {}).await;
+            let login = match result {
+                Ok(login) => login,
+                Err(error) => {
+                    let _ = this.update(cx, |this, cx| {
+                        this.codex_busy = false;
+                        this.error = Some(error.to_string());
+                        cx.notify();
+                    });
+                    return;
+                }
+            };
+            if this
+                .update(cx, |this, cx| {
+                    this.codex_login = Some(login.clone());
+                    cx.notify();
+                })
+                .is_err()
+            {
+                return;
+            }
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_secs_f64((login.interval_ms / 1000.).max(1.)))
+                    .await;
+                let Ok(login_id) = login.login_id.clone().try_into() else {
+                    return;
+                };
+                let result = client
+                    .call::<api::PollCodexLogin>(p::PollCodexLoginIn { login_id })
+                    .await;
+                match result {
+                    Ok(result) if result.status == p::PollCodexLoginOutStatus::Pending => continue,
+                    Ok(result) if result.status == p::PollCodexLoginOutStatus::Connected => {
+                        let _ = this.update(cx, |this, cx| this.codex_connected(cx));
+                    }
+                    result => {
+                        let _ = this.update(cx, |this, cx| {
+                            this.codex_login = None;
+                            this.codex_busy = false;
+                            this.error = Some(match result {
+                                Err(error) => error.to_string(),
+                                _ => "Codex login expired. Connect again to get a new code.".into(),
+                            });
+                            cx.notify();
+                        });
+                    }
+                }
+                break;
+            }
+        }));
+    }
+
+    fn cancel_codex(&mut self, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let Some(login) = &self.codex_login else {
+            return;
+        };
+        let Ok(login_id) = login.login_id.clone().try_into() else {
+            return;
+        };
+        self.codex_login_task.take();
+        self.codex_login_task = Some(cx.spawn(async move |this, cx| {
+            let result = client
+                .call::<api::CancelCodexLogin>(p::CancelCodexLoginIn { login_id })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.codex_login = None;
+                this.codex_busy = false;
+                this.error = result.err().map(|error| error.to_string());
+                cx.notify();
+            });
+        }));
+    }
+
     fn upload_codex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.pending {
             return;
@@ -320,6 +433,121 @@ impl SettingsForm {
             self.error = Some("Enter a valid credential.".into());
             cx.notify();
         }
+    }
+    fn codex_card(
+        &self,
+        set: bool,
+        updated: Option<f64>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let mut card = v_flex().gap_3()
+            .child(div().text_lg().child("Codex"))
+            .child(if set { "Set" } else { "Not set" })
+            .child("Sign in with ChatGPT using a one-time code. Enable device-code login in your ChatGPT security settings or ask your workspace admin.");
+        if let Some(login) = &self.codex_login {
+            let uri = login.verification_url.clone();
+            card = card
+                .child("Open the sign-in page, then enter this code:")
+                .child(
+                    div()
+                        .text_3xl()
+                        .font_family("monospace")
+                        .child(login.user_code.clone()),
+                )
+                .child(
+                    Button::new("codex-open-sign-in")
+                        .primary()
+                        .label("Open sign-in page")
+                        .on_click(move |_, _, cx| cx.open_url(&uri)),
+                )
+                .child(
+                    Button::new("codex-cancel")
+                        .label("Cancel")
+                        .on_click(cx.listener(|this, _, _, cx| this.cancel_codex(cx))),
+                )
+                .child("Waiting for sign-in… This code expires in 15 minutes.");
+        } else {
+            card = card.child(
+                Button::new("codex-connect")
+                    .primary()
+                    .disabled(self.codex_busy || self.pending)
+                    .label(if self.codex_busy || self.pending {
+                        "Connecting…"
+                    } else if set {
+                        "Reconnect Codex"
+                    } else {
+                        "Connect Codex"
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| this.connect_codex(cx))),
+            );
+        }
+        card = card.child(
+            Button::new("codex-upload-toggle")
+                .disabled(self.codex_busy || self.pending)
+                .label("Use auth.json instead")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.codex_upload = !this.codex_upload;
+                    cx.notify();
+                })),
+        );
+        card = card.children(updated.filter(|at| at.is_finite() && *at >= 0.).map(|at| {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs_f64()
+                * 1000.;
+            let minutes = ((now - at).max(0.) / 60_000.) as u64;
+            let label = if minutes < 1 {
+                "Just now".into()
+            } else if minutes < 60 {
+                format!("{minutes} minutes ago")
+            } else if minutes < 1440 {
+                format!("{} hours ago", minutes / 60)
+            } else {
+                format!("{} days ago", minutes / 1440)
+            };
+            div().text_sm().child(format!("Last updated · {label}"))
+        }));
+        card = card.child(
+            Button::new("delete-Codex")
+                .label("Remove")
+                .disabled(!set || self.pending || self.codex_busy)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.credential_changed = Some(p::CredentialProvider::Codex);
+                    this.mutate::<api::DeleteCredential>(
+                        p::DeleteCredentialIn {
+                            key: "codex.auth_json".into(),
+                        },
+                        None,
+                        window,
+                        cx,
+                    );
+                })),
+        );
+        if self.codex_upload {
+            card = card
+                .child(
+                    Button::new("upload-codex-auth")
+                        .label("Upload auth.json")
+                        .disabled(self.codex_busy || self.pending)
+                        .on_click(cx.listener(|this, _, window, cx| this.upload_codex(window, cx))),
+                )
+                .child("Run codex login, then paste ~/.codex/auth.json.")
+                .child(
+                    Input::new(&self.secret_inputs["Codex"])
+                        .id("codex-auth-json")
+                        .aria_label("Codex auth.json"),
+                )
+                .child(
+                    Button::new("codex-upload-save")
+                        .disabled(self.codex_busy || self.pending)
+                        .label("Save")
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.save_login("Codex", window, cx)),
+                        ),
+                );
+        }
+        card
     }
     fn save_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(project) = self.project.clone() else {
@@ -583,6 +811,9 @@ impl Render for SettingsForm {
                                 "Anthropic" => s.anthropic.updated_at,
                                 _ => s.openai.updated_at,
                             });
+                            if name == "Codex" {
+                                return self.codex_card(set, updated, cx).into_any_element();
+                            }
                             v_flex()
                                 .gap_1()
                                 .child(format!("{name} · {}", if set { "Set" } else { "Not set" }))
@@ -665,6 +896,7 @@ impl Render for SettingsForm {
                                             })),
                                         ),
                                 )
+                                .into_any_element()
                         }),
                 )
                 .into_any_element(),
@@ -694,7 +926,17 @@ impl Render for SettingsForm {
                         .is_none()
                         .then(|| div().child("Link a project to edit its settings.")),
                 )
-                .children(self.fields.iter().enumerate().map(|(ix, f)| {
+                .children(self.fields.iter().enumerate().filter(|(_, field)| {
+                    let group = field.path.first().map(String::as_str);
+                    match self.section {
+                        0 => group == Some("agent"),
+                        1 => group == Some("scripts"),
+                        2 => matches!(group, Some("environment" | "environment_variables")),
+                        3 => group == Some("git"),
+                        4 => group == Some("prompts"),
+                        _ => false,
+                    }
+                }).map(|(ix, f)| {
                     let mut path = f.path.clone();
                     if path.len() > 3 && path[0] == "scripts" && path[1] == "run" {
                         path.truncate(3);
@@ -729,64 +971,70 @@ impl Render for SettingsForm {
                                 })),
                         )
                 }))
-                .child(
+                .children((self.section < 5).then(|| {
                     Button::new("save-project")
                         .label("Save project settings")
                         .disabled(self.project.is_none() || self.pending)
-                        .on_click(cx.listener(|this, _, window, cx| this.save_project(window, cx))),
-                )
-                .child(Input::new(&self.add_name))
-                .child(Input::new(&self.add_value))
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Button::new("add-run-setting")
-                                .label("Add run script")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.add_setting(true, window, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new("add-env-setting")
-                                .label("Add environment variable")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.add_setting(false, window, cx)
-                                })),
-                        ),
-                )
-                .child("Project secrets")
-                .children(self.secret_names.iter().map(|name| {
-                    let name = name.clone();
-                    let label = name.clone();
-                    Button::new(SharedString::from(format!("remove-secret-{name}")))
-                        .label(format!("Remove {label}"))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            if let Some(project_id) = this.project_id.clone() {
-                                this.mutate::<api::DeleteProjectSecret>(
-                                    p::DeleteProjectSecretIn {
-                                        project_id,
-                                        name: name.clone(),
-                                    },
-                                    None,
-                                    window,
-                                    cx,
-                                );
-                            }
-                        }))
+                        .on_click(cx.listener(|this, _, window, cx| this.save_project(window, cx)))
                 }))
-                .child(Input::new(&self.secret_name))
-                .child(Input::new(&self.secret_value))
-                .child(
-                    Button::new("set-secret")
-                        .label("Set secret")
-                        .disabled(self.pending)
-                        .on_click(cx.listener(|this, _, window, cx| this.set_secret(window, cx))),
-                )
+                .children((self.section == 1 || self.section == 2).then(|| {
+                    v_flex()
+                        .child(Input::new(&self.add_name))
+                        .child(Input::new(&self.add_value))
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .child(
+                                    Button::new("add-run-setting")
+                                        .label("Add run script")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.add_setting(true, window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new("add-env-setting")
+                                        .label("Add environment variable")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.add_setting(false, window, cx)
+                                        })),
+                                ),
+                        )
+                }))
+                .children((self.section == 5).then(|| {
+                    v_flex()
+                        .child("Project secrets")
+                        .children(self.secret_names.iter().map(|name| {
+                            let name = name.clone();
+                            let label = name.clone();
+                            Button::new(SharedString::from(format!("remove-secret-{name}")))
+                                .label(format!("Remove {label}"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if let Some(project_id) = this.project_id.clone() {
+                                        this.mutate::<api::DeleteProjectSecret>(
+                                            p::DeleteProjectSecretIn {
+                                                project_id,
+                                                name: name.clone(),
+                                            },
+                                            None,
+                                            window,
+                                            cx,
+                                        );
+                                    }
+                                }))
+                        }))
+                        .child(Input::new(&self.secret_name))
+                        .child(Input::new(&self.secret_value))
+                        .child(
+                            Button::new("set-secret")
+                                .label("Set secret")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(|this, _, window, cx| this.set_secret(window, cx))),
+                        )
+                }))
                 .into_any_element(),
-            2 => h_flex()
+            2 => v_flex()
                 .gap_2()
-                .children(
+                .child(h_flex().gap_2().child("Theme").children(
                     [
                         ("System", SavedTheme::System),
                         ("Light", SavedTheme::Light),
@@ -810,6 +1058,24 @@ impl Render for SettingsForm {
                                 }
                             })
                     }),
+                ))
+                .child(
+                    h_flex().gap_2().child("Transcript detail").children(
+                        [
+                            ("Default", TranscriptDetail::Default),
+                            ("Detailed", TranscriptDetail::Detailed),
+                        ]
+                        .map(|(label, detail)| {
+                            let current = cx.global::<Local>().config().transcript_detail;
+                            Button::new(SharedString::from(format!("detail-{label}")))
+                                .label(label)
+                                .selected(current == detail)
+                                .on_click(move |_, _, cx| {
+                                    cx.global_mut::<Local>()
+                                        .update_config(|c| c.transcript_detail = detail);
+                                })
+                        }),
+                    ),
                 )
                 .into_any_element(),
             _ => {

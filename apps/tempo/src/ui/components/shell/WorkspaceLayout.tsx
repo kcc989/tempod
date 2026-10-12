@@ -15,14 +15,16 @@ import { useAction } from "~/ui/hooks/useActions";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useWorkspaceLifecycle, useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
-import { useLayout } from "~/ui/hooks/useWorkspaceUi";
+import { useLayout, useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
 import { safeLayoutStorage } from "~/ui/lib/storage";
 import {
   cycleTab,
   focusComposer,
+  isRightOpen,
   openDiff,
   openDialog,
   setLayout,
+  setRightQuiet,
   toggleDiffScope,
 } from "~/ui/state/workspace-ui";
 
@@ -79,7 +81,17 @@ function useWorkspaceActions(workspaceId: string, projectId: string | undefined)
 }
 
 function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
-  const { rightOpen } = useLayout();
+  const layout = useLayout();
+  const quiet = useWorkspaceSelector(workspaceId, (s) => {
+    const w = s.workspace;
+    if (!w) return false;
+    return (
+      w.state === "sleeping" || (((s.changes ?? w.changes)?.files.length ?? 0) === 0 && w.prNumber === null)
+    );
+  });
+  useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
+  const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
+  const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned });
   const horizontal = useDefaultLayout({
     id: "workspace",
     panelIds: rightOpen ? ["center", "right"] : ["center"],

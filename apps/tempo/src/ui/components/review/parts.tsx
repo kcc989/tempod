@@ -50,7 +50,7 @@ export function LineCounts({
   );
 }
 
-/** 04, Empty states: while sleeping, the file tree shows `Wake to browse files`. */
+/** Explicit wake for container-dependent views and sleeping file cache misses. */
 export function WakeButton({
   workspaceId,
   label,

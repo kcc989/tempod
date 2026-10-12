@@ -124,16 +124,27 @@ export function useAddComment(onDone?: () => void) {
   });
 }
 
-/** listFiles while the container is up; refetched when files change. */
+/** listFiles uses the DO fallback while sleeping. */
 export function useFileList(workspaceId: string, enabled = true) {
-  const live = useLive(workspaceId);
+  const state = useWorkspaceStateValue(workspaceId);
+  const live = isLive(state);
+  const available = live || state === "sleeping";
   useInvalidateOnChanges(workspaceId, LIST_FILES);
   const query = useCallQuery(
     "listFiles",
     { workspaceId },
-    { enabled: enabled && live, staleTime: 30_000, retry: false, refetchInterval: retryWhileWaking },
+    {
+      enabled: enabled && available,
+      staleTime: 30_000,
+      retry: false,
+      refetchInterval: live ? retryWhileWaking : false,
+    },
   );
-  return { query, live };
+  const { refetch } = query;
+  useEffect(() => {
+    if (enabled && available) void refetch();
+  }, [enabled, available, state, refetch]);
+  return { query, live, available };
 }
 
 const LIST_FILES = ["listFiles"] as const;

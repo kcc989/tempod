@@ -86,6 +86,19 @@ CREATE INDEX workspaces_by_activity ON workspaces(user_id, archived_at, last_act
 
 Each WorkspaceDO holds the full record of one workspace. Everything the UI shows for a workspace comes from here.
 
+The read-only file fallback uses this additional table. Null contents mean a known path whose contents are not cached.
+
+```sql
+CREATE TABLE file_cache (
+  path           TEXT PRIMARY KEY,
+  response_json  TEXT,
+  bytes          INTEGER NOT NULL DEFAULT 0,
+  updated_at     INTEGER NOT NULL DEFAULT 0
+);
+```
+
+`filesSyncedAt` in DO KV records that a tree has been synced, including an empty tree. File contents keep the existing `readFile` response format. Only paths from `fs.list` are persisted, so ignored files are excluded. Contents are bounded to 1,000 files and 16 MiB of encoded JSON per workspace; older contents are evicted while paths remain. Each best-effort sync pass takes at most 10 seconds, prioritizes changed and already cached files, and reads at most 1,000 files. Sync after create/wake, coalesce `git.changed` notifications for 5 seconds, and attempt a final sync before shutdown and on SIGTERM. Sync failures do not block work or sleep. Successful live reads refresh the cache; deletions and renames prune old paths when the tree syncs.
+
 ```sql
 -- Exactly one row, id = 1.
 CREATE TABLE workspace (
@@ -366,6 +379,9 @@ One more CredentialDO instance is named `system`. It holds the GitHub App config
 | `offerCodexAuth(content, lastRefresh, fromWorkspaceId)` | `{accepted, version}` |
 | `getCodexAuth()` | `{content, version, lastRefresh}` or `null`. WorkspaceDO only. |
 | `getGithubAppConfig()` | `{appId, slug, privateKey, clientId, clientSecret}` or `null`. On the `system` instance only. Only the Worker's `auth/` and `github/` modules call it. |
+| `startCodexLogin()` | `Result<{loginId, verificationUrl, userCode, expiresAt, intervalMs}>`; one active in-memory attempt per owner |
+| `pollCodexLogin(loginId)` | `Result<{status: "pending" \| "connected" \| "expired"}>`; tokens stay inside CredentialDO |
+| `cancelCodexLogin(loginId)` | `void`; idempotent and scoped to the matching attempt |
 | `addCodexLease(workspaceId)`, `dropCodexLease(workspaceId)` | `void` |
 
 **UserHubDO** (one per user)
@@ -530,8 +546,8 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000 | `CONTAINER_NOT_READY` |
-| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}` | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE` |
+| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000; last synced tree while sleeping | `CONTAINER_NOT_READY` (no synced tree) |
+| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}`; last synced contents while sleeping | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE`, `CONTAINER_NOT_READY` (contents not cached) |
 | `searchFiles` | `{workspaceId, query, regex?}` | `[{path, line, text}]`, at most 500 | — |
 | `runScript` | `{workspaceId, scriptId}` | `ScriptRun` | `NOT_FOUND` |
 | `stopScript` | `{workspaceId, runId}` | `{}` | — |
@@ -546,6 +562,9 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `getCredentialStatus` | `{}` | `{claude, codex, openrouter, anthropic, openai}`, each `{set, updatedAt}`; `codex` adds `lastRefresh` | — |
 | `setClaudeToken` | `{token}`: no spaces, 20 to 4096 chars | `{}` | `VALIDATION_FAILED` |
 | `setCodexAuth` | `{authJson}`: MUST parse and contain `tokens.access_token`, `tokens.refresh_token`, `last_refresh` | `{}` | `VALIDATION_FAILED` |
+| `startCodexLogin` | `{}` | `{loginId, verificationUrl, userCode, expiresAt, intervalMs}` | `CREDENTIAL_INVALID` |
+| `pollCodexLogin` | `{loginId}` | `{status: "pending" \| "connected" \| "expired"}` | `CREDENTIAL_INVALID` |
+| `cancelCodexLogin` | `{loginId}` | `{}` | — |
 | `setApiKey` | `{provider: "openrouter" or "anthropic" or "openai", key}` | `{}` | `VALIDATION_FAILED` |
 | `deleteCredential` | `{key}` | `{}` | — |
 | `setProjectSecret` | `{projectId, name, value}`; `name` matches `^[A-Z_][A-Z0-9_]*$` | `{}` | `VALIDATION_FAILED` |
