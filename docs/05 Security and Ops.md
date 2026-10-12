@@ -107,7 +107,7 @@ One deploy command builds the image, deploys the Worker and runs migrations. A o
 | `DATA` | R2 binding | Bucket `tempo-data` |
 | `WORKSPACE`, `USER_HUB`, `CREDENTIALS` | DO bindings | As in 01 |
 
-**Deploy.** `bun run deploy` runs Alchemy v2. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and print `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>`.
+**Deploy.** `bun run deploy` first verifies Cloudflare API access and the existing Alchemy state-store health endpoint, then runs Alchemy v2. An unreachable existing store must stop deployment before bootstrap; a network error must never be interpreted as absent state. When the store exists, the wrapper disables automatic bootstrap/upgrade approval (`--yes`) and runs without prompts. Existing state-store auth/encryption secrets and the Tempo secrets must be preserved. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and print `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>`.
 
 **GitHub App setup** (manifest flow)
 

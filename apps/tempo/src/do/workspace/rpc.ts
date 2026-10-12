@@ -691,6 +691,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           draft,
         },
       );
+      core.setKv("prTitle", title.trim() || row.title || row.branch);
       core.updateWs({ prNumber: pr.number, prState: pr.state, checksState: null });
       core.publish();
       core.scheduleAlarm();

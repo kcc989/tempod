@@ -173,7 +173,12 @@ export const API = {
   refreshPullRequest: fn(
     "POST",
     Schema.Struct(W),
-    Schema.Struct({ prNumber: Schema.NullOr(N), prState: Schema.NullOr(S), checksState: Schema.NullOr(S) }),
+    Schema.Struct({
+      prNumber: Schema.NullOr(N),
+      prState: Schema.NullOr(S),
+      checksState: Schema.NullOr(S),
+      prTitle: Schema.optional(Schema.NullOr(S)),
+    }),
   ),
   listCheckRuns: fn("GET", Schema.Struct(W), Schema.Array(CheckRun)),
 

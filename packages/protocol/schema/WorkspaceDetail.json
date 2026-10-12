@@ -148,6 +148,23 @@
     "pushed": {
       "type": "boolean"
     },
+    "prTitle": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "previewToken": {
       "type": "string"
     },
