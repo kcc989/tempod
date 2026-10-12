@@ -54,7 +54,7 @@ The owner approved deployment and hosted tests on 2026-10-11. PR #5's GitHub CI 
 
 The production image built as `sha256:f0b5fa7a2601babcf3e78a31509f489f1b364212f7c1da923b745f5003910e30`, at 3,171,713,483 bytes (under 6 GB). All 119 daemon tests pass inside it. The runner supplies proxy settings and a temporary BuildKit CA secret; neither credentials nor the runner CA are copied into image layers.
 
-Alchemy's optional `@effect/platform-node` peer at the existing Effect version 4.0.3 was supplied in local deployment tooling to unblock CLI module loading. Repository dependencies were not changed. The approved `production` deployment attempt then stopped at remote state initialization; no app cloud resources were provisioned. The current enforced network policy still denies the necessary destinations. Add these through the environment configuration workflow before resuming:
+Alchemy's optional `@effect/platform-node` peer at the existing Effect version 4.0.3 was initially supplied in local deployment tooling to unblock CLI module loading. Main now includes this pinned dependency and a guarded deployment command. The approved `production` deployment attempt stopped at remote state initialization; no app cloud resources were provisioned. The current enforced network policy still denies the necessary destinations. Add these through the environment configuration workflow before resuming:
 
 - `tempod.dev`
 - `typecast.dev` and `*.typecast.dev`
@@ -63,4 +63,4 @@ Alchemy's optional `@effect/platform-node` peer at the existing Effect version 4
 
 Deployment approval remains in effect. After network access is enabled, resume the same Alchemy account/profile with `--stage production`, using `ALCHEMY_HOME=/workspace/.config/tempo-alchemy` on this runner. Owner GitHub App setup, sign-in and agent credentials still need the real app; no hosted gate or paid agent evaluation has run.
 
-The shared-server gaps recorded in `WEB-CLIENT-CORE-REQUESTS.md` also remain open: historical per-turn token usage, PR titles after closing/merging, and authenticated attachment retrieval after reload. Local tests cannot supply these missing production contracts.
+Main `022fdf1` now supplies closed/merged PR titles and owner-authenticated attachment retrieval through shared contracts, as recorded in `WEB-CLIENT-CORE-REQUESTS.md`. Client integration and hosted verification still need those contracts; historical per-turn token accounting remains open.
