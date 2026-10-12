@@ -40,6 +40,7 @@ Branch `claude/compassionate-lovelace-798clf`, from main `1e588ba`. Goal: featur
   - `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` and `cargo test --workspace` pass; `tempo-mac` has 194 tests.
 - **Owner decisions:** Q-4 to Q-10 are answered and built: Browser Run with Live View, owner-only previews, PR workspaces and one default model per agent (`IMPLEMENTATION_NOTES.md`).
 - **Merged main `548417d`:** PR #10 replaces the Settings dialog with sidebar settings pages (web and Mac); a project's Agents page holds the per-agent models and Browser Run. PR #11 adds Codex device-code login (`startCodexLogin`, `pollCodexLogin`, `cancelCodexLogin`); `auth.json` upload stays as a fallback.
+- **Merged main `c6c6c84`:** PR #12 lets a sleeping workspace browse synced files. The WorkspaceDO keeps a `file_cache` table (DO migration `0002_file_cache`), filled by best-effort sync passes. While sleeping, `listFiles` and `readFile` answer from it; a cache miss returns `CONTAINER_NOT_READY` without a wake. Web and Mac file views show the cached files and `Wake to browse files`. In every other state, `error` included, the two calls stay wake triggers (Q-5); 03 says so.
 - **Not done:** spikes, hosted gates B–E and Mac acceptance need a real account, logins and a Mac.
 
 ## Current state

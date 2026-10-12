@@ -43,6 +43,7 @@ struct Document {
     scope: Option<p::DiffScope>,
 }
 pub struct ReviewPanel {
+    weak: gpui_kit::WeakEntity<ReviewPanel>,
     store: Entity<WorkspaceStore>,
     client: Client,
     tab: usize,
@@ -133,11 +134,27 @@ impl ReviewPanel {
                 this.initialized = true;
                 this.changes_seq = seq;
                 this.refresh(cx);
+                // These reloads are not user actions: reads that need the container would wake it.
+                let live = this.live(cx);
+                let browsable = live || this.sleeping(cx);
+                if this.tab == 1 && browsable {
+                    this.load_paths(cx);
+                }
                 if this.document_open
                     && this.diff.is_some()
+                    && live
                     && let Some(path) = this.selected.clone()
                 {
                     this.open_diff(path, window, cx);
+                } else if this.document_open
+                    && browsable
+                    && this
+                        .active_document
+                        .as_deref()
+                        .is_some_and(|key| key.starts_with("file:"))
+                    && let Some(path) = this.selected.clone()
+                {
+                    this.open_file(path, window, cx);
                 }
             }
             cx.notify();
@@ -152,6 +169,7 @@ impl ReviewPanel {
             }
         });
         let mut this = Self {
+            weak: cx.weak_entity(),
             store,
             client,
             tab: 0,
@@ -206,12 +224,51 @@ impl ReviewPanel {
     fn id(&self, cx: &gpui_kit::App) -> String {
         self.store.read(cx).workspace_id.clone()
     }
+    fn sleeping(&self, cx: &gpui_kit::App) -> bool {
+        self.store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .is_some_and(|w| w.state == p::WorkspaceState::Sleeping)
+    }
+    fn live(&self, cx: &gpui_kit::App) -> bool {
+        self.store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .is_some_and(|w| live(w.state))
+    }
+    fn wake_button(&self, id: &'static str) -> Button {
+        let weak = self.weak.clone();
+        Button::new(id)
+            .label("Wake to browse files")
+            .on_click(move |_, _, cx| {
+                let _ = weak.update(cx, |this, cx| {
+                    let request = this.client.call::<api::WakeWorkspace>(p::WakeWorkspaceIn {
+                        workspace_id: this.id(cx),
+                    });
+                    cx.spawn(async move |this, cx| {
+                        let result = request.await;
+                        let _ = this.update(cx, |this, cx| {
+                            match result {
+                                Ok(_) => this.error = None,
+                                Err(e) => super::toast::error_in_main_window(&e, None, cx),
+                            }
+                            cx.notify();
+                        });
+                    })
+                    .detach();
+                });
+            })
+    }
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         if !self.store.read(cx).state.ready {
             return;
         }
         if let Some(workspace) = &self.store.read(cx).state.workspace
-            && workspace.state == p::WorkspaceState::Sleeping
+            && !live(workspace.state)
         {
             self.files = workspace
                 .changes
@@ -220,6 +277,20 @@ impl ReviewPanel {
                 .map(|s| s.files.clone())
                 .unwrap_or_default();
             self.loading = false;
+            let comments = self
+                .client
+                .call::<api::ListReviewComments>(p::ListReviewCommentsIn {
+                    workspace_id: self.id(cx),
+                });
+            cx.spawn(async move |this, cx| {
+                if let Ok(comments) = comments.await {
+                    let _ = this.update(cx, |this, cx| {
+                        this.comments = comments;
+                        cx.notify();
+                    });
+                }
+            })
+            .detach();
             cx.notify();
             return;
         }
@@ -392,6 +463,7 @@ impl ReviewPanel {
         self.document_generation += 1;
         let generation = self.document_generation;
         self.document_loading = true;
+        self.error = None;
         let request = self.client.call::<api::ReadFile>(p::ReadFileIn {
             workspace_id: self.id(cx),
             path: path.clone(),
@@ -424,6 +496,12 @@ impl ReviewPanel {
                         this.cache_document();
                     }
                     Ok(_) => this.error = Some("This file is binary.".into()),
+                    Err(e)
+                        if this.sleeping(cx)
+                            && e.code() == Some(p::ErrorCode::ContainerNotReady) =>
+                    {
+                        this.error = Some("Wake to browse files".into())
+                    }
                     Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
@@ -508,9 +586,19 @@ impl ReviewPanel {
             return div().size_full().child(diff.clone()).into_any_element();
         }
         if let Some(file) = &self.file {
-            return Editor::new(file)
-                .readonly(true)
+            return v_flex()
                 .size_full()
+                .children(
+                    self.sleeping(cx)
+                        .then(|| div().p_2().child("Last synced file. May be out of date.")),
+                )
+                .child(Editor::new(file).readonly(true).size_full())
+                .into_any_element();
+        }
+        if self.sleeping(cx) && self.error.as_deref() == Some("Wake to browse files") {
+            return div()
+                .p_4()
+                .child(self.wake_button("wake-file"))
                 .into_any_element();
         }
         div()
@@ -552,22 +640,11 @@ impl ReviewPanel {
         cx.notify();
     }
     fn load_paths(&mut self, cx: &mut Context<Self>) {
-        if self
-            .store
-            .read(cx)
-            .state
-            .workspace
-            .as_ref()
-            .is_some_and(|w| w.state == p::WorkspaceState::Sleeping)
-        {
-            self.error = Some("Wake to browse files".into());
-            cx.notify();
-            return;
-        }
         let request = self.client.call::<api::ListFiles>(p::ListFilesIn {
             workspace_id: self.id(cx),
         });
         self.loading = true;
+        self.error = None;
         cx.spawn(async move |this, cx| {
             let result = request.await;
             let result = match result {
@@ -592,6 +669,12 @@ impl ReviewPanel {
                         this.match_files(cx);
                         this.tree
                             .update(cx, |state, cx| state.set_items(tree.items(), cx));
+                    }
+                    Err(e)
+                        if this.sleeping(cx)
+                            && e.code() == Some(p::ErrorCode::ContainerNotReady) =>
+                    {
+                        this.error = Some("Wake to browse files".into())
                     }
                     Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
@@ -1028,6 +1111,14 @@ pub fn sort_runs(mut runs: Vec<p::CheckRun>) -> Vec<p::CheckRun> {
     runs
 }
 
+/// 03, Wake triggers: in other states a read that needs the container starts a wake.
+fn live(state: p::WorkspaceState) -> bool {
+    matches!(
+        state,
+        p::WorkspaceState::Ready | p::WorkspaceState::Working | p::WorkspaceState::SettingUp
+    )
+}
+
 fn safe_http_url(url: &str) -> Option<String> {
     (url.starts_with("https://") || url.starts_with("http://")).then(|| url.to_string())
 }
@@ -1188,6 +1279,14 @@ impl Render for ReviewPanel {
                 .into_any_element(),
             1 => v_flex()
                 .size_full()
+                .children(
+                    (self.sleeping(cx) && self.error.is_none())
+                        .then(|| div().p_2().child("Last synced files. May be out of date.")),
+                )
+                .children(
+                    (self.sleeping(cx) && self.error.as_deref() == Some("Wake to browse files"))
+                        .then(|| self.wake_button("wake-files")),
+                )
                 .child(Input::new(&self.query))
                 .children((!query.is_empty() && paths.is_empty()).then(|| {
                     div().p_2().child(if self.fuzzy_loading {
@@ -1199,6 +1298,7 @@ impl Render for ReviewPanel {
                 .child(
                     Button::new("search-content")
                         .label("Search files")
+                        .disabled(self.sleeping(cx))
                         .on_click(cx.listener(|this, _, _, cx| this.search(cx))),
                 )
                 .child(if self.search_mode {

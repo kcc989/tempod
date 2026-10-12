@@ -1,4 +1,5 @@
 import {
+  API,
   Capabilities,
   ITEM_CONTENT,
   PermissionOption,
@@ -86,6 +87,7 @@ export const json = {
   permissionOptions: jsonColumn("permissions.options_json", Schema.Array(PermissionOption)),
   summary: jsonColumn("summaries.summary_json", WorkspaceSummary),
   secretMeta: jsonColumn("secrets.meta_json", SecretMeta),
+  fileResponse: jsonColumn("file_cache.response_json", API.readFile.output),
 } as const;
 
 export const EMPTY_PROMPT: TurnPrompt = { text: "", mentions: [], attachmentIds: [], reviewCommentIds: [] };

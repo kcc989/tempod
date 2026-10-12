@@ -3030,6 +3030,13 @@ mod tests {
                         }
                     } else if path.ends_with("/getCredentialStatus") {
                         (200,r#"{"claude":{"set":true,"updatedAt":null},"anthropic":{"set":true,"updatedAt":null},"openai":{"set":true,"updatedAt":null},"openrouter":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null}}"#.into())
+                    } else if path.ends_with("/listFiles") {
+                        (200, r#"{"paths":["README.md"]}"#.into())
+                    } else if path.ends_with("/readFile") {
+                        (
+                            200,
+                            r#"{"content":"cached contents","encoding":"utf8","size":15}"#.into(),
+                        )
                     } else {
                         (200, "{}".into())
                     };
@@ -3321,6 +3328,123 @@ mod tests {
                 .any(|(path, _)| path.ends_with("/wakeWorkspace"))
         );
         assert_eq!(toasts(cx, window), 0, "the banner already shows INTERNAL");
+    }
+
+    #[gpui_kit::test]
+    fn sleeping_files_use_cached_reads_without_waking(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::Sleeping;
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.review.update(cx, |review, cx| {
+                    review.open_picker(cx);
+                    review.open_file("README.md".into(), window, cx);
+                });
+            });
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| view.review.read(cx).file.is_some());
+        let requests = server.requests.lock().unwrap();
+        assert!(
+            requests
+                .iter()
+                .any(|(path, _)| path.ends_with("/listFiles"))
+        );
+        assert!(requests.iter().any(|(path, _)| path.ends_with("/readFile")));
+        assert!(
+            !requests
+                .iter()
+                .any(|(path, _)| path.ends_with("/wakeWorkspace") || path.ends_with("/getChanges"))
+        );
+    }
+
+    #[gpui_kit::test]
+    fn review_reloads_on_state_changes_never_wake_the_workspace(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::Ready;
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.review.update(cx, |review, cx| {
+                    review.open_picker(cx);
+                    review.open_file("README.md".into(), window, cx);
+                });
+            });
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| view.review.read(cx).file.is_some());
+        for next in [
+            p::WorkspaceState::Stopping,
+            p::WorkspaceState::Sleeping,
+            p::WorkspaceState::Error,
+            p::WorkspaceState::Starting,
+        ] {
+            server.requests.lock().unwrap().clear();
+            view.update(cx, |view, cx| {
+                view.store.update(cx, |store, cx| {
+                    let w = store.state.workspace.as_mut().unwrap();
+                    w.state = next;
+                    w.rev += 1.;
+                    cx.notify();
+                })
+            });
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.ends_with("/listReviewComments"))
+            {
+                assert!(
+                    Instant::now() < deadline,
+                    "{next:?}: the review did not reload"
+                );
+                cx.run_until_parked();
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            std::thread::sleep(Duration::from_millis(200));
+            cx.run_until_parked();
+            let requests = server.requests.lock().unwrap();
+            let paths: Vec<_> = requests.iter().map(|(path, _)| path.as_str()).collect();
+            let waking = [
+                "/getChanges",
+                "/getFileDiff",
+                "/searchFiles",
+                "/wakeWorkspace",
+            ];
+            let cached = ["/listFiles", "/readFile"];
+            for path in &paths {
+                assert!(
+                    !waking.iter().any(|name| path.ends_with(name)),
+                    "{next:?}: {path}"
+                );
+                if next != p::WorkspaceState::Sleeping {
+                    assert!(
+                        !cached.iter().any(|name| path.ends_with(name)),
+                        "{next:?}: {path}"
+                    );
+                }
+            }
+            if next == p::WorkspaceState::Sleeping {
+                for name in cached {
+                    assert!(paths.iter().any(|path| path.ends_with(name)), "{name}");
+                }
+            }
+        }
     }
 
     #[gpui_kit::test]

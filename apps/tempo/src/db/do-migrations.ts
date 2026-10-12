@@ -249,6 +249,18 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
     statements: ["ALTER TABLE turns ADD COLUMN usage_json TEXT"],
   },
   {
+    tag: "0002_file_cache",
+    when: 1791849600000,
+    statements: [
+      `CREATE TABLE file_cache (
+  path           TEXT PRIMARY KEY,
+  response_json  TEXT,
+  bytes          INTEGER NOT NULL DEFAULT 0,
+  updated_at     INTEGER NOT NULL DEFAULT 0
+)`,
+    ],
+  },
+  {
     tag: "0003_preview_access",
     when: 1791921600000,
     statements: [

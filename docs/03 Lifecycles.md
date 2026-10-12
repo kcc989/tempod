@@ -41,7 +41,7 @@ Only these transitions are allowed. Any other change of `workspace.state` is a b
 
 Open UI sockets do not count. A tab left open all day MUST NOT keep a container running.
 
-**Wake triggers:** `sendPrompt`, `createSession`, a terminal WebSocket, a preview request, `wakeWorkspace`, `rerunSetup`, `runScript`. Read calls that need the container (`getChanges`, `getFileDiff`, `listFiles`, `readFile`, `searchFiles`) return `CONTAINER_NOT_READY` and also start a wake.
+**Wake triggers:** `sendPrompt`, `createSession`, a terminal WebSocket, a preview request, `wakeWorkspace`, `rerunSetup`, `runScript`. Read calls that need the container (`getChanges`, `getFileDiff`, `listFiles`, `readFile`, `searchFiles`) return `CONTAINER_NOT_READY` and also start a wake. The one exception is `sleeping`: there `listFiles` and `readFile` are not wake triggers. They use the DO's last synced file cache (02, WorkspaceDO schema). Cache misses return `CONTAINER_NOT_READY` without waking; the user can explicitly wake to browse current files. In every other state, `error` included, these two calls need a ready container and are wake triggers, as the other read calls are.
 
 **Unplanned restarts.** At most 3 in any 60 minutes, tracked in `workspace.auto_restarts_json`. The 4th goes to `error` with `CONTAINER_START_FAILED`.
 
@@ -218,7 +218,7 @@ Sleep saves everything, then destroys the container. Wake picks the fastest rest
 1. `turns.check`: if a turn is running or queued, cancel the op. The workspace is not idle.
 2. `git.checkpoint` with reason `pre_sleep`, then `bundle.upload`.
 3. `home.backup`.
-4. `tempod.shutdown`: `tempod` stops scripts and agents and flushes its outbox. It keeps running, so the snapshot can still be taken.
+4. `tempod.shutdown`: the DO first attempts a final file cache sync (02, WorkspaceDO schema). Then `tempod` stops scripts and agents and flushes its outbox. It keeps running, so the snapshot can still be taken.
 5. `container.snapshot`: `snapshotContainer({ name })`. Insert the `snapshots` row.
 6. `container.destroy`: `ctx.container.destroy()`. Set `tempod_token = null`. Close all terminal sockets with code 1001.
 7. State `sleeping`. Drop the Codex lease in CredentialDO.
@@ -332,7 +332,7 @@ Every known failure has one detector and one response. The user always sees the 
 | Start from snapshot fails | `container.start` step | Mark the snapshot `unusable`; start from the image at once |
 | `tempod` socket closes while the container runs | WebSocket close | Reconnect up to 5 times (1, 2, 4, 8, 16 s). Then `destroy()` and wake. |
 | Container stops on its own (host restart, out of memory) | Heartbeat sees `running = false` | Running turn becomes `interrupted`; notice item; wake, within the 3-per-hour limit |
-| `tempod` gets SIGTERM | `tempod` | `tempod` sends `tempod.stopping`, and the running turn ends `interrupted`. The DO requests `git.checkpoint {reason: "sigterm"}`, uploads the bundle, runs `home.backup`, then sends `shutdown`. When the container stops, the row above applies. |
+| `tempod` gets SIGTERM | `tempod` | `tempod` sends `tempod.stopping`, and the running turn ends `interrupted`. The DO attempts a file cache sync, requests `git.checkpoint {reason: "sigterm"}`, uploads the bundle, runs `home.backup`, then sends `shutdown`. When the container stops, the row above applies. |
 | Adapter exits during a turn | `agent.exited` | Turn `failed` / `AGENT_CRASHED`; notice with `stderrTail`; next prompt reloads |
 | `session/load` fails | `session.start` result | Handoff (01, Sessions) |
 | Credential rejected | `turn.ended` error, or `credential.invalid` | Turn `failed` / `CREDENTIAL_INVALID`; banner in the UI |

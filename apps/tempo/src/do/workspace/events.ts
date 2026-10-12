@@ -130,6 +130,7 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
       return onScriptExited(rt, event);
     case "git.changed":
       storeChanges(core, summarize(event.files));
+      core.files.requestSync(event.files.flatMap((f) => (f.oldPath ? [f.path, f.oldPath] : [f.path])));
       return;
     case "ports.changed": {
       const now = Date.now();
@@ -271,6 +272,7 @@ const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">)
 const onSigterm = async (core: WorkspaceCore): Promise<void> => {
   core.tempodStopping = true;
   try {
+    await core.files.sync();
     const { bundle } = await takeCheckpoint(core, "sigterm", null);
     if (bundle) await uploadBundleWithRetry(core, bundle);
     await backupHome(core).catch((e) => log("warn", "sigterm home backup failed", { error: errorText(e) }));

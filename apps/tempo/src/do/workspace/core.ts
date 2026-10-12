@@ -43,6 +43,7 @@ import type { Env } from "../../env.ts";
 import { errorText, log } from "../../log.ts";
 import type { TempodClient } from "./tempod-client.ts";
 import { assertTransition } from "./transitions.ts";
+import { WorkspaceFiles } from "./files.ts";
 
 export type DB = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
@@ -80,6 +81,7 @@ const withUsage = (text: string | null): { usage?: TurnUsage } => {
 
 /** Everything the WorkspaceDO modules share: storage, in-memory state, and helpers. */
 export class WorkspaceCore {
+  readonly files = new WorkspaceFiles(this);
   readonly db: DB;
   tempod: TempodClient | null = null;
   /** The connect in flight, shared by every caller (container.ts, connectTempod). */

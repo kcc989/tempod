@@ -17,6 +17,24 @@ const tablesOf = (sql: SqlStorage): string[] =>
     .toArray()
     .map((r) => r.name);
 
+describe("WORKSPACE_MIGRATIONS order", () => {
+  it("has strictly increasing `when` values, so the migrator applies every entry", () => {
+    for (let n = 1; n < WORKSPACE_MIGRATIONS.length; n++)
+      expect(WORKSPACE_MIGRATIONS[n]!.when, WORKSPACE_MIGRATIONS[n]!.tag).toBeGreaterThan(
+        WORKSPACE_MIGRATIONS[n - 1]!.when,
+      );
+    expect(WORKSPACE_MIGRATIONS.map((m) => m.tag)).toEqual([
+      "0000_init",
+      "0001_steering_pending",
+      "0002_turn_usage",
+      "0002_file_cache",
+      "0003_preview_access",
+      "0004_drop_unused_statuses",
+      "0005_browser_run",
+    ]);
+  });
+});
+
 describe("DO migration 0004_drop_unused_statuses", () => {
   it("rebuilds sessions, turns and review_comments with the new CHECKs and keeps every row", async () => {
     const stub = env.WORKSPACE.getByName(newId());

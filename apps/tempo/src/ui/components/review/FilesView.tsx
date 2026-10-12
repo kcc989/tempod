@@ -24,7 +24,7 @@ const activeFilePath = (s: WorkspaceUiState): string | null => {
 /** 04, All files tab: a tree from listFiles; a click opens a read-only file tab. */
 export function FilesView({ workspaceId }: { workspaceId: string }) {
   const state = useWorkspaceStateValue(workspaceId);
-  const { query, live } = useFileList(workspaceId);
+  const { query, live, available } = useFileList(workspaceId);
   const tree = useMemo(() => buildTree(query.data?.paths ?? []), [query.data]);
   const [expanded, setExpanded] = useRememberedSet(`files:${workspaceId}`);
   const rows = useMemo(() => treeRows(tree, expanded), [tree, expanded]);
@@ -73,7 +73,7 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
   };
 
   let body;
-  if (!live) {
+  if (!available || (state === "sleeping" && query.isError && !query.data)) {
     body = isComingUp(state) ? (
       <div className="flex flex-1 items-center justify-center p-6">
         <LoadingText label={ERROR_MESSAGES.CONTAINER_NOT_READY} />
@@ -124,7 +124,7 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
         <Button
           size="sm"
           variant="ghost"
-          disabled={!live}
+          disabled={!available || !query.data}
           onClick={() => openDialog({ kind: "openFile", workspaceId })}
         >
           <FileIcon />
@@ -142,6 +142,9 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
           <ShortcutKbd action="searchFiles" />
         </Button>
       </div>
+      {state === "sleeping" && query.data && (
+        <p className="px-3 py-1 text-xs text-muted-foreground">Last synced files. May be out of date.</p>
+      )}
       <div className="flex min-h-0 flex-1 flex-col">{body}</div>
     </div>
   );

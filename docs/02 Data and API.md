@@ -86,6 +86,19 @@ CREATE INDEX workspaces_by_activity ON workspaces(user_id, archived_at, last_act
 
 Each WorkspaceDO holds the full record of one workspace. Everything the UI shows for a workspace comes from here.
 
+The read-only file fallback while sleeping (03, Wake triggers) uses this additional table. Null contents mean a known path whose contents are not cached.
+
+```sql
+CREATE TABLE file_cache (
+  path           TEXT PRIMARY KEY,
+  response_json  TEXT,
+  bytes          INTEGER NOT NULL DEFAULT 0,
+  updated_at     INTEGER NOT NULL DEFAULT 0
+);
+```
+
+`filesSyncedAt` in DO KV records that a tree has been synced, including an empty tree. File contents keep the existing `readFile` response format. Only paths from `fs.list` are persisted, so ignored files are excluded. Contents are bounded to 1,000 files and 16 MiB of encoded JSON per workspace; older contents are evicted while paths remain. Each best-effort sync pass takes at most 10 seconds, prioritizes changed and already cached files, and reads at most 1,000 files. Sync after create/wake, coalesce `git.changed` notifications for 5 seconds, and attempt a final sync before shutdown and on SIGTERM. Sync failures do not block work or sleep. Successful live reads refresh the cache; deletions and renames prune old paths when the tree syncs.
+
 ```sql
 -- Exactly one row, id = 1.
 CREATE TABLE workspace (
@@ -545,8 +558,8 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000 | `CONTAINER_NOT_READY` |
-| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}` | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE` |
+| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000; last synced tree while sleeping | `CONTAINER_NOT_READY`, also while sleeping with no synced tree |
+| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}`; last synced contents while sleeping | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE`, `CONTAINER_NOT_READY`, also while sleeping when the contents are not cached |
 | `searchFiles` | `{workspaceId, query, regex?}` | `[{path, line, text}]`, at most 500 | — |
 | `runScript` | `{workspaceId, scriptId}` | `ScriptRun` | `NOT_FOUND` |
 | `stopScript` | `{workspaceId, runId}` | `{}` | — |
