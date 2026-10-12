@@ -59,11 +59,14 @@ test("file dialogs and Run shortcut remain available with the right side hidden"
   await expect(page.getByText("Read only", { exact: true })).toBeVisible();
   await page.keyboard.press(`${mod}+Shift+f`);
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeVisible();
+  // Radix adds its Escape listener just before it moves focus into the dialog.
+  await expect(page.getByRole("combobox", { name: "Search text" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeHidden();
   app.setRunScript();
   await page.keyboard.press(`${mod}+k`);
   await expect(page.getByRole("option", { name: /Start or stop the default run script/ })).toBeVisible();
+  await expect(page.getByPlaceholder("Jump to a workspace or run an action")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Command palette" })).toBeHidden();
   await page.keyboard.press("Alt+r");
