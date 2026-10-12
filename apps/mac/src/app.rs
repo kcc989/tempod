@@ -634,7 +634,10 @@ pub fn init(runtime: ClientRuntime, urls: async_channel::Receiver<Vec<String>>, 
                         }
                     }
                     tempo_client::Signal::UpdateRequired => {
+                        state.update_meta = None;
+                        state.available_update = None;
                         state.stop_for_update(cx);
+                        state.check_updates(cx);
                         cx.notify();
                     }
                 });
