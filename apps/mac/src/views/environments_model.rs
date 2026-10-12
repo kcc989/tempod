@@ -280,7 +280,7 @@ mod tests {
     const OPEN: &str = "01k700000000000000000000w6";
 
     #[test]
-    fn the_workspace_override_wins_and_a_missing_id_counts_as_none() {
+    fn the_workspace_override_wins_and_a_missing_override_falls_back_to_the_project() {
         let all = environments();
         assert_eq!(
             applies(&all, Some(OPEN), Some(PAYMENTS)).unwrap().name,
