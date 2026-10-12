@@ -77,7 +77,16 @@ if (process.env.TEMPO_BUILD_CA && !process.argv.includes("--prepare")) {
   const immutableTag = `tempo-workspace:${digest.slice(7)}`;
   run("docker", ["tag", tag, immutableTag], root);
   run("bunx", ["wrangler", "containers", "push", immutableTag], app);
-  workspaceImage = { image: immutableTag };
+  const remote = spawnSync("docker", ["image", "inspect", "--format", "{{json .RepoDigests}}", tag], {
+    encoding: "utf8",
+  });
+  const prefix = `registry.cloudflare.com/${env("CLOUDFLARE_ACCOUNT_ID")}/tempo-workspace@sha256:`;
+  const references: string[] = remote.status === 0 ? JSON.parse(remote.stdout) : [];
+  const reference = references.find(
+    (value) => value.startsWith(prefix) && /^[a-f0-9]{64}$/.test(value.slice(prefix.length)),
+  );
+  if (!reference) throw new Error("Cannot identify the pushed managed-registry image digest.");
+  workspaceImage = { image: reference };
 }
 const DO = { type: "durable-object", storage: "sqlite" } as const;
 const config = {
