@@ -1,0 +1,54 @@
+{
+  "agent": "pi",
+  "bin": "/usr/local/bin/pi-acp",
+  "live": false,
+  "agentInfo": {
+    "name": "pi-acp",
+    "title": "pi ACP adapter",
+    "version": "0.0.34"
+  },
+  "agentCapabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": false,
+      "sse": false
+    },
+    "promptCapabilities": {
+      "image": true,
+      "audio": false,
+      "embeddedContext": false
+    },
+    "sessionCapabilities": {
+      "list": {},
+      "delete": {}
+    }
+  },
+  "authMethods": [
+    "pi_terminal_login"
+  ],
+  "modes": [
+    "off",
+    "minimal",
+    "low",
+    "medium",
+    "high"
+  ],
+  "currentModeId": "medium",
+  "configOptions": [
+    {
+      "id": "model",
+      "type": "select",
+      "category": "model"
+    },
+    {
+      "id": "thought_level",
+      "type": "select",
+      "category": "thought_level"
+    }
+  ],
+  "setMode": "medium",
+  "loadBeforeAnyTurn": {
+    "ok": true,
+    "replayedUpdates": 0
+  }
+}

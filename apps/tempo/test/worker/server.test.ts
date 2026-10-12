@@ -16,7 +16,7 @@ import {
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { SYSTEM_CREDENTIALS, GITHUB_APP_KEYS, type GithubAppConfig } from "../../src/do/credential.ts";
 import { clearGithubAppConfigCache } from "../../src/github/app.ts";
-import { handleAttachment } from "../../src/http/attachments.ts";
+import { handleAttachment, handleAttachmentRead } from "../../src/http/attachments.ts";
 import { handleChannel } from "../../src/http/channels.ts";
 import { handleApiV1 } from "../../src/http/native.ts";
 import { handlePreview } from "../../src/http/preview.ts";
@@ -1339,6 +1339,35 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     }
   });
 
+  it("publishes the signed DMG hash from the same release as latestMacClient", async () => {
+    const sha256 = "a".repeat(64);
+    await env.DATA.put("clients/mac/latest.json", JSON.stringify({ version: "0.4.2", sha256 }));
+    try {
+      const meta = await (await v1("/api/v1/meta")).json();
+      expect(meta).toMatchObject({ latestMacClient: "0.4.2", latestMacClientSha256: sha256 });
+      expect(conforms(ApiMeta, meta)).toBe(true);
+    } finally {
+      await env.DATA.delete("clients/mac/latest.json");
+    }
+  });
+
+  it("omits invalid download hashes and rejects malformed release versions", async () => {
+    for (const release of [
+      { version: "0.4.2", sha256: "invalid" },
+      { version: 42, sha256: "a".repeat(64) },
+    ]) {
+      await env.DATA.put("clients/mac/latest.json", JSON.stringify(release));
+      try {
+        const meta = (await (await v1("/api/v1/meta")).json()) as Row;
+        expect(meta["latestMacClientSha256"]).toBeUndefined();
+        expect(meta["latestMacClient"]).toBe(typeof release.version === "string" ? release.version : null);
+        expect(conforms(ApiMeta, meta)).toBe(true);
+      } finally {
+        await env.DATA.delete("clients/mac/latest.json");
+      }
+    }
+  });
+
   it("POST /api/v1/rpc/<function> accepts a bearer token (AT-24)", async () => {
     const o = await owner();
     const res = await v1("/api/v1/rpc/listProjects", {
@@ -2065,5 +2094,76 @@ describe("GitHub App setup (05, Deployment and configuration: GitHub App setup)"
     const res = await setup("/setup/github/installed?installation_id=1&setup_action=install");
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe("https://tempo.test/");
+  });
+});
+
+describe("authenticated attachment reads", () => {
+  it("serves owner image bytes after reload and while archived, with private safety headers", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const upload = await postAttachment(
+      workspaceId,
+      formWith(new File(["png bytes"], "shot.png", { type: "image/png" })),
+      { Authorization: `Bearer ${o.token}` },
+    );
+    const a = (await upload.json()) as Row;
+    await runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => {
+      state.storage.sql.exec("UPDATE workspace SET archived_at = 1, state = 'archived'");
+    });
+    await env.DB.prepare("UPDATE workspaces SET archived_at = 1 WHERE id = ?").bind(workspaceId).run();
+    const url = `${APP_ORIGIN}/api/workspaces/${workspaceId}/attachments/${a["attachmentId"]}`;
+    const read = (headers: HeadersInit) =>
+      handleAttachmentRead(new Request(url, { headers }), env, workspaceId, a["attachmentId"]);
+    const response = await read({ Cookie: await sessionCookie(o.token) });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("png bytes");
+    expect(response.headers.get("Content-Type")).toBe("image/png");
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect((await read({})).status).toBe(401);
+    expect((await read({ Authorization: `Bearer ${o.token}`, Origin: "https://evil.test" })).status).toBe(
+      403,
+    );
+    expect(
+      (
+        await handleAttachmentRead(
+          new Request(url, { headers: { Authorization: `Bearer ${o.token}` } }),
+          env,
+          workspaceId,
+          newId(),
+        )
+      ).status,
+    ).toBe(404);
+    const other = await owner();
+    expect((await read({ Authorization: `Bearer ${other.token}` })).status).toBe(404);
+  });
+
+  it("forces active content to download and rejects inconsistent or missing objects", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const upload = await postAttachment(
+      workspaceId,
+      formWith(new File(["<svg/>"], "shot.svg", { type: "image/svg+xml" })),
+      { Authorization: `Bearer ${o.token}` },
+    );
+    const a = (await upload.json()) as Row;
+    const read = () =>
+      handleAttachmentRead(
+        new Request(`${APP_ORIGIN}/api/workspaces/${workspaceId}/attachments/${a["attachmentId"]}`, {
+          headers: { Authorization: `Bearer ${o.token}` },
+        }),
+        env,
+        workspaceId,
+        a["attachmentId"],
+      );
+    const response = await read();
+    expect(response.headers.get("Content-Type")).toBe("application/octet-stream");
+    expect(response.headers.get("Content-Disposition")).toBe("attachment");
+    await runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => {
+      state.storage.sql.exec("UPDATE attachments SET size_bytes = 9 WHERE id = ?", a["attachmentId"]);
+    });
+    expect((await read()).status).toBe(413);
+    await env.DATA.delete(`attachments/${workspaceId}/${a["attachmentId"]}/shot.svg`);
+    expect((await read()).status).toBe(404);
   });
 });

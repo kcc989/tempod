@@ -414,6 +414,12 @@ export const runQueue = async (core: WorkspaceCore, opsBusy: () => boolean): Pro
     await startTurn(core, next);
   } finally {
     core.queueBusy = false;
+    const status = core.db
+      .select({ status: turns.status })
+      .from(turns)
+      .where(eq(turns.id, next.id))
+      .get()?.status;
+    if (status !== "queued") core.kickQueue();
   }
 };
 
@@ -427,17 +433,20 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
     core.updateTurn(turn.id, { status: "cancelled", queuePos: null, endedAt: Date.now() });
     return;
   }
+  let content: PromptContent | undefined;
+  let sentAt = 0;
   try {
     await ensureSessionLive(core, session);
     const fresh = core.sessionRow(session.id);
-    const content = await buildContent(core, fresh, turn);
-    const sentAt = Date.now();
+    content = await buildContent(core, fresh, turn);
+    sentAt = Date.now();
     await requireTempod(core).request("session.prompt", {
       sessionId: session.id,
       turnId: turn.id,
       content: content.blocks,
     });
     commitContent(core, session.id, turn.id, content, sentAt);
+    if (core.turnRow(turn.id).status !== "queued") return;
     const now = Date.now();
     core.updateTurn(turn.id, { status: "running", startedAt: now, queuePos: null });
     core.updateSession(session.id, { status: "running" });
@@ -445,6 +454,10 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow): Promise<void> => {
     core.updateWs({ lastActivityAt: now });
     core.publish();
   } catch (e) {
+    if (content && core.turnRow(turn.id).startedAt !== null) {
+      commitContent(core, session.id, turn.id, content, sentAt);
+      return;
+    }
     const err = e instanceof TempoError ? e : new TempoError("AGENT_START_FAILED", undefined, errorText(e));
     if (err.code === "CONTAINER_NOT_READY" || err.code === "TEMPOD_UNREACHABLE") {
       // The turn stays queued; connectTempod runs the queue again once tempod is back.

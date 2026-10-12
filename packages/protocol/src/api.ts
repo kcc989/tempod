@@ -176,7 +176,12 @@ export const API = {
   refreshPullRequest: fn(
     "POST",
     Schema.Struct(W),
-    Schema.Struct({ prNumber: Schema.NullOr(N), prState: Schema.NullOr(S), checksState: Schema.NullOr(S) }),
+    Schema.Struct({
+      prNumber: Schema.NullOr(N),
+      prState: Schema.NullOr(S),
+      checksState: Schema.NullOr(S),
+      prTitle: Schema.optional(Schema.NullOr(S)),
+    }),
   ),
   listCheckRuns: fn("GET", Schema.Struct(W), Schema.Array(CheckRun)),
 
@@ -210,6 +215,17 @@ export const API = {
     Empty,
   ),
   setCodexAuth: fn("POST", Schema.Struct({ authJson: NonEmpty }), Empty),
+  startCodexLogin: fn(
+    "POST",
+    Empty,
+    Schema.Struct({ loginId: S, verificationUrl: S, userCode: S, expiresAt: N, intervalMs: N }),
+  ),
+  pollCodexLogin: fn(
+    "POST",
+    Schema.Struct({ loginId: NonEmpty }),
+    Schema.Struct({ status: Schema.Literals(["pending", "connected", "expired"]) }),
+  ),
+  cancelCodexLogin: fn("POST", Schema.Struct({ loginId: NonEmpty }), Empty),
   setApiKey: fn("POST", Schema.Struct({ provider: ApiKeyProvider, key: NonEmpty }), Empty),
   deleteCredential: fn("POST", Schema.Struct({ key: S }), Empty),
   setProjectSecret: fn("POST", Schema.Struct({ projectId: S, name: EnvName, value: S }), Empty),
@@ -239,5 +255,6 @@ export const ApiMeta = Schema.Struct({
   serverVersion: S,
   minMacClient: S,
   latestMacClient: Schema.NullOr(S),
+  latestMacClientSha256: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 });
 export type ApiMeta = typeof ApiMeta.Type;

@@ -1551,6 +1551,37 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
     expect(await stateOf(w.stub)).toBe("ready");
   });
 
+  it("reuses the durable checkpoint identity after an uncertain daemon response", async () => {
+    const w = await withHistory();
+    let calls = 0;
+    w.tempod.on("git.checkpoint", (params) => {
+      if (++calls === 1) throw new Error("acknowledgement lost after checkpoint");
+      return checkpointResult(params);
+    });
+    const res = await whileDriving(w.stub, w.stub.revertToCheckpoint({ checkpointId: w.c1 }));
+    expect(codeOf(res)).toBe("OK");
+    const requests = w.tempod.requestsOf("git.checkpoint");
+    expect(requests).toHaveLength(2);
+    expect(requests[0].checkpointId).toBe(requests[1].checkpointId);
+    expect(opState(await opOf(w.stub, "revert"))["checkpointRequestId"]).toBe(requests[0].checkpointId);
+    expect(await rows(w.stub, "SELECT id FROM checkpoints WHERE reason = 'pre_revert'")).toEqual([
+      { id: requests[0].checkpointId },
+    ]);
+  });
+
+  it("refuses revert when the safety checkpoint fails, keeping files and transcript intact", async () => {
+    const w = await withHistory();
+    w.tempod.fail("git.checkpoint", "INTERNAL", "checkpoint failed");
+    const res = await whileDriving(w.stub, w.stub.revertToCheckpoint({ checkpointId: w.c1 }));
+    expect(codeOf(res)).toBe("INTERNAL");
+    expect(w.tempod.requestsOf("git.checkpoint")).toHaveLength(3);
+    expect(w.tempod.requestsOf("git.revert")).toHaveLength(0);
+    expect((await opOf(w.stub, "revert"))!["status"]).toBe("failed");
+    expect((await rows(w.stub, "SELECT reverted FROM turns")).every((t) => t["reverted"] === 0)).toBe(true);
+    expect(await rows(w.stub, "SELECT id FROM items WHERE kind = 'revert_marker'")).toHaveLength(0);
+    expect(await stateOf(w.stub)).toBe("ready");
+  });
+
   it("does not set the force flag when HEAD equals last_pushed_sha or nothing was pushed", async () => {
     const w = await withHistory();
     await exec(w.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?", "e".repeat(40));

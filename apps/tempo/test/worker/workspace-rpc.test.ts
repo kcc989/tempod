@@ -1,6 +1,7 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
+import { github } from "../../src/github/provider.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import {
   DEFAULT_EFFECTIVE,
@@ -1968,5 +1969,52 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
 
   it("returns NOT_FOUND for a workspace that was never created", async () => {
     expect(codeOf(await uninitialised().getDiagnostics({}))).toBe("NOT_FOUND");
+  });
+});
+
+describe("PR title contract", () => {
+  it("persists closed and merged titles in refresh and detail even when status does not change", async () => {
+    const o = await seedProject();
+    const { stub } = await seedWorkspace(o);
+    await runInDurableObject(stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      core.updateWs({ prNumber: 17, prState: "closed", checksState: null });
+      core.ghToken = { token: "fake", expiresAt: Date.now() + 3600000 };
+    });
+    const pull = vi.spyOn(github, "getPullRequest");
+    const checks = vi.spyOn(github, "listCheckRuns").mockResolvedValue([]);
+    try {
+      for (const merged of [false, true]) {
+        const title = merged ? "Merged title" : "Closed title";
+        pull.mockResolvedValue({
+          number: 17,
+          title,
+          state: "closed",
+          merged,
+          merged_at: merged ? "2026-10-11" : null,
+          draft: false,
+          head: { sha: "abc" },
+        } as never);
+        expect(ok(await stub.refreshPullRequest({}))).toMatchObject({
+          prTitle: title,
+          prState: merged ? "merged" : "closed",
+        });
+        expect((await detail(stub)).prTitle).toBe(title);
+      }
+      pull.mockResolvedValue({
+        number: 17,
+        title: "Renamed merged title",
+        state: "closed",
+        merged: true,
+        merged_at: "2026-10-11",
+        draft: false,
+        head: { sha: "abc" },
+      } as never);
+      await stub.refreshPullRequest({});
+      expect((await detail(stub)).prTitle).toBe("Renamed merged title");
+    } finally {
+      pull.mockRestore();
+      checks.mockRestore();
+    }
   });
 });

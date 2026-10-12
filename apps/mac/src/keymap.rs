@@ -53,6 +53,22 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("enter", Send, Some(COMPOSER_INPUT)),
         KeyBinding::new("escape", StopTurn, Some(COMPOSER_INPUT)),
         KeyBinding::new("shift-tab", TogglePlanMode, Some(COMPOSER_INPUT)),
+        KeyBinding::new(
+            "down",
+            NextComposerChoice,
+            Some("Composer > ComposerPicker > Input"),
+        ),
+        KeyBinding::new(
+            "up",
+            PreviousComposerChoice,
+            Some("Composer > ComposerPicker > Input"),
+        ),
+        KeyBinding::new(
+            "escape",
+            DismissComposerChoice,
+            Some("Composer > ComposerPicker > Input"),
+        ),
+        KeyBinding::new("enter", Send, Some("Composer > ComposerPicker > Input")),
         KeyBinding::new("down", NextFile, Some(DIFF)),
         KeyBinding::new("up", PreviousFile, Some(DIFF)),
         KeyBinding::new("ctrl-v", MarkFileViewed, Some(DIFF)),
@@ -165,8 +181,15 @@ mod tests {
     }
 
     #[test]
-    fn bindings_use_only_the_four_contexts_of_07() {
-        let allowed = ["", WORKSPACE, DIFF, TERMINAL, "Composer > Input"];
+    fn bindings_use_only_spec_regions_and_nested_input_contexts() {
+        let allowed = [
+            "",
+            WORKSPACE,
+            DIFF,
+            TERMINAL,
+            "Composer > Input",
+            "Composer > ComposerPicker > Input",
+        ];
         for (keys, action, context) in table() {
             assert!(
                 allowed.contains(&context.as_str()),

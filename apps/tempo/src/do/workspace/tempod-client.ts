@@ -29,6 +29,7 @@ interface Pending {
   readonly resolve: (v: unknown) => void;
   readonly reject: (e: unknown) => void;
   readonly timer: ReturnType<typeof setTimeout>;
+  readonly cleanup: () => void;
 }
 
 /** Kinds whose payload is a secret: never stored in `events` (02, Rules). */
@@ -68,25 +69,32 @@ export class TempodClient {
     opts: { timeoutMs?: number; signal?: AbortSignal } = {},
   ): Promise<TempodResult<O>> {
     if (this.closed) return Promise.reject(new TempoError("TEMPOD_UNREACHABLE"));
+    if (opts.signal?.aborted)
+      return Promise.reject(new TempoError("TEMPOD_TIMEOUT", undefined, `${op} aborted`));
     const id = newId();
     const timeoutMs = opts.timeoutMs ?? TEMPOD_REQUESTS[op].timeoutMs;
     return new Promise<TempodResult<O>>((resolve, reject) => {
       const timer = setTimeout(() => {
+        this.pending.get(id)?.cleanup();
         this.pending.delete(id);
         reject(new TempoError("TEMPOD_TIMEOUT", undefined, `${op} timed out after ${timeoutMs} ms`));
       }, timeoutMs);
-      this.pending.set(id, { op, resolve: resolve as (v: unknown) => void, reject, timer });
-      opts.signal?.addEventListener("abort", () => {
+      const abort = () => {
         const p = this.pending.get(id);
         if (!p) return;
         clearTimeout(p.timer);
+        p.cleanup();
         this.pending.delete(id);
         reject(new TempoError("TEMPOD_TIMEOUT", undefined, `${op} aborted`));
-      });
+      };
+      const cleanup = () => opts.signal?.removeEventListener("abort", abort);
+      this.pending.set(id, { op, resolve: resolve as (v: unknown) => void, reject, timer, cleanup });
+      opts.signal?.addEventListener("abort", abort, { once: true });
       try {
         this.socket.send(JSON.stringify({ type: "req", id, op, params }));
       } catch (e) {
         clearTimeout(timer);
+        cleanup();
         this.pending.delete(id);
         reject(new TempoError("TEMPOD_UNREACHABLE", undefined, String(e)));
       }
@@ -132,6 +140,7 @@ export class TempodClient {
       const p = this.pending.get(msg.id);
       if (!p) return;
       clearTimeout(p.timer);
+      p.cleanup();
       this.pending.delete(msg.id);
       if (msg.ok) {
         const decoded = Schema.decodeUnknownExit(
@@ -156,11 +165,13 @@ export class TempodClient {
             workspaceId: this.core.wsOrNull()?.workspaceId,
             error: String(e),
           });
+          this.close(1011, "event application failed");
         });
     }
   }
 
   private async applyEvent(envelope: TempodEventEnvelope): Promise<void> {
+    if (this.closed) return;
     if (this.catalogUserId) {
       const decoded = decodeEvent(envelope.event);
       if (decoded._tag === "Success" && decoded.value.kind === "credential.changed") {
@@ -184,31 +195,40 @@ export class TempodClient {
       return;
     }
     const event = decoded.value;
-    if (!isIncarnation) {
-      const payload = SECRET_EVENT_KINDS.has(event.kind) ? "{}" : JSON.stringify(event);
-      const inserted = this.core.db
-        .insert(events)
-        .values({
-          incarnation,
-          seq: envelope.seq,
-          kind: event.kind,
-          payloadJson: payload,
-          receivedAt: Date.now(),
-        })
-        .onConflictDoNothing()
-        .returning({ id: events.id })
-        .all();
-      if (inserted.length === 0) return;
+    if (SECRET_EVENT_KINDS.has(event.kind)) {
+      await this.onEvent(event, envelope);
     }
-    if (event.kind === "incarnation.changed") {
-      // tempod restarts at seq 1; rows kept for a reused incarnation (an older disk) would collide.
-      this.core.db.delete(events).where(eq(events.incarnation, event.incarnation)).run();
-    }
-    await this.onEvent(event, envelope);
-    if (event.kind === "incarnation.changed") {
-      this.core.updateWs({ tempodIncarnation: event.incarnation, tempodAckedSeq: envelope.seq });
-      this.queueAck(true);
-    } else this.markApplied(envelope.seq);
+    this.core.ctx.storage.transactionSync(() => {
+      if (!isIncarnation) {
+        const payload = SECRET_EVENT_KINDS.has(event.kind) ? "{}" : JSON.stringify(event);
+        const inserted = this.core.db
+          .insert(events)
+          .values({
+            incarnation,
+            seq: envelope.seq,
+            kind: event.kind,
+            payloadJson: payload,
+            receivedAt: Date.now(),
+          })
+          .onConflictDoNothing()
+          .returning({ id: events.id })
+          .all();
+        if (inserted.length === 0) return;
+      }
+      if (event.kind === "incarnation.changed") {
+        this.core.db.delete(events).where(eq(events.incarnation, event.incarnation)).run();
+      }
+      if (!SECRET_EVENT_KINDS.has(event.kind)) {
+        const result = this.onEvent(event, envelope);
+        if (result !== undefined) throw new Error("Local tempod events must apply synchronously");
+      }
+      if (event.kind === "incarnation.changed") {
+        this.core.updateWs({ tempodIncarnation: event.incarnation, tempodAckedSeq: envelope.seq });
+      } else if (envelope.seq > this.core.ws().tempodAckedSeq) {
+        this.core.updateWs({ tempodAckedSeq: envelope.seq });
+      }
+    });
+    this.queueAck(isIncarnation);
   }
 
   private markApplied(seq: number): void {
@@ -245,6 +265,7 @@ export class TempodClient {
     if (this.ackTimer) clearTimeout(this.ackTimer);
     for (const [id, p] of this.pending) {
       clearTimeout(p.timer);
+      p.cleanup();
       p.reject(new TempoError("TEMPOD_UNREACHABLE", undefined, `${p.op}: connection closed`));
       this.pending.delete(id);
     }

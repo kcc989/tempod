@@ -26,6 +26,8 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+`bun run test:web` runs local browser acceptance across Chromium, Firefox, WebKit, dark mode and phone width. See [`Web acceptance`](docs/WEB_ACCEPTANCE.md) for the harness, coverage and the hosted test plan using keeled.
+
 `bun run mac:dev` opens the native app on a Mac. Its sign-in and live view wiring are not complete.
 
 With Docker available, `bun run test:tempod:container` builds the pinned Linux workspace image and runs daemon tests in a derived test image as user `tempo`. It checks the production image's 6 GB size limit. On shared engines, serialize this command with other full CI runs.

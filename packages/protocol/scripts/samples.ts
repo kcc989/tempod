@@ -41,6 +41,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { type: "resource_link", uri: "file:///workspace/src/app.tsx", name: "app.tsx" },
   ],
   Usage: [{}, w.claudeSession.usage],
+  Attachment: [{ id: uid(201), name: "shot.png", mime: "image/png", size: 8 }],
   Capabilities: [{}, { loadSession: true, promptCapabilities: { image: true } }],
 
   RunScript: Object.values(w.settings.scripts.run),
@@ -176,6 +177,13 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ApiMeta: [
     { protocol: 1, serverVersion: "0.1.0", minMacClient: "0.1.0", latestMacClient: null },
     { protocol: 1, serverVersion: "0.2.0", minMacClient: "0.1.0", latestMacClient: "0.2.1" },
+    {
+      protocol: 1,
+      serverVersion: "0.2.0",
+      minMacClient: "0.1.0",
+      latestMacClient: "0.2.1",
+      latestMacClientSha256: "a".repeat(64),
+    },
   ],
 };
 
@@ -336,6 +344,9 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
   setCodexAuth: [{ authJson: '{"tokens":{"note":"fixture"}}' }],
+  startCodexLogin: [{}],
+  pollCodexLogin: [{ loginId: "fixture-login-id" }],
+  cancelCodexLogin: [{ loginId: "fixture-login-id" }],
   setApiKey: [{ provider: "openrouter", key: "fixture-openrouter-key" }],
   deleteCredential: [{ key: "codex" }],
   setProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL", value: "fixture-value" }],
@@ -346,6 +357,16 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
 /** Outputs that are not shared types, by their wire type name. */
 export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   Empty: [{}],
+  StartCodexLoginOut: [
+    {
+      loginId: "fixture-login-id",
+      verificationUrl: "https://auth.openai.com/codex/device",
+      userCode: "ABCD-EFGH",
+      expiresAt: 1_800_000_000_000,
+      intervalMs: 5000,
+    },
+  ],
+  PollCodexLoginOut: [{ status: "pending" }, { status: "connected" }, { status: "expired" }],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },
     { repoId: 812345679, owner: "acme", name: "docs", defaultBranch: "trunk", private: false },
@@ -371,6 +392,7 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   CommitAndPushOut: [{ commitSha: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d" }],
   CreatePullRequestOut: [{ number: 43, url: "https://github.com/acme/webapp/pull/43" }],
   RefreshPullRequestOut: [
+    { prNumber: 12, prState: "merged", checksState: "success", prTitle: "Keep the merged title" },
     { prNumber: 42, prState: "open", checksState: "pending" },
     { prNumber: null, prState: null, checksState: null },
   ],

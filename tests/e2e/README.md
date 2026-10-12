@@ -24,6 +24,10 @@ Without `TEMPO_E2E_URL` every test is skipped, so `bun run test:e2e` is safe any
 Most tests drive the native JSON API and the channels, the same contract the web UI and the Mac
 app use. Tests marked `(browser)` drive the web UI and need `TEMPO_E2E_STORAGE_STATE`.
 
+## Local web acceptance
+
+`bun run test:web` from the repo root runs the production client with local protocol fixtures in Chromium at desktop and phone width, including dark mode. It needs no deployment or credentials. See [`docs/WEB_ACCEPTANCE.md`](../../docs/WEB_ACCEPTANCE.md). The default `test` command below still runs the separate deployed acceptance gates.
+
 ## Environment
 
 | Variable                                                                  | Needed for                                                   | Value                                                                                                  |
@@ -92,15 +96,15 @@ for the idle timer, AT-9 runs five containers), so a gate run takes hours.
 
 These show as skipped (`fixme`); the comment above each one in the spec has the exact steps.
 
-| Test                                                                   | Why it is manual                                                                                                                                                                      |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AT-1 GitHub sign-in, and a different account refused                   | Needs real GitHub logins (password, 2FA) for two accounts                                                                                                                             |
-| AT-5 the R2 bundle exists                                              | No API lists R2; check with `wrangler r2 object get`. AT-8 depends on the bundle, so it covers it indirectly                                                                          |
-| AT-7 destroy from the Cloudflare dashboard                             | The automated AT-7 stops tempod from inside the container instead (SIGKILL, or SIGTERM when tempod is PID 1)                                                                          |
-| AT-8 with the snapshot marked `unusable`                               | No API marks a snapshot; the automated AT-8 uses a workspace that never slept (no snapshot), which takes the same fresh path. The literal case: sleep, redeploy a changed image, wake |
-| AT-22 in Safari and Firefox on macOS, and the git and script shortcuts | Playwright's WebKit and Firefox are not the shipped macOS browsers. The automated AT-22 covers ⌘K, ⌥N, ⌥,, ⌘B, ⌥L and ⌥T in Chromium                                                  |
-| AT-23 the Mac app's own screens                                        | Part of the Mac app's gate E checklist; the server side is automated                                                                                                                  |
-| Credential grep of `events` rows                                       | No API reads the WorkspaceDO `events` table                                                                                                                                           |
+| Test                                                       | Why it is manual                                                                                                                                                                      |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AT-1 GitHub sign-in, and a different account refused       | Needs real GitHub logins (password, 2FA) for two accounts                                                                                                                             |
+| AT-5 the R2 bundle exists                                  | No API lists R2; check with `wrangler r2 object get`. AT-8 depends on the bundle, so it covers it indirectly                                                                          |
+| AT-7 destroy from the Cloudflare dashboard                 | The automated AT-7 stops tempod from inside the container instead (SIGKILL, or SIGTERM when tempod is PID 1)                                                                          |
+| AT-8 with the snapshot marked `unusable`                   | No API marks a snapshot; the automated AT-8 uses a workspace that never slept (no snapshot), which takes the same fresh path. The literal case: sleep, redeploy a changed image, wake |
+| AT-22 in Chrome on macOS, and the git and script shortcuts | Linux Chromium is not the shipped Chrome on macOS. The automated AT-22 covers ⌘K, ⌥N, ⌥,, ⌘B, ⌥L and ⌥T in Chromium                                                                   |
+| AT-23 the Mac app's own screens                            | Part of the Mac app's gate E checklist; the server side is automated                                                                                                                  |
+| Credential grep of `events` rows                           | No API reads the WorkspaceDO `events` table                                                                                                                                           |
 
 AT-11 needs `TEMPO_E2E_CODEX_AUTH_FILE`. The test sets `last_refresh` 9 days back, uploads the file
 with `setCodexAuth`, and makes Codex refresh in one workspace. Codex rotates the refresh token, so

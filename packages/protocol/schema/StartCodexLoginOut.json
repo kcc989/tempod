@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StartCodexLoginOut",
+  "type": "object",
+  "properties": {
+    "loginId": {
+      "type": "string"
+    },
+    "verificationUrl": {
+      "type": "string"
+    },
+    "userCode": {
+      "type": "string"
+    },
+    "expiresAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "intervalMs": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": ["loginId", "verificationUrl", "userCode", "expiresAt", "intervalMs"],
+  "additionalProperties": true
+}

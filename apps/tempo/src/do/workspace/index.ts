@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import {
   TempoError,
   capture,
@@ -294,6 +295,12 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   async pushCodexAuth(content: string, version: number): Promise<void> {
     if (!this.core.tempod?.open) return;
     await this.core.tempod.request("credential.put", { provider: "codex", content, version });
+  }
+
+  async getAttachment(id: string): Promise<import("@tempo/protocol").Attachment | null> {
+    this.core.ws();
+    const a = this.core.db.select().from(attachments).where(eq(attachments.id, id)).get();
+    return a ? { id: a.id, name: a.name, mime: a.mime, size: a.sizeBytes } : null;
   }
 
   async registerAttachment(a: {

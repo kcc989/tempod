@@ -26,10 +26,10 @@ only inside the repo.
    `agentCapabilities` is recorded; `loadSession` must be a boolean, and `true` for the agents
    where 01 says `session/load` works (claude, codex, pi).
 2. `session/new` with the Playwright MCP server (`PLAYWRIGHT_MCP_SERVER` from `@tempo/protocol`)
-   returns a session id, the modes of 01 (claude: `bypassPermissions` and `plan`; codex:
+   returns a session id, the modes of 01 (from the `mode` config option when advertised, otherwise the session modes response) (claude: `bypassPermissions` and `plan`; codex:
    `agent-full-access` and `read-only`, starting in `agent-full-access`; opencode: `build` and
    `plan`) and a config option with category `model`.
-3. `session/set_mode` to Tempo's default mode (claude `bypassPermissions`, codex
+3. Setting Tempo's default mode through the advertised `mode` config option (`session/set_config_option`), or through `session/set_mode` when session modes are exposed (claude `bypassPermissions`, codex
    `agent-full-access`, otherwise the agent's current mode) succeeds. Pi reports no modes, which is
    recorded.
 4. `session/load` in a new adapter process, when advertised. The result is recorded: before any

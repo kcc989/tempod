@@ -53,7 +53,7 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 
 - MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, or in R2.
 - The log helper redacts any field whose name matches `/token|key|secret|password|authorization|auth_json|cookie/i`.
-- Home backups exclude `.codex/auth.json` and `.claude/.credentials.json` (01, Durability).
+- Home backups exclude `.codex/auth.json`, `.claude/.credentials.json` and `.tempod/` (01, Durability). The daemon outbox may contain unacknowledged credential refreshes.
 - Container snapshots do hold Codex `auth.json`. They stay inside the Cloudflare account; this is part of R4.
 - The `system` CredentialDO derives its key with salt `system` instead of a user id.
 - Rotating `TEMPO_ENCRYPTION_KEY` is not supported in version 1. A new key makes every stored secret unreadable, and the owner enters them again. The GitHub App must then be set up again.
@@ -107,7 +107,7 @@ One deploy command builds the image, deploys the Worker and runs migrations. A o
 | `DATA` | R2 binding | Bucket `tempo-data` |
 | `WORKSPACE`, `USER_HUB`, `CREDENTIALS` | DO bindings | As in 01 |
 
-**Deploy.** `bun run deploy` runs Alchemy v2. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and print `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>`.
+**Deploy.** `bun run deploy` first verifies Cloudflare API access and the existing Alchemy state-store health endpoint, then runs Alchemy v2. An unreachable existing store must stop deployment before bootstrap; a network error must never be interpreted as absent state. When the store exists, the wrapper disables automatic bootstrap/upgrade approval (`--yes`) and runs without prompts. Existing state-store auth/encryption secrets and the Tempo secrets must be preserved. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and print `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>`.
 
 **GitHub App setup** (manifest flow)
 

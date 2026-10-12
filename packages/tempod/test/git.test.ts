@@ -267,6 +267,26 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
   );
 
   test(
+    "a checkpoint retry recovers its original bundle without overwriting its tree",
+    async () => {
+      const { c, ws, clone, g, h } = await boot();
+      await clone();
+      writeFileSync(join(ws, "a.txt"), "saved tree\n");
+      const params = { checkpointId: "01RETRY", turnId: "t1", reason: "turn_end" };
+      const first = await c.ok<CheckpointResult>("git.checkpoint", params);
+      if ("unchanged" in first) throw new Error("expected checkpoint");
+      writeFileSync(join(ws, "a.txt"), "later unsaved edits\n");
+      rmSync(h.config.ckptBundle);
+      const retried = await c.ok<CheckpointResult>("git.checkpoint", params);
+      expect(retried).toEqual(first);
+      expect(await g("show", `${first.commit}:a.txt`)).toBe("saved tree");
+      expect(readFileSync(join(ws, "a.txt"), "utf8")).toBe("later unsaved edits\n");
+      expect(await g("bundle", "verify", first.bundlePath)).toBeDefined();
+    },
+    T,
+  );
+
+  test(
     "untracked files over 50 MiB stay out, also when only the user's index has them",
     async () => {
       const { c, ws, clone, g } = await boot();

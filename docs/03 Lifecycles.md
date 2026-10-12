@@ -59,6 +59,7 @@ Every multi-step flow is an op in the WorkspaceDO `ops` table, run one step per 
 **Rules**
 
 - At most one op is `running` at a time. Ops wait as `pending` and start in creation order. `housekeeping` starts only when no other op is `pending`.
+- A checkpoint step persists its request checkpoint id in the op state before asking the daemon. Retries reuse that id; an existing checkpoint ref is immutable and regenerates its original bundle.
 - Each step is an idempotent function. It MUST check the current state before it acts (for example, `ctx.container.running` before `start()`).
 - `alarm()` takes the oldest due op, sets it `running`, runs its current step with an `AbortSignal` that fires at the step's timeout, and saves the result.
 - On success: set the next step, or `done`, and set the alarm to now.
@@ -98,7 +99,7 @@ When the container is not running, `archive` skips every step that needs it and 
 | `settings.read` | 10 s | 3 | Use defaults; show the error in the Setup tab |
 | `setup.run` | 30 min | 1 | Not an error: set `setup_status = 'failed'` |
 | `script.archive` | 120 s | 1 | Continue; `warn` notice |
-| `git.checkpoint` | 2 min | 3 | Skip; log `warn` |
+| `git.checkpoint` | 2 min | 3 | For `revert`, fail with `INTERNAL` without reverting; otherwise skip and log `warn` |
 | `bundle.upload` | 5 min | 3 | Mark `local_only` |
 | `home.backup` | 5 min | 2 | Skip; log `warn` |
 | `tempod.shutdown` | 45 s | 1 | Continue |
@@ -246,7 +247,7 @@ Sleep saves everything, then destroys the container. Wake picks the fastest rest
 Revert puts the files back to the end of an earlier turn. It never deletes data: a safety checkpoint is made first.
 
 1. Allowed only when no turn is running or queued. Else `WORKSPACE_BUSY`.
-2. `git.checkpoint` with reason `pre_revert`, then upload. This is the safety checkpoint.
+2. `git.checkpoint` with reason `pre_revert`, then upload. This is the safety checkpoint. If the checkpoint cannot be made after three attempts, fail with `INTERNAL`; do not revert files or mark the transcript. An unchanged tree may reuse the newest checkpoint. A bundle upload failure keeps the safety checkpoint locally (`local_only`).
 3. `git.revert {checkpointId}` runs in `/workspace`:
 
 ```bash

@@ -74,11 +74,29 @@ pub async fn fake_http(
     FakeHttp { base, requests }
 }
 
+// Real sockets must settle before the paused clock advances a request deadline.
+struct IoClockGuard(tokio::task::JoinHandle<()>);
+impl IoClockGuard {
+    fn new() -> Self {
+        Self(tokio::spawn(async {
+            loop {
+                tokio::task::yield_now().await;
+            }
+        }))
+    }
+}
+impl Drop for IoClockGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 async fn serve_one(
     mut stream: TcpStream,
     log: Arc<Mutex<Vec<HttpRequest>>>,
     handler: Arc<Handler>,
 ) -> std::io::Result<()> {
+    let _io_clock = IoClockGuard::new();
     {
         let mut buf = Vec::new();
         let head_end = loop {
@@ -134,7 +152,11 @@ async fn serve_one(
             body.len()
         );
         stream.write_all(response.as_bytes()).await?;
-        stream.shutdown().await
+        stream.shutdown().await?;
+        for _ in 0..20 {
+            tokio::task::yield_now().await;
+        }
+        Ok(())
     }
 }
 

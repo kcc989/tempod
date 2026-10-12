@@ -1,17 +1,22 @@
 # Progress
 
-Status of the Tempo build against the spec (tabs 00 to 07). Continuation started 2026-10-11 on `claude/great-franklin-xc39l8` ([PR #1](https://github.com/kcc989/tempod/pull/1)), from `dadd62d`.
+Status of the Tempo build against the spec (tabs 00 to 07). Continuation started 2026-10-11 on `claude/great-franklin-xc39l8` ([PR #1](https://github.com/kcc989/tempod/pull/1)), from `dadd62d`. PR #1 is now merged; native chat controls continue on `codex/native-chat-controls` from merged main `1984b89`.
 
-Percentages below are the previous build loops' estimates, not new acceptance measurements. Deviations and open questions are in `IMPLEMENTATION_NOTES.md`.
+Percentages below are the previous build loops' estimates, not new acceptance measurements. Deviations and open questions are in `IMPLEMENTATION_NOTES.md`. The web continuation now has a separate [acceptance record](WEB_ACCEPTANCE.md).
 
 ## Current state
 
+- **Web continuation (2026-10-11):** all four web regions are implemented in the existing source. Added local Playwright acceptance with production components, protocol-checked RPC fixtures and intercepted client WebSockets. CI now runs desktop Chromium, Firefox and WebKit, dark Chromium and phone Chromium. This is local browser evidence; hosted gates remain open.
+- **Web verification:** after integrating main `5e259d6`, 59 styled local browser cases and 21 existing workspace browser regressions pass; 6 device-specific cases skip intentionally. Root typecheck, lint, unit tests, format check, version check and production build pass in this Linux workspace.
+- **Web integration:** preserved the draft recovery, pending-send guard, chip metadata, scrolling and navigation fixes merged in PR #3. Added a guard so the initial transcript backlog does not announce as new activity, plus a matching native pending-send regression (formatted with pinned Rust 1.97; not executed in this Linux workspace).
+- **Hosted preparation:** deployment and keeled test writes are owner-approved. PR #5 CI passed; keeled's PR-check workflow passed CI and was merged in PR #17. The production image is 3,171,713,483 bytes and all 119 daemon tests pass inside it. Cloudflare preflight passed, but deployment stopped before app provisioning because the environment denies the app/preview hosts, Alchemy state host and container registry. Required destinations and resume settings are in `WEB_ACCEPTANCE.md`. No real login or hosted gate has run.
+
 - **Continuation is active.** The prior loops stopped at the account usage limit; their interim code is now being checked locally on macOS.
 - **Verified locally:** `bun run typecheck`, `lint`, `format:check`, `check:versions`, `test` and `build`. Tests: 717 Worker, 294 UI logic, 16 component, 201 protocol, 111 daemon, 9 settings and 3 cities. The 44 deployed e2e tests and 40 adapter conformance tests skip without their environment; these are not acceptance evidence.
-- **Native baseline:** `cargo test --workspace` (176 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac. Workspace channel/cache/reconnect fixtures and headless chat, queue, steering and permission tests are included.
+- **Native baseline:** `cargo test --workspace` (189 tests), `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass on this Mac. Workspace channel/cache/reconnect fixtures and headless chat, queue, steering, permission, picker, close-control, slash-menu and file-mention tests are included.
 - **Image verification:** the prior full image run passed 112 tests, including uid/gid 1000, tini as PID 1, adapter/tool presence and orphan cleanup. The final daemon production image builds at 1,715,653,040 bytes (under 6 GB). Current Linux test evidence is recorded below.
 - **Steering image tests:** 114 tests pass in the full derived Linux image with current daemon/protocol source and tests mounted read-only. The first image run captured older test fixtures while edits continued and failed the two new steering tests; the final run uses the corrected fixtures. This is local fixture evidence, not authenticated adapter acceptance.
-- **Remote CI and deployment:** GitHub CI passed `408f985`, `fd92d37` and native sign-in `d59b273` (4m10s). The workspace/steering follow-up needs its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
+- **Remote CI and deployment:** GitHub CI passed `408f985`, `fd92d37` and native sign-in `d59b273` (4m10s). The workspace/steering milestone `63761de` also passed (3m47s). Native chat-controls commit `55d0c36` passed (4m12s). The slash-menu follow-up needs its own remote check. Gate A and the hosted acceptance gates remain open. No deployment or paid evaluation has been started.
 
 ## Continuation changes
 
@@ -27,6 +32,11 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 - Connected the Mac app to the real two-thread I/O runtime. Wake events reconnect its channels; unauthorized and incompatible-client signals reach AppState. Added native device sign-in, saved-session validation, server sign-out and channel cleanup. The hub channel now feeds the sidebar and Dock count.
 - Connected native workspace channels, revision resume, 60-second hidden-store cleanup, chat tabs, draft persistence, prompt/Stop/plan-mode/permission RPCs and rich transcript rows. Static transcript spike windows still work. Headless tests cover successful and failed sends, queued edits/deletion/reordering, steering dispatch and permission keyboard replies.
 - Added owner-requested live steering in web and Mac: Enter queues; supported running chats also offer Send now. The ACP v1 extension is capability-gated and uses host-owned idle fallback. A durable reservation prevents automatic duplicate delivery after an uncertain acknowledgement or DO restart. Specs 01–04 and 07 describe the new fields and behavior.
+
+- Added native agent-reported model and mode pickers, grouped model labels, chat close buttons and confirmation, and chat/model/tool shortcuts. A running chat waits for its turn to stop before closing; cancellation failures and a 30-second timeout leave it open. Failed configuration restores the saved selection. Pickers stay disabled while starting, working or awaiting a configuration response. Six new headless tests cover these controls and failures; manual UI acceptance remains open.
+- Added native `/` command selection with fuzzy filtering, agent descriptions, keyboard navigation and Tempo plan mode. Selection keeps the text after the caret; Escape dismisses the menu without stopping the agent. Three new tests cover UTF-8 boundaries, command identity and keyboard behavior. Specs 04 and 07 now state menu keyboard priority.
+
+- Added native file mentions with the existing `listFiles` RPC, fuzzy matching, loading/error/empty states, Retry and removable chips. Queue and live steering include mentions. Four new tests cover matching, keyboard selection, text preservation, request payloads and failed-send retention. Attachment input and manual native acceptance remain open.
 
 - Added GPUI Kit headless tests with its existing pinned test-support feature. Eight app tests cover saved-session validation, device approval/denial, cancellation, 401 cleanup, update requirements, server sign-out failure and Enter in the connect form. Tokens use a memory store in tests; real Keychain/browser acceptance remains open.
 
@@ -44,8 +54,8 @@ Percentages below are the previous build loops' estimates, not new acceptance me
 | Auth and GitHub App setup | 05 | 92% | Built; not checked against real GitHub. |
 | Native API for the Mac app | 07 | 90–100% | `/api/v1/*`, bearer WebSocket auth, `/downloads/mac`. |
 | Container image and deploy | 01, 05 | 85% | Dockerfile, versions.json, Alchemy + wrangler deploy. |
-| Web UI | 04 | about 30% | Foundation done; most regions are in progress. |
-| Tempo for Mac | 07 | partial | Device sign-in, hub/workspace channels and chat/queue/steering actions wired locally. Native review/process panels and acceptance remain. |
+| Web UI | 04 | implemented with contract gaps | Regions are present; local browser acceptance added. Historical usage, closed PR titles, attachment retrieval, hosted gates and macOS shortcut verification remain. |
+| Tempo for Mac | 07 | integrated source; native acceptance open | Review, file tabs, processes/remote terminal, settings, diagnostics, shell actions and local release helpers are wired. Native/hosted acceptance remains. |
 | Private previews + Browser Run | 00 Q3, 01 | design | Research done; decision brief not written. |
 | Spikes S1–S16, acceptance tests AT-1–AT-37 | 06 | 0% | Need a Cloudflare account on Workers Paid and real agent logins. |
 
@@ -136,33 +146,21 @@ All 18 review findings are fixed, and 109 tests pass.
 - [x] Run daemon tests inside the full container image (112 pass, rule 14).
 
 **Web UI (04)**
-- [ ] Sidebar (15%): indicators, hover card, context menu, sort, sections, workspace actions.
-- [ ] Top bar (10%): primary action table, pill, port links, base-branch picker, overflow menu, commit/PR/merge/archive.
-- [ ] Center (10%):
-  - the agent menu and closed chats;
-  - the transcript for every item kind;
-  - the composer: pickers, attachments, mentions, queue, drafts;
-  - the banners.
-- [ ] Right panel (5%): Changes, Diff with comments and viewed marks, All files, ⌘P and ⌘⇧F, Checks, Browser tab.
-- [ ] Bottom panel (5%): Setup, Run, Terminal t1–t9 with xterm.
-- [ ] Dialogs (30%): New workspace, Add project, Settings (Logins, Project, Notifications, Devices), Diagnostics, First-run checklist.
-- [ ] Indicators and browser notifications (15%).
-- [ ] Region actions in the shortcut registry (55%).
-- [ ] Empty, loading and error states per region, and phone variants (55%).
+- [x] Implemented region components: Sidebar, TopBar, ChatTabs/Transcript/Composer, RightPanel and BottomPanel. Prior percentages described an older foundation snapshot.
+- [x] Implemented dialogs, indicators, notifications, action registry and phone variants; existing UI model/component tests pass.
+- [x] Add rendered local browser acceptance and run it in CI. Coverage and boundaries are in `WEB_ACCEPTANCE.md`.
+- [ ] Complete deployed gates B–D with real agent sessions and keeled, including PR checks, previews, restart durability and credential grep.
+- [ ] Resolve the shared contracts in `WEB-CLIENT-CORE-REQUESTS.md`: historical turn usage, closed/merged PR titles and authenticated attachment retrieval.
+- [ ] Verify every shortcut in shipped Chrome, Safari and Firefox on macOS.
 
-**Tempo for Mac (07)**
-- [x] `tempo-client`: runtime, RPC, channels, reconnects, close codes, device-flow client and store apply rules pass local tests. App sign-in, hub and workspace stores are wired. Manual and hosted acceptance remain.
-- [ ] Sign-in and first run: device flow and saved-token checks are wired and tested headlessly; real browser approval, Keychain and update download acceptance remain.
-- [ ] Live state and reconnects: hub and workspace channels, revision resume, hidden-store timers and reconnect bars are wired and tested locally. Notifications and manual acceptance remain.
-- [ ] Window layout and components (15%).
-- [ ] Transcript, composer and permissions: chat tabs, rich text/tool/permission rows, drafts, Send/Queue/Send now/Stop, queued edit/delete/drag, plan mode and permission replies are wired. Model pickers, attachment/mention/slash input, full tool content, close-chat confirmation, transcript shortcuts, performance and manual acceptance remain.
-- [ ] Changes, diff view and comments (2%).
-- [ ] `tempo-terminal`, a fork of gpui-terminal (5%); scripts and previews.
-- [ ] macOS integration (35%): notifications, Dock badge, URL scheme, window state.
-- [ ] Local storage and logging (8%).
-- [ ] Build, signing and updates (20%): `scripts/mac/release.sh`, update check.
-- [ ] 07 testing table (18%), and the manual checklist `tests/mac-e2e/CHECKLIST.md`.
-- [x] Compile, test and lint macOS code on this Mac. Manual UI, notification, Keychain and signing checks remain.
+**Tempo for Mac (07), cloud implementation continuation**
+- [x] Native source integration: lifecycle/Keychain tasks, shared stores and cache, shell/sidebar/dialogs, rich transcript, attachments, queue/steering, model/mode, review/files/checks, git/workspace operations, scripts/remote terminal, Settings and Diagnostics.
+- [x] Linux verification: Rust workspace tests, formatting and strict Clippy; required root Bun checks. Native acceptance remains a separate result.
+- [x] Release helpers: local ad-hoc bundle, explicit signed/notarized release and publish modes, final-artifact metadata and publish-last checks. No Mac bundle or release was produced by the cloud task.
+- [x] Connect update Download to the published core hash contract, including bounded authenticated transfer, verify-before-save and saved-session required updates. First-launch required-update authentication, attachment thumbnail retrieval and absent display metadata are recorded in IMPLEMENTATION_NOTES.
+- [ ] Run Gate E, native shortcut/focus/rendering/performance, Keychain, notifications, deep links, real logins, interactive terminal and clean-Mac installation locally. See `tests/mac-e2e/CHECKLIST.md`.
+
+The owner elected to test locally. These source milestones do not claim an M1–M5 or Gate E acceptance pass. Earlier Mac baseline evidence above remains historical; this continuation ran on Debian 13 x86_64.
 
 **Private previews and Browser Run (owner request, 2026-10-11)**
 - [x] Research: Browser Run, Protected Quick Tunnels, Cloudflare Access, code integration points.
@@ -184,3 +182,9 @@ See `IMPLEMENTATION_NOTES.md`:
 - **M-1:** remote-image blocking in the Mac app.
 - **00 Q1 to Q5 and 07 Q7:** open questions in the spec.
 - **Private previews:** the design choice, once the brief is ready.
+
+## Core cloud implementation audit (2026-10-11)
+
+Core continues on `codex/complete-tempo-core`, based on published `b1ba351` (the original cloud checkout was `1984b89`; the named integration branch was deleted after PR #1 merged). The cloud change adds atomic daemon-event application and replay after failures, accepts fast turn lifecycle events before prompt acknowledgements, persists checkpoint request identities and regenerates immutable checkpoint bundles, excludes daemon SQLite/outbox files from home backups, and fixes aborted requests and health probes. Concurrent adapter starts now preserve the process limit. ACP v1 mode config options drive the mode choices, selection and setters when advertised; the evaluated TUI-v2 snapshot provided no protocol advantage, so OpenCode remains pinned at 1.18.35. A native DO abort/reacquisition test verifies recovery of waiting setup without rerunning its script. The owner resolved Q-1 (a safety checkpoint is required before revert) and MQ-1 (optional `latestMacClientSha256` in version 1 metadata); specs, generated TypeScript/Rust contracts and fixtures are updated.
+
+Deployment tooling has a local `--prepare` mode and a review configuration under `docs/deployment/`. Cloud image builds use temporary CA mounts with TLS verification; Linux runners can mount source/dependencies read-only into the full image for daemon tests. This section does not close hosted gates or replace their real-account evidence. Exact commands, results, SHAs and remaining inputs are in `CORE-RESULTS.md`.

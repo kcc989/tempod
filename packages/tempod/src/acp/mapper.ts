@@ -13,7 +13,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { boundContent, offloadBlobs, splitText, type SaveBlob } from "../bounds.ts";
 import { errorText, type Logger } from "../log.ts";
-import { isObj, stripMeta, toCommands, toConfigOptions } from "./convert.ts";
+import { configModes, isObj, modeConfig, stripMeta, toCommands, toConfigOptions } from "./convert.ts";
 
 type Obj = Record<string, unknown>;
 
@@ -216,6 +216,13 @@ export class SessionMapper {
     this.emit({ kind: "session.updated", sessionId: this.sessionId, patch });
   }
 
+  syncModeConfig(): void {
+    const option = modeConfig(this.state.configOptions);
+    if (!option) return;
+    this.state.modes = configModes(option);
+    this.state.modeId = option.currentValue as string;
+  }
+
   /** Applies session-level fields of an update without emitting (used while `session/load` replays). */
   captureState(update: unknown): void {
     if (!isObj(update)) return;
@@ -228,6 +235,7 @@ export class SessionMapper {
         break;
       case "config_option_update":
         this.state.configOptions = toConfigOptions(update["configOptions"]);
+        this.syncModeConfig();
         break;
     }
   }
@@ -258,7 +266,12 @@ export class SessionMapper {
         return this.sessionPatch({ modeId: this.state.modeId });
       case "config_option_update":
         this.captureState(update);
-        return this.sessionPatch({ configOptions: this.state.configOptions });
+        return this.sessionPatch({
+          configOptions: this.state.configOptions,
+          ...(modeConfig(this.state.configOptions)
+            ? { modes: this.state.modes, modeId: this.state.modeId }
+            : {}),
+        });
       case "session_info_update":
         if (typeof update["title"] === "string") this.sessionPatch({ title: update["title"] });
         return;

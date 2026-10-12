@@ -344,6 +344,7 @@ export class WorkspaceCore {
       errorDetail: row.errorDetail,
       setupStatus: row.setupStatus as WorkspaceDetail["setupStatus"],
       pushed: row.pushed === 1,
+      prTitle: row.prNumber === null ? null : (this.kv<string>("prTitle") ?? null),
       previewToken: row.previewToken,
       ports: this.db
         .select()
