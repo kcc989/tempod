@@ -271,7 +271,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 - The placeholder string is exactly `tempo-placeholder`. `TempoOutbound` swaps it for the real key (see below).
 - `tempod` sends `initialize` with `protocolVersion: 1` and these client capabilities: `fs.readTextFile: true`, `fs.writeTextFile: true`, `terminal: false`, and session.notices: true. Agents run commands with their own shell tools.
 - `tempod` serves `fs/read_text_file` and `fs/write_text_file` only for absolute paths under `/workspace`, `/home/tempo/attachments` or `/home/tempo/roles` (08). Any other path returns a JSON-RPC error.
-- Every `session/new` and `session/load` passes two MCP servers: Playwright, below, and `tempo` (08, Explicit triggers). Until phase 5 milestone M5, only Playwright.
+- Every `session/new` and `session/load` passes one MCP server, Playwright:
 
 ```json
 {

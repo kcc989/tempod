@@ -42,7 +42,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 05 Security and Ops | Threat model, auth, secrets, egress, previews, deploy, logs, upgrades, cost |
 | 06 Build Plan | Repo layout, phases, spikes, acceptance tests, rules for coding agents |
 | 07 Mac Client | Tempo for Mac on GPUI Kit: native API, device sign-in, layout, macOS integration, release, phase 4 and gate E |
-| 08 Events and Roles | Lifecycle events, user-defined roles in Dynamic Workers, role runs, guard rails, phase 5 and gate F |
+| 08 Events and Roles | Lifecycle events, markdown roles, role runs, limits, phase 5 and gate F |
 
 ## Goals and non-goals
 
@@ -72,7 +72,7 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 - Tempo's own agent harness. Roles (08) drive the existing agents through ACP; they are not a harness.
 - Devcontainers. Version 1 uses one Tempo base image plus a per-project setup script.
 - Docker inside the container.
-- Approval policies. Version 1 runs each agent in its most permissive mode inside the container. It MUST still show any permission request an agent sends, such as a plan approval. Role gates (08) MAY answer a permission request first; with no gate, the user answers.
+- Approval policies. Version 1 runs each agent in its most permissive mode inside the container. It MUST still show any permission request an agent sends, such as a plan approval.
 - A self-hosted git backend. Version 1 uses GitHub through a `GitProvider` interface, so a second provider can come later.
 - Native mobile apps. The web UI MUST work at phone width for reading and sending prompts.
 
@@ -93,7 +93,7 @@ Use these words exactly, in code, UI and docs.
 | Preview | An owner-only URL to one port inside a container | `preview` |
 | Setup, run, archive scripts | Per-project shell scripts, as in Conductor | `setupScript`, `runScript`, `archiveScript` |
 | `tempod` | The daemon inside each container. It runs agents and talks to the WorkspaceDO. | `tempod` |
-| Lifecycle event, change, revision, role, role version, role run, gate | Defined in 08, Vocabulary | `lifecycleEvent`, `change`, `revision`, `role`, `roleVersion`, `roleRun`, `gate` |
+| Lifecycle event, change, role, role run, result | Defined in 08, Vocabulary | `lifecycleEvent`, `change`, `role`, `roleRun`, `result` |
 
 **Banned words.** Do not use these in code, UI or docs: "VM", "node" (as a machine), "task", "worktree". SAM uses them, and they mean different things there. Use "Sandbox" only for the Cloudflare product and its SDK classes. In the UI, say "container".
 

@@ -339,7 +339,7 @@ CREATE TABLE egress_log (
 - Every change to `items` increments `workspace.items_rev` by 1 and sets `items.rev` to the new value, in the same transaction.
 - Each `checkpoints.id` is a ULID. Its git ref is `refs/tempo/checkpoints/<checkpoint id>`.
 - Delete `events` rows older than 7 days in the daily `housekeeping` op.
-- Lifecycle event tables, new columns on `sessions` and `turns`, UserHubDO and D1 role tables, new server functions, channel messages, the `role.requested` event and new error codes are in 08. They are part of this contract.
+- Lifecycle event and role run tables, new columns on `sessions` and `turns`, the D1 `user_roles` table, new server functions, the `roleRun` channel message and new error codes are in 08. They are part of this contract.
 
 ## CredentialDO and UserHubDO
 

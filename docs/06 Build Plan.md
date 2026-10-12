@@ -54,7 +54,7 @@ tempo/
 
 A phase starts only after the gate before it passes. Work for the next phase MAY begin early in a branch, but it MUST NOT merge until the gate passes. If a spike shows the spec is wrong, change the spec first, then the code.
 
-Phase 5 (08) is the exception: it MAY run in parallel with phases 2 to 4, its milestones merge when their own tests pass, and gate F needs gate B. Its spikes are S18 and S19 (08).
+Phase 5 (08) is the exception: it MAY run in parallel with phases 2 to 4, its milestones merge when their own tests pass, and gate F needs gate B. Its spike is S18 (08).
 
 ## Spikes
 
