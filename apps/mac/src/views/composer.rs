@@ -1,8 +1,9 @@
-//! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 1 to 12 rows, in the
+//! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 3 to 12 rows, in the
 //! `Composer` key context. Enter sends, ⇧Enter adds a line (the text field's own binding), Esc
 //! stops the turn, ⇧Tab toggles plan mode. Pickers use agent-reported modes and models.
 use super::composer_model::{self, SlashEntry};
 use super::file_picker::{FilePicker, MentionTrigger};
+use super::tokens::{Token, color};
 use crate::actions::{
     DismissComposerChoice, NextComposerChoice, PreviousComposerChoice, Send, StopTurn,
     TogglePlanMode,
@@ -20,7 +21,7 @@ use gpui_kit::component::{Disableable as _, h_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, EventEmitter, Focusable as _, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, div,
+    Styled as _, Subscription, Window, div, px,
 };
 use tempo_protocol as p;
 
@@ -93,7 +94,7 @@ impl EventEmitter<ComposerEvent> for Composer {}
 
 impl Composer {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 12));
+        let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(3, 12));
         let changed = cx.subscribe(&input, |_, input, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 cx.emit(ComposerEvent::Change(input.read(cx).value().to_string()));
@@ -552,6 +553,8 @@ impl Render for Composer {
                     }
                 })
                 .aria_label("Message")
+                .appearance(false)
+                .bordered(false)
                 .disabled(self.read_only || self.sending),
         );
         let list = self.file_menu.clone();
@@ -650,7 +653,20 @@ impl Render for Composer {
             .on_action(
                 cx.listener(|_, _: &TogglePlanMode, _, cx| cx.emit(ComposerEvent::TogglePlanMode)),
             )
-            .p_3()
+            .m_3()
+            .p_4()
+            .gap_3()
+            .rounded(px(16.))
+            .border_1()
+            .border_color(color(
+                if self.input.read(cx).focus_handle(cx).is_focused(window) {
+                    Token::Primary
+                } else {
+                    Token::Border
+                },
+                cx,
+            ))
+            .bg(color(Token::Background, cx))
             .children(self.attachments.iter().enumerate().map(|(ix, (id, name))| {
                 let id = id.clone();
                 Button::new(("attachment", ix))
@@ -674,12 +690,6 @@ impl Render for Composer {
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::ClearReview)))
             }))
             .children(self.uploading.then(|| div().child("Uploading attachment…")))
-            .child(
-                Button::new("attach-file")
-                    .label("Attach file")
-                    .disabled(self.read_only || self.uploading || self.sending)
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![])))),
-            )
             .children(menu)
             .child(
                 h_flex()
@@ -730,9 +740,27 @@ impl Render for Composer {
                             )
                     }))
                     .child(
+                        div()
+                            .flex_1()
+                            .text_sm()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child("⌘L to focus"),
+                    )
+                    .child(
+                        Button::new("attach-file")
+                            .label("+")
+                            .accessibility_label("Attach file")
+                            .tooltip("Attach file (⌘U)")
+                            .disabled(self.read_only || self.uploading || self.sending)
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![])))),
+                    )
+                    .child(
                         Button::new("send-prompt")
                             .primary()
-                            .label(if self.working { "Queue" } else { "Send" })
+                            .label("↑")
+                            .accessibility_label(if self.working { "Queue" } else { "Send" })
+                            .w(px(28.))
+                            .rounded(px(8.))
                             .disabled(
                                 self.read_only
                                     || self.sending

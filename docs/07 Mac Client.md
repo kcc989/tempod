@@ -155,7 +155,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
 | Center tabs | `Tabs` |
 | Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
-| Composer | `Textarea` (grows from 1 to 12 rows); `Select` for model and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
+| Composer | `Textarea` (grows from 3 to 12 rows); `Select` for model and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
 | Changes, Checks | `VirtualList`, `Badge`, `Tag` |
 | All files | `Tree` |
 | File tab | `Editor`, read-only, with syntax highlighting |
@@ -189,6 +189,7 @@ Tool calls use a borderless disclosure with indented content. Tool text renders 
 - **Work rows.** Group, label and count items exactly as 04, Work row, Work types and Tool call labels, with the same Default and Detailed detail. Put the rules in `src/views/chat_model.rs` so they are tested without a window.
 - **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control on an opaque background, as 04. Each chat tab keeps its own scroll position.
 - **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right and bottom panels: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
+- **Composer appearance.** The text field and toolbar share the rounded container from 04, using the native theme background. The field grows from 3 to 12 rows without a separate border; the toolbar aligns attachment and send controls to the right and shows the native ⌘L focus hint.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
 - **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
 - **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.

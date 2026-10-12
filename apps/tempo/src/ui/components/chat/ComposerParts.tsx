@@ -298,7 +298,7 @@ function SelectOptionItems({ option, onPick }: { option: ConfigOption; onPick: (
 }
 
 const pickerTrigger =
-  "inline-flex h-6 max-w-44 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-7 max-w-36 items-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
 
 /** Model picker (⌘/) from the agent's `model` config option; set with setSessionConfig. */
 export function ModelPicker({
@@ -319,7 +319,7 @@ export function ModelPicker({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
-        className={pickerTrigger}
+        className={cn(pickerTrigger, "text-foreground")}
         disabled={disabled}
         aria-label={`Model: ${currentValueLabel(option)}`}
       >
