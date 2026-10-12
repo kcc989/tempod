@@ -34,7 +34,8 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | New workspace dialog | Same | Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
-| Permission cards, plan mode, model and mode pickers | Same |  |
+| Permission cards, plan mode, model, reasoning level and mode pickers | Same |  |
+| Custom agents in New chat and New workspace, the profile-issues notice | Same | `Manage agents…` opens the Settings window on Agents |
 | Attachments, @-mentions, `/` commands | Same | Also accepts files dragged from Finder |
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
@@ -46,7 +47,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
 | Environment… dialog and environment proposal review | Same |  |
-| Settings: General, Logins, Environments, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
+| Settings: General, Logins, Agents, Environments, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |
@@ -157,7 +158,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
 | Center tabs | `Tabs` |
 | Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
-| Composer | `Textarea` (grows from 3 to 12 rows); `Select` for model and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
+| Composer | `Textarea` (grows from 3 to 12 rows); `Select` for model, reasoning level and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
 | Changes, Checks | `VirtualList`, `Badge`, `Tag` |
 | All files | `Tree` |
 | File tab | `Editor`, read-only, with syntax highlighting |
@@ -368,6 +369,7 @@ Phase 4 starts after gate D passes. Server changes come first, so the web UI nev
 | AT-35 | Revoking the Mac session in web Settings → Devices returns the app to the sign-in screen within 60 s. |
 | AT-36 | Every action in 04's shortcut table works with its Conductor binding. |
 | AT-37 | A logs, Keychain and disk check after a full run finds no token, secret, prompt or transcript text outside the Keychain. |
+| AT-52 | A custom agent made in web Settings → Agents shows in the Mac New chat menu. Editing it in the Mac Settings window shows the change on the web after a reload. A chat started from it on the Mac shows the same profile-issues notice as the web. |
 
 ## Risks and open questions
 

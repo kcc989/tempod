@@ -5,6 +5,7 @@ import type { WorkspaceDO } from "./do/workspace/index.ts";
 interface TempoEnv {
   readonly DB: D1Database;
   readonly DATA: R2Bucket;
+  readonly AGENTS: Artifacts;
   readonly WORKSPACE: DurableObjectNamespace<WorkspaceDO>;
   readonly USER_HUB: DurableObjectNamespace<UserHubDO>;
   readonly CREDENTIALS: DurableObjectNamespace<CredentialDO>;

@@ -24,6 +24,7 @@ import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useCallMutation } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
+import { useCustomAgents } from "~/ui/hooks/useCustomAgents";
 import { useWorkspaceSelector, useWorkspaceStore } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUi } from "~/ui/hooks/useWorkspaceUi";
 import { call } from "~/ui/lib/api";
@@ -37,12 +38,14 @@ import {
   closeTab,
   confirm,
   getWorkspaceUi,
+  openDialog,
   openTab,
   syncChatTabs,
   type OpenTab,
 } from "~/ui/state/workspace-ui";
 import {
   agentMenu,
+  customAgentMenu,
   chatTabIds,
   closedSessions,
   nextTabIndex,
@@ -97,7 +100,8 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   });
   const renameSession = useCallMutation("renameSession");
 
-  const newChat = (agent: AgentId) => createSession.mutate({ workspaceId, agent });
+  const newChat = (agent: AgentId, customAgentId?: string) =>
+    createSession.mutate({ workspaceId, agent, ...(customAgentId ? { customAgentId } : {}) });
 
   const closeChat = async (sessionId: string) => {
     const key = `chat:${sessionId}`;
@@ -407,11 +411,12 @@ export function NewChatMenu({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
-  onPick: (agent: AgentId) => void;
+  onPick: (agent: AgentId, customAgentId?: string) => void;
 }) {
   const creds = useCredentialStatus().data;
   const settings = useWorkspaceSelector(workspaceId, (s) => s.workspace?.settings ?? null);
   const entries = agentMenu(creds, settings);
+  const custom = customAgentMenu(useCustomAgents().data, creds);
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
@@ -429,6 +434,23 @@ export function NewChatMenu({
             {e.hint && <DropdownMenuShortcut className="tracking-normal">{e.hint}</DropdownMenuShortcut>}
           </DropdownMenuItem>
         ))}
+        {custom.length > 0 && <DropdownMenuSeparator />}
+        {custom.map((e) => (
+          <DropdownMenuItem
+            key={e.customAgentId}
+            disabled={!e.enabled}
+            onSelect={() => onPick(e.agent, e.customAgentId)}
+          >
+            <span className="min-w-0 flex-1 truncate">{e.label}</span>
+            <DropdownMenuShortcut className="tracking-normal">
+              {e.enabled ? e.baseLabel : "Add login in Settings"}
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", tab: "agents" })}>
+          Manage agents…
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

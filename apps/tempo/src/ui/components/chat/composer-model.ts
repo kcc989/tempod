@@ -3,8 +3,10 @@ import {
   type AvailableCommand,
   type ConfigOption,
   type Mention,
+  type ProfileIssue,
   type Session,
 } from "@tempo/protocol";
+import { agentLabel } from "~/ui/lib/agents";
 import { fuzzyFilter } from "~/ui/lib/fuzzy";
 import type { PendingInsertion } from "~/ui/state/workspace-ui";
 
@@ -152,6 +154,8 @@ export interface ConfigPickers {
   readonly model: ConfigOption | undefined;
   /** A `mode` config option, used only when the agent reports no modes. */
   readonly modeOption: ConfigOption | undefined;
+  /** The reasoning level: the option whose category is `thought_level` (04, Composer). */
+  readonly thoughtLevel: ConfigOption | undefined;
   readonly others: ReadonlyArray<ConfigOption>;
 }
 
@@ -159,10 +163,11 @@ export const configPickers = (session: Pick<Session, "configOptions" | "modes">)
   const model = session.configOptions.find((o) => o.category === "model");
   const mode = session.configOptions.find((o) => o.category === "mode");
   const modeOption = session.modes.length === 0 ? mode : undefined;
+  const level = session.configOptions.find((o) => o.category === "thought_level" && o.type === "select");
   const others = session.configOptions.filter(
-    (o) => o !== model && o !== mode && (o.type === "select" || o.type === "boolean"),
+    (o) => o !== model && o !== mode && o !== level && (o.type === "select" || o.type === "boolean"),
   );
-  return { model, modeOption, others };
+  return { model, modeOption, thoughtLevel: level, others };
 };
 
 /** The display name of an option's current value. */
@@ -196,3 +201,22 @@ export const optionGroups = (
 /** Moves an item within a list (for keyboard reordering of queued chips). */
 export const moveIndex = (length: number, from: number, delta: number): number =>
   Math.max(0, Math.min(length - 1, from + delta));
+
+const ISSUE_LABELS: Record<ProfileIssue, string> = {
+  systemPrompt: "system prompt",
+  tools: "tool limits",
+  mcpServers: "MCP servers",
+  model: "model",
+  thoughtLevel: "reasoning level",
+};
+
+/** The profile-issues notice (04, Composer): null when there is nothing to show. */
+export const profileIssuesText = (
+  session: Pick<Session, "agent" | "customAgent" | "profileIssues">,
+): string | null => {
+  const issues = session.profileIssues ?? [];
+  if (!session.customAgent || issues.length === 0) return null;
+  return `${agentLabel(session.agent)} ignored some settings of ${session.customAgent.name}: ${issues
+    .map((i) => ISSUE_LABELS[i])
+    .join(", ")}`;
+};

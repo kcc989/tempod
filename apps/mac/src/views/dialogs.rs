@@ -22,6 +22,9 @@ pub struct Dialogs {
     agent: Option<p::AgentId>,
     models: Vec<p::AgentModelOptions>,
     model: Option<String>,
+    /// A custom agent picked in the model menu; its base agent is `agent` (04, New workspace).
+    custom_agent: Option<String>,
+    custom_agents: Vec<p::CustomAgentSummary>,
     models_loading: bool,
     workspace_options: bool,
     branches: Vec<p::ListBranchesItem>,
@@ -71,6 +74,8 @@ impl Dialogs {
             agent: None,
             models: vec![],
             model: None,
+            custom_agent: None,
+            custom_agents: vec![],
             models_loading: false,
             workspace_options: false,
             branches: vec![],
@@ -153,6 +158,17 @@ impl Dialogs {
         let Some(client) = &self.client else {
             return;
         };
+        let agents = client.call::<api::ListCustomAgents>(p::Empty {});
+        cx.spawn(async move |this, cx| {
+            let result = agents.await;
+            let _ = this.update(cx, |this, cx| {
+                if let Ok(agents) = result {
+                    this.custom_agents = agents;
+                }
+                cx.notify();
+            });
+        })
+        .detach();
         let request = client.call::<api::ListModels>(Default::default());
         self.models_loading = true;
         self.error = None;
@@ -320,7 +336,10 @@ impl Dialogs {
         .detach();
     }
     fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.pending || self.models_loading || self.model.is_none() {
+        if self.pending
+            || self.models_loading
+            || (self.model.is_none() && self.custom_agent.is_none())
+        {
             return;
         }
         let Some(client) = &self.client else {
@@ -361,7 +380,12 @@ impl Dialogs {
             project_id,
             source,
             agent: self.agent,
-            model: self.model.clone(),
+            model: if self.custom_agent.is_some() {
+                None
+            } else {
+                self.model.clone()
+            },
+            custom_agent_id: self.custom_agent.clone(),
             prompt,
         });
         self.pending = true;
@@ -528,19 +552,42 @@ impl Render for Dialogs {
                 })
             })
             .collect();
-        let model_label = choices
+        // Custom agents whose base agent has a login (it reports models), after the models.
+        let custom: Vec<(p::AgentId, String, String)> = self
+            .custom_agents
             .iter()
-            .find(|(agent, value, _)| {
-                Some(*agent) == self.agent && Some(value) == self.model.as_ref()
+            .filter(|a| self.models.iter().any(|m| m.agent == a.base_agent))
+            .map(|a| {
+                (
+                    a.base_agent,
+                    a.id.clone(),
+                    format!(
+                        "{} · {}",
+                        a.name.as_str(),
+                        super::chat_model::agent_label(a.base_agent)
+                    ),
+                )
             })
-            .map(|(_, _, label)| label.clone())
-            .unwrap_or_else(|| "Select model".into());
+            .collect();
+        let model_label = match &self.custom_agent {
+            Some(id) => custom
+                .iter()
+                .find(|(_, c, _)| c == id)
+                .map(|(_, _, label)| label.clone()),
+            None => choices
+                .iter()
+                .find(|(agent, value, _)| {
+                    Some(*agent) == self.agent && Some(value) == self.model.as_ref()
+                })
+                .map(|(_, _, label)| label.clone()),
+        }
+        .unwrap_or_else(|| "Select model".into());
         let weak = cx.weak_entity();
         let model_picker = Button::new("workspace-model")
             .label(model_label)
             .disabled(self.pending || self.models_loading)
             .dropdown_menu(move |menu, _, _| {
-                choices.iter().fold(menu, |menu, (agent, value, label)| {
+                let menu = choices.iter().fold(menu, |menu, (agent, value, label)| {
                     let weak = weak.clone();
                     let agent = *agent;
                     let value = value.clone();
@@ -548,6 +595,24 @@ impl Render for Dialogs {
                         let _ = weak.update(cx, |this, cx| {
                             this.agent = Some(agent);
                             this.model = Some(value.clone());
+                            this.custom_agent = None;
+                            cx.notify();
+                        });
+                    }))
+                });
+                let menu = if custom.is_empty() {
+                    menu
+                } else {
+                    menu.separator()
+                };
+                custom.iter().fold(menu, |menu, (agent, id, label)| {
+                    let weak = weak.clone();
+                    let agent = *agent;
+                    let id = id.clone();
+                    menu.item(PopupMenuItem::new(label.clone()).on_click(move |_, _, cx| {
+                        let _ = weak.update(cx, |this, cx| {
+                            this.agent = Some(agent);
+                            this.custom_agent = Some(id.clone());
                             cx.notify();
                         });
                     }))
@@ -642,7 +707,7 @@ impl Render for Dialogs {
                         .disabled(
                             self.pending
                                 || self.models_loading
-                                || self.model.is_none()
+                                || (self.model.is_none() && self.custom_agent.is_none())
                                 || self.project.is_none(),
                         )
                         .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),

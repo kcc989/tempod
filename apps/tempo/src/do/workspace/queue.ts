@@ -155,6 +155,7 @@ export const ensureSessionLive = async (
       env,
       modeId: session.modeId ?? DEFAULT_MODE[agent],
       ...(model ? { model } : {}),
+      ...(session.profileJson ? { profile: json.profile.read(session.profileJson, undefined) } : {}),
       browser: browserRunEnabled(core) ? "run" : "local",
       acpSessionId: session.acpSessionId,
       mcpServers: (await core.mcpServers()).map(mcpToSpec),
@@ -170,6 +171,7 @@ export const ensureSessionLive = async (
     configOptionsJson: json.configOptions.write(res.configOptions),
     commandsJson: json.commands.write(res.availableCommands),
     capabilitiesJson: json.capabilities.write(res.capabilities),
+    profileIssuesJson: json.profileIssues.write(res.profileIssues ?? []),
     ...(res.handoff ? { handoffPending: 1 } : {}),
   });
   for (const [configId, value] of Object.entries(config)) {

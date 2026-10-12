@@ -137,6 +137,33 @@ export const workspaces = sqliteTable(
   ],
 );
 
+/** Pointer to a custom agent file in the user's Artifacts repo (02, Custom agents). */
+export const customAgents = sqliteTable(
+  "custom_agents",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    baseAgent: text("base_agent").notNull(),
+    repo: text("repo").notNull(),
+    path: text("path").notNull(),
+    commitSha: text("commit_sha").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (t) => [
+    check("custom_agents_base_agent", sql`${t.baseAgent} IN ('claude','codex','opencode','pi')`),
+    uniqueIndex("custom_agents_active_name")
+      .on(t.userId, t.name)
+      .where(sql`deleted_at IS NULL`),
+  ],
+);
+
+export type CustomAgentRow = typeof customAgents.$inferSelect;
 export type ProjectRow = typeof projects.$inferSelect;
 export type WorkspaceRow = typeof workspaces.$inferSelect;
 export type EnvironmentRow = typeof environments.$inferSelect;

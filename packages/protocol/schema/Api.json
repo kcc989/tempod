@@ -1118,6 +1118,73 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "listCustomAgents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "CustomAgentSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getCustomAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCustomAgentIn.json"
+        },
+        "output": {
+          "$ref": "CustomAgent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveCustomAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SaveCustomAgentIn.json"
+        },
+        "output": {
+          "$ref": "CustomAgent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteCustomAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteCustomAgentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "getCredentialStatus": {
       "type": "object",
       "properties": {
@@ -1414,6 +1481,10 @@
     "continueAfterSetupFailure",
     "listTerminals",
     "listScriptRuns",
+    "listCustomAgents",
+    "getCustomAgent",
+    "saveCustomAgent",
+    "deleteCustomAgent",
     "getCredentialStatus",
     "setClaudeToken",
     "setCodexAuth",

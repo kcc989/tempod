@@ -3,6 +3,7 @@ import { newId, type Source, type TempodEvent, type TempodOp } from "@tempo/prot
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import type { WorkspaceCore } from "../../src/do/workspace/core.ts";
 import type { OpRunner } from "../../src/do/workspace/runner.ts";
+import type { SessionAgentProfile } from "../../src/do/workspace/rpc.ts";
 
 /**
  * Test doubles for the parts of a workspace that need a real container: `ctx.container` and
@@ -433,6 +434,7 @@ export const seedWorkspace = async (
     branch?: string;
     agent?: "claude" | "codex" | "opencode" | "pi";
     source?: Source;
+    custom?: SessionAgentProfile;
   } = {},
 ) => {
   const workspaceId = newId();
@@ -457,6 +459,7 @@ export const seedWorkspace = async (
     defaultAgent: opts.agent ?? "claude",
     agent: opts.agent ?? "claude",
     prompt: opts.prompt ? { text: opts.prompt } : null,
+    ...(opts.custom ? { custom: opts.custom } : {}),
     author: { name: "Owner", email: `${OWNER_GITHUB_ID}+owner@users.noreply.github.com` },
     createdAt: now,
   });

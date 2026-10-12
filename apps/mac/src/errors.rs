@@ -41,6 +41,9 @@ pub fn error_text(code: &str) -> &'static str {
         "ENVIRONMENT_EXISTS" => "An environment with this name already exists.",
         "MODEL_REQUIRED" => "Set a default model for this agent in Settings → Project.",
         "SETTINGS_INVALID" => "Settings are not valid.",
+        "CUSTOM_AGENT_EXISTS" => "You already have an agent with this name.",
+        "CUSTOM_AGENT_LIMIT" => "You have the most custom agents allowed. Delete one first.",
+        "ARTIFACTS_ERROR" => "Could not reach agent storage. Try again.",
         "EGRESS_BLOCKED" => "(Shown only in the egress log.)",
         _ => "Something went wrong.",
     }

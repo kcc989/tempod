@@ -58,6 +58,35 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   PermissionOption: w.permissionOptions,
   PlanEntry: w.planContent.entries,
   ToolLocation: w.toolCallContent.locations,
+  McpStdioServer: [w.reviewerDefinition.mcp.servers[0]],
+  McpRemoteServer: [
+    w.reviewerDefinition.mcp.servers[1],
+    { name: "events", type: "sse", url: "https://mcp.example.com/sse", headers: {} },
+  ],
+  CustomAgentDefinition: [
+    w.reviewerDefinition,
+    {
+      name: "Pi tester",
+      description: "",
+      baseAgent: "pi",
+      model: "",
+      thoughtLevel: "",
+      systemPrompt: "",
+      tools: { allow: ["read", "bash", "mcp__docs__*"], deny: [] },
+      mcp: { playwright: true, servers: [] },
+    },
+  ],
+  CustomAgent: [w.reviewerAgent],
+  CustomAgentSummary: [
+    {
+      id: w.CUSTOM_AGENT_ID,
+      name: "Reviewer",
+      description: "Reviews code without editing it",
+      baseAgent: "claude",
+      updatedAt: 1_791_000_000_000,
+    },
+  ],
+  SessionCustomAgent: [w.reviewerSession.customAgent],
   ContentBlock: [
     { type: "text", text: "Done." },
     { type: "image", mimeType: "image/png", data: "iVBORw0KGgo=" },
@@ -109,7 +138,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       changes: null,
     }),
   ],
-  Session: [w.claudeSession, w.codexSession],
+  Session: [w.claudeSession, w.codexSession, w.reviewerSession],
   Mention: [{ path: "src/app.tsx" }],
   TurnPrompt: [
     w.turn(1).prompt,
@@ -385,6 +414,11 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
       model: "reported-model",
       prompt: { text: "Fix the flaky test" },
     },
+    {
+      projectId: PROJECT_ID,
+      source: { kind: "branch", branch: "review/auth" },
+      customAgentId: w.CUSTOM_AGENT_ID,
+    },
   ],
   listWorkspaces: [{}, { includeArchived: true }],
   getWorkspace: [ws],
@@ -405,6 +439,7 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   createSession: [
     { ...ws, agent: "codex" },
     { ...ws, agent: "claude", model: "opus", modeId: "plan" },
+    { ...ws, agent: "claude", customAgentId: w.CUSTOM_AGENT_ID },
   ],
   closeSession: [{ ...ws, sessionId: S2 }],
   renameSession: [{ ...ws, sessionId: S1, title: "Reviewer" }],
@@ -502,6 +537,13 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
     },
   ],
   deleteMcpServer: [{ id: "01jmcp0000000000000000000b" }],
+  listCustomAgents: [{}],
+  getCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
+  saveCustomAgent: [
+    { definition: w.reviewerDefinition },
+    { customAgentId: w.CUSTOM_AGENT_ID, definition: { ...w.reviewerDefinition, thoughtLevel: "" } },
+  ],
+  deleteCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
 };
 
 /** Outputs that are not shared types, by their wire type name. */

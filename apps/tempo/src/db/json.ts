@@ -1,4 +1,5 @@
 import {
+  AgentProfile,
   API,
   Capabilities,
   EnvironmentProposal,
@@ -6,6 +7,7 @@ import {
   SecretBinding,
   ITEM_CONTENT,
   PermissionOption,
+  ProfileIssue,
   Session,
   Settings,
   SettingsLayer,
@@ -95,6 +97,8 @@ export const json = {
   environmentSecrets: jsonColumn("environments.secrets_json", Schema.Array(SecretBinding)),
   environmentInjectors: jsonColumn("environments.injectors_json", Schema.Array(Injector)),
   environmentProposal: jsonColumn("environment_proposals.proposal_json", EnvironmentProposal),
+  profile: jsonColumn("sessions.profile_json", AgentProfile),
+  profileIssues: jsonColumn("sessions.profile_issues_json", Schema.Array(ProfileIssue)),
 } as const;
 
 export const EMPTY_PROMPT: TurnPrompt = { text: "", mentions: [], attachmentIds: [], reviewCommentIds: [] };

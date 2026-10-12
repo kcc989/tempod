@@ -41,6 +41,29 @@ impl SelectItem for Choice {
 }
 type Picker = SelectState<Vec<Choice>>;
 
+/// A select option's values, with group names kept in the labels.
+fn select_choices(config: Option<&p::ConfigOption>) -> Vec<Choice> {
+    config
+        .and_then(|c| c.options.as_ref())
+        .into_iter()
+        .flatten()
+        .flat_map(|option| match option {
+            p::ConfigOptionOptionsItem::Option(option) => vec![Choice {
+                value: option.value.clone(),
+                label: option.name.clone().into(),
+            }],
+            p::ConfigOptionOptionsItem::Group(group) => group
+                .options
+                .iter()
+                .map(|option| Choice {
+                    value: option.value.clone(),
+                    label: format!("{} · {}", group.name, option.name).into(),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
 pub enum ComposerEvent {
     Send(String),
     Attach(Vec<std::path::PathBuf>),
@@ -84,7 +107,14 @@ pub struct Composer {
     mode: Entity<Picker>,
     model_config: Option<String>,
     model_choices: Vec<Choice>,
+    /// The reasoning level: the agent's `thought_level` option (04, Composer).
+    level: Entity<Picker>,
+    level_config: Option<String>,
+    level_choices: Vec<Choice>,
     mode_choices: Vec<Choice>,
+    /// The profile-issues notice (04) and whether it was dismissed for this session.
+    profile_notice: Option<String>,
+    notice_dismissed: bool,
     pub configuring: bool,
     _picker_events: Vec<Subscription>,
     _input_changed: Subscription,
@@ -120,6 +150,20 @@ impl Composer {
         let model =
             cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx).searchable(true));
         let mode = cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx));
+        let level = cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx));
+        let level_events = cx.subscribe(&level, |this, _, event: &SelectEvent<Vec<Choice>>, cx| {
+            if this.read_only || this.working || this.starting || this.configuring {
+                return;
+            }
+            if let (SelectEvent::Confirm(Some(value)), Some(config_id)) =
+                (event, &this.level_config)
+            {
+                cx.emit(ComposerEvent::SetModel {
+                    config_id: config_id.clone(),
+                    value: value.clone(),
+                });
+            }
+        });
         let model_events = cx.subscribe(&model, |this, _, event: &SelectEvent<Vec<Choice>>, cx| {
             if this.read_only || this.working || this.starting || this.configuring {
                 return;
@@ -170,9 +214,14 @@ impl Composer {
             mode,
             model_config: None,
             model_choices: vec![],
+            level,
+            level_config: None,
+            level_choices: vec![],
             mode_choices: vec![],
+            profile_notice: None,
+            notice_dismissed: false,
             configuring: false,
-            _picker_events: vec![model_events, mode_events],
+            _picker_events: vec![model_events, mode_events, level_events],
             _input_changed: changed,
         }
     }
@@ -209,25 +258,7 @@ impl Composer {
             .iter()
             .find(|c| c.category.as_deref() == Some("model") && c.type_ == "select");
         self.model_config = config.map(|c| c.id.clone());
-        let choices: Vec<_> = config
-            .and_then(|c| c.options.as_ref())
-            .into_iter()
-            .flatten()
-            .flat_map(|option| match option {
-                p::ConfigOptionOptionsItem::Option(option) => vec![Choice {
-                    value: option.value.clone(),
-                    label: option.name.clone().into(),
-                }],
-                p::ConfigOptionOptionsItem::Group(group) => group
-                    .options
-                    .iter()
-                    .map(|option| Choice {
-                        value: option.value.clone(),
-                        label: format!("{} · {}", group.name, option.name).into(),
-                    })
-                    .collect(),
-            })
-            .collect();
+        let choices = select_choices(config);
         if self.model_choices != choices {
             self.model_choices = choices.clone();
             self.model
@@ -243,6 +274,28 @@ impl Composer {
                 }
             });
         }
+        let level = session
+            .config_options
+            .iter()
+            .find(|c| c.category.as_deref() == Some("thought_level") && c.type_ == "select");
+        self.level_config = level.map(|c| c.id.clone());
+        let choices = select_choices(level);
+        if self.level_choices != choices {
+            self.level_choices = choices.clone();
+            self.level
+                .update(cx, |state, cx| state.set_items(choices, window, cx));
+        }
+        if !self.configuring
+            && let Some(p::ConfigOptionCurrentValue::String(value)) =
+                level.map(|c| &c.current_value)
+        {
+            self.level.update(cx, |state, cx| {
+                if state.selected_value() != Some(value) {
+                    state.set_selected_value(value, window, cx);
+                }
+            });
+        }
+        self.profile_notice = super::agents_model::profile_issues_text(session);
         let choices: Vec<_> = session
             .modes
             .iter()
@@ -667,6 +720,24 @@ impl Render for Composer {
                 cx,
             ))
             .bg(color(Token::Background, cx))
+            .children(
+                self.profile_notice
+                    .clone()
+                    .filter(|_| !self.notice_dismissed)
+                    .map(|text| {
+                        h_flex()
+                            .gap_2()
+                            .child(div().flex_1().text_sm().child(text))
+                            .child(
+                                Button::new("dismiss-profile-notice")
+                                    .label("Dismiss")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.notice_dismissed = true;
+                                        cx.notify();
+                                    })),
+                            )
+                    }),
+            )
             .children(self.attachments.iter().enumerate().map(|(ix, (id, name))| {
                 let id = id.clone();
                 Button::new(("attachment", ix))
@@ -731,6 +802,14 @@ impl Render for Composer {
                                 self.read_only || self.working || self.starting || self.configuring,
                             )
                     }))
+                    .children((!self.level_choices.is_empty()).then(|| {
+                        Select::new(&self.level)
+                            .accessibility_label("Reasoning level")
+                            .placeholder("Reasoning level")
+                            .disabled(
+                                self.read_only || self.working || self.starting || self.configuring,
+                            )
+                    }))
                     .children((!self.mode_choices.is_empty()).then(|| {
                         Select::new(&self.mode)
                             .accessibility_label("Mode")
@@ -752,7 +831,9 @@ impl Render for Composer {
                             .accessibility_label("Attach file")
                             .tooltip("Attach file (⌘U)")
                             .disabled(self.read_only || self.uploading || self.sending)
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![])))),
+                            .on_click(
+                                cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![]))),
+                            ),
                     )
                     .child(
                         Button::new("send-prompt")
