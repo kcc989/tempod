@@ -733,13 +733,36 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     },
 
     listFiles: async () => {
+      if (core.state === "sleeping") return core.files.list();
       rt.requireReady();
-      return requireTempod(core).request("fs.list", {});
+      const res = await requireTempod(core).request("fs.list", {});
+      try {
+        core.files.rememberList(res.paths);
+      } catch {
+        /* The live response is still usable. */
+      }
+      return res;
     },
 
     readFile: async ({ path }) => {
+      if (core.state === "sleeping") return core.files.read(path);
       rt.requireReady();
-      return requireTempod(core).request("fs.read", { path, maxBytes: 1024 * 1024 });
+      try {
+        const res = await requireTempod(core).request("fs.read", { path, maxBytes: 1024 * 1024 });
+        try {
+          core.files.rememberFile(path, res);
+        } catch {
+          /* The live response is still usable. */
+        }
+        return res;
+      } catch (e) {
+        try {
+          core.files.forgetFile(path);
+        } catch {
+          /* Preserve the live error. */
+        }
+        throw e;
+      }
     },
 
     searchFiles: async ({ query, regex }) => {

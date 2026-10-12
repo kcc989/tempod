@@ -1688,7 +1688,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
       encoding: "utf8",
       size: 5,
     });
-    expect(w.tempod.requestsOf("fs.read")).toEqual([{ path: "README.md", maxBytes: 1024 * 1024 }]);
+    expect(w.tempod.requestsOf("fs.read").at(-1)).toEqual({ path: "README.md", maxBytes: 1024 * 1024 });
     // 02 Files: searchFiles → [{path, line, text}], at most 500
     expect(ok(await w.stub.searchFiles({ query: "foo" }))).toEqual([
       { path: "src/a.ts", line: 3, text: "const foo = 1" },
@@ -1704,6 +1704,106 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.readFile({ path: "../../etc/passwd" }))).toBe("PATH_OUTSIDE_WORKSPACE");
     w.tempod.fail("git.fileDiff", "NOT_FOUND", "no such file");
     expect(codeOf(await w.stub.getFileDiff({ scope: "branch", path: "missing.ts" }))).toBe("NOT_FOUND");
+  });
+
+  it("syncs files before sleep and serves them without waking or contacting tempod", async () => {
+    const w = await readyWs();
+    w.tempod.on("fs.list", () => ({ paths: ["README.md", "src/a.ts", "bin.dat"] }));
+    w.tempod.on("fs.read", ({ path }) =>
+      path === "bin.dat"
+        ? { content: "AAE=", encoding: "base64", size: 2 }
+        : { content: `saved ${path}`, encoding: "utf8", size: 10 },
+    );
+    await putToSleep(w);
+    const before = w.tempod.requests.length;
+    expect(ok(await w.stub.listFiles({}))).toEqual({ paths: ["README.md", "bin.dat", "src/a.ts"] });
+    expect(ok(await w.stub.readFile({ path: "/workspace/src/a.ts" }))).toMatchObject({
+      content: "saved src/a.ts",
+    });
+    expect(ok(await w.stub.readFile({ path: "bin.dat" }))).toEqual({
+      content: "AAE=",
+      encoding: "base64",
+      size: 2,
+    });
+    expect(w.tempod.requests).toHaveLength(before);
+    expect(await opsOf(w.stub, "wake")).toHaveLength(0);
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
+  it("does not wake on a cache miss and rejects paths outside the workspace", async () => {
+    const w = await readyWs();
+    await putToSleep(w);
+    expect(codeOf(await w.stub.readFile({ path: "uncached.ts" }))).toBe("CONTAINER_NOT_READY");
+    for (const path of ["../README.md", "/etc/passwd", "/workspace/../etc/passwd"])
+      expect(codeOf(await w.stub.readFile({ path }))).toBe("PATH_OUTSIDE_WORKSPACE");
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.setKv("filesSyncedAt", undefined));
+    expect(codeOf(await w.stub.listFiles({}))).toBe("CONTAINER_NOT_READY");
+    expect(await opsOf(w.stub, "wake")).toHaveLength(0);
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
+  it("refreshes changed files, removes deleted files and drops unreadable cached contents", async () => {
+    const w = await readyWs();
+    const sync = () => runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
+    await sync();
+    w.tempod.on("fs.list", () => ({ paths: ["src/renamed.ts"] }));
+    w.tempod.on("fs.read", () => ({ content: "updated", encoding: "utf8", size: 7 }));
+    const seq = await emit(w, {
+      kind: "git.changed",
+      files: [
+        { path: "src/renamed.ts", oldPath: "README.md", status: "renamed", additions: 1, deletions: 1 },
+      ],
+      additions: 1,
+      deletions: 1,
+    });
+    await waitFor(
+      async () => Number((await wsRow(w.stub))["tempod_acked_seq"]) >= seq,
+      5000,
+      "file event applied",
+    );
+    await waitFor(
+      async () =>
+        (await one(w.stub, "SELECT response_json FROM file_cache WHERE path = 'src/renamed.ts'"))?.[
+          "response_json"
+        ] != null,
+      8000,
+      "file cache synced",
+    );
+    expect(await one(w.stub, "SELECT path FROM file_cache WHERE path = 'README.md'")).toBeUndefined();
+    expect(
+      await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.read("src/renamed.ts")),
+    ).toMatchObject({ content: "updated" });
+    w.tempod.fail("fs.read", "FILE_TOO_LARGE");
+    await putToSleep(w);
+    expect(ok(await w.stub.listFiles({}))).toEqual({ paths: ["src/renamed.ts"] });
+    expect(codeOf(await w.stub.readFile({ path: "src/renamed.ts" }))).toBe("CONTAINER_NOT_READY");
+  });
+
+  it("keeps the previous snapshot and completes sleep when syncing fails", async () => {
+    const w = await readyWs();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
+    w.tempod.fail("fs.list", "INTERNAL");
+    await putToSleep(w);
+    expect(ok(await w.stub.listFiles({}))).toEqual({ paths: ["README.md"] });
+    expect(ok(await w.stub.readFile({ path: "README.md" }))).toMatchObject({ content: "hello" });
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
+  it("bounds cache storage and excludes files absent from the non-ignored tree", async () => {
+    const w = await readyWs();
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      const core = internals(i).core;
+      await core.files.sync();
+      core.files.rememberFile(".env", { content: "ignored", encoding: "utf8", size: 7 });
+      expect(() => core.files.read(".env")).toThrow();
+      core.files.rememberList(Array.from({ length: 20 }, (_, n) => `file-${n}.txt`));
+      const content = "x".repeat(900_000);
+      for (let n = 0; n < 20; n++)
+        core.files.rememberFile(`file-${n}.txt`, { content, encoding: "utf8", size: content.length });
+    });
+    const total = await one(w.stub, "SELECT SUM(bytes) AS bytes FROM file_cache");
+    expect(Number(total?.["bytes"])).toBeLessThanOrEqual(16 * 1024 * 1024);
+    expect(await one(w.stub, "SELECT path FROM file_cache WHERE path = '.env'")).toBeUndefined();
   });
 
   it("return CONTAINER_NOT_READY while the workspace starts", async () => {

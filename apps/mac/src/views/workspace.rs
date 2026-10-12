@@ -2526,6 +2526,13 @@ mod tests {
                         }
                     } else if path.ends_with("/getCredentialStatus") {
                         (200,r#"{"claude":{"set":true,"updatedAt":null},"anthropic":{"set":true,"updatedAt":null},"openai":{"set":true,"updatedAt":null},"openrouter":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null}}"#.into())
+                    } else if path.ends_with("/listFiles") {
+                        (200, r#"{"paths":["README.md"]}"#.into())
+                    } else if path.ends_with("/readFile") {
+                        (
+                            200,
+                            r#"{"content":"cached contents","encoding":"utf8","size":15}"#.into(),
+                        )
                     } else {
                         (200, "{}".into())
                     };
@@ -2634,6 +2641,41 @@ mod tests {
             assert!(Instant::now() < deadline, "chat action did not finish");
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[gpui_kit::test]
+    fn sleeping_files_use_cached_reads_without_waking(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::Sleeping;
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.review.update(cx, |review, cx| {
+                    review.open_picker(cx);
+                    review.open_file("README.md".into(), window, cx);
+                });
+            });
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| view.review.read(cx).file.is_some());
+        let requests = server.requests.lock().unwrap();
+        assert!(
+            requests
+                .iter()
+                .any(|(path, _)| path.ends_with("/listFiles"))
+        );
+        assert!(requests.iter().any(|(path, _)| path.ends_with("/readFile")));
+        assert!(
+            !requests
+                .iter()
+                .any(|(path, _)| path.ends_with("/wakeWorkspace") || path.ends_with("/getChanges"))
+        );
     }
 
     #[gpui_kit::test]
