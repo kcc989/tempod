@@ -6,6 +6,7 @@ import {
   ContentBlock,
   PermissionOption,
   SessionMode,
+  TurnUsage,
 } from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
 import { ChangedFile } from "./types.ts";
@@ -113,6 +114,7 @@ export const TempodEvent = Schema.Union([
     stopReason: Schema.NullOr(Schema.String),
     error: Schema.optional(ResError),
     interrupted: Schema.optional(Schema.Boolean),
+    usage: Schema.optional(TurnUsage),
   }),
   ev("permission.requested", {
     requestId: Schema.String,
@@ -200,6 +202,10 @@ export const CheckpointResult = Schema.Union([
 ]);
 export type CheckpointResult = typeof CheckpointResult.Type;
 
+/** 01 Browser Run: `"run"` drives a Browser Run session, `"local"` the container's Chromium. */
+export const BrowserMode = Schema.Literals(["local", "run"]);
+export type BrowserMode = typeof BrowserMode.Type;
+
 export const SessionStartResult = Schema.Struct({
   acpSessionId: Schema.String,
   modes: Schema.Array(SessionMode),
@@ -257,6 +263,7 @@ export const TEMPOD_REQUESTS = {
       env: Env,
       modeId: Schema.optional(Schema.NullOr(Schema.String)),
       model: Schema.optional(Schema.NullOr(Schema.String)),
+      browser: BrowserMode,
       acpSessionId: Schema.optional(Schema.NullOr(Schema.String)),
     }),
     SessionStartResult,
@@ -390,6 +397,10 @@ export const PLAYWRIGHT_MCP_SERVER = {
   args: ["--headless", "--isolated", "--browser", "chromium"],
   env: [{ name: "PLAYWRIGHT_BROWSERS_PATH", value: "/opt/ms-playwright" }],
 } as const;
+
+/** 01 Browser Run: Playwright MCP reaches the session through `TempoOutbound` rule 11. */
+export const BROWSER_RUN_HOST = "browser.tempo.internal";
+export const BROWSER_RUN_CDP_ENDPOINT = `wss://${BROWSER_RUN_HOST}/`;
 
 export const PLACEHOLDER = "tempo-placeholder";
 

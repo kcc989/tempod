@@ -28,6 +28,8 @@ import {
   OWNER_GITHUB_ID,
   internals,
   seedCredentials,
+  installFakes,
+  FakeTempod,
   seedProject,
   seedWorkspace,
   waitFor,
@@ -514,6 +516,27 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
     gh.installations = [];
   });
 
+  it("GitHub's setup_url stores the new installation for a signed-in owner (05 setup step 5)", async () => {
+    const o = await owner();
+    gh.installations = [
+      { id: o.installationId, account: { login: "acme", type: "Organization" }, suspended_at: null },
+      { id: 556001, account: { login: "fresh-org", type: "Organization" }, suspended_at: null },
+    ];
+    const anonymous = await setup("/setup/github/installed?installation_id=556001&setup_action=install");
+    expect(anonymous.status).toBe(302);
+    expect(await d1Row("SELECT * FROM github_installations WHERE installation_id = 556001")).toBeNull();
+    const res = await setup("/setup/github/installed?installation_id=556001&setup_action=install", {
+      headers: { Cookie: await sessionCookie(o.token) },
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("https://tempo.test/");
+    expect(await d1Row("SELECT * FROM github_installations WHERE installation_id = 556001")).toMatchObject({
+      user_id: o.userId,
+      account_login: "fresh-org",
+    });
+    gh.installations = [];
+  });
+
   it("listInstallations returns GITHUB_API_ERROR when GitHub refuses", async () => {
     const o = await owner();
     gh.installationsStatus = 403;
@@ -725,6 +748,62 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
 // 02, Workspaces; 03, Create a workspace
 // ======================================================================
 
+describe("listModels", () => {
+  it("discovers the configured agent's models before any workspace or chat exists", async () => {
+    const o = await owner();
+    await env.CREDENTIALS.getByName(o.userId).putSecret("claude.oauth_token", "token");
+    const stub = env.WORKSPACE.getByName(`models:${o.userId}`);
+    const tempod = new FakeTempod();
+    tempod.on("session.start", () => ({
+      acpSessionId: "discovery",
+      modes: [],
+      availableCommands: [],
+      capabilities: {},
+      reloaded: false,
+      handoff: false,
+      configOptions: [
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: "a",
+          options: [
+            {
+              group: "group",
+              name: "Group",
+              options: [
+                { value: "a", name: "Model A" },
+                { value: "b", name: "Model B" },
+              ],
+            },
+          ],
+        },
+      ],
+    }));
+    const { container } = await installFakes(stub, tempod);
+    expect(ok(await call("listModels", o, {}))).toEqual([
+      {
+        agent: "claude",
+        currentValue: "a",
+        options: [
+          { value: "a", name: "Model A" },
+          { value: "b", name: "Model B" },
+        ],
+      },
+    ]);
+    expect(await d1Rows("SELECT id FROM workspaces WHERE user_id = ?", o.userId)).toEqual([]);
+    expect(await doRows(stub, "SELECT id FROM sessions")).toEqual([]);
+    expect(tempod.requestsOf("session.prompt")).toEqual([]);
+    expect(tempod.requestsOf("session.close")).toHaveLength(1);
+    expect(container.destroyed).toBe(1);
+    await call("listModels", o, {});
+    expect(tempod.requestsOf("session.start")).toHaveLength(1);
+    const other = await owner();
+    expect(ok(await call("listModels", other, {}))).toEqual([]);
+  });
+});
+
 describe("createWorkspace (03, Create a workspace)", () => {
   it("picks the first unused city and the branch <branch_prefix><slug>, and returns a starting summary", async () => {
     const o = await owner();
@@ -801,15 +880,21 @@ describe("createWorkspace (03, Create a workspace)", () => {
         projectId: o.projectId,
         source: { kind: "new", baseBranch: "main" },
         agent: "codex",
+        model: "chosen-model",
         prompt: { text },
       }),
     );
     expect(ws.title).toBe(text.trim().slice(0, 60));
     expect(ws.defaultAgent).toBe("codex");
+    const chat = await doRows(env.WORKSPACE.getByName(ws.id), "SELECT agent, config_json FROM sessions");
+    expect(chat).toHaveLength(1);
+    expect(JSON.parse(chat[0]!["config_json"])).toEqual({ model: "chosen-model" });
   });
 
   it("defaults the agent to the project's agent.default", async () => {
-    const o = await owner({ settingsJson: JSON.stringify({ agent: { default: "opencode", model: "x/y" } }) });
+    const o = await owner({
+      settingsJson: JSON.stringify({ agent: { default: "opencode", models: { opencode: "x/y" } } }),
+    });
     const ws = ok(
       await call("createWorkspace", o, {
         projectId: o.projectId,
@@ -943,6 +1028,49 @@ describe("createWorkspace (03, Create a workspace)", () => {
     );
     expect(ws).toMatchObject({ branch: "pr-branch-8", baseBranch: "develop", slug: "lisbon" });
     gh.pulls.delete(8);
+  });
+
+  it("source.kind 'pr' keeps the PR's number, state and title in D1 and the WorkspaceDO", async () => {
+    // 03 Create 3–4 and init 1: number, title and state (as in Status polling); D1 pr_number and pr_state.
+    const o = await owner();
+    const cases: Array<[number, Row, string]> = [
+      [21, { draft: true }, "draft"],
+      [22, {}, "open"],
+      [23, { state: "closed" }, "closed"],
+      [24, { state: "closed", merged: true, merged_at: "2026-10-12T00:00:00Z" }, "merged"],
+    ];
+    for (const [number, patch, state] of cases) {
+      gh.pulls.set(number, { ...pull(number, `pr-branch-${number}`, o.repoId), ...patch });
+      const ws = ok(
+        await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number } }),
+      );
+      expect(ws).toMatchObject({ prNumber: number, prState: state });
+      expect(await d1Row("SELECT pr_number, pr_state FROM workspaces WHERE id = ?", ws.id)).toEqual({
+        pr_number: number,
+        pr_state: state,
+      });
+      const stub = env.WORKSPACE.getByName(ws.id);
+      expect(ok(await stub.getWorkspace({}))).toMatchObject({
+        prNumber: number,
+        prState: state,
+        prTitle: `PR ${number}`,
+      });
+      expect(await doRows(stub, "SELECT pr_number, pr_state FROM workspace")).toEqual([
+        { pr_number: number, pr_state: state },
+      ]);
+      gh.pulls.delete(number);
+    }
+    const plain = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
+    expect(plain).toMatchObject({ prNumber: null, prState: null });
+    expect(await d1Row("SELECT pr_number, pr_state FROM workspaces WHERE id = ?", plain.id)).toEqual({
+      pr_number: null,
+      pr_state: null,
+    });
   });
 
   it("source.kind 'pr' from a fork fails with VALIDATION_FAILED and the exact message", async () => {
@@ -1507,6 +1635,21 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
     sock.ws.close(1000);
   });
 
+  it("drops client x-tempo-* headers, so a forged Browser Run header still opens the channel", async () => {
+    const o = await owner();
+    const { workspaceId } = await seedWorkspace(o);
+    const res = (await upgrade(`/api/ws/workspace/${workspaceId}?sinceRev=0`, {
+      Authorization: `Bearer ${o.token}`,
+      "x-tempo-browser-app": "3000",
+      "x-tempo-browser-cdp": "1",
+    }))!;
+    expect(res.status).toBe(101);
+    const sock = accept(res);
+    await waitFor(() => sock.messages.length > 0, 5000, "workspace hello");
+    expect(sock.messages[0]).toMatchObject({ type: "hello", v: 1 });
+    sock.ws.close(1000);
+  });
+
   it("upgrades, then closes with 4404 for a workspace the user does not own", async () => {
     const o = await owner();
     const other = await owner();
@@ -1590,6 +1733,22 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
     expect(rows[0]).toMatchObject({ name: "notes.txt", mime: "text/plain", size_bytes: 11, r2_key: key });
   });
 
+  it("refuses a cookie upload without an Origin header (05, CSRF) and one from another origin", async () => {
+    const o = await owner();
+    const { workspaceId } = await seedWorkspace(o);
+    const cookie = await sessionCookie(o.token);
+    const file = () => formWith(new File(["x"], "x.txt", { type: "text/plain" }));
+    const bare = await postAttachment(workspaceId, file(), { Cookie: cookie });
+    expect(((await bare.json()) as ErrorBody).code).toBe("FORBIDDEN");
+    const foreign = await postAttachment(workspaceId, file(), {
+      Cookie: cookie,
+      Origin: "https://evil.test",
+    });
+    expect(((await foreign.json()) as ErrorBody).code).toBe("FORBIDDEN");
+    const same = await postAttachment(workspaceId, file(), { Cookie: cookie, Origin: APP_ORIGIN });
+    expect(same.status).toBe(200);
+  });
+
   it("returns FILE_TOO_LARGE for a file over 10 MiB and stores nothing", async () => {
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
@@ -1659,46 +1818,94 @@ const previewGet = (host: string, path = "/", headers: Record<string, string> = 
 };
 
 describe("preview access (05, Preview access)", () => {
-  it("returns 404 for a first label that does not match the pattern", async () => {
+  const PAGE = "This preview opens only from Tempo.";
+  const isPreview404 = async (res: Response, label = "") => {
+    expect(res.status, label).toBe(404);
+    expect(await res.text(), label).toContain(PAGE);
+    expect(res.headers.get("Referrer-Policy"), label).toBe("no-referrer");
+    expect(res.headers.get("X-Robots-Tag"), label).toBe("noindex, nofollow");
+  };
+  const addPort = (stub: DurableObjectStub<WorkspaceDO>, port: number) =>
+    doRows(stub, "INSERT INTO ports (port, first_seen_at) VALUES (?, 0)", port);
+  const enter = async (entryUrl: string) => {
+    const u = new URL(entryUrl);
+    return previewGet(u.host, `${u.pathname}${u.search}`);
+  };
+
+  it("returns the preview 404 page for a first label that does not match the pattern", async () => {
+    const id = newId();
     for (const host of [
       "previews.test.previews.test",
-      "80-01jaxk3v2m9q8r7t6y5w4e3d2c-k3j9x2m4q8w7e5r1.previews.test",
-      "3000-01JAXK3V2M9Q8R7T6Y5W4E3D2Ci-k3j9x2m4q8w7e5r1.previews.test",
-      "3000-01jaxk3v2m9q8r7t6y5w4e3d2c-short.previews.test",
-      "3000-01jaxk3v2m9q8r7t6y5w4e3d2c-k3j9x2m4q8w7e5r1-x.previews.test",
+      `80-${id}.previews.test`,
+      `3000-${id.toUpperCase().slice(0, 25)}I.previews.test`,
+      `3000-${id}-k3j9x2m4q8w7e5r1.previews.test`,
+      `3000-${id}-x.previews.test`,
+      "nope.previews.test",
     ]) {
-      expect((await previewGet(host)).status, host).toBe(404);
+      await isPreview404(await previewGet(host), host);
     }
   });
 
-  // Regression (fixed): a malformed preview hostname returns the bare 404 before the privacy headers are added.
-  it("adds Referrer-Policy and X-Robots-Tag to the 404 for a bad label too", async () => {
-    // 05 Preview access: "The Worker adds Referrer-Policy: no-referrer and X-Robots-Tag: noindex, nofollow to every preview response."
-    const res = await previewGet("nope.previews.test");
-    expect(res.status).toBe(404);
-    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
-    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-  });
-
-  it("returns 404, never 403, for a wrong token or an unknown workspace, with the privacy headers", async () => {
+  it("openPreview returns a one-time entry link for a detected port and keeps only the code's SHA-256", async () => {
     const o = await owner();
     const { workspaceId, stub } = await seedWorkspace(o);
-    const detail = ok(await stub.getWorkspace({}));
-    const right = String(detail.previewToken);
-    expect(right).toMatch(/^[a-z0-9]{16}$/);
-    const wrong = right.startsWith("a") ? `b${right.slice(1)}` : `a${right.slice(1)}`;
-    for (const host of [
-      `3000-${workspaceId}-${wrong}.previews.test`,
-      `3000-${newId()}-${right}.previews.test`,
-    ]) {
-      const res = await previewGet(host);
-      expect(res.status, host).toBe(404);
-      expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
-      expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    await addPort(stub, 3000);
+    const before = Date.now();
+    const { url } = ok(await call("openPreview", o, { workspaceId, port: 3000 }));
+    // 05 Entry link: https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>/__tempo/enter?code=<code>
+    const m = new RegExp(
+      `^https://3000-${workspaceId}\\.previews\\.test/__tempo/enter\\?code=([a-z0-9]{32})$`,
+    ).exec(url);
+    expect(m, url).not.toBeNull();
+    const code = m![1]!;
+    const stored = await doRows(stub, "SELECT * FROM preview_codes");
+    expect(stored).toHaveLength(1);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
+    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    expect(stored[0]).toEqual({ code_hash: hex, port: 3000, expires_at: expect.any(Number) });
+    expect(stored[0]!["expires_at"]).toBeGreaterThanOrEqual(before + 60_000);
+    expect(stored[0]!["expires_at"]).toBeLessThanOrEqual(Date.now() + 60_000);
+    const second = ok(await call("openPreview", o, { workspaceId, port: 3000 })).url;
+    expect(second).not.toBe(url);
+  });
+
+  it("openPreview returns NOT_FOUND for a port that is not detected, and only the owner may call it", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    await addPort(stub, 3000);
+    expect(codeOf(await call("openPreview", o, { workspaceId, port: 5173 }))).toBe("NOT_FOUND");
+    expect(codeOf(await call("openPreview", o, { workspaceId, port: 7070 }))).toBe("NOT_FOUND");
+    expect(codeOf(await call("openPreview", null, { workspaceId, port: 3000 }))).toBe("UNAUTHENTICATED");
+    expect(codeOf(await call("openPreview", await seedStranger(), { workspaceId, port: 3000 }))).toBe(
+      "FORBIDDEN",
+    );
+    expect(await doRows(stub, "SELECT * FROM preview_codes")).toHaveLength(0);
+  });
+
+  it("the same 404 page for an unknown workspace, a bad code and a missing or bad cookie", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    await addPort(stub, 3000);
+    const host = `3000-${workspaceId}.previews.test`;
+    const unknown = `3000-${newId()}.previews.test`;
+    const cookie = {
+      Cookie: `__Host-tempo_preview=${Math.floor(Date.now() / 1000) + 3600}.${"A".repeat(43)}`,
+    };
+    for (const [label, res] of [
+      ["unknown workspace", await previewGet(unknown)],
+      ["unknown workspace with a cookie", await previewGet(unknown, "/", cookie)],
+      ["unknown workspace, enter", await previewGet(unknown, `/__tempo/enter?code=${"a".repeat(32)}`)],
+      ["missing cookie", await previewGet(host)],
+      ["bad cookie", await previewGet(host, "/", cookie)],
+      ["bad code", await previewGet(host, `/__tempo/enter?code=${"a".repeat(32)}`)],
+      ["short code", await previewGet(host, "/__tempo/enter?code=abc")],
+      ["no code", await previewGet(host, "/__tempo/enter")],
+    ] as const) {
+      await isPreview404(res, label);
     }
   });
 
-  it("serves the waking page for the right token while the container is down, with the privacy headers", async () => {
+  it("serves the waking page after entering while the container is down, with the privacy headers", async () => {
     // A workspace from createWorkspace has no container in tests, so it never comes up.
     const o = await owner();
     const workspaceId = String(
@@ -1710,14 +1917,23 @@ describe("preview access (05, Preview access)", () => {
       )["id"],
     );
     const stub = env.WORKSPACE.getByName(workspaceId);
-    const token = String(ok(await stub.getWorkspace({})).previewToken);
-    const host = `3000-${workspaceId}-${token}.PREVIEWS.test`;
-    const html = await previewGet(host, "/", { Accept: "text/html" });
+    await addPort(stub, 3000);
+    const entered = await enter(ok(await call("openPreview", o, { workspaceId, port: 3000 })).url);
+    expect(entered.status).toBe(303);
+    const value = /^__Host-tempo_preview=([^;]+);/.exec(entered.headers.get("Set-Cookie") ?? "")![1]!;
+    const host = `3000-${workspaceId}.PREVIEWS.test`;
+    const html = await previewGet(host, "/", {
+      Accept: "text/html",
+      Cookie: `__Host-tempo_preview=${value}`,
+    });
     expect(html.status).toBe(200);
     expect(await html.text()).toContain("Waking workspace");
     expect(html.headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(html.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-    const api = await previewGet(host, "/api/data", { Accept: "application/json" });
+    const api = await previewGet(host, "/api/data", {
+      Accept: "application/json",
+      Cookie: `__Host-tempo_preview=${value}`,
+    });
     expect(api.status).toBe(503);
     expect(api.headers.get("Retry-After")).toBe("5");
     expect(api.headers.get("Referrer-Policy")).toBe("no-referrer");
@@ -2325,8 +2541,8 @@ const sha256 = async (text: string): Promise<string> =>
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-describe("TempoOutbound rules 11 and 12 (01, Environments)", () => {
-  it("rule 12 swaps a bound secret in a header, the query and Basic auth, and logs rule 12", async () => {
+describe("TempoOutbound rules 12 and 13 (01, Environments)", () => {
+  it("rule 13 swaps a bound secret in a header, the query and Basic auth, and logs rule 13", async () => {
     const o = await ownerWithEnvironment(
       { secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }] },
       { STRIPE_KEY: "sk_live_3" },
@@ -2348,7 +2564,7 @@ describe("TempoOutbound rules 11 and 12 (01, Environments)", () => {
     const sentBasic = gh.upstream.at(-1)!;
     expect(atob(sentBasic.headers.get("Authorization")!.replace("Basic ", ""))).toBe("sk_live_3:");
     await waitFor(async () => (await egressRows(stub)).length >= 2, 5000, "egress rows");
-    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([12, 12]);
+    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([13, 13]);
   });
 
   it("refuses a placeholder for another host, an unset value, or an unknown name (rule 7)", async () => {
@@ -2378,7 +2594,7 @@ describe("TempoOutbound rules 11 and 12 (01, Environments)", () => {
     expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([7, 7, 7]);
   });
 
-  it("rule 11 runs the injector: it gets an HMAC, its placeholders are swapped, and it cannot leave its hosts", async () => {
+  it("rule 12 runs the injector: it gets an HMAC, its placeholders are swapped, and it cannot leave its hosts", async () => {
     const o = await ownerWithEnvironment(
       {
         secrets: [{ name: "SIGN_KEY", hosts: ["signed.example"] }],
@@ -2403,6 +2619,6 @@ describe("TempoOutbound rules 11 and 12 (01, Environments)", () => {
     expect(thrown.status).toBe(502);
     expect(await thrown.text()).toBe("tempo: injector sign failed");
     await waitFor(async () => (await egressRows(stub)).length >= 5, 5000, "egress rows");
-    expect(new Set((await egressRows(stub)).map((r) => r["rule"]))).toEqual(new Set([11, 12]));
+    expect(new Set((await egressRows(stub)).map((r) => r["rule"]))).toEqual(new Set([12, 13]));
   });
 });

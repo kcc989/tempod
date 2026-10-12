@@ -52,7 +52,7 @@ const setup = async (opts: { maxLiveAgents?: number } = {}) => {
   const start = (sessionId: string, extra: Record<string, unknown> = {}, env: Record<string, string> = {}) =>
     c.ok<SessionStartResult>(
       "session.start",
-      { sessionId, agent: "claude", env: { FAKE_STATE_DIR: state, ...env }, ...extra },
+      { sessionId, agent: "claude", env: { FAKE_STATE_DIR: state, ...env }, browser: "local", ...extra },
       20_000,
     );
   const prompt = (sessionId: string, turnId: string, text: string) =>
@@ -131,6 +131,26 @@ describe("session.start", () => {
   );
 
   test(
+    "Playwright MCP uses local Chromium, or the Browser Run CDP endpoint with browser run (01)",
+    async () => {
+      const { start, calls } = await setup();
+      await start("local");
+      await start("remote", { browser: "run" });
+      const mcp = calls()
+        .split("\n")
+        .filter((l) => l.includes(" mcp "))
+        .map((l) => l.slice(l.indexOf(" mcp ") + 5));
+      expect(mcp).toEqual([
+        "playwright --headless --isolated --browser chromium",
+        "tempo mcp",
+        "playwright --cdp-endpoint wss://browser.tempo.internal/",
+        "tempo mcp",
+      ]);
+    },
+    T,
+  );
+
+  test(
     "reload: session/load with replay dropped, reloaded: true",
     async () => {
       const { c, start, prompt, ended, h } = await setup();
@@ -189,7 +209,11 @@ describe("session.start", () => {
       h = startTempod(config);
       const c = new DoClient(h.base);
       await c.hello();
-      const res = await c.req("session.start", { sessionId: "s1", agent: "claude", env: {} }, 20_000);
+      const res = await c.req(
+        "session.start",
+        { sessionId: "s1", agent: "claude", env: {}, browser: "local" },
+        20_000,
+      );
       expect(res).toMatchObject({ ok: false, error: { code: "AGENT_START_FAILED" } });
     },
     T,
@@ -197,6 +221,22 @@ describe("session.start", () => {
 });
 
 describe("session.prompt", () => {
+  test(
+    "turn.ended carries the token usage from the prompt response",
+    async () => {
+      const { start, prompt, ended } = await setup();
+      await start("s1");
+      expect(await prompt("s1", "t1", "usage")).toEqual({ accepted: true });
+      expect((await ended("t1")).usage).toEqual({
+        totalTokens: 1500,
+        inputTokens: 1200,
+        outputTokens: 300,
+        cachedReadTokens: 800,
+      });
+    },
+    T,
+  );
+
   test(
     "chunks become one streaming item with coalesced deltas; turn.ended carries the stop reason",
     async () => {
@@ -206,6 +246,7 @@ describe("session.prompt", () => {
       const end = await ended("t1");
       expect(end.stopReason).toBe("end_turn");
       expect(end.error).toBeUndefined();
+      expect(end.usage).toBeUndefined();
       expect(c.of("turn.started").some((e) => e.turnId === "t1")).toBe(true);
       const created = c.of("item.created").filter((e) => e.turnId === "t1");
       expect(created.map((e) => e.item.kind)).toEqual(["agent_thought", "agent_message"]);
@@ -583,7 +624,12 @@ describe("cancel, eviction and crashes", () => {
       await start("a");
       await prompt("a", "ta", "slow");
       await c.waitEvent("item.created", (e) => e.turnId === "ta");
-      const result = await c.req("session.start", { sessionId: "b", agent: "claude", env: {} });
+      const result = await c.req("session.start", {
+        sessionId: "b",
+        agent: "claude",
+        env: {},
+        browser: "local",
+      });
       expect(result).toMatchObject({ ok: false, error: { code: "AGENT_START_FAILED" } });
       expect(h.app.agents.liveCount).toBe(1);
       expect(h.app.agents.get("a")?.busy).toBe(true);

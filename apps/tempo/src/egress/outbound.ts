@@ -2,6 +2,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Injector } from "@tempo/protocol";
 import { SECRET_KEYS } from "../do/credential.ts";
 import type { Env } from "../env.ts";
+import { BROWSER_CDP_HEADER, stripInternalHeaders } from "../http/preview.ts";
 import { environmentSecretKey } from "../lib/environments.ts";
 import { log } from "../log.ts";
 import { decide, decideForInjector, swapSecrets, type Decision, type EgressConfig } from "./rules.ts";
@@ -9,7 +10,8 @@ import { decide, decideForInjector, swapSecrets, type Decision, type EgressConfi
 export interface OutboundProps {
   readonly workspaceId: string;
   readonly userId: string;
-  /** Set for a subrequest of this injector (01, rule 11). */
+  readonly catalog?: boolean;
+  /** Set for a subrequest of this injector (01, rule 12). */
   readonly injector?: string;
 }
 
@@ -30,21 +32,23 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     const url = new URL(request.url);
     const { workspaceId, userId, injector: injectorName } = this.ctx.props;
     const workspace = this.env.WORKSPACE.getByName(workspaceId);
-    let rule = injectorName ? 11 : 10;
+    let rule = injectorName ? 12 : 10;
     let status = 0;
     try {
-      const config = await this.config(workspaceId);
+      const config: EgressConfig = this.ctx.props.catalog
+        ? { owner: "", repo: "", policy: "allowlist", allowlist: [] }
+        : await this.config(workspaceId);
       let decision: Decision;
       if (injectorName) {
         const injector = config.injectors?.find((i) => i.name === injectorName);
         decision = injector
           ? decideForInjector(url, request.headers, this.env.APP_HOST, config, injector)
-          : { rule: 11, action: "block", status: 403, body: `tempo: egress blocked for ${url.hostname}` };
+          : { rule: 12, action: "block", status: 403, body: `tempo: egress blocked for ${url.hostname}` };
       } else {
         decision = decide(url, request.headers, this.env.APP_HOST, config);
       }
       rule = decision.rule;
-      const acted = await this.act(decision, request, config, userId);
+      const acted = await this.act(decision, request, config, userId, workspace);
       rule = acted.rule ?? rule;
       status = acted.response.status;
       return acted.response;
@@ -53,19 +57,20 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
       log("warn", "egress fetch failed", { workspaceId, host: url.hostname, rule });
       return block(502, `tempo: upstream error for ${url.hostname}`);
     } finally {
-      this.ctx.waitUntil(
-        workspace
-          .logEgress({
-            ts: started,
-            method: request.method,
-            host: url.hostname,
-            path: url.pathname,
-            status,
-            ms: Date.now() - started,
-            rule,
-          })
-          .catch(() => undefined),
-      );
+      if (!this.ctx.props.catalog)
+        this.ctx.waitUntil(
+          workspace
+            .logEgress({
+              ts: started,
+              method: request.method,
+              host: url.hostname,
+              path: url.pathname,
+              status,
+              ms: Date.now() - started,
+              rule,
+            })
+            .catch(() => undefined),
+        );
     }
   }
 
@@ -75,8 +80,15 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     request: Request,
     config: EgressConfig,
     userId: string,
+    workspace: DurableObjectStub<import("../do/workspace/index.ts").WorkspaceDO>,
   ): Promise<{ response: Response; rule?: number }> {
     switch (decision.action) {
+      case "browser": {
+        // Rule 11 (01, Browser Run): the WorkspaceDO joins the CDP socket to its Browser Run session.
+        const headers = stripInternalHeaders(new Headers(request.headers));
+        headers.set(BROWSER_CDP_HEADER, "1");
+        return { response: await workspace.fetch(new Request(request, { headers })) };
+      }
       case "block":
         return { response: block(decision.status, decision.body) };
       case "inject":
@@ -85,7 +97,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         const values = await this.environmentSecrets(config, decision.names, userId);
         if (!values) return { response: block(403, "tempo: placeholder credential refused"), rule: 7 };
         const swapped = swapSecrets(new URL(request.url), request.headers, values);
-        // Manual redirects, so a redirect cannot carry the value to another host (01, rule 12).
+        // Manual redirects, so a redirect cannot carry the value to another host (01, rule 13).
         const init = new Request(request, { headers: swapped.headers, redirect: "manual" });
         return { response: await fetch(new Request(swapped.url, init)) };
       }
@@ -116,7 +128,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     return out;
   }
 
-  /** Rule 11: the owner-approved injector runs as a Dynamic Worker (01, Environments). */
+  /** Rule 12: the owner-approved injector runs as a Dynamic Worker (01, Environments). */
   private async runInjector(injector: Injector, request: Request, config: EgressConfig): Promise<Response> {
     const { workspaceId, userId } = this.ctx.props;
     const environmentId = config.environmentId ?? "";
@@ -170,7 +182,7 @@ export interface InjectorSecretsProps {
 
 const HASHES = new Set(["SHA-1", "SHA-256", "SHA-512"]);
 
-/** `env.SECRETS` inside an injector (01, rule 11): MACs, never raw values. */
+/** `env.SECRETS` inside an injector (01, rule 12): MACs, never raw values. */
 export class InjectorSecrets extends WorkerEntrypoint<Env, InjectorSecretsProps> {
   async hmac(
     name: string,

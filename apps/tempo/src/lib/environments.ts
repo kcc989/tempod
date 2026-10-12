@@ -1,13 +1,6 @@
-import { Schema } from "effect";
-import {
-  Injector,
-  SecretBinding,
-  type EgressPolicy,
-  type Environment,
-  type Injector as InjectorT,
-  type SecretBinding as SecretBindingT,
-} from "@tempo/protocol";
+import type { EgressPolicy, Environment, Injector, SecretBinding } from "@tempo/protocol";
 import type { EnvironmentRow } from "../db/d1.ts";
+import { json } from "../db/json.ts";
 
 /** The parsed, non-secret fields of a D1 environments row (01, Environments). */
 export interface EnvironmentConfig {
@@ -15,32 +8,17 @@ export interface EnvironmentConfig {
   readonly name: string;
   readonly egressPolicy: EgressPolicy;
   readonly egressAllowlist: ReadonlyArray<string>;
-  readonly secrets: ReadonlyArray<SecretBindingT>;
-  readonly injectors: ReadonlyArray<InjectorT>;
+  readonly secrets: ReadonlyArray<SecretBinding>;
+  readonly injectors: ReadonlyArray<Injector>;
 }
-
-const decodeSecrets = Schema.decodeUnknownOption(Schema.Array(SecretBinding));
-const decodeInjectors = Schema.decodeUnknownOption(Schema.Array(Injector));
-const decodeHosts = Schema.decodeUnknownOption(Schema.Array(Schema.String));
-
-const json = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return [];
-  }
-};
-
-const orEmpty = <T>(o: { _tag: "Some"; value: ReadonlyArray<T> } | { _tag: "None" }): ReadonlyArray<T> =>
-  o._tag === "Some" ? o.value : [];
 
 export const parseEnvironment = (row: EnvironmentRow): EnvironmentConfig => ({
   id: row.id,
   name: row.name,
   egressPolicy: row.egressPolicy,
-  egressAllowlist: orEmpty(decodeHosts(json(row.egressAllowlistJson))),
-  secrets: orEmpty(decodeSecrets(json(row.secretsJson))),
-  injectors: orEmpty(decodeInjectors(json(row.injectorsJson))),
+  egressAllowlist: json.egressAllowlist.read(row.egressAllowlistJson, []),
+  secrets: json.environmentSecrets.read(row.secretsJson, []),
+  injectors: json.environmentInjectors.read(row.injectorsJson, []),
 });
 
 export const environmentToWire = (row: EnvironmentRow, setNames: ReadonlyArray<string>): Environment => {

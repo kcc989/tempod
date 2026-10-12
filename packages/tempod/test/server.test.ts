@@ -294,11 +294,11 @@ describe("WebSocket protocol", () => {
       '[scripts]\nsetup = "bun install"\n[unknown]\nx = 1\n',
     );
     const s = await c.ok<{
-      effective: { scripts: { setup: string }; agent: { model: string } };
+      effective: { scripts: { setup: string }; agent: { models: { pi: string } } };
       warnings: string[];
-    }>("settings.read", { overrides: { agent: { model: "m9" } } });
+    }>("settings.read", { overrides: { agent: { models: { pi: "m9" } } } });
     expect(s.effective.scripts.setup).toBe("bun install");
-    expect(s.effective.agent.model).toBe("m9");
+    expect(s.effective.agent.models.pi).toBe("m9");
     expect(s.warnings.length).toBeGreaterThan(0);
     const bad = await c.req("settings.read", { overrides: { environment: { sleep_after_idle_minutes: 1 } } });
     expect(bad).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });

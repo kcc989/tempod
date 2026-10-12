@@ -165,9 +165,6 @@
         }
       ]
     },
-    "previewToken": {
-      "type": "string"
-    },
     "ports": {
       "type": "array",
       "items": {
@@ -191,6 +188,9 @@
         "required": ["port", "url"],
         "additionalProperties": true
       }
+    },
+    "browserActive": {
+      "type": "boolean"
     },
     "settings": {
       "$ref": "Settings.json"
@@ -350,8 +350,8 @@
     "errorDetail",
     "setupStatus",
     "pushed",
-    "previewToken",
     "ports",
+    "browserActive",
     "settings",
     "runningTurnId",
     "queue",

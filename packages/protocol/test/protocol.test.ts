@@ -5,10 +5,14 @@ import {
   hostMatches,
   InjectorInput,
   isHostPattern,
+  AGENT_IDS,
   API,
+  DEFAULT_SETTINGS,
   ERROR_CODES,
   ERROR_MESSAGES,
   FN_NAMES,
+  Settings,
+  SettingsLayer,
   Item,
   TEMPOD_REQUESTS,
   TempodEvent,
@@ -18,7 +22,6 @@ import {
   capture,
   errorMessage,
   newId,
-  newPreviewToken,
   randomToken,
   reconnectDelay,
   redact,
@@ -34,9 +37,9 @@ describe("ids", () => {
     for (const id of ids) expect(id).toMatch(ULID_PATTERN);
     expect([...ids].sort()).toEqual(ids);
   });
-  it("makes 16-char [a-z0-9] preview tokens (01, Preview URL)", () => {
-    expect(newPreviewToken()).toMatch(/^[a-z0-9]{16}$/);
-    expect(randomToken(32)).toHaveLength(32);
+  it("makes random [a-z0-9] tokens of the asked length (05, Preview access codes)", () => {
+    expect(randomToken(32)).toMatch(/^[a-z0-9]{32}$/);
+    expect(randomToken(32)).not.toBe(randomToken(32));
   });
 });
 
@@ -45,6 +48,9 @@ describe("errors", () => {
     expect(ERROR_CODES).toHaveLength(Object.keys(ERROR_MESSAGES).length);
     expect(errorMessage("CREDENTIAL_MISSING", "codex")).toBe("Add your Codex login in Settings.");
     expect(errorMessage("NOT_FOUND")).toBe("Not found.");
+    expect(errorMessage("MODEL_REQUIRED", "pi")).toBe(
+      "Set a default model for this agent in Settings → Project.",
+    );
   });
   it("round-trips TempoError through the Result envelope", async () => {
     const res = await capture(() => {
@@ -59,6 +65,24 @@ describe("errors", () => {
       code: "INTERNAL",
       message: "Something went wrong.",
     });
+  });
+});
+
+describe("settings (01, Project settings file)", () => {
+  it("defaults to an empty model for each agent and Browser Run off", () => {
+    expect(Schema.decodeUnknownSync(Settings)(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
+    expect(Object.keys(DEFAULT_SETTINGS.agent.models).sort()).toEqual([...AGENT_IDS].sort());
+    for (const agent of AGENT_IDS) expect(DEFAULT_SETTINGS.agent.models[agent]).toBe("");
+    expect(DEFAULT_SETTINGS.browser.run).toBe(false);
+  });
+  it("accepts a layer with some agent models and browser.run, and rejects bad types", () => {
+    const decode = Schema.decodeUnknownSync(SettingsLayer);
+    expect(decode({ agent: { models: { pi: "openrouter/x" } }, browser: { run: true } })).toEqual({
+      agent: { models: { pi: "openrouter/x" } },
+      browser: { run: true },
+    });
+    expect(() => decode({ agent: { models: { pi: 1 } } })).toThrow();
+    expect(() => decode({ browser: { run: "yes" } })).toThrow();
   });
 });
 

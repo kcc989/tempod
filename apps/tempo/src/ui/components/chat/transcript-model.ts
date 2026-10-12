@@ -9,6 +9,7 @@ import {
   type Turn,
 } from "@tempo/protocol";
 import type { DiffLine } from "~/ui/lib/diff";
+import { formatTokens } from "~/ui/lib/format";
 import { foldsIntoWork, type TranscriptDetail } from "./work-model";
 
 /** Pure helpers for the transcript (04, Transcript; 02, Item model). */
@@ -369,3 +370,10 @@ export const turnOutcome = (turn: Pick<Turn, "status" | "stopReason">): string |
 
 export const turnDuration = (turn: Pick<Turn, "startedAt" | "endedAt">): number | null =>
   turn.startedAt !== null && turn.endedAt !== null ? Math.max(0, turn.endedAt - turn.startedAt) : null;
+
+/** The footer's token text, from the usage the agent reported for this turn. */
+export const turnTokens = (turn: Pick<Turn, "usage">): string | null => {
+  const u = turn.usage;
+  if (!u) return null;
+  return `${formatTokens(u.totalTokens)} tokens (${formatTokens(u.inputTokens)} in, ${formatTokens(u.outputTokens)} out)`;
+};

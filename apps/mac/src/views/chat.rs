@@ -14,12 +14,15 @@ use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Disableable as _, h_flex, v_flex};
 use gpui_kit::{
-    Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, Role, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, div, image_cache,
+    Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
+    ImageFormat, ImageSource, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
+    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
+    Window, div, image_cache, px,
 };
-use std::collections::{HashMap, HashSet};
-use tempo_protocol::{ItemContent, ItemStatus, NoticeLevel, TurnStatus};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
+use tempo_client::{AttachmentFile, Client};
+use tempo_protocol::{AgentId, ItemContent, ItemStatus, NoticeLevel, TurnStatus};
 
 /// Opens a file tab at a workspace path (07, Links). Handled by the workspace view in M3.
 #[derive(Clone, PartialEq, Eq, Debug, Action)]
@@ -89,21 +92,90 @@ pub enum TranscriptEvent {
 
 impl EventEmitter<TranscriptEvent> for TranscriptView {}
 
+/// Encoded bytes of transcript thumbnails kept in memory per transcript.
+const THUMBNAIL_BUDGET: usize = 32 * 1024 * 1024;
+
+/// Attachment thumbnails by attachment id, in memory only (07, Local storage). Failed and evicted
+/// ones show as a name chip and are not fetched again.
+#[derive(Default)]
+struct Thumbnails {
+    images: HashMap<String, Arc<Image>>,
+    order: VecDeque<String>,
+    bytes: usize,
+    pending: HashSet<String>,
+    skipped: HashSet<String>,
+}
+
+impl Thumbnails {
+    fn wants(&self, id: &str) -> bool {
+        !self.images.contains_key(id) && !self.pending.contains(id) && !self.skipped.contains(id)
+    }
+
+    /// Returns the images evicted to stay within the budget.
+    fn insert(&mut self, id: String, image: Arc<Image>) -> Vec<Arc<Image>> {
+        self.pending.remove(&id);
+        self.bytes += image.bytes().len();
+        self.order.push_back(id.clone());
+        self.images.insert(id, image);
+        let mut evicted = Vec::new();
+        while self.bytes > THUMBNAIL_BUDGET && self.order.len() > 1 {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            if let Some(image) = self.images.remove(&oldest) {
+                self.bytes -= image.bytes().len();
+                evicted.push(image);
+            }
+            self.skipped.insert(oldest);
+        }
+        evicted
+    }
+
+    fn fail(&mut self, id: &str) {
+        self.pending.remove(id);
+        self.skipped.insert(id.to_string());
+    }
+}
+
+/// An image the attachment route served inline, ready to draw from its bytes.
+fn thumbnail_image(file: AttachmentFile) -> Option<Arc<Image>> {
+    let format = match file.mime.as_str() {
+        "image/png" => ImageFormat::Png,
+        "image/jpeg" => ImageFormat::Jpeg,
+        "image/gif" => ImageFormat::Gif,
+        "image/webp" => ImageFormat::Webp,
+        _ => return None,
+    };
+    (!file.bytes.is_empty()).then(|| Arc::new(Image::from_bytes(format, file.bytes)))
+}
+
 pub struct TranscriptView {
     rows: Vec<TranscriptRow>,
     scroller: Entity<MessageScrollerState>,
     images: Entity<LocalImageCache>,
     open: HashMap<String, bool>,
     ticker: Option<gpui_kit::Task<()>>,
-    inline_images: HashMap<String, std::sync::Arc<gpui_kit::Image>>,
+    inline_images: HashMap<String, Arc<Image>>,
     media_pending: HashSet<String>,
     permission_focus: HashMap<String, FocusHandle>,
+    attachment_source: Option<(Client, String)>,
+    thumbnails: Thumbnails,
     pub read_only: bool,
+    /// The chat's agent, for error messages that name it.
+    pub agent: Option<AgentId>,
+    /// No turn runs and none is queued, so a revert can start (04, Transcript).
+    pub can_revert: bool,
 }
 
 impl TranscriptView {
     pub fn new(rows: Vec<TranscriptRow>, cx: &mut Context<Self>) -> Self {
         let count = rows.len();
+        cx.on_release(|this, cx| {
+            for image in this.thumbnails.images.values() {
+                ImageSource::Image(image.clone()).remove_asset(cx);
+            }
+        })
+        .detach();
         Self {
             rows,
             scroller: cx.new(|cx| MessageScrollerState::new(count, cx)),
@@ -113,11 +185,70 @@ impl TranscriptView {
             inline_images: HashMap::new(),
             media_pending: HashSet::new(),
             permission_focus: HashMap::new(),
+            attachment_source: None,
+            thumbnails: Thumbnails::default(),
             read_only: false,
+            agent: None,
+            can_revert: false,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_thumbnail(&self, attachment_id: &str) -> bool {
+        self.thumbnails.images.contains_key(attachment_id)
+    }
+
+    /// Where attachment thumbnails load from: the owner-only attachment route (02).
+    pub fn set_attachment_source(&mut self, client: Client, workspace_id: String) {
+        self.attachment_source = Some((client, workspace_id));
+    }
+
+    fn load_thumbnails(&mut self, rows: &[TranscriptRow], cx: &mut Context<Self>) {
+        let Some((client, workspace_id)) = self.attachment_source.clone() else {
+            return;
+        };
+        for row in rows {
+            let Some(RowContent::Item { item, .. }) = &row.native else {
+                continue;
+            };
+            let ItemContent::UserMessage(message) = &item.content else {
+                continue;
+            };
+            for attachment in &message.attachments {
+                if !chat_model::is_served_inline(&attachment.mime)
+                    || !self.thumbnails.wants(&attachment.id)
+                {
+                    continue;
+                }
+                self.thumbnails.pending.insert(attachment.id.clone());
+                let request = client.get_attachment(&workspace_id, &attachment.id);
+                let id = attachment.id.clone();
+                let row_id = row.id.clone();
+                cx.spawn(async move |this, cx| {
+                    let image = request.await.ok().and_then(thumbnail_image);
+                    let _ = this.update(cx, |this, cx| {
+                        match image {
+                            Some(image) => {
+                                for old in this.thumbnails.insert(id, image) {
+                                    ImageSource::Image(old).remove_asset(cx);
+                                }
+                            }
+                            None => this.thumbnails.fail(&id),
+                        }
+                        if let Some(ix) = this.rows.iter().position(|r| r.id == row_id) {
+                            this.scroller
+                                .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                        }
+                        cx.notify();
+                    });
+                })
+                .detach();
+            }
         }
     }
 
     pub fn sync(&mut self, rows: Vec<TranscriptRow>, cx: &mut Context<Self>) {
+        self.load_thumbnails(&rows, cx);
         for row in &rows {
             if let Some(RowContent::Item { item, .. }) = &row.native
                 && let ItemContent::Permission(p) = &item.content
@@ -425,6 +556,7 @@ fn render_native_row(
                         TranscriptRow::from_native(RowContent::Item {
                             item: Box::new(item),
                             dim: false,
+                            revertable: false,
                         }),
                         ix,
                         view.clone(),
@@ -461,63 +593,29 @@ fn render_native_row(
                 )
                 .into_any_element()
         }
-        RowContent::Footer { turn, work_row } => {
-            let duration = turn
-                .started_at
-                .zip(turn.ended_at)
-                .filter(|_| !work_row)
-                .map(|(start, end)| format!("{} · ", chat_model::format_duration(end - start)))
-                .unwrap_or_default();
-            div()
-                .px_4()
-                .py_2()
-                .opacity(if turn.reverted { 0.5 } else { 1. })
-                .text_color(color(Token::MutedForeground, cx))
-                .child(format!("{duration}{}", turn.status))
-                .into_any_element()
-        }
-        RowContent::Item { item, dim } => {
+        RowContent::Footer { turn, work_row } => div()
+            .px_4()
+            .py_2()
+            .opacity(if turn.reverted { 0.5 } else { 1. })
+            .text_color(color(Token::MutedForeground, cx))
+            .child(chat_model::turn_footer(&turn, work_row))
+            .into_any_element(),
+        RowContent::Item {
+            item,
+            dim,
+            revertable,
+        } => {
             let body = match &item.content {
                 ItemContent::AgentMessage(c) => v_flex()
                     .child(markdown(id.clone(), &c.text))
                     .children((item.status == ItemStatus::Streaming).then(|| {
-                        div()
-                            .px_4()
-                            .text_color(color(Token::MutedForeground, cx))
-                            .child("Streaming…")
+                        let caret = color(Token::Foreground, cx).opacity(0.6);
+                        div().mx_4().w(px(6.)).h(px(14.)).rounded(px(1.)).bg(caret)
                     }))
                     .into_any_element(),
-                ItemContent::UserMessage(c) => v_flex()
-                    .child(markdown(id.clone(), &c.text))
-                    .children(
-                        c.mentions
-                            .iter()
-                            .map(|m| div().px_4().text_sm().child(format!("@{}", m.path))),
-                    )
-                    .children(
-                        c.attachments
-                            .iter()
-                            .map(|a| div().px_4().text_sm().child(a.name.clone())),
-                    )
-                    .child({
-                        let turn = item.turn_id.clone();
-                        let view = view.clone();
-                        Button::new(SharedString::from(format!("revert-{}", item.id)))
-                            .label("Revert to here")
-                            .disabled(turn.is_none())
-                            .on_click(move |_, _, cx| {
-                                let _ = view.update(cx, |this, cx| {
-                                    if !this.read_only
-                                        && let Some(turn) = &turn
-                                    {
-                                        cx.emit(TranscriptEvent::Revert {
-                                            turn_id: turn.clone(),
-                                        });
-                                    }
-                                });
-                            })
-                    })
-                    .into_any_element(),
+                ItemContent::UserMessage(c) => {
+                    user_message(&id, &item, c, revertable, view.clone(), cx)
+                }
                 ItemContent::AgentThought(c) => disclosure(
                     id.clone(),
                     Disclosure::new("Thinking"),
@@ -711,28 +809,7 @@ fn render_native_row(
                     .border_color(color(Token::Border, cx))
                     .child(format!("Reverted to turn {}", c.to_turn_seq))
                     .into_any_element(),
-                ItemContent::Error(c) => {
-                    let turn_id = item.turn_id.clone();
-                    let weak = view.clone();
-                    v_flex()
-                        .px_4()
-                        .gap_2()
-                        .text_color(color(Token::Destructive, cx))
-                        .child(c.code.clone())
-                        .children(c.detail.clone())
-                        .children(turn_id.map(|turn_id| {
-                            Button::new(SharedString::from(format!("{id}:retry")))
-                                .label("Retry")
-                                .on_click(move |_, _, cx| {
-                                    let _ = weak.update(cx, |_, cx| {
-                                        cx.emit(TranscriptEvent::Retry {
-                                            turn_id: turn_id.clone(),
-                                        })
-                                    });
-                                })
-                        }))
-                        .into_any_element()
-                }
+                ItemContent::Error(c) => error_card(&id, &item, c, ix, view.clone(), cx),
                 ItemContent::Permission(p) => {
                     let read_only = view.upgrade().is_none_or(|v| v.read(cx).read_only);
                     let answered = p.chosen_option_id.is_some()
@@ -808,6 +885,216 @@ fn render_native_row(
                 .into_any_element()
         }
     }
+}
+
+/// 04, Transcript, `user_message`: text, mention chips and attachment thumbnails; the time and
+/// `Revert to here` show on hover.
+fn user_message(
+    id: &SharedString,
+    item: &tempo_protocol::Item,
+    c: &tempo_protocol::UserMessageContent,
+    revertable: bool,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let (thumbnails, can_revert) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            let images: HashMap<_, _> = c
+                .attachments
+                .iter()
+                .filter_map(|a| Some((a.id.clone(), v.thumbnails.images.get(&a.id)?.clone())))
+                .collect();
+            (images, !v.read_only && v.can_revert)
+        })
+        .unwrap_or_default();
+    let muted = color(Token::MutedForeground, cx);
+    let border = color(Token::Border, cx);
+    let chip = move |key: SharedString, label: String| {
+        div()
+            .id(key)
+            .role(Role::Note)
+            .aria_label(format!("Attachment {label}"))
+            .px_1p5()
+            .border_1()
+            .border_color(border)
+            .rounded_sm()
+            .text_xs()
+            .child(label)
+            .into_any_element()
+    };
+    let attachments = c.attachments.iter().map(|a| {
+        let key: SharedString = format!("{id}:attachment:{}", a.id).into();
+        let name = a.name.clone();
+        match thumbnails.get(&a.id).cloned() {
+            Some(image) => {
+                let fallback_key = key.clone();
+                div()
+                    .id(key.clone())
+                    .role(Role::Image)
+                    .aria_label(name.clone())
+                    .child(
+                        gpui_kit::img(image)
+                            .size(px(64.))
+                            .object_fit(ObjectFit::Cover)
+                            .rounded_sm()
+                            .border_1()
+                            .border_color(border)
+                            .with_fallback({
+                                let name = name.clone();
+                                move || chip(fallback_key.clone(), name.clone())
+                            }),
+                    )
+                    .into_any_element()
+            }
+            None => chip(key, name),
+        }
+    });
+    let mentions = c.mentions.iter().enumerate().map(|(ix, m)| {
+        let path = links::workspace_path(&m.path).map(str::to_string);
+        Button::new(SharedString::from(format!("{id}:mention:{ix}")))
+            .ghost()
+            .label(format!("@{}", m.path))
+            .accessibility_label(format!("Open {}", m.path))
+            .disabled(path.is_none())
+            .on_click(move |_, window, cx| {
+                if let Some(path) = &path {
+                    window.dispatch_action(Box::new(OpenWorkspaceFile(path.clone().into())), cx)
+                }
+            })
+    });
+    let turn = item.turn_id.clone();
+    let group: SharedString = format!("{id}:hover").into();
+    let now = now_ms();
+    v_flex()
+        .id(SharedString::from(format!("{id}:user")))
+        .group(group.clone())
+        .role(Role::Article)
+        .aria_label("Your message")
+        .children((!c.text.is_empty()).then(|| markdown(id.clone(), &c.text)))
+        .children(
+            (!c.mentions.is_empty() || !c.attachments.is_empty()).then(|| {
+                h_flex()
+                    .px_4()
+                    .gap_1()
+                    .flex_wrap()
+                    .children(mentions)
+                    .children(attachments)
+            }),
+        )
+        .child(
+            h_flex()
+                .px_4()
+                .gap_2()
+                .h(px(20.))
+                .text_xs()
+                .text_color(muted)
+                .invisible()
+                .group_hover(group, |s| s.visible())
+                .child(chat_model::format_relative(item.created_at, now))
+                .children((revertable && can_revert && turn.is_some()).then(|| {
+                    Button::new(SharedString::from(format!("revert-{}", item.id)))
+                        .ghost()
+                        .label("Revert to here")
+                        .on_click(move |_, _, cx| {
+                            let _ = view.update(cx, |this, cx| {
+                                if !this.read_only
+                                    && let Some(turn) = &turn
+                                {
+                                    cx.emit(TranscriptEvent::Revert {
+                                        turn_id: turn.clone(),
+                                    });
+                                }
+                            });
+                        })
+                })),
+        )
+        .into_any_element()
+}
+
+/// 04, Transcript, `error`: a red card with the message, the code, and Retry.
+fn error_card(
+    id: &SharedString,
+    item: &tempo_protocol::Item,
+    c: &tempo_protocol::ErrorContent,
+    ix: usize,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let detail_key = format!("{id}:detail");
+    let (agent, read_only, open) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            (v.agent, v.read_only, v.is_open(&detail_key, false))
+        })
+        .unwrap_or((None, true, false));
+    let message = crate::errors::error_message(&c.code, agent);
+    let toggle = view.clone();
+    let retry = view;
+    let turn_id = item.turn_id.clone();
+    v_flex()
+        .id(SharedString::from(format!("{id}:error")))
+        .role(Role::Alert)
+        .aria_label(message.clone())
+        .mx_4()
+        .my_1()
+        .p_2()
+        .gap_1()
+        .border_1()
+        .border_color(color(Token::Destructive, cx))
+        .rounded_md()
+        .child(
+            h_flex()
+                .gap_2()
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_sm().child(message))
+                        .child(
+                            div()
+                                .font_family("monospace")
+                                .text_xs()
+                                .text_color(color(Token::MutedForeground, cx))
+                                .child(c.code.clone()),
+                        ),
+                )
+                .children(c.detail.is_some().then(|| {
+                    Button::new(SharedString::from(format!("{id}:details")))
+                        .ghost()
+                        .label("Details")
+                        .on_click(move |_, _, cx| {
+                            let _ = toggle.update(cx, |this, cx| {
+                                let open = this.is_open(&detail_key, false);
+                                this.open.insert(detail_key.clone(), !open);
+                                this.scroller
+                                    .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                                cx.notify();
+                            });
+                        })
+                }))
+                .children(turn_id.filter(|_| !read_only).map(|turn_id| {
+                    Button::new(SharedString::from(format!("{id}:retry")))
+                        .label("Retry")
+                        .on_click(move |_, _, cx| {
+                            let _ = retry.update(cx, |_, cx| {
+                                cx.emit(TranscriptEvent::Retry {
+                                    turn_id: turn_id.clone(),
+                                })
+                            });
+                        })
+                })),
+        )
+        .children(open.then(|| c.detail.clone()).flatten().map(|detail| {
+            div()
+                .font_family("monospace")
+                .text_xs()
+                .text_color(color(Token::MutedForeground, cx))
+                .child(detail)
+        }))
+        .into_any_element()
 }
 
 struct Disclosure {
@@ -893,6 +1180,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn thumbnails_take_served_images_and_evict_the_oldest_past_the_budget() {
+        let file = |mime: &str, len: usize| AttachmentFile {
+            mime: mime.into(),
+            bytes: vec![1; len],
+        };
+        assert!(thumbnail_image(file("image/png", 3)).is_some());
+        assert!(thumbnail_image(file("application/octet-stream", 3)).is_none());
+        assert!(thumbnail_image(file("image/webp", 0)).is_none());
+        let mut cache = Thumbnails::default();
+        let big = THUMBNAIL_BUDGET / 2 + 1;
+        cache.pending.insert("a".into());
+        assert!(cache.wants("b") && !cache.wants("a"));
+        let image = |len| thumbnail_image(file("image/png", len)).unwrap();
+        assert!(cache.insert("a".into(), image(big)).is_empty());
+        assert_eq!(cache.insert("b".into(), image(big)).len(), 1);
+        assert!(!cache.images.contains_key("a") && cache.images.contains_key("b"));
+        assert!(
+            !cache.wants("a"),
+            "an evicted thumbnail is not fetched again"
+        );
+        cache.fail("c");
+        assert!(!cache.wants("c"));
+    }
+
     #[gpui_kit::test]
     fn expand_all_toggles_work_rows_and_folded_tool_calls(cx: &mut gpui_kit::TestAppContext) {
         let mut state = tempo_client::state::workspace::WorkspaceState::new();
@@ -945,6 +1257,7 @@ mod tests {
                 TranscriptRow::from_native(RowContent::Item {
                     item: Box::new(item),
                     dim: false,
+                    revertable: false,
                 })
             })
             .collect();

@@ -12,6 +12,7 @@ pub struct HubStore {
     channel: Option<ChannelHandle>,
     task: Option<Task<()>>,
     projects_task: Option<Task<()>>,
+    reconnect_bar_task: Option<Task<()>>,
 }
 
 impl HubStore {
@@ -25,6 +26,7 @@ impl HubStore {
             channel: None,
             task: None,
             projects_task: None,
+            reconnect_bar_task: None,
         }
     }
 
@@ -82,9 +84,19 @@ impl HubStore {
                                 }
                             }
                             ChannelEvent::Status(status) => {
+                                hub.reconnect_bar_task.take();
                                 hub.connection = match status {
                                     Status::Open => Connection::Open,
-                                    Status::Down { since } => Connection::Down(since),
+                                    Status::Down { since } => {
+                                        hub.reconnect_bar_task =
+                                            Some(cx.spawn(async move |this, cx| {
+                                                cx.background_executor()
+                                                    .timer(super::RECONNECTING_BAR_AFTER)
+                                                    .await;
+                                                let _ = this.update(cx, |_, cx| cx.notify());
+                                            }));
+                                        Connection::Down(since)
+                                    }
                                     _ => Connection::Closed,
                                 }
                             }

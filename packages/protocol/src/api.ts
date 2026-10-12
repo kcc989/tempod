@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { AgentId, ApiKeyProvider, DiffScope, MergeMethod, ReviewSide } from "./enums.ts";
+import { AgentId, ApiKeyProvider, DiffScope, EgressStatusFilter, MergeMethod, ReviewSide } from "./enums.ts";
 import { EgressPolicy } from "./enums.ts";
 import {
   EgressAllowlist,
@@ -10,6 +10,7 @@ import {
 } from "./environments.ts";
 import { EnvName } from "./settings.ts";
 import {
+  AgentModelOptions,
   ChangedFile,
   CheckRun,
   CheckpointInfo,
@@ -124,10 +125,12 @@ export const API = {
       projectId: S,
       source: NewSource,
       agent: opt(AgentId),
+      model: opt(S),
       prompt: opt(Schema.Struct({ text: NonEmpty })),
     }),
     WorkspaceSummary,
   ),
+  listModels: fn("GET", Empty, Schema.Array(AgentModelOptions)),
   listWorkspaces: fn("GET", Schema.Struct({ includeArchived: opt(B) }), Schema.Array(WorkspaceSummary)),
   getWorkspace: fn("GET", Schema.Struct(W), WorkspaceDetail),
   renameWorkspace: fn("POST", Schema.Struct({ ...W, title: S }), Empty),
@@ -139,9 +142,17 @@ export const API = {
   archiveWorkspace: fn("POST", Schema.Struct(W), Empty),
   restoreWorkspace: fn("POST", Schema.Struct(W), Empty),
   deleteWorkspace: fn("POST", Schema.Struct(W), Empty),
-  rotatePreviewToken: fn("POST", Schema.Struct(W), Schema.Struct({ previewToken: S })),
+  openPreview: fn("POST", Schema.Struct({ ...W, port: N }), Schema.Struct({ url: S })),
+  rotatePreviewKey: fn("POST", Schema.Struct(W), Empty),
+  /** POST: each call mints a new Live View link, which is a secret (01, Browser Run). */
+  getBrowserLiveView: fn("POST", Schema.Struct(W), Schema.Struct({ url: Schema.NullOr(S) })),
   setBaseBranch: fn("POST", Schema.Struct({ ...W, baseBranch: NonEmpty }), Empty),
-  getDiagnostics: fn("GET", Schema.Struct(W), Diagnostics),
+  /** `egressHost`: text the host contains, any case. `egressStatus` defaults to `all`. */
+  getDiagnostics: fn(
+    "GET",
+    Schema.Struct({ ...W, egressHost: opt(S), egressStatus: opt(EgressStatusFilter) }),
+    Diagnostics,
+  ),
   setWorkspaceEnvironment: fn("POST", Schema.Struct({ ...W, environmentId: Schema.NullOr(S) }), Empty),
   resolveEnvironmentProposal: fn(
     "POST",
@@ -293,3 +304,10 @@ export const ApiMeta = Schema.Struct({
   latestMacClientSha256: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 });
 export type ApiMeta = typeof ApiMeta.Type;
+
+/** `GET /api/setup/status`, no auth: whether the GitHub App exists, and its install page. */
+export const AppSetupStatus = Schema.Struct({
+  configured: Schema.Boolean,
+  installUrl: Schema.NullOr(S),
+});
+export type AppSetupStatus = typeof AppSetupStatus.Type;

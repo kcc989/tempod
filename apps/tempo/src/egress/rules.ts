@@ -1,4 +1,5 @@
 import {
+  BROWSER_RUN_HOST,
   PLACEHOLDER,
   SECRET_PLACEHOLDER_PREFIX,
   SECRET_PLACEHOLDER_RE,
@@ -58,7 +59,7 @@ const decodeBasic = (value: string): string | null => {
   }
 };
 
-/** Header values to scan, plus the decoded `user:password` of `Authorization: Basic` (01, rule 12). */
+/** Header values to scan, plus the decoded `user:password` of `Authorization: Basic` (01, rule 13). */
 const scanTexts = (url: URL, headers: Headers): string[] => {
   const out = [url.pathname, url.search];
   for (const [name, value] of headers) {
@@ -117,8 +118,9 @@ export const swapSecrets = (
 
 export type Decision =
   | { readonly rule: number; readonly action: "block"; readonly status: number; readonly body: string }
-  | { readonly rule: 11; readonly action: "inject"; readonly injector: Injector }
-  | { readonly rule: 12; readonly action: "swap"; readonly names: ReadonlyArray<string> }
+  | { readonly rule: 11; readonly action: "browser" }
+  | { readonly rule: 12; readonly action: "inject"; readonly injector: Injector }
+  | { readonly rule: 13; readonly action: "swap"; readonly names: ReadonlyArray<string> }
   | {
       readonly rule: number;
       readonly action: "forward";
@@ -129,13 +131,14 @@ export type Decision =
     };
 
 /**
- * Rules 0 to 10 (01 and 05), first match wins. Pure: credential lookup happens in the caller.
+ * Rules 0 to 13 (01 and 05), first match wins; rule 11 is checked right after rule 0. Pure: credential lookup happens in the caller.
  * `set` names the credential to add; the caller fetches it and replaces the header.
  */
 export const decide = (url: URL, headers: Headers, appHost: string, config: EgressConfig): Decision => {
   const host = url.hostname.toLowerCase();
   if (host === appHost.toLowerCase())
     return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
+  if (host === BROWSER_RUN_HOST) return { rule: 11, action: "browser" };
   if (url.protocol === "http:") return policy(8, host, config);
   if (
     (host === "github.com" || host === "codeload.github.com") &&
@@ -156,10 +159,10 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
     return { rule: 6, action: "forward", set: { name: "authorization", value: "openai" } };
   }
   const injector = (config.injectors ?? []).find((i) => i.hosts.some((p) => hostMatches(host, p)));
-  if (injector) return { rule: 11, action: "inject", injector };
+  if (injector) return { rule: 12, action: "inject", injector };
   const names = secretPlaceholderNames(url, headers);
   if (swappable(host, names, config.secrets ?? []) && !carriesFixedPlaceholder(url, headers))
-    return { rule: 12, action: "swap", names };
+    return { rule: 13, action: "swap", names };
   if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
   return policy(8, host, config);
 };
@@ -175,8 +178,8 @@ const carriesFixedPlaceholder = (url: URL, headers: Headers) =>
   scanTexts(url, headers).some((t) => t.includes(PLACEHOLDER));
 
 /**
- * A subrequest from an injector (01, rule 11): rules 0 and 1, then only the injector's hosts,
- * then rule 12, then rule 7. Never rule 11 again.
+ * A subrequest from an injector (01, rule 12): rules 0 and 1, then only the injector's hosts,
+ * then rule 13, then rule 7. Never rule 12 again.
  */
 export const decideForInjector = (
   url: URL,
@@ -187,7 +190,7 @@ export const decideForInjector = (
 ): Decision => {
   const host = url.hostname.toLowerCase();
   const blocked = {
-    rule: 11,
+    rule: 12,
     action: "block",
     status: 403,
     body: `tempo: egress blocked for ${host}`,
@@ -195,12 +198,12 @@ export const decideForInjector = (
   if (host === appHost.toLowerCase())
     return { rule: 0, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
   if (!injector.hosts.some((p) => hostMatches(host, p))) return blocked;
-  if (url.protocol === "http:") return { rule: 11, action: "forward" };
+  if (url.protocol === "http:") return { rule: 12, action: "forward" };
   const names = secretPlaceholderNames(url, headers);
   if (swappable(host, names, config.secrets ?? []) && !carriesFixedPlaceholder(url, headers))
-    return { rule: 12, action: "swap", names };
+    return { rule: 13, action: "swap", names };
   if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
-  return { rule: 11, action: "forward" };
+  return { rule: 12, action: "forward" };
 };
 
 const policy = (_from: number, host: string, config: EgressConfig): Decision => {

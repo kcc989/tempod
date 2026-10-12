@@ -1,7 +1,15 @@
 {
   "agent": {
     "default": "claude",
-    "model": ""
+    "models": {
+      "claude": "",
+      "codex": "",
+      "opencode": "",
+      "pi": ""
+    }
+  },
+  "browser": {
+    "run": false
   },
   "scripts": {
     "setup": "",

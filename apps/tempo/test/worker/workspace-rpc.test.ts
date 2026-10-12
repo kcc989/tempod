@@ -2,6 +2,7 @@ import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
 import { github } from "../../src/github/provider.ts";
+import { previewCookie } from "../../src/do/workspace/preview.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import {
   DEFAULT_EFFECTIVE,
@@ -40,7 +41,7 @@ const ok = (r: Res): any => {
 const codeOf = (r: Res): string => (r.ok ? "OK" : (r as unknown as { error: ErrorBody }).error.code);
 
 const ULID = /^[0-9a-hjkmnp-tv-z]{26}$/;
-const PREVIEW_TOKEN = /^[a-z0-9]{16}$/;
+const PREVIEW_KEY = /^[A-Za-z0-9_-]{43}$/;
 
 // ---------- storage helpers ----------
 
@@ -139,7 +140,7 @@ const author = { name: "Owner", email: `${OWNER_GITHUB_ID}+owner@users.noreply.g
 
 const initInput = (
   w: { workspaceId: string; seeded: Seeded; slug: string; branch: string },
-  opts: { prompt?: string; agent?: AgentId } = {},
+  opts: { prompt?: string; agent?: AgentId; model?: string } = {},
 ) => ({
   workspaceId: w.workspaceId,
   projectId: w.seeded.projectId,
@@ -150,6 +151,7 @@ const initInput = (
   source: { kind: "new" as const },
   defaultAgent: "claude" as const,
   agent: opts.agent ?? "claude",
+  model: opts.model,
   prompt: opts.prompt ? { text: opts.prompt } : null,
   author,
   createdAt: Date.now(),
@@ -185,7 +187,7 @@ const insertD1Workspace = async (
  * `container.start`, so the state stays `starting` and queued turns stay queued.
  */
 const seedHeld = async (
-  opts: { prompt?: string; agent?: AgentId; credentials?: boolean } = {},
+  opts: { prompt?: string; agent?: AgentId; model?: string; credentials?: boolean } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
   if (opts.credentials !== false) await seedCredentials(seeded.userId);
@@ -340,9 +342,9 @@ describe("init", { timeout: 30_000 }, () => {
     const d = await detail(w.stub);
     // 03 "In WorkspaceDO.init" 1: "Set title to the first 60 characters of the prompt, or to the slug."
     expect(d.title).toBe(text.slice(0, 60));
-    // 03 init 1: "Make preview_token (16 chars from [a-z0-9] ...)"
-    expect(d.previewToken).toMatch(PREVIEW_TOKEN);
-    expect((await wsRow(w.stub))["preview_token"]).toBe(d.previewToken);
+    // 03 init 1: "Make preview_key (32 random bytes from crypto.getRandomValues, base64url)."
+    expect((await wsRow(w.stub))["preview_key"]).toMatch(PREVIEW_KEY);
+    expect(d).not.toHaveProperty("previewToken");
     // 03 init 3: "Insert the create op. Set state starting."
     expect(d.state).toBe("starting");
     const create = await opsOf(w.stub, "create");
@@ -385,27 +387,30 @@ describe("init", { timeout: 30_000 }, () => {
     await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) !== null, 5000, "hub summary");
   });
 
-  it("uses the slug as the title and creates no session, turn or item without a prompt", async () => {
-    const w = await seedHeld();
+  it("creates an idle first chat with the selected model and no turn or item without a prompt", async () => {
+    const w = await seedHeld({ agent: "codex", model: "reported-model" });
     const d = await detail(w.stub);
     expect(d.title).toBe(w.slug);
     expect(d.state).toBe("starting");
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(0);
+    const sessions = await rows(w.stub, "SELECT * FROM sessions");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ agent: "codex", status: "idle" });
+    expect(JSON.parse(sessions[0]!["config_json"])).toEqual({ model: "reported-model" });
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(0);
     expect(await rows(w.stub, "SELECT id FROM items")).toHaveLength(0);
     expect(await opsOf(w.stub, "create")).toHaveLength(1);
   });
 
-  it("keeps whole short prompts as the title and makes a fresh preview token per workspace", async () => {
+  it("keeps whole short prompts as the title and makes a fresh preview key per workspace", async () => {
     const a = await seedHeld({ prompt: "Fix the login bug" });
     const b = await seedHeld({ prompt: "Fix the login bug" });
     expect((await detail(a.stub)).title).toBe("Fix the login bug");
-    expect((await detail(a.stub)).previewToken).not.toBe((await detail(b.stub)).previewToken);
+    expect((await wsRow(a.stub))["preview_key"]).not.toBe((await wsRow(b.stub))["preview_key"]);
   });
 
   it("is idempotent: a second init returns the existing summary and adds nothing", async () => {
     const w = await seedHeld({ prompt: "First prompt" });
-    const before = await detail(w.stub);
+    const before = await wsRow(w.stub);
     const again = ok(
       await w.stub.init(
         initInput({ ...w, slug: "other-slug", branch: "tempo/other" }, { prompt: "Second prompt" }),
@@ -415,8 +420,7 @@ describe("init", { timeout: 30_000 }, () => {
     expect(again.title).toBe("First prompt");
     expect(again.slug).toBe(w.slug);
     expect(again.branch).toBe(w.branch);
-    const after = await detail(w.stub);
-    expect(after.previewToken).toBe(before.previewToken);
+    expect((await wsRow(w.stub))["preview_key"]).toBe(before["preview_key"]);
     expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
     expect(await rows(w.stub, "SELECT id FROM items")).toHaveLength(1);
@@ -429,7 +433,7 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     const w = await readyWs();
     const d = await detail(w.stub);
     // 02 Shared types: WorkspaceDetail = WorkspaceSummary plus errorCode, errorDetail, setupStatus, pushed,
-    // previewToken, ports, settings, runningTurnId, queue, imageRef, op
+    // ports, settings, runningTurnId, queue, imageRef, op
     for (const key of [
       "id",
       "projectId",
@@ -452,7 +456,6 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
       "errorDetail",
       "setupStatus",
       "pushed",
-      "previewToken",
       "ports",
       "settings",
       "runningTurnId",
@@ -492,11 +495,12 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     await emit(w, { kind: "ports.changed", ports: [5173, 3000] });
     await waitFor(async () => (await detail(w.stub)).ports.length === 2, 5000, "ports");
     const d = await detail(w.stub);
-    // 01 Preview URL: https://<P>-<workspaceId lowercase>-<previewToken>.<PREVIEW_DOMAIN>
+    // 01 Preview URL: https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>; the hostname holds no secret.
     expect(d.ports).toEqual([
-      { port: 3000, url: `https://3000-${w.workspaceId}-${d.previewToken}.previews.test` },
-      { port: 5173, url: `https://5173-${w.workspaceId}-${d.previewToken}.previews.test` },
+      { port: 3000, url: `https://3000-${w.workspaceId}.previews.test` },
+      { port: 5173, url: `https://5173-${w.workspaceId}.previews.test` },
     ]);
+    expect(d).not.toHaveProperty("previewToken");
   });
 
   it("shows the create op's progress while it runs", async () => {
@@ -674,6 +678,41 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
       },
       5000,
       "D1 unpinned",
+    );
+  });
+
+  it("publishes the summary to the hub even when the D1 write fails", async () => {
+    const w = await readyWs();
+    const brokenD1 = {
+      prepare: () => {
+        throw new Error("D1 unavailable");
+      },
+    };
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      const core = internals(i).core as unknown as { env: object; realEnv?: object };
+      core.realEnv = core.env;
+      core.env = new Proxy(core.env, {
+        get: (target, key) => (key === "DB" ? brokenD1 : Reflect.get(target, key)),
+      });
+    });
+    try {
+      ok(await w.stub.renameWorkspace({ title: "Renamed while D1 is down" }));
+      const rev = (await wsRow(w.stub))["summary_rev"];
+      // 02 Hub: "The WorkspaceDO calls UserHubDO.publish(summary) every time it increments summary_rev."
+      await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) === rev, 5000, "hub rev");
+      expect((await d1Row(w.workspaceId))!["title"]).not.toBe("Renamed while D1 is down");
+    } finally {
+      await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+        const core = internals(i).core as unknown as { env: object; realEnv?: object };
+        core.env = core.realEnv!;
+      });
+    }
+    // The next publish brings D1 up to date.
+    ok(await w.stub.setPinned({ pinned: true }));
+    await waitFor(
+      async () => (await d1Row(w.workspaceId))?.["title"] === "Renamed while D1 is down",
+      5000,
+      "D1 caught up",
     );
   });
 
@@ -864,7 +903,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("WORKSPACE_ARCHIVED");
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("WORKSPACE_ARCHIVED");
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(0);
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
+    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(2);
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "archive")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("archived");
@@ -952,20 +991,70 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
   });
 });
 
-describe("rotatePreviewToken", { timeout: 30_000 }, () => {
-  it("makes a new 16-character token and preview URLs use it", async () => {
+describe("rotatePreviewKey", { timeout: 30_000 }, () => {
+  it("makes a new preview key and leaves the preview URLs as they are", async () => {
     const w = await seedHeld();
     await exec(w.stub, "INSERT INTO ports (port, first_seen_at) VALUES (3000, 0)");
-    const before = (await detail(w.stub)).previewToken;
-    const { previewToken } = ok(await w.stub.rotatePreviewToken({}));
-    expect(previewToken).toMatch(PREVIEW_TOKEN);
-    expect(previewToken).not.toBe(before);
-    const d = await detail(w.stub);
-    expect(d.previewToken).toBe(previewToken);
-    // 01 Preview URL: "Rotating it breaks old links."
-    expect(d.ports).toEqual([
-      { port: 3000, url: `https://3000-${w.workspaceId}-${previewToken}.previews.test` },
+    const before = (await wsRow(w.stub))["preview_key"];
+    expect(ok(await w.stub.rotatePreviewKey({}))).toEqual({});
+    const after = (await wsRow(w.stub))["preview_key"];
+    expect(after).toMatch(PREVIEW_KEY);
+    expect(after).not.toBe(before);
+    expect((await detail(w.stub)).ports).toEqual([
+      { port: 3000, url: `https://3000-${w.workspaceId}.previews.test` },
     ]);
+  });
+});
+
+describe("open previews", { timeout: 30_000 }, () => {
+  /** A preview cookie from openPreview and previewEnter, as the Worker gets one (05, Preview access). */
+  const cookieFor = async (w: Ws): Promise<string> => {
+    await exec(w.stub, "INSERT OR IGNORE INTO ports (port, first_seen_at) VALUES (3000, 0)");
+    const { url } = ok(await w.stub.openPreview({ port: 3000 }));
+    return (await w.stub.previewEnter(3000, new URL(url).searchParams.get("code")!))!;
+  };
+  const previewFetch = (w: Ws, cookie: string, init: { upgrade?: boolean } = {}) =>
+    w.stub.fetch(`https://3000-${w.workspaceId}.previews.test/live`, {
+      headers: {
+        "x-tempo-preview": `3000:${cookie}`,
+        ...(init.upgrade ? { Upgrade: "websocket" } : {}),
+      },
+    });
+
+  it("closes preview WebSockets that are already open when the key is reset, and the old cookie stops working", async () => {
+    const w = await readyWs();
+    const cookie = await cookieFor(w);
+    const res = await previewFetch(w, cookie, { upgrade: true });
+    expect(res.status).toBe(101);
+    const socket = res.webSocket!;
+    let closed: number | null = null;
+    socket.addEventListener("close", (e) => {
+      closed = e.code;
+    });
+    socket.accept();
+    await waitFor(() => w.tempod.proxySockets.length === 1, 3000, "proxied socket");
+    ok(await w.stub.rotatePreviewKey({}));
+    // 05 Preview access: "rotatePreviewKey makes a new preview_key; every preview cookie for the workspace stops working at once."
+    await waitFor(() => closed === 1008, 5000, "browser side closed");
+    await waitFor(() => w.tempod.proxySockets[0]!.closed !== null, 5000, "tempod side closed");
+    expect((await previewFetch(w, cookie)).status).toBe(404);
+  });
+
+  it("leaves open preview WebSockets alone until the key is reset", async () => {
+    const w = await readyWs();
+    const cookie = await cookieFor(w);
+    const socket = (await previewFetch(w, cookie, { upgrade: true })).webSocket!;
+    let closed = false;
+    socket.addEventListener("close", () => {
+      closed = true;
+    });
+    socket.accept();
+    await waitFor(() => w.tempod.proxySockets.length === 1, 3000, "proxied socket");
+    ok(await w.stub.renameWorkspace({ title: "Still previewing" }));
+    await sleep(200);
+    expect(closed).toBe(false);
+    expect(w.tempod.proxySockets[0]!.closed).toBeNull();
+    socket.close(1000, "done");
   });
 });
 
@@ -976,7 +1065,7 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     expect(codeOf(await w.stub.createSession({ agent: "claude" }))).toBe("CREDENTIAL_MISSING");
     await env.CREDENTIALS.getByName(w.seeded.userId).putSecret("openrouter.api_key", "sk-or-test");
     expect(codeOf(await w.stub.createSession({ agent: "codex" }))).toBe("CREDENTIAL_MISSING");
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(0);
+    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
     const s = ok(await w.stub.createSession({ agent: "opencode" }));
     expect(s).toMatchObject({ agent: "opencode", status: "starting" });
   });
@@ -1117,6 +1206,26 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
       status: "draft",
       sentTurnId: null,
     });
+  });
+
+  it("returns VALIDATION_FAILED for review comment ids that do not exist or were already sent, and queues nothing", async () => {
+    const w = await seedHeld({ prompt: "First" });
+    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 1, body: "Rename" }));
+    ok(await prompt(w, sessionId, "Uses c1", { reviewCommentIds: [c1.id] }));
+    const count = async () => (await rows(w.stub, "SELECT id FROM turns")).length;
+    const before = await count();
+    // 02 sendPrompt: VALIDATION_FAILED; 03 sendPrompt 3 marks only draft review comments sent.
+    expect(codeOf(await prompt(w, sessionId, "Again", { reviewCommentIds: [c1.id] }))).toBe(
+      "VALIDATION_FAILED",
+    );
+    expect(codeOf(await prompt(w, sessionId, "Ghost", { reviewCommentIds: [newId()] }))).toBe(
+      "VALIDATION_FAILED",
+    );
+    expect(await count()).toBe(before);
+    const c2 = ok(await w.stub.addReviewComment({ path: "src/app.ts", body: "Draft" }));
+    ok(await prompt(w, sessionId, "Uses c2 twice", { reviewCommentIds: [c2.id, c2.id] }));
+    expect(await count()).toBe(before + 1);
   });
 
   it("broadcasts turn and item.upsert to the workspace channel", async () => {
@@ -1308,6 +1417,18 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
       "turn.deleted",
     );
     socket.close();
+  });
+
+  it("deleteQueuedTurn raises items_rev with the deleted items; a refused delete leaves it alone", async () => {
+    const w = await seedHeld({ prompt: "Keep me" });
+    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const t2 = ok(await prompt(w, sessionId, "Delete me"));
+    const before = (await wsRow(w.stub))["items_rev"];
+    expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("OK");
+    // 02 Rules: "Every change to items increments workspace.items_rev by 1"
+    expect((await wsRow(w.stub))["items_rev"]).toBe(before + 1);
+    expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("NOT_FOUND");
+    expect((await wsRow(w.stub))["items_rev"]).toBe(before + 1);
   });
 
   it("reorderQueue sets the order of the queued turns", async () => {
@@ -1662,6 +1783,34 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
   });
 });
 
+describe("commitAndPush behind other ops", { timeout: 30_000 }, () => {
+  it("waits as pending behind an op instead of returning WORKSPACE_BUSY, then runs in creation order", async () => {
+    const w = await readyWs();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
+    });
+    const call = w.stub.commitAndPush({ message: "Second" });
+    // 03 Step runner: "Ops wait as pending and start in creation order."
+    await waitFor(async () => (await opsOf(w.stub, "commit_push")).length === 2, 3000, "queued op");
+    expect((await opsOf(w.stub, "commit_push")).map((o) => o.status)).toEqual(["pending", "pending"]);
+    const res = await whileDriving(w.stub, call);
+    expect(ok(res)).toEqual({ commitSha: "f".repeat(40) });
+    expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);
+  });
+
+  it("returns its own op's error code once the queued op runs", async () => {
+    const w = await readyWs();
+    w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
+    });
+    const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Second" }));
+    // 02 commitAndPush errors: NOTHING_TO_COMMIT, PUSH_REJECTED.
+    expect(codeOf(res)).toBe("PUSH_REJECTED");
+    expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);
+  });
+});
+
 describe("files and changes", { timeout: 30_000 }, () => {
   it("pass through to tempod when the container is ready", async () => {
     const w = await readyWs();
@@ -1806,6 +1955,23 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await one(w.stub, "SELECT path FROM file_cache WHERE path = '.env'")).toBeUndefined();
   });
 
+  it("validates file_cache.response_json on read and write (02, Conventions)", async () => {
+    const w = await readyWs();
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      const { files } = internals(i).core;
+      await files.sync();
+      files.rememberFile("README.md", { content: "x", encoding: "latin1", size: 1 } as never);
+      expect(() => files.read("README.md")).toThrow();
+    });
+    expect(await one(w.stub, "SELECT response_json FROM file_cache WHERE path = 'README.md'")).toEqual({
+      response_json: null,
+    });
+    await putToSleep(w);
+    await exec(w.stub, "UPDATE file_cache SET response_json = ? WHERE path = 'README.md'", '{"content":5}');
+    expect(codeOf(await w.stub.readFile({ path: "README.md" }))).toBe("CONTAINER_NOT_READY");
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
   it("return CONTAINER_NOT_READY while the workspace starts", async () => {
     const w = await seedHeld();
     expect(codeOf(await w.stub.getChanges({ scope: "branch" }))).toBe("CONTAINER_NOT_READY");
@@ -1824,7 +1990,8 @@ describe("files and changes", { timeout: 30_000 }, () => {
     await putToSleep(w);
     hold(w.tempod);
     // 03 Wake triggers: "Read calls that need the container (getChanges, getFileDiff, listFiles, readFile,
-    // searchFiles) return CONTAINER_NOT_READY and also start a wake." runScript is a wake trigger.
+    // searchFiles) return CONTAINER_NOT_READY and also start a wake. The one exception is sleeping ..."
+    // getChanges starts the wake, so listFiles and readFile run in starting. runScript is a wake trigger.
     expect(codeOf(await w.stub.getChanges({ scope: "branch" }))).toBe("CONTAINER_NOT_READY");
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("starting");
@@ -1994,6 +2161,26 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
     expect(String(error)).toMatch(/not found/i);
   });
 
+  it("logEgress keeps only the newest 10,000 rows on every insert", async () => {
+    const w = await seedHeld();
+    await exec(
+      w.stub,
+      "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 10000) INSERT INTO egress_log (ts, method, host, path, status, ms, rule) SELECT i, 'GET', 'example.com', '/' || i, 200, 1, 9 FROM n",
+    );
+    await w.stub.logEgress({ ts: 20_000, method: "GET", host: "x", path: "/", status: 200, ms: 1, rule: 8 });
+    // 02 egress_log: "Newest 10,000 rows only."
+    expect(await one(w.stub, "SELECT count(*) AS n, min(ts) AS lo, max(ts) AS hi FROM egress_log")).toEqual({
+      n: 10_000,
+      lo: 2,
+      hi: 20_000,
+    });
+    await w.stub.logEgress({ ts: 20_001, method: "GET", host: "x", path: "/", status: 200, ms: 1, rule: 8 });
+    expect((await one(w.stub, "SELECT count(*) AS n, min(ts) AS lo FROM egress_log"))!).toEqual({
+      n: 10_000,
+      lo: 3,
+    });
+  });
+
   it("logEgress appends rows that Diagnostics shows newest first; an unknown workspace ignores it", async () => {
     const w = await seedHeld();
     const a = {
@@ -2058,7 +2245,15 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
     ]);
     expect(diag.egress).toEqual([]);
     // Sessions: each session's agent, ACP session id, capabilities and live or not
+    const initial = (await rows(w.stub, "SELECT id FROM sessions WHERE id != ?", s.id))[0]!;
     expect(diag.sessions).toEqual([
+      {
+        id: initial["id"],
+        agent: "claude",
+        acpSessionId: null,
+        capabilities: {},
+        live: false,
+      },
       {
         id: s.id,
         agent: "claude",
@@ -2118,5 +2313,230 @@ describe("PR title contract", () => {
       pull.mockRestore();
       checks.mockRestore();
     }
+  });
+});
+
+describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, () => {
+  it("init stores the PR number, state and title, and status polling starts", async () => {
+    const seeded = await seedProject();
+    await seedCredentials(seeded.userId);
+    const workspaceId = newId();
+    const slug = `pr-${++counter}`;
+    const branch = "feature/retries";
+    await insertD1Workspace(seeded, { id: workspaceId, slug, branch });
+    const stub = env.WORKSPACE.getByName(workspaceId);
+    await installFakes(stub);
+    const summary = ok(
+      await stub.init({
+        ...initInput({ workspaceId, seeded, slug, branch }),
+        source: { kind: "pr", number: 42 },
+        pr: { number: 42, state: "draft", title: "Add retries" },
+      }),
+    );
+    // 03 init 1: "For source.kind = "pr", set pr_number and pr_state, and keep the PR title"
+    expect(summary).toMatchObject({ prNumber: 42, prState: "draft" });
+    expect(await detail(stub)).toMatchObject({ prNumber: 42, prState: "draft", prTitle: "Add retries" });
+    expect(await wsRow(stub)).toMatchObject({ pr_number: 42, pr_state: "draft" });
+    await waitFor(async () => (await d1Row(workspaceId))?.["pr_number"] === 42, 5000, "D1 pr_number");
+    expect((await d1Row(workspaceId))!["pr_state"]).toBe("draft");
+
+    // 03 Status polling: while a UI socket is open and pr_number is set.
+    await runInDurableObject(stub, (i: WorkspaceDO) => {
+      internals(i).core.ghToken = { token: "fake", expiresAt: Date.now() + 3_600_000 };
+    });
+    const pull = vi.spyOn(github, "getPullRequest").mockResolvedValue({
+      number: 42,
+      title: "Add retries to jobs",
+      state: "open",
+      merged: false,
+      merged_at: null,
+      draft: false,
+      head: { sha: "abc" },
+    } as never);
+    const checks = vi.spyOn(github, "listCheckRuns").mockResolvedValue([]);
+    try {
+      const ui = await openUi({ workspaceId, stub } as Ws);
+      await runDurableObjectAlarm(stub);
+      await waitFor(() => pull.mock.calls.length > 0, 5000, "PR poll");
+      expect(pull.mock.calls[0]![2]).toBe(42);
+      await waitFor(async () => (await detail(stub)).prState === "open", 5000, "polled state");
+      expect((await detail(stub)).prTitle).toBe("Add retries to jobs");
+      ui.socket.close();
+    } finally {
+      pull.mockRestore();
+      checks.mockRestore();
+    }
+  });
+
+  it("a workspace from a branch or a new branch has no PR", async () => {
+    const w = await seedHeld();
+    expect(await detail(w.stub)).toMatchObject({ prNumber: null, prState: null, prTitle: null });
+  });
+});
+
+describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30_000 }, () => {
+  /** A workspace in `error` with no create or wake op left, as after a step failed for good. */
+  const errored = async () => {
+    const w = await seedHeld({ prompt: "First" });
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      const { core, runner } = internals(i);
+      for (const kind of ["create", "wake"] as const) {
+        const op = runner.find(kind);
+        if (op) runner.cancel(op.id);
+      }
+      core.setState("error", { code: "CONTAINER_START_FAILED", detail: "test" });
+    });
+    expect(await stateOf(w.stub)).toBe("error");
+    return w;
+  };
+  const restarted = async (w: Ws) => {
+    const wakes = (await opsOf(w.stub, "wake")).filter(
+      (o) => o.status === "pending" || o.status === "running",
+    );
+    expect(wakes).toHaveLength(1);
+    expect(await stateOf(w.stub)).toBe("starting");
+  };
+  const sessionIdOf = async (w: Ws) => (await one(w.stub, "SELECT id FROM sessions"))!["id"] as string;
+
+  const NOT_READY = "CONTAINER_NOT_READY";
+  const triggers: Array<[string, string, (w: Ws) => Promise<string>]> = [
+    ["sendPrompt", "OK", async (w) => codeOf(await prompt(w, await sessionIdOf(w), "Again"))],
+    ["createSession", "OK", async (w) => codeOf(await w.stub.createSession({ agent: "claude" }))],
+    ["wakeWorkspace", "OK", async (w) => codeOf(await w.stub.wakeWorkspace({}))],
+    ["rerunSetup", NOT_READY, async (w) => codeOf(await w.stub.rerunSetup({}))],
+    [
+      "runScript",
+      NOT_READY,
+      async (w) => {
+        await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+          const run = { dev: { command: "npm run dev", cwd: "", default: true } };
+          internals(i).core.updateWs({
+            settingsJson: JSON.stringify(settingsWith({ scripts: { run } })),
+          });
+        });
+        return codeOf(await w.stub.runScript({ scriptId: "dev" }));
+      },
+    ],
+    ["getChanges", NOT_READY, async (w) => codeOf(await w.stub.getChanges({ scope: "branch" }))],
+    [
+      "getFileDiff",
+      NOT_READY,
+      async (w) => codeOf(await w.stub.getFileDiff({ scope: "branch", path: "README.md" })),
+    ],
+    ["listFiles", NOT_READY, async (w) => codeOf(await w.stub.listFiles({}))],
+    ["readFile", NOT_READY, async (w) => codeOf(await w.stub.readFile({ path: "README.md" }))],
+    ["searchFiles", NOT_READY, async (w) => codeOf(await w.stub.searchFiles({ query: "x" }))],
+    [
+      "a terminal WebSocket",
+      "101",
+      async (w) => {
+        const res = await w.stub.fetch(`https://tempo.test/api/ws/terminal/${w.workspaceId}/t1`, {
+          headers: { Upgrade: "websocket" },
+        });
+        res.webSocket?.accept();
+        res.webSocket?.close();
+        return String(res.status);
+      },
+    ],
+    [
+      "a preview request",
+      "200",
+      async (w) => {
+        const cookie = await runInDurableObject(w.stub, (i: WorkspaceDO) =>
+          previewCookie(internals(i).core.ws().previewKey, 3000),
+        );
+        const res = await w.stub.previewFetch(
+          new Request("https://preview.test/", { headers: { Accept: "text/html" } }),
+          3000,
+          cookie ?? "",
+        );
+        await res.body?.cancel();
+        return String(res.status);
+      },
+    ],
+  ];
+
+  for (const [name, expected, trigger] of triggers) {
+    it(`${name} restarts it`, async () => {
+      const w = await errored();
+      expect(await trigger(w)).toBe(expected);
+      await restarted(w);
+    });
+  }
+
+  // 03 Wake triggers: only `sleeping` answers listFiles and readFile from the file cache.
+  const cachedReads: Array<[string, (w: Ws) => Promise<Res>]> = [
+    ["listFiles", (w) => w.stub.listFiles({})],
+    ["readFile", (w) => w.stub.readFile({ path: "README.md" })],
+  ];
+  for (const [name, read] of cachedReads) {
+    it(`${name} restarts it instead of answering from the file cache`, async () => {
+      const w = await errored();
+      await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+        const { files } = internals(i).core;
+        files.rememberList(["README.md"]);
+        files.rememberFile("README.md", { content: "cached", encoding: "utf8", size: 6 });
+        expect(files.read("README.md")).toMatchObject({ content: "cached" });
+      });
+      expect(codeOf(await read(w))).toBe(NOT_READY);
+      await restarted(w);
+    });
+  }
+});
+
+describe("getDiagnostics egress filters (02, 05 Observability)", { timeout: 30_000 }, () => {
+  const seedEgress = async (w: Ws) =>
+    runInDurableObject(w.stub, (_i: WorkspaceDO, state: DurableObjectState) => {
+      const add = (host: string, status: number, rule: number) =>
+        state.storage.sql.exec(
+          "INSERT INTO egress_log (ts, method, host, path, status, ms, rule) VALUES (?, 'GET', ?, '/', ?, 1, ?)",
+          Date.now(),
+          host,
+          status,
+          rule,
+        );
+      add("tempo.example.com", 403, 0);
+      add("api.github.com", 403, 7);
+      add("evil.example.net", 403, 10);
+      add("registry.npmjs.org", 404, 8);
+      add("openrouter.ai", 502, 4);
+      add("cdn.example.org", 301, 9);
+      for (let n = 0; n < 700; n++) add("Registry.NPMJS.org", 200, 8);
+      for (let n = 0; n < 600; n++) add("api.github.com", 200, 3);
+    });
+  const egressOf = async (w: Ws, input: Record<string, unknown>) =>
+    ok(await w.stub.getDiagnostics(input as never)).egress as Array<{
+      host: string;
+      status: number;
+      rule: number;
+    }>;
+
+  it("filters every stored row on the server and returns the newest 500 matches", async () => {
+    const w = await seedHeld();
+    await seedEgress(w);
+    const all = await egressOf(w, {});
+    expect(all).toHaveLength(500);
+    expect(all.every((r) => r.host === "api.github.com")).toBe(true);
+    // The npm rows are older than the newest 500; the filter still finds them.
+    const npm = await egressOf(w, { egressHost: "npmjs" });
+    expect(npm).toHaveLength(500);
+    expect(npm.every((r) => r.host.toLowerCase() === "registry.npmjs.org")).toBe(true);
+    expect(npm.at(-1)).toMatchObject({ status: 200 });
+    expect(await egressOf(w, { egressHost: "NPMJS", egressStatus: "4xx" })).toEqual([
+      expect.objectContaining({ host: "registry.npmjs.org", status: 404 }),
+    ]);
+    expect(await egressOf(w, { egressHost: "%" })).toEqual([]);
+  });
+
+  it("blocked means rule 0, 7 or 10; 2xx to 5xx match the status class", async () => {
+    const w = await seedHeld();
+    await seedEgress(w);
+    const blocked = await egressOf(w, { egressStatus: "blocked" });
+    expect(blocked.map((r) => r.rule)).toEqual([10, 7, 0]);
+    expect((await egressOf(w, { egressStatus: "3xx" })).map((r) => r.host)).toEqual(["cdn.example.org"]);
+    expect((await egressOf(w, { egressStatus: "4xx" })).map((r) => r.status)).toEqual([404, 403, 403, 403]);
+    expect((await egressOf(w, { egressStatus: "5xx" })).map((r) => r.host)).toEqual(["openrouter.ai"]);
+    expect(await egressOf(w, { egressStatus: "2xx", egressHost: "example" })).toEqual([]);
+    expect(await egressOf(w, { egressStatus: "all", egressHost: "example.com" })).toHaveLength(1);
   });
 });

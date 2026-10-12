@@ -101,7 +101,7 @@ CREATE INDEX workspaces_by_activity ON workspaces(user_id, archived_at, last_act
 
 Each WorkspaceDO holds the full record of one workspace. Everything the UI shows for a workspace comes from here.
 
-The read-only file fallback uses this additional table. Null contents mean a known path whose contents are not cached.
+The read-only file fallback while sleeping (03, Wake triggers) uses this additional table. Null contents mean a known path whose contents are not cached.
 
 ```sql
 CREATE TABLE file_cache (
@@ -137,7 +137,9 @@ CREATE TABLE workspace (
   attention           TEXT NOT NULL DEFAULT 'none',
   setup_status        TEXT NOT NULL DEFAULT 'none'
                       CHECK (setup_status IN ('none','running','succeeded','failed','skipped')),
-  preview_token       TEXT NOT NULL,
+  preview_token       TEXT NOT NULL,   -- unused since preview_key; kept because 05 Upgrades forbids dropping a column
+  preview_key         TEXT NOT NULL,   -- HMAC key for preview cookies (05, Preview access)
+  browser_session_id  TEXT,            -- open Browser Run session (01); null when none
   settings_json       TEXT NOT NULL DEFAULT '{}',  -- effective settings, last read
   pushed              INTEGER NOT NULL DEFAULT 0,  -- branch exists on origin
   pr_number           INTEGER,
@@ -180,7 +182,7 @@ CREATE TABLE sessions (
   agent                TEXT NOT NULL CHECK (agent IN ('claude','codex','opencode','pi')),
   title                TEXT NOT NULL DEFAULT '',
   acp_session_id       TEXT,
-  status               TEXT NOT NULL CHECK (status IN ('starting','idle','running','closed','broken')),
+  status               TEXT NOT NULL CHECK (status IN ('starting','idle','running','closed')),
   mode_id              TEXT,
   config_json          TEXT NOT NULL DEFAULT '{}',  -- {configId: value} chosen by the user
   modes_json           TEXT NOT NULL DEFAULT '[]',  -- as reported by the agent
@@ -212,7 +214,8 @@ CREATE TABLE turns (
   reverted       INTEGER NOT NULL DEFAULT 0,
   queued_at      INTEGER NOT NULL,
   started_at     INTEGER,
-  ended_at       INTEGER
+  ended_at       INTEGER,
+  usage_json     TEXT                      -- token usage the agent reported for this turn; null when none
 );
 CREATE INDEX turns_by_status ON turns(status, queue_pos);
 
@@ -280,7 +283,7 @@ CREATE TABLE review_comments (
   line_end      INTEGER,
   side          TEXT CHECK (side IN ('old','new')),
   body          TEXT NOT NULL,
-  status        TEXT NOT NULL CHECK (status IN ('draft','sent','resolved')),
+  status        TEXT NOT NULL CHECK (status IN ('draft','sent')),
   sent_turn_id  TEXT,
   created_at    INTEGER NOT NULL
 );
@@ -325,6 +328,13 @@ CREATE TABLE attachments (
   r2_key          TEXT NOT NULL,
   container_path  TEXT,                     -- set once copied into the container
   created_at      INTEGER NOT NULL
+);
+
+-- One-time preview entry codes (05, Preview access). A row is deleted when used or after 60 s.
+CREATE TABLE preview_codes (
+  code_hash   TEXT PRIMARY KEY,        -- SHA-256 of the code, hex
+  port        INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL
 );
 
 -- Newest 10,000 rows only.
@@ -500,7 +510,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, token)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`), `logEgress(row)`, `pushCodexAuth(content, version)`.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
 
 **Projects and GitHub**
 
@@ -533,7 +543,8 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createWorkspace` | `{projectId, source, agent?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
+| `createWorkspace` | `{projectId, source, agent?, model?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
+| `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; cached for 15 minutes and invalidated by credentials or image changes | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
 | `renameWorkspace` | `{workspaceId, title}` | `{}` | — |
@@ -544,9 +555,11 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `archiveWorkspace` | `{workspaceId}` | `{}` | `WORKSPACE_BUSY` |
 | `restoreWorkspace` | `{workspaceId}` | `{}` | `BRANCH_IN_USE` |
 | `deleteWorkspace` | `{workspaceId}` (archived only) | `{}` | `WORKSPACE_NOT_ARCHIVED` |
-| `rotatePreviewToken` | `{workspaceId}` | `{previewToken}` | — |
+| `openPreview` | `{workspaceId, port}` | `{url}`: a one-time entry link (05, Preview access) | `NOT_FOUND` (port not detected) |
+| `rotatePreviewKey` | `{workspaceId}` | `{}`. Every preview cookie for the workspace stops working. | — |
+| `getBrowserLiveView` | `{workspaceId}` | `{url}`: a Live View URL (01, Browser Run), or null when no Browser Run session is open. `POST`, because each call mints a new secret link. MUST NOT be logged or cached. | — |
 | setBaseBranch | {workspaceId, baseBranch}; allowed only while no PR exists | {} | PR\_EXISTS, NOT\_FOUND (branch not on origin) |
-| getDiagnostics | {workspaceId} | {ops, container, logs, egress, sessions} as in 05, Observability | — |
+| getDiagnostics | {workspaceId, egressHost?, egressStatus?}; `egressHost` is text the host contains, any case; `egressStatus` is `all` (default), `blocked` (rule 0, 7 or 10), `2xx`, `3xx`, `4xx` or `5xx` | {ops, container, logs, egress, sessions} as in 05, Observability | — |
 | `setWorkspaceEnvironment` | `{workspaceId, environmentId}`; null = use the project's | `{}` | `NOT_FOUND` |
 | `resolveEnvironmentProposal` | `{workspaceId, proposalId, status: "applied" or "dismissed"}` | `{}` | `NOT_FOUND` (no pending proposal with that id) |
 
@@ -591,8 +604,8 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000; last synced tree while sleeping | `CONTAINER_NOT_READY` (no synced tree) |
-| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}`; last synced contents while sleeping | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE`, `CONTAINER_NOT_READY` (contents not cached) |
+| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000; last synced tree while sleeping | `CONTAINER_NOT_READY`, also while sleeping with no synced tree |
+| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}`; last synced contents while sleeping | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE`, `CONTAINER_NOT_READY`, also while sleeping when the contents are not cached |
 | `searchFiles` | `{workspaceId, query, regex?}` | `[{path, line, text}]`, at most 500 | — |
 | `runScript` | `{workspaceId, scriptId}` | `ScriptRun` | `NOT_FOUND` |
 | `stopScript` | `{workspaceId, runId}` | `{}` | — |
@@ -626,11 +639,12 @@ The UI loads a workspace once over its WebSocket, then applies updates. Field na
 | --- | --- |
 | `Project` | `id, installationId, repoId, owner, name, defaultBranch, settings, sortOrder, environmentId` |
 | `WorkspaceSummary` | `id, projectId, slug, title, branch, baseBranch, state, attention, defaultAgent, prNumber, prState, checksState, pinned, lastActivityAt, createdAt, archivedAt, rev` |
-| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, previewToken, ports: [{port, url}], settings, runningTurnId, queue: [turnId], imageRef, op, prTitle?, environmentId, environmentProposals` |
+| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, ports: [{port, url}], settings, browserActive, runningTurnId, queue: [turnId], imageRef, op, prTitle?, environmentId, environmentProposals` |
 | `EnvironmentProposal` | `note` (at most 2,000 chars), `egressPolicy?`, `allowlistAdd?: [pattern]`, `secrets?: [{name, hosts}]`, `injectors?: [{name, hosts, code}]`. Same limits as 01, Environments. |
 | `PendingEnvironmentProposal` | `id, createdAt, proposal: EnvironmentProposal`. `WorkspaceDetail.environmentProposals` lists the pending ones, oldest first. `WorkspaceDetail.environmentId` is the workspace override or null. |
 | `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported) |
-| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false) |
+| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false), `usage?` (`TurnUsage`; absent when the agent sent none) |
+| `TurnUsage` | `totalTokens, inputTokens, outputTokens, thoughtTokens?, cachedReadTokens?, cachedWriteTokens?`: ACP v1 `PromptResponse.usage` for one turn. Counts that are not finite and non-negative are dropped; a missing required count drops the whole value. |
 | `Item` | `id, sessionId, turnId, kind, status, content, rev, createdAt, updatedAt` |
 | `ScriptRun` | `id, kind, scriptId, command, status, exitCode, signal, startedAt, endedAt` |
 | `ReviewComment` | `id, path, lineStart, lineEnd, side, body, status, sentTurnId, createdAt` |
@@ -721,7 +735,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `environment.set` | `{summary}`: `EnvironmentSummary` = `{name, egressPolicy, egressAllowlist, secrets: [{name, hosts, set}], injectors: [{name, hosts}], blockedHosts}`. `name` is null with no environment. `blockedHosts` = distinct hosts of `egress_log` rows with rule 7 or 10 in the last 24 h, newest first, at most 50. The DO sends it after `env.set`, and at most every 5 s after a new blocked host. | `{}` | 10 s |
 | `script.start` | `{runId, kind, scriptId, command, cwd, timeoutMs}` | `{pid}` | 10 s |
 | `script.stop` | `{runId}` | `{}` | 15 s |
-| `session.start` | `{sessionId, agent, env, modeId?, model?, acpSessionId?}` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
+| `session.start` | `{sessionId, agent, env, modeId?, model?, browser, acpSessionId?}`; `browser` is `"local"` or `"run"` (01, Browser Run) | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
 | `session.prompt` | `{sessionId, turnId, content}` | `{accepted: true}`; the end comes as `turn.ended` | 30 s |
 | `session.steer` | `{sessionId, turnId, messageId, content}` | `{outcome: "injected" or "promptRequired" or "unsupported"}`; the existing prompt owns the turn lifecycle | 30 s |
 | `session.cancel` | `{sessionId, turnId}` | `{}` | 20 s |
@@ -751,7 +765,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `item.updated` | `sessionId, itemId, patch` |
 | `session.updated` | `sessionId, patch` (mode, config options, commands, usage, title) |
 | `turn.started` | `sessionId, turnId` |
-| `turn.ended` | `sessionId, turnId, stopReason, error?, interrupted?` |
+| `turn.ended` | `sessionId, turnId, stopReason, error?, interrupted?, usage?` (`TurnUsage` from the `session/prompt` response) |
 | `permission.requested` | `requestId, sessionId, turnId, itemId, title, options` |
 | `agent.exited` | `sessionId, code, signal, stderrTail` |
 | `script.output` | `runId, stream, data` |
@@ -816,6 +830,7 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `FILE_TOO_LARGE` | File over the read limit | This file is too large to show. |
 | `PATH_OUTSIDE_WORKSPACE` | Path escapes the allowed folders | That path is outside the workspace. |
 | `CHECKPOINT_NOT_FOUND` | No such checkpoint | That checkpoint no longer exists. |
+| `MODEL_REQUIRED` | An OpenCode or Pi session starts while `agent.models.<agent>` is empty | Set a default model for this agent in Settings → Project. |
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `ENVIRONMENT_EXISTS` | Another environment has that name | An environment with this name already exists. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |

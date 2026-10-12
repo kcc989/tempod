@@ -3,6 +3,7 @@ import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlit
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { CloseCode, type HubServerMessage, type WorkspaceSummary } from "@tempo/protocol";
+import { json } from "../db/json.ts";
 import { summaries, userHubSchema } from "../db/user-hub-do.ts";
 import { USER_HUB_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
 import { workspaces } from "../db/d1.ts";
@@ -50,13 +51,11 @@ export class UserHubDO extends DurableObject<Env> {
   async publish(summary: WorkspaceSummary): Promise<void> {
     const prev = this.db.select().from(summaries).where(eq(summaries.workspaceId, summary.id)).get();
     if (prev && prev.rev >= summary.rev) return;
+    const summaryJson = json.summary.write(summary);
     this.db
       .insert(summaries)
-      .values({ workspaceId: summary.id, summaryJson: JSON.stringify(summary), rev: summary.rev })
-      .onConflictDoUpdate({
-        target: summaries.workspaceId,
-        set: { summaryJson: JSON.stringify(summary), rev: summary.rev },
-      })
+      .values({ workspaceId: summary.id, summaryJson, rev: summary.rev })
+      .onConflictDoUpdate({ target: summaries.workspaceId, set: { summaryJson, rev: summary.rev } })
       .run();
     this.broadcast({ type: "workspace", summary });
   }
@@ -71,7 +70,10 @@ export class UserHubDO extends DurableObject<Env> {
       .select()
       .from(summaries)
       .all()
-      .map((r) => JSON.parse(r.summaryJson) as WorkspaceSummary);
+      .flatMap((r) => {
+        const s = json.summary.read(r.summaryJson, null);
+        return s ? [s] : [];
+      });
   }
 
   /** If the table is empty, loads it once from D1. Sockets that open meanwhile wait for the same load. */
@@ -96,10 +98,12 @@ export class UserHubDO extends DurableObject<Env> {
       .all();
     for (const r of list) {
       const s = summaryFromD1Row(r);
+      const summaryJson = json.summary.tryWrite(s);
+      if (summaryJson === null) continue;
       // A summary published during the load is newer than D1's copy.
       this.db
         .insert(summaries)
-        .values({ workspaceId: s.id, summaryJson: JSON.stringify(s), rev: s.rev })
+        .values({ workspaceId: s.id, summaryJson, rev: s.rev })
         .onConflictDoNothing()
         .run();
     }

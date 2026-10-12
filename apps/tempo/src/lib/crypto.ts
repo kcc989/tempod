@@ -70,3 +70,18 @@ export const sha256Hex = async (data: string | Uint8Array<ArrayBuffer>): Promise
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 };
+
+export const bytesToBase64Url = (bytes: Uint8Array): string =>
+  bytesToBase64(bytes).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+export const base64UrlToBytes = (b64url: string): Uint8Array<ArrayBuffer> =>
+  base64ToBytes(b64url.replace(/-/g, "+").replace(/_/g, "/"));
+
+/** `n` random bytes from crypto.getRandomValues, base64url without padding. */
+export const randomBase64Url = (n: number): string =>
+  bytesToBase64Url(crypto.getRandomValues(new Uint8Array(n)));
+
+export const hmacSha256Base64Url = async (key: Uint8Array<ArrayBuffer>, data: string): Promise<string> => {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return bytesToBase64Url(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(data))));
+};

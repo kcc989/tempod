@@ -29,6 +29,13 @@ const PROPOSAL = {
 } as const;
 
 export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+  AgentModelOptions: [
+    {
+      agent: "claude",
+      currentValue: "reported-model",
+      options: [{ value: "reported-model", name: "Reported model" }],
+    },
+  ],
   ErrorBody: [
     { code: "NOT_FOUND", message: "Not found." },
     {
@@ -125,6 +132,9 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       endedAt: null,
     }),
     w.turn(4, { status: "failed", stopReason: null, errorCode: "AGENT_CRASHED", reverted: true }),
+    w.turn(5, {
+      usage: { totalTokens: 15300, inputTokens: 12000, outputTokens: 3300, cachedReadTokens: 9000 },
+    }),
   ],
   UserMessageContent: [w.userMessageContent],
   AgentMessageContent: [
@@ -224,6 +234,10 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     },
   ],
   PendingEnvironmentProposal: [{ id: uid(903), createdAt: 1_790_000_200_000, proposal: PROPOSAL }],
+  AppSetupStatus: [
+    { configured: false, installUrl: null },
+    { configured: true, installUrl: "https://github.com/apps/tempo-example/installations/new" },
+  ],
   ApiMeta: [
     { protocol: 1, serverVersion: "0.1.0", minMacClient: "0.1.0", latestMacClient: null },
     { protocol: 1, serverVersion: "0.2.0", minMacClient: "0.1.0", latestMacClient: "0.2.1" },
@@ -331,6 +345,7 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
       projectId: PROJECT_ID,
       source: { kind: "pr", number: 42 },
       agent: "codex",
+      model: "reported-model",
       prompt: { text: "Fix the flaky test" },
     },
   ],
@@ -345,7 +360,9 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   archiveWorkspace: [ws],
   restoreWorkspace: [ws],
   deleteWorkspace: [ws],
-  rotatePreviewToken: [ws],
+  openPreview: [{ ...ws, port: 3000 }],
+  rotatePreviewKey: [ws],
+  getBrowserLiveView: [ws],
   setBaseBranch: [{ ...ws, baseBranch: "develop" }],
   getDiagnostics: [ws],
   createSession: [
@@ -408,6 +425,7 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   continueAfterSetupFailure: [ws],
   listTerminals: [ws],
   listScriptRuns: [ws],
+  listModels: [{}],
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
   setCodexAuth: [{ authJson: '{"tokens":{"note":"fixture"}}' }],
@@ -478,6 +496,14 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   SearchFilesItem: [{ path: "src/theme/toggle.tsx", line: 3, text: "export const useTheme = () => {" }],
   ListTerminalsItem: [{ terminalId: "t1" }, { terminalId: "t2" }],
-  RotatePreviewTokenOut: [{ previewToken: "q8w7e5r1k3j9x2m4" }],
+  OpenPreviewOut: [
+    {
+      url: `https://3000-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
+    },
+  ],
   ListProjectSecretNamesOut: [{ names: ["DATABASE_URL", "STRIPE_KEY"] }],
+  GetBrowserLiveViewOut: [
+    { url: "https://live.browser.run/ui/view?wss=live.browser.run/api/devtools/browser/s1/page/p1?jwt=x" },
+    { url: null },
+  ],
 };

@@ -10,6 +10,7 @@ import {
   type Injector,
 } from "@tempo/protocol";
 import { environments, projects, workspaces, type EnvironmentRow } from "../../db/d1.ts";
+import { json } from "../../db/json.ts";
 import {
   environmentSecretKey,
   environmentToWire,
@@ -130,10 +131,10 @@ export const updateEnvironment = async (
     name: input.name ?? row.name,
     egressPolicy: input.egressPolicy ?? row.egressPolicy,
     egressAllowlistJson: input.egressAllowlist
-      ? JSON.stringify(input.egressAllowlist)
+      ? json.egressAllowlist.write(input.egressAllowlist)
       : row.egressAllowlistJson,
-    secretsJson: input.secrets ? JSON.stringify(input.secrets) : row.secretsJson,
-    injectorsJson: injectors ? JSON.stringify(injectors) : row.injectorsJson,
+    secretsJson: input.secrets ? json.environmentSecrets.write(input.secrets) : row.secretsJson,
+    injectorsJson: injectors ? json.environmentInjectors.write(injectors) : row.injectorsJson,
     updatedAt: now,
   };
   await d1(c.env)
@@ -184,7 +185,10 @@ export const setEnvironmentSecret = async (
     if (current.secrets.length >= ENVIRONMENT_LIMITS.secretsMax) throw invalid("too many secrets");
     await d1(c.env)
       .update(environments)
-      .set({ secretsJson: JSON.stringify([...current.secrets, { name, hosts: [] }]), updatedAt: Date.now() })
+      .set({
+        secretsJson: json.environmentSecrets.write([...current.secrets, { name, hosts: [] }]),
+        updatedAt: Date.now(),
+      })
       .where(eq(environments.id, row.id))
       .run();
   }
@@ -202,7 +206,7 @@ export const deleteEnvironmentSecret = async (
   await d1(c.env)
     .update(environments)
     .set({
-      secretsJson: JSON.stringify(current.secrets.filter((s) => s.name !== name)),
+      secretsJson: json.environmentSecrets.write(current.secrets.filter((s) => s.name !== name)),
       updatedAt: Date.now(),
     })
     .where(eq(environments.id, row.id))

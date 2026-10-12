@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EgressStatusFilter",
+  "type": "string",
+  "enum": ["all", "blocked", "2xx", "3xx", "4xx", "5xx"]
+}
