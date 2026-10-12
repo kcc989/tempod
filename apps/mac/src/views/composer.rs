@@ -19,7 +19,8 @@ use gpui_kit::component::v_flex;
 use gpui_kit::component::{Disableable as _, h_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, EventEmitter, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    IntoElement, ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, Window, div,
 };
 use tempo_protocol as p;
 
@@ -652,7 +653,12 @@ impl Render for Composer {
             }))
             .children((self.review_count > 0).then(|| {
                 Button::new("review-context")
-                    .label(format!("{} review comments · Remove", self.review_count))
+                    .label(composer_model::review_chip_label(self.review_count))
+                    .tooltip("Remove review comments")
+                    .accessibility_label(format!(
+                        "{}. Remove",
+                        composer_model::review_chip_label(self.review_count)
+                    ))
                     .disabled(self.sending)
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::ClearReview)))
             }))
@@ -681,10 +687,16 @@ impl Render for Composer {
                     })),
             )
             .children(self.usage.map(|(used, size)| {
-                div().text_sm().child(format!(
-                    "◔ {used:.0} / {size:.0} tokens · {:.0}% context",
+                let label = format!(
+                    "{used:.0} / {size:.0} tokens · {:.0}% context",
                     (used / size).min(1.) * 100.
-                ))
+                );
+                div()
+                    .id("context-usage")
+                    .role(Role::Status)
+                    .aria_label(label.clone())
+                    .text_sm()
+                    .child(format!("◔ {label}"))
             }))
             .child(field)
             .child(

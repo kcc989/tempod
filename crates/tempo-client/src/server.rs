@@ -10,7 +10,7 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, Header
 use reqwest::{RequestBuilder, Response, Url};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use tempo_protocol::{ApiMeta, ErrorBody, Function, PROTOCOL_VERSION};
+use tempo_protocol::{ApiMeta, ErrorBody, ErrorCode, Function, PROTOCOL_VERSION};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
@@ -106,6 +106,23 @@ impl fmt::Debug for DeviceAuthorization {
 pub enum TokenStatus {
     Valid,
     Revoked,
+}
+
+/// An attachment as the attachment route serves it (02, Attachments).
+#[derive(Clone, PartialEq, Eq)]
+pub struct AttachmentFile {
+    /// The `Content-Type` without parameters, lowercase.
+    pub mime: String,
+    pub bytes: Vec<u8>,
+}
+
+impl fmt::Debug for AttachmentFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AttachmentFile")
+            .field("mime", &self.mime)
+            .field("len", &self.bytes.len())
+            .finish()
+    }
 }
 
 #[derive(Deserialize)]
@@ -506,6 +523,63 @@ impl Client {
         })
     }
 
+    /// `GET /api/workspaces/<workspaceId>/attachments/<attachmentId>` (02, Attachments): the original
+    /// bytes and their served type, at most 10 MiB. A 404 is `NOT_FOUND`.
+    pub fn get_attachment(
+        &self,
+        workspace_id: &str,
+        attachment_id: &str,
+    ) -> impl Future<Output = Result<AttachmentFile, ApiError>> + Send + 'static {
+        let request = with_bearer(
+            self.server.http().get(self.server.url(&[
+                "api",
+                "workspaces",
+                workspace_id,
+                "attachments",
+                attachment_id,
+            ])),
+            &self.token,
+        )
+        .timeout(Duration::from_secs(120));
+        self.send(async move {
+            let mut response = request
+                .send()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?;
+            let status = response.status().as_u16();
+            if status != 200 {
+                return Err(read_error(response, status).await);
+            }
+            if let Some(size) = response
+                .content_length()
+                .filter(|size| *size > MAX_ATTACHMENT_BYTES)
+            {
+                return Err(ApiError::TooLarge { size });
+            }
+            let mime = response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.split(';').next())
+                .map(|v| v.trim().to_ascii_lowercase())
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| "application/octet-stream".into());
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?
+            {
+                let size = bytes.len() as u64 + chunk.len() as u64;
+                if size > MAX_ATTACHMENT_BYTES {
+                    return Err(ApiError::TooLarge { size });
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            Ok(AttachmentFile { mime, bytes })
+        })
+    }
+
     pub fn download_mac(
         &self,
         version: &str,
@@ -652,6 +726,29 @@ async fn read_api<T: DeserializeOwned>(response: Response) -> Result<T, ApiError
     match serde_json::from_slice::<ErrorBody>(&bytes) {
         Ok(error) => Err(ApiError::Server { status, error }),
         Err(_) => Err(ApiError::Http { status }),
+    }
+}
+
+/// The error of a non-200 answer whose body is not JSON output. Reads at most 64 KiB of it.
+async fn read_error(mut response: Response, status: u16) -> ApiError {
+    let mut body = Vec::new();
+    while let Ok(Some(chunk)) = response.chunk().await {
+        if body.len() + chunk.len() > 64 * 1024 {
+            break;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    match serde_json::from_slice::<ErrorBody>(&body) {
+        Ok(error) => ApiError::Server { status, error },
+        Err(_) if status == 404 => ApiError::Server {
+            status,
+            error: ErrorBody {
+                code: ErrorCode::NotFound,
+                message: "Not found.".into(),
+                detail: None,
+            },
+        },
+        Err(_) => ApiError::Http { status },
     }
 }
 
