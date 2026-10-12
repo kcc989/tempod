@@ -8,6 +8,7 @@ pub enum AuthState {
         error: Option<String>,
     },
     Connecting,
+    ClearingSession,
     AwaitingApproval {
         user_code: String,
         verification_uri_complete: String,
@@ -35,6 +36,27 @@ impl Session {
         self.server.sign_out(&self.token)
     }
 
+    pub fn validate(
+        &self,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<tempo_client::TokenStatus, SignInError>> + Send + 'static>,
+    > {
+        Box::pin(self.server.get_session(&self.token))
+    }
+    pub fn meta(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = Result<tempo_protocol::ApiMeta, tempo_client::ApiError>>
+                + Send
+                + 'static,
+        >,
+    > {
+        Box::pin(self.server.meta())
+    }
+    pub fn host(&self) -> &str {
+        self.server.host()
+    }
     pub fn forget(&self, tokens: &dyn TokenStore) {
         self.client.close_channels();
         tokens.delete(self.server.host());

@@ -15,24 +15,6 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
-      name: "desktop-firefox",
-      use: {
-        ...devices["Desktop Firefox"],
-        viewport: { width: 1440, height: 900 },
-        launchOptions:
-          process.env["TEMPO_WEB_NO_SANDBOX"] === "1"
-            ? {
-                firefoxUserPrefs: {
-                  "security.sandbox.content.level": 0,
-                  "security.sandbox.socket.process.level": 0,
-                  "media.cubeb.sandbox": false,
-                },
-              }
-            : {},
-      },
-    },
-    { name: "desktop-webkit", use: { ...devices["Desktop Safari"], viewport: { width: 1440, height: 900 } } },
-    {
       name: "desktop-dark",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, colorScheme: "dark" },
     },
