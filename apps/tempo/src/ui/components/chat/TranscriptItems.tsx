@@ -280,7 +280,7 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
   const mono = toolKind === "execute";
   const hasBody = content.length > 0 || rawInput !== undefined;
   return (
-    <div className="rounded-md border">
+    <div className="min-w-0">
       <button
         type="button"
         aria-expanded={hasBody ? open : undefined}
@@ -320,7 +320,7 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
         </div>
       )}
       {open && hasBody && (
-        <div className="flex flex-col gap-2 border-t p-2">
+        <div className="flex min-w-0 flex-col gap-2 pt-1 pr-2 pb-2 pl-7.5">
           {content.map((c, i) => {
             const view = toolContentView(c);
             if (view.kind === "diff") {
@@ -341,7 +341,16 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
                 </p>
               );
             }
-            return <BlockViewer key={i} workspaceId={ctx.workspaceId} block={view.block} monospace={mono} />;
+            return (
+              <BlockViewer
+                key={i}
+                workspaceId={ctx.workspaceId}
+                block={view.block}
+                monospace={mono}
+                markdown
+                streaming={item.status === "streaming" || item.status === "in_progress"}
+              />
+            );
           })}
           {content.length === 0 && rawInput !== undefined && (
             <pre className="max-h-60 overflow-auto rounded-md bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">

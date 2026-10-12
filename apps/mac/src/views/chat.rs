@@ -6,7 +6,7 @@ use super::chat_model::RowContent;
 use super::tokens::{Token, color};
 use crate::image_policy::LocalImageCache;
 use crate::links::{self, LinkTarget};
-use crate::markdown::escape_raw_html;
+use crate::markdown::{escape_raw_html, tool_text};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
@@ -288,10 +288,15 @@ fn render_native_row(
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
                         let text = block
                             .0
+                            .get("content")
+                            .unwrap_or(&block.0)
                             .get("text")
                             .and_then(serde_json::Value::as_str)
                             .unwrap_or("");
-                        markdown(format!("{}:block:{index}", id).into(), text)
+                        markdown(
+                            format!("{}:block:{index}", id).into(),
+                            &tool_text(text, c.tool_kind.as_deref() == Some("execute")),
+                        )
                     });
                     let details =
                         v_flex()
