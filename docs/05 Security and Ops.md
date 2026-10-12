@@ -45,7 +45,7 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 | --- | --- | --- |
 | `TEMPO_ENCRYPTION_KEY` | Worker secret | Deploy (32 random bytes, base64) |
 | `BETTER_AUTH_SECRET` | Worker secret | Deploy (at least 32 random bytes) |
-| `TEMPO_SETUP_TOKEN` | Worker secret | Deploy; printed once for the setup link |
+| `TEMPO_SETUP_TOKEN` | Worker secret | Deploy; saved privately for the setup link |
 | GitHub App id, slug, private key, client id, client secret | CredentialDO named `system`, keys `github_app.id`, `github_app.slug`, `github_app.private_key`, `github_app.client_id`, `github_app.client_secret` | The manifest flow (Deployment, below) |
 | Agent logins, API keys, project secrets | The owner's CredentialDO (02) | The owner, in Settings |
 
@@ -107,7 +107,7 @@ One deploy command builds the image, deploys the Worker and runs migrations. A o
 | `DATA` | R2 binding | Bucket `tempo-data` |
 | `WORKSPACE`, `USER_HUB`, `CREDENTIALS` | DO bindings | As in 01 |
 
-**Deploy.** `bun run deploy` first verifies Cloudflare API access and the existing Alchemy state-store health endpoint, then runs Alchemy v2. An unreachable existing store must stop deployment before bootstrap; a network error must never be interpreted as absent state. When the store exists, the wrapper disables automatic bootstrap/upgrade approval (`--yes`) and runs without prompts. Existing state-store auth/encryption secrets and the Tempo secrets must be preserved. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and print `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>`.
+**Deploy.** `bun run deploy` first verifies Cloudflare API access and the dedicated Tempo state-store health endpoint, then runs Alchemy v2. An unreachable existing store must stop deployment before bootstrap; a network error must never be interpreted as absent state. When the store exists, the wrapper sets `TEMPO_STATE_BOOTSTRAP_ALLOWED=0` and runs without prompts. The SDK patch then refuses automatic state-store bootstrap/upgrade even when `--yes` approves the app resource plan. Existing state-store auth/encryption secrets and the Tempo secrets must be preserved. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and save `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>` privately in mode-0600 `.alchemy/tempo-setup-link.txt`. The pinned SDK patch isolates Worker/DO namespace, auth/encryption secret names, bootstrap stack and credential cache identity (deployment guide). Stage `production` and profile `tempo` are fixed by the wrapper. Bootstrap and generated Tempo secrets persist in encrypted remote state; local files are caches. The unrelated account-wide `alchemy-state-store` and its secrets MUST NOT be touched or reused.
 
 **GitHub App setup** (manifest flow)
 

@@ -14,6 +14,8 @@ const env = (key: string): string => {
 
 const root = path.resolve(import.meta.dirname, "..");
 const app = path.join(root, "apps/tempo");
+process.env.XDG_CONFIG_HOME = path.join(root, ".alchemy", "xdg");
+fs.mkdirSync(process.env.XDG_CONFIG_HOME, { recursive: true, mode: 0o700 });
 const versions = JSON.parse(fs.readFileSync(path.join(root, "container/versions.json"), "utf8")) as {
   base_image: string;
   base_image_digest: string | null;
@@ -110,6 +112,9 @@ try {
 } finally {
   fs.rmSync(secretsDir, { recursive: true, force: true });
 }
-console.log(
-  `Open https://${env("APP_HOST")}/setup/github?token=${env("TEMPO_SETUP_TOKEN")} to create the GitHub App.`,
-);
+const setupLink = path.join(root, ".alchemy", "tempo-setup-link.txt");
+fs.mkdirSync(path.dirname(setupLink), { recursive: true, mode: 0o700 });
+fs.writeFileSync(setupLink, `https://${env("APP_HOST")}/setup/github?token=${env("TEMPO_SETUP_TOKEN")}\n`, {
+  mode: 0o600,
+});
+console.log("Private setup link saved to .alchemy/tempo-setup-link.txt; open it locally. Do not publish it.");

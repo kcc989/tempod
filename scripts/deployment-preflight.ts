@@ -20,15 +20,15 @@ export const preflightDeployment = async (
     return body.result;
   };
   const scripts = (await api("workers/scripts")) as Array<{ id: string }>;
-  if (!scripts.some((script) => script.id === "alchemy-state-store")) return false;
+  if (!scripts.some((script) => script.id === "tempo-state-store")) return false;
   if (pendingBootstrap)
     throw new Error(
-      "An existing Alchemy state store has an unfinished local bootstrap. Preserve its files and recover the original state before resuming; do not replay generated secrets.",
+      "An existing Alchemy state store has an unfinished local bootstrap. Preserve its files and verify and finish the dedicated Tempo bootstrap before resuming; do not replay generated secrets.",
     );
   const { subdomain } = (await api("workers/subdomain")) as { subdomain?: string };
   if (!subdomain)
     throw new Error("Existing Alchemy state store has no workers.dev subdomain. Stop before bootstrap.");
-  const host = `alchemy-state-store.${subdomain}.workers.dev`;
+  const host = `tempo-state-store.${subdomain}.workers.dev`;
   try {
     const response = await request(`https://${host}/version`, { signal: AbortSignal.timeout(15_000) });
     if (!response.ok) throw new Error("unavailable");

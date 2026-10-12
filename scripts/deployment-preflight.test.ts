@@ -9,7 +9,7 @@ describe("deployment preflight", () => {
     const paths: string[] = [];
     const fake = async (url: string | URL | Request) => {
       paths.push(String(url));
-      if (String(url).endsWith("workers/scripts")) return api([{ id: "alchemy-state-store" }]);
+      if (String(url).endsWith("workers/scripts")) return api([{ id: "tempo-state-store" }]);
       if (String(url).endsWith("workers/subdomain")) return api({ subdomain: "account" });
       throw new Error("CONNECT 403");
     };
@@ -22,7 +22,7 @@ describe("deployment preflight", () => {
       preflightDeployment(env, async () => new Response("denied", { status: 403 })),
     ).rejects.toThrow("Cloudflare preflight workers/scripts failed (403)");
     const fake = async (url: string | URL | Request) => {
-      if (String(url).endsWith("workers/scripts")) return api([{ id: "alchemy-state-store" }]);
+      if (String(url).endsWith("workers/scripts")) return api([{ id: "tempo-state-store" }]);
       if (String(url).endsWith("workers/subdomain")) return api({ subdomain: "account" });
       return new Response("unavailable", { status: 500 });
     };
@@ -30,18 +30,28 @@ describe("deployment preflight", () => {
   });
   it("refuses to replay an unfinished bootstrap over an existing store", async () => {
     await expect(
-      preflightDeployment(env, async () => api([{ id: "alchemy-state-store" }]), true),
+      preflightDeployment(env, async () => api([{ id: "tempo-state-store" }]), true),
     ).rejects.toThrow("do not replay generated secrets");
   });
   it("permits a reachable existing store and a confirmed first deployment", async () => {
     for (const exists of [true, false]) {
       const fake = async (url: string | URL | Request) => {
-        if (String(url).endsWith("workers/scripts"))
-          return api(exists ? [{ id: "alchemy-state-store" }] : []);
+        if (String(url).endsWith("workers/scripts")) return api(exists ? [{ id: "tempo-state-store" }] : []);
         if (String(url).endsWith("workers/subdomain")) return api({ subdomain: "account" });
         return Response.json({ version: "2" });
       };
       expect(await preflightDeployment(env, fake)).toBe(exists);
     }
   });
+});
+
+it("ignores the unrelated account-wide store", async () => {
+  const paths: string[] = [];
+  expect(
+    await preflightDeployment(env, async (url) => {
+      paths.push(String(url));
+      return api([{ id: "alchemy-state-store" }]);
+    }),
+  ).toBe(false);
+  expect(paths).toHaveLength(1);
 });
