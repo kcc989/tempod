@@ -2764,7 +2764,7 @@ describe.concurrent("queue runner scheduling", () => {
 
   it(
     "a turn deferred while the tempod socket is down starts once tempod reconnects",
-    async ({ expect }) => {
+    async ({ expect, onTestFinished }) => {
       // 03 Queue runner: "It runs after any change to state, turns, sessions or setup_status"; tempod coming back is
       // what the deferred turn waited for. 03 Failure handling: the socket closes, the DO reconnects.
       const ctx = await readyWorkspace();
@@ -2774,6 +2774,11 @@ describe.concurrent("queue runner scheduling", () => {
         3000,
         "session idle",
       );
+      let reconnect!: ReturnType<FakeTempod["holdConnect"]>;
+      await runInDurableObject(ctx.stub, () => {
+        reconnect = ctx.tempod.holdConnect();
+      });
+      onTestFinished(() => runInDurableObject(ctx.stub, reconnect.release));
       await closeTempod(ctx);
       await waitFor(
         async () =>
@@ -2782,9 +2787,10 @@ describe.concurrent("queue runner scheduling", () => {
         "socket closed",
       );
       const turn = await prompt(ctx, session.id, "While away");
-      await settle(100);
+      await runInDurableObject(ctx.stub, () => reconnect.entered);
       expect((await turnRow(ctx.stub, turn))!.status).toBe("queued");
-      // The reconnect is scheduled 1 s after the close.
+      expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(0);
+      await runInDurableObject(ctx.stub, reconnect.release);
       await waitPrompt(ctx, turn);
       expect(ctx.tempod.hellos).toHaveLength(2);
       expect((await wsRow(ctx.stub)).state).toBe("working");
