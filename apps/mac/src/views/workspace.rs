@@ -3116,7 +3116,31 @@ impl Render for WorkspaceView {
                             })),
                     )
                     .child(new_chat)
-                    .child(closed_menu),
+                    .child(closed_menu)
+                    .child(
+                        Button::new("create-pr-guide")
+                            .label("Create or update guide")
+                            .disabled(archived || self.active.is_none())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if let Some(id) = this.active.clone() {
+                                    this.send(
+                                        &id,
+                                        include_str!("../../../../packages/protocol/pr-guide-prompt.txt"),
+                                        window,
+                                        cx,
+                                    );
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new("open-pr-guide")
+                            .label("Open guide")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let id = &this.store.read(cx).workspace_id;
+                                let url = format!("{}/w/{id}?guide=true", this.client.server().origin());
+                                cx.open_url(&url);
+                            })),
+                    ),
             )
             .child(div().flex_1().min_h_0().child(content))
             .into_any_element()

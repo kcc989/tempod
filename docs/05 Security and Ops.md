@@ -29,6 +29,7 @@ The main threat is code or text inside a workspace (a hostile dependency, a pois
 - MUST NOT enable raw HTML in Markdown (no `rehype-raw`).
 - MUST NOT load remote images in agent Markdown. Render them as links. Images from ACP `image` content blocks are fine; they are inline data.
 - Links in the transcript open with `rel="noopener noreferrer"`.
+- Guided PR HTML artifacts are an explicit isolated preview, never raw HTML inside Markdown or the app document. Load repository content through the authenticated `readFile` function. An artifact iframe uses only `sandbox="allow-scripts"` (no same-origin, popups, forms, downloads or top navigation), `referrerpolicy="no-referrer"`, and a CSP prepended before artifact content: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`. Artifacts must use inline CSS/JavaScript and data media; remote dependencies are blocked. Load them only after the user opens them. The Mac app opens guides in the authenticated web client instead of executing HTML natively.
 - MUST NOT render SVG inline, in `<object>` or in an `<iframe>` on `APP_HOST`. SVG files, SVG artifacts and Mermaid output render only through `<img>`.
 - MUST NOT serve artifact HTML or PDFs from `APP_HOST`. The artifact route sends them only as downloads (02).
 

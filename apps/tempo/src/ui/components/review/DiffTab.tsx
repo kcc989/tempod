@@ -17,7 +17,7 @@ import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
 import { agentLabel } from "~/ui/lib/agents";
 import { isEditableTarget } from "~/ui/lib/shortcuts";
-import { insertIntoComposer, openDiff, targetChatSession } from "~/ui/state/workspace-ui";
+import { insertIntoComposer, openDiff, openGuide, targetChatSession } from "~/ui/state/workspace-ui";
 import { changeRows, GROUP_BY_FOLDER_KEY, isBoolean, totals } from "./changes-model";
 import { ScopeToggle } from "./ChangesView";
 import { DiffFile } from "./DiffFile";
@@ -187,6 +187,9 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-2 py-1.5">
         <ScopeToggle workspaceId={workspaceId} changes={changes} />
+        <Button size="sm" variant="outline" onClick={() => openGuide(workspaceId)}>
+          Guide
+        </Button>
         {sum.files > 0 && (
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             {sum.files === 1 ? "1 file" : `${sum.files} files`}
@@ -236,7 +239,7 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
 }
 
 /** `Send <n> comments to <agent>`: the drafts go to the composer as one chip. */
-function SendComments({
+export function SendComments({
   workspaceId,
   drafts,
 }: {
@@ -263,7 +266,13 @@ function SendComments({
   );
 }
 
-function DraftsMenu({ workspaceId, drafts }: { workspaceId: string; drafts: ReadonlyArray<ReviewComment> }) {
+export function DraftsMenu({
+  workspaceId,
+  drafts,
+}: {
+  workspaceId: string;
+  drafts: ReadonlyArray<ReviewComment>;
+}) {
   const [open, setOpen] = useState(false);
   const remove = useDeleteComment();
   if (drafts.length === 0) return null;
