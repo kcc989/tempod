@@ -422,7 +422,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     <div className="shrink-0">
       {loginText && <LoginBanner text={loginText} />}
       <div
-        className={cn("relative border-t px-3 pt-2 pb-2", dragging && "bg-accent/40")}
+        className={cn("relative px-3 pt-2 pb-3", dragging && "bg-accent/40")}
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
@@ -438,7 +438,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           addFiles([...e.dataTransfer.files]);
         }}
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border bg-muted p-3">
           {(plan !== null || inPlan || queued.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5" aria-label="Queued messages">
               {plan !== null && <PlanPill progress={plan} />}
@@ -524,7 +524,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                 if (!e.clipboardData.getData("text/plain")) e.preventDefault();
                 addFiles(pasted);
               }}
-              className="max-h-48 min-h-9 resize-none"
+              className="max-h-48 min-h-24 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
             />
           </div>
           <div className="flex items-center gap-1">

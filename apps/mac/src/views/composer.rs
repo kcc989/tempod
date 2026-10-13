@@ -5,6 +5,7 @@ use crate::actions::{Send, StopTurn, TogglePlanMode};
 use crate::keymap::COMPOSER;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::v_flex;
 use gpui_kit::component::{Disableable as _, h_flex};
 use gpui_kit::{
@@ -18,6 +19,8 @@ pub enum ComposerEvent {
     Change(String),
     Stop,
     TogglePlanMode,
+    SelectAgent(tempo_protocol::AgentId),
+    SelectModel { config_id: String, value: String },
 }
 
 pub struct Composer {
@@ -26,6 +29,9 @@ pub struct Composer {
     pub sending: bool,
     pub working: bool,
     pub steering: bool,
+    pub model_label: String,
+    pub available_agents: Vec<tempo_protocol::AgentId>,
+    pub models: Vec<(String, String, String)>,
     _input_changed: Subscription,
 }
 
@@ -46,6 +52,9 @@ impl Composer {
             sending: false,
             working: false,
             steering: false,
+            model_label: "Model".into(),
+            models: Vec::new(),
+            available_agents: Vec::new(),
             _input_changed: changed,
         }
     }
@@ -79,6 +88,46 @@ impl Composer {
 
 impl Render for Composer {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let models = self.models.clone();
+        let agents = self.available_agents.clone();
+        let weak = cx.weak_entity();
+        let picker = Button::new("composer-model")
+            .label(self.model_label.clone())
+            .disabled(
+                self.read_only
+                    || self.sending
+                    || self.working
+                    || (models.is_empty() && agents.is_empty()),
+            )
+            .dropdown_menu(move |menu, _, _| {
+                let menu = agents.iter().fold(menu, |menu, agent| {
+                    let weak = weak.clone();
+                    let agent = *agent;
+                    menu.item(
+                        PopupMenuItem::new(format!(
+                            "{} · Default",
+                            super::chat_model::agent_label(agent)
+                        ))
+                        .on_click(move |_, _, cx| {
+                            let _ =
+                                weak.update(cx, |_, cx| cx.emit(ComposerEvent::SelectAgent(agent)));
+                        }),
+                    )
+                });
+                models.iter().fold(menu, |menu, (config_id, value, name)| {
+                    let weak = weak.clone();
+                    let config_id = config_id.clone();
+                    let value = value.clone();
+                    menu.item(PopupMenuItem::new(name.clone()).on_click(move |_, _, cx| {
+                        let _ = weak.update(cx, |_, cx| {
+                            cx.emit(ComposerEvent::SelectModel {
+                                config_id: config_id.clone(),
+                                value: value.clone(),
+                            })
+                        });
+                    }))
+                })
+            });
         v_flex()
             .key_context(COMPOSER)
             .on_action(cx.listener(Self::send))
@@ -95,6 +144,7 @@ impl Render for Composer {
             .child(
                 h_flex()
                     .gap_2()
+                    .child(picker)
                     .child(
                         Button::new("send-prompt")
                             .primary()

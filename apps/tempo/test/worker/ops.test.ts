@@ -1535,7 +1535,8 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
     ]);
     const markers = await rows(
       w.stub,
-      "SELECT session_id, content_json FROM items WHERE kind = 'revert_marker'",
+      "SELECT session_id, content_json FROM items WHERE kind = 'revert_marker' AND session_id = ?",
+      w.sessionId,
     );
     expect(markers).toHaveLength(1);
     expect(markers[0]!["session_id"]).toBe(w.sessionId);
@@ -1612,7 +1613,11 @@ describe("revert and commit_push ops", { timeout: 60_000 }, () => {
       [0, 0, 1],
     );
     const markers = (
-      await rows(w.stub, "SELECT content_json FROM items WHERE kind = 'revert_marker' ORDER BY rev")
+      await rows(
+        w.stub,
+        "SELECT content_json FROM items WHERE kind = 'revert_marker' AND session_id = ? ORDER BY rev",
+        w.sessionId,
+      )
     ).map((r) => JSON.parse(r["content_json"]));
     expect(markers).toEqual([
       { checkpointId: pointed, toTurnSeq: 3 },

@@ -92,6 +92,7 @@ export const API = {
       projectId: S,
       source: NewSource,
       agent: opt(AgentId),
+      model: opt(S),
       prompt: opt(Schema.Struct({ text: NonEmpty })),
     }),
     WorkspaceSummary,

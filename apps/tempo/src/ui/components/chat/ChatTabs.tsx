@@ -1,4 +1,3 @@
-import type { AgentId } from "@tempo/protocol";
 import { ChevronDownIcon, HistoryIcon, PlusIcon, ShieldQuestionIcon, XIcon } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CENTER_TAB_KINDS, CenterTabPart } from "~/ui/components/chat/tab-kinds";
@@ -16,14 +15,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "~/ui/components/ui/dropdown-menu";
 import { Spinner } from "~/ui/components/ui/spinner";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useCallMutation } from "~/ui/hooks/useCall";
-import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { useWorkspaceSelector, useWorkspaceStore } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUi } from "~/ui/hooks/useWorkspaceUi";
 import { call } from "~/ui/lib/api";
@@ -42,7 +39,6 @@ import {
   type OpenTab,
 } from "~/ui/state/workspace-ui";
 import {
-  agentMenu,
   chatTabIds,
   closedSessions,
   nextTabIndex,
@@ -51,6 +47,7 @@ import {
   sessionTitle,
   waitUntil,
 } from "./chat-tabs-model";
+import { NewChatComposer } from "./NewChatComposer";
 import { toggleExpandAll } from "./expand-store";
 
 export interface ChatTabsProps {
@@ -89,15 +86,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     }
   }, [ready, workspaceId, tabIds]);
 
-  const createSession = useCallMutation("createSession", {
-    onSuccess: (session) => {
-      activateWhenShown.current = session.id;
-      openTab(workspaceId, { kind: "chat", sessionId: session.id });
-    },
-  });
   const renameSession = useCallMutation("renameSession");
-
-  const newChat = (agent: AgentId) => createSession.mutate({ workspaceId, agent });
 
   const closeChat = async (sessionId: string) => {
     const key = `chat:${sessionId}`;
@@ -171,7 +160,28 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const closed = useMemo(() => closedSessions(sessions), [sessions]);
 
   const newChatMenu = (
-    <NewChatMenu open={menuOpen} onOpenChange={setMenuOpen} disabled={!ready || archived} onPick={newChat} />
+    <>
+      <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="New chat"
+          disabled={!ready || archived}
+          onClick={() => setMenuOpen(true)}
+        >
+          <PlusIcon />
+        </Button>
+      </SimpleTooltip>
+      <NewChatComposer
+        workspaceId={workspaceId}
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        onCreated={(session) => {
+          activateWhenShown.current = session.id;
+          openTab(workspaceId, { kind: "chat", sessionId: session.id });
+        }}
+      />
+    </>
   );
   const closedMenu =
     closed.length > 0 ? (
@@ -387,43 +397,6 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         {body}
       </div>
     </div>
-  );
-}
-
-function NewChatMenu({
-  open,
-  onOpenChange,
-  disabled,
-  onPick,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  disabled: boolean;
-  onPick: (agent: AgentId) => void;
-}) {
-  const creds = useCredentialStatus().data;
-  const entries = agentMenu(creds);
-  return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
-        <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="ghost" aria-label="New chat" disabled={disabled}>
-            <PlusIcon />
-          </Button>
-        </DropdownMenuTrigger>
-      </SimpleTooltip>
-      <DropdownMenuContent align="start" className="min-w-56">
-        <DropdownMenuLabel>New chat</DropdownMenuLabel>
-        {entries.map((e) => (
-          <DropdownMenuItem key={e.agent} disabled={!e.enabled} onSelect={() => onPick(e.agent)}>
-            <span className="flex-1">{e.label}</span>
-            {!e.enabled && (
-              <DropdownMenuShortcut className="tracking-normal">Add login in Settings</DropdownMenuShortcut>
-            )}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

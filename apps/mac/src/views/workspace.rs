@@ -178,6 +178,28 @@ impl WorkspaceView {
                 ),
                 ComposerEvent::Stop => this.stop(&session, cx),
                 ComposerEvent::TogglePlanMode => this.toggle_plan(&session, cx),
+                ComposerEvent::SelectAgent(agent) => {
+                    this.replace_empty_chat(&session, *agent, window, cx)
+                }
+                ComposerEvent::SelectModel { config_id, value } => {
+                    let request =
+                        this.client
+                            .call::<api::SetSessionConfig>(p::SetSessionConfigIn {
+                                workspace_id: this.store.read(cx).workspace_id.clone(),
+                                session_id: session.clone(),
+                                config_id: config_id.clone(),
+                                value: p::SetSessionConfigInValue::String(value.clone()),
+                            });
+                    cx.spawn(async move |this, cx| {
+                        if let Err(error) = request.await {
+                            let _ = this.update(cx, |this, cx| {
+                                this.error = Some(error.to_string());
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .detach();
+                }
             },
         );
         let session = session_id.to_string();
@@ -242,11 +264,59 @@ impl WorkspaceView {
                 .sessions
                 .get(id)
                 .is_some_and(|s| s.steering == Some(true));
+            let model = state.sessions.get(id).and_then(|s| {
+                s.config_options
+                    .iter()
+                    .find(|o| o.category.as_deref() == Some("model"))
+            });
+            let mut models = Vec::new();
+            if let Some(option) = model {
+                for entry in option.options.as_deref().unwrap_or(&[]) {
+                    let choices = match entry {
+                        p::ConfigOptionOptionsItem::Option(value) => std::slice::from_ref(value),
+                        p::ConfigOptionOptionsItem::Group(group) => group.options.as_slice(),
+                    };
+                    for choice in choices {
+                        models.push((option.id.clone(), choice.value.clone(), choice.name.clone()));
+                    }
+                }
+            }
+            let label = model
+                .and_then(|o| {
+                    models
+                        .iter()
+                        .find(|(_, value, _)| *value == o.current_value.to_string())
+                })
+                .map(|(_, _, name)| name.clone())
+                .unwrap_or_else(|| {
+                    state
+                        .sessions
+                        .get(id)
+                        .map(|s| format!("{} · Default", chat_model::agent_label(s.agent)))
+                        .unwrap_or_else(|| "Model".into())
+                });
+            let available_agents = if !state.turns.values().any(|turn| turn.session_id == *id) {
+                self.credentials
+                    .as_ref()
+                    .map(|credentials| {
+                        chat_model::AGENTS
+                            .iter()
+                            .copied()
+                            .filter(|agent| chat_model::has_login(*agent, credentials))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
             chat.transcript.update(cx, |t, cx| {
                 t.read_only = read_only;
                 t.sync(rows, cx);
             });
             chat.composer.update(cx, |c, cx| {
+                c.available_agents = available_agents;
+                c.models = models;
+                c.model_label = label;
                 c.read_only = read_only;
                 c.working = working;
                 c.steering = steering;
@@ -627,6 +697,96 @@ impl WorkspaceView {
         .detach();
     }
 
+    fn replace_empty_chat(
+        &mut self,
+        session_id: &str,
+        agent: p::AgentId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let state = &self.store.read(cx).state;
+        if state
+            .turns
+            .values()
+            .any(|turn| turn.session_id == session_id)
+            || state
+                .sessions
+                .get(session_id)
+                .is_none_or(|session| session.agent == agent)
+        {
+            return;
+        }
+        let Some(chat) = self.chats.get(session_id) else {
+            return;
+        };
+        if chat.composer.read(cx).sending || chat.composer.read(cx).read_only {
+            return;
+        }
+        let draft = chat.composer.read(cx).text(cx);
+        chat.composer.update(cx, |c, cx| {
+            c.sending = true;
+            cx.notify();
+        });
+        let old_id = session_id.to_string();
+        let workspace_id = self.store.read(cx).workspace_id.clone();
+        let client = self.client.clone();
+        let request = client.call::<api::CreateSession>(p::CreateSessionIn {
+            workspace_id: workspace_id.clone(),
+            agent,
+            model: None,
+            mode_id: None,
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let close_result = if result.is_ok() {
+                Some(
+                    client
+                        .call::<api::CloseSession>(p::CloseSessionIn {
+                            workspace_id,
+                            session_id: old_id.clone(),
+                        })
+                        .await,
+                )
+            } else {
+                None
+            };
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Some(chat) = this.chats.get(&old_id) {
+                    chat.composer.update(cx, |c, cx| {
+                        c.sending = false;
+                        cx.notify();
+                    });
+                }
+                match result {
+                    Ok(session) => {
+                        this.active = Some(session.id.clone());
+                        this.store.update(cx, |store, cx| {
+                            store
+                                .state
+                                .apply(p::WorkspaceServerMessage::Session(p::WsSession {
+                                    type_: p::WsSessionType::Session,
+                                    session,
+                                }));
+                            cx.notify();
+                        });
+                        this.sync(window, cx);
+                        if let Some(chat) = this.active.as_ref().and_then(|id| this.chats.get(id)) {
+                            chat.composer
+                                .update(cx, |c, cx| c.set_text(&draft, window, cx));
+                        }
+                        this.focus_composer(window, cx);
+                        if let Some(Err(error)) = close_result {
+                            this.error = Some(error.to_string());
+                        }
+                    }
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     fn create_chat(&mut self, agent: p::AgentId, window: &mut Window, cx: &mut Context<Self>) {
         let request = self.client.call::<api::CreateSession>(p::CreateSessionIn {
             workspace_id: self.store.read(cx).workspace_id.clone(),
@@ -700,30 +860,29 @@ impl Render for WorkspaceView {
                 p::WorkspaceState::Archived | p::WorkspaceState::Archiving
             )
         });
-        let credentials = self.credentials.clone();
-        let weak = cx.weak_entity();
-        let new_chat = Button::new("new-chat-menu")
+        let new_chat = Button::new("new-chat")
             .label("New chat")
-            .dropdown_menu(move |menu, _, _| {
-                chat_model::AGENTS.iter().fold(menu, |menu, agent| {
-                    let agent = *agent;
-                    let weak = weak.clone();
-                    let enabled = credentials
-                        .as_ref()
-                        .is_none_or(|c| chat_model::has_login(agent, c));
-                    menu.item(
-                        PopupMenuItem::new(if enabled {
-                            chat_model::agent_label(agent).to_string()
-                        } else {
-                            format!("{} · Add login in Settings", chat_model::agent_label(agent))
-                        })
-                        .disabled(!enabled)
-                        .on_click(move |_, window, cx| {
-                            let _ = weak.update(cx, |this, cx| this.create_chat(agent, window, cx));
-                        }),
-                    )
-                })
-            });
+            .disabled(archived)
+            .on_click(cx.listener(|this, _, window, cx| {
+                let preferred = this
+                    .store
+                    .read(cx)
+                    .state
+                    .workspace
+                    .as_ref()
+                    .map(|w| w.default_agent)
+                    .unwrap_or(p::AgentId::Claude);
+                let agent = this
+                    .credentials
+                    .as_ref()
+                    .and_then(|credentials| {
+                        std::iter::once(preferred)
+                            .chain(chat_model::AGENTS.iter().copied())
+                            .find(|a| chat_model::has_login(*a, credentials))
+                    })
+                    .unwrap_or(preferred);
+                this.create_chat(agent, window, cx);
+            }));
         let weak = cx.weak_entity();
         let closed_menu = Button::new("closed-chat-menu")
             .label("Closed chats")

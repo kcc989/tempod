@@ -46,7 +46,7 @@ const isUniqueViolation = (e: unknown, column: "branch" | "slug") => {
 /** 03, Create a workspace: checks and the D1 insert here; everything after in WorkspaceDO.init. */
 export const createWorkspace = async (
   { env, user }: HandlerCtx,
-  { projectId, source, agent, prompt }: FnInput<"createWorkspace">,
+  { projectId, source, agent, model, prompt }: FnInput<"createWorkspace">,
 ): Promise<FnOutput<"createWorkspace">> => {
   const p = await requireProject(env, user.id, projectId);
   const project = projectToWire(p);
@@ -126,6 +126,7 @@ export const createWorkspace = async (
       source: wsSource,
       defaultAgent,
       agent: defaultAgent,
+      ...(model ? { model } : {}),
       prompt: prompt ? { text: prompt.text } : null,
       author,
       createdAt: now,

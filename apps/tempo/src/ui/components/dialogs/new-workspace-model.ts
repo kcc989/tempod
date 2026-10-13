@@ -65,6 +65,7 @@ export const createInput = (
   draft: SourceDraft,
   agent: AgentId | null,
   prompt: string,
+  model = "",
 ): FnInput<"createWorkspace"> | null => {
   const source = buildSource(draft, project);
   if (!source) return null;
@@ -73,6 +74,7 @@ export const createInput = (
     projectId: project.id,
     source,
     ...(agent ? { agent } : {}),
+    ...(model.trim() ? { model: model.trim() } : {}),
     ...(text ? { prompt: { text } } : {}),
   };
 };

@@ -127,7 +127,7 @@ The server function does the checks and the D1 insert; the WorkspaceDO does ever
 **In `WorkspaceDO.init`**
 
 1. Write the `workspace` row. Make `preview_token` (16 chars from `[a-z0-9]`, from `crypto.getRandomValues`). Set `title` to the first 60 characters of the prompt, or to the slug.
-2. If there is a prompt: create a session (`starting`, agent = input agent or project default), a turn (`queued`, `seq = 1`) and its `user_message` item.
+2. Create an initial session (`starting` with a prompt, otherwise `idle`; agent = input agent or project default), with the optional selected model in its config. If there is a prompt, also create a turn (`queued`, `seq = 1`) and its `user_message` item. Without a prompt, the session stays empty until the user sends a message.
 3. Insert the `create` op. Set state `starting`. Set the alarm to now.
 4. Publish the summary to UserHubDO.
 

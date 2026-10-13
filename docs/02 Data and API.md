@@ -474,7 +474,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createWorkspace` | `{projectId, source, agent?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
+| `createWorkspace` | `{projectId, source, agent?, model?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
 | `renameWorkspace` | `{workspaceId, title}` | `{}` | — |

@@ -722,6 +722,8 @@ pub struct CreateSessionIn {
 pub struct CreateWorkspaceIn {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub agent: ::std::option::Option<AgentId>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub model: ::std::option::Option<::std::string::String>,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
