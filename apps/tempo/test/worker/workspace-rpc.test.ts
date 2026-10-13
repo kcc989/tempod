@@ -197,7 +197,13 @@ const insertD1Workspace = async (
  */
 const seedHeld = async (
   onTestFinished: TestContext["onTestFinished"],
-  opts: { prompt?: string; agent?: AgentId; model?: string; credentials?: boolean } = {},
+  opts: {
+    prompt?: string;
+    agent?: AgentId;
+    model?: string;
+    credentials?: boolean;
+    prepare?: (tempod: FakeTempod, stub: Stub) => void;
+  } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
   if (opts.credentials !== false) await seedCredentials(seeded.userId, [opts.agent ?? "claude"]);
@@ -209,6 +215,7 @@ const seedHeld = async (
   const stub = env.WORKSPACE.getByName(workspaceId);
   const tempod = new FakeTempod();
   hold(tempod, onTestFinished);
+  opts.prepare?.(tempod, stub);
   const { container } = await installFakes(stub, tempod);
   const summary = ok(await stub.init(initInput({ workspaceId, seeded, slug, branch }, opts)));
   return { workspaceId, stub, tempod, container, seeded, slug, branch, summary };
@@ -2440,7 +2447,14 @@ describe.concurrent("first prompt while setup is pending", () => {
     expect,
     onTestFinished,
   }) => {
-    const w = await seedHeld(onTestFinished);
+    let health!: ReturnType<FakeTempod["holdHealth"]>;
+    const w = await seedHeld(onTestFinished, {
+      prepare: (tempod, stub) => {
+        health = tempod.holdHealth();
+        onTestFinished(() => runInDurableObject(stub, health.release));
+      },
+    });
+    await runInDurableObject(w.stub, () => health.entered);
     const session = ok(await w.stub.createSession({ agent: "claude" }));
     expect(
       codeOf(
@@ -2455,8 +2469,27 @@ describe.concurrent("first prompt while setup is pending", () => {
     ).toBe("OK");
     expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/override" }))).toBe("OK");
-    w.tempod.healthy = true;
-    await driveToState(w.stub, "working");
+    let markWorking!: () => void;
+    const working = new Promise<void>((resolve) => {
+      markWorking = resolve;
+    });
+    await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      const original = core.setState.bind(core);
+      core.setState = (next, error) => {
+        original(next, error);
+        if (next === "working") markWorking();
+      };
+      onTestFinished(() =>
+        runInDurableObject(w.stub, () => {
+          core.setState = original;
+        }),
+      );
+    });
+    await runInDurableObject(w.stub, async () => {
+      health.release();
+      await working;
+    });
     expect((await detail(w.stub)).branch).toBe("feature/override");
     expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
     expect(w.tempod.requestsOf("repo.clone")[0].branch).toBe("feature/override");
