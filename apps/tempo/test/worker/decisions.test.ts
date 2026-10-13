@@ -1,3 +1,5 @@
+import { Files } from "@cloudflare/sandbox";
+import { seedReadyWorkspace } from "./ready-fixture.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,15 +17,7 @@ import {
 } from "@tempo/protocol";
 import { saveDefinition } from "../../src/agents/library.ts";
 import { decideHooks, decisionApi, decisionState, type MatchedHook } from "../../src/agents/decisions.ts";
-import {
-  seedProject,
-  seedCredentials,
-  seedWorkspace,
-  driveToState,
-  internals,
-  waitFor,
-  sqlRows,
-} from "./fakes.ts";
+import { internals, waitFor, sqlRows } from "./fakes.ts";
 
 const definition = Schema.decodeUnknownSync(AgentDefinition)({
   handle: "auth-reviewer",
@@ -105,17 +99,20 @@ describe("Clef decisions", () => {
 });
 
 const setup = async () => {
-  const project = await seedProject();
-  await seedCredentials(project.userId, ["claude"]);
-  const agent = await saveDefinition(env, project.userId, definition);
-  const w = await seedWorkspace(project);
-  await driveToState(w.stub, ["ready"]);
+  vi.spyOn(Files.prototype, "readFile").mockImplementation(async () => new Response("abc"));
+  const w = await seedReadyWorkspace({ credentials: ["claude"] });
+  const agent = await saveDefinition(env, w.seeded.userId, definition);
+  const session = unwrap(await w.stub.createSession({ agent: "claude" }));
+  w.tempod.on("git.checkpoint", () => ({
+    commit: "a".repeat(40),
+    tree: "b".repeat(40),
+    parent: "c".repeat(40),
+    base: "d".repeat(40),
+    bundlePath: "/checkpoint.bundle",
+    bundleBytes: 3,
+  }));
 
-  const sid = Schema.decodeUnknownSync(Schema.String)(
-    (await sqlRows(w.stub, "SELECT id FROM sessions ORDER BY sort_order"))[0]!.id,
-  );
-
-  return { ...w, project, agent, sid };
+  return { ...w, project: w.seeded, agent, sid: session.id };
 };
 
 const attach = async (w: Awaited<ReturnType<typeof setup>>, hooks: AttachmentHook[]) => {
@@ -179,6 +176,8 @@ describe("workspace decisions", { timeout: 15000 }, () => {
       events.map((e) => (e.event.type === "run.decided" ? e.event.payload.outcome : "unexpected")).sort(),
     ).toEqual(["run", "skip"]);
     expect(calls).toHaveLength(1);
+    await waitFor(() => w.tempod.requestsOf("session.prompt").length === 1);
+    expect(unwrap(await w.stub.listRuns({}))[0]?.status).toBe("running");
     await appendPush(w, "push:auth");
     expect(unwrap(await w.stub.listRuns({}))).toHaveLength(1);
     expect(calls).toHaveLength(1);
