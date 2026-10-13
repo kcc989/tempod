@@ -196,6 +196,9 @@ Documentation-only changes retain the
 required check with lint/format only; unavailable change bases run the full suite.
 Hosted acceptance and installed-agent conformance remain
 explicit gates; skipped tests do not satisfy them.
+The daemon image workflow and test image install only root tooling and the daemon's
+dependency closure with Bun workspace filters; image builds and all daemon/image
+checks remain complete.
 
 ## Definition of done
 

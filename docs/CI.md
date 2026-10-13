@@ -1,5 +1,8 @@
 # CI runtime and test value
 
+The [Linear playbook audit](CI_PLAYBOOK.md) records the fifteen recommendations,
+run-history evidence and the filtered image-install change.
+
 PRs target **under five total runner minutes**, not five minutes per parallel job.
 The single `check` job runs all local checks, builds, and browser regressions for
 code changes. Documentation-only changes keep the same required `check` job but
@@ -181,6 +184,12 @@ failure; production reconnect timing and test concurrency remain unchanged.
 Image checks run on main only when the image, daemon, shared daemon packages or
 installation/build inputs change, and remain manually dispatchable. UI-only or
 native-only merges do not rebuild the full image. Superseded image runs cancel.
+Both the image workflow and test-image dependency installation filter Bun to the
+root tooling (`tempo`) and daemon (`@tempo/tempod`). Bun includes the daemon's
+workspace dependencies (`@tempo/protocol` and `@tempo/settings`) and their external
+dependencies. The frozen lockfile, version check, compiled daemon, complete image
+build, size limit and daemon/image tests still run. PR CI installs every workspace
+because it uses the app and browser suites as well.
 
 The removed standalone `web` job is now part of `check`. If branch protection
 requires `web`, update the required check to `check` when adopting this workflow.
