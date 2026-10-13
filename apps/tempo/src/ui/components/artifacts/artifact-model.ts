@@ -1,3 +1,4 @@
+import { svgDataUrl } from "~/ui/lib/svg";
 import { artifactRoute, type Artifact, type ArtifactKind } from "@tempo/protocol";
 
 /** Pure helpers for artifacts in the web UI (04, Artifacts tab and Artifact tab). */
@@ -62,9 +63,7 @@ export const isMarkdownPath = (path: string): boolean => ["md", "markdown"].incl
 
 export const base64DataUrl = (mime: string, base64: string): string => `data:${mime};base64,${base64}`;
 
-/** SVG renders only through `<img>` (05); a data URL keeps it out of the document. */
-export const svgDataUrl = (svg: string): string =>
-  `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+export { svgDataUrl } from "~/ui/lib/svg";
 
 /** A file's bytes as an `<img>` source: SVG from text or base64, raster from base64. */
 export const imageDataUrl = (

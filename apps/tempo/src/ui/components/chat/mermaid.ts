@@ -1,4 +1,4 @@
-import { svgDataUrl } from "~/ui/components/artifacts/artifact-model";
+import { svgDataUrl } from "~/ui/lib/svg";
 
 /**
  * Mermaid diagrams (04, Design and front-end rules): mermaid 12.1.0, loaded lazily, strict security

@@ -15,7 +15,7 @@
     "lint": "oxlint --deny-warnings .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "test": "turbo run test test:worker test:ui test:components --filter=!@tempo/e2e --filter=!@tempo/conformance && bun test scripts/*.test.ts",
+    "test": "bun scripts/test.ts",
     "test:conformance": "bun run --cwd tests/conformance test",
     "test:e2e": "bun run --cwd tests/e2e test",
     "check:versions": "bun container/check-versions.ts",

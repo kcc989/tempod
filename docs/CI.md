@@ -25,7 +25,8 @@ Browser fixture builds have separate cached outputs (`test/web/dist` and
 built artifacts before previewing to avoid development-server transform costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
 to avoid loading the same dependency module graph into every workerd isolate.
 Worker, UI model and component suites have separate Turbo tasks and cache entries.
-`bun run test` runs all three; `bun run --cwd apps/tempo test:all` runs the aggregate
+`bun run test` starts the Worker task immediately and runs all other test tasks
+one at a time alongside it (at most two active test tasks); `bun run --cwd apps/tempo test:all` runs the aggregate
 Vitest configuration directly. A UI source change reuses the Worker test result.
 Worker inputs exclude UI/routes but include Worker fixtures, runtime configuration
 and server sources. UI/component inputs conservatively include all app sources
@@ -38,7 +39,9 @@ UI and component files use isolated VM threads to avoid repeated process startup
 each suite is limited to two workers. Worker event, RPC and operation cases use
 four-way concurrency with distinct users, projects and Durable Objects, and
 test-context assertions. Held daemon fakes register cleanup on their own test
-context. Groups using shared GitHub spies or a global clock remain sequential
+context. The SVG data URL encoder lives in a small shared helper so loading Mermaid does
+not pull in the protocol/Effect schema graph; Mermaid cases retain fresh module
+fixtures and their original deadlines. Groups using shared GitHub spies or a global clock remain sequential
 and form barriers between concurrent groups. DOM cases remain sequential. TypeScript
 7.0.2 provides the native checker; use two checkers per project and at most two
 concurrent typecheck tasks. The root deployment/tooling typecheck is also cached
