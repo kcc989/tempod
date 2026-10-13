@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CenterTabPart } from "../../../src/ui/components/chat/tab-kinds";
 import { LiveViewTab } from "../../../src/ui/components/review/LiveViewTab";
-import { OverflowMenu } from "../../../src/ui/components/topbar/OverflowMenu";
 import { PortLinks } from "../../../src/ui/components/topbar/PortLinks";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
 
@@ -28,8 +27,6 @@ const WS = "01jaxk3v2m9q8r7t6y5w4e3d2c";
 const BARE = `https://3000-${WS}.previews.test`;
 
 const live = (jwt: string) => `https://live.browser.test/devtools/inspector.html?wss=x&jwt=${jwt}`;
-
-const fakeTab = () => ({ opener: window, location: { href: "" }, close: vi.fn() });
 
 const deferred = <T,>() => {
   let resolve!: (v: T) => void;
@@ -227,85 +224,5 @@ describe("Live View tab (04, Browser tabs)", () => {
 
     for (const [, value] of setItem.mock.calls) expect(value).not.toContain("secret");
     expect(JSON.stringify(getWorkspaceUi(WS))).not.toContain("secret");
-  });
-});
-
-describe("Live on a phone (04, Phone width)", () => {
-  const actions = {
-    runPrimaryElsewhere: vi.fn(),
-    open: vi.fn(),
-    commit: vi.fn(),
-    createPr: vi.fn(),
-    merge: vi.fn(),
-    viewChecks: vi.fn(),
-    setPinned: vi.fn(),
-    rename: vi.fn(),
-    renameBranch: vi.fn(),
-    copyPath: vi.fn(),
-    copyBranch: vi.fn(),
-    wake: vi.fn(),
-    sleep: vi.fn(),
-    archive: vi.fn(),
-    copyLink: vi.fn(),
-    resetPreviewAccess: vi.fn(),
-    pending: { power: false, archive: false, commit: false, createPr: false, merge: false },
-  };
-
-  const show = (
-    browserActive: boolean,
-    result: () => Promise<import("@tempo/protocol").FnOutput<"getBrowserLiveView">>,
-  ) => {
-    vi.mocked(call).mockImplementation(async (name) => {
-      if (name === "listProjects") return [];
-
-      if (name === "getBrowserLiveView") return await result();
-      throw new Error(`unexpected ${name}`);
-    });
-    const d = detail({ id: WS, browserActive });
-    render(tree(createElement(OverflowMenu, { view: { w: d, d }, actions: actions, phone: true })), {
-      wrapper: environment.Provider,
-    });
-    fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "Enter" });
-  };
-
-  it("lists Live only while a Browser Run session is open", async () => {
-    show(false, async () => ({ url: null }));
-    expect(await screen.findByRole("menuitem", { name: "Diagnostics" })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: "Live" })).toBeNull();
-  });
-
-  it("opens a browser tab on the click, then sends it to the Live View link", async () => {
-    const tab = fakeTab();
-    const open = vi.spyOn(browserTabs, "open").mockReturnValue(tab);
-    const pending = deferred<{ url: string | null }>();
-    show(true, () => pending.promise);
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Live" }));
-    expect(open).toHaveBeenCalledWith("", "_blank");
-    expect(tab.opener).toBeNull();
-    expect(call).toHaveBeenCalledWith("getBrowserLiveView", { workspaceId: WS });
-    await act(async () => pending.resolve({ url: live("c") }));
-    expect(tab.location.href).toBe(live("c"));
-    expect(tab.close).not.toHaveBeenCalled();
-  });
-
-  it("closes the tab and says Browser session ended. when no session is open", async () => {
-    const tab = fakeTab();
-    vi.spyOn(browserTabs, "open").mockReturnValue(tab);
-    show(true, async () => ({ url: null }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Live" }));
-    await waitFor(() => expect(tab.close).toHaveBeenCalled());
-    expect(tab.location.href).toBe("");
-    expect(await screen.findByText("Browser session ended.")).toBeTruthy();
-  });
-
-  it("closes the tab and shows the error toast when the call fails", async () => {
-    const tab = fakeTab();
-    vi.spyOn(browserTabs, "open").mockReturnValue(tab);
-    show(true, async () => {
-      throw new TempoError("NOT_FOUND");
-    });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Live" }));
-    await waitFor(() => expect(tab.close).toHaveBeenCalled());
-    expect(toast.error).toHaveBeenCalledWith("Not found.", { id: "error:NOT_FOUND" });
   });
 });

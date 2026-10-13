@@ -1,7 +1,7 @@
 import { Match } from "effect";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeftIcon } from "lucide-react";
-import { useEffect, type CSSProperties } from "react";
+import { useEffect } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
@@ -98,6 +98,7 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
   useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
   const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
   const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned });
+  const chatStyle = { minWidth: 0, "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 2vw, 24px)" };
 
   const horizontal = useDefaultLayout({
     id: "workspace",
@@ -116,11 +117,7 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
           onLayoutChanged={horizontal.onLayoutChanged}
         >
           <ResizablePanel id="center" minSize={320}>
-            <section
-              aria-label="Chat"
-              className="flex h-full min-h-0 flex-col"
-              style={{ "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 2vw, 24px)" } as CSSProperties}
-            >
+            <section aria-label="Chat" className="flex h-full min-h-0 flex-col" style={chatStyle}>
               <WorkspaceBanners workspaceId={workspaceId} />
               <div className="min-h-0 flex-1">
                 <ChatTabs workspaceId={workspaceId} variant="desktop" />
@@ -152,6 +149,19 @@ function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
     <div className="flex h-full min-h-0 flex-col">
       <TopBar workspaceId={workspaceId} variant="phone" />
       {Match.value(phonePane).pipe(
+        Match.when("tools", () => (
+          <section aria-label="Workspace tools" className="flex min-h-0 flex-1 flex-col">
+            <div className="border-b px-2 py-1">
+              <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
+                <ChevronLeftIcon aria-hidden />
+                Back to chat
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <ToolPanel workspaceId={workspaceId} phone />
+            </div>
+          </section>
+        )),
         Match.when("changes", () => (
           <section aria-label="Changes" className="flex min-h-0 flex-1 flex-col">
             <RightPanel workspaceId={workspaceId} variant="phone" />

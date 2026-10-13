@@ -34,7 +34,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Saved conversations | Default browser | Opens the owner’s Tempo `/history` to read project-scoped saved conversations; browser sign-in may be required |
 | New workspace dialog | Same | Enter in the focused prompt creates; ⇧Enter adds a line. Blank creation works while model discovery loads. Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. Branch option rows fill the menu width, align names left, use monospace and truncate with an ellipsis while keeping full accessible names. |
 | Top bar branch editing | Same | Double-click the branch name to edit inline; Enter or blur saves and Escape cancels. Copy uses a separate icon. |
-| Chat tabs, transcript, composer, queue, Stop | Same |  |
+| Chat tabs, transcript, composer, queue, Stop | Same | Guide actions live in the Guides tool panel. |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model, reasoning level and mode pickers | Same |  |
 | Agents in New chat and New workspace, the profile-issues notice | Same | New chat hides agents and agents without a confirmed base-agent login, including while credential status loads or is unavailable. `Manage agents…` stays available and opens the Settings window on Agents |
@@ -160,7 +160,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 | Window frame | `Root`; no separate full-width Tempo title row. In windowed mode the native traffic lights and drag region sit above the sidebar; with the sidebar hidden, they share the workspace header. Fullscreen adds no frame row. The native window name remains `Tempo`. |
 | Panes | `Resizable` for sidebar, center and right side; sizes saved in `state.json`. Sidebar and right pane retain their width when a sibling closes or the window grows; the center takes the remaining width. |
 | Sidebar | `Sidebar`; rows are custom; `HoverCard`; `Menu` for the right-click menu; `Badge` for the PR; `Spinner` |
-| Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
+| Top bar | `Toolbar`; `Button` for the primary action; `Button` for Info; `Badge`; `Tooltip` |
 | Center chat tabs and right tool tabs | `Tabs` |
 | Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
 | Composer | `Textarea` (grows from 2 to 12 rows); `Select` for model, reasoning level and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
@@ -184,7 +184,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 - Read every color through `cx.theme()`. Map the tokens of 04 (`--primary`, `--destructive`, `--warning`, `--muted-foreground`) to `ThemeColor` fields once, in `src/views/tokens.rs`. No color values in views.
 - Every custom control sets an element id, an `a11y_role()` and an `.aria_label(...)`, so AccessKit can expose it.
 - Settings uses left-aligned navigation with a `Search settings` filter and a `Search workspaces` button with a `⌘K` hint for the command palette. Section icons match 04. It uses a bounded form column, grouped login cards and content-sized action buttons. Chat uses the available pane width and a compact composer toolbar.
-- The chat bar starts 12 pt from the sidebar divider, aligned with the branch header. New chat uses a plus icon with an accessible label and shortcut tooltip. It hides an empty Closed chats menu. Guide actions and the base branch picker live in More actions. Branch copy appears on header hover or keyboard focus without moving other controls. The composer shows `⌘L to focus` at the upper right, with reserved text space. Transcript rows can shrink within the available pane width.
+- The chat bar starts 12 pt from the sidebar divider, aligned with the branch header. New chat uses a plus icon with an accessible label and shortcut tooltip. It hides an empty Closed chats menu. Guide actions live in Guides; the base branch picker lives in Info. Branch copy appears on header hover or keyboard focus without moving other controls. The composer shows `⌘L to focus` at the upper right, with reserved text space. Transcript rows can shrink within the available pane width.
 - Base branch options align left, truncate long names and mark the current branch with a check icon at the right.
 - The transcript and composer share a fluid outer track capped at 820 pt, including padding, with balanced side margins. With the right side closed, padding is 2% of window width, clamped from 16 to 24 pt; with it open, padding is 16 pt. Markdown replies have a separate 600 pt reading limit, targeting about 75 characters, and share the composer text's leading edge. The composer, work rows and structured controls can use the wider outer track. Above the track limit, remaining space becomes balanced side margins. Smaller panes remain fluid.
 - Minimum window size: 900 × 600 pt. Below 1,100 pt wide, the right side collapses behind its toggle.
@@ -227,7 +227,9 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 ## Terminal, scripts and previews
 
-**Guided PRs.** `Create or update guide` in the workspace sends the same shared authoring prompt as the web UI through the active chat's normal `sendPrompt` flow. It is disabled without a chat or when archived; the composer’s read-only and sending checks also apply. `Open guide` opens `<Tempo origin>/w/<workspaceId>?guide=true` in the default browser. The chapter, diff and interactive artifact renderer is the authenticated web Guide view (04); the native client does not execute artifact HTML. This follows C7's browser policy and ships in the same phase as the web feature.
+**Workspace Info.** Match 04: the header Info button opens the tool area with live state, branch/base branch, changes, open chats, running scripts and available terminals, artifacts, and workspace controls. Preserve confirmations, error handling and inline/context-menu renaming. GitHub actions belong to Changes or an existing PR. Info is the initial tool tab.
+
+**Guided PRs.** Guides is a separate tool panel reachable from Info and the tool launcher. It previews the guide title, summary and chapters from `.tempo/pr-guide.json`, and links chapter files to native diffs. Create/update sends the shared authoring prompt through the active chat's normal `sendPrompt` flow; it is disabled without a chat or while archived, and composer read-only/sending checks still apply. Refresh reads only while running; sleeping workspaces retain the loaded preview and offer Wake. `Open guided review` opens `<Tempo origin>/w/<workspaceId>?guide=true` in the default browser for validated chapter comparisons, flows, comments and interactive artifacts. Native previews do not execute artifact HTML. This follows C7's browser policy and ships with the web change.
 
 **Terminal**
 
@@ -271,7 +273,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Dock badge.** Set `NSApp.dockTile.badgeLabel` to the number of workspaces whose attention is `needs_input`, `error` or `unread`. Clear it at 0. It is the same count as the web tab title.
 
-**URL scheme.** Register `tempo` in `Info.plist` (`CFBundleURLTypes`). `tempo://workspace/<workspaceId>` opens that workspace. Ignore any other path. The web overflow menu adds `Open in Tempo for Mac`, which opens that link.
+**URL scheme.** Register `tempo` in `Info.plist` (`CFBundleURLTypes`). `tempo://workspace/<workspaceId>` opens that workspace. Ignore any other path. The web Info panel adds `Open in Tempo for Mac`, which opens that link.
 
 **Window state.** Restore the window frame and the last open workspace on launch. This version has one main window. Settings replaces its workspace frame. Back, Esc and ⌘W return to the workspace with its chat, draft and panel state retained. Workspace shortcuts are suspended while Settings is shown; the command palette remains available.
 

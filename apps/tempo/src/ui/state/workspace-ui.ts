@@ -128,7 +128,7 @@ export interface OpenTab {
   readonly seq: number;
 }
 
-export type RightTab = "changes" | "files" | "checks" | "artifacts" | "activity";
+export type RightTab = "info" | "changes" | "files" | "checks" | "artifacts" | "activity";
 
 export type BottomTab = "setup" | "run" | "terminal";
 
@@ -172,8 +172,8 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   insertions: [],
   composerFocusSeq: 0,
   diffScope: "branch",
-  toolTabs: ["changes"],
-  activeToolKey: "changes",
+  toolTabs: ["info"],
+  activeToolKey: "info",
   rightTab: "changes",
   bottomTab: "setup",
   rightQuiet: false,
@@ -489,7 +489,7 @@ export const showBottomTab = (workspaceId: string, tab: BottomTab): void => {
 // ---------------------------------------------------------------------------------------------
 // Layout (global, kept in localStorage)
 /** `setup` has no bottom-navigation entry; the Setup banners open it. */
-export type PhonePane = "chat" | "changes" | "setup";
+export type PhonePane = "chat" | "changes" | "setup" | "tools";
 
 export interface LayoutState {
   readonly sidebarOpen: boolean;

@@ -37,6 +37,8 @@ pub mod tokens;
 pub mod tools;
 pub mod top_bar;
 pub mod workspace;
+pub mod workspace_info;
+pub mod guides;
 
 use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::v_flex;

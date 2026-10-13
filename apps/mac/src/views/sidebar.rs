@@ -875,46 +875,46 @@ fn row_menu(
     let pin = summary.clone();
     let archive = summary.id.clone();
     let branch = summary.branch.clone();
-    let github = project_of(summary, cx)
+    let github = summary
+        .pr_number
+        .and_then(|_| project_of(summary, cx))
         .map(|p| ind::github_url_for(&p.owner, &p.name, summary.pr_number, &summary.branch));
-    menu.item(PopupMenuItem::new("Rename").on_click(move |_, window, cx| {
-        crate::app::AppState::global(cx).update(cx, |a, cx| {
-            a.show_workspace(&rename, cx);
-        });
-        window.dispatch_action(Box::new(crate::actions::RenameWorkspace), cx);
-    }))
-    .item(
-        PopupMenuItem::new(if summary.pinned { "Unpin" } else { "Pin" }).on_click(
-            move |_, window, cx| {
-                mutate::<api::SetPinned>(
-                    p::SetPinnedIn {
-                        workspace_id: pin.id.clone(),
-                        pinned: !pin.pinned,
-                    },
-                    None,
-                    window,
-                    cx,
-                )
-            },
-        ),
-    )
-    .item(
-        PopupMenuItem::new("Copy branch name").on_click(move |_, window, cx| {
-            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()));
-            super::toast::success("Branch name copied.", window, cx);
-        }),
-    )
-    .item(
-        PopupMenuItem::new("Open on GitHub")
-            .disabled(github.is_none())
-            .on_click(move |_, _, cx| {
-                if let Some(url) = &github {
-                    cx.open_url(url);
-                }
+    let menu = menu
+        .item(PopupMenuItem::new("Rename").on_click(move |_, window, cx| {
+            crate::app::AppState::global(cx).update(cx, |a, cx| {
+                a.show_workspace(&rename, cx);
+            });
+            window.dispatch_action(Box::new(crate::actions::RenameWorkspace), cx);
+        }))
+        .item(
+            PopupMenuItem::new(if summary.pinned { "Unpin" } else { "Pin" }).on_click(
+                move |_, window, cx| {
+                    mutate::<api::SetPinned>(
+                        p::SetPinnedIn {
+                            workspace_id: pin.id.clone(),
+                            pinned: !pin.pinned,
+                        },
+                        None,
+                        window,
+                        cx,
+                    )
+                },
+            ),
+        )
+        .item(
+            PopupMenuItem::new("Copy branch name").on_click(move |_, window, cx| {
+                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()));
+                super::toast::success("Branch name copied.", window, cx);
             }),
-    )
-    .separator()
-    .item(
+        );
+    let menu = if let Some(url) = github {
+        menu.item(
+            PopupMenuItem::new("Open PR on GitHub").on_click(move |_, _, cx| cx.open_url(&url)),
+        )
+    } else {
+        menu
+    };
+    menu.separator().item(
         PopupMenuItem::new("Archive")
             .disabled(!ind::can_archive(summary.state))
             .on_click(move |_, window, cx| {

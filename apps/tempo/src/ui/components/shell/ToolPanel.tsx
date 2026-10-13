@@ -2,6 +2,8 @@ import { RunActivity } from "../chat/RunCard";
 import { useState } from "react";
 import {
   FileIcon,
+  InfoIcon,
+  BookOpenIcon,
   FileDiffIcon,
   FolderIcon,
   GlobeIcon,
@@ -29,11 +31,15 @@ import {
   closeTab,
   closeTool,
   openLiveView,
+  openGuide,
   selectTool,
   type UtilityTab,
 } from "~/ui/state/workspace-ui";
 
+import { WorkspaceInfo } from "./WorkspaceInfo";
+
 const tools: ReadonlyArray<{ key: UtilityTab; label: string; icon: LucideIcon }> = [
+  { key: "info", label: "Info", icon: InfoIcon },
   { key: "files", label: "Files", icon: FolderIcon },
   { key: "terminal", label: "Terminal", icon: SquareTerminalIcon },
   { key: "changes", label: "Changes", icon: FileDiffIcon },
@@ -44,14 +50,15 @@ const tools: ReadonlyArray<{ key: UtilityTab; label: string; icon: LucideIcon }>
   { key: "run", label: "Run", icon: PlayIcon },
 ];
 
-export function ToolPanel({ workspaceId }: { workspaceId: string }) {
+export function ToolPanel({ workspaceId, phone = false }: { workspaceId: string; phone?: boolean }) {
   const ui = useWorkspaceUi(workspaceId);
   const documents = ui.tabs.filter((t) => t.tab.kind !== "chat");
   const active = ui.activeToolKey;
   const [terminalOpened, setTerminalOpened] = useState(false);
 
   if (active === "terminal" && !terminalOpened) setTerminalOpened(true);
-  const utilities = tools.filter((t) => ui.toolTabs.includes(t.key));
+  const available = tools.filter((t) => !phone || !["files", "terminal", "run"].includes(t.key));
+  const utilities = available.filter((t) => ui.toolTabs.includes(t.key));
 
   return (
     <section aria-label="Workspace tools" className="flex h-full min-h-0 flex-col bg-background">
@@ -127,7 +134,11 @@ export function ToolPanel({ workspaceId }: { workspaceId: string }) {
               <GlobeIcon aria-hidden />
               Browser
             </Button>
-            {tools.map(({ key, label, icon: Icon }) => (
+            <Button variant="outline" className="h-11 justify-start" onClick={() => openGuide(workspaceId)}>
+              <BookOpenIcon aria-hidden />
+              Guides
+            </Button>
+            {available.map(({ key, label, icon: Icon }) => (
               <Button
                 key={key}
                 variant="outline"
@@ -142,6 +153,9 @@ export function ToolPanel({ workspaceId }: { workspaceId: string }) {
           <p className="mt-5 text-sm text-muted-foreground">
             Browser shows the workspace’s Cloudflare Browser Run live view.
           </p>
+        </TabsContent>
+        <TabsContent value="info" className="min-h-0">
+          <WorkspaceInfo workspaceId={workspaceId} phone={phone} />
         </TabsContent>
         <TabsContent value="changes" className="flex min-h-0 flex-col">
           <ChangesView workspaceId={workspaceId} />

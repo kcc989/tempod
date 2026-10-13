@@ -8,14 +8,16 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{Sizable as _, h_flex, v_flex};
 use gpui_kit::{
-    AnyElement, Context, Entity, EventEmitter, IntoElement, ParentElement as _, Render,
-    SharedString, Styled as _, Subscription, Window, div,
+    AnyElement, AppContext as _, Context, Entity, EventEmitter, IntoElement, ParentElement as _,
+    Render, SharedString, Styled as _, Subscription, Window, div,
 };
 use tempo_client::Client;
 use tempo_protocol::{self as p, api};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
+    Info,
+    Guides,
     Changes,
     Files,
     Checks,
@@ -29,6 +31,8 @@ pub enum Tool {
 impl Tool {
     fn title(self) -> &'static str {
         match self {
+            Self::Info => "Info",
+            Self::Guides => "Guides",
             Self::Changes => "Changes",
             Self::Files => "Files",
             Self::Checks => "Checks",
@@ -41,7 +45,9 @@ impl Tool {
         }
     }
 }
-const TOOLS: [Tool; 9] = [
+const TOOLS: [Tool; 11] = [
+    Tool::Info,
+    Tool::Guides,
     Tool::Browser,
     Tool::Files,
     Tool::Terminal,
@@ -63,12 +69,15 @@ const PROCESSES: [Tool; 3] = [Tool::Setup, Tool::Run, Tool::Terminal];
 #[derive(Clone)]
 pub struct RevealTools;
 impl EventEmitter<RevealTools> for ToolPanel {}
+impl EventEmitter<super::workspace_info::InfoAction> for ToolPanel {}
 
 pub struct ToolPanel {
     store: Entity<WorkspaceStore>,
     client: Client,
     review: Entity<ReviewPanel>,
     processes: Entity<ProcessPanel>,
+    pub(super) info: Entity<super::workspace_info::WorkspaceInfo>,
+    guides: Entity<super::guides::GuidePanel>,
     tabs: Vec<Tool>,
     active: Option<Tool>,
     browser: Option<String>,
@@ -85,8 +94,29 @@ impl ToolPanel {
         client: Client,
         review: Entity<ReviewPanel>,
         processes: Entity<ProcessPanel>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let info = cx.new(|cx| {
+            super::workspace_info::WorkspaceInfo::new(store.clone(), client.clone(), window, cx)
+        });
+        let guides = cx.new(|cx| {
+            super::guides::GuidePanel::new(store.clone(), client.clone(), review.clone(), cx)
+        });
+        let info_events = cx.subscribe(
+            &info,
+            |this, _, event: &super::workspace_info::InfoAction, cx| {
+                if let super::workspace_info::InfoAction::OpenTool(tool) = event {
+                    this.select(*tool, cx);
+                } else {
+                    cx.emit(event.clone());
+                }
+            },
+        );
+        let guide_events = cx.subscribe(
+            &guides,
+            |_, _, event: &super::workspace_info::InfoAction, cx| cx.emit(event.clone()),
+        );
         let review_events = cx.subscribe(&review, |this, _, event: &ReviewEvent, cx| {
             match event {
                 ReviewEvent::Selected(ix) => {
@@ -127,15 +157,24 @@ impl ToolPanel {
             client,
             review,
             processes,
-            tabs: vec![Tool::Changes],
-            active: Some(Tool::Changes),
+            info,
+            guides,
+            tabs: vec![Tool::Info],
+            active: Some(Tool::Info),
             browser: None,
             browser_error: None,
             browser_pending: false,
             browser_generation: 0,
             #[cfg(target_os = "macos")]
             native_browser: None,
-            _subscriptions: vec![review_events, process_events, changed, state],
+            _subscriptions: vec![
+                review_events,
+                process_events,
+                changed,
+                state,
+                info_events,
+                guide_events,
+            ],
         }
     }
     fn activate(&mut self, tool: Tool, cx: &mut Context<Self>) {
@@ -155,10 +194,29 @@ impl ToolPanel {
             self.review.update(cx, |r, cx| r.select_tab(ix, cx));
         } else if let Some(ix) = PROCESSES.iter().position(|t| *t == tool) {
             self.processes.update(cx, |p, cx| p.select_tab(ix, cx));
-        } else if self.browser.is_none() && !self.browser_pending {
+        } else if tool == Tool::Browser && self.browser.is_none() && !self.browser_pending {
             self.open_browser(cx);
         }
+        if tool == Tool::Info {
+            self.info.update(cx, |i, cx| i.refresh(cx));
+        }
+        if tool == Tool::Guides {
+            self.guides.update(cx, |g, cx| g.refresh(cx));
+        }
         self.activate(tool, cx);
+    }
+    pub fn show_info(&mut self, chat: Option<String>, cx: &mut Context<Self>) {
+        self.guides.update(cx, |g, cx| {
+            g.active_chat = chat;
+            cx.notify();
+        });
+        self.select(Tool::Info, cx);
+    }
+    pub fn set_chat(&mut self, chat: Option<String>, cx: &mut Context<Self>) {
+        self.guides.update(cx, |g, cx| {
+            g.active_chat = chat;
+            cx.notify();
+        });
     }
     fn clear_browser(&mut self) {
         self.browser_generation += 1;
@@ -310,6 +368,10 @@ impl Render for ToolPanel {
                     .size_full()
                     .child(self.processes.clone())
                     .into_any_element()
+            } else if tool == Tool::Info {
+                self.info.clone().into_any_element()
+            } else if tool == Tool::Guides {
+                self.guides.clone().into_any_element()
             } else {
                 self.browser_content(cx)
             }

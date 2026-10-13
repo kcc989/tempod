@@ -58,6 +58,7 @@ export function WorkspaceRow({
   const branch = w.branch.split("/").at(-1) === w.title ? "" : w.branch;
   const slug = w.slug !== w.title && w.branch.split("/").at(-1) !== w.slug ? w.slug : "";
   const detail = [branch, slug].filter(Boolean).join(" · ");
+
   const metadata = (
     <span className="flex min-w-0 items-center gap-2 pl-5 text-xs text-muted-foreground">
       {detail && <span className="min-w-0 truncate">{detail}</span>}
@@ -186,17 +187,12 @@ function RowMenu({
         <CopyIcon />
         Copy branch name
       </ContextMenuItem>
-      {project ? (
+      {project && w.prNumber !== null && (
         <ContextMenuItem asChild>
           <a href={githubUrlFor(project, w, undefined)} target="_blank" rel="noopener noreferrer">
             <ExternalLinkIcon />
-            Open on GitHub
+            Open PR on GitHub
           </a>
-        </ContextMenuItem>
-      ) : (
-        <ContextMenuItem disabled>
-          <ExternalLinkIcon />
-          Open on GitHub
         </ContextMenuItem>
       )}
       <ContextMenuSeparator />

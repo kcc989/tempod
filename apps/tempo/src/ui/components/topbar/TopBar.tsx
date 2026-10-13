@@ -15,7 +15,7 @@ import { toggleRight } from "~/ui/state/workspace-ui";
 import { requestCommit } from "./commit-request";
 import { EditableBranch } from "./EditableBranch";
 import { InlineEdit } from "./InlineEdit";
-import { OverflowMenu } from "./OverflowMenu";
+import { WorkspaceInfoButton } from "./WorkspaceInfoButton";
 import { PortLinks } from "./PortLinks";
 import { PrimaryActionButton } from "./PrimaryAction";
 import { prLink, shortcutAvailability, workspaceView, type WorkspaceView } from "./topbar-logic";
@@ -30,7 +30,7 @@ export interface TopBarProps {
 /**
  * 04, Top bar. Left: title, branch with copy on hover or focus, and the PR link. Middle: preview
  * ports, then `Live` during a Browser Run session. Right: container pill, the primary git action, the
- * overflow menu and the right-side toggle.
+ * Info button and the right-side toggle.
  */
 export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
   const summary = useHubWorkspace(workspaceId);
@@ -76,6 +76,7 @@ function pillFor({ w, d }: WorkspaceView) {
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
   const [renamingTitle, setRenamingTitle] = useState(false);
+
   return (
     <header className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-card px-2 py-1">
       <div className="flex min-w-0 shrink flex-wrap items-center gap-1.5">
@@ -110,7 +111,7 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <ContainerPill pill={pillFor(view)} onWake={w.state === "sleeping" ? actions.wake : undefined} />
         <PrimaryActionButton workspaceId={w.id} />
-        <OverflowMenu view={view} actions={actions} onRename={() => setRenamingTitle(true)} />
+        <WorkspaceInfoButton view={view} />
         <SimpleTooltip label="Toggle right side (⌘⌥B)">
           <Button size="icon-sm" variant="ghost" aria-label="Toggle right side" onClick={toggleRight}>
             <PanelRightIcon />
@@ -161,7 +162,7 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
         className="max-w-32"
         onWake={w.state === "sleeping" ? actions.wake : undefined}
       />
-      <OverflowMenu view={view} actions={actions} phone />
+      <WorkspaceInfoButton view={view} phone />
     </header>
   );
 }
@@ -182,6 +183,7 @@ function EditableTitle({
   const [localEditing, setLocalEditing] = useState(false);
   const editing = controlledEditing ?? localEditing;
   const setEditing = onEditingChange ?? setLocalEditing;
+
   if (editing) {
     return (
       <InlineEdit
@@ -193,7 +195,9 @@ function EditableTitle({
       />
     );
   }
+
   if (!show) return null;
+
   return (
     <h1 className="flex min-w-0">
       <button

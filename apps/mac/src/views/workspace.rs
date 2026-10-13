@@ -9,15 +9,14 @@ use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::popover::Popover;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
-    AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Task, TestSupportExt as _, Window, div,
+    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
+    TestSupportExt as _, Window, div,
 };
 use std::collections::{HashMap, HashSet};
 use tempo_client::Client;
@@ -51,36 +50,7 @@ struct QueueEditor {
     input: Entity<TextareaState>,
 }
 
-/// The base branch picker (04, Top bar): `listBranches` results for the current search, or none
-/// while they load.
-struct BranchPicker {
-    query: Entity<InputState>,
-    branches: Option<Result<Vec<String>, String>>,
-    generation: u64,
-    _search: Option<Task<()>>,
-    _query_changed: Subscription,
-}
-
-// Non-interactive geometry for the picker opened from More actions.
-#[derive(gpui_kit::IntoElement)]
-struct BranchPickerAnchor;
-impl gpui_kit::component::Selectable for BranchPickerAnchor {
-    fn is_selected(&self) -> bool {
-        false
-    }
-    fn selected(self, _: bool) -> Self {
-        self
-    }
-}
-impl gpui_kit::RenderOnce for BranchPickerAnchor {
-    fn render(self, _: &mut Window, _: &mut gpui_kit::App) -> impl IntoElement {
-        div().w(gpui_kit::px(1.)).h(gpui_kit::px(24.))
-    }
-}
-
-/// Error toasts with the same code replace each other, as the web's `error:<code>` toast id.
 struct ErrorToast;
-
 pub(super) const BROWSER_SESSION_ENDED: &str = "Browser session ended.";
 
 pub struct WorkspaceView {
@@ -90,6 +60,7 @@ pub struct WorkspaceView {
     pub processes: Entity<super::processes::ProcessPanel>,
     pub tools: Entity<super::tools::ToolPanel>,
     _tool_events: Subscription,
+    _info_events: Subscription,
     review_comments: Vec<String>,
     _review_events: Subscription,
     _review_changed: Subscription,
@@ -110,7 +81,6 @@ pub struct WorkspaceView {
     last_state: Option<p::WorkspaceState>,
     error_details_open: bool,
     banner_pending: bool,
-    branch_picker: Option<BranchPicker>,
     queue_editor: Option<QueueEditor>,
     queue_pending: bool,
     branch_editor: Option<Entity<InputState>>,
@@ -172,12 +142,60 @@ impl WorkspaceView {
                 client.clone(),
                 review.clone(),
                 processes.clone(),
+                window,
                 cx,
             )
         });
         let tool_events = cx.subscribe(&tools, |this, _, _: &super::tools::RevealTools, cx| {
             this.reveal_right(cx)
         });
+        let info_events = cx.subscribe_in(
+            &tools,
+            window,
+            |this, _, event: &super::workspace_info::InfoAction, window, cx| {
+                use super::workspace_info::InfoAction;
+                let id = this.store.read(cx).workspace_id.clone();
+                match event {
+                    InfoAction::Wake => this
+                        .mutate::<api::WakeWorkspace>(p::WakeWorkspaceIn { workspace_id: id }, cx),
+                    InfoAction::Sleep => this.mutate::<api::SleepWorkspace>(
+                        p::SleepWorkspaceIn { workspace_id: id },
+                        cx,
+                    ),
+                    InfoAction::Environment => this.environment(window, cx),
+                    InfoAction::Diagnostics => this.diagnostics(window, cx),
+                    InfoAction::ResetPreview => this.operation("Reset preview access", window, cx),
+                    InfoAction::Archive => this.archive(cx),
+                    InfoAction::CopyLink => {
+                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(format!(
+                            "{}/w/{}",
+                            this.client.server().origin(),
+                            id
+                        )))
+                    }
+                    InfoAction::OpenChat(chat) => {
+                        this.active = Some(chat.clone());
+                        this.sync(window, cx);
+                    }
+                    InfoAction::GenerateGuide => {
+                        if let Some(chat) = this.active.clone() {
+                            this.send(
+                                &chat,
+                                include_str!("../../../../packages/protocol/pr-guide-prompt.txt"),
+                                window,
+                                cx,
+                            );
+                        }
+                    }
+                    InfoAction::OpenGuideReview => cx.open_url(&format!(
+                        "{}/w/{}?guide=true",
+                        this.client.server().origin(),
+                        id
+                    )),
+                    InfoAction::OpenTool(_) => {}
+                }
+            },
+        );
         let review_changed = cx.observe(&review, |_, _, cx| cx.notify());
         let review_events = cx.subscribe_in(
             &review,
@@ -255,6 +273,7 @@ impl WorkspaceView {
             right_opened: false,
             tools,
             _tool_events: tool_events,
+            _info_events: info_events,
             chat_inset: 16.,
             show_window_controls: false,
             _detail_changed: detail_changed,
@@ -282,7 +301,6 @@ impl WorkspaceView {
             last_state: None,
             error_details_open: false,
             banner_pending: false,
-            branch_picker: None,
             queue_editor: None,
             queue_pending: false,
             branch_editor: None,
@@ -1069,25 +1087,12 @@ impl WorkspaceView {
             None
         };
         let branch = w.branch.clone();
-        let base_branch = self.base_branch_picker(&w, cx);
-        let base_label = format!("Base branch: {}", w.base_branch);
-        let base_locked = w.pr_number.is_some()
-            || matches!(
-                w.state,
-                p::WorkspaceState::Archived | p::WorkspaceState::Archiving
-            );
-        let guide_disabled = matches!(
-            w.state,
-            p::WorkspaceState::Archived | p::WorkspaceState::Archiving
-        ) || self.active.is_none();
+        let sleep = w.state == p::WorkspaceState::Sleeping;
         let pr_link = crate::app::AppState::try_global(cx).and_then(|app| {
             let hub = app.read(cx).hub.read(cx);
             let project = hub.projects.iter().find(|p| p.id == w.project_id)?;
             super::indicators::pr_link(&project.owner, &project.name, w.pr_number, w.pr_state)
         });
-        let id = w.id.clone();
-        let sleep = w.state == p::WorkspaceState::Sleeping;
-        let weak = cx.weak_entity();
         let instance = match &w.settings.environment.instance {
             p::Instance::InstanceName(name) => name.to_string(),
             p::Instance::CustomInstance(instance) => format!(
@@ -1245,114 +1250,15 @@ impl WorkspaceView {
                     }))
             }))
             .child(
-                Button::new("overflow")
-                    .icon(gpui_kit::assets::IconName::Ellipsis)
-                    .accessibility_label("More actions")
-                    .tooltip("More actions")
-                    .dropdown_menu(move |menu, _, _| {
-                        let weak_wake = weak.clone();
-                        let wake_id = id.clone();
-                        let mut menu = menu.item(
-                            PopupMenuItem::new(if sleep { "Wake" } else { "Sleep" }).on_click(
-                                move |_, _, cx| {
-                                    let _ = weak_wake.update(cx, |this, cx| {
-                                        if sleep {
-                                            this.mutate::<api::WakeWorkspace>(
-                                                p::WakeWorkspaceIn {
-                                                    workspace_id: wake_id.clone(),
-                                                },
-                                                cx,
-                                            )
-                                        } else {
-                                            this.mutate::<api::SleepWorkspace>(
-                                                p::SleepWorkspaceIn {
-                                                    workspace_id: wake_id.clone(),
-                                                },
-                                                cx,
-                                            )
-                                        }
-                                    });
-                                },
-                            ),
-                        );
-                        let base_weak = weak.clone();
-                        menu = menu.item(PopupMenuItem::new(base_label.clone()).disabled(base_locked).on_click(move |_, window, cx| {
-                            let _ = base_weak.update(cx, |_, cx| {
-                                cx.defer_in(window, |this, window, cx| this.open_branch_picker(window, cx));
-                            });
-                        }));
-                        for label in [
-                            "Create or update guide",
-                            "Open guide",
-                            "Open on GitHub",
-                            "Copy workspace link",
-                            "Rename workspace",
-                            "Rename chat",
-                            "Reset preview access",
-                            "Environment…",
-                            "Diagnostics",
-                            "Archive",
-                        ] {
-                            let weak = weak.clone();
-                            menu = menu.item(PopupMenuItem::new(label)
-                                .disabled(label == "Create or update guide" && guide_disabled)
-                                .on_click(
-                                move |_, window, cx| {
-                                    let _ = weak.update(cx, |this, cx| match label {
-                                        "Create or update guide" => {
-                                            if let Some(id) = this.active.clone() {
-                                                this.send(&id, include_str!("../../../../packages/protocol/pr-guide-prompt.txt"), window, cx);
-                                            }
-                                        }
-                                        "Open guide" => {
-                                            cx.open_url(&format!("{}/w/{}?guide=true", this.client.server().origin(), this.store.read(cx).workspace_id));
-                                        }
-                                        "Rename workspace" => this.operation("Rename", window, cx),
-                                        "Open on GitHub" => {
-                                            if let Some(w) = &this.store.read(cx).state.workspace {
-                                                let app = crate::app::AppState::global(cx);
-                                                if let Some(p) = app
-                                                    .read(cx)
-                                                    .hub
-                                                    .read(cx)
-                                                    .projects
-                                                    .iter()
-                                                    .find(|p| p.id == w.project_id)
-                                                {
-                                                    cx.open_url(&format!(
-                                                        "https://github.com/{}/{}",
-                                                        p.owner, p.name
-                                                    ));
-                                                }
-                                            }
-                                        }
-                                        "Copy workspace link" => {
-                                            if let Some(url) = crate::app::AppState::global(cx)
-                                                .read(cx)
-                                                .server_url
-                                                .as_ref()
-                                            {
-                                                cx.write_to_clipboard(
-                                                    gpui_kit::ClipboardItem::new_string(format!(
-                                                        "{}/w/{}",
-                                                        url.trim_end_matches('/'),
-                                                        this.store.read(cx).workspace_id
-                                                    )),
-                                                );
-                                            }
-                                        }
-                                        "Environment…" => this.environment(window, cx),
-                                        "Diagnostics" => this.diagnostics(window, cx),
-                                        "Archive" => this.archive(cx),
-                                        _ => this.operation(label, window, cx),
-                                    });
-                                },
-                            ));
-                        }
-                        menu
-                    }),
+                Button::new("workspace-info")
+                    .icon(gpui_kit::assets::IconName::Info)
+                    .accessibility_label("Workspace info")
+                    .tooltip("Workspace info")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        let chat=this.active.clone();
+                        this.tools.update(cx, |tools,cx|tools.show_info(chat,cx));
+                    })),
             )
-            .child(base_branch)
             .child(
                 Button::new("toggle-right-side")
                     .icon(gpui_kit::assets::IconName::PanelRight)
@@ -1373,203 +1279,6 @@ impl WorkspaceView {
         } else {
             bar
         }
-    }
-
-    /// `→ <base branch>` (04, Top bar): a searchable `listBranches` picker until a PR exists.
-    fn base_branch_picker(
-        &self,
-        w: &p::WorkspaceDetail,
-        cx: &mut Context<Self>,
-    ) -> gpui_kit::AnyElement {
-        let base = w.base_branch.clone();
-        let locked = w.pr_number.is_some()
-            || matches!(
-                w.state,
-                p::WorkspaceState::Archived | p::WorkspaceState::Archiving
-            );
-        if locked {
-            return div().into_any_element();
-        }
-        let weak = cx.weak_entity();
-        let popover = Popover::new("base-branch-picker")
-            .trigger(BranchPickerAnchor)
-            .anchor(gpui_kit::Anchor::TopRight)
-            .open(self.branch_picker.is_some())
-            .on_open_change(cx.listener(|this, open: &bool, _, cx| {
-                if !*open {
-                    this.branch_picker = None;
-                    cx.notify();
-                }
-            }))
-            .content(move |_, _, cx| {
-                let Some(view) = weak.upgrade() else {
-                    return div().into_any_element();
-                };
-                let Some(picker) = &view.read(cx).branch_picker else {
-                    return div().into_any_element();
-                };
-                let list = match &picker.branches {
-                    None => super::skeleton_rows(3).into_any_element(),
-                    Some(Err(message)) => {
-                        let retry = weak.clone();
-                        v_flex()
-                            .p_2()
-                            .gap_2()
-                            .child(message.clone())
-                            .child(Button::new("retry-branches").label("Retry").on_click(
-                                move |_, _, cx| {
-                                    let _ = retry
-                                        .update(cx, |this, cx| this.search_branches(false, cx));
-                                },
-                            ))
-                            .into_any_element()
-                    }
-                    Some(Ok(names)) if names.is_empty() => {
-                        div().p_2().child("No branches.").into_any_element()
-                    }
-                    Some(Ok(names)) => v_flex()
-                        .id("base-branch-list")
-                        .role(Role::List)
-                        .aria_label("Branches")
-                        .max_h(gpui_kit::px(240.))
-                        .overflow_y_scroll()
-                        .children(names.iter().enumerate().map(|(ix, name)| {
-                            let pick = weak.clone();
-                            let branch = name.clone();
-                            Button::new(("base-branch-option", ix))
-                                .ghost()
-                                .w_full()
-                                .accessibility_label(if *name == base {
-                                    format!("{name}, current base branch")
-                                } else {
-                                    name.clone()
-                                })
-                                .child(
-                                    h_flex()
-                                        .w_full()
-                                        .min_w_0()
-                                        .gap_2()
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .text_left()
-                                                .truncate()
-                                                .font_family("monospace")
-                                                .child(name.clone()),
-                                        )
-                                        .children((*name == base).then(|| {
-                                            gpui_kit::component::Icon::new(
-                                                gpui_kit::assets::IconName::Check,
-                                            )
-                                            .small()
-                                        })),
-                                )
-                                .on_click(move |_, _, cx| {
-                                    let _ = pick.update(cx, |this, cx| {
-                                        this.pick_base_branch(branch.clone(), cx)
-                                    });
-                                })
-                        }))
-                        .into_any_element(),
-                };
-                v_flex()
-                    .w(gpui_kit::px(288.))
-                    .gap_1()
-                    .child(Input::new(&picker.query))
-                    .child(list)
-                    .into_any_element()
-            });
-        if let Some(picker) = &self.branch_picker {
-            popover
-                .track_focus(&picker.query.read(cx).focus_handle(cx))
-                .into_any_element()
-        } else {
-            popover.into_any_element()
-        }
-    }
-
-    fn open_branch_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search branches"));
-        let changed = cx.subscribe(&query, |this, _, event: &InputEvent, cx| {
-            if matches!(event, InputEvent::Change) {
-                this.search_branches(true, cx);
-            }
-        });
-        query.update(cx, |q, cx| q.focus(window, cx));
-        self.branch_picker = Some(BranchPicker {
-            query,
-            branches: None,
-            generation: 0,
-            _search: None,
-            _query_changed: changed,
-        });
-        self.search_branches(false, cx);
-        cx.notify();
-    }
-
-    /// `listBranches {projectId, query?}`, 200 ms after the search changes, as the web.
-    fn search_branches(&mut self, debounce: bool, cx: &mut Context<Self>) {
-        let Some(w) = self.store.read(cx).state.workspace.clone() else {
-            return;
-        };
-        let Some(picker) = &mut self.branch_picker else {
-            return;
-        };
-        picker.generation += 1;
-        let generation = picker.generation;
-        let query = picker.query.read(cx).value().trim().to_string();
-        let request = self.client.call::<api::ListBranches>(p::ListBranchesIn {
-            project_id: w.project_id,
-            query: (!query.is_empty()).then_some(query),
-        });
-        picker._search = Some(cx.spawn(async move |this, cx| {
-            if debounce {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(200))
-                    .await;
-            }
-            let result = request.await;
-            let _ = this.update(cx, |this, cx| {
-                let Some(picker) = &mut this.branch_picker else {
-                    return;
-                };
-                if picker.generation != generation {
-                    return;
-                }
-                picker.branches = Some(
-                    result
-                        .map(|branches| {
-                            branches
-                                .into_iter()
-                                .map(|b| b.name)
-                                .filter(|name| *name != w.branch)
-                                .collect()
-                        })
-                        .map_err(|e| api_error_message(&e, None)),
-                );
-                cx.notify();
-            });
-        }));
-    }
-
-    fn pick_base_branch(&mut self, name: String, cx: &mut Context<Self>) {
-        self.branch_picker = None;
-        let Some(w) = self.store.read(cx).state.workspace.clone() else {
-            return;
-        };
-        if name != w.base_branch
-            && let Ok(base_branch) = name.try_into()
-        {
-            self.mutate::<api::SetBaseBranch>(
-                p::SetBaseBranchIn {
-                    workspace_id: w.id,
-                    base_branch,
-                },
-                cx,
-            );
-        }
-        cx.notify();
     }
 
     fn open_run_transcript(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -1856,6 +1565,8 @@ impl WorkspaceView {
         if self.active.as_ref().is_none_or(|id| !ids.contains(id)) {
             self.active = ids.first().cloned();
         }
+        let chat = self.active.clone();
+        self.tools.update(cx, |tools, cx| tools.set_chat(chat, cx));
         if let Some(id) = self.active.clone() {
             self.ensure_chat(&id, window, cx);
         }
@@ -3809,21 +3520,30 @@ mod tests {
                 .client(tempo_client::Token::new("test-token"));
             let (window, view) = mount(cx, state, client);
             cx.update_window(window, |_, window, cx| {
-                view.update(cx, |view, cx| view.open_branch_picker(window, cx))
+                view.update(cx, |view, cx| {
+                    view.tools.update(cx, |tools, cx| {
+                        tools.info.update(cx, |info, cx| info.search_branches(cx))
+                    })
+                })
             })
             .unwrap();
-            wait_until(cx, &view, |view, _| {
-                view.branch_picker
-                    .as_ref()
-                    .is_some_and(|p| p.branches.is_some())
+            wait_until(cx, &view, |view, cx| {
+                !view.tools.read(cx).info.read(cx).branches.is_empty()
             });
-            view.read_with(cx, |view, _| {
-                let branches = view.branch_picker.as_ref().unwrap().branches.clone();
-                assert_eq!(branches, Some(Ok(vec!["main".into(), "release".into()])));
+            view.read_with(cx, |view, cx| {
+                let branches = view.tools.read(cx).info.read(cx).branches.clone();
+                assert_eq!(branches, vec!["main".to_string(), "release".to_string()]);
             });
-            view.update(cx, |view, cx| view.pick_base_branch("release".into(), cx));
-            wait_until(cx, &view, |view, _| !view.operation_pending);
-            assert!(view.read_with(cx, |view, _| view.branch_picker.is_none()));
+            view.update(cx, |view, cx| {
+                view.tools.update(cx, |tools, cx| {
+                    tools
+                        .info
+                        .update(cx, |info, cx| info.pick_branch("release".into(), cx))
+                })
+            });
+            wait_until(cx, &view, |view, cx| {
+                !view.tools.read(cx).info.read(cx).branch_pending
+            });
             let requests = server.requests.lock().unwrap().clone();
             let list = requests
                 .iter()
@@ -3835,7 +3555,16 @@ mod tests {
                 .find(|(path, _)| path.ends_with("/setBaseBranch"))
                 .unwrap();
             assert_eq!(set.1["baseBranch"], "release");
-            assert_eq!(toasts(cx, window), usize::from(fail));
+            assert_eq!(
+                view.read_with(cx, |view, cx| view
+                    .tools
+                    .read(cx)
+                    .info
+                    .read(cx)
+                    .branch_error
+                    .is_some()),
+                fail
+            );
             cx.update_window(window, |_, window, _| window.remove_window())
                 .unwrap();
         }
