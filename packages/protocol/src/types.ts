@@ -1,3 +1,4 @@
+import { AgentProposalRecord } from "./agent-proposals.ts";
 import { Effect, Schema } from "effect";
 import {
   AvailableCommand,
@@ -134,6 +135,7 @@ export const WorkspaceDetail = Schema.Struct({
   changes: Schema.optional(N(ChangesSummary)),
   hasUnpushedCommits: Schema.optional(Schema.Boolean),
   environmentId: Schema.optional(N(Schema.String)),
+  agentProposals: Schema.optionalKey(Schema.Array(AgentProposalRecord)),
   environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
 });
 

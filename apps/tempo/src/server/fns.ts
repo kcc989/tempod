@@ -72,6 +72,10 @@ export const listRuns = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listRuns">) => data)
   .handler(({ data }) => run("listRuns", data));
 
+export const resolveAgentProposal = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"resolveAgentProposal">) => data)
+  .handler(({ data }) => run("resolveAgentProposal", data));
+
 export const sendRunToChat = createServerFn({ method: "POST" })
   .validator((data: FnInput<"sendRunToChat">) => data)
   .handler(({ data }) => run("sendRunToChat", data));

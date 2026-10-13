@@ -503,3 +503,9 @@ Tab 06 rules: deployed, real logins, three runs in a row.
 ## Out of scope
 
 Agents in the repository, `change.ended` hooks, `choice` and `score` questions for routing, cross-workspace decision history, per-day and per-user budgets, sharing agents between users, and approval of agent changes made in Settings.
+
+### Agent proposal storage and apply
+
+WorkspaceDO migration `0011_agent_proposals` adds `agent_proposals(id, session_id, created_at, status, proposal_json)`, with status `pending`, `applied` or `rejected`. `WorkspaceDetail.agentProposals` carries the records used by `{proposalId}` transcript cards, including resolved cards. The proposal is validated and redacted before storage, stays outside raw daemon events, and changes no library or attachment until Apply.
+
+D1 migration `0006_agent_proposal_applications` adds a receipt keyed by proposal ID with user/workspace ownership, timestamp and a checked guard. Applying commits the receipt, definition create/replace and attachment writes in one batch. The guard checks current ownership, versions and the create limit; a failed batch leaves the proposal pending. A retry after a committed batch uses the receipt without incrementing the version again. Apply and Reject are idempotent for their resolved status.

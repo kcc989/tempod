@@ -561,6 +561,13 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       "CREATE INDEX items_by_rev ON items(rev)",
     ],
   },
+  {
+    tag: "0011_agent_proposals",
+    when: 1792612800000,
+    statements: [
+      `CREATE TABLE agent_proposals (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id), created_at INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending','applied','rejected')), proposal_json TEXT NOT NULL)`,
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

@@ -5,6 +5,7 @@ import {
   ARTIFACT_TITLE_MAX,
   ARTIFACT_TOOL_DESCRIPTION,
   EnvironmentProposal,
+  AgentProposal,
   OutputKind,
   RUN_REPORTS,
   TEMPO_RUN_ID_ENV,
@@ -244,6 +245,24 @@ export const handleMcpMessage = async (
       return reply({
         tools: [
           ...TOOLS,
+          ...(!runId
+            ? [
+                {
+                  name: "list_agents",
+                  description:
+                    "List the owner's active agent library and this project's attachments and hooks.",
+                  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+                },
+                {
+                  name: "propose_agent_change",
+                  description:
+                    "Propose an agent definition, project attachment or detachment. Only the owner can apply this change in Tempo. Reference secrets by name; never include their values.",
+                  inputSchema: JsonSchema.toDocumentDraft07(
+                    Schema.toJsonSchemaDocument(AgentProposal, { onExcessProperty: "error" }),
+                  ).schema,
+                },
+              ]
+            : []),
           ...(runId && Schema.is(OutputKind)(outputKind)
             ? [
                 {
@@ -305,6 +324,32 @@ export const handleMcpMessage = async (
           if (!res.ok) return reply(text(body.error ?? `tempod answered ${res.status}`, true));
 
           return reply(text(body.text ?? ""));
+        }
+
+        if (!runId && (params["name"] === "list_agents" || params["name"] === "propose_agent_change")) {
+          const res = await call("/agent-tools", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ op: params["name"], sessionId: sessionId ?? "", params: args }),
+          });
+
+          const body = Schema.decodeUnknownSync(
+            Schema.Struct({
+              result: Schema.optionalKey(Schema.Json),
+              error: Schema.optionalKey(Schema.String),
+            }),
+          )(await res.json());
+
+          return reply(
+            text(
+              res.ok
+                ? params["name"] === "list_agents"
+                  ? JSON.stringify(body.result)
+                  : "Sent to the owner for review."
+                : (body.error ?? "Tool rejected."),
+              !res.ok,
+            ),
+          );
         }
 
         if (params["name"] === "report_result" && runId && Schema.is(OutputKind)(outputKind)) {

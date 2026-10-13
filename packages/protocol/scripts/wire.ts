@@ -6,6 +6,9 @@ import * as P from "../src/index.ts";
  * Rust type get. tempod's protocol is left out: only the WorkspaceDO speaks it.
  */
 export const SHARED = {
+  AgentProposal: P.AgentProposal,
+  AgentProposalRecord: P.AgentProposalRecord,
+  AgentLibraryToolResult: P.AgentLibraryToolResult,
   RoleName: P.RoleName,
   RoleScope: P.RoleScope,
   RoleAccess: P.RoleAccess,

@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentProposalRecord",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "applied", "rejected"]
+    },
+    "proposal": {
+      "$ref": "AgentProposal.json"
+    }
+  },
+  "required": ["id", "sessionId", "createdAt", "status", "proposal"],
+  "additionalProperties": true
+}

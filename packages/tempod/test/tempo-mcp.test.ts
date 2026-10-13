@@ -54,6 +54,8 @@ describe("tempo MCP server (01, Environments)", () => {
       "environment_status",
       "propose_environment_change",
       "publish_artifact",
+      "list_agents",
+      "propose_agent_change",
     ]);
     expect(await handleMcpMessage({ jsonrpc: "2.0", id: 4, method: "nope" }, call)).toMatchObject({
       error: { code: -32601 },
@@ -150,6 +152,24 @@ describe("run MCP reports", () => {
       "plan",
     );
 
+    const names = Schema.decodeUnknownSync(
+      Schema.Struct({
+        result: Schema.Struct({ tools: Schema.Array(Schema.Struct({ name: Schema.String })) }),
+      }),
+    )(list).result.tools.map((t) => t.name);
+
+    expect(names).not.toContain("list_agents");
+    expect(names).not.toContain("propose_agent_change");
+    expect(
+      await handleMcpMessage(
+        { id: 99, method: "tools/call", params: { name: "list_agents", arguments: {} } },
+        call,
+        "run-session",
+        "run-id",
+        "plan",
+      ),
+    ).toMatchObject({ error: { code: -32602 } });
+
     expect(list).toMatchObject({
       result: {
         tools: expect.arrayContaining([
@@ -217,5 +237,61 @@ describe("run MCP reports", () => {
     );
     client.close();
     expect(await disconnected).toMatchObject({ result: { isError: true } });
+  });
+  test("chat tools use request/reply frames and proposals receive validation errors without raw events", async () => {
+    const config = testConfig();
+    h = startTempod({ ...config, agentCommands: { ...config.agentCommands, claude: fakeAgentCommand() } });
+    const client = new DoClient(h.base);
+    await client.hello();
+    await client.waitFor(() => existsSync(h!.app.config.mcpSocket), 5000, "mcp socket");
+    await client.ok("session.start", {
+      sessionId: "chat-session",
+      agent: "claude",
+      env: { FAKE_STATE_DIR: h.app.config.stateDir },
+      browser: "local",
+    });
+    const call = viaSocket(h.app.config.mcpSocket);
+
+    const listed = handleMcpMessage(
+      { id: 1, method: "tools/call", params: { name: "list_agents", arguments: {} } },
+      call,
+      "chat-session",
+    );
+
+    await client.waitFor(() => client.raw.some((m) => m.type === "tool.req"), 5000, "library request");
+    const list = client.raw.find((m) => m.type === "tool.req")!;
+    expect(list).toMatchObject({ op: "list_agents", sessionId: "chat-session", params: {} });
+    client.send({ type: "tool.res", id: list.id, ok: true, result: { agents: [], attachments: [] } });
+    expect(await listed).toMatchObject({
+      result: { content: [{ type: "text", text: '{"agents":[],"attachments":[]}' }] },
+    });
+
+    const proposal = handleMcpMessage(
+      {
+        id: 2,
+        method: "tools/call",
+        params: { name: "propose_agent_change", arguments: { note: "private proposal" } },
+      },
+      call,
+      "chat-session",
+    );
+
+    await client.waitFor(
+      () => client.raw.filter((m) => m.type === "tool.req").length === 2,
+      5000,
+      "proposal request",
+    );
+    const frame = client.raw.filter((m) => m.type === "tool.req")[1]!;
+    expect(frame).toMatchObject({ op: "propose_agent_change", params: { note: "private proposal" } });
+    client.send({
+      type: "tool.res",
+      id: frame.id,
+      ok: false,
+      error: { code: "AGENT_INVALID", message: "The agent is not valid." },
+    });
+    expect(await proposal).toMatchObject({
+      result: { isError: true, content: [{ type: "text", text: "The agent is not valid." }] },
+    });
+    expect(JSON.stringify(client.events)).not.toContain("private proposal");
   });
 });

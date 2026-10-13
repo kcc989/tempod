@@ -1,3 +1,4 @@
+import { agentTool } from "../../agents/proposals.ts";
 import { toTurnUsage, type LifecycleEvent } from "@tempo/protocol";
 import {
   ERROR_CODES,
@@ -217,7 +218,8 @@ export class TempodClient {
     }
 
     if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
-    throw new TempoError("UNKNOWN_OP");
+
+    return agentTool(this.core, request);
   }
   private async applyEvent(envelope: TempodEventEnvelope): Promise<void> {
     if (this.closed) return;

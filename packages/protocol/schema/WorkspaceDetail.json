@@ -315,6 +315,12 @@
         }
       ]
     },
+    "agentProposals": {
+      "type": "array",
+      "items": {
+        "$ref": "AgentProposalRecord.json"
+      }
+    },
     "environmentProposals": {
       "anyOf": [
         {

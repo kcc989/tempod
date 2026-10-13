@@ -34,6 +34,12 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("listRuns", input);
   }
 
+  resolveAgentProposal(
+    input: MethodInput<"resolveAgentProposal">,
+  ): Promise<Result<FnOutput<"resolveAgentProposal">>> {
+    return this.rpc("resolveAgentProposal", input);
+  }
+
   sendRunToChat(input: MethodInput<"sendRunToChat">): Promise<Result<FnOutput<"sendRunToChat">>> {
     return this.rpc("sendRunToChat", input);
   }

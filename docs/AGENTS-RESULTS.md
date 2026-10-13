@@ -40,3 +40,7 @@ The run PR rebases onto workspace tools (#44) and deterministic reconnect covera
 The complete post-optimization forced-task benchmark passed in 90.4 seconds: Worker 88.2 s, other tests 46.1 s, typecheck 11.5 s, app build 13.1 s and all 28 browsers 37.8 s. No CI limits or concurrency changed.
 
 M3 merged as [#46](https://github.com/kcc989/tempod/pull/46) at [893f3a2](https://github.com/kcc989/tempod/commit/893f3a2). Hosted [checks](https://github.com/kcc989/tempod/actions/runs/38474358376) passed in 295.9 seconds including setup (309 seconds including cleanup): Worker 234.7 s, other tests 67.5 s, browsers 100.6 s, typecheck 18.8 s and app build 45.5 s.
+
+## M4 Decisions
+
+[M4 #47](https://github.com/kcc989/tempod/pull/47) adds the confirmed Worker AI binding, batches at 64, bounded/redacted state, threshold decisions, three-second deadlines and one retry. Decisions and runs commit atomically; replay deduplicates. Both clients show joined diagnostics, skip lines and Run anyway. Seven focused Worker cases and the card/trace interactions pass. Full local CI passed in 59.6 s with reuse (Worker 0.2 s cached, other tests 23.5 s, browsers 31.2 s, typecheck 8.6 s). The preceding uncached Worker stage passed in 77.1 s. Native tests passed 264 tests; native check and strict Clippy pass. Snippet privacy clarification and hosted checks remain pending before merge.

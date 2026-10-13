@@ -99,6 +99,7 @@ export const API = {
   ),
   cancelRun: fn("POST", Schema.Struct({ ...W, runId: S }), Empty),
   listRuns: fn("GET", Schema.Struct({ ...W, changeId: opt(S) }), Schema.Array(Run)),
+  resolveAgentProposal: fn("POST", Schema.Struct({ ...W, proposalId: S, apply: B }), Empty),
   sendRunToChat: fn("POST", Schema.Struct({ ...W, runId: S }), Schema.Struct({ turnId: S })),
   listLifecycleEvents: fn(
     "GET",

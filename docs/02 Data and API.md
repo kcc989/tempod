@@ -1048,3 +1048,9 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `INTERNAL` | Anything else | Something went wrong. |
 
 `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle` are the GitHub PR title regardless of open, closed or merged state; null means no title has been fetched. The WorkspaceDO persists it and sends detail updates when the title changes.
+
+### Agent proposal storage and apply
+
+WorkspaceDO migration `0011_agent_proposals` adds `agent_proposals(id, session_id, created_at, status, proposal_json)`, with status `pending`, `applied` or `rejected`. `WorkspaceDetail.agentProposals` carries the records used by `{proposalId}` transcript cards, including resolved cards. The proposal is validated and redacted before storage, stays outside raw daemon events, and changes no library or attachment until Apply.
+
+D1 migration `0006_agent_proposal_applications` adds a receipt keyed by proposal ID with user/workspace ownership, timestamp and a checked guard. Applying commits the receipt, definition create/replace and attachment writes in one batch. The guard checks current ownership, versions and the create limit; a failed batch leaves the proposal pending. A retry after a committed batch uses the receipt without incrementing the version again. Apply and Reject are idempotent for their resolved status.

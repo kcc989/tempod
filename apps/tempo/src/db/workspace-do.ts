@@ -262,6 +262,14 @@ export const fileCache = sqliteTable("file_cache", {
   updatedAt: integer("updated_at").notNull().default(0),
 });
 
+export const agentProposals = sqliteTable("agent_proposals", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  createdAt: integer("created_at").notNull(),
+  status: text("status", { enum: ["pending", "applied", "rejected"] }).notNull(),
+  proposalJson: text("proposal_json").notNull(),
+});
+
 export const environmentProposals = sqliteTable("environment_proposals", {
   id: text("id").primaryKey(),
   createdAt: integer("created_at").notNull(),
@@ -359,6 +367,7 @@ export const workspaceSchema = {
   artifacts,
   artifactCodes,
   environmentProposals,
+  agentProposals,
   fileCache,
   workspace,
   ops,
