@@ -41,6 +41,12 @@ function CommandDialog({
       <DialogContent
         className={cn("top-[20%] translate-y-0 overflow-hidden p-0 sm:max-w-xl", className)}
         showCloseButton={false}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && !e.defaultPrevented && !e.nativeEvent.isComposing && props.onOpenChange) {
+            e.preventDefault();
+            props.onOpenChange(false);
+          }
+        }}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>
