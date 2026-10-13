@@ -39,6 +39,31 @@ export class FakeTempod {
   healthy = true;
   private healthGate: Promise<void> | null = null;
   private onHealthProbe: (() => void) | null = null;
+  private connectGate: Promise<void> | null = null;
+  private onConnectProbe: (() => void) | null = null;
+
+  holdConnect() {
+    let markEntered!: () => void;
+    let release!: () => void;
+
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+
+    this.connectGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.onConnectProbe = markEntered;
+
+    return {
+      entered,
+      release: () => {
+        this.connectGate = null;
+        this.onConnectProbe = null;
+        release();
+      },
+    };
+  }
 
   /** Blocks the actual health response until the test releases startup. */
   holdHealth() {
@@ -169,7 +194,13 @@ export class FakeTempod {
           return Response.json({ ok: true, version: this.version, incarnation: this.incarnation });
         }
 
-        if (url.pathname === "/v1/connect") return this.accept();
+        if (url.pathname === "/v1/connect") {
+          this.onConnectProbe?.();
+
+          if (this.connectGate) await this.connectGate;
+
+          return this.accept();
+        }
 
         if (url.pathname.startsWith("/v1/proxy/")) {
           this.proxyRequests.push({ path: `${url.pathname}${url.search}`, headers: req.headers });

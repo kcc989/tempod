@@ -150,6 +150,13 @@ ignores are not used, so a required check never stays pending on a docs-only PR.
 
 ## Rules for future changes
 
+Hosted run `38469401920` spent 224.2 seconds on Worker tests and failed the
+deferred-turn reconnect case: its fixed 100 ms settling delay could outlast the
+one-second reconnect timer under load. The fake now holds the actual reconnect
+response until the test observes the queued turn and absence of a daemon prompt,
+then releases it and verifies execution resumes. Cleanup releases the gate on
+failure; production reconnect timing and test concurrency remain unchanged.
+
 1. Name the distinct bug or contract a test protects. Assert the externally
    observable result, including failure behavior where relevant. A mock expectation
    is useful only when the interaction itself is the contract.
