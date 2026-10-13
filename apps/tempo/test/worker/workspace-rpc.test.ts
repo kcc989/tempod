@@ -2405,9 +2405,12 @@ describe.concurrent("getDiagnostics", { timeout: 30_000 }, () => {
   });
 });
 
-describe("first prompt while setup is pending", () => {
-  it("preserves a manual override made before the pending rename runs", async () => {
-    const w = await seedHeld();
+describe.concurrent("first prompt while setup is pending", () => {
+  it("preserves a manual override made before the pending rename runs", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     const session = ok(await w.stub.createSession({ agent: "claude" }));
     expect(
       codeOf(
