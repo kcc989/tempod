@@ -5,8 +5,9 @@ The single `check` job runs all local checks, builds, and browser regressions fo
 code changes. Documentation-only changes keep the same required `check` job but
 run lint and formatting without installing the workspace dependencies or Chromium.
 Typecheck and builds overlap with tests on that one runner. Once the builds and
-non-Worker suites pass, the two browser suites run concurrently on their separate
-fixture servers while Worker tests finish. The timing summary
+non-Worker suites pass, both browser suites run in one Playwright invocation with
+a shared two-worker limit and separate fixture servers while Worker tests finish. Standalone
+`test:web` and `test:browser` commands remain available. The timing summary
 shows individual durations and the total elapsed time, so overlapping stages
 should not be added together.
 `bun run ci` reports stage durations to the Actions summary and gives check
@@ -22,7 +23,20 @@ multi-gigabyte Bun dependency cache is not archived: saving it exceeded the
 cleanup budget. Dependency installation still uses the frozen lockfile. Turbo hashes package
 sources, transitive dependencies, root TypeScript configuration, Bun configuration
 and dependency patches. Image tests have a separate `TEMPO_IMAGE_TEST` hash. Live
-agent/deployment tasks are never cached. The app and daemon builds still execute.
+agent/deployment tasks are never cached. Task archives can be restored across
+lockfile changes within the same OS/Bun namespace; Turbo checks the resolved
+dependencies and inputs before reusing any result. Successful task results are
+saved even if another check fails, but not after cancellation or failed dependency
+installation. Each run/attempt has a distinct archive key. Chromium is keyed by
+the installed Playwright version rather than unrelated package script changes.
+
+The daemon build and production app CI build are cached. `build:ci` fixes the app's
+Wrangler configuration to the checked-in default and restores both `dist` and the
+Wrangler deployment pointer. Its inputs include transitive workspace sources,
+built-in roles, container configuration, local environment files and build-time
+environment values. Generated Wrangler metadata contains absolute paths, so the
+checkout directory is part of this task's hash. The general app `build` remains
+uncached because it permits arbitrary external Wrangler configuration paths.
 Browser fixture builds have separate cached outputs (`test/web/dist` and
 `test/browser/dist`); both browser suites still execute against restored or freshly
 built artifacts before previewing to avoid development-server transform costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
@@ -37,6 +51,17 @@ because UI API modules import server functions; their test/helper inputs are sco
 separately. All three tasks and fixture builds hash transitive workspace source
 dependencies through `transit`, in addition to lockfiles and root configuration.
 Widen inputs if a new import crosses these boundaries.
+
+RPC cases that only need an already-ready workspace use the test-only
+`seedReadyWorkspace` API. It creates a fresh user/project/DO, uses real migrated
+storage and connects the real daemon client to the protocol fake, without
+replaying the create operation. Options configure title, slug, branch, effective
+settings and credentials for selected agents; no credentials are provisioned by
+default. An equivalence test compares observable defaults and file/git RPC
+outcomes with a lifecycle-created workspace and verifies isolation. Init/create,
+session, recovery and lifecycle cases retain their full fixtures. Existing
+credential helpers can provision a selected agent instead of storing unrelated
+secrets.
 
 UI and component files use isolated VM threads to avoid repeated process startup;
 each suite is limited to two workers. Worker event, RPC and operation cases use
@@ -59,6 +84,12 @@ heavy contention when browsers also overlapped component/UI tests (over 100
 seconds per browser stage). They now wait for those suites and builds; all
 checks remain. Turbo emits full test logs on failure,
 rather than streaming routine native Worker logs to Actions.
+
+Before the configurable-fixture/shared-pool changes, main run `38411262121`
+completed in 4m59s: Worker tests took 239.0s, other tests 93.9s, typecheck
+23.7s, the app build 41.1s and dependency installation 33s. Browser stages
+took 76.2s and 60.5s concurrently. These overlapping durations are the baseline
+for evaluating the next changes; they are not additive runner minutes.
 
 ## Test audit
 

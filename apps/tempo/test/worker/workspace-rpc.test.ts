@@ -4,6 +4,7 @@ import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
 import { github } from "../../src/github/provider.ts";
 import { previewCookie } from "../../src/do/workspace/preview.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
+import { seedReadyWorkspace } from "./ready-fixture.ts";
 import {
   DEFAULT_EFFECTIVE,
   FakeTempod,
@@ -199,7 +200,7 @@ const seedHeld = async (
   opts: { prompt?: string; agent?: AgentId; model?: string; credentials?: boolean } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
-  if (opts.credentials !== false) await seedCredentials(seeded.userId);
+  if (opts.credentials !== false) await seedCredentials(seeded.userId, [opts.agent ?? "claude"]);
   counter++;
   const workspaceId = newId();
   const slug = `held-${counter}`;
@@ -218,7 +219,7 @@ const readyWs = async (
   opts: { prompt?: string; credentials?: boolean } = {},
 ): Promise<Ws & { first: { sessionId: string; turnId: string } | null }> => {
   const seeded = await seedProject();
-  if (opts.credentials !== false) await seedCredentials(seeded.userId);
+  if (opts.credentials !== false) await seedCredentials(seeded.userId, ["claude"]);
   const w = await seedWorkspace(seeded, opts.prompt ? { prompt: opts.prompt } : {});
   await driveToState(w.stub, "ready", "working");
   let first: { sessionId: string; turnId: string } | null = null;
@@ -311,6 +312,38 @@ const forceError = (w: Ws) =>
   );
 
 // =====================================================================================
+
+describe("ready RPC fixture contract", { timeout: 30_000 }, () => {
+  it("matches lifecycle-created defaults and serves independent workspace RPCs", async ({ expect }) => {
+    const full = await readyWs();
+    const minimal = await seedReadyWorkspace();
+    const defaults = async (w: Ws) => {
+      const d = await detail(w.stub);
+      return {
+        state: d.state,
+        attention: d.attention,
+        settings: d.settings,
+        setupStatus: d.setupStatus,
+        defaultAgent: d.defaultAgent,
+        pinned: d.pinned,
+        baseBranch: d.baseBranch,
+        ports: d.ports,
+        queue: d.queue,
+        runningTurnId: d.runningTurnId,
+      };
+    };
+    expect(await defaults(minimal)).toEqual(await defaults(full));
+    expect(ok(await minimal.stub.readFile({ path: "README.md" }))).toEqual(
+      ok(await full.stub.readFile({ path: "README.md" })),
+    );
+    expect(ok(await minimal.stub.getChanges({ scope: "branch" }))).toEqual(
+      ok(await full.stub.getChanges({ scope: "branch" })),
+    );
+    ok(await minimal.stub.renameWorkspace({ title: "Minimal fixture" }));
+    expect((await detail(minimal.stub)).title).toBe("Minimal fixture");
+    expect((await detail(full.stub)).title).not.toBe("Minimal fixture");
+  });
+});
 
 describe.concurrent("init", { timeout: 30_000 }, () => {
   it("writes the workspace row, the first session, turn and user_message item, inserts the create op and sets state starting", async ({
@@ -512,7 +545,7 @@ describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
   });
 
   it("lists ports with their preview URLs", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     await emit(w, { kind: "ports.changed", ports: [5173, 3000] });
     await waitFor(async () => (await detail(w.stub)).ports.length === 2, 5000, "ports");
     const d = await detail(w.stub);
@@ -547,8 +580,8 @@ describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
 });
 
 describe.concurrent("renameWorkspace", { timeout: 30_000 }, () => {
-  it("stores the title and publishes it to the D1 row", async ({ expect, onTestFinished }) => {
-    const w = await seedHeld(onTestFinished);
+  it("stores the title and publishes it to the D1 row", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     const rev = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.renameWorkspace({ title: "Billing refactor" }))).toBe("OK");
     const d = await detail(w.stub);
@@ -657,7 +690,7 @@ describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
   it("sends git.renameBranch {from, to} when connected, then stores and publishes the new branch", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     const from = (await detail(w.stub)).branch;
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/renamed" }))).toBe("OK");
     // 02 tempod protocol: git.renameBranch {from, to}
@@ -677,7 +710,7 @@ describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
   });
 
   it("keeps the old branch when tempod fails the rename", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     const before = (await detail(w.stub)).branch;
     w.tempod.fail("git.renameBranch", "INTERNAL", "git branch -m failed");
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/nope" }))).toBe("INTERNAL");
@@ -686,11 +719,8 @@ describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
 });
 
 describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
-  it("setPinned writes pinned through the DO and raises summary_rev in D1", async ({
-    expect,
-    onTestFinished,
-  }) => {
-    const w = await seedHeld(onTestFinished);
+  it("setPinned writes pinned through the DO and raises summary_rev in D1", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     const rev0 = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.setPinned({ pinned: true }))).toBe("OK");
     const d1 = await detail(w.stub);
@@ -720,7 +750,7 @@ describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
   });
 
   it("publishes the summary to the hub even when the D1 write fails", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     const brokenD1 = {
       prepare: () => {
         throw new Error("D1 unavailable");
@@ -1045,11 +1075,8 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
 });
 
 describe.concurrent("rotatePreviewKey", { timeout: 30_000 }, () => {
-  it("makes a new preview key and leaves the preview URLs as they are", async ({
-    expect,
-    onTestFinished,
-  }) => {
-    const w = await seedHeld(onTestFinished);
+  it("makes a new preview key and leaves the preview URLs as they are", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     await exec(w.stub, "INSERT INTO ports (port, first_seen_at) VALUES (3000, 0)");
     const before = (await wsRow(w.stub))["preview_key"];
     expect(ok(await w.stub.rotatePreviewKey({}))).toEqual({});
@@ -1080,7 +1107,7 @@ describe.concurrent("open previews", { timeout: 30_000 }, () => {
   it("closes preview WebSockets that are already open when the key is reset, and the old cookie stops working", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     const cookie = await cookieFor(w);
     const res = await previewFetch(w, cookie, { upgrade: true });
     expect(res.status).toBe(101);
@@ -1099,7 +1126,7 @@ describe.concurrent("open previews", { timeout: 30_000 }, () => {
   });
 
   it("leaves open preview WebSockets alone until the key is reset", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     const cookie = await cookieFor(w);
     const socket = (await previewFetch(w, cookie, { upgrade: true })).webSocket!;
     let closed = false;
@@ -1930,7 +1957,7 @@ describe.concurrent("commitAndPush behind other ops", { timeout: 30_000 }, () =>
 
 describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   it("pass through to tempod when the container is ready", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     w.tempod.on("fs.search", () => ({ matches: [{ path: "src/a.ts", line: 3, text: "const foo = 1" }] }));
     w.tempod.on("git.fileDiff", () => ({ diff: "@@ -1 +1 @@\n-a\n+b\n" }));
     // 02 Review and git: getChanges → {files, baseSha, headSha}
@@ -1963,7 +1990,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   });
 
   it("pass tempod's error codes through", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     w.tempod.fail("fs.read", "FILE_TOO_LARGE", "2 MiB");
     expect(codeOf(await w.stub.readFile({ path: "big.bin" }))).toBe("FILE_TOO_LARGE");
     w.tempod.fail("fs.read", "PATH_OUTSIDE_WORKSPACE", "/etc/passwd");
@@ -2058,7 +2085,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   });
 
   it("bounds cache storage and excludes files absent from the non-ignored tree", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await seedReadyWorkspace();
     await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const core = internals(i).core;
       await core.files.sync();
@@ -2254,30 +2281,34 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
   it("getEgressConfig returns {owner, repo, policy, allowlist, mcp} from the project and the effective settings", async ({
     expect,
   }) => {
-    const w = await readyWs();
-    // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist, mcp}
-    expect(await w.stub.getEgressConfig()).toEqual({
-      owner: "acme",
-      repo: "app",
-      environmentId: null,
-      policy: "open",
-      allowlist: [],
-      secrets: [],
-      injectors: [],
-      mcp: [],
+    const w = await seedReadyWorkspace({
+      settings: {
+        ...DEFAULT_EFFECTIVE,
+        environment: {
+          ...DEFAULT_EFFECTIVE.environment,
+          egress_policy: "allowlist",
+          egress_allowlist: ["*.npmjs.org", "example.com"],
+        },
+      },
     });
-    await useSettings(
-      w,
-      settingsWith({
-        environment: { egress_policy: "allowlist", egress_allowlist: ["*.npmjs.org", "example.com"] },
-      }),
-    );
+    // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist, mcp}
     expect(await w.stub.getEgressConfig()).toEqual({
       owner: "acme",
       repo: "app",
       environmentId: null,
       policy: "allowlist",
       allowlist: ["*.npmjs.org", "example.com"],
+      secrets: [],
+      injectors: [],
+      mcp: [],
+    });
+    await useSettings(w, DEFAULT_EFFECTIVE);
+    expect(await w.stub.getEgressConfig()).toEqual({
+      owner: "acme",
+      repo: "app",
+      environmentId: null,
+      policy: "open",
+      allowlist: [],
       secrets: [],
       injectors: [],
       mcp: [],
@@ -2294,8 +2325,8 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
     expect(String(error)).toMatch(/not found/i);
   });
 
-  it("logEgress keeps only the newest 10,000 rows on every insert", async ({ expect, onTestFinished }) => {
-    const w = await seedHeld(onTestFinished);
+  it("logEgress keeps only the newest 10,000 rows on every insert", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     await exec(
       w.stub,
       "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 10000) INSERT INTO egress_log (ts, method, host, path, status, ms, rule) SELECT i, 'GET', 'example.com', '/' || i, 200, 1, 9 FROM n",
@@ -2316,9 +2347,8 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
 
   it("logEgress appends rows that Diagnostics shows newest first; an unknown workspace ignores it", async ({
     expect,
-    onTestFinished,
   }) => {
-    const w = await seedHeld(onTestFinished);
+    const w = await seedReadyWorkspace();
     const a = {
       ts: 1000,
       method: "GET",
@@ -2677,11 +2707,8 @@ describe.concurrent("getDiagnostics egress filters (02, 05 Observability)", { ti
       rule: number;
     }>;
 
-  it("filters every stored row on the server and returns the newest 500 matches", async ({
-    expect,
-    onTestFinished,
-  }) => {
-    const w = await seedHeld(onTestFinished);
+  it("filters every stored row on the server and returns the newest 500 matches", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     await seedEgress(w);
     const all = await egressOf(w, {});
     expect(all).toHaveLength(500);
@@ -2697,11 +2724,8 @@ describe.concurrent("getDiagnostics egress filters (02, 05 Observability)", { ti
     expect(await egressOf(w, { egressHost: "%" })).toEqual([]);
   });
 
-  it("blocked means rule 0, 7 or 10; 2xx to 5xx match the status class", async ({
-    expect,
-    onTestFinished,
-  }) => {
-    const w = await seedHeld(onTestFinished);
+  it("blocked means rule 0, 7 or 10; 2xx to 5xx match the status class", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     await seedEgress(w);
     const blocked = await egressOf(w, { egressStatus: "blocked" });
     expect(blocked.map((r) => r.rule)).toEqual([10, 7, 0]);

@@ -1,5 +1,5 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { newId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
+import { newId, type AgentId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import type { WorkspaceCore } from "../../src/do/workspace/core.ts";
 import type { OpRunner } from "../../src/do/workspace/runner.ts";
@@ -468,10 +468,14 @@ export const seedWorkspace = async (
   return { workspaceId, stub, ...fakes };
 };
 
-/** Gives the user a credential for every agent. */
-export const seedCredentials = async (userId: string): Promise<void> => {
+/** Gives the user credentials for the selected agents (all agents when omitted). */
+export const seedCredentials = async (
+  userId: string,
+  agents: readonly AgentId[] = ["claude", "codex", "opencode", "pi"],
+): Promise<void> => {
   const creds = env.CREDENTIALS.getByName(userId);
-  await creds.putSecret("claude.oauth_token", "sk-ant-oat01-test-token-value");
-  await creds.putSecret("openrouter.api_key", "sk-or-test");
-  await creds.putSecret("openai.api_key", "sk-openai-test");
+  if (agents.includes("claude")) await creds.putSecret("claude.oauth_token", "sk-ant-oat01-test-token-value");
+  if (agents.includes("opencode") || agents.includes("pi"))
+    await creds.putSecret("openrouter.api_key", "sk-or-test");
+  if (agents.includes("codex")) await creds.putSecret("openai.api_key", "sk-openai-test");
 };

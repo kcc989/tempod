@@ -180,7 +180,7 @@ const seedWs = async (
   } = {},
 ): Promise<Ws> => {
   const seeded = await seedProject();
-  if (opts.credentials) await seedCredentials(seeded.userId);
+  if (opts.credentials) await seedCredentials(seeded.userId, ["claude"]);
   counter++;
   const workspaceId = newId();
   const slug = `ops${counter}`;

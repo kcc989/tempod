@@ -187,8 +187,13 @@ under five total runner minutes. `bun run ci` measures each stage and permits
 300 seconds for check commands after setup, with a six-minute hard job timeout
 for setup and cleanup. Total elapsed time including setup remains visible. See `docs/CI.md` for the test audit, suite
 boundaries and rules. Worker, UI and component tests and browser fixture builds
-have separate cache entries that include transitive workspace sources. Browser
-tests still execute for code changes. Documentation-only changes retain the
+have separate cache entries that include transitive workspace sources. The fixed
+production CI build is cached with its configuration and environment inputs;
+deployment builds with arbitrary configuration remain uncached. Browser tests
+still execute for code changes in a shared Playwright worker pool. RPC tests can
+use configurable isolated ready-workspace fixtures and explicit agent credentials;
+lifecycle tests still exercise real initialization and operation steps.
+Documentation-only changes retain the
 required check with lint/format only; unavailable change bases run the full suite.
 Hosted acceptance and installed-agent conformance remain
 explicit gates; skipped tests do not satisfy them.
