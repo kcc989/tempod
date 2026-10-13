@@ -13,12 +13,14 @@ export function InlineEdit({
   onSave,
   onDone,
   className,
+  maxLength = 200,
 }: {
   value: string;
   label: string;
   onSave: (next: string) => void;
   onDone: () => void;
   className?: string;
+  maxLength?: number;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const finished = useRef(false);
@@ -45,7 +47,7 @@ export function InlineEdit({
       ref={ref}
       defaultValue={value}
       aria-label={label}
-      maxLength={200}
+      maxLength={maxLength}
       className={cn("h-6 px-1.5 text-sm", className)}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {

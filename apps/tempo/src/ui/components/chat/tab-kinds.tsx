@@ -1,5 +1,6 @@
 import {
   ShapesIcon,
+  BookOpenIcon,
   FileCodeIcon,
   FileDiffIcon,
   GlobeIcon,
@@ -15,6 +16,7 @@ import { Transcript } from "~/ui/components/chat/Transcript";
 import { BrowserTab } from "~/ui/components/review/BrowserTab";
 import { DiffTab } from "~/ui/components/review/DiffTab";
 import { FileTab } from "~/ui/components/review/FileTab";
+import { GuideTab } from "~/ui/components/review/GuideTab";
 import { LiveViewTab } from "~/ui/components/review/LiveViewTab";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import type { CenterTab, CenterTabKind } from "~/ui/state/workspace-ui";
@@ -68,6 +70,7 @@ export const CENTER_TAB_KINDS: { readonly [K in CenterTabKind]: CenterTabKindDef
   chat: { icon: MessageSquareIcon, Title: ChatTitle, Body: ChatBody },
   file: { icon: FileCodeIcon, Title: ({ tab }) => <>{baseName(tab.path)}</>, Body: FileTab },
   diff: { icon: FileDiffIcon, Title: () => <>Diff</>, Body: DiffTab },
+  guide: { icon: BookOpenIcon, Title: () => <>Guide</>, Body: GuideTab },
   browser: { icon: GlobeIcon, Title: ({ tab }) => <>{hostOf(tab.url)}</>, Body: BrowserTab },
   liveView: { icon: RadioIcon, Title: () => <>Live View</>, Body: LiveViewTab },
   artifact: { icon: ShapesIcon, Title: ArtifactTitle, Body: ArtifactTab },

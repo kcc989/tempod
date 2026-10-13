@@ -220,6 +220,8 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 ## Terminal, scripts and previews
 
+**Guided PRs.** `Create or update guide` in the workspace sends the same shared authoring prompt as the web UI through the active chat's normal `sendPrompt` flow. It is disabled without a chat or when archived; the composer’s read-only and sending checks also apply. `Open guide` opens `<Tempo origin>/w/<workspaceId>?guide=true` in the default browser. The chapter, diff and interactive artifact renderer is the authenticated web Guide view (04); the native client does not execute artifact HTML. This follows C7's browser policy and ships in the same phase as the web feature.
+
 **Terminal**
 
 - `crates/tempo-terminal` forks `gpui-terminal` 0.1.0 and ports it to the GPUI that `gpui-kit` 0.7.1 bundles. Keep its license file and headers. It uses `alacritty_terminal = "=0.25.1"` for parsing and the grid.
@@ -423,3 +425,6 @@ Pages read on 2026-10-11.
 - [Effect v4: Schema to JSON Schema](https://effect.website/docs/v4/schema/json-schema)
 - [RFC 8628: OAuth 2.0 Device Authorization Grant](https://www.rfc-editor.org/rfc/rfc8628)
 - [Apple: Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+
+## Branch naming
+New workspaces use animal slugs and receive a branch name from the first accepted prompt as in 03. The workspace header offers Rename branch with Save branch and Cancel. It calls `renameBranch` and preserves server error messages; enable it only for ready, working or sleeping workspaces with an unpushed branch. A manual save overrides automatic naming.

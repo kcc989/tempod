@@ -90,10 +90,10 @@ Framework-free stores (`Store` from `ui/lib/store.ts`). React reads them with th
 
 **Center tabs** (per workspace, in memory)
 
-- `CenterTab = {kind: "chat", sessionId} | {kind: "file", path, line: number | null} | {kind: "diff", path: string | null} | {kind: "browser", url} | {kind: "liveView"}`.
-- `tabKey(tab)`: identity. `chat:<id>`, `file:<path>`, `diff` (one diff tab), `browser:<url>`, `liveView` (one Live View tab).
-- `tabRef(tab)` / `parseTabRef(ref)`: the string form `chat:<sessionId>`, `file:<path>:<line?>`, `diff:<path?>`, `browser:<url>`, `liveView:`.
-- `openTab(ws, tab, {activate?})`, `openFile(ws, path, line?)`, `openDiff(ws, path?)`, `openBrowser(ws, url)`, `openLiveView(ws)`: open or update in place; bump `seq`; return the key.
+- `CenterTab = {kind: "chat", sessionId} | {kind: "file", path, line: number | null} | {kind: "diff", path: string | null} | {kind: "browser", url} | {kind: "liveView"} | {kind: "guide"}`.
+- `tabKey(tab)`: identity. `chat:<id>`, `file:<path>`, `diff` (one diff tab), `browser:<url>`, `liveView` (one Live View tab), `guide` (one Guide tab).
+- `tabRef(tab)` / `parseTabRef(ref)`: the string form `chat:<sessionId>`, `file:<path>:<line?>`, `diff:<path?>`, `browser:<url>`, `liveView:`, `guide:`.
+- `openTab(ws, tab, {activate?})`, `openFile(ws, path, line?)`, `openDiff(ws, path?)`, `openBrowser(ws, url)`, `openLiveView(ws)`, `openGuide(ws)`: open or update in place; bump `seq`; return the key.
 - `closeTab(ws, key)`, `activateTab(ws, key)`, `cycleTab(ws, 1 | -1)`, `moveTab(ws, key, index)`, `syncChatTabs(ws, sessionIds)`.
 - `targetChatSession(state)`: the active chat, else the chat shown last.
 

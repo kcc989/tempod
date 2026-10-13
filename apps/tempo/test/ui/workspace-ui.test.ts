@@ -62,6 +62,7 @@ describe("tab refs", () => {
     [{ kind: "file", path: "src/a.ts", line: null }, "file:src/a.ts:"],
     [{ kind: "diff", path: "README.md" }, "diff:README.md"],
     [{ kind: "diff", path: null }, "diff:"],
+    [{ kind: "guide" }, "guide:"],
     [{ kind: "browser", url: "https://p-1.example.com:3000/x" }, "browser:https://p-1.example.com:3000/x"],
     [{ kind: "liveView" }, "liveView:"],
   ];

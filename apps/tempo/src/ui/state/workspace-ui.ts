@@ -14,6 +14,7 @@ export type CenterTab =
   | { readonly kind: "chat"; readonly sessionId: string }
   | { readonly kind: "file"; readonly path: string; readonly line: number | null }
   | { readonly kind: "diff"; readonly path: string | null }
+  | { readonly kind: "guide" }
   | { readonly kind: "browser"; readonly url: string }
   | { readonly kind: "liveView" }
   /** `version` null: the newest version (04, Artifact tab). */
@@ -33,6 +34,8 @@ export const tabKey = (t: CenterTab): string => {
       return `file:${t.path}`;
     case "diff":
       return "diff";
+    case "guide":
+      return "guide";
     case "browser":
       return `browser:${t.url}`;
     case "liveView":
@@ -54,6 +57,8 @@ export const tabRef = (t: CenterTab): string => {
       return `file:${t.path}:${t.line ?? ""}`;
     case "diff":
       return `diff:${t.path ?? ""}`;
+    case "guide":
+      return "guide:";
     case "browser":
       return `browser:${t.url}`;
     case "liveView":
@@ -82,6 +87,8 @@ export const parseTabRef = (ref: string): CenterTab | null => {
     }
     case "diff":
       return { kind: "diff", path: rest === "" ? null : rest };
+    case "guide":
+      return rest === "" ? { kind: "guide" } : null;
     case "browser":
       return rest ? { kind: "browser", url: rest } : null;
     case "liveView":
@@ -270,6 +277,8 @@ export const openFile = (workspaceId: string, path: string, line: number | null 
 
 export const openDiff = (workspaceId: string, path: string | null = null): string =>
   openTab(workspaceId, { kind: "diff", path });
+
+export const openGuide = (workspaceId: string): string => openTab(workspaceId, { kind: "guide" });
 
 export const openBrowser = (workspaceId: string, url: string): string =>
   openTab(workspaceId, { kind: "browser", url });

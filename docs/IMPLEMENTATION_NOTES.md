@@ -166,6 +166,8 @@ The owner asked for MCP servers that work with every agent and with remote serve
 
 ## Choices where the spec is silent
 
+Guided PRs (04, 05, 07) use agent-authored repository files, the existing `readFile`, `getChanges`, `getFileDiff`, `sendPrompt` and `createPullRequest` APIs, and no new database or endpoint. `PrGuide` is a versioned repository document schema in `packages/protocol`, not a new channel/RPC wire type. The Mac client creates guides through its active chat and opens the web renderer in the default browser. Browser guide links require the owner's login. Explanation freshness is not automatically inferred: live files remain visible and users are prompted to update after changing code.
+
 | Area | Choice |
 | --- | --- |
 | Monorepo | Bun workspaces with Turborepo (`turbo.json`), as requested. TypeScript 6.0.3: TypeScript 7 is the native compiler, and some tools still need the JS API. |
@@ -322,6 +324,8 @@ The native continuation implements 07's existing sign-in contract: server/versio
 The next native milestone wires workspace channels and cached chat views to the same apply rules used by `tempo-client`. Reconnect and hidden-store tests share the web channel fixtures. Composer drafts survive failed sends; queue editing uses a separate field so it does not replace the unsent draft. Queue reordering sends every queued turn in the workspace, including other chats. Headless view tests use loopback RPC fixtures; rendered pixel quality and authenticated agent behavior still need acceptance.
 
 The owner requested both queueing and live steering, and selected delivery during the active turn where supported. Specs 01–04 and 07 now define the ACP v1 steering extension, optional send delivery, capability/progress flags and the durable `turns.steering_pending` reservation. Unsupported or settled delivery stays queued. An ambiguous acknowledgement or interrupted reservation becomes a failed turn with an explicit check-before-retry message. No new library or adapter version was added. Primary reference: [Claude ACP steering example](https://github.com/agentclientprotocol/claude-agent-acp/blob/main/examples/steering.ts). Real logged-in adapter conformance remains open.
+
+First-prompt naming uses WorkspaceDO KV keys `firstPromptSeen`, `promptBranch` and `branchManuallyNamed`. `promptBranch` stores the pending branch name across setup, sleep and DO restarts. The internal package name `@tempo/cities` remains for compatibility; its fixed list now contains animals.
 
 ### Long-term project conversation artifacts
 
