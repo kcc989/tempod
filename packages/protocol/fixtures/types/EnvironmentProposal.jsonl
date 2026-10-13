@@ -1,0 +1,2 @@
+{"note":"The tests call the Stripe API and pip installs from PyPI.","allowlistAdd":["pypi.org","files.pythonhosted.org"],"secrets":[{"name":"STRIPE_KEY","hosts":["api.stripe.com"]}]}
+{"note":"Sign S3 requests.","egressPolicy":"allowlist","injectors":[{"name":"aws-sigv4","hosts":["s3.amazonaws.com"],"code":"export default { async fetch(request, env) { return fetch(request); } };\n"}]}

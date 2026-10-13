@@ -37,8 +37,14 @@ export const ERROR_MESSAGES = {
   FILE_TOO_LARGE: "This file is too large to show.",
   PATH_OUTSIDE_WORKSPACE: "That path is outside the workspace.",
   CHECKPOINT_NOT_FOUND: "That checkpoint no longer exists.",
+  ARTIFACT_NOT_READY: "This artifact is still being saved. Try again in a moment.",
+  MODEL_REQUIRED: "Set a default model for this agent in Settings → Project.",
   SETTINGS_INVALID: "Settings are not valid.",
+  ENVIRONMENT_EXISTS: "An environment with this name already exists.",
   EGRESS_BLOCKED: "(Shown only in the egress log.)",
+  CUSTOM_AGENT_EXISTS: "You already have an agent with this name.",
+  CUSTOM_AGENT_LIMIT: "You have the most custom agents allowed. Delete one first.",
+  ARTIFACTS_ERROR: "Could not reach agent storage. Try again.",
   INTERNAL: "Something went wrong.",
 } as const;
 

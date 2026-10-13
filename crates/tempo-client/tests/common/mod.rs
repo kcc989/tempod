@@ -37,7 +37,15 @@ impl HttpRequest {
     }
 }
 
-pub type Handler = dyn Fn(&HttpRequest, usize) -> (u16, String) + Send + Sync;
+/// A reply with any body. Without `content_length` the body ends when the connection closes.
+pub struct RawReply {
+    pub status: u16,
+    pub content_type: &'static str,
+    pub body: Vec<u8>,
+    pub content_length: bool,
+}
+
+pub type Handler = dyn Fn(&HttpRequest, usize) -> RawReply + Send + Sync;
 
 pub struct FakeHttp {
     pub base: String,
@@ -53,6 +61,22 @@ impl FakeHttp {
 /// Answers every request with `handler(request, index)`: a status and a JSON body.
 pub async fn fake_http(
     handler: impl Fn(&HttpRequest, usize) -> (u16, String) + Send + Sync + 'static,
+) -> FakeHttp {
+    fake_http_raw(move |request, index| {
+        let (status, body) = handler(request, index);
+        RawReply {
+            status,
+            content_type: "application/json",
+            body: body.into_bytes(),
+            content_length: true,
+        }
+    })
+    .await
+}
+
+/// Answers every request with `handler(request, index)`.
+pub async fn fake_http_raw(
+    handler: impl Fn(&HttpRequest, usize) -> RawReply + Send + Sync + 'static,
 ) -> FakeHttp {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let base = format!("http://{}", listener.local_addr().expect("addr"));
@@ -74,11 +98,29 @@ pub async fn fake_http(
     FakeHttp { base, requests }
 }
 
+// Real sockets must settle before the paused clock advances a request deadline.
+struct IoClockGuard(tokio::task::JoinHandle<()>);
+impl IoClockGuard {
+    fn new() -> Self {
+        Self(tokio::spawn(async {
+            loop {
+                tokio::task::yield_now().await;
+            }
+        }))
+    }
+}
+impl Drop for IoClockGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 async fn serve_one(
     mut stream: TcpStream,
     log: Arc<Mutex<Vec<HttpRequest>>>,
     handler: Arc<Handler>,
 ) -> std::io::Result<()> {
+    let _io_clock = IoClockGuard::new();
     {
         let mut buf = Vec::new();
         let head_end = loop {
@@ -128,13 +170,23 @@ async fn serve_one(
             log.push(request.clone());
             log.len() - 1
         };
-        let (status, body) = handler(&request, index);
-        let response = format!(
-            "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
+        let reply = handler(&request, index);
+        let length = if reply.content_length {
+            format!("Content-Length: {}\r\n", reply.body.len())
+        } else {
+            String::new()
+        };
+        let head = format!(
+            "HTTP/1.1 {} X\r\nContent-Type: {}\r\n{length}Connection: close\r\n\r\n",
+            reply.status, reply.content_type
         );
-        stream.write_all(response.as_bytes()).await?;
-        stream.shutdown().await
+        stream.write_all(head.as_bytes()).await?;
+        stream.write_all(&reply.body).await?;
+        stream.shutdown().await?;
+        for _ in 0..20 {
+            tokio::task::yield_now().await;
+        }
+        Ok(())
     }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, type RefObject } from "react";
 import { isEditableTarget, isMacPlatform, matchAction, type ActionId } from "~/ui/lib/shortcuts";
+import { modalOpen } from "~/ui/lib/modal";
 
 /** Return false to let the event through (no preventDefault). */
 export type ShortcutHandler = (e: KeyboardEvent) => void | false;
@@ -24,6 +25,7 @@ export function useShortcuts(
 
   const onKey = useEffectEvent((e: KeyboardEvent, mac: boolean) => {
     if (e.defaultPrevented || e.isComposing) return;
+    if (!target && modalOpen()) return;
     const id = matchAction(e, Object.keys(handlers) as ActionId[], mac, {
       editable: isEditableTarget(e.target),
       allowPlainInEditable,

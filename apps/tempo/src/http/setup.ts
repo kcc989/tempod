@@ -1,8 +1,11 @@
+import type { AppSetupStatus } from "@tempo/protocol";
 import { SYSTEM_CREDENTIALS } from "../do/credential.ts";
 import type { Env } from "../env.ts";
 import { clearGithubAppConfigCache, getGithubAppConfig } from "../github/app.ts";
 import { timingSafeEqual } from "../lib/crypto.ts";
-import { log } from "../log.ts";
+import { errorText, log } from "../log.ts";
+import { getSessionUser, isOwner } from "../auth/auth.ts";
+import { listInstallations } from "../server/handlers/projects.ts";
 import { appOrigin, escapeHtml, html } from "./common.ts";
 
 const notFound = () => new Response("Not found", { status: 404 });
@@ -10,7 +13,9 @@ const notFound = () => new Response("Not found", { status: 404 });
 /** 05, GitHub App setup (manifest flow). Works only while no App is configured, and only with the token. */
 export const handleSetup = async (request: Request, env: Env, url: URL): Promise<Response> => {
   if (url.pathname === "/setup/github/installed") {
-    // GitHub's setup_url. Installations are synced from GET /app/installations once the owner signs in.
+    // GitHub's setup_url (05 step 5). A signed-in owner gets the new installation stored now;
+    // otherwise the Add project dialog syncs GET /app/installations after sign-in.
+    await storeInstallation(request, env, url.searchParams.get("installation_id"));
     return Response.redirect(`${appOrigin(env)}/`, 302);
   }
   if (await getGithubAppConfig(env, { fresh: true })) return notFound();
@@ -56,6 +61,23 @@ export const handleSetup = async (request: Request, env: Env, url: URL): Promise
   return notFound();
 };
 
+const storeInstallation = async (
+  request: Request,
+  env: Env,
+  installationId: string | null,
+): Promise<void> => {
+  if (!installationId || !/^[1-9][0-9]{0,15}$/.test(installationId)) return;
+  try {
+    const user = await getSessionUser(env, request.headers, { allowCookie: true, allowBearer: false });
+    if (!user || !(await isOwner(env, user.id))) return;
+    const stored = await listInstallations({ env, user });
+    if (!stored.some((i) => i.installationId === Number(installationId)))
+      log("warn", "installation from setup_url not found", { installationId: Number(installationId) });
+  } catch (e) {
+    log("warn", "installation sync failed", { error: errorText(e) });
+  }
+};
+
 export const manifest = (env: Env) => {
   const origin = appOrigin(env);
   return {
@@ -67,6 +89,7 @@ export const manifest = (env: Env) => {
     public: false,
     hook_attributes: { url: `${origin}/`, active: false },
     default_permissions: {
+      email_addresses: "read",
       contents: "write",
       pull_requests: "write",
       metadata: "read",
@@ -97,8 +120,9 @@ const setupPage = (env: Env, token: string): Response => {
 /** Unauthenticated: whether the App exists, and its install link (both public facts). */
 export const handleSetupStatus = async (env: Env): Promise<Response> => {
   const config = await getGithubAppConfig(env);
-  return Response.json({
+  const status: AppSetupStatus = {
     configured: config !== null,
     installUrl: config ? `https://github.com/apps/${config.slug}/installations/new` : null,
-  });
+  };
+  return Response.json(status);
 };

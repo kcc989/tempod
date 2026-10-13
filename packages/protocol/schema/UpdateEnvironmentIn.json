@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UpdateEnvironmentIn",
+  "type": "object",
+  "properties": {
+    "environmentId": {
+      "type": "string"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "egressPolicy": {
+      "anyOf": [
+        {
+          "$ref": "EgressPolicy.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "egressAllowlist": {
+      "anyOf": [
+        {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "secrets": {
+      "anyOf": [
+        {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "SecretBinding.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "injectors": {
+      "anyOf": [
+        {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "$ref": "InjectorInput.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["environmentId"],
+  "additionalProperties": true
+}

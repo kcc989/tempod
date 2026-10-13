@@ -36,6 +36,8 @@ export interface ChangesResult {
   readonly fetching: boolean;
   readonly error: Error | null;
   readonly refetch: () => void;
+  /** The commit an image diff's `Before` comes from: baseSha (branch) or headSha (uncommitted). */
+  readonly beforeSha: string | null;
 }
 
 /**
@@ -70,6 +72,7 @@ export function useChanges(workspaceId: string): ChangesResult {
     fetching: query.isFetching,
     error: query.error,
     refetch: () => void refetch(),
+    beforeSha: query.data ? (scope === "branch" ? query.data.baseSha : query.data.headSha) : null,
   };
 }
 
@@ -124,16 +127,27 @@ export function useAddComment(onDone?: () => void) {
   });
 }
 
-/** listFiles while the container is up; refetched when files change. */
+/** listFiles uses the DO fallback while sleeping. */
 export function useFileList(workspaceId: string, enabled = true) {
-  const live = useLive(workspaceId);
+  const state = useWorkspaceStateValue(workspaceId);
+  const live = isLive(state);
+  const available = live || state === "sleeping";
   useInvalidateOnChanges(workspaceId, LIST_FILES);
   const query = useCallQuery(
     "listFiles",
     { workspaceId },
-    { enabled: enabled && live, staleTime: 30_000, retry: false, refetchInterval: retryWhileWaking },
+    {
+      enabled: enabled && available,
+      staleTime: 30_000,
+      retry: false,
+      refetchInterval: live ? retryWhileWaking : false,
+    },
   );
-  return { query, live };
+  const { refetch } = query;
+  useEffect(() => {
+    if (enabled && available) void refetch();
+  }, [enabled, available, state, refetch]);
+  return { query, live, available };
 }
 
 const LIST_FILES = ["listFiles"] as const;

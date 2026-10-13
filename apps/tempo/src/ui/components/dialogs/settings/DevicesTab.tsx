@@ -13,6 +13,7 @@ import {
 } from "~/ui/auth";
 import { formatDateTime, formatRelative } from "~/ui/lib/format";
 import { toastError } from "~/ui/lib/toast";
+import { MacClientInfo } from "./MacClientInfo";
 
 const DEVICES_KEY = ["auth", "devices"] as const;
 
@@ -44,13 +45,14 @@ export function DevicesTab() {
 
   if (session.isPending || devices.isPending) return <SkeletonRows rows={3} />;
   if (devices.isError) return <ErrorState error={devices.error} onRetry={() => void devices.refetch()} />;
-  if (devices.data.length === 0) return <EmptyState title="No sign-ins." />;
 
   return (
     <div className="grid gap-2">
+      <MacClientInfo />
       <p className="text-xs text-muted-foreground">
         Where you are signed in, including Tempo for Mac. Revoke a sign-in to sign that device out.
       </p>
+      {devices.data.length === 0 && <EmptyState title="No sign-ins." />}
       <ul className="flex flex-col divide-y rounded-lg border">
         {devices.data.map((d) => {
           const label = sessionLabel(d.userAgent);

@@ -1,4 +1,5 @@
-import { DEFAULT_SETTINGS, type Settings, type SettingsLayer } from "@tempo/protocol";
+import { DEFAULT_SETTINGS, SettingsLayer, type Settings } from "@tempo/protocol";
+import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
   effectiveEntries,
@@ -38,7 +39,19 @@ describe("the field list", () => {
         return typeof v === "object" && v !== null && !Array.isArray(v) ? leaves(v, path) : [path];
       });
     expect(FIELDS.map((f) => f.path).sort()).toEqual(leaves(DEFAULT_SETTINGS).sort());
-    expect(SECTIONS).toEqual(["Agent", "Scripts", "Environment", "Git", "Prompts"]);
+    expect(SECTIONS).toEqual(["Agent", "Browser", "Scripts", "Environment", "Git", "Prompts"]);
+  });
+
+  it("has one free-text default model per agent and a Browser Run toggle (04, Settings → Project)", () => {
+    expect(
+      FIELDS.filter((f) => f.path.startsWith("agent.models.")).map((f) => [f.path, f.kind, f.label]),
+    ).toEqual([
+      ["agent.models.claude", "text", "Claude default model"],
+      ["agent.models.codex", "text", "Codex default model"],
+      ["agent.models.opencode", "text", "OpenCode default model"],
+      ["agent.models.pi", "text", "Pi default model"],
+    ]);
+    expect(fieldDef("browser.run")).toMatchObject({ section: "Browser", label: "Browser Run", kind: "bool" });
   });
 });
 
@@ -175,6 +188,25 @@ describe("the form", () => {
     expect(Object.keys(layerFromForm(bad).errors)).toEqual(["environment.sleep_after_idle_minutes"]);
   });
 
+  it("saves agent models and Browser Run as a SettingsLayer", () => {
+    const form = formFromLayer({ agent: { models: { codex: "gpt-5-codex" } } }, effective);
+    expect(form["agent.models.codex"]).toEqual({ set: true, value: { kind: "text", text: "gpt-5-codex" } });
+    expect(form["agent.models.pi"]).toEqual({ set: false, value: { kind: "text", text: "" } });
+    expect(form["browser.run"]).toEqual({ set: false, value: { kind: "bool", on: false } });
+    const next: SettingsForm = {
+      ...form,
+      "agent.models.pi": { set: true, value: { kind: "text", text: " openrouter/pi " } },
+      "browser.run": { set: true, value: { kind: "bool", on: true } },
+    };
+    const { layer: out, errors } = layerFromForm(next);
+    expect(errors).toEqual({});
+    expect(out).toEqual({
+      agent: { models: { codex: "gpt-5-codex", pi: "openrouter/pi" } },
+      browser: { run: true },
+    });
+    expect(Schema.decodeUnknownSync(SettingsLayer)(out)).toEqual(out);
+  });
+
   it("detects changes but not new row keys", () => {
     const a = formFromLayer(layer, effective);
     const b = formFromLayer(layer, effective);
@@ -190,23 +222,49 @@ describe("the form", () => {
   });
 });
 
-describe("effective values and sources (04: Tempo, .tempo, .conductor, conductor.json or default)", () => {
+describe("effective values and sources (04: Tempo, .tempo or default)", () => {
   const layer: SettingsLayer = { scripts: { setup: "make" } };
 
   it("uses the open workspace's values and sources", () => {
     const ctx = {
       settings: effective,
-      sources: { "scripts.setup": ".tempo" as const, "scripts.run.dev": "conductor.json" as const },
+      sources: { "scripts.setup": ".tempo" as const, "scripts.run.dev": "default" as const },
       layer,
     };
     expect(effectiveLeaf(fieldDef("scripts.setup"), ctx)).toEqual({ text: "bun install", source: ".tempo" });
     expect(effectiveLeaf(fieldDef("git.branch_prefix"), ctx)).toEqual({ text: "tempo/", source: "default" });
     expect(effectiveEntries(fieldDef("scripts.run"), ctx)).toEqual([
-      { key: "dev", text: "bun run dev · default", source: "conductor.json" },
+      { key: "dev", text: "bun run dev · default", source: "default" },
     ]);
     expect(effectiveEntries(fieldDef("environment_variables"), ctx)).toEqual([
       { key: "NODE_ENV", text: "NODE_ENV=development", source: "default" },
     ]);
+  });
+
+  it("shows each agent's model and Browser Run with their sources", () => {
+    const settings: Settings = {
+      ...effective,
+      agent: { default: "claude", models: { ...effective.agent.models, pi: "openrouter/pi" } },
+      browser: { run: true },
+    };
+    const ctx = {
+      settings,
+      sources: { "agent.models.pi": ".tempo" as const, "browser.run": "tempo" as const },
+      layer: { browser: { run: true } },
+    };
+    expect(effectiveLeaf(fieldDef("agent.models.pi"), ctx)).toEqual({
+      text: "openrouter/pi",
+      source: ".tempo",
+    });
+    expect(effectiveLeaf(fieldDef("agent.models.opencode"), ctx)).toEqual({
+      text: "Empty",
+      source: "default",
+    });
+    expect(effectiveLeaf(fieldDef("browser.run"), ctx)).toEqual({ text: "On", source: "tempo" });
+    expect(effectiveLeaf(fieldDef("browser.run"), { settings: null, sources: null, layer: {} })).toEqual({
+      text: "Off",
+      source: "default",
+    });
   });
 
   it("falls back to the project's overrides over the defaults with no open workspace", () => {
@@ -222,7 +280,7 @@ describe("effective values and sources (04: Tempo, .tempo, .conductor, conductor
 
   it("labels sources as 04 names them", () => {
     expect(sourceLabel("tempo")).toBe("Tempo");
-    expect(sourceLabel("conductor.json")).toBe("conductor.json");
+    expect(sourceLabel("default")).toBe("default");
   });
 
   it("formats values for display", () => {

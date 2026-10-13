@@ -77,6 +77,40 @@ export type ToolLocation = typeof ToolLocation.Type;
 export const Usage = Schema.Record(Schema.String, Schema.Unknown);
 export type Usage = typeof Usage.Type;
 
+/** ACP v1 `PromptResponse.usage`: the token counts the agent reports for one turn. */
+export const TurnUsage = Schema.Struct({
+  totalTokens: Schema.Number,
+  inputTokens: Schema.Number,
+  outputTokens: Schema.Number,
+  thoughtTokens: Schema.optional(Schema.Number),
+  cachedReadTokens: Schema.optional(Schema.Number),
+  cachedWriteTokens: Schema.optional(Schema.Number),
+});
+export type TurnUsage = typeof TurnUsage.Type;
+
+const tokenCount = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : undefined;
+
+/** Keeps only finite, non-negative counts. Null when a required count is missing. */
+export const toTurnUsage = (value: unknown): TurnUsage | null => {
+  if (typeof value !== "object" || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const totalTokens = tokenCount(v["totalTokens"]);
+  const inputTokens = tokenCount(v["inputTokens"]);
+  const outputTokens = tokenCount(v["outputTokens"]);
+  if (totalTokens === undefined || inputTokens === undefined || outputTokens === undefined) return null;
+  const usage: { -readonly [K in keyof TurnUsage]: TurnUsage[K] } = {
+    totalTokens,
+    inputTokens,
+    outputTokens,
+  };
+  for (const key of ["thoughtTokens", "cachedReadTokens", "cachedWriteTokens"] as const) {
+    const n = tokenCount(v[key]);
+    if (n !== undefined) usage[key] = n;
+  }
+  return usage;
+};
+
 export const Capabilities = Schema.Record(Schema.String, Schema.Unknown);
 export type Capabilities = typeof Capabilities.Type;
 

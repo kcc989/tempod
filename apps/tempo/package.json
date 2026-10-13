@@ -11,7 +11,8 @@
     "test": "vitest run && vitest run -c vitest.ui.config.ts && vitest run -c vitest.components.config.ts",
     "cf-typegen": "wrangler types --include-env=false ./worker-runtime.d.ts",
     "db:generate": "drizzle-kit generate",
-    "auth:generate": "auth generate --config scripts/auth.cli.ts --output src/db/auth-schema.ts -y"
+    "auth:generate": "auth generate --config scripts/auth.cli.ts --output src/db/auth-schema.ts -y",
+    "dev:web-test": "vite --config vite.web-test.config.ts"
   },
   "dependencies": {
     "@cloudflare/sandbox": "1.0.0",
@@ -31,7 +32,9 @@
     "cmdk": "1.1.1",
     "drizzle-orm": "0.45.4",
     "effect": "4.0.3",
+    "isomorphic-git": "1.44.1",
     "lucide-react": "1.55.0",
+    "mermaid": "12.1.0",
     "radix-ui": "1.7.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

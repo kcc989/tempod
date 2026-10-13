@@ -1,12 +1,17 @@
-import { CopyIcon, GitBranchIcon } from "lucide-react";
+import type { WorkspaceSummary } from "@tempo/protocol";
+import { CopyIcon, GitBranchIcon, PanelRightIcon } from "lucide-react";
 import { useState } from "react";
 import { ContainerPill, StatusIcon } from "~/ui/components/sidebar/indicators";
 import { Button } from "~/ui/components/ui/button";
 import { Skeleton } from "~/ui/components/ui/skeleton";
+import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
+import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { pillText } from "~/ui/lib/indicators";
+import { cn } from "~/ui/lib/utils";
+import { toggleRight } from "~/ui/state/workspace-ui";
 import { BaseBranchPicker } from "./BaseBranchPicker";
 import { requestCommit } from "./commit-request";
 import { EditableBranch } from "./EditableBranch";
@@ -14,7 +19,7 @@ import { InlineEdit } from "./InlineEdit";
 import { OverflowMenu } from "./OverflowMenu";
 import { PortLinks } from "./PortLinks";
 import { PrimaryActionButton } from "./PrimaryAction";
-import { shortcutAvailability, workspaceView, type WorkspaceView } from "./topbar-logic";
+import { prLink, shortcutAvailability, workspaceView, type WorkspaceView } from "./topbar-logic";
 import { useWorkspaceActions, type WorkspaceActions } from "./useWorkspaceActions";
 
 export interface TopBarProps {
@@ -24,8 +29,9 @@ export interface TopBarProps {
 }
 
 /**
- * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`. Middle: preview ports.
- * Right: container pill, the primary git action and the overflow menu.
+ * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`, the PR link. Middle: preview
+ * ports, then `Live` during a Browser Run session. Right: container pill, the primary git action, the
+ * overflow menu and the right-side toggle.
  */
 export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
   const summary = useHubWorkspace(workspaceId);
@@ -36,7 +42,7 @@ export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
 
   if (!view) {
     return (
-      <header aria-busy="true" className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+      <header aria-busy="true" className="flex h-10 shrink-0 items-center gap-2 border-b bg-card px-3">
         <Skeleton className="h-4 w-40" />
         <Skeleton className="ml-auto h-5 w-24 rounded-full" />
       </header>
@@ -70,7 +76,7 @@ function pillFor({ w, d }: WorkspaceView) {
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
   return (
-    <header className="flex h-10 shrink-0 items-center gap-3 border-b px-2">
+    <header className="flex h-10 shrink-0 items-center gap-3 border-b bg-card px-2">
       <div className="flex min-w-0 shrink items-center gap-1.5">
         <EditableTitle title={w.title} onSave={actions.rename} />
         <span className="flex min-w-0 items-center gap-0.5 font-mono text-xs text-muted-foreground">
@@ -93,21 +99,51 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
           baseBranch={w.baseBranch}
           locked={w.prNumber !== null || w.state === "archived" || w.state === "archiving"}
         />
+        <PrLinkAnchor workspace={w} />
       </div>
-      <PortLinks workspaceId={w.id} ports={d?.ports ?? []} className="flex-1 justify-center" />
+      <PortLinks
+        workspaceId={w.id}
+        ports={d?.ports ?? []}
+        browserActive={d?.browserActive ?? false}
+        className="flex-1 justify-center"
+      />
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <ContainerPill pill={pillFor(view)} />
+        <ContainerPill pill={pillFor(view)} onWake={w.state === "sleeping" ? actions.wake : undefined} />
         <PrimaryActionButton workspaceId={w.id} />
         <OverflowMenu view={view} actions={actions} />
+        <SimpleTooltip label="Toggle right side (⌘⌥B)">
+          <Button size="icon-sm" variant="ghost" aria-label="Toggle right side" onClick={toggleRight}>
+            <PanelRightIcon />
+          </Button>
+        </SimpleTooltip>
       </div>
     </header>
+  );
+}
+
+function PrLinkAnchor({ workspace: w }: { workspace: WorkspaceSummary }) {
+  const link = prLink(useProject(w.projectId), w);
+  if (!link) return null;
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={link.ariaLabel}
+      className={cn(
+        "shrink-0 rounded-md px-1 font-mono text-xs tabular-nums outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        link.className,
+      )}
+    >
+      {link.label}
+    </a>
   );
 }
 
 function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+    <header className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3">
       <StatusIcon workspace={w} op={d?.op ?? null} />
       <div className="flex min-w-0 flex-1 flex-col">
         <EditableTitle title={w.title} onSave={actions.rename} />
@@ -116,7 +152,11 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
           <span className="truncate"> → {w.baseBranch}</span>
         </div>
       </div>
-      <ContainerPill pill={pillFor(view)} className="max-w-32" />
+      <ContainerPill
+        pill={pillFor(view)}
+        className="max-w-32"
+        onWake={w.state === "sleeping" ? actions.wake : undefined}
+      />
       <OverflowMenu view={view} actions={actions} phone />
     </header>
   );

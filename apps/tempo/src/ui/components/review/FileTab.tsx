@@ -2,7 +2,11 @@ import { ERROR_MESSAGES } from "@tempo/protocol";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { FileIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { imageDataUrl, isMarkdownPath, isSvgPath } from "~/ui/components/artifacts/artifact-model";
+import { MessageMarkdown } from "~/ui/components/chat/Markdown";
 import type { CenterTabProps } from "~/ui/components/chat/tab-kinds";
+import { ToggleGroup, ToggleGroupItem } from "~/ui/components/ui/toggle-group";
+import { useLocalStorage } from "~/ui/hooks/useLocalStorage";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { LoadingText } from "~/ui/components/ui/spinner";
 import { useCallQuery } from "~/ui/hooks/useCall";
@@ -18,26 +22,80 @@ import { retryWhileWaking, useInvalidateOnChanges, useWorkspaceStateValue } from
 const READ_FILE = ["readFile"] as const;
 const LINE_HEIGHT = 20;
 
+type View = "source" | "preview";
+const isView = (u: unknown): u is View => u === "source" || u === "preview";
+/** 04 All files tab: the Markdown Source or Preview choice, kept per browser. */
+export const MARKDOWN_VIEW_KEY = "files:markdown-view";
+
 /** A read-only file (readFile) with Shiki highlighting; `tab.line` is revealed and marked. */
 export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
   const state = useWorkspaceStateValue(workspaceId);
   const live = isLive(state);
+  const available = live || state === "sleeping";
   useInvalidateOnChanges(workspaceId, READ_FILE);
   const file = useCallQuery(
     "readFile",
     { workspaceId, path: tab.path },
-    { enabled: live, retry: false, staleTime: 5_000, refetchInterval: retryWhileWaking },
+    { enabled: available, retry: false, staleTime: 5_000, refetchInterval: live ? retryWhileWaking : false },
   );
+  const { refetch } = file;
+  useEffect(() => {
+    if (available) void refetch();
+  }, [available, state, refetch]);
+
+  const [markdownView, setMarkdownView] = useLocalStorage<View>(MARKDOWN_VIEW_KEY, "preview", isView);
+  const [svgView, setSvgView] = useState<View>("source");
+  const svg = isSvgPath(tab.path);
+  const markdown = isMarkdownPath(tab.path) && file.data?.encoding === "utf8";
+  const view = svg ? svgView : markdownView;
+  const toggle =
+    file.data && (markdown || (svg && file.data.encoding === "utf8")) ? (
+      <ToggleGroup
+        type="single"
+        size="sm"
+        aria-label="View"
+        value={view}
+        onValueChange={(v) => {
+          if (!isView(v)) return;
+          if (svg) setSvgView(v);
+          else setMarkdownView(v);
+        }}
+      >
+        <ToggleGroupItem value="source" className="h-6 px-2 text-xs">
+          Source
+        </ToggleGroupItem>
+        <ToggleGroupItem value="preview" className="h-6 px-2 text-xs">
+          Preview
+        </ToggleGroupItem>
+      </ToggleGroup>
+    ) : null;
 
   let body;
   if (file.data) {
-    body =
-      file.data.encoding === "utf8" ? (
-        <CodeView path={tab.path} content={file.data.content} line={tab.line} seq={seq} />
-      ) : (
-        <EmptyState icon={FileIcon} title="Binary file." description={formatBytes(file.data.size)} />
+    const image = imageDataUrl(tab.path, file.data);
+    if (image && (!svg || file.data.encoding === "base64" || view === "preview"))
+      body = (
+        <div className="flex h-full items-center justify-center overflow-auto p-3">
+          <img src={image} alt={tab.path} className="max-h-full max-w-full object-contain" />
+        </div>
       );
-  } else if (!live) {
+    else if (markdown && view === "preview")
+      body = (
+        <div className="h-full overflow-auto px-4 py-3">
+          <MessageMarkdown workspaceId={workspaceId} text={file.data.content} streaming={false} />
+        </div>
+      );
+    else
+      body =
+        file.data.encoding === "utf8" ? (
+          <CodeView path={tab.path} content={file.data.content} line={tab.line} seq={seq} />
+        ) : (
+          <EmptyState icon={FileIcon} title="Binary file." description={formatBytes(file.data.size)} />
+        );
+  } else if (
+    !available ||
+    (state === "sleeping" && file.isError && errorCode(file.error) === "CONTAINER_NOT_READY")
+  ) {
     body = isComingUp(state) ? (
       <div className="flex h-full items-center justify-center">
         <LoadingText label={ERROR_MESSAGES.CONTAINER_NOT_READY} />
@@ -70,14 +128,20 @@ export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
           {tab.path}
         </span>
         {file.data && <span className="shrink-0">{formatBytes(file.data.size)}</span>}
-        <span className="ml-auto shrink-0">Read only</span>
+        <span className="ml-auto flex shrink-0 items-center gap-2">
+          {toggle}
+          Read only
+        </span>
       </div>
+      {state === "sleeping" && file.data && (
+        <p className="px-3 py-1 text-xs text-muted-foreground">Last synced file. May be out of date.</p>
+      )}
       <div className="min-h-0 flex-1">{body}</div>
     </div>
   );
 }
 
-function CodeView({
+export function CodeView({
   path,
   content,
   line,

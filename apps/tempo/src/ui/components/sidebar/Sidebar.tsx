@@ -7,6 +7,8 @@ import {
   FolderPlusIcon,
   HistoryIcon,
   PlusIcon,
+  PinIcon,
+  SearchIcon,
   SettingsIcon,
 } from "lucide-react";
 import { useMemo } from "react";
@@ -81,7 +83,7 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
     );
   } else {
     content = (
-      <nav aria-label="Workspaces" className="flex flex-col gap-2 p-2">
+      <nav aria-label="Workspaces" className="flex flex-col gap-3 p-2">
         {sections.map((section) => (
           <Section
             key={section.key}
@@ -98,9 +100,39 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b pr-2 pl-3">
-        <span className="flex-1 truncate text-sm font-medium">Workspaces</span>
+    <div className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground">
+      <nav aria-label="Workspace actions" className="flex shrink-0 flex-col gap-1 border-b p-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="justify-start"
+          onClick={() => openDialog({ kind: "newWorkspace" })}
+        >
+          <PlusIcon />
+          New workspace
+          {!phone && (
+            <span aria-hidden className="ml-auto text-xs text-muted-foreground">
+              ⌥N
+            </span>
+          )}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="justify-start"
+          onClick={() => openDialog({ kind: "palette" })}
+        >
+          <SearchIcon />
+          Search workspaces
+          {!phone && (
+            <span aria-hidden className="ml-auto text-xs text-muted-foreground">
+              ⌘K
+            </span>
+          )}
+        </Button>
+      </nav>
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b pr-2 pl-3">
+        <span className="flex-1 truncate text-xs font-medium text-muted-foreground">Projects</span>
         <SortMenu sort={sort} onSort={setSort} />
         <Button
           size="icon-sm"
@@ -120,12 +152,13 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
           </Link>
         </Button>
         <Button
-          size="icon-sm"
+          size="sm"
           variant="ghost"
           aria-label="Settings"
           onClick={() => openDialog({ kind: "settings" })}
         >
           <SettingsIcon />
+          Settings
         </Button>
       </div>
     </div>
@@ -173,15 +206,20 @@ function Section({
   const projectId = section.projectId;
   return (
     <Collapsible open={open} onOpenChange={onToggle}>
-      <div className="flex h-7 items-center gap-0.5">
+      <div className="mb-1 flex h-8 items-center gap-0.5">
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&[data-state=open]>svg]:rotate-90"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&[data-state=open]>svg]:rotate-90"
           >
             <ChevronRightIcon aria-hidden className="size-3 shrink-0 transition-transform" />
-            <span className="truncate">{label}</span>
-            {!open && section.workspaces.length > 0 && (
+            {projectId ? (
+              <FolderGit2Icon aria-hidden className="size-3.5 shrink-0" />
+            ) : (
+              <PinIcon aria-hidden className="size-3.5 shrink-0" />
+            )}
+            <span className="flex-1 truncate text-left">{label}</span>
+            {section.workspaces.length > 0 && (
               <span className="text-muted-foreground tabular-nums">{section.workspaces.length}</span>
             )}
           </button>

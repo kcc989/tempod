@@ -1,7 +1,8 @@
-//! Key bindings: the Conductor column of the shortcut table in 04 (07, Shortcuts).
+//! Key bindings: the Mac column of the shortcut table in 04 (07, Shortcuts).
 use crate::actions::*;
 use gpui_kit::{App, KeyBinding, NoAction};
 
+pub const SETTINGS: &str = "Settings";
 pub const WORKSPACE: &str = "Workspace";
 pub const COMPOSER: &str = "Composer";
 pub const DIFF: &str = "Diff";
@@ -21,6 +22,10 @@ pub fn bindings() -> Vec<KeyBinding> {
     let ws = Some(WORKSPACE);
     let mut out = vec![
         KeyBinding::new("cmd-,", OpenSettings, None),
+        KeyBinding::new("escape", BackFromSettings, Some(SETTINGS)),
+        KeyBinding::new("escape", BackFromSettings, Some("Settings > Input")),
+        KeyBinding::new("cmd-w", BackFromSettings, Some(SETTINGS)),
+        KeyBinding::new("cmd-k", CommandPalette, Some(SETTINGS)),
         KeyBinding::new("cmd-h", HideApp, None),
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-m", Minimize, None),
@@ -53,6 +58,22 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("enter", Send, Some(COMPOSER_INPUT)),
         KeyBinding::new("escape", StopTurn, Some(COMPOSER_INPUT)),
         KeyBinding::new("shift-tab", TogglePlanMode, Some(COMPOSER_INPUT)),
+        KeyBinding::new(
+            "down",
+            NextComposerChoice,
+            Some("Composer > ComposerPicker > Input"),
+        ),
+        KeyBinding::new(
+            "up",
+            PreviousComposerChoice,
+            Some("Composer > ComposerPicker > Input"),
+        ),
+        KeyBinding::new(
+            "escape",
+            DismissComposerChoice,
+            Some("Composer > ComposerPicker > Input"),
+        ),
+        KeyBinding::new("enter", Send, Some("Composer > ComposerPicker > Input")),
         KeyBinding::new("down", NextFile, Some(DIFF)),
         KeyBinding::new("up", PreviousFile, Some(DIFF)),
         KeyBinding::new("ctrl-v", MarkFileViewed, Some(DIFF)),
@@ -116,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn conductor_column_of_04() {
+    fn mac_column_of_04() {
         let expected = [
             ("tempo::CommandPalette", "cmd-k"),
             ("tempo::NewWorkspace", "cmd-n"),
@@ -165,8 +186,17 @@ mod tests {
     }
 
     #[test]
-    fn bindings_use_only_the_four_contexts_of_07() {
-        let allowed = ["", WORKSPACE, DIFF, TERMINAL, "Composer > Input"];
+    fn bindings_use_only_spec_regions_and_nested_input_contexts() {
+        let allowed = [
+            "",
+            WORKSPACE,
+            SETTINGS,
+            "Settings > Input",
+            DIFF,
+            TERMINAL,
+            "Composer > Input",
+            "Composer > ComposerPicker > Input",
+        ];
         for (keys, action, context) in table() {
             assert!(
                 allowed.contains(&context.as_str()),

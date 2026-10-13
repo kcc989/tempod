@@ -11,6 +11,7 @@ import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useLocalStorage } from "~/ui/hooks/useLocalStorage";
 import { useIsNarrow } from "~/ui/hooks/useMediaQuery";
+import { useAction } from "~/ui/hooks/useActions";
 import { useShortcuts } from "~/ui/hooks/useShortcuts";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
@@ -123,16 +124,24 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
     if (f) scrollToPath(f.path, true);
   };
 
+  const markCurrentViewed = () => {
+    const root = scrollRef.current;
+    if (!root || files.length === 0) return;
+    const f = files[currentFileIndex(tops(), root.scrollTop)];
+    if (f) toggleViewed(f.path);
+  };
+
+  useAction("nextFile", () => step(1), { enabled: active });
+  useAction("prevFile", () => step(-1), { enabled: active });
+  useAction("markViewed", markCurrentViewed, { enabled: active && files.length > 0 });
+
   useShortcuts(
     {
       nextFile: () => step(1),
       prevFile: () => step(-1),
       markViewed: (e) => {
         if (isEditableTarget(e.target)) return false;
-        const root = scrollRef.current;
-        if (!root || files.length === 0) return;
-        const f = files[currentFileIndex(tops(), root.scrollTop)];
-        if (f) toggleViewed(f.path);
+        markCurrentViewed();
       },
     },
     { enabled: active },
@@ -160,6 +169,7 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
         workspaceId={workspaceId}
         file={f}
         scope={changes.scope}
+        beforeSha={changes.beforeSha}
         view={view}
         live={changes.live}
         viewedHash={marks[f.path]}

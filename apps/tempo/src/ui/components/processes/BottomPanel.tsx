@@ -8,7 +8,6 @@ import { setBottomTab, type BottomTab } from "~/ui/state/workspace-ui";
 import { RunTab } from "./RunTab";
 import { SetupTab } from "./SetupTab";
 import { TerminalTab } from "./TerminalTab";
-import { useToggleRunAction } from "./useScripts";
 
 export interface BottomPanelProps {
   readonly workspaceId: string;
@@ -26,13 +25,12 @@ export function BottomPanel({ workspaceId }: BottomPanelProps) {
   const setupFailed = useWorkspaceSelector(workspaceId, (s) => s.workspace?.setupStatus === "failed");
   const [terminalOpened, setTerminalOpened] = useState(false);
   if (tab === "terminal" && !isPhone && !terminalOpened) setTerminalOpened(true);
-  useToggleRunAction(workspaceId);
 
   return (
     <Tabs
       value={tab}
       onValueChange={(v) => isBottomTab(v) && setBottomTab(workspaceId, v)}
-      className="h-full min-h-0 gap-0"
+      className="h-full min-h-0 gap-0 bg-card"
     >
       <TabsList variant="line" aria-label="Processes" className="w-full shrink-0 justify-start px-2">
         <TabsTrigger value="setup">

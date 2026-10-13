@@ -9,6 +9,16 @@
     "agent": {
       "$ref": "AgentId.json"
     },
+    "customAgentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "model": {
       "anyOf": [
         {

@@ -115,6 +115,7 @@ export const linkProject = async (
     defaultBranch: repo.default_branch,
     settingsJson: "{}",
     sortOrder: (max?.m ?? 0) + 1,
+    environmentId: null,
     createdAt: now,
     updatedAt: now,
   };

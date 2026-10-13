@@ -49,3 +49,15 @@ export const normalizeUrl = (input: string, current: string): string | null => {
  */
 export const PREVIEW_SANDBOX =
   "allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads";
+
+const PREVIEW_LABEL = /^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})$/;
+
+/** The port when `url` is a preview of this workspace (01, Preview URL), else null. */
+export const previewPortOf = (url: string, workspaceId: string): number | null => {
+  try {
+    const m = PREVIEW_LABEL.exec(new URL(url).hostname.split(".")[0] ?? "");
+    return m && m[2] === workspaceId.toLowerCase() ? Number(m[1]) : null;
+  } catch {
+    return null;
+  }
+};

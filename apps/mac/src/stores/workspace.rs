@@ -74,6 +74,13 @@ impl WorkspaceStore {
         }));
     }
 
+    pub fn retry(&mut self, client: &Client, cx: &mut Context<Self>) {
+        self.close();
+        self.error = None;
+        self.show(client, cx);
+        cx.notify();
+    }
+
     fn close(&mut self) {
         self.channel.take();
         self.task.take();
@@ -83,13 +90,46 @@ impl WorkspaceStore {
 
     fn apply(&mut self, event: WorkspaceChannelEvent, cx: &mut Context<Self>) {
         match event {
+            ChannelEvent::DecodeError(diagnostic) => {
+                crate::logging::warn(
+                    "workspace",
+                    "workspace message could not be decoded",
+                    serde_json::json!({"diagnostic": diagnostic}),
+                );
+                self.error = Some(tempo_client::NOT_TEMPO_MESSAGE.into());
+            }
             ChannelEvent::Message(message) => {
                 if matches!(message, tempo_protocol::WorkspaceServerMessage::Hello(_)) {
                     self.error = None;
+                    crate::logging::info(
+                        "workspace",
+                        "workspace channel loaded",
+                        serde_json::json!({}),
+                    );
                 }
                 for event in self.state.apply(message) {
-                    if let WorkspaceEvent::Error { message, .. } = event {
-                        self.error = Some(message);
+                    match event {
+                        WorkspaceEvent::Error { message, .. } => self.error = Some(message),
+                        WorkspaceEvent::TurnEnded { .. }
+                            if self.hidden_since.is_none()
+                                && crate::app::AppState::try_global(cx)
+                                    .is_some_and(|a| a.read(cx).workspace_focused) =>
+                        {
+                            if let Some(client) = crate::app::AppState::try_global(cx)
+                                .and_then(|a| a.read(cx).client())
+                            {
+                                let request = client.call::<tempo_protocol::api::MarkViewed>(
+                                    tempo_protocol::MarkViewedIn {
+                                        workspace_id: self.workspace_id.clone(),
+                                    },
+                                );
+                                cx.spawn(async move |_, _| {
+                                    let _ = request.await;
+                                })
+                                .detach();
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 if let Some(channel) = &self.channel {
@@ -232,5 +272,40 @@ mod tests {
             )
         });
         store.read_with(cx, |store, _| assert!(store.not_found));
+    }
+
+    #[gpui_kit::test]
+    fn retry_keeps_cached_items_and_resume_revision(cx: &mut TestAppContext) {
+        cx.background_executor.allow_parking();
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client =
+            tempo_client::Server::new(&runtime.handle(), "http://127.0.0.1:9", crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+        let store = cx.new(|_| WorkspaceStore::new("w"));
+        store.update(cx, |store, cx| {
+            for line in include_str!(
+                "../../../../packages/protocol/fixtures/channel/workspace-first-load.jsonl"
+            )
+            .lines()
+            {
+                store.apply(
+                    ChannelEvent::Message(serde_json::from_str(line).unwrap()),
+                    cx,
+                );
+            }
+            let state = store.state.clone();
+            store.error = Some("failed".into());
+            store.not_found = true;
+            store.retry(&client, cx);
+            assert_eq!(store.state, state);
+            assert_eq!(
+                store.channel.as_ref().unwrap().since_rev(),
+                store.since_rev()
+            );
+            assert!(store.error.is_none());
+            assert!(!store.not_found);
+            store.close();
+        });
     }
 }
