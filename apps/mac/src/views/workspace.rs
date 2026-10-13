@@ -548,7 +548,6 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
         use chat_model::WorkspaceBanner as B;
-        let muted = color(Token::MutedForeground, cx);
         let workspace_id = self.store.read(cx).workspace_id.clone();
         match banner {
             B::Progress { title, setup } => v_flex()

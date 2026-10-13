@@ -662,6 +662,7 @@ impl Render for Dialogs {
         let choices: Vec<_> = self
             .models
             .iter()
+            .filter(|_| !self.models_loading)
             .flat_map(|entry| {
                 entry.options.iter().map(|option| {
                     (
@@ -680,7 +681,7 @@ impl Render for Dialogs {
         let custom: Vec<(p::AgentId, String, String)> = self
             .custom_agents
             .iter()
-            .filter(|a| self.models.iter().any(|m| m.agent == a.base_agent))
+            .filter(|a| !self.models_loading && self.models.iter().any(|m| m.agent == a.base_agent))
             .map(|a| {
                 (
                     a.base_agent,
@@ -705,11 +706,17 @@ impl Render for Dialogs {
                 })
                 .map(|(_, _, label)| label.clone()),
         }
-        .unwrap_or_else(|| "Select model".into());
+        .unwrap_or_else(|| {
+            if self.models_loading {
+                "Loading models…".into()
+            } else {
+                "Select model".into()
+            }
+        });
         let weak = cx.weak_entity();
         let model_picker = Button::new("workspace-model")
             .label(model_label)
-            .disabled(self.pending || self.models_loading || self.created_chat.is_some())
+            .disabled(self.pending || self.created_chat.is_some())
             .dropdown_menu(move |menu, _, _| {
                 let menu = choices.iter().fold(menu, |menu, (agent, value, label)| {
                     let weak = weak.clone();
@@ -729,7 +736,7 @@ impl Render for Dialogs {
                 } else {
                     menu.separator()
                 };
-                custom.iter().fold(menu, |menu, (agent, id, label)| {
+                let menu = custom.iter().fold(menu, |menu, (agent, id, label)| {
                     let weak = weak.clone();
                     let agent = *agent;
                     let id = id.clone();
@@ -740,27 +747,61 @@ impl Render for Dialogs {
                             cx.notify();
                         });
                     }))
-                })
+                });
+                menu.item(
+                    PopupMenuItem::new("Manage agents…")
+                        .on_click(|_, _, cx| super::settings::open_agents(cx)),
+                )
             });
+        let projects: Vec<_> = self
+            .projects
+            .iter()
+            .map(|p| (p.id.clone(), format!("{}/{}", p.owner, p.name)))
+            .collect();
+        let label = projects
+            .iter()
+            .find(|(id, _)| Some(id) == self.project.as_ref())
+            .map(|(_, label)| label.clone())
+            .unwrap_or_else(|| "Choose a project".into());
+        let weak = cx.weak_entity();
+        let project_picker =
+            Button::new("workspace-project")
+                .label(label)
+                .dropdown_menu(move |menu, _, _| {
+                    projects.iter().fold(menu, |menu, (id, label)| {
+                        let weak = weak.clone();
+                        let id = id.clone();
+                        menu.item(PopupMenuItem::new(label.clone()).on_click(
+                            move |_, window, cx| {
+                                let _ = weak.update(cx, |this, cx| {
+                                    this.select_project(id.clone(), window, cx)
+                                });
+                            },
+                        ))
+                    })
+                });
+        let create_workspace = Button::new("create-workspace")
+            .label("Create")
+            .disabled(
+                self.pending
+                    || self.project.is_none()
+                    || (!self.prompt.read(cx).value().trim().is_empty()
+                        && (self.models_loading
+                            || (self.model.is_none() && self.custom_agent.is_none()))),
+            )
+            .on_click(cx.listener(|this, _, window, cx| this.create(window, cx)));
         let body = match kind {
             "New workspace" => v_flex()
                 .gap_2()
-                .child("Project")
-                .children(self.projects.iter().map(|p| {
-                    let id = p.id.clone();
-                    Button::new(SharedString::from(format!("project-{id}")))
-                        .label(format!("{}/{}", p.owner, p.name))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.select_project(id.clone(), window, cx)
-                        }))
-                }))
                 .child(
-                    Button::new("workspace-options")
-                        .label("Workspace options")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.workspace_options = !this.workspace_options;
-                            cx.notify();
-                        })),
+                    h_flex().gap_2().child(project_picker).child(
+                        Button::new("workspace-options")
+                            .label("Workspace options")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workspace_options = !this.workspace_options;
+                                cx.notify();
+                            })),
+                    ),
                 )
                 .children(self.workspace_options.then(|| {
                     v_flex()
@@ -805,9 +846,19 @@ impl Render for Dialogs {
                             }))
                         }))
                 }))
-                .child(Textarea::new(&self.prompt))
+                .child(
+                    div()
+                        .min_h(gpui_kit::px(180.))
+                        .child(Textarea::new(&self.prompt)),
+                )
                 .children(self.models_loading.then(|| div().child("Loading models…")))
-                .child(model_picker)
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .justify_between()
+                        .child(model_picker)
+                        .child(create_workspace),
+                )
                 .children((!self.models_loading && self.model.is_none()).then(|| {
                     Button::new("retry-models")
                         .label("Retry loading models")
@@ -825,22 +876,14 @@ impl Render for Dialogs {
                             cx.notify();
                         }))
                 }))
-                .child(
-                    Button::new("create-workspace")
-                        .label("Create")
-                        .disabled(
-                            self.pending
-                                || self.project.is_none()
-                                || (!self.prompt.read(cx).value().trim().is_empty()
-                                    && (self.models_loading
-                                        || (self.model.is_none() && self.custom_agent.is_none()))),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),
-                )
                 .into_any_element(),
             "New chat" => v_flex()
                 .gap_2()
-                .child(Textarea::new(&self.prompt))
+                .child(
+                    div()
+                        .min_h(gpui_kit::px(180.))
+                        .child(Textarea::new(&self.prompt)),
+                )
                 .children(self.models_loading.then(|| div().child("Loading models…")))
                 .child(
                     h_flex().gap_2().child(model_picker).child(
