@@ -375,3 +375,8 @@ An owner sign-in returned `email_not_found` after OAuth. The configured App exis
 ## Existing workspace migration ordering
 
 The first hosted existing-workspace check exposed `DrizzleError: Rollback` on workspace reads and WebSocket upgrades. The file-cache release already recorded migration timestamp 1791849600000, while merged turn usage had been inserted before it at 1791835200000. Drizzle uses the latest timestamp, so it skipped adding `turns.usage_json`; the later status-table rebuild then rolled back. The turn-usage entry now follows the existing file-cache timestamp, before its consumers. Already-upgraded workspaces have later journal entries and do not reapply it. Regression tests reproduce both released schemas, preserve sessions/turns/cached files and verify a second migration run. No workspace state is deleted or manually rewritten, and this fix does not change token accounting semantics.
+
+
+## Artifact deployment bundle
+
+The artifact release's local production build bundled Mermaid's browser-only rendering dependencies into SSR (143 JavaScript modules, 8,110,976 bytes). As with Shiki, the Mermaid loader now checks `import.meta.env.SSR` before its dynamic import. Server-rendered fences remain code; hydration performs the existing browser rendering. This does not change Mermaid security settings, shared contracts or native rendering. No upload rejection is inferred from the larger build; this removes browser-only dependencies before deployment.
