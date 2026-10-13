@@ -12,6 +12,8 @@ use tempo_protocol::{self as p, api};
 pub struct Dialogs {
     pub kind: Option<&'static str>,
     workspace_id: Option<String>,
+    chat_created: Option<Box<dyn Fn(p::Session, &mut Window, &mut gpui_kit::App)>>,
+    created_chat: Option<p::Session>,
     modal_window: Option<gpui_kit::AnyWindowHandle>,
     client: Option<tempo_client::Client>,
     projects: Vec<p::Project>,
@@ -65,6 +67,8 @@ impl Dialogs {
         Self {
             kind: None,
             workspace_id: None,
+            chat_created: None,
+            created_chat: None,
             modal_window: None,
             client: None,
             projects: vec![],
@@ -162,6 +166,115 @@ impl Dialogs {
         }
         cx.notify();
     }
+    pub fn show_chat(
+        &mut self,
+        client: tempo_client::Client,
+        workspace_id: String,
+        agent: p::AgentId,
+        on_created: impl Fn(p::Session, &mut Window, &mut gpui_kit::App) + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.kind = Some("New chat");
+        self.client = Some(client);
+        self.workspace_id = Some(workspace_id);
+        self.agent = Some(agent);
+        self.chat_created = Some(Box::new(on_created));
+        self.modal_window = Some(window.window_handle());
+        let form = cx.entity();
+        let weak = cx.weak_entity();
+        window.open_dialog(cx, move |dialog, _, _| {
+            let weak = weak.clone();
+            dialog
+                .title("New chat")
+                .w(gpui_kit::px(680.))
+                .child(form.clone())
+                .on_close(move |_, _, cx| {
+                    let _ = weak.update(cx, |this, cx| {
+                        this.kind = None;
+                        cx.notify();
+                    });
+                })
+        });
+        window.focus(&self.prompt.read(cx).focus_handle(cx), cx);
+        self.load_models(cx);
+        cx.notify();
+    }
+
+    fn create_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.pending
+            || self.models_loading
+            || (self.model.is_none() && self.custom_agent.is_none())
+        {
+            return;
+        }
+        let (Some(client), Some(workspace_id), Some(agent)) =
+            (self.client.clone(), self.workspace_id.clone(), self.agent)
+        else {
+            return;
+        };
+        let created = self.created_chat.clone();
+        let custom_agent_id = self.custom_agent.clone();
+        let model = if custom_agent_id.is_some() {
+            None
+        } else {
+            self.model.clone()
+        };
+        let text = self.prompt.read(cx).value().trim().to_string();
+        self.pending = true;
+        cx.spawn_in(window, async move |this, cx| {
+            let result = async {
+                let session = match created {
+                    Some(session) => session,
+                    None => {
+                        client
+                            .call::<api::CreateSession>(p::CreateSessionIn {
+                                workspace_id: workspace_id.clone(),
+                                agent,
+                                custom_agent_id,
+                                model,
+                                mode_id: None,
+                            })
+                            .await?
+                    }
+                };
+                let _ = this.update_in(cx, |this, _, cx| {
+                    this.created_chat = Some(session.clone());
+                    cx.notify();
+                });
+                if !text.is_empty() {
+                    client
+                        .call::<api::SendPrompt>(p::SendPromptIn {
+                            workspace_id,
+                            session_id: session.id.clone(),
+                            text,
+                            mentions: vec![],
+                            attachment_ids: vec![],
+                            review_comment_ids: vec![],
+                            delivery: None,
+                        })
+                        .await?;
+                }
+                Ok::<_, tempo_client::ApiError>(session)
+            }
+            .await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.pending = false;
+                match result {
+                    Ok(session) => {
+                        if let Some(callback) = this.chat_created.take() {
+                            callback(session, window, cx);
+                        }
+                        this.close(cx);
+                    }
+                    Err(error) => super::toast::error(&error, this.agent, window, cx),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     fn load_models(&mut self, cx: &mut Context<Self>) {
         let Some(client) = &self.client else {
             return;
@@ -187,12 +300,15 @@ impl Dialogs {
                 match result {
                     Ok(models) => {
                         this.models = models;
-                        let preferred = this
-                            .projects
-                            .iter()
-                            .find(|p| Some(&p.id) == this.project.as_ref())
-                            .and_then(|p| p.settings.agent.as_ref())
-                            .and_then(|a| a.default);
+                        let preferred = if this.kind == Some("New chat") {
+                            this.agent
+                        } else {
+                            this.projects
+                                .iter()
+                                .find(|p| Some(&p.id) == this.project.as_ref())
+                                .and_then(|p| p.settings.agent.as_ref())
+                                .and_then(|a| a.default)
+                        };
                         let entry = this
                             .models
                             .iter()
@@ -344,9 +460,10 @@ impl Dialogs {
         .detach();
     }
     fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = self.prompt.read(cx).value().trim().to_string();
         if self.pending
-            || self.models_loading
-            || (self.model.is_none() && self.custom_agent.is_none())
+            || (!text.is_empty()
+                && (self.models_loading || (self.model.is_none() && self.custom_agent.is_none())))
         {
             return;
         }
@@ -371,7 +488,6 @@ impl Dialogs {
                 }
             },
         };
-        let text = self.prompt.read(cx).value().to_string();
         let prompt = if text.is_empty() {
             None
         } else {
@@ -546,6 +662,7 @@ impl Render for Dialogs {
         let choices: Vec<_> = self
             .models
             .iter()
+            .filter(|_| !self.models_loading)
             .flat_map(|entry| {
                 entry.options.iter().map(|option| {
                     (
@@ -564,7 +681,7 @@ impl Render for Dialogs {
         let custom: Vec<(p::AgentId, String, String)> = self
             .custom_agents
             .iter()
-            .filter(|a| self.models.iter().any(|m| m.agent == a.base_agent))
+            .filter(|a| !self.models_loading && self.models.iter().any(|m| m.agent == a.base_agent))
             .map(|a| {
                 (
                     a.base_agent,
@@ -589,11 +706,17 @@ impl Render for Dialogs {
                 })
                 .map(|(_, _, label)| label.clone()),
         }
-        .unwrap_or_else(|| "Select model".into());
+        .unwrap_or_else(|| {
+            if self.models_loading {
+                "Loading models…".into()
+            } else {
+                "Select model".into()
+            }
+        });
         let weak = cx.weak_entity();
         let model_picker = Button::new("workspace-model")
             .label(model_label)
-            .disabled(self.pending || self.models_loading)
+            .disabled(self.pending || self.created_chat.is_some())
             .dropdown_menu(move |menu, _, _| {
                 let menu = choices.iter().fold(menu, |menu, (agent, value, label)| {
                     let weak = weak.clone();
@@ -613,7 +736,7 @@ impl Render for Dialogs {
                 } else {
                     menu.separator()
                 };
-                custom.iter().fold(menu, |menu, (agent, id, label)| {
+                let menu = custom.iter().fold(menu, |menu, (agent, id, label)| {
                     let weak = weak.clone();
                     let agent = *agent;
                     let id = id.clone();
@@ -624,27 +747,61 @@ impl Render for Dialogs {
                             cx.notify();
                         });
                     }))
-                })
+                });
+                menu.item(
+                    PopupMenuItem::new("Manage agents…")
+                        .on_click(|_, _, cx| super::settings::open_agents(cx)),
+                )
             });
+        let projects: Vec<_> = self
+            .projects
+            .iter()
+            .map(|p| (p.id.clone(), format!("{}/{}", p.owner, p.name)))
+            .collect();
+        let label = projects
+            .iter()
+            .find(|(id, _)| Some(id) == self.project.as_ref())
+            .map(|(_, label)| label.clone())
+            .unwrap_or_else(|| "Choose a project".into());
+        let weak = cx.weak_entity();
+        let project_picker =
+            Button::new("workspace-project")
+                .label(label)
+                .dropdown_menu(move |menu, _, _| {
+                    projects.iter().fold(menu, |menu, (id, label)| {
+                        let weak = weak.clone();
+                        let id = id.clone();
+                        menu.item(PopupMenuItem::new(label.clone()).on_click(
+                            move |_, window, cx| {
+                                let _ = weak.update(cx, |this, cx| {
+                                    this.select_project(id.clone(), window, cx)
+                                });
+                            },
+                        ))
+                    })
+                });
+        let create_workspace = Button::new("create-workspace")
+            .label("Create")
+            .disabled(
+                self.pending
+                    || self.project.is_none()
+                    || (!self.prompt.read(cx).value().trim().is_empty()
+                        && (self.models_loading
+                            || (self.model.is_none() && self.custom_agent.is_none()))),
+            )
+            .on_click(cx.listener(|this, _, window, cx| this.create(window, cx)));
         let body = match kind {
             "New workspace" => v_flex()
                 .gap_2()
-                .child("Project")
-                .children(self.projects.iter().map(|p| {
-                    let id = p.id.clone();
-                    Button::new(SharedString::from(format!("project-{id}")))
-                        .label(format!("{}/{}", p.owner, p.name))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.select_project(id.clone(), window, cx)
-                        }))
-                }))
                 .child(
-                    Button::new("workspace-options")
-                        .label("Workspace options")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.workspace_options = !this.workspace_options;
-                            cx.notify();
-                        })),
+                    h_flex().gap_2().child(project_picker).child(
+                        Button::new("workspace-options")
+                            .label("Workspace options")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workspace_options = !this.workspace_options;
+                                cx.notify();
+                            })),
+                    ),
                 )
                 .children(self.workspace_options.then(|| {
                     v_flex()
@@ -689,9 +846,19 @@ impl Render for Dialogs {
                             }))
                         }))
                 }))
-                .child(Textarea::new(&self.prompt))
+                .child(
+                    div()
+                        .min_h(gpui_kit::px(180.))
+                        .child(Textarea::new(&self.prompt)),
+                )
                 .children(self.models_loading.then(|| div().child("Loading models…")))
-                .child(model_picker)
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .justify_between()
+                        .child(model_picker)
+                        .child(create_workspace),
+                )
                 .children((!self.models_loading && self.model.is_none()).then(|| {
                     Button::new("retry-models")
                         .label("Retry loading models")
@@ -709,16 +876,28 @@ impl Render for Dialogs {
                             cx.notify();
                         }))
                 }))
+                .into_any_element(),
+            "New chat" => v_flex()
+                .gap_2()
                 .child(
-                    Button::new("create-workspace")
-                        .label("Create")
-                        .disabled(
-                            self.pending
-                                || self.models_loading
-                                || (self.model.is_none() && self.custom_agent.is_none())
-                                || self.project.is_none(),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),
+                    div()
+                        .min_h(gpui_kit::px(180.))
+                        .child(Textarea::new(&self.prompt)),
+                )
+                .children(self.models_loading.then(|| div().child("Loading models…")))
+                .child(
+                    h_flex().gap_2().child(model_picker).child(
+                        Button::new("create-chat")
+                            .label("Create chat")
+                            .disabled(
+                                self.pending
+                                    || self.models_loading
+                                    || (self.model.is_none() && self.custom_agent.is_none()),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.create_chat(window, cx)),
+                            ),
+                    ),
                 )
                 .into_any_element(),
             "Rename workspace" => v_flex()
@@ -938,7 +1117,13 @@ impl Render for Dialogs {
                             cx.notify();
                         }
                         cx.stop_propagation();
-                    } else if event.keystroke.key == "enter" && event.keystroke.modifiers.platform {
+                    } else if event.keystroke.key == "enter"
+                        && (event.keystroke.modifiers.platform
+                            || (matches!(this.kind, Some("New workspace" | "New chat"))
+                                && !event.keystroke.modifiers.shift
+                                && !event.keystroke.modifiers.alt
+                                && this.prompt.read(cx).focus_handle(cx).is_focused(window)))
+                    {
                         window.dispatch_action(Box::new(crate::actions::ConfirmDialog), cx);
                         cx.stop_propagation();
                     }
@@ -956,6 +1141,8 @@ impl Render for Dialogs {
                 cx.listener(|this, _: &crate::actions::ConfirmDialog, window, cx| {
                     if this.kind == Some("New workspace") {
                         this.create(window, cx);
+                    } else if this.kind == Some("New chat") {
+                        this.create_chat(window, cx);
                     }
                 }),
             )
@@ -964,7 +1151,7 @@ impl Render for Dialogs {
             .overflow_y_scroll()
             .p_4()
             .gap_2()
-            .child(kind)
+            .children((kind != "New workspace" && kind != "New chat").then_some(kind))
             .children(self.error.clone().map(|e| {
                 h_flex()
                     .gap_2()

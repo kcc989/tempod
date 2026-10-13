@@ -86,6 +86,20 @@ export async function browserFixture(page: Page) {
     requests.push({ name, input });
     let value: unknown = {};
     switch (name) {
+      case "listModels":
+        value = [
+          {
+            agent: "claude",
+            currentValue: "fixture-sonnet",
+            options: [{ value: "fixture-sonnet", name: "Fixture Sonnet" }],
+          },
+          {
+            agent: "codex",
+            currentValue: "fixture-codex",
+            options: [{ value: "fixture-codex", name: "Fixture Codex" }],
+          },
+        ];
+        break;
       case "listProjects":
         value = [project];
         break;

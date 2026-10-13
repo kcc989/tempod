@@ -32,7 +32,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | --- | --- | --- |
 | Sidebar, hover card, right-click menu, History | Same |  |
 | Saved conversations | Default browser | Opens the owner’s Tempo `/history` to read project-scoped saved conversations; browser sign-in may be required |
-| New workspace dialog | Same | Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
+| New workspace dialog | Same | Enter in the focused prompt creates; ⇧Enter adds a line. Blank creation works while model discovery loads. Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model, reasoning level and mode pickers | Same |  |
@@ -200,6 +200,7 @@ Tool calls use a borderless disclosure with indented content. Tool text renders 
 - **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control on an opaque background, as 04. Each chat tab keeps its own scroll position.
 - **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right and bottom panels: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
 - **Composer appearance.** The text field and toolbar share the rounded container from 04, using the native theme background. Focus does not add an outline or change its border or shadow. The field grows from 2 to 12 rows without a separate border; the toolbar uses compact, borderless model and mode controls at the left and a small context ring, attachment and send icons at the right. Hovering the context ring shows used and total tokens. Model menu rows have extra vertical padding and a 320 px menu with a 44 px search field, independent of their compact 28 px trigger. Picker chevrons sit beside their labels; leave 16 px below the composer.
+- **New chat.** Opens a focused prompt with the shared model and custom-agent picker in its footer. Enter creates the session and sends a nonempty prompt; blank prompts open an empty chat.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
 - **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
 - **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.

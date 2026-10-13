@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import type { Project } from "@tempo/protocol";
-import { CheckIcon, FolderGit2Icon, MoreHorizontalIcon } from "lucide-react";
-import { useState } from "react";
+import { CheckIcon, FolderGit2Icon, MoreHorizontalIcon, CornerDownLeftIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -52,13 +52,14 @@ import {
   createInput,
   emptySource,
   filterPullRequests,
+  initialAgent,
   initialModel,
   modelChoices,
   isSourceTab,
   SOURCE_TABS,
   type SourceDraft,
 } from "./new-workspace-model";
-import { Field, SubmitKbd } from "./parts";
+import { Field } from "./parts";
 
 /** 04, New workspace (⌥N). Args: the project and a prompt to start with. */
 export function NewWorkspaceDialog() {
@@ -118,6 +119,8 @@ function NewWorkspaceForm({
   const [prompt, setPrompt] = useState(args.prompt ?? "");
   const [keepOpen, setKeepOpen] = useState(false);
   const [tried, setTried] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const creating = useRef(false);
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
   const available = agentsWithLogin(credentials.data);
@@ -130,7 +133,9 @@ function NewWorkspaceForm({
     ? createInput(project, source, pickedCustom.baseAgent, prompt, undefined, pickedCustom.id)
     : models.isSuccess && selected
       ? createInput(project, source, selected.agent, prompt, selected.model)
-      : null;
+      : !prompt.trim()
+        ? createInput(project, source, initialAgent(available, project), prompt)
+        : null;
 
   const create = useCallMutation("createWorkspace", {
     invalidates: ["listWorkspaces"],
@@ -151,14 +156,25 @@ function NewWorkspaceForm({
 
   const submit = () => {
     setTried(true);
-    if (!input || create.isPending) return;
-    create.mutate(input);
+    if (!input) {
+      setOptionsOpen(true);
+      return;
+    }
+    if (creating.current) return;
+    creating.current = true;
+    create.mutate(input, {
+      onSettled: () => {
+        creating.current = false;
+      },
+    });
   };
 
   return (
     <DialogContent
       onSubmitShortcut={submit}
-      className="gap-0 overflow-visible p-0 sm:max-w-3xl"
+      className="gap-0 overflow-visible rounded-2xl bg-muted p-0"
+      style={{ width: "min(48rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
+      overlayClassName="backdrop-blur-sm"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         document.getElementById("nw-prompt")?.focus();
@@ -171,7 +187,7 @@ function NewWorkspaceForm({
         </DialogDescription>
       </DialogHeader>
       <form
-        className="grid"
+        className="flex min-h-72 flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -200,7 +216,7 @@ function NewWorkspaceForm({
               ))}
             </SelectContent>
           </Select>
-          <Popover>
+          <Popover open={optionsOpen} onOpenChange={setOptionsOpen}>
             <PopoverTrigger asChild>
               <Button type="button" variant="ghost" size="icon" aria-label="Workspace options">
                 <MoreHorizontalIcon className="size-4" />
@@ -277,10 +293,17 @@ function NewWorkspaceForm({
         <Textarea
           id="nw-prompt"
           aria-label="Prompt"
+          disabled={create.isPending}
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           placeholder="What do you want to work on?"
-          className="min-h-44 max-h-[50dvh] resize-none rounded-none border-0 bg-transparent px-5 py-4 text-base shadow-none focus-visible:ring-1 focus-visible:ring-inset"
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing)
+              return;
+            event.preventDefault();
+            submit();
+          }}
+          className="min-h-48 flex-1 max-h-[50dvh] resize-none rounded-none border-0 bg-transparent px-5 py-4 text-base shadow-none focus-visible:ring-1 focus-visible:ring-inset"
         />
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4">
           <div className="min-w-0 flex-1">
@@ -341,7 +364,7 @@ function NewWorkspaceForm({
             disabled={create.isPending || !input}
           >
             {create.isPending ? "Creating…" : "Create"}
-            <SubmitKbd className="border-background/30 bg-background/15 text-background" />
+            <CornerDownLeftIcon className="size-3.5" />
           </Button>
         </div>
       </form>
