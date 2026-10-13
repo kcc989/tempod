@@ -42,6 +42,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
 | Checks | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
+| Workspace startup status | Same | Compact spinner and current op step; fall back to the workspace status before a step is available. No step list, timings or queue explanation. |
 | Previews | Different | Open in the default browser; no Browser tab |
 | Artifact cards, Artifacts tab, Artifact tab | Different | Images, Markdown and text show in the app. HTML and PDF artifacts open in the default browser through `openArtifact`. Mermaid blocks show as code (Artifacts, below). |
 | Image and Markdown file tabs, image diffs, plan proposals | Same | Mermaid blocks show as code |

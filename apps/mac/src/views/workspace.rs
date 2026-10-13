@@ -556,18 +556,13 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
         use chat_model::WorkspaceBanner as B;
-        use p::OpProgressStepsItemStatus as S;
         let muted = color(Token::MutedForeground, cx);
         let workspace_id = self.store.read(cx).workspace_id.clone();
         match banner {
-            B::Progress {
-                title,
-                steps,
-                setup,
-            } => v_flex()
+            B::Progress { title, setup } => v_flex()
                 .id("workspace-progress")
                 .role(Role::Status)
-                .aria_label(title)
+                .aria_label(title.clone())
                 .px_3()
                 .py_2()
                 .gap_1()
@@ -578,61 +573,12 @@ impl WorkspaceView {
                         .gap_2()
                         .child(Spinner::new().color(color(Token::Primary, cx)).small())
                         .child(title)
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_color(muted)
-                                .child("Prompts you send now wait in the queue."),
-                        )
                         .children(setup.then(|| {
                             Button::new("open-setup-tab")
                                 .label("Open Setup tab")
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.show_setup_tab(window, cx)
                                 }))
-                        })),
-                )
-                .child(
-                    v_flex()
-                        .id("workspace-progress-steps")
-                        .role(Role::List)
-                        .aria_label("Steps")
-                        .pl(gpui_kit::px(22.))
-                        .max_w(gpui_kit::px(448.))
-                        .children(steps.into_iter().enumerate().map(|(ix, step)| {
-                            let (mark, state, tint) = match step.status {
-                                S::Done => ("✓", "Done", Token::Success),
-                                S::Running => ("", "Running", Token::Primary),
-                                S::Failed => ("✕", "Failed", Token::Destructive),
-                                S::Skipped => ("−", "Skipped", Token::MutedForeground),
-                                S::Pending => ("○", "Waiting", Token::MutedForeground),
-                            };
-                            let quiet = matches!(step.status, S::Pending | S::Skipped);
-                            h_flex()
-                                .id(("workspace-progress-step", ix))
-                                .role(Role::ListItem)
-                                .aria_label(format!("{}, {state}", step.label))
-                                .gap_2()
-                                .text_xs()
-                                .text_color(if quiet {
-                                    muted
-                                } else {
-                                    color(Token::Foreground, cx)
-                                })
-                                .child(if step.status == S::Running {
-                                    Spinner::new()
-                                        .color(color(tint, cx))
-                                        .xsmall()
-                                        .into_any_element()
-                                } else {
-                                    div()
-                                        .w(gpui_kit::px(12.))
-                                        .text_color(color(tint, cx))
-                                        .child(mark)
-                                        .into_any_element()
-                                })
-                                .child(div().flex_1().child(step.label))
-                                .children(step.time.map(|t| div().text_color(muted).child(t)))
                         })),
                 )
                 .into_any_element(),
