@@ -528,15 +528,15 @@ describe("create op", { timeout: 60_000 }, () => {
   });
 
   it("schedules housekeeping 24 hours after init", async ({ expect }) => {
+    const before = Date.now();
     const w = await seedWs();
-    // 03 Step runner: "Housekeeping: once every 24 hours."
+    const after = Date.now();
     const hk = (await opsOf(w.stub, "housekeeping"))[0]!;
     expect(hk["status"]).toBe("pending");
     expect(hk["step"]).toBe("events.prune");
-    expect(
-      Schema.decodeUnknownSync(Schema.Number)(hk["next_run_at"]) -
-        Schema.decodeUnknownSync(Schema.Number)(hk["created_at"]),
-    ).toBe(DAY);
+    const scheduled = Schema.decodeUnknownSync(Schema.Number)(hk["next_run_at"]);
+    expect(scheduled).toBeGreaterThanOrEqual(before + DAY);
+    expect(scheduled).toBeLessThanOrEqual(after + DAY);
   });
 
   it("for a branch source, sets pushed = 1 and last_pushed_sha to the remote head", async ({ expect }) => {

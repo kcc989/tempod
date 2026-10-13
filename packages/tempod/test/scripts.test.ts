@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { closeSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { closeSync, openSync, writeFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TRUNCATED_LINE } from "../src/scripts.ts";
 import { cleanupDirs, DoClient, isAlive, sleep, startTempod, testConfig, type Harness } from "./helpers.ts";
@@ -124,11 +124,17 @@ describe("scripts", () => {
     "a failing log write cuts the log but the output keeps flowing",
     async () => {
       const { start, exited, output, h } = await setup();
-      await start("01logfail", "sleep 0.3; for i in $(seq 1 3); do echo after$i; done");
+      const gate = join(h.config.workspace, "logfail.release");
+      await start(
+        "01logfail",
+        `while [ ! -f ${gate} ]; do sleep 0.01; done; for i in $(seq 1 3); do echo after$i; done`,
+      );
 
       const run = h.app.scripts["runs"].get("01logfail")!;
 
       closeSync(run.logFd!);
+      run.logFd = openSync(join(h.config.logsDir, "01logfail.log"), "r");
+      writeFileSync(gate, "ready");
       const ev = await exited("01logfail");
       expect(ev.exitCode).toBe(0);
       expect(output("01logfail")).toBe("after1\nafter2\nafter3\n");
@@ -154,8 +160,11 @@ describe("scripts", () => {
       for (let i = 0; i < 20 && alive(bg); i++) await sleep(20);
       expect(alive(bg)).toBe(false);
 
-      await start("01stubborn", "trap '' TERM; while true; do sleep 0.05; done");
-      await sleep(100);
+      await start("01stubborn", "trap '' TERM; echo ready; while true; do sleep 0.05; done");
+      await c.waitEvent(
+        "script.output",
+        (event) => event.runId === "01stubborn" && event.data.includes("ready"),
+      );
       const t0 = Date.now();
       await c.ok("script.stop", { runId: "01stubborn" });
       const hard = await exited("01stubborn");

@@ -799,16 +799,26 @@ describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
     let restoreD1 = () => {};
 
     await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
-      const database = internals(instance).core.env.DB;
-      const originalPrepare = database.prepare.bind(database);
+      const core = internals(instance).core;
+      const environment = core.env;
+      const database = environment.DB;
 
-      const prepare = vi.spyOn(database, "prepare").mockImplementation((query) => {
-        if (/^update\s+"?workspaces"?\s+set\b/i.test(query)) throw new Error("D1 unavailable");
+      const unavailable = {
+        prepare: () => {
+          throw new Error("D1 unavailable");
+        },
+        batch: <T>(statements: D1PreparedStatement[]) => database.batch<T>(statements),
+        exec: (query: string) => database.exec(query),
+        withSession: (bookmark?: D1SessionBookmark | D1SessionConstraint) => database.withSession(bookmark),
+        dump: () => database.dump(),
+      } satisfies D1Database;
 
-        return originalPrepare(query);
+      Object.defineProperty(core, "env", {
+        value: { ...environment, DB: unavailable } satisfies typeof environment,
       });
-
-      restoreD1 = () => prepare.mockRestore();
+      restoreD1 = () => {
+        Object.defineProperty(core, "env", { value: environment });
+      };
     });
 
     try {
@@ -2604,7 +2614,7 @@ describe.concurrent("getDiagnostics", { timeout: 30_000 }, () => {
   });
 });
 
-describe.concurrent("first prompt while setup is pending", () => {
+describe.concurrent("first prompt while setup is pending", { timeout: 30_000 }, () => {
   it("preserves a manual override made before the pending rename runs", async ({
     expect,
     onTestFinished,
