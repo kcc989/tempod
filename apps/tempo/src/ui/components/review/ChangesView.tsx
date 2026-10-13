@@ -18,7 +18,13 @@ import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
 import { isMacPlatform, matchesCombo } from "~/ui/lib/shortcuts";
 import { cn } from "~/ui/lib/utils";
-import { openDiff, setDiffScope, setPhonePane, type WorkspaceUiState } from "~/ui/state/workspace-ui";
+import {
+  openDiff,
+  openGuide,
+  setDiffScope,
+  setPhonePane,
+  type WorkspaceUiState,
+} from "~/ui/state/workspace-ui";
 import { changeRows, GROUP_BY_FOLDER_KEY, isBoolean, totals, type ChangeRow } from "./changes-model";
 import { ListBox } from "./ListBox";
 import { LineCounts, SourceNote, StatusLetter } from "./parts";
@@ -92,6 +98,16 @@ export function ChangesView({
       )}
       <div className="flex shrink-0 flex-wrap items-center gap-2 px-2 py-1.5">
         <ScopeToggle workspaceId={workspaceId} changes={changes} />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            openGuide(workspaceId);
+            if (phone) setPhonePane("chat");
+          }}
+        >
+          Guide
+        </Button>
         <SimpleTooltip label="Group by folder">
           <Toggle
             size="sm"

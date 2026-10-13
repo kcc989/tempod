@@ -219,6 +219,8 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 ## Terminal, scripts and previews
 
+**Guided PRs.** `Create or update guide` in the workspace sends the same shared authoring prompt as the web UI through the active chat's normal `sendPrompt` flow. It is disabled without a chat or when archived; the composer’s read-only and sending checks also apply. `Open guide` opens `<Tempo origin>/w/<workspaceId>?guide=true` in the default browser. The chapter, diff and interactive artifact renderer is the authenticated web Guide view (04); the native client does not execute artifact HTML. This follows C7's browser policy and ships in the same phase as the web feature.
+
 **Terminal**
 
 - `crates/tempo-terminal` forks `gpui-terminal` 0.1.0 and ports it to the GPUI that `gpui-kit` 0.7.1 bundles. Keep its license file and headers. It uses `alacritty_terminal = "=0.25.1"` for parsing and the grid.

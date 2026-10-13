@@ -166,6 +166,8 @@ The owner asked for MCP servers that work with every agent and with remote serve
 
 ## Choices where the spec is silent
 
+Guided PRs (04, 05, 07) use agent-authored repository files, the existing `readFile`, `getChanges`, `getFileDiff`, `sendPrompt` and `createPullRequest` APIs, and no new database or endpoint. `PrGuide` is a versioned repository document schema in `packages/protocol`, not a new channel/RPC wire type. The Mac client creates guides through its active chat and opens the web renderer in the default browser. Browser guide links require the owner's login. Explanation freshness is not automatically inferred: live files remain visible and users are prompted to update after changing code.
+
 | Area | Choice |
 | --- | --- |
 | Monorepo | Bun workspaces with Turborepo (`turbo.json`), as requested. TypeScript 6.0.3: TypeScript 7 is the native compiler, and some tools still need the JS API. |
