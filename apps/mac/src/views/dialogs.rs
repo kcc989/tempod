@@ -9,10 +9,12 @@ use gpui_kit::{
 };
 use tempo_protocol::{self as p, api};
 
+type ChatCreated = Box<dyn Fn(p::Session, &mut Window, &mut gpui_kit::App)>;
+
 pub struct Dialogs {
     pub kind: Option<&'static str>,
     workspace_id: Option<String>,
-    chat_created: Option<Box<dyn Fn(p::Session, &mut Window, &mut gpui_kit::App)>>,
+    chat_created: Option<ChatCreated>,
     created_chat: Option<p::Session>,
     modal_window: Option<gpui_kit::AnyWindowHandle>,
     client: Option<tempo_client::Client>,

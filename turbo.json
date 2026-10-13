@@ -63,7 +63,8 @@
         "wrangler.jsonc",
         "package.json",
         "tsconfig.json",
-        "worker-runtime.d.ts"
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/roles-builtin/**"
       ]
     },
     "@tempo/app#test:ui": {
@@ -76,7 +77,8 @@
         "vitest.ui.config.ts",
         "package.json",
         "tsconfig.json",
-        "worker-runtime.d.ts"
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/roles-builtin/**"
       ]
     },
     "@tempo/app#test:components": {
@@ -89,7 +91,8 @@
         "vitest.components.config.ts",
         "package.json",
         "tsconfig.json",
-        "worker-runtime.d.ts"
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/roles-builtin/**"
       ]
     },
     "@tempo/app#build:web-fixture": {
@@ -102,7 +105,8 @@
         "vite.web-test.config.ts",
         "package.json",
         "tsconfig.json",
-        "worker-runtime.d.ts"
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/roles-builtin/**"
       ]
     },
     "@tempo/app#build:browser-fixture": {
@@ -115,8 +119,12 @@
         "test/browser/vite.config.ts",
         "package.json",
         "tsconfig.json",
-        "worker-runtime.d.ts"
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/roles-builtin/**"
       ]
+    },
+    "@tempo/app#build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/roles-builtin/**"]
     }
   },
   "globalDependencies": ["tsconfig*.json", "bunfig.toml", "patches/**"],

@@ -49,7 +49,7 @@ test("sends, queues, edits queued prompts and stops through the real composer", 
   await expect(message).toHaveValue("");
   await message.fill("Next prompt");
   await message.press("Enter");
-  await expect(page.getByText("Next prompt", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next prompt", exact: true })).toBeVisible();
   await expect.poll(() => fixture.inputs("sendPrompt").length).toBe(2);
   expect(fixture.inputs("sendPrompt").map((i) => i.delivery)).toEqual(["queue", "queue"]);
   await page.getByRole("button", { name: "Next prompt", exact: true }).click();
