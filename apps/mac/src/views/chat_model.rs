@@ -757,36 +757,12 @@ pub fn step_label(step: &str) -> String {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct StepRow {
-    pub label: String,
-    pub status: p::OpProgressStepsItemStatus,
-    /// For example `4 s`; none while the step has not finished.
-    pub time: Option<String>,
-}
-
-pub fn step_rows(op: &p::OpProgress) -> Vec<StepRow> {
-    use p::OpProgressStepsItemStatus as S;
-    op.steps
-        .iter()
-        .map(|s| StepRow {
-            label: step_label(&s.name),
-            status: s.status,
-            time: s
-                .ms
-                .filter(|_| matches!(s.status, S::Done | S::Failed))
-                .map(format_duration),
-        })
-        .collect()
-}
-
 /// The workspace banners (04, Empty, loading and error states), as the web `workspaceBanners`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WorkspaceBanner {
-    /// `creating`, `starting`, `setting_up`: the op's steps as a checklist.
+    /// `creating`, `starting`, `setting_up`: only the current status.
     Progress {
-        title: &'static str,
-        steps: Vec<StepRow>,
+        title: String,
         setup: bool,
     },
     Error {
@@ -821,8 +797,12 @@ pub fn workspace_banners(w: &p::WorkspaceDetail) -> Vec<WorkspaceBanner> {
     };
     if let Some(title) = title {
         out.push(WorkspaceBanner::Progress {
-            title,
-            steps: w.op.as_ref().map(step_rows).unwrap_or_default(),
+            title: w
+                .op
+                .as_ref()
+                .filter(|op| !op.step.is_empty())
+                .map(|op| step_label(&op.step))
+                .unwrap_or_else(|| title.into()),
             setup: w.state == S::SettingUp,
         });
     }
@@ -1036,27 +1016,16 @@ mod tests {
                 },
             ],
         });
-        let WorkspaceBanner::Progress {
-            title,
-            steps,
-            setup,
-        } = &workspace_banners(&w)[0]
-        else {
+        let WorkspaceBanner::Progress { title, setup } = &workspace_banners(&w)[0] else {
             panic!("progress");
         };
-        assert_eq!((*title, *setup), ("Starting the workspace", false));
-        let rows: Vec<_> = steps
-            .iter()
-            .map(|s| (s.label.as_str(), s.time.as_deref()))
-            .collect();
-        assert_eq!(
-            rows,
-            [
-                ("Starting container", Some("4 s")),
-                ("Cloning repo", None),
-                ("Cache warm up now", None)
-            ]
-        );
+        assert_eq!((title.as_str(), *setup), ("Cloning repo", false));
+        w.op = None;
+        assert!(matches!(
+            &workspace_banners(&w)[..],
+            [WorkspaceBanner::Progress { title, setup: false }]
+                if title == "Starting the workspace"
+        ));
         w.state = p::WorkspaceState::Error;
         w.error_code = Some("CLONE_FAILED".into());
         w.error_detail = Some("fatal: repository not found".into());
@@ -1085,10 +1054,10 @@ mod tests {
         assert!(matches!(
             &workspace_banners(&w)[..],
             [WorkspaceBanner::Progress {
-                title: "Running setup",
+                title,
                 setup: true,
                 ..
-            }]
+            }] if title == "Running setup"
         ));
     }
     #[test]
