@@ -378,3 +378,31 @@ export const Diagnostics = Schema.Struct({
 export type Diagnostics = typeof Diagnostics.Type;
 
 export const ErrorCodeField = ErrorCodeSchema;
+
+/** Project-scoped, long-lived transcript artifact in R2. */
+export const ConversationSummary = Schema.Struct({
+  conversationId: Schema.String,
+  projectId: Schema.String,
+  title: Schema.String,
+  branch: Schema.String,
+  updatedAt: Schema.Number,
+});
+export type ConversationSummary = typeof ConversationSummary.Type;
+
+export const ConversationArtifact = Schema.Struct({
+  version: Schema.Literal(1),
+  ...ConversationSummary.fields,
+  sessions: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      agent: AgentId,
+      title: Schema.String,
+      status: SessionStatus,
+      createdAt: Schema.Number,
+      closedAt: Schema.NullOr(Schema.Number),
+    }),
+  ),
+  turns: Schema.Array(Turn),
+  items: Schema.Array(Item),
+});
+export type ConversationArtifact = typeof ConversationArtifact.Type;

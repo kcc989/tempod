@@ -3,6 +3,8 @@ import { AgentId, ApiKeyProvider, DiffScope, MergeMethod, ReviewSide } from "./e
 import { EnvName } from "./settings.ts";
 import {
   ChangedFile,
+  ConversationArtifact,
+  ConversationSummary,
   CheckRun,
   CheckpointInfo,
   CredentialStatus,
@@ -84,6 +86,13 @@ export const API = {
     Schema.Struct({ projectId: S }),
     Schema.Array(Schema.Struct({ number: N, title: S, headBranch: S })),
   ),
+
+  listProjectConversations: fn(
+    "GET",
+    Schema.Struct({ projectId: S, cursor: opt(S) }),
+    Schema.Struct({ conversations: Schema.Array(ConversationSummary), cursor: Schema.NullOr(S) }),
+  ),
+  getProjectConversation: fn("GET", Schema.Struct({ projectId: S, conversationId: S }), ConversationArtifact),
 
   // Workspaces
   createWorkspace: fn(

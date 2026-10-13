@@ -688,6 +688,83 @@ pub struct ContinueAfterSetupFailureIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`ConversationArtifact`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ConversationArtifact {
+    pub branch: ::std::string::String,
+    #[serde(rename = "conversationId")]
+    pub conversation_id: ::std::string::String,
+    pub items: ::std::vec::Vec<crate::Item>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub sessions: ::std::vec::Vec<ConversationArtifactSessionsItem>,
+    pub title: ::std::string::String,
+    pub turns: ::std::vec::Vec<Turn>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: f64,
+    pub version: ConversationArtifactVersion,
+}
+///`ConversationArtifactSessionsItem`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ConversationArtifactSessionsItem {
+    pub agent: AgentId,
+    #[serde(
+        rename = "closedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub closed_at: ::std::option::Option<f64>,
+    #[serde(rename = "createdAt")]
+    pub created_at: f64,
+    pub id: ::std::string::String,
+    pub status: SessionStatus,
+    pub title: ::std::string::String,
+}
+///`ConversationArtifactVersion`
+#[derive(::serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(transparent)]
+pub struct ConversationArtifactVersion(f64);
+impl ::std::ops::Deref for ConversationArtifactVersion {
+    type Target = f64;
+    fn deref(&self) -> &f64 {
+        &self.0
+    }
+}
+impl ::std::convert::From<ConversationArtifactVersion> for f64 {
+    fn from(value: ConversationArtifactVersion) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::TryFrom<f64> for ConversationArtifactVersion {
+    type Error = self::error::ConversionError;
+    fn try_from(value: f64) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if ![1_f64].contains(&value) {
+            Err("invalid value".into())
+        } else {
+            Ok(Self(value))
+        }
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ConversationArtifactVersion {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        Self::try_from(<f64>::deserialize(deserializer)?)
+            .map_err(|e| <D::Error as ::serde::de::Error>::custom(e.to_string()))
+    }
+}
+///`ConversationSummary`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ConversationSummary {
+    pub branch: ::std::string::String,
+    #[serde(rename = "conversationId")]
+    pub conversation_id: ::std::string::String,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub title: ::std::string::String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: f64,
+}
 ///`CreatePullRequestIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CreatePullRequestIn {
@@ -1387,6 +1464,14 @@ pub struct GetFileDiffIn {
 pub struct GetFileDiffOut {
     pub diff: ::std::string::String,
 }
+///`GetProjectConversationIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetProjectConversationIn {
+    #[serde(rename = "conversationId")]
+    pub conversation_id: ::std::string::String,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
 ///`GetWorkspaceIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetWorkspaceIn {
@@ -1980,6 +2065,21 @@ pub struct ListOpenPullRequestsItem {
     pub head_branch: ::std::string::String,
     pub number: f64,
     pub title: ::std::string::String,
+}
+///`ListProjectConversationsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListProjectConversationsIn {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub cursor: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`ListProjectConversationsOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListProjectConversationsOut {
+    pub conversations: ::std::vec::Vec<ConversationSummary>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub cursor: ::std::option::Option<::std::string::String>,
 }
 ///`ListProjectSecretNamesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -5771,6 +5871,15 @@ pub mod api {
         type Input = crate::GetFileDiffIn;
         type Output = crate::GetFileDiffOut;
     }
+    /// `getProjectConversation`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetProjectConversation;
+    impl crate::Function for GetProjectConversation {
+        const NAME: &'static str = "getProjectConversation";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetProjectConversationIn;
+        type Output = crate::ConversationArtifact;
+    }
     /// `getWorkspace`
     #[derive(Clone, Copy, Debug)]
     pub struct GetWorkspace;
@@ -5851,6 +5960,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListOpenPullRequestsIn;
         type Output = ::std::vec::Vec<crate::ListOpenPullRequestsItem>;
+    }
+    /// `listProjectConversations`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListProjectConversations;
+    impl crate::Function for ListProjectConversations {
+        const NAME: &'static str = "listProjectConversations";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListProjectConversationsIn;
+        type Output = crate::ListProjectConversationsOut;
     }
     /// `listProjectSecretNames`
     #[derive(Clone, Copy, Debug)]
@@ -6188,6 +6306,7 @@ pub mod api {
         ("getCredentialStatus", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
+        ("getProjectConversation", crate::Method::Get),
         ("getWorkspace", crate::Method::Get),
         ("linkProject", crate::Method::Post),
         ("listBranches", crate::Method::Get),
@@ -6197,6 +6316,7 @@ pub mod api {
         ("listInstallationRepos", crate::Method::Get),
         ("listInstallations", crate::Method::Get),
         ("listOpenPullRequests", crate::Method::Get),
+        ("listProjectConversations", crate::Method::Get),
         ("listProjectSecretNames", crate::Method::Get),
         ("listProjects", crate::Method::Get),
         ("listReviewComments", crate::Method::Get),
@@ -6265,6 +6385,8 @@ pub mod wire {
         "ConfigSelectOption",
         "ContentBlock",
         "ContinueAfterSetupFailureIn",
+        "ConversationArtifact",
+        "ConversationSummary",
         "CreatePullRequestIn",
         "CreatePullRequestOut",
         "CreateSessionIn",
@@ -6291,6 +6413,7 @@ pub mod wire {
         "GetDiagnosticsIn",
         "GetFileDiffIn",
         "GetFileDiffOut",
+        "GetProjectConversationIn",
         "GetWorkspaceIn",
         "HandoffContent",
         "HubHello",
@@ -6314,6 +6437,8 @@ pub mod wire {
         "ListInstallationsItem",
         "ListOpenPullRequestsIn",
         "ListOpenPullRequestsItem",
+        "ListProjectConversationsIn",
+        "ListProjectConversationsOut",
         "ListProjectSecretNamesIn",
         "ListProjectSecretNamesOut",
         "ListReviewCommentsIn",
@@ -6453,6 +6578,8 @@ pub mod wire {
             "ContinueAfterSetupFailureIn" => {
                 crate::roundtrip::<crate::ContinueAfterSetupFailureIn>(text)
             }
+            "ConversationArtifact" => crate::roundtrip::<crate::ConversationArtifact>(text),
+            "ConversationSummary" => crate::roundtrip::<crate::ConversationSummary>(text),
             "CreatePullRequestIn" => crate::roundtrip::<crate::CreatePullRequestIn>(text),
             "CreatePullRequestOut" => crate::roundtrip::<crate::CreatePullRequestOut>(text),
             "CreateSessionIn" => crate::roundtrip::<crate::CreateSessionIn>(text),
@@ -6479,6 +6606,7 @@ pub mod wire {
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
+            "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
             "GetWorkspaceIn" => crate::roundtrip::<crate::GetWorkspaceIn>(text),
             "HandoffContent" => crate::roundtrip::<crate::HandoffContent>(text),
             "HubHello" => crate::roundtrip::<crate::HubHello>(text),
@@ -6504,6 +6632,12 @@ pub mod wire {
             "ListInstallationsItem" => crate::roundtrip::<crate::ListInstallationsItem>(text),
             "ListOpenPullRequestsIn" => crate::roundtrip::<crate::ListOpenPullRequestsIn>(text),
             "ListOpenPullRequestsItem" => crate::roundtrip::<crate::ListOpenPullRequestsItem>(text),
+            "ListProjectConversationsIn" => {
+                crate::roundtrip::<crate::ListProjectConversationsIn>(text)
+            }
+            "ListProjectConversationsOut" => {
+                crate::roundtrip::<crate::ListProjectConversationsOut>(text)
+            }
             "ListProjectSecretNamesIn" => crate::roundtrip::<crate::ListProjectSecretNamesIn>(text),
             "ListProjectSecretNamesOut" => {
                 crate::roundtrip::<crate::ListProjectSecretNamesOut>(text)

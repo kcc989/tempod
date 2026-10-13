@@ -6,6 +6,22 @@ const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+  ConversationSummary: [
+    { conversationId: W1, projectId: PROJECT_ID, title: "Saved chat", branch: "tempo/chat", updatedAt: at(10) },
+  ],
+  ConversationArtifact: [
+    {
+      version: 1,
+      conversationId: W1,
+      projectId: PROJECT_ID,
+      title: "Saved chat",
+      branch: "tempo/chat",
+      updatedAt: at(10),
+      sessions: [],
+      turns: [],
+      items: [],
+    },
+  ],
   ErrorBody: [
     { code: "NOT_FOUND", message: "Not found." },
     {
@@ -250,6 +266,8 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
       prompt: { text: "Fix the flaky test" },
     },
   ],
+  listProjectConversations: [{ projectId: PROJECT_ID }],
+  getProjectConversation: [{ projectId: PROJECT_ID, conversationId: W1 }],
   listWorkspaces: [{}, { includeArchived: true }],
   getWorkspace: [ws],
   renameWorkspace: [{ ...ws, title: "Dark mode" }],
@@ -336,6 +354,20 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
 
 /** Outputs that are not shared types, by their wire type name. */
 export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+  ListProjectConversationsOut: [
+    {
+      conversations: [
+        {
+          conversationId: W1,
+          projectId: PROJECT_ID,
+          title: "Saved chat",
+          branch: "tempo/chat",
+          updatedAt: at(10),
+        },
+      ],
+      cursor: null,
+    },
+  ],
   Empty: [{}],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },

@@ -26,6 +26,7 @@ import {
   type ConnectHandlers,
 } from "./container.ts";
 import { WorkspaceCore, parseJson, type Author } from "./core.ts";
+import { CONVERSATION_INTERVAL_MS, markConversationDirty, saveConversation } from "./conversations.ts";
 import { applyTempodEvent } from "./events.ts";
 import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
@@ -102,6 +103,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     void ctx.blockConcurrencyWhile(async () => {
       await runMigrations(core.db, WORKSPACE_MIGRATIONS);
       if (core.wsOrNull()) {
+        if (
+          core.kv<number>("conversationSavedRevision") === undefined &&
+          core.kv<number>("conversationDueAt") === undefined
+        )
+          markConversationDirty(core);
         recoverSteering(core);
         this.runner.recover();
         await this.armAlarm();
@@ -239,6 +245,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       await this.armAlarm();
       return core.summary();
     });
+  }
+
+  async persistConversation(): Promise<void> {
+    await saveConversation(this.core, true);
   }
 
   async getGithubToken(): Promise<string | null> {
@@ -392,6 +402,15 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       this.lastPrPoll = now;
       await pollPullRequestSafe(core);
     }
+    const conversationDue = core.kv<number>("conversationDueAt");
+    if (conversationDue !== undefined && conversationDue <= Date.now()) {
+      try {
+        await saveConversation(core);
+      } catch {
+        core.setKv("conversationDueAt", Date.now() + CONVERSATION_INTERVAL_MS);
+        log("warn", "conversation artifact upload failed", { workspaceId: core.workspaceId });
+      }
+    }
     await this.armAlarm();
   }
 
@@ -404,6 +423,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const core = this.core;
     if (!core.wsOrNull()) return;
     const candidates: number[] = [];
+    const conversationDue = core.kv<number>("conversationDueAt");
+    if (conversationDue !== undefined) candidates.push(conversationDue);
     const due = this.runner.nextDueAt();
     if (due !== null) candidates.push(due);
     if (this.containerExpected()) candidates.push(this.lastHeartbeat + HEARTBEAT_MS);

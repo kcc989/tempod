@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { WorkspaceSummary } from "@tempo/protocol";
 import { ArchiveIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { ProjectConversations } from "~/ui/components/history/ProjectConversations";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
 import { ScrollArea } from "~/ui/components/ui/scroll-area";
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/_app/history")({
 
 /** 04, Sidebar → History: archived workspaces with Restore and Delete. */
 function HistoryPage() {
+  const [saved, setSaved] = useState(false);
   const list = useCallQuery("listWorkspaces", { includeArchived: true });
   const hub = useHub();
   const projects = useProjects();
@@ -39,10 +41,41 @@ function HistoryPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-10 shrink-0 items-center border-b px-3">
-        <h1 className="text-sm font-semibold">History</h1>
+        <h1 className="mr-3 text-sm font-semibold">History</h1>
+        <Button
+          size="sm"
+          variant={saved ? "ghost" : "secondary"}
+          aria-pressed={!saved}
+          onClick={() => setSaved(false)}
+        >
+          Workspaces
+        </Button>
+        <Button
+          size="sm"
+          variant={saved ? "secondary" : "ghost"}
+          aria-pressed={saved}
+          onClick={() => setSaved(true)}
+        >
+          Saved conversations
+        </Button>
       </header>
       <ScrollArea className="min-h-0 flex-1">
-        {list.isPending ? (
+        {saved ? (
+          projects.isPending ? (
+            <SkeletonRows rows={5} />
+          ) : projects.isError ? (
+            <ErrorState error={projects.error} onRetry={() => void projects.refetch()} />
+          ) : (
+            <>
+              <p className="p-3 text-xs text-muted-foreground">
+                Conversations remain available after a workspace is deleted.
+              </p>
+              {projects.data.map((project) => (
+                <ProjectConversations key={project.id} project={project} />
+              ))}
+            </>
+          )
+        ) : list.isPending ? (
           <SkeletonRows rows={8} />
         ) : list.isError ? (
           <ErrorState error={list.error} onRetry={() => void list.refetch()} />
@@ -66,7 +99,9 @@ function HistoryRow({ workspace: w, project }: { workspace: WorkspaceSummary; pr
     invalidates: ["listWorkspaces"],
     onSuccess: () => navigate({ to: "/w/$workspaceId", params: { workspaceId: w.id } }),
   });
-  const remove = useCallMutation("deleteWorkspace", { invalidates: ["listWorkspaces"] });
+  const remove = useCallMutation("deleteWorkspace", {
+    invalidates: ["listWorkspaces", "listProjectConversations"],
+  });
   const onDelete = async () => {
     if (await confirm(CONFIRM_TEXT.deleteWorkspace(w.slug))) remove.mutate({ workspaceId: w.id });
   };

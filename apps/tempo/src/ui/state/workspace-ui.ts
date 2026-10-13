@@ -489,7 +489,7 @@ export const CONFIRM_TEXT = {
   }),
   deleteWorkspace: (slug: string): ConfirmOptions => ({
     title: "Delete this workspace?",
-    description: `Type ${slug} to confirm.`,
+    description: `Saved conversations will remain in project history. Type ${slug} to confirm.`,
     confirmLabel: "Delete",
     destructive: true,
     typeToConfirm: slug,

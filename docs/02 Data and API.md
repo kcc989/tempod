@@ -392,9 +392,15 @@ One bucket, `tempo-data`, binding `DATA`. Keys are exact.
 | `homes/<workspaceId>/<recordId>.tar.zst` | `DirectoryBackup` of `/home/tempo` | `DirectoryBackup` | Newest 3 per workspace |
 | `attachments/<workspaceId>/<attachmentId>/<file name>` | Files the user attached to a prompt | Worker | Until the workspace is deleted |
 | `logs/<workspaceId>/<runId>.log` | Full script log, at most 50 MiB | WorkspaceDO | 30 days |
+| `artifacts/projects/<projectId>/conversations/<workspaceId>.json` | Version 1 conversation artifact: project/workspace identity, title, branch, save time, sessions, turns and transcript items | WorkspaceDO | Indefinitely, including after workspace deletion |
 
 - The daily `housekeeping` op in each WorkspaceDO applies these limits.
-- Deleting a workspace deletes every key under its id, in all four prefixes.
+- Deleting a workspace deletes every key under its id in the four workspace prefixes. It first saves a final conversation artifact; upload failure prevents deletion. Project conversation artifacts remain.
+- Transcript, session, turn and workspace-summary changes mark the artifact dirty in durable KV (`conversationRevision`, `conversationDueAt`, `conversationSavedRevision`). The DO alarm coalesces uploads within 60 seconds; turn completion makes the upload immediately due. A failed upload keeps the dirty revision and retries after 60 seconds. Uploads are serialized, and changes during an upload remain dirty.
+- Existing WorkspaceDOs schedule an initial copy when first accessed. Listing project conversations copies any existing workspace with no artifact; reading a live workspace conversation refreshes its artifact.
+- Artifacts contain only explicit transcript fields, never workspace settings, container tokens, preview tokens or agent credential/session files. Structured tool-call content uses the shared redaction helper before upload. R2 stays private; artifact reads use the owner-authenticated API and project ownership checks.
+- `ConversationSummary` is `{conversationId, projectId, title, branch, updatedAt}`; `conversationId` equals the workspace id. `ConversationArtifact` adds `version: 1`, `sessions: [{id, agent, title, status, createdAt, closedAt}]`, `turns: Turn[]` and `items: Item[]`, sorted oldest first. Sessions retain their tab order. Artifact timestamps are milliseconds.
+- Unlinking a project stops if any final workspace artifact cannot be saved, and preserves its R2 artifacts; they can be recovered from the private bucket. The project-scoped API requires a linked, owned project.
 
 ## Item model
 
@@ -466,6 +472,8 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `linkProject` | `{installationId, repoId}` | `Project` | `PROJECT_EXISTS`, `REPO_NOT_ACCESSIBLE` |
 | `listProjects` | `{}` | `Project[]` | — |
 | `updateProjectSettings` | `{projectId, settings}` | `Project` | `SETTINGS_INVALID` |
+| `listProjectConversations` | `{projectId, cursor?}` | `{conversations: ConversationSummary[], cursor: string or null}`; 100 per page in R2 key order | `NOT_FOUND` |
+| `getProjectConversation` | `{projectId, conversationId}` | `ConversationArtifact`; refreshes a live workspace copy first | `NOT_FOUND` |
 | `unlinkProject` | `{projectId}` | `{}` | `PROJECT_HAS_WORKSPACES` |
 | `listBranches` | `{projectId, query?}` | `[{name}]`, at most 100 | `GITHUB_API_ERROR` |
 | `listOpenPullRequests` | `{projectId}` | `[{number, title, headBranch}]` | `GITHUB_API_ERROR` |

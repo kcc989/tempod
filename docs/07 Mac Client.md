@@ -30,7 +30,8 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |
-| Sidebar, hover card, right-click menu, History | Same |  |
+| Sidebar, hover card, right-click menu | Same |  |
+| History | Default browser | Opens the owner’s Tempo `/history`, including project-scoped saved conversations; browser sign-in may be required |
 | New workspace dialog | Same | First prompt is text only, as on the web |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |

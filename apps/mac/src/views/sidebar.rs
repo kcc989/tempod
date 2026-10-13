@@ -89,7 +89,18 @@ impl RenderOnce for WorkspaceSidebar {
             .collapsible(false)
             .w_full()
             .children(groups)
-            .footer(Button::new("history").ghost().label("History"))
+            .footer(
+                Button::new("history")
+                    .ghost()
+                    .label("History")
+                    .on_click(|_, _, cx| {
+                        if let Some(state) = crate::app::AppState::try_global(cx)
+                            && let Some(origin) = state.read(cx).server_url.clone()
+                        {
+                            cx.open_url(&format!("{}/history", origin.trim_end_matches('/')));
+                        }
+                    }),
+            )
             .into_any_element()
     }
 }

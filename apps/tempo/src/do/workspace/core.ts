@@ -43,6 +43,7 @@ import {
 import type { Env } from "../../env.ts";
 import { log } from "../../log.ts";
 import type { TempodClient } from "./tempod-client.ts";
+import { markConversationDirty } from "./conversations.ts";
 import { assertTransition } from "./transitions.ts";
 
 export type DB = DrizzleSqliteDODatabase<typeof workspaceSchema>;
@@ -79,6 +80,7 @@ export const parseJson = <T>(text: string | null | undefined, fallback: T): T =>
 export class WorkspaceCore {
   readonly db: DB;
   tempod: TempodClient | null = null;
+  conversationUpload: Promise<void> | null = null;
   /** The connect in flight, shared by every caller (container.ts, connectTempod). */
   tempodConnecting: Promise<TempodClient> | null = null;
   /** Sessions with a live adapter process in the current container. */
@@ -664,6 +666,12 @@ export class WorkspaceCore {
   }
 
   broadcast(message: WorkspaceServerMessage): void {
+    if (["workspace", "session", "turn", "turn.deleted", "item.upsert", "item.delta"].includes(message.type))
+      markConversationDirty(this);
+    if (message.type === "turn" && !["queued", "running"].includes(message.turn.status)) {
+      this.setKv("conversationDueAt", Date.now());
+      this.scheduleAlarm();
+    }
     const sockets = this.uiSockets();
     if (sockets.length === 0) return;
     const text = JSON.stringify(message);

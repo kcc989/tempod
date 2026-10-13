@@ -57,6 +57,8 @@ export const SHARED = {
   SettingsReadResult: P.SettingsReadResult,
 
   Project: P.Project,
+  ConversationSummary: P.ConversationSummary,
+  ConversationArtifact: P.ConversationArtifact,
   WorkspaceSummary: P.WorkspaceSummary,
   OpProgress: P.OpProgress,
   ChangedFile: P.ChangedFile,

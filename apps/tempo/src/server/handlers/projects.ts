@@ -1,13 +1,12 @@
 import { waitUntil } from "cloudflare:workers";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { TempoError, newId, type FnInput, type FnOutput } from "@tempo/protocol";
+import { TempoError, newId, unwrap, type FnInput, type FnOutput } from "@tempo/protocol";
 import { validateOverrides } from "@tempo/settings";
 import { githubInstallations, projects, workspaces } from "../../db/d1.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
 import { getRepoById, listAppInstallations, listInstallationRepos } from "../../github/api.ts";
 import { GithubHttpError } from "../../github/client.ts";
 import { github } from "../../github/provider.ts";
-import { log } from "../../log.ts";
 import type { HandlerCtx } from "../run.ts";
 import {
   d1,
@@ -178,8 +177,7 @@ export const unlinkProject = async (
     .all();
   for (const w of archived) {
     const res = await env.WORKSPACE.getByName(w.id).deleteWorkspace({});
-    if (!res.ok)
-      log("warn", "workspace delete during unlink failed", { workspaceId: w.id, code: res.error.code });
+    unwrap(res);
   }
   await env.CREDENTIALS.getByName(user.id).deleteProjectEnv(projectId);
   await d1(env).delete(projects).where(eq(projects.id, projectId)).run();

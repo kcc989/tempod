@@ -144,7 +144,7 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 | Tempo for Mac | Rust app on GPUI Kit (07) | 0 or more per owner | Window layout, drafts, its Keychain token | Tempo Worker (`/api/v1`, WebSockets) |
 | Image `workspace` | Container image (Debian trixie, Node 24) | 1 image, many containers | Agents, Chromium, Playwright, dev tools | — |
 | D1 database `tempo` | SQLite (D1) | 1 | Users, GitHub installations, projects, workspace summaries | — |
-| R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs | — |
+| R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs, project conversation artifacts | — |
 
 ## Where state lives
 
@@ -157,7 +157,7 @@ The WorkspaceDO is the source of truth for a workspace. D1 holds only what lists
 | Workspace summary: name, branch, state, attention, PR | D1 `workspaces`, written only by its WorkspaceDO after createWorkspace inserts it | Deleted |
 | Workspace state, sessions, turns, transcript items, events, checkpoint index, review comments, script runs | WorkspaceDO SQLite | Workspace deleted |
 | Secrets | CredentialDO SQLite, AES-256-GCM | Deleted |
-| Checkpoint bundles, home backups, attachments, script logs | R2 bucket `tempo-data` | Retention rules in 02 |
+| Checkpoint bundles, home backups, attachments, script logs, project conversation artifacts | R2 bucket `tempo-data` | Retention rules in 02 |
 | Container snapshot | Cloudflare Containers snapshot | 30 days after creation or last restore |
 | Live UI connections | UserHubDO and WorkspaceDO memory | Connection closes |
 
