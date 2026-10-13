@@ -44,13 +44,16 @@ export class FakeTempod {
   holdHealth() {
     let markEntered!: () => void;
     let release!: () => void;
+
     const entered = new Promise<void>((resolve) => {
       markEntered = resolve;
     });
+
     this.healthGate = new Promise<void>((resolve) => {
       release = resolve;
     });
     this.onHealthProbe = markEntered;
+
     return {
       entered,
       release: () => {
@@ -158,7 +161,9 @@ export class FakeTempod {
 
         if (url.pathname === "/v1/health") {
           this.onHealthProbe?.();
+
           if (this.healthGate) await this.healthGate;
+
           if (!this.healthy) return new Response("starting", { status: 503 });
 
           return Response.json({ ok: true, version: this.version, incarnation: this.incarnation });
@@ -538,8 +543,11 @@ export const seedCredentials = async (
   agents: readonly AgentId[] = ["claude", "codex", "opencode", "pi"],
 ): Promise<void> => {
   const creds = env.CREDENTIALS.getByName(userId);
+
   if (agents.includes("claude")) await creds.putSecret("claude.oauth_token", "sk-ant-oat01-test-token-value");
+
   if (agents.includes("opencode") || agents.includes("pi"))
     await creds.putSecret("openrouter.api_key", "sk-or-test");
+
   if (agents.includes("codex")) await creds.putSecret("openai.api_key", "sk-openai-test");
 };

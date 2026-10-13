@@ -224,6 +224,7 @@ const seedHeld = async (
   } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
+
   if (opts.credentials !== false) await seedCredentials(seeded.userId, [opts.agent ?? "claude"]);
   counter++;
   const workspaceId = newId();
@@ -245,6 +246,7 @@ const readyWs = async (
   opts: { prompt?: string; credentials?: boolean } = {},
 ): Promise<Ws & { first: { sessionId: string; turnId: string } | null }> => {
   const seeded = await seedProject();
+
   if (opts.credentials !== false) await seedCredentials(seeded.userId, ["claude"]);
   const w = await seedWorkspace(seeded, opts.prompt ? { prompt: opts.prompt } : {});
   await driveToState(w.stub, "ready", "working");
@@ -348,8 +350,10 @@ describe("ready RPC fixture contract", { timeout: 30_000 }, () => {
   it("matches lifecycle-created defaults and serves independent workspace RPCs", async ({ expect }) => {
     const full = await readyWs();
     const minimal = await seedReadyWorkspace();
+
     const defaults = async (w: Ws) => {
       const d = await detail(w.stub);
+
       return {
         state: d.state,
         attention: d.attention,
@@ -363,6 +367,7 @@ describe("ready RPC fixture contract", { timeout: 30_000 }, () => {
         runningTurnId: d.runningTurnId,
       };
     };
+
     expect(await defaults(minimal)).toEqual(await defaults(full));
     expect(ok(await minimal.stub.readFile({ path: "README.md" }))).toEqual(
       ok(await full.stub.readFile({ path: "README.md" })),
@@ -2450,6 +2455,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
         },
       },
     });
+
     // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist, mcp}
     expect(await w.stub.getEgressConfig()).toEqual({
       owner: "acme",
@@ -2508,6 +2514,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
     expect,
   }) => {
     const w = await seedReadyWorkspace();
+
     const a = {
       ts: 1000,
       method: "GET",
@@ -2603,12 +2610,14 @@ describe.concurrent("first prompt while setup is pending", () => {
     onTestFinished,
   }) => {
     let health!: ReturnType<FakeTempod["holdHealth"]>;
+
     const w = await seedHeld(onTestFinished, {
       prepare: (tempod, stub) => {
         health = tempod.holdHealth();
         onTestFinished(() => runInDurableObject(stub, health.release));
       },
     });
+
     await runInDurableObject(w.stub, () => health.entered);
     const session = ok(await w.stub.createSession({ agent: "claude" }));
     expect(
@@ -2625,16 +2634,20 @@ describe.concurrent("first prompt while setup is pending", () => {
     expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/override" }))).toBe("OK");
     let markWorking!: () => void;
+
     const working = new Promise<void>((resolve) => {
       markWorking = resolve;
     });
+
     await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
       const core = internals(instance).core;
       const original = core.setState.bind(core);
       core.setState = (next, error) => {
         original(next, error);
+
         if (next === "working") markWorking();
       };
+
       onTestFinished(() =>
         runInDurableObject(w.stub, () => {
           core.setState = original;
