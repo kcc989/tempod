@@ -378,6 +378,10 @@ An owner sign-in returned `email_not_found` after OAuth. The configured App exis
 
 The first hosted existing-workspace check exposed `DrizzleError: Rollback` on workspace reads and WebSocket upgrades. The file-cache release already recorded migration timestamp 1791849600000, while merged turn usage had been inserted before it at 1791835200000. Drizzle uses the latest timestamp, so it skipped adding `turns.usage_json`; the later status-table rebuild then rolled back. The turn-usage entry now follows the existing file-cache timestamp, before its consumers. Already-upgraded workspaces have later journal entries and do not reapply it. Regression tests reproduce both released schemas, preserve sessions/turns/cached files and verify a second migration run. No workspace state is deleted or manually rewritten, and this fix does not change token accounting semantics.
 
+
+## Artifact deployment bundle
+
+The artifact release's local production build bundled Mermaid's browser-only rendering dependencies into SSR (143 JavaScript modules, 8,110,976 bytes). As with Shiki, the Mermaid loader now checks `import.meta.env.SSR` before its dynamic import. Server-rendered fences remain code; hydration performs the existing browser rendering. This does not change Mermaid security settings, shared contracts or native rendering. No upload rejection is inferred from the larger build; this removes browser-only dependencies before deployment.
 ## Mac Codex device sign-in
 
 Mac Settings performs OpenAI device authorization on its existing tokio runtime and stores the result with `setCodexAuth`. This is the explicit networking exception in 07. The existing server login RPCs remain the web path. The Mac uses a separate HTTP client, never sends its Tempo bearer token to OpenAI, never logs upstream bodies, and cancels local polling and token exchange when the task is dropped. No library or wire contract was added. The Mac shows safe sign-in failures instead of replacing them with the expired-credential message. A direct request from the Mac returned HTTP 200 during diagnosis; the exact deployed server rejection remains unconfirmed.

@@ -13,6 +13,7 @@ let counter = 0;
 let chain: Promise<unknown> = Promise.resolve();
 
 const load = (): Promise<MermaidApi> => {
+  if (import.meta.env.SSR) return Promise.reject(new Error("Diagrams render in the browser."));
   loaded ??= import("mermaid").then((m) => m.default);
   return loaded;
 };
