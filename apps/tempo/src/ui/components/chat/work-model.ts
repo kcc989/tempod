@@ -164,6 +164,14 @@ export const workSummary = (folded: ReadonlyArray<Item>, durationMs: number | nu
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
+/** 04 Plan proposals: a tool call whose `rawInput.plan` is a non-empty string (Claude's ExitPlanMode). */
+export const planProposalText = (item: Item): string | null => {
+  if (item.kind !== "tool_call") return null;
+  const raw = item.content.rawInput;
+  const plan = raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>)["plan"] : undefined;
+  return typeof plan === "string" && plan.trim() !== "" ? plan : null;
+};
+
 /** True when Default detail folds the item into its turn's work row. */
 export const foldsIntoWork = (item: Item, lastMessageId: string | undefined): boolean => {
   switch (item.kind) {
@@ -172,7 +180,12 @@ export const foldsIntoWork = (item: Item, lastMessageId: string | undefined): bo
     case "agent_message":
       return item.id !== lastMessageId;
     case "tool_call":
-      return item.status !== "failed" && item.status !== "cancelled" && workType(item) !== "edit";
+      return (
+        item.status !== "failed" &&
+        item.status !== "cancelled" &&
+        workType(item) !== "edit" &&
+        planProposalText(item) === null
+      );
     default:
       return false;
   }

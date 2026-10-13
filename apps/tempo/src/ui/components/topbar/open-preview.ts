@@ -8,7 +8,7 @@ export const BROWSER_SESSION_ENDED = "Browser session ended.";
  * The tab opens on the click, before `link` returns, so pop-up blockers allow it. It then goes to
  * the link; on an error it closes and the error toasts. A null link closes it and returns false.
  */
-const openInNewTab = async (link: () => Promise<string | null>): Promise<boolean> => {
+export const openInNewTab = async (link: () => Promise<string | null>): Promise<boolean> => {
   const tab = globalThis.open?.("", "_blank") ?? null;
   if (tab) tab.opener = null;
   try {
@@ -35,4 +35,13 @@ export const openPreviewTab = async (workspaceId: string, port: number): Promise
 export const openLiveViewTab = async (workspaceId: string): Promise<void> => {
   const opened = await openInNewTab(async () => (await call("getBrowserLiveView", { workspaceId })).url);
   if (!opened) toast(BROWSER_SESSION_ENDED);
+};
+
+/** 04 Artifact tab and phone width: an HTML or PDF artifact in a new browser tab. */
+export const openArtifactInBrowser = async (
+  workspaceId: string,
+  artifactId: string,
+  version: number,
+): Promise<void> => {
+  await openInNewTab(async () => (await call("openArtifact", { workspaceId, artifactId, version })).url);
 };

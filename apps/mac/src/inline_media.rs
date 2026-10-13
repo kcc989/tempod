@@ -21,7 +21,7 @@ pub fn image(block: &Value) -> Option<Arc<Image>> {
     let bytes = decode_base64(block["data"].as_str()?)?;
     Some(Arc::new(Image::from_bytes(format, bytes)))
 }
-fn decode_base64(text: &str) -> Option<Vec<u8>> {
+pub fn decode_base64(text: &str) -> Option<Vec<u8>> {
     if text.len() > 14 * 1024 * 1024 || !text.len().is_multiple_of(4) {
         return None;
     }

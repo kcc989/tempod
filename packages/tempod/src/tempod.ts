@@ -20,6 +20,7 @@ import { listFiles, readWorkspaceFile, searchFiles } from "./fs.ts";
 import { Git, summarize } from "./git.ts";
 import { errorText, Logger } from "./log.ts";
 import { startMcpSocket } from "./tempo-mcp.ts";
+import { Artifacts } from "./artifacts.ts";
 import { Outbox } from "./outbox.ts";
 import { PortScanner } from "./ports.ts";
 import { pruneLogs, ScriptManager } from "./scripts.ts";
@@ -66,6 +67,7 @@ export class Tempod {
   readonly watcher: Watcher;
   readonly codex: CodexCredentials;
   readonly settings: SettingsState;
+  readonly artifacts: Artifacts;
   readonly handlers: Handlers;
   private readonly caEnv: Record<string, string>;
   private scriptEnv: Record<string, string> = {};
@@ -144,6 +146,14 @@ export class Tempod {
       onChange: () => void this.refresh(),
       ...(opts.forcePollingWatcher ? { forcePolling: true } : {}),
     });
+    this.artifacts = new Artifacts({
+      db: this.db,
+      workspace: config.workspace,
+      artifactsDir: config.artifactsDir,
+      stageDir: config.artifactsStage,
+      emit,
+      runningTurnId: (sessionId) => this.agents.runningTurnId(sessionId),
+    });
     this.codex = new CodexCredentials({
       codexHome: config.codexHome,
       log: this.log,
@@ -203,6 +213,7 @@ export class Tempod {
       this.mcpSocket = startMcpSocket(this.config.mcpSocket, {
         summary: () => this.environmentSummary,
         propose: (proposal) => this.emit({ kind: "environment.proposed", proposal }),
+        publish: (req) => this.artifacts.publish(req),
       });
     } catch (e) {
       this.log.warn("tempo MCP socket failed", { error: errorText(e) });
@@ -327,6 +338,11 @@ export class Tempod {
           this.workspaceInfo = { ...this.workspaceInfo, branch: p.to };
         }
         return r;
+      },
+      "git.readFile": (p) => this.git.readFileAt(p.sha, p.path, p.maxBytes),
+      "artifact.release": async (p) => {
+        this.artifacts.release(p.artifactId, p.version);
+        return {};
       },
       "fs.list": async () => ({ paths: await listFiles(ws, this.baseEnv()) }),
       "fs.read": (p) => readWorkspaceFile(ws, p.path, p.maxBytes),

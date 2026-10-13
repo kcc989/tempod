@@ -39,8 +39,9 @@ import { thumbnailSrc } from "./attachment-cache";
 import { reviewChipLabel } from "./composer-model";
 import { BlockViewer, UnifiedDiff } from "./ContentBlocks";
 import { toggleExpanded, useExpanded } from "./expand-store";
+import { ArtifactCard } from "~/ui/components/artifacts/ArtifactCard";
 import { MessageMarkdown } from "./Markdown";
-import { currentStep, editCounts, toolLabel, workSummary, workType } from "./work-model";
+import { currentStep, editCounts, planProposalText, toolLabel, workSummary, workType } from "./work-model";
 import {
   blockView,
   errorItemMessage,
@@ -72,10 +73,13 @@ export const ItemView = memo(function ItemView({
   ctx,
   item,
   turn,
+  permission,
 }: {
   ctx: ItemContext;
   item: Item;
   turn: Turn | undefined;
+  /** A plan proposal's permission item, shown under its card. */
+  permission?: Item | undefined;
 }) {
   switch (item.kind) {
     case "user_message":
@@ -86,8 +90,18 @@ export const ItemView = memo(function ItemView({
       return (
         <Collapsed label={item.status === "streaming" ? "Thinking…" : "Thinking"} text={item.content.text} />
       );
-    case "tool_call":
+    case "tool_call": {
+      const plan = planProposalText(item);
+      if (plan !== null)
+        return (
+          <PlanProposal
+            ctx={ctx}
+            plan={plan}
+            permission={permission?.kind === "permission" ? permission : undefined}
+          />
+        );
       return <ToolCall ctx={ctx} item={item} />;
+    }
     case "plan":
       return <Plan item={item} />;
     case "permission":
@@ -109,8 +123,29 @@ export const ItemView = memo(function ItemView({
       );
     case "error":
       return <ErrorCard ctx={ctx} item={item} turn={turn} />;
+    case "artifact":
+      return <ArtifactCard workspaceId={ctx.workspaceId} item={item} />;
   }
 });
+
+/** 04 Plan proposals: the plan as Markdown, expanded, with its permission's buttons under it. */
+function PlanProposal({
+  ctx,
+  plan,
+  permission,
+}: {
+  ctx: ItemContext;
+  plan: string;
+  permission: ItemOf<"permission"> | undefined;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-2">
+      <p className="text-xs font-medium text-muted-foreground">Plan</p>
+      <MessageMarkdown workspaceId={ctx.workspaceId} text={plan} streaming={false} />
+      {permission && <Permission ctx={ctx} item={permission} />}
+    </div>
+  );
+}
 
 function UserMessage({
   ctx,

@@ -16,8 +16,12 @@ use gpui_kit::{
     IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
     Styled as _, Subscription, Window, div, uniform_list,
 };
+use std::sync::Arc;
 use tempo_client::Client;
 use tempo_protocol::{self as p, api};
+
+#[path = "review_artifacts.rs"]
+mod artifacts;
 
 #[derive(Clone)]
 pub enum ReviewEvent {
@@ -41,6 +45,22 @@ struct Document {
     file: Option<Entity<EditorState>>,
     stale: bool,
     scope: Option<p::DiffScope>,
+    content: Extra,
+}
+
+/// One side of an image diff: None when the side does not exist, `Some(None)` when it has no image.
+type DiffSide = Option<Option<Arc<gpui_kit::Image>>>;
+
+/// What a document shows besides a diff or source (04, Artifact tab; image and Markdown file tabs;
+/// image diffs).
+#[derive(Clone, Default)]
+struct Extra {
+    /// `(artifactId, version)` of an Artifact tab.
+    artifact: Option<(String, f64)>,
+    image: Option<Arc<gpui_kit::Image>>,
+    markdown: Option<String>,
+    /// `Before` and `After` of an image diff; `Some(None)` is a side with no image.
+    image_diff: Option<(DiffSide, DiffSide)>,
 }
 pub struct ReviewPanel {
     weak: gpui_kit::WeakEntity<ReviewPanel>,
@@ -92,6 +112,16 @@ pub struct ReviewPanel {
     search: Vec<p::SearchFilesItem>,
     search_mode: bool,
     search_generation: u64,
+    extra: Extra,
+    markdown_preview: bool,
+    svg_preview: bool,
+    /// A text artifact's name and text, waiting for a window to make its editor.
+    pending_text: Option<(String, String)>,
+    artifacts: Option<Vec<p::Artifact>>,
+    artifacts_error: Option<String>,
+    artifacts_key: String,
+    /// The commit an image diff's `Before` comes from: baseSha (branch) or headSha (uncommitted).
+    before_sha: Option<String>,
     _store_changed: Subscription,
 }
 impl ReviewPanel {
@@ -133,6 +163,7 @@ impl ReviewPanel {
                 }
                 this.initialized = true;
                 this.changes_seq = seq;
+                this.sync_artifacts(cx);
                 this.refresh(cx);
                 // These reloads are not user actions: reads that need the container would wake it.
                 let live = this.live(cx);
@@ -216,6 +247,14 @@ impl ReviewPanel {
             search: vec![],
             search_mode: false,
             search_generation: 0,
+            extra: Extra::default(),
+            markdown_preview: true,
+            svg_preview: false,
+            pending_text: None,
+            artifacts: None,
+            artifacts_error: None,
+            artifacts_key: String::new(),
+            before_sha: None,
             _store_changed: changed,
         };
         this.refresh(cx);
@@ -332,6 +371,11 @@ impl ReviewPanel {
                 }
                 match result {
                     Ok(out) => {
+                        this.before_sha = Some(if this.scope == p::DiffScope::Branch {
+                            out.base_sha
+                        } else {
+                            out.head_sha
+                        });
                         this.files = out.files;
                         if this.grouped {
                             this.files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -378,6 +422,10 @@ impl ReviewPanel {
         self.open_diff(self.files[next].path.clone(), window, cx);
     }
     pub fn open_diff(&mut self, path: String, window: &mut Window, cx: &mut Context<Self>) {
+        if super::artifacts_model::image_mime_of_path(&path).is_some() {
+            return self.open_image_diff(path, window, cx);
+        }
+        self.extra = Extra::default();
         self.active_document = Some(format!("diff:{}:{path}", self.scope));
         self.selected = Some(path.clone());
         self.file = None;
@@ -454,6 +502,7 @@ impl ReviewPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.extra = Extra::default();
         self.active_document = Some(format!("file:{path}"));
         self.selected = Some(path.clone());
         self.document_title = Some(path.clone());
@@ -476,8 +525,21 @@ impl ReviewPanel {
                     return;
                 }
                 this.document_loading = false;
+                if let Ok(out) = &result
+                    && let Some(mime) = super::artifacts_model::image_mime_of_path(&path)
+                {
+                    this.show_file_image(mime, out, window, cx);
+                    if mime != "image/svg+xml" || out.encoding == p::ReadFileOutEncoding::Base64 {
+                        this.cache_document();
+                        cx.notify();
+                        return;
+                    }
+                }
                 match result {
                     Ok(out) if out.encoding == p::ReadFileOutEncoding::Utf8 => {
+                        if super::artifacts_model::is_markdown_path(&path) {
+                            this.extra.markdown = Some(out.content.clone());
+                        }
                         let file = cx.new(|cx| {
                             EditorState::new(window, cx)
                                 .language(language(&path))
@@ -523,6 +585,7 @@ impl ReviewPanel {
                 file: self.file.clone(),
                 stale: false,
                 scope: self.diff.as_ref().map(|_| self.scope),
+                content: self.extra.clone(),
             };
             self.documents.retain(|d| d.key != key);
             self.documents.push(doc);
@@ -536,6 +599,10 @@ impl ReviewPanel {
     }
     pub fn select_document(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(doc) = self.documents.iter().find(|d| d.key == key).cloned() {
+            if let Some((artifact_id, version)) = doc.content.artifact.clone() {
+                self.open_artifact(artifact_id, Some(version), window, cx);
+                return;
+            }
             if doc.stale {
                 if let Some(scope) = doc.scope {
                     self.scope = scope;
@@ -555,6 +622,7 @@ impl ReviewPanel {
             self.document_title = Some(doc.title);
             self.diff = doc.diff;
             self.file = doc.file;
+            self.extra = doc.content;
             self.active_document = Some(doc.key);
             cx.notify();
         }
@@ -576,11 +644,18 @@ impl ReviewPanel {
         self.document_loading = false;
         self.diff = None;
         self.file = None;
+        self.extra = Extra::default();
         cx.notify();
     }
     pub fn document(&self, cx: &gpui_kit::App) -> AnyElement {
+        if self.extra.artifact.is_some() {
+            return self.render_artifact_document(cx);
+        }
         if self.document_loading {
             return super::skeleton_rows(8).into_any_element();
+        }
+        if let Some(element) = self.render_extra(cx) {
+            return element;
         }
         if let Some(diff) = &self.diff {
             return div().size_full().child(diff.clone()).into_any_element();
@@ -1146,7 +1221,8 @@ fn language(path: &str) -> &'static str {
     }
 }
 impl Render for ReviewPanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.take_pending_text(window, cx);
         let query = self.query.read(cx).value().to_lowercase();
         let paths = self.fuzzy_matches.clone();
         let mut changed_rows = vec![];
@@ -1402,6 +1478,7 @@ impl Render for ReviewPanel {
                     .into_any_element()
                 })
                 .into_any_element(),
+            3 => self.render_artifacts(cx),
             _ => self.render_checks(cx),
         };
         let draft_ids: Vec<_> = self
@@ -1423,9 +1500,15 @@ impl Render for ReviewPanel {
                         if *ix == 2 {
                             this.load_checks(true, cx);
                         }
+                        if *ix == 3 {
+                            this.load_artifacts(cx);
+                        }
                         cx.notify();
                     }))
-                    .children(["Changes", "All files", "Checks"].map(|t| Tab::new().label(t))),
+                    .children(
+                        ["Changes", "All files", "Checks", "Artifacts"]
+                            .map(|t| Tab::new().label(t)),
+                    ),
             )
             .children(self.error.clone().map(|e| {
                 div()

@@ -193,6 +193,10 @@ export class AgentSession {
     return this.turn !== null && !this.turn.ended;
   }
 
+  get runningTurnId(): string | null {
+    return this.turn !== null && !this.turn.ended ? this.turn.turnId : null;
+  }
+
   /** The last 200 stderr lines, each cut at 2,000 chars (01, Crashes), within the message size limit. */
   stderrTail(): string {
     return tailLines(this.stderr, ITEM_CONTENT_MAX);
@@ -378,9 +382,13 @@ export class AgentSession {
     // A custom agent's server replaces a user server of the same name.
     const names = new Set(profile.specs.map((s) => s.name));
     const specs = [...(p.mcpServers ?? []).filter((s) => !names.has(s.name)), ...profile.specs];
-    const mcpServers = acpMcpServers(specs, this.capabilities, this.deps.bridge, p.browser).filter(
-      (s) => !(profile.dropPlaywright && s.name === PLAYWRIGHT_MCP_SERVER.name),
-    );
+    const mcpServers = acpMcpServers(
+      specs,
+      this.capabilities,
+      this.deps.bridge,
+      p.browser ?? "local",
+      this.sessionId,
+    ).filter((s) => !(profile.dropPlaywright && s.name === PLAYWRIGHT_MCP_SERVER.name));
     const meta = profile.meta ? { _meta: profile.meta } : {};
     let reloaded = false;
     let handoff = false;

@@ -131,6 +131,8 @@ describe("contract", () => {
     expect(TEMPOD_REQUESTS["session.start"].timeoutMs).toBe(120_000);
     expect(TEMPOD_REQUESTS.shutdown.timeoutMs).toBe(45_000);
     expect(TEMPOD_REQUESTS["environment.set"].timeoutMs).toBe(10_000);
+    expect(TEMPOD_REQUESTS["git.readFile"].timeoutMs).toBe(10_000);
+    expect(TEMPOD_REQUESTS["artifact.release"].timeoutMs).toBe(10_000);
     expect(Object.keys(TEMPOD_REQUESTS).sort()).toEqual(
       [
         "repo.clone",
@@ -155,6 +157,8 @@ describe("contract", () => {
         "git.revert",
         "git.commitAndPush",
         "git.renameBranch",
+        "git.readFile",
+        "artifact.release",
         "fs.list",
         "fs.read",
         "fs.search",

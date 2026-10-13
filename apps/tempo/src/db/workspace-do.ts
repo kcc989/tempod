@@ -1,5 +1,5 @@
-import { REVIEW_STATUSES, SESSION_STATUSES } from "@tempo/protocol";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { ARTIFACT_KINDS, ARTIFACT_STATUSES, REVIEW_STATUSES, SESSION_STATUSES } from "@tempo/protocol";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /** WorkspaceDO SQLite (02). DDL lives in do-migrations.ts; these tables type the queries. */
 
@@ -246,7 +246,41 @@ export const environmentProposals = sqliteTable("environment_proposals", {
   proposalJson: text("proposal_json").notNull(),
 });
 
+export const artifacts = sqliteTable(
+  "artifacts",
+  {
+    id: text("id").notNull(),
+    version: integer("version").notNull(),
+    sessionId: text("session_id").notNull(),
+    turnId: text("turn_id"),
+    itemId: text("item_id").notNull(),
+    path: text("path").notNull(),
+    name: text("name").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    mime: text("mime").notNull(),
+    kind: text("kind", { enum: ARTIFACT_KINDS }).notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    stagedPath: text("staged_path").notNull(),
+    status: text("status", { enum: ARTIFACT_STATUSES }).notNull(),
+    attempt: integer("attempt").notNull().default(0),
+    r2Key: text("r2_key").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.id, t.version] })],
+);
+
+export const artifactCodes = sqliteTable("artifact_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  artifactId: text("artifact_id").notNull(),
+  version: integer("version").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+});
+
 export const workspaceSchema = {
+  artifacts,
+  artifactCodes,
   environmentProposals,
   fileCache,
   workspace,
@@ -278,3 +312,4 @@ export type ScriptRunRow = typeof scriptRuns.$inferSelect;
 export type ReviewCommentRow = typeof reviewComments.$inferSelect;
 export type PermissionRow = typeof permissions.$inferSelect;
 export type AttachmentRow = typeof attachments.$inferSelect;
+export type ArtifactRow = typeof artifacts.$inferSelect;

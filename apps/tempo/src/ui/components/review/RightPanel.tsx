@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
 import { setRightTab, type RightTab } from "~/ui/state/workspace-ui";
+import { ArtifactsView } from "~/ui/components/artifacts/ArtifactsView";
 import { ChangesView } from "./ChangesView";
 import { ChecksView } from "./ChecksView";
 import { FilesView } from "./FilesView";
@@ -11,9 +12,10 @@ export interface RightPanelProps {
   readonly variant?: "desktop" | "phone";
 }
 
-const isRightTab = (v: string): v is RightTab => v === "changes" || v === "files" || v === "checks";
+const isRightTab = (v: string): v is RightTab =>
+  v === "changes" || v === "files" || v === "checks" || v === "artifacts";
 
-/** 04, Right and bottom panels: Changes, All files and Checks. */
+/** 04, Right and bottom panels: Changes, All files, Checks and Artifacts. */
 export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps) {
   const tab = useWorkspaceUiSelector(workspaceId, (s) => s.rightTab);
   if (variant === "phone") {
@@ -36,6 +38,7 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
           <TabsTrigger value="changes">Changes</TabsTrigger>
           <TabsTrigger value="files">All files</TabsTrigger>
           <TabsTrigger value="checks">Checks</TabsTrigger>
+          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
         </TabsList>
         <TabsContent value="changes" className="flex min-h-0 flex-col">
           <ChangesView workspaceId={workspaceId} />
@@ -45,6 +48,9 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
         </TabsContent>
         <TabsContent value="checks" className="flex min-h-0 flex-col">
           <ChecksView workspaceId={workspaceId} />
+        </TabsContent>
+        <TabsContent value="artifacts" className="flex min-h-0 flex-col">
+          <ArtifactsView workspaceId={workspaceId} />
         </TabsContent>
       </Tabs>
     </>

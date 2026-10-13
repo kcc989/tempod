@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS artifacts (
+  artifact_id   TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL,
+  path          TEXT NOT NULL,
+  last_version  INTEGER NOT NULL,
+  UNIQUE (session_id, path)
+);
 `;
 
 export class TempodDb {

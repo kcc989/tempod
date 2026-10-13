@@ -12,6 +12,7 @@
     "notice",
     "handoff",
     "revert_marker",
-    "error"
+    "error",
+    "artifact"
   ]
 }

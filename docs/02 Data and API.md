@@ -594,7 +594,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, version, code)`, `artifactFetch(request, artifactId, cookie)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`, `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, code)` (the code names the version), `artifactFetch(request, artifactId, cookie)`, `getArtifact(artifactId, version)` (one `Artifact` or null, for the artifact route), `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`, `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
 
 **Projects and GitHub**
 
@@ -910,7 +910,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `script.exited` | `runId, exitCode, signal, timedOut` |
 | `git.changed` | `files, additions, deletions` |
 | `ports.changed` | `ports` |
-| `artifact.published` | `sessionId, turnId, artifactId, version, path, name, title, summary?, mime, kind, size, sha256, stagedPath` (01, Artifacts) |
+| `artifact.published` | `sessionId, turnId, artifactId, version, path, name, title, summary?, mime, artifactKind, size, sha256, stagedPath` (01, Artifacts). `artifactKind` is the `kind` from 01, Allowed files; `kind` is the event's own tag. |
 | `settings.changed` | `effective, warnings, errors` |
 | `credential.changed` | `provider, content, lastRefresh` |
 | `credential.invalid` | `provider` |

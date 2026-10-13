@@ -221,4 +221,16 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
   listScriptRuns(input: MethodInput<"listScriptRuns">): Promise<Result<FnOutput<"listScriptRuns">>> {
     return this.rpc("listScriptRuns", input);
   }
+
+  readFileAt(input: MethodInput<"readFileAt">): Promise<Result<FnOutput<"readFileAt">>> {
+    return this.rpc("readFileAt", input);
+  }
+
+  listArtifacts(input: MethodInput<"listArtifacts">): Promise<Result<FnOutput<"listArtifacts">>> {
+    return this.rpc("listArtifacts", input);
+  }
+
+  openArtifact(input: MethodInput<"openArtifact">): Promise<Result<FnOutput<"openArtifact">>> {
+    return this.rpc("openArtifact", input);
+  }
 }

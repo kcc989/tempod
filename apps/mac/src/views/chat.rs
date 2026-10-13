@@ -88,6 +88,11 @@ pub enum TranscriptEvent {
     Revert {
         turn_id: String,
     },
+    /// An artifact card was clicked: open the Artifact tab at this version (04).
+    OpenArtifact {
+        artifact_id: String,
+        version: f64,
+    },
 }
 
 impl EventEmitter<TranscriptEvent> for TranscriptView {}
@@ -211,6 +216,10 @@ impl TranscriptView {
             let Some(RowContent::Item { item, .. }) = &row.native else {
                 continue;
             };
+            if let ItemContent::Artifact(a) = &item.content {
+                self.load_artifact_thumbnail(&client, &workspace_id, a, item.status, &row.id, cx);
+                continue;
+            }
             let ItemContent::UserMessage(message) = &item.content else {
                 continue;
             };
@@ -245,6 +254,58 @@ impl TranscriptView {
                 .detach();
             }
         }
+    }
+
+    /// 04 artifact card: kind `image` shows a thumbnail from the artifact route, decoded (SVG
+    /// rasterized) on the background executor.
+    fn load_artifact_thumbnail(
+        &mut self,
+        client: &Client,
+        workspace_id: &str,
+        a: &tempo_protocol::ArtifactItemContent,
+        status: ItemStatus,
+        row_id: &SharedString,
+        cx: &mut Context<Self>,
+    ) {
+        let key = artifact_thumbnail_key(a);
+        if a.artifact_kind != tempo_protocol::ArtifactKind::Image
+            || status != ItemStatus::Completed
+            || !self.thumbnails.wants(&key)
+        {
+            return;
+        }
+        self.thumbnails.pending.insert(key.clone());
+        let request = client.get_artifact(workspace_id, &a.artifact_id, a.version as u32);
+        let row_id = row_id.clone();
+        cx.spawn(async move |this, cx| {
+            let file = request.await.ok();
+            let image = match file {
+                Some(file) => {
+                    cx.background_executor()
+                        .spawn(async move {
+                            super::artifacts_model::decode_image(&file.mime, file.bytes)
+                        })
+                        .await
+                }
+                None => None,
+            };
+            let _ = this.update(cx, |this, cx| {
+                match image {
+                    Some(image) => {
+                        for old in this.thumbnails.insert(key, image) {
+                            ImageSource::Image(old).remove_asset(cx);
+                        }
+                    }
+                    None => this.thumbnails.fail(&key),
+                }
+                if let Some(ix) = this.rows.iter().position(|r| r.id == row_id) {
+                    this.scroller
+                        .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub fn sync(&mut self, rows: Vec<TranscriptRow>, cx: &mut Context<Self>) {
@@ -514,7 +575,111 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         )
 }
 
-fn markdown(id: SharedString, text: &str) -> AnyElement {
+fn artifact_thumbnail_key(a: &tempo_protocol::ArtifactItemContent) -> String {
+    format!("artifact:{}:{}", a.artifact_id, a.version)
+}
+
+/// 04 Transcript, `artifact`: kind, title, `v<n>`, name and size, summary, and an image thumbnail.
+/// A click opens the Artifact tab; `pending` shows `Saving`, `failed` the lost text.
+fn artifact_card(
+    id: &SharedString,
+    item: &tempo_protocol::Item,
+    a: &tempo_protocol::ArtifactItemContent,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    use super::artifacts_model::{LOST_TEXT, SAVING, kind_label, version_label};
+    let pending = item.status == ItemStatus::Pending;
+    let failed = item.status == ItemStatus::Failed;
+    let thumbnail = view.upgrade().and_then(|v| {
+        v.read(cx)
+            .thumbnails
+            .images
+            .get(&artifact_thumbnail_key(a))
+            .cloned()
+    });
+    let muted = color(Token::MutedForeground, cx);
+    let title = h_flex()
+        .gap_2()
+        .child(div().text_color(muted).child(kind_label(a.artifact_kind)))
+        .child(a.title.clone())
+        .children(version_label(a.version).map(|v| div().text_color(muted).child(v)))
+        .children(pending.then(|| {
+            h_flex()
+                .gap_1()
+                .text_color(muted)
+                .child(Spinner::new())
+                .child(SAVING)
+        }));
+    let mut card = div()
+        .id(id.clone())
+        .role(Role::Button)
+        .aria_label(format!("Artifact: {}", a.title))
+        .mx_4()
+        .px_3()
+        .py_2()
+        .rounded_md()
+        .border_1()
+        .border_color(color(Token::Border, cx))
+        .child(
+            v_flex()
+                .gap_1()
+                .child(title)
+                .child(div().text_color(muted).child(format!(
+                    "{} · {}",
+                    a.name,
+                    super::format_bytes(a.size)
+                )))
+                .children(a.summary.clone().map(|s| div().text_color(muted).child(s)))
+                .children(failed.then(|| {
+                    div()
+                        .text_color(color(Token::Destructive, cx))
+                        .child(LOST_TEXT)
+                }))
+                .children(thumbnail.map(|image| {
+                    gpui_kit::img(image)
+                        .max_h(px(240.))
+                        .max_w_full()
+                        .object_fit(ObjectFit::Contain)
+                        .rounded_sm()
+                })),
+        );
+    if !pending && !failed {
+        let artifact_id = a.artifact_id.clone();
+        let version = a.version;
+        card = card.cursor_pointer().on_click(move |_, _, cx| {
+            let _ = view.update(cx, |_, cx| {
+                cx.emit(TranscriptEvent::OpenArtifact {
+                    artifact_id: artifact_id.clone(),
+                    version,
+                })
+            });
+        });
+    }
+    card.into_any_element()
+}
+
+/// 04 Plan proposals: a tool call with `rawInput.plan` shows as a `Plan` card with the plan as
+/// Markdown; its permission row follows right under it.
+fn plan_card(id: &SharedString, plan: &str, cx: &mut gpui_kit::App) -> AnyElement {
+    v_flex()
+        .mx_4()
+        .px_3()
+        .py_2()
+        .gap_1()
+        .rounded_md()
+        .border_1()
+        .border_color(color(Token::Border, cx))
+        .child(
+            div()
+                .text_color(color(Token::MutedForeground, cx))
+                .child("Plan"),
+        )
+        .child(markdown(id.clone(), plan))
+        .into_any_element()
+}
+
+pub(crate) fn markdown(id: SharedString, text: &str) -> AnyElement {
     render_row(id, escape_raw_html(text).into_owned().into()).into_any_element()
 }
 
@@ -646,6 +811,14 @@ fn render_native_row(
                     view.clone(),
                     cx,
                 ),
+                ItemContent::ToolCall(c) if chat_model::plan_proposal_text(c).is_some() => {
+                    plan_card(
+                        &id,
+                        &chat_model::plan_proposal_text(c).unwrap_or_default(),
+                        cx,
+                    )
+                }
+                ItemContent::Artifact(a) => artifact_card(&id, &item, a, view.clone(), cx),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
                         let key: SharedString = format!("{}:block:{index}", id).into();

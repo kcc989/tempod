@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { isImagePath } from "~/ui/components/artifacts/artifact-model";
 import { Button } from "~/ui/components/ui/button";
 import { Checkbox } from "~/ui/components/ui/checkbox";
 import { ShortcutKbd } from "~/ui/components/ui/kbd";
@@ -24,6 +25,7 @@ import { openFile } from "~/ui/state/workspace-ui";
 import { statusLetter } from "./changes-model";
 import { CommentForm, DraftCard } from "./CommentParts";
 import { DiffLines } from "./DiffLines";
+import { ImageDiff } from "./ImageDiff";
 import {
   diffHash,
   diffLineCount,
@@ -39,6 +41,7 @@ export interface DiffFileProps {
   readonly workspaceId: string;
   readonly file: ChangedFile;
   readonly scope: DiffScope;
+  readonly beforeSha: string | null;
   readonly view: DiffView;
   readonly live: boolean;
   readonly viewedHash: string | undefined;
@@ -56,6 +59,7 @@ export function DiffFile({
   workspaceId,
   file,
   scope,
+  beforeSha,
   view,
   live,
   viewedHash,
@@ -148,6 +152,17 @@ export function DiffFile({
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
       </div>
+    );
+  } else if (isImagePath(path)) {
+    body = (
+      <ImageDiff
+        workspaceId={workspaceId}
+        path={path}
+        oldPath={file.oldPath ?? path}
+        status={statusLetter(file.status)}
+        beforeSha={beforeSha}
+        live={live}
+      />
     );
   } else if (parsed.binary) {
     body = <Note>Binary file.</Note>;

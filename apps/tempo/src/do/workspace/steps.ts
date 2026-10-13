@@ -46,6 +46,7 @@ import {
   type PendingBundle,
 } from "./durability.ts";
 import { sendEnv } from "./events.ts";
+import { resumeArtifacts, uploadAllArtifacts } from "./artifacts.ts";
 import { getGithubToken, refreshChanges } from "./git.ts";
 import { closeBrowser } from "./browser.ts";
 import { finishTurn } from "./queue.ts";
@@ -296,6 +297,11 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
       return "next";
     },
 
+    "artifacts.resume": async (sc) => {
+      resumeArtifacts(sc.core, fresh(sc));
+      return "next";
+    },
+
     "turns.check": async ({ core }) => {
       if (core.runningTurn() || core.queuedTurns().length > 0) return "cancel";
       if (core.state !== "ready") return "cancel";
@@ -401,6 +407,13 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
     "home.backup": async (sc) => {
       if (!containerRunning(sc.core)) return skip(sc);
       await backupHome(sc.core, sc.signal);
+      return "next";
+    },
+
+    "artifacts.upload": async (sc) => {
+      await reconnect(sc.core);
+      if (!containerRunning(sc.core)) return skip(sc);
+      await uploadAllArtifacts(sc.core);
       return "next";
     },
 
