@@ -28,6 +28,12 @@ pub fn has_login(agent: AgentId, status: &CredentialStatus) -> bool {
         AgentId::Opencode | AgentId::Pi => status.openrouter.set,
     }
 }
+pub fn new_chat_agents(credentials: Option<&CredentialStatus>) -> Vec<AgentId> {
+    AGENTS
+        .into_iter()
+        .filter(|agent| credentials.is_some_and(|c| has_login(*agent, c)))
+        .collect()
+}
 pub const NO_LOGIN_HINT: &str = "Add login in Settings";
 pub const NO_MODEL_HINT: &str = "Set a model in Settings → Project";
 pub const LOADING_LOGINS_HINT: &str = "Loading logins…";
@@ -917,6 +923,26 @@ pub fn turn_footer(turn: &Turn, work_row: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn new_chat_only_offers_agents_with_a_confirmed_login() {
+        let mut credentials: CredentialStatus = serde_json::from_value(serde_json::json!({
+            "claude": {"set": false, "updatedAt": null},
+            "codex": {"set": false, "updatedAt": null, "lastRefresh": null},
+            "openrouter": {"set": false, "updatedAt": null},
+            "anthropic": {"set": false, "updatedAt": null},
+            "openai": {"set": false, "updatedAt": null}
+        }))
+        .unwrap();
+        assert!(new_chat_agents(None).is_empty());
+        assert!(new_chat_agents(Some(&credentials)).is_empty());
+        credentials.claude.set = true;
+        assert_eq!(new_chat_agents(Some(&credentials)), vec![AgentId::Claude]);
+        credentials.claude.set = false;
+        credentials.anthropic.set = true;
+        credentials.openai.set = true;
+        credentials.openrouter.set = true;
+        assert_eq!(new_chat_agents(Some(&credentials)), AGENTS.to_vec());
+    }
     #[test]
     fn new_chat_disables_opencode_and_pi_without_a_model() {
         let mut credentials: CredentialStatus = serde_json::from_value(serde_json::json!({

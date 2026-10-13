@@ -100,7 +100,7 @@ describe("custom agents in New chat and New workspace (04)", () => {
     { id: "a2", name: "Pi tester", description: "", baseAgent: "pi" as const, updatedAt: 1 },
   ];
 
-  it("menu entries name the base agent and are disabled without its login", () => {
+  it("menu entries name the base agent and hide agents without its login", () => {
     expect(customAgentMenu(agents, creds(["codex"]))).toEqual([
       {
         agent: "codex",
@@ -110,16 +110,10 @@ describe("custom agents in New chat and New workspace (04)", () => {
         enabled: true,
         hint: null,
       },
-      {
-        agent: "pi",
-        customAgentId: "a2",
-        label: "Pi tester",
-        baseLabel: "Pi",
-        enabled: false,
-        hint: "Add login in Settings",
-      },
     ]);
     expect(customAgentMenu(undefined, undefined)).toEqual([]);
+    expect(customAgentMenu(agents, undefined)).toEqual([]);
+    expect(customAgentMenu(agents, creds([]))).toEqual([]);
   });
 
   it("the New workspace select maps custom values back to the agent and sends customAgentId", () => {
