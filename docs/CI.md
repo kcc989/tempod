@@ -206,3 +206,10 @@ The final Mac suite passed 264 tests in 5.45 seconds of test execution. Its nati
 The production app CI build task also passed locally on macOS in 4.1 seconds. The complete Linux CI command remains failed at its oxlint allocator abort; the successful separate stages are not presented as a full CI run.
 
 PR #44's first hosted full-suite run (`38470261533`, head `23e6a64`) passed. Check commands took 251.3 s and setup-inclusive time was 305.7 s; the job including cleanup took 319 s, above the five-minute target but inside both deadlines. Worker tests were the critical path at 244.8 s, with no Worker source or configuration changes in this PR. Other tests took 72.5 s, typecheck 19.5 s, app build 51.0 s and all 28 browser cases 97.7 s. The base main run had failed an existing Worker reconnect assertion, so its Worker result was unavailable for reuse. No pool size, cache input, test coverage or deadline changed. After rebasing, all 266 Mac tests passed in 1.61 s of execution.
+
+
+## Agents cleanup test loading
+
+M6's first hosted check (run `38481219598`) hit the unchanged 300-second command deadline: 332.3 s including setup, Worker 293.8 s, other tests 160.3 s and browsers 126.9 s. All 28 browsers passed; the Worker task was terminated at the deadline.
+
+The Worker optimizer now also bundles the shared protocol/settings modules and the migration-only parser. The UI and component optimizers bundle Effect and the shared protocol. This changes dependency loading only; Worker limits stay four files/four cases, the UI/component limits stay two, the browser pool stays two, and all cases remain. A complete forced-task local benchmark passed in 89.4 s versus the previous 99.4 s: Worker 86.1 s (previously 96.6 s), other tests 48.2 s (52.1 s), browsers 39.0 s (43.8 s), typecheck 12.5 s and app build 13.2 s. Stage durations overlap. Hosted follow-up measurements remain pending.

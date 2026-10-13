@@ -30,6 +30,9 @@ export default defineConfig({
           enabled: true,
           include: [
             "effect",
+            "@tempo/protocol",
+            "@tempo/settings",
+            "@tempo/settings/migrations/roles",
             "effect/Schema",
             "drizzle-orm",
             "drizzle-orm/d1",
