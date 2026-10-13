@@ -51,7 +51,7 @@ import {
 } from "./composer-model";
 import {
   AttachmentChip,
-  ContextRing,
+  ContextMeter,
   LoginBanner,
   ProfileIssuesNotice,
   MentionChip,
@@ -825,7 +825,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                     e.target.value = "";
                   }}
                 />
-                {usage && <ContextRing usage={usage} />}
+                {usage && <ContextMeter usage={usage} />}
                 {running && (
                   <SimpleTooltip label="Stop (Esc)">
                     <Button

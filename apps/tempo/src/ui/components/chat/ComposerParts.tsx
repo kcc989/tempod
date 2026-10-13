@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/components/ui/dropdown-menu";
 import { ShortcutKbd } from "~/ui/components/ui/kbd";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Spinner } from "~/ui/components/ui/spinner";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { formatBytes, formatTokens } from "~/ui/lib/format";
@@ -260,42 +261,46 @@ export function QueuedChip({
 }
 
 /** Used and total context from the agent's usage_update. */
-export function ContextRing({ usage }: { usage: ContextUsage }) {
-  const r = 6;
-  const c = 2 * Math.PI * r;
+export function ContextMeter({ usage }: { usage: ContextUsage }) {
   const pct = Math.round(usage.ratio * 100);
   const label = `${formatTokens(usage.used)} of ${formatTokens(usage.size)} tokens of context used (${pct}%)`;
 
   return (
-    <SimpleTooltip label={label}>
-      <span
-        tabIndex={0}
-        role="img"
-        aria-label={label}
-        className="inline-flex size-6 items-center justify-center rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        <svg viewBox="0 0 16 16" className="size-4 -rotate-90">
-          <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="stroke-muted" />
-          <circle
-            cx="8"
-            cy="8"
-            r={r}
-            fill="none"
-            strokeWidth="2"
-            strokeDasharray={c}
-            strokeDashoffset={c * (1 - usage.ratio)}
-            strokeLinecap="round"
-            className={cn(
-              usage.ratio >= 0.95
-                ? "stroke-destructive"
-                : usage.ratio >= 0.8
-                  ? "stroke-warning"
-                  : "stroke-primary",
-            )}
-          />
-        </svg>
-      </span>
-    </SimpleTooltip>
+    <Popover>
+      <SimpleTooltip label={label}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-2 px-2 text-xs text-muted-foreground"
+            aria-label={`Context usage: ${label}`}
+          >
+            Context
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-12 overflow-hidden rounded-full bg-muted-foreground/25"
+            >
+              <span
+                className="block h-full rounded-full bg-muted-foreground"
+                style={{ width: `${usage.ratio * 100}%` }}
+              />
+            </span>
+          </Button>
+        </PopoverTrigger>
+      </SimpleTooltip>
+      <PopoverContent side="top" align="end" className="w-64 space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-4 font-medium">
+          <span>Context used</span>
+          <span className="tabular-nums">{pct}%</span>
+        </div>
+        <p className="text-muted-foreground tabular-nums">
+          {usage.used.toLocaleString()} of {usage.size.toLocaleString()} tokens
+        </p>
+        <p className="text-xs text-muted-foreground">
+          The fill shows how much of the agent’s context window is used.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 

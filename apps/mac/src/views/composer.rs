@@ -15,7 +15,6 @@ use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
 use gpui_kit::component::list::{List, ListEvent, ListState};
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::v_flex;
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex};
@@ -106,6 +105,7 @@ pub struct Composer {
     pub steering: bool,
     commands: Vec<p::AvailableCommand>,
     usage: Option<(f64, f64)>,
+    context_details_open: bool,
     plan_available: bool,
     command_menu: Entity<CommandState>,
     command_dismissed: bool,
@@ -216,6 +216,7 @@ impl Composer {
             steering: false,
             commands: vec![],
             usage: None,
+            context_details_open: false,
             plan_available: false,
             command_menu: cx.new(|cx| CommandState::new(window, cx)),
             command_dismissed: false,
@@ -244,6 +245,86 @@ impl Composer {
             self.input
                 .update(cx, |input, cx| input.set_placeholder(text, window, cx));
         }
+    }
+
+    fn render_context_usage(
+        &self,
+        used: f64,
+        size: f64,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let ratio = (used / size).min(1.);
+        let percent = ratio * 100.;
+        let label = format!("Context usage: {used:.0} of {size:.0} tokens ({percent:.0}%)");
+        let owner = cx.weak_entity();
+        Popover::new("context-details")
+            .anchor(gpui_kit::Anchor::BottomRight)
+            .open(self.context_details_open)
+            .trigger(
+                Button::new("context-usage")
+                    .ghost()
+                    .small()
+                    .h(px(28.))
+                    .accessibility_label(label.clone())
+                    .tooltip(label)
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .text_xs()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child("Context")
+                            .child(
+                                div()
+                                    .w(px(48.))
+                                    .h(px(6.))
+                                    .rounded(px(3.))
+                                    .overflow_hidden()
+                                    .bg(color(Token::MutedForeground, cx).opacity(0.25))
+                                    .child(
+                                        div()
+                                            .h_full()
+                                            .w(gpui_kit::relative(ratio as f32))
+                                            .rounded(px(3.))
+                                            .bg(color(Token::MutedForeground, cx)),
+                                    ),
+                            ),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.context_details_open = true;
+                        cx.notify();
+                    })),
+            )
+            .on_open_change(move |open, _, cx| {
+                let _ = owner.update(cx, |this, cx| {
+                    this.context_details_open = *open;
+                    cx.notify();
+                });
+            })
+            .content(move |_, _, cx| {
+                v_flex()
+                    .w(px(240.))
+                    .gap_2()
+                    .text_sm()
+                    .child(
+                        h_flex()
+                            .justify_between()
+                            .child("Context used")
+                            .child(format!("{percent:.0}%")),
+                    )
+                    .child(
+                        div()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(format!("{used:.0} of {size:.0} tokens")),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(
+                                "The fill shows how much of the agent’s context window is used.",
+                            ),
+                    )
+            })
     }
 
     pub fn sync_session(
@@ -959,22 +1040,10 @@ impl Render for Composer {
                             )
                     }))
                     .child(div().flex_1())
-                    .children(self.usage.map(|(used, size)| {
-                        let percent = (used / size).min(1.) * 100.;
-                        let label = format!("{used:.0} / {size:.0} tokens · {percent:.0}% context");
-                        Button::new("context-usage")
-                            .ghost()
-                            .small()
-                            .accessibility_label(label.clone())
-                            .tooltip(label.clone())
-                            .child(
-                                ProgressCircle::new("context-ring")
-                                    .value(percent as f32)
-                                    .size(px(14.))
-                                    .color(color(Token::MutedForeground, cx))
-                                    .accessibility_label(label),
-                            )
-                    }))
+                    .children(
+                        self.usage
+                            .map(|(used, size)| self.render_context_usage(used, size, cx)),
+                    )
                     .child(
                         Button::new("attach-file")
                             .ghost()
