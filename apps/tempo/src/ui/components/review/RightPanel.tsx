@@ -32,7 +32,7 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
         onValueChange={(v) => {
           if (isRightTab(v)) setRightTab(workspaceId, v);
         }}
-        className="h-full min-h-0 gap-0"
+        className="h-full min-h-0 gap-0 bg-card"
       >
         <TabsList variant="line" className="w-full shrink-0 justify-start px-2">
           <TabsTrigger value="changes">Changes</TabsTrigger>

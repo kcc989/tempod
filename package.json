@@ -15,7 +15,7 @@
     "lint": "oxlint --deny-warnings .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "test": "turbo run test && bun test scripts/deployment-preflight.test.ts",
+    "test": "turbo run test && bun test scripts/*.test.ts",
     "test:conformance": "bun run --cwd tests/conformance test",
     "test:e2e": "bun run --cwd tests/e2e test",
     "check:versions": "bun container/check-versions.ts",
@@ -23,7 +23,7 @@
     "build:tempod": "turbo run build --filter=@tempo/tempod",
     "protocol:gen": "bun packages/protocol/scripts/gen-schema.ts",
     "protocol:fixtures": "bun packages/protocol/scripts/gen-fixtures.ts",
-    "mac:dev": "cargo run -p tempo-mac",
+    "mac:dev": "bash scripts/mac/dev.sh",
     "mac:test": "cargo test --workspace",
     "mac:release": "bash scripts/mac/release.sh",
     "test:tempod:container": "bun scripts/test-tempod-container.ts",
@@ -41,5 +41,8 @@
     "turbo": "2.11.7",
     "typescript": "6.0.3"
   },
-  "packageManager": "bun@1.4.2"
+  "packageManager": "bun@1.4.2",
+  "patchedDependencies": {
+    "alchemy@2.0.0-beta.81": "patches/alchemy@2.0.0-beta.81.patch"
+  }
 }

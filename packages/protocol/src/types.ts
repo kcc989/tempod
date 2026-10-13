@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import {
   AvailableCommand,
   Capabilities,
@@ -113,7 +113,9 @@ export const WorkspaceDetail = Schema.Struct({
   prTitle: Schema.optional(N(Schema.String)),
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
   /** A Browser Run session is open (01, Browser Run). */
-  browserActive: Schema.Boolean,
+  browserActive: Schema.Boolean.annotate({ default: false }).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(false)),
+  ),
   settings: Settings,
   runningTurnId: N(Schema.String),
   queue: Schema.Array(Schema.String),

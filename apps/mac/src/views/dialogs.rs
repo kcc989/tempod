@@ -32,6 +32,7 @@ pub struct Dialogs {
     prs: Vec<p::ListOpenPullRequestsItem>,
     installations: Vec<p::ListInstallationsItem>,
     repos: Vec<p::ListInstallationReposItem>,
+    repo_search: Entity<InputState>,
     installation: Option<f64>,
     history: Vec<p::WorkspaceSummary>,
     delete: Option<p::WorkspaceSummary>,
@@ -58,6 +59,8 @@ impl Dialogs {
         let confirm =
             cx.new(|cx| InputState::new(window, cx).placeholder("Type the workspace slug"));
         let mut inputs_changed = vec![cx.observe(&confirm, |_, _, cx| cx.notify())];
+        let repo_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search repos"));
+        inputs_changed.push(cx.observe(&repo_search, |_, _, cx| cx.notify()));
         inputs_changed.push(branch_changed);
         Self {
             kind: None,
@@ -83,6 +86,7 @@ impl Dialogs {
             prs: vec![],
             installations: vec![],
             repos: vec![],
+            repo_search,
             installation: None,
             history: vec![],
             delete: None,
@@ -124,6 +128,10 @@ impl Dialogs {
             self.source = 0;
             self.workspace_options = false;
             window.focus(&self.prompt.read(cx).focus_handle(cx), cx);
+        } else if kind == "Add project" {
+            self.repo_search
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            window.focus(&self.repo_search.read(cx).focus_handle(cx), cx);
         } else {
             window.focus(&self.branch.read(cx).focus_handle(cx), cx);
         }
@@ -735,6 +743,16 @@ impl Render for Dialogs {
                 .into_any_element(),
             "Add project" => {
                 let muted = super::tokens::color(super::tokens::Token::MutedForeground, cx);
+                let query = self.repo_search.read(cx).value().trim().to_lowercase();
+                let shown: Vec<_> = self
+                    .repos
+                    .iter()
+                    .filter(|repo| {
+                        format!("{}/{}", repo.owner, repo.name)
+                            .to_lowercase()
+                            .contains(&query)
+                    })
+                    .collect();
                 let linked: Vec<f64> = crate::app::AppState::try_global(cx)
                     .map(|a| {
                         a.read(cx)
@@ -773,6 +791,7 @@ impl Render for Dialogs {
                 } else {
                     v_flex()
                         .gap_2()
+                        .child(Input::new(&self.repo_search))
                         .child(
                             h_flex()
                                 .gap_1()
@@ -791,7 +810,16 @@ impl Render for Dialogs {
                                 .id("installation-repos")
                                 .role(gpui_kit::Role::List)
                                 .aria_label("Repos")
-                                .children(self.repos.iter().map(|r| {
+                                .max_h(gpui_kit::px(360.))
+                                .overflow_y_scroll()
+                                .children(shown.is_empty().then(|| {
+                                    div().py_2().text_color(muted).child(if query.is_empty() {
+                                        "No repos."
+                                    } else {
+                                        "No matching repos."
+                                    })
+                                }))
+                                .children(shown.into_iter().map(|r| {
                                     let id = r.repo_id;
                                     let name = format!("{}/{}", r.owner, r.name);
                                     h_flex()

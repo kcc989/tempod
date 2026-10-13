@@ -64,7 +64,7 @@ function LoginCard({ row, status }: { row: LoginRow; status: CredentialStatus })
   const lastRefresh = row.provider === "codex" ? status.codex.lastRefresh : null;
 
   return (
-    <section aria-label={row.label} className="grid gap-2 rounded-lg border p-3">
+    <section aria-label={row.label} className="grid gap-2 rounded-lg border bg-card p-3">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">{row.label}</h3>
         <Badge variant={state.set ? "success" : "muted"}>{state.set ? "Set" : "Not set"}</Badge>

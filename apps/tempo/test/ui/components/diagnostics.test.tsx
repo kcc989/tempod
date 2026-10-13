@@ -61,10 +61,11 @@ describe("Diagnostics egress filters (05, Observability)", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       fireEvent.change(screen.getByLabelText("Filter by host"), { target: { value: " GitHub " } });
-      await act(async () => vi.advanceTimersByTime(100));
+      await act(async () => vi.advanceTimersByTimeAsync(100));
       expect(vi.mocked(call).mock.calls.filter(([name]) => name === "getDiagnostics")).toHaveLength(1);
       expect(screen.getByText("2 shown")).toBeTruthy();
-      await act(async () => vi.advanceTimersByTime(200));
+      await act(async () => vi.advanceTimersByTimeAsync(200));
+      await act(async () => vi.advanceTimersByTimeAsync(1));
     } finally {
       vi.useRealTimers();
     }

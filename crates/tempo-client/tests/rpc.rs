@@ -33,7 +33,7 @@ fn client(rt: &RuntimeHandle, base: &str) -> tempo_client::Client {
         .client(Token::new(TOKEN))
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn call_posts_the_input_with_bearer_and_client_header_and_decodes_the_output() {
     let turn = fixture("Turn");
     let reply = turn.clone();
@@ -60,7 +60,7 @@ async fn call_posts_the_input_with_bearer_and_client_header_and_decodes_the_outp
     assert_eq!(r.json(), serde_json::to_value(&input).expect("encodes"));
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn an_error_answer_decodes_into_api_error_with_its_status() {
     let server = fake_http(|req, _| match req.path.as_str() {
         "/api/v1/rpc/cancelTurn" => (
@@ -93,7 +93,7 @@ async fn an_error_answer_decodes_into_api_error_with_its_status() {
     assert!(!c.is_unauthorized());
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_401_raises_unauthorized_once_and_closes_every_channel() {
     let server = fake_http(|_, _| {
         (
@@ -132,7 +132,7 @@ async fn a_401_raises_unauthorized_once_and_closes_every_channel() {
     assert!(rx.recv().await.is_err(), "nothing follows Closed");
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn meta_sends_no_token() {
     let server = fake_http(|_, _| (200, fixture("ApiMeta"))).await;
     let rt = RuntimeHandle::current();
@@ -151,7 +151,7 @@ async fn meta_sends_no_token() {
     assert_eq!(r.header("origin"), None);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn setup_status_sends_no_token_and_reads_the_install_link() {
     let server = fake_http(|_, _| {
         (
@@ -180,7 +180,7 @@ async fn setup_status_sends_no_token_and_reads_the_install_link() {
     assert_eq!(r.header("authorization"), None);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn upload_attachment_sends_one_multipart_file_with_the_bearer_token() {
     let server = fake_http(|_, _| {
         (
@@ -235,7 +235,7 @@ async fn upload_attachment_sends_one_multipart_file_with_the_bearer_token() {
     assert_eq!(server.requests().len(), 1, "an oversized file is not sent");
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn get_attachment_reads_the_bytes_with_the_bearer_token_up_to_10_mib() {
     let server = fake_http_raw(|req, _| {
         let reply = |status, content_type, body: Vec<u8>, content_length| RawReply {
@@ -361,7 +361,7 @@ fn a_call_runs_on_the_runtime_and_resolves_on_another_executor() {
     drop(runtime);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_server_url_must_be_http_or_https() {
     let rt = RuntimeHandle::current();
     for bad in [
@@ -396,7 +396,7 @@ fn block_on<F: std::future::Future>(fut: F) -> F::Output {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn release_download_is_authenticated_size_bound_and_revocation_closes_the_client() {
     let server = fake_http(|_, _| (200, "dmg bytes".into())).await;
     let rt = RuntimeHandle::current();
@@ -424,7 +424,7 @@ async fn release_download_is_authenticated_size_bound_and_revocation_closes_the_
     assert!(c.is_unauthorized());
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn hash_metadata_download_honors_a_hard_size_bound_without_an_exact_manifest_size() {
     let server = fake_http(|_, _| (200, "dmg bytes".into())).await;
     let rt = RuntimeHandle::current();

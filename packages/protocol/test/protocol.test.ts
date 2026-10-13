@@ -69,6 +69,16 @@ describe("errors", () => {
 });
 
 describe("settings (01, Project settings file)", () => {
+  it("decodes protocol 1 settings without a model map using the existing defaults", () => {
+    const decode = Schema.decodeUnknownSync(Settings);
+    const { browser: _, ...withoutBrowser } = DEFAULT_SETTINGS;
+    const legacy = { ...withoutBrowser, agent: { default: "claude" } };
+    expect(decode(legacy)).toEqual(DEFAULT_SETTINGS);
+    expect(() => decode({ ...legacy, agent: { default: "claude", models: null } })).toThrow();
+    expect(() => decode({ ...legacy, agent: { default: "claude", models: { claude: 1 } } })).toThrow();
+    expect(() => decode({ ...legacy, browser: null })).toThrow();
+    expect(() => decode({ ...legacy, browser: { run: "yes" } })).toThrow();
+  });
   it("defaults to an empty model for each agent and Browser Run off", () => {
     expect(Schema.decodeUnknownSync(Settings)(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
     expect(Object.keys(DEFAULT_SETTINGS.agent.models).sort()).toEqual([...AGENT_IDS].sort());

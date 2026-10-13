@@ -26,10 +26,16 @@
             }
           },
           "required": ["claude", "codex", "opencode", "pi"],
-          "additionalProperties": true
+          "additionalProperties": true,
+          "default": {
+            "claude": "",
+            "codex": "",
+            "opencode": "",
+            "pi": ""
+          }
         }
       },
-      "required": ["default", "models"],
+      "required": ["default"],
       "additionalProperties": true
     },
     "browser": {
@@ -40,7 +46,10 @@
         }
       },
       "required": ["run"],
-      "additionalProperties": true
+      "additionalProperties": true,
+      "default": {
+        "run": false
+      }
     },
     "scripts": {
       "type": "object",
@@ -130,6 +139,6 @@
       "additionalProperties": true
     }
   },
-  "required": ["agent", "browser", "scripts", "environment", "environment_variables", "git", "prompts"],
+  "required": ["agent", "scripts", "environment", "environment_variables", "git", "prompts"],
   "additionalProperties": true
 }

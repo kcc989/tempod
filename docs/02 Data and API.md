@@ -759,6 +759,8 @@ Changes apply to sessions that start or reload after the change. Running agents 
 
 The UI loads a workspace once over its WebSocket, then applies updates. Field names are camelCase on the wire.
 
+For protocol 1 deployments made before per-agent defaults and Browser Run were added, an absent `settings.agent.models` decodes to `{claude: "", codex: "", opencode: "", pi: ""}`, an absent `settings.browser` decodes to `{run: false}`, and an absent workspace `browserActive` decodes to `false`. Present values must still pass the shared schema; `null` or malformed values are refused. Servers continue to send the full effective settings and browser state.
+
 **Shared types** (`packages/protocol`)
 
 | Type | Fields |

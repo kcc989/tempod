@@ -17,7 +17,7 @@ use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex
 use gpui_kit::{
     AppContext as _, Context, DismissEvent, Entity, Focusable as _, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Task, Window, div,
+    Styled as _, Subscription, Task, TestSupportExt as _, Window, div,
 };
 use std::collections::{HashMap, HashSet};
 use tempo_client::Client;
@@ -692,17 +692,6 @@ impl WorkspaceView {
                     )
                     .into_any_element()
             }
-            B::Sleeping => div()
-                .id("workspace-sleeping")
-                .role(Role::Status)
-                .aria_label("Sleeping. Sending a message wakes it.")
-                .px_3()
-                .py_1()
-                .border_b_1()
-                .border_color(color(Token::Border, cx))
-                .text_color(muted)
-                .child("Sleeping. Sending a message wakes it.")
-                .into_any_element(),
         }
     }
 
@@ -1064,17 +1053,25 @@ impl WorkspaceView {
             p::WorkspaceState::Archived => "Archived".into(),
         };
         h_flex()
+            .bg(color(Token::Panel, cx))
             .gap_2()
             .p_2()
             .border_b_1()
             .border_color(color(Token::Border, cx))
             .child(
-                Button::new("workspace-title").label(w.title).on_click(
-                    cx.listener(|this, _, window, cx| this.operation("Rename", window, cx)),
-                ),
+                Button::new("workspace-title")
+                    .ghost()
+                    .small()
+                    .label(w.title)
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.operation("Rename", window, cx)),
+                    ),
             )
             .child(
                 Button::new("copy-branch")
+                    .ghost()
+                    .small()
+                    .text_color(color(Token::MutedForeground, cx))
                     .label(branch.clone())
                     .on_click(move |_, _, cx| {
                         cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()))
@@ -1115,6 +1112,8 @@ impl WorkspaceView {
             .child(div().flex_1())
             .child(if sleep {
                 Button::new("wake-pill")
+                    .ghost()
+                    .small()
                     .label(pill)
                     .tooltip("Wake. Sending a message also wakes it.")
                     .disabled(self.operation_pending)
@@ -1282,6 +1281,8 @@ impl WorkspaceView {
             .open(self.branch_picker.is_some())
             .trigger(
                 Button::new("base-branch")
+                    .ghost()
+                    .small()
                     .label(format!("→ {base}"))
                     .accessibility_label(format!("Base branch {base}. Change base branch")),
             )
@@ -2629,17 +2630,63 @@ impl Render for WorkspaceView {
             return div().p_4().child("Not found.").into_any_element();
         }
         if !store.state.ready {
+            let reconnecting = store
+                .connection
+                .shows_reconnecting_bar(std::time::Instant::now());
+            let error = store.error.clone();
+            let retry = error.is_some() || reconnecting;
             return v_flex()
                 .size_full()
+                .items_center()
+                .justify_center()
+                .p_6()
                 .child(
-                    div()
-                        .p_3()
-                        .border_b_1()
-                        .border_color(color(Token::Border, cx))
-                        .text_color(color(Token::MutedForeground, cx))
-                        .child("Loading workspace…"),
+                    v_flex()
+                        .id("workspace-loading")
+                        .role(if error.is_some() {
+                            Role::Alert
+                        } else {
+                            Role::Status
+                        })
+                        .aria_label(if retry {
+                            "Workspace connection failed"
+                        } else {
+                            "Loading workspace"
+                        })
+                        .test_support()
+                        .w_full()
+                        .max_w(gpui_kit::px(480.))
+                        .gap_3()
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .children((!retry).then(|| Spinner::new().small()))
+                                .child(div().font_weight(gpui_kit::FontWeight::MEDIUM).child(
+                                    if error.is_some() {
+                                        "Could not load workspace."
+                                    } else if retry {
+                                        "Reconnecting…"
+                                    } else {
+                                        "Loading workspace…"
+                                    },
+                                )),
+                        )
+                        .children(error.map(|message| {
+                            div()
+                                .text_color(color(Token::Destructive, cx))
+                                .child(message)
+                        }))
+                        .children((!retry).then(|| super::skeleton_rows(5)))
+                        .children(retry.then(|| {
+                            Button::new("retry-workspace")
+                                .outline()
+                                .label("Retry")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    let client = this.client.clone();
+                                    this.store.update(cx, |store, cx| store.retry(&client, cx));
+                                }))
+                        })),
                 )
-                .child(super::skeleton_rows(8))
                 .into_any_element();
         }
         let ids = self.tab_ids(cx);
@@ -2704,7 +2751,11 @@ impl Render for WorkspaceView {
             .open(menu.is_some())
             .trigger(
                 Button::new("new-chat-menu")
-                    .label("New chat")
+                    .ghost()
+                    .small()
+                    .icon(gpui_kit::assets::IconName::Plus)
+                    .accessibility_label("New chat")
+                    .tooltip("New chat (⌘T)")
                     .disabled(archived),
             )
             .on_open_change(cx.listener(|this, open: &bool, window, cx| {
@@ -3028,6 +3079,8 @@ impl Render for WorkspaceView {
                                     };
                                     tab.suffix(
                                         Button::new(button_id)
+                                            .ghost()
+                                            .small()
                                             .icon(gpui_kit::assets::IconName::X)
                                             .accessibility_label("Close chat")
                                             .tooltip("Close chat")
@@ -3342,6 +3395,49 @@ mod tests {
             assert!(Instant::now() < deadline, "send did not finish");
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[gpui_kit::test]
+    fn initial_connection_failure_offers_retry_and_hello_removes_loading(cx: &mut TestAppContext) {
+        use gpui_kit::test::TestWindowExt as _;
+        let mut state = fixture();
+        state.ready = false;
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client =
+            tempo_client::Server::new(&runtime.handle(), "http://127.0.0.1:9", crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+        let (handle, view) = mount(cx, state, client);
+        let store = view.read_with(cx, |view, _| view.store.clone());
+        store.update(cx, |store, cx| {
+            store.connection =
+                crate::stores::Connection::Down(Instant::now() - Duration::from_secs(3));
+            cx.notify();
+        });
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(
+                window.find("workspace-loading").role(),
+                Some(gpui_kit::Role::Status)
+            );
+            assert!(window.try_find("retry-workspace").is_some());
+            window.click("retry-workspace", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        store.read_with(cx, |store, _| assert!(store.error.is_none()));
+        store.update(cx, |store, cx| {
+            store.state = fixture();
+            cx.notify();
+        });
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("workspace-loading").is_none());
+        })
+        .unwrap();
+        view.read_with(cx, |view, _| assert!(view.active.is_some()));
     }
 
     fn toasts(cx: &mut TestAppContext, window: AnyWindowHandle) -> usize {

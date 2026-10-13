@@ -12,7 +12,8 @@ export type HighlightLines = ReadonlyArray<ReadonlyArray<HighlightToken>>;
 type Shiki = typeof import("shiki");
 
 let shiki: Promise<Shiki> | null = null;
-const load = (): Promise<Shiki> => (shiki ??= import("shiki"));
+const load = (): Promise<Shiki | null> =>
+  import.meta.env.SSR ? Promise.resolve(null) : (shiki ??= import("shiki"));
 
 /** Above this, code shows plain: highlighting would block the page. */
 export const MAX_HIGHLIGHT_CHARS = 60_000;
@@ -49,6 +50,7 @@ export const highlight = async (code: string, lang: string): Promise<HighlightLi
   const hit = cache.get(key);
   if (hit) return hit;
   const s = await load();
+  if (!s) return null;
   const id = resolveLanguage(lang, { ...s.bundledLanguages, ...s.bundledLanguagesAlias });
   if (!id) return null;
   const result = await s.codeToTokens(code, {

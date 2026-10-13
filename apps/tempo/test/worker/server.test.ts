@@ -2190,6 +2190,7 @@ describe("GitHub App setup (05, Deployment and configuration: GitHub App setup)"
         hook_attributes: { active: false },
       });
       expect(manifest["default_permissions"]).toEqual({
+        email_addresses: "read",
         contents: "write",
         pull_requests: "write",
         metadata: "read",

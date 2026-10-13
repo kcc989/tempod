@@ -26,8 +26,8 @@ describe("WORKSPACE_MIGRATIONS order", () => {
     expect(WORKSPACE_MIGRATIONS.map((m) => m.tag)).toEqual([
       "0000_init",
       "0001_steering_pending",
-      "0002_turn_usage",
       "0002_file_cache",
+      "0002_turn_usage",
       "0003_preview_access",
       "0004_drop_unused_statuses",
       "0005_browser_run",
@@ -154,4 +154,57 @@ describe("DO migration 0004_drop_unused_statuses", () => {
       );
     });
   });
+});
+
+describe("deployed workspace upgrade", () => {
+  it.each(["file-cache", "previous release"])(
+    "upgrades the deployed %s schema without losing rows and can run again",
+    async (release) => {
+      const stub = env.WORKSPACE.getByName(newId());
+      await runInDurableObject(stub, async (_i: WorkspaceDO, state: DurableObjectState) => {
+        const sql = state.storage.sql;
+        sql.exec("DROP TABLE turns");
+        for (const name of tablesOf(sql)) sql.exec(`DROP TABLE "${name}"`);
+        const db = drizzle(state.storage);
+        const oldTags = ["0000_init", "0001_steering_pending", "0002_file_cache"];
+        const previous =
+          release === "file-cache"
+            ? WORKSPACE_MIGRATIONS.filter((m) => oldTags.includes(m.tag))
+            : WORKSPACE_MIGRATIONS.filter((m) => m.tag !== "0007_custom_agents")
+                .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
+                .sort((a, b) => a.when - b.when);
+        await runMigrations(db, previous);
+        expect(
+          sql
+            .exec<{ created_at: number }>(
+              "SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
+            )
+            .one().created_at,
+        ).toBe(release === "file-cache" ? 1791849600000 : 1792180800000);
+        sql.exec(
+          "INSERT INTO sessions (id, agent, title, status, sort_order, created_at, updated_at) VALUES ('legacy-session', 'codex', 'Existing chat', 'idle', 0, 1, 2)",
+        );
+        sql.exec(
+          "INSERT INTO turns (id, session_id, seq, status, prompt_json, queued_at) VALUES ('legacy-turn', 'legacy-session', 1, 'completed', '{}', 3)",
+        );
+        sql.exec(
+          "INSERT INTO file_cache (path, response_json, bytes, updated_at) VALUES ('README.md', '{}', 13, 4)",
+        );
+        await runMigrations(db, WORKSPACE_MIGRATIONS);
+        await runMigrations(db, WORKSPACE_MIGRATIONS);
+        expect(sql.exec("SELECT id, title, status FROM sessions").toArray()).toEqual([
+          { id: "legacy-session", title: "Existing chat", status: "idle" },
+        ]);
+        expect(sql.exec("SELECT id, prompt_json, usage_json FROM turns").toArray()).toEqual([
+          { id: "legacy-turn", prompt_json: "{}", usage_json: null },
+        ]);
+        expect(sql.exec("SELECT path, response_json, bytes, updated_at FROM file_cache").toArray()).toEqual([
+          { path: "README.md", response_json: "{}", bytes: 13, updated_at: 4 },
+        ]);
+        expect(sql.exec("SELECT * FROM __drizzle_migrations").toArray()).toHaveLength(
+          WORKSPACE_MIGRATIONS.length,
+        );
+      });
+    },
+  );
 });

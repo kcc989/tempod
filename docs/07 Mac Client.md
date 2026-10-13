@@ -146,9 +146,11 @@ The Mac stores apply the same messages with the same rules as the web stores (02
 
 ## Window layout and components
 
-The Mac shell uses a 13 pt base size, matching the dense web shell. Sidebar actions, the Projects header, the scrolling project list and the fixed History/Settings footer follow 04, including empty, loading and error states. The sidebar uses the theme sidebar surface; project headers and workspace rows have distinct type weight and spacing. With no workspace selected, the center offers New workspace and Add project. Review controls are compact, the empty changes list fills the available space, and the commit form sits in a padded, bordered footer. Process controls use consistent padding and spacing.
+The Mac shell uses a 13 pt base size, matching the dense web shell. Sidebar actions, the Projects header, the scrolling project list and the fixed History/Settings footer follow 04, including empty, loading and error states. The sidebar uses the theme sidebar surface; active workspace rows use the neutral sidebar accent, matching the web client. Project headers and workspace rows have distinct type weight and spacing. With no workspace selected, the center offers New workspace and Add project. Review controls are compact, the empty changes list fills the available space, and the commit form sits in a padded, bordered footer. Process controls use consistent padding and spacing.
 
 The main window has the five regions of 04. Each region uses the GPUI Kit components below. Where no component fits, Tempo builds its own, marked **custom**.
+
+Add project includes the focused `Search repos` input and local owner/name filtering from 04, above its scrolling repository list.
 
 | Region (04) | GPUI Kit components |
 | --- | --- |
@@ -158,7 +160,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
 | Center tabs | `Tabs` |
 | Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
-| Composer | `Textarea` (grows from 3 to 12 rows); `Select` for model, reasoning level and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
+| Composer | `Textarea` (grows from 2 to 12 rows); `Select` for model, reasoning level and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
 | Changes, Checks | `VirtualList`, `Badge`, `Tag` |
 | All files | `Tree` |
 | File tab | `Editor`, read-only, with syntax highlighting |
@@ -168,7 +170,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | Dialogs | `Dialog`, `AlertDialog`, `Form`, `Input`, `Select`, `Checkbox` |
 | Command palette | `Command` |
 | Toasts | `Notification` |
-| Settings | Its own window with left sidebar navigation for Personal and Project sections, matching 04 |
+| Settings | A full-window page with Back and Esc navigation to the workspace, matching 04 |
 | Loading | `Skeleton`, `Spinner` |
 | Shortcut hints | `Kbd` |
 
@@ -177,6 +179,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 - Themes: GPUI Kit `Default Light` and `Default Dark`. Follow the macOS appearance unless Settings → Appearance says otherwise.
 - Read every color through `cx.theme()`. Map the tokens of 04 (`--primary`, `--destructive`, `--warning`, `--muted-foreground`) to `ThemeColor` fields once, in `src/views/tokens.rs`. No color values in views.
 - Every custom control sets an element id, an `a11y_role()` and an `.aria_label(...)`, so AccessKit can expose it.
+- Settings uses left-aligned navigation, a bounded form column, grouped login cards and content-sized action buttons, matching 04. Chat uses a bounded reading column and a compact composer toolbar.
 - Minimum window size: 900 × 600 pt. Below 1,100 pt wide, the right side collapses behind its toggle.
 
 ## Transcript, composer and permissions
@@ -192,7 +195,7 @@ Tool calls use a borderless disclosure with indented content. Tool text renders 
 - **Work rows.** Group, label and count items exactly as 04, Work row, Work types and Tool call labels, with the same Default and Detailed detail. Put the rules in `src/views/chat_model.rs` so they are tested without a window.
 - **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control on an opaque background, as 04. Each chat tab keeps its own scroll position.
 - **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right and bottom panels: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
-- **Composer appearance.** The text field and toolbar share the rounded container from 04, using the native theme background. The field grows from 3 to 12 rows without a separate border; the toolbar aligns attachment and send controls to the right and shows the native ⌘L focus hint.
+- **Composer appearance.** The text field and toolbar share the rounded container from 04, using the native theme background. Focus does not add an outline or change its border or shadow. The field grows from 2 to 12 rows without a separate border; the toolbar uses compact, borderless model and mode controls at the left and a small context ring, attachment and send icons at the right. Hovering the context ring shows used and total tokens. Model menu rows have extra vertical padding and a 320 px menu with a 44 px search field, independent of their compact 28 px trigger. Picker chevrons sit beside their labels; leave 16 px below the composer.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
 - **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
 - **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.
@@ -258,7 +261,9 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **URL scheme.** Register `tempo` in `Info.plist` (`CFBundleURLTypes`). `tempo://workspace/<workspaceId>` opens that workspace. Ignore any other path. The web overflow menu adds `Open in Tempo for Mac`, which opens that link.
 
-**Window state.** Restore the window frame and the last open workspace on launch. This version has one main window plus the Settings window.
+**Window state.** Restore the window frame and the last open workspace on launch. This version has one main window. Settings replaces its workspace frame. Back, Esc and ⌘W return to the workspace with its chat, draft and panel state retained. Workspace shortcuts are suspended while Settings is shown; the command palette remains available.
+
+The native light and dark palettes follow 04's surface hierarchy across sidebar, chat, panels, composer, settings and popup menus. Theme changes preserve these palettes.
 
 ## Local storage and settings
 
@@ -272,9 +277,11 @@ The app stores no workspace data on disk. This table is the full list of what it
 | Logs | `~/Library/Logs/Tempo/tempo.log`: JSON lines, 5 files of 5 MB each |
 
 - Use the `security-framework` crate for the Keychain.
+- Local development bundles use a separately signed `TempoKeychain` helper. Keep its binary unchanged across UI rebuilds, rebuilding it only when its source, dependencies or signing certificate change. It checks the requesting parent process for `dev.tempo.mac` and the helper's signing certificate before reading, writing or deleting the session item. Credentials travel through private pipes; never arguments, files or logs. Existing sessions can require one Keychain approval for the helper. Distributed bundles without this development helper use the direct Keychain path.
 - Write files atomically: temp file, then rename. If a file does not parse, rename it to `<name>.bad` and start from defaults.
 - Logs pass through the same redact rule as 05. MUST NOT log tokens, secrets, prompts or transcript text.
-- Project settings, logins and secrets are server data. The Settings window changes them with the same functions as the web.
+- Project settings, logins and secrets are server data. The Settings page changes them with the same functions as the web.
+- Project Agents uses 04's connected-agent Default model dropdown and Advanced agent defaults, discovered with `listModels`; no model-id text inputs.
 - Project settings follow 04's direct editing and `Reset to inherited` behavior, including explicit empty and Off overrides, source labels, and per-entry merging for run scripts and environment variables. There is no separate override toggle.
 - The bundle identifier is `dev.tempo.mac`. Change it only before the first release; the Keychain item and folders depend on it.
 
@@ -288,7 +295,9 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 
 | Command | Does |
 | --- | --- |
-| `bun run mac:dev` | `cargo run -p tempo-mac` |
+| `bun run mac:dev` | Builds a debug `Tempo.app`, signs it with the local `Tempo Development` identity (or `TEMPO_MAC_SIGN_IDENTITY`), verifies it and opens it |
+| `bash scripts/mac/dev.sh --check-workspace` | Builds the same signed app in a separate directory and checks the saved workspace channel. Prints only decode status, component names and missing schema fields; never tokens or payload values |
+| `bash scripts/mac/setup-dev-signing.sh` | Once, with owner approval: creates a local code-signing identity in the user's login Keychain and grants it code-signing trust |
 | `bun run mac:test` | `cargo test --workspace` |
 | `bun run protocol:gen` | Writes `packages/protocol/schema/*.json` (JSON Schema Draft-07) and `crates/tempo-protocol/src/generated.rs` |
 | `bun run protocol:fixtures` | Writes `packages/protocol/fixtures/` from the TypeScript schema tests |
@@ -307,7 +316,8 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 7. Upload the DMG to R2 at `clients/mac/<version>/Tempo-<version>.dmg`. Then write `clients/mac/latest.json` as `{version, sha256, size, publishedAt}`. Write `latest.json` last.
 
 - `TEMPO_MAC_SIGN_IDENTITY` is a "Developer ID Application" identity. `TEMPO_MAC_NOTARY_PROFILE` is made once with `xcrun notarytool store-credentials`. Both need a paid Apple Developer Program membership.
-- Without them, `mac:dev` and local builds use ad-hoc signing (`codesign --sign -`). Those builds are for the owner's own Mac only; macOS may ask again for Keychain access after each rebuild.
+- `mac:dev` uses a stable certificate and bundle identifier, so Keychain authorization can survive rebuilds. Its setup script keeps temporary private-key files private, imports the identity for `/usr/bin/codesign` only, grants trust for code signing only, and removes temporary files. No developer account is needed. It refuses to launch without a valid signing identity or to overwrite a running Tempo bundle. The first signed launch may need approval for the existing session item.
+- Local `mac:release -- --adhoc` builds remain ad-hoc (`codesign --sign -`) and are for the owner's own Mac only. Keychain may ask again after each rebuild.
 - `Tempo.entitlements` turns on the hardened runtime with no exceptions. No App Sandbox in this version.
 
 `latestMacClientSha256` is the lowercase 64-character SHA-256 from the same `clients/mac/latest.json` record as `latestMacClient`. It is omitted when no valid hash is published. Clients MUST refuse an unverified download when the field is absent. This is additive under protocol version 1.

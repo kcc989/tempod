@@ -89,6 +89,7 @@ export const manifest = (env: Env) => {
     public: false,
     hook_attributes: { url: `${origin}/`, active: false },
     default_permissions: {
+      email_addresses: "read",
       contents: "write",
       pull_requests: "write",
       metadata: "read",

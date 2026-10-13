@@ -11,6 +11,7 @@ gpui_kit::actions!(
         About,
         CheckForUpdates,
         OpenSettings,
+        BackFromSettings,
         SignOut,
         HideApp,
         Quit,

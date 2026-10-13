@@ -5544,6 +5544,7 @@ pub struct SetWorkspaceEnvironmentIn {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Settings {
     pub agent: SettingsAgent,
+    #[serde(default = "defaults::settings_browser")]
     pub browser: SettingsBrowser,
     pub environment: SettingsEnvironment,
     pub environment_variables:
@@ -5556,6 +5557,7 @@ pub struct Settings {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct SettingsAgent {
     pub default: AgentId,
+    #[serde(default = "defaults::settings_agent_models")]
     pub models: SettingsAgentModels,
 }
 ///`SettingsAgentModels`
@@ -5566,10 +5568,25 @@ pub struct SettingsAgentModels {
     pub opencode: ::std::string::String,
     pub pi: ::std::string::String,
 }
+impl ::std::default::Default for SettingsAgentModels {
+    fn default() -> Self {
+        SettingsAgentModels {
+            claude: "".to_string(),
+            codex: "".to_string(),
+            opencode: "".to_string(),
+            pi: "".to_string(),
+        }
+    }
+}
 ///`SettingsBrowser`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct SettingsBrowser {
     pub run: bool,
+}
+impl ::std::default::Default for SettingsBrowser {
+    fn default() -> Self {
+        SettingsBrowser { run: false }
+    }
 }
 ///`SettingsEnvironment`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6296,7 +6313,7 @@ pub struct WorkspaceDetail {
     #[serde(rename = "baseBranch")]
     pub base_branch: ::std::string::String,
     pub branch: ::std::string::String,
-    #[serde(rename = "browserActive")]
+    #[serde(rename = "browserActive", default)]
     pub browser_active: bool,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub changes: ::std::option::Option<ChangesSummary>,
@@ -7538,6 +7555,20 @@ impl ::std::convert::TryFrom<::std::string::String> for WsWorkspaceType {
         value: ::std::string::String,
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
+    }
+}
+/// Generation of default values for serde.
+pub mod defaults {
+    pub(super) fn settings_browser() -> super::SettingsBrowser {
+        super::SettingsBrowser { run: false }
+    }
+    pub(super) fn settings_agent_models() -> super::SettingsAgentModels {
+        super::SettingsAgentModels {
+            claude: "".to_string(),
+            codex: "".to_string(),
+            opencode: "".to_string(),
+            pi: "".to_string(),
+        }
     }
 }
 /// Error types.
