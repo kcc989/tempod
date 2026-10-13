@@ -177,3 +177,15 @@ native-only merges do not rebuild the full image. Superseded image runs cancel.
 
 The removed standalone `web` job is now part of `check`. If branch protection
 requires `web`, update the required check to `check` when adopting this workflow.
+
+## Workspace tool regression (2026-10-13)
+
+One desktop browser case protects independent chat/draft selection while files and Browser Run share the right tool area, including closing the active tool to the launcher. The existing desktop terminal case now opens Terminal from that launcher. Both browser suites use a shared test helper that honors Chromium client-hint platform data before the legacy platform field, matching the app's shortcut rule. Pool sizes, cache inputs and deadlines are unchanged.
+
+Local macOS measurements: web cases took 9.6 seconds including one temporary visual-capture case (19 permanent cases); workspace browser regressions took 5.6 seconds (9 cases). UI model and component stages previously took 1.5 and 7.1 seconds in this checkout. These are local stage measurements, not a complete CI pass. The baseline cold CI run above remains 4m00s total. Cleanup resolved the initial 20 GiB free-disk gate. The Linux CI attempt then stopped in oxlint's allocator with SIGABRT: 2.2 s for check commands and 3.0 s including setup, with lint at 1.5 s. This failed partial run is not a full CI result. Source lint passes on macOS; separate Linux typecheck passed in 24.8 s. The complete root Linux test command passed: Worker tests took 118.7 s, other test tasks 130.0 s, followed by 13 root script tests in 3.2 s. Those overlapping stages are not additive.
+
+The final Mac suite passed 264 tests in 5.45 seconds of test execution. Its native surface tests assert visibility after paint, pane hide/restore and deferred-popup hide/restore through an observable surface boundary. They do not establish native visual acceptance or hosted Browser Run acceptance.
+
+The production app CI build task also passed locally on macOS in 4.1 seconds. The complete Linux CI command remains failed at its oxlint allocator abort; the successful separate stages are not presented as a full CI run.
+
+PR #44's first hosted full-suite run (`38470261533`, head `23e6a64`) passed. Check commands took 251.3 s and setup-inclusive time was 305.7 s; the job including cleanup took 319 s, above the five-minute target but inside both deadlines. Worker tests were the critical path at 244.8 s, with no Worker source or configuration changes in this PR. Other tests took 72.5 s, typecheck 19.5 s, app build 51.0 s and all 28 browser cases 97.7 s. The base main run had failed an existing Worker reconnect assertion, so its Worker result was unavailable for reuse. No pool size, cache input, test coverage or deadline changed. After rebasing, all 266 Mac tests passed in 1.61 s of execution.

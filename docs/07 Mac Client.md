@@ -16,7 +16,7 @@ The Mac app is a client of the cloud Tempo only. It does not run workspaces on t
 | C4 | Sign-in | Better Auth device authorization (RFC 8628) plus the bearer plugin. The token lives in the macOS Keychain. | No secret ships in the app; the owner can revoke it from the web |
 | C5 | Wire types | Rust types generated from `packages/protocol` (Effect Schema to JSON Schema to `typify`), checked against shared fixtures | One definition of every message |
 | C6 | Networking | One tokio runtime on background threads: `reqwest` for HTTP, `tokio-tungstenite` for WebSockets. The GPUI main thread does no I/O. | GPUI's executors are not tokio; the UI thread stays free |
-| C7 | Previews | Open in the default browser. No in-app Browser tab in this version. | GPUI Kit's WebView (`gpui-wry`) is experimental and draws over popovers, dialogs and menus |
+| C7 | Previews | Open in the default browser. Cloudflare Browser Run Live View renders in the right tool area. | Previews use the default browser; Live View uses the existing macOS bindings and a transient WKWebView, with no general browser controls |
 | C8 | Terminal | `crates/tempo-terminal`: a fork of `gpui-terminal` 0.1.0 (MIT or Apache-2.0) on `alacritty_terminal` 0.25.1, ported to GPUI Kit's GPUI | GPUI Kit has no terminal; `gpui-terminal` targets a different GPUI release |
 | C9 | Platform | macOS 15 or later, Apple silicon (arm64) only | GPUI Kit needs macOS 15; one architecture halves the test matrix |
 | C10 | Shortcuts | ⌘ bindings: the Mac column of the shortcut table in 04 | No browser reserves keys in a native app |
@@ -150,7 +150,7 @@ The Mac stores apply the same messages with the same rules as the web stores (02
 
 The Mac shell uses a 13 pt base size, matching the dense web shell. Sidebar actions, the Projects header, the scrolling project list and the fixed History/Settings footer follow 04, including empty, loading and error states. The sidebar uses the theme sidebar surface; active workspace rows use the neutral sidebar accent, matching the web client. Project headers and workspace rows have distinct type weight and spacing. With no workspace selected, the center offers New workspace and Add project. Review controls are compact, the empty changes list fills the available space, and the commit form sits in a padded, bordered footer. Process controls use consistent padding and spacing.
 
-The main window has the five regions of 04. Each region uses the GPUI Kit components below. Where no component fits, Tempo builds its own, marked **custom**.
+The main window has the four regions of 04: sidebar, top bar, center chat tabs and a single full-height right tool area. The tool launcher, on-demand tabs, close controls and independent chat selection follow 04. Review and process tools share the same content area; there is no lower process panel. File, diff and artifact documents open in the tool area, keeping chat and composer visible. Each region uses the GPUI Kit components below. Where no component fits, Tempo builds its own, marked **custom**.
 
 Add project includes the focused `Search repos` input and local owner/name filtering from 04, above its scrolling repository list.
 
@@ -160,7 +160,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 | Panes | `Resizable` for sidebar, center and right side; sizes saved in `state.json` |
 | Sidebar | `Sidebar`; rows are custom; `HoverCard`; `Menu` for the right-click menu; `Badge` for the PR; `Spinner` |
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
-| Center tabs | `Tabs` |
+| Center chat tabs and right tool tabs | `Tabs` |
 | Transcript | `MessageScroller`; `TextView::markdown` for messages; `Collapsible` for work rows, thoughts, tool calls and handoff |
 | Composer | `Textarea` (grows from 2 to 12 rows); `Select` for model, reasoning level and mode; `Attachment`; `Command` for `/`; `Popover` with `List` for `@` |
 | Changes, Checks | `VirtualList`, `Badge`, `Tag` |
@@ -169,6 +169,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 | Diff tab | **custom** `DiffView` (Changes, diff view and review comments) |
 | Setup and Run output | **custom** log view on `VirtualList`, monospace |
 | Terminal | **custom**, from `tempo-terminal` |
+| Browser Run Live View | **custom** transient WKWebView through existing `objc2` bindings |
 | Dialogs | `Dialog`, `AlertDialog`, `Form`, `Input`, `Select`, `Checkbox` |
 | Command palette | `Command` |
 | Toasts | `Notification` |
@@ -198,7 +199,7 @@ Tool calls use a borderless disclosure with indented content. Tool text renders 
 - **Streaming.** On `item.delta`, append the text to the item and call `remeasure_items` for that row only.
 - **Work rows.** Group, label and count items exactly as 04, Work row, Work types and Tool call labels, with the same Default and Detailed detail. Put the rules in `src/views/chat_model.rs` so they are tested without a window.
 - **Scrolling.** `MessageScroller` follows the newest row. When the reader scrolls up, it shows its jump-to-latest control on an opaque background, as 04. Each chat tab keeps its own scroll position.
-- **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right and bottom panels: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
+- **Sleeping and the right side.** Follow 04, Empty states (`sleeping`) and Right tool area: no sleeping banner, the top bar pill wakes, and the right side starts closed while the workspace sleeps or has no changes and no PR.
 - **Composer appearance.** The text field and toolbar share the rounded container from 04, using the native theme background. Focus does not add an outline or change its border or shadow. The field grows from 2 to 12 rows without a separate border; the toolbar uses compact, borderless model and mode controls at the left and a small context ring, attachment and send icons at the right. Hovering the context ring shows used and total tokens. Model menu rows have extra vertical padding and a 320 px menu with a 44 px search field, independent of their compact 28 px trigger. Picker chevrons sit beside their labels; leave 16 px below the composer.
 - **New chat.** Opens a focused prompt with the shared model and custom-agent picker in its footer. Enter creates the session and sends a nonempty prompt; blank prompts open an empty chat.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04.
@@ -234,7 +235,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Setup and Run.** Same as 04: output from `script.output`, Start and Stop, and ⌘R to start or stop the default run script.
 
-**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. There is no in-app Browser tab in this version (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` calls `getBrowserLiveView` and opens the URL in the default browser. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
+**Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. The Browser tool is dedicated to Cloudflare Browser Run Live View (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` opens Browser in the tool area. Opening it and Reload call `getBrowserLiveView`; its secret URL stays in memory only, never in logs, disk, layout or container state. A transient WKWebView shows the returned hosted live view with a nonpersistent website data store. The tool panel owns it beyond GPUI's per-frame element arena. It hides and detaches for another tool or document, an inactive workspace, a collapsed tool area, Settings or sign-in. GPUI dialogs, sheets, deferred popovers and dropdown menus hide it while open. Closing Browser, Reload and session end discard the view and URL. A closed session shows `Browser session ended.`; Reload retries request errors. Previews and HTML/PDF artifacts still use the default browser. No address bar, general browsing, browser history or saved cookies are added. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
 
 **Artifacts** (phase 5, 04 Artifacts tab and Artifact tab)
 
@@ -255,7 +256,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 | Tempo | About Tempo; Check for Updates…; Settings… (⌘,); Sign Out; Hide Tempo (⌘H); Quit Tempo (⌘Q) |
 | File | New Workspace (⌘N); New Chat (⌘T); Close Tab (⌘W); Open File (⌘P) |
 | Edit | Undo, Redo, Cut, Copy, Paste, Select All (standard keys); Search Files (⌘⇧F) |
-| View | Command Palette (⌘K); Toggle Sidebar (⌘B); Toggle Right Side (⌘⌥B); Toggle Bottom Panel (⌘J); Diff (⌘⇧D) |
+| View | Command Palette (⌘K); Toggle Sidebar (⌘B); Toggle Right Side (⌘⌥B); Terminal / Tool Launcher (⌘J); Diff (⌘⇧D) |
 | Workspace | Commit and Push (⌘⇧Y); Create PR (⌘⇧P); Merge (⌘⇧M); Archive (⌘⇧A); Start or Stop Run (⌘R); Next Workspace That Needs You (⌘⌥L) |
 | Window | Minimize (⌘M); Zoom; Workspace 1 to 9 (⌘1 to ⌘9) |
 | Help | Open Tempo in Browser |

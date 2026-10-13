@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
-import { BottomPanel } from "~/ui/components/processes/BottomPanel";
+import { ToolPanel } from "~/ui/components/shell/ToolPanel";
 import { SetupTab } from "~/ui/components/processes/SetupTab";
 import { useToggleRunAction } from "~/ui/components/processes/useScripts";
 import { ReviewDialogs } from "~/ui/components/review/ReviewDialogs";
@@ -32,10 +32,6 @@ import {
   toggleDiffScope,
 } from "~/ui/state/workspace-ui";
 
-/**
- * One workspace: top bar, then center tabs | right side (right panel over bottom panel). Phones
- * show the chat or the changes pane, picked by the bottom navigation.
- */
 export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
   const isPhone = useIsPhone();
   const status = useWorkspaceSelector(workspaceId, (s) => s.status);
@@ -74,8 +70,8 @@ export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
 }
 
 function useWorkspaceActions(workspaceId: string, projectId: string | undefined) {
-  useAction("nextTab", () => cycleTab(workspaceId, 1));
-  useAction("prevTab", () => cycleTab(workspaceId, -1));
+  useAction("nextTab", () => cycleTab(workspaceId, 1, true));
+  useAction("prevTab", () => cycleTab(workspaceId, -1, true));
   useAction("diffTab", () => openDiff(workspaceId));
   useAction("toggleScope", () => toggleDiffScope(workspaceId));
   useAction("focusComposer", () => focusComposer(workspaceId));
@@ -130,7 +126,7 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
           {rightOpen && (
             <>
               <ResizableHandle aria-label="Resize right side" />
-              <ResizablePanel id="right" defaultSize="38%" minSize={280}>
+              <ResizablePanel id="right" defaultSize="50%" minSize={280}>
                 <RightSide workspaceId={workspaceId} />
               </ResizablePanel>
             </>
@@ -142,38 +138,7 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
 }
 
 function RightSide({ workspaceId }: { workspaceId: string }) {
-  const { bottomOpen } = useLayout();
-
-  const vertical = useDefaultLayout({
-    id: "right",
-    panelIds: bottomOpen ? ["review", "processes"] : ["review"],
-    storage: safeLayoutStorage,
-  });
-
-  return (
-    <ResizablePanelGroup
-      id="right"
-      orientation="vertical"
-      defaultLayout={vertical.defaultLayout}
-      onLayoutChanged={vertical.onLayoutChanged}
-    >
-      <ResizablePanel id="review" minSize={120}>
-        <section aria-label="Review" className="flex h-full min-h-0 flex-col">
-          <RightPanel workspaceId={workspaceId} variant="desktop" />
-        </section>
-      </ResizablePanel>
-      {bottomOpen && (
-        <>
-          <ResizableHandle aria-label="Resize bottom panel" />
-          <ResizablePanel id="processes" defaultSize="45%" minSize={100}>
-            <section aria-label="Processes" className="flex h-full min-h-0 flex-col">
-              <BottomPanel workspaceId={workspaceId} />
-            </section>
-          </ResizablePanel>
-        </>
-      )}
-    </ResizablePanelGroup>
-  );
+  return <ToolPanel workspaceId={workspaceId} />;
 }
 
 function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {

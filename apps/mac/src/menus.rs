@@ -44,7 +44,7 @@ pub fn app_menus() -> Vec<Menu> {
             MenuItem::action("Command Palette", CommandPalette),
             MenuItem::action("Toggle Sidebar", ToggleSidebar),
             MenuItem::action("Toggle Right Side", ToggleRightSide),
-            MenuItem::action("Toggle Bottom Panel", ToggleBottomPanel),
+            MenuItem::action("Terminal / Tool Launcher", ToggleBottomPanel),
             MenuItem::action("Diff", ShowDiff),
         ]),
         Menu::new("Workspace").items([
@@ -130,7 +130,7 @@ mod tests {
                 "Command Palette",
                 "Toggle Sidebar",
                 "Toggle Right Side",
-                "Toggle Bottom Panel",
+                "Terminal / Tool Launcher",
                 "Diff"
             ]
         );

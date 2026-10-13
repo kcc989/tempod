@@ -7,5 +7,6 @@
 
 pub mod dock;
 pub mod keychain;
+pub mod live_view;
 pub mod notifications;
 pub mod wake;

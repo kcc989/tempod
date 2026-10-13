@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { browserFixture } from "./fixture";
+import { pressMod } from "../platform";
 
 test("streaming survives reload; Enter queues; Send now steers; permission answers work", async ({
   page,
@@ -40,27 +41,21 @@ test("file dialogs and Run shortcut remain available with the right side hidden"
   await page.goto("/w/w1");
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
 
-  const mod = await page.evaluate(() =>
-    /mac|iphone|ipad|ipod/i.test(navigator.platform) || /Mac OS X/.test(navigator.userAgent)
-      ? "Meta"
-      : "Control",
-  );
-
-  await page.keyboard.press(`${mod}+Alt+b`);
+  await pressMod(page, "Alt+b");
   await expect(page.getByRole("tab", { name: "All files", exact: true })).toBeHidden();
-  await page.keyboard.press(`${mod}+p`);
+  await pressMod(page, "p");
   await expect(page.getByRole("dialog", { name: "Open file" })).toBeVisible();
   await page.getByRole("combobox", { name: "File name" }).fill("main");
   await page.getByRole("option", { name: /main.ts/ }).click();
   await expect(page.getByText("Read only", { exact: true })).toBeVisible();
-  await page.keyboard.press(`${mod}+Shift+f`);
+  await pressMod(page, "Shift+f");
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeVisible();
   await page.getByRole("combobox", { name: "Search text" }).fill("ready");
   await expect(page.getByRole("option", { name: /export const ready/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeHidden();
   app.setRunScript();
-  await page.keyboard.press(`${mod}+k`);
+  await pressMod(page, "k");
   await expect(page.getByRole("option", { name: /Start or stop the default run script/ })).toBeVisible();
   await expect(page.getByPlaceholder("Jump to a workspace or run an action")).toBeFocused();
   await page.keyboard.press("Escape");

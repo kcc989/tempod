@@ -34,7 +34,6 @@ import {
   CONFIRM_TEXT,
   closeTab,
   confirm,
-  getWorkspaceUi,
   openTab,
   syncChatTabs,
   type OpenTab,
@@ -68,7 +67,21 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const ready = useWorkspaceSelector(workspaceId, (s) => s.ready);
   const sessions = useWorkspaceSelector(workspaceId, (s) => s.sessions);
   const state = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state);
-  const ui = useWorkspaceUi(workspaceId);
+  const workspaceUi = useWorkspaceUi(workspaceId);
+
+  const ui =
+    variant === "phone"
+      ? workspaceUi
+      : {
+          ...workspaceUi,
+          tabs: workspaceUi.tabs.filter((t) => t.tab.kind === "chat"),
+          activeKey: workspaceUi.activeKey?.startsWith("chat:")
+            ? workspaceUi.activeKey
+            : workspaceUi.lastChatSessionId
+              ? `chat:${workspaceUi.lastChatSessionId}`
+              : (workspaceUi.tabs.find((t) => t.tab.kind === "chat")?.key ?? null),
+        };
+
   const [viewingClosed, setViewingClosed] = useState<ReadonlyArray<string>>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -157,8 +170,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   useAction(
     "closeTab",
     () => {
-      const s = getWorkspaceUi(workspaceId);
-      const t = s.tabs.find((x) => x.key === s.activeKey);
+      const t = ui.tabs.find((x) => x.key === ui.activeKey);
 
       if (t) close(t);
     },

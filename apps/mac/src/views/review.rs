@@ -6,7 +6,6 @@ use gpui_kit::component::input::{
     Editor, EditorState, Input, InputEvent, InputState, Textarea, TextareaState,
 };
 use gpui_kit::component::list::ListItem;
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tree::{Tree, TreeState};
 use gpui_kit::component::{Disableable as _, Icon, IconName, Sizable as _, h_flex, v_flex};
@@ -26,6 +25,7 @@ mod artifacts;
 #[derive(Clone)]
 pub enum ReviewEvent {
     Document,
+    Selected(usize),
     Comments(Vec<String>),
     CommentDeleted(String),
 }
@@ -624,6 +624,7 @@ impl ReviewPanel {
             self.file = doc.file;
             self.extra = doc.content;
             self.active_document = Some(doc.key);
+            cx.emit(ReviewEvent::Document);
             cx.notify();
         }
     }
@@ -814,7 +815,7 @@ impl ReviewPanel {
         cx.notify();
     }
     pub fn request_commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.tab = 0;
+        self.select_tab(0, cx);
         self.commit.update(cx, |i, cx| i.focus(window, cx));
         cx.notify();
     }
@@ -956,21 +957,32 @@ impl ReviewPanel {
         self.query.update(cx, |i, cx| i.focus(window, cx));
     }
     pub fn open_picker(&mut self, cx: &mut Context<Self>) {
-        self.tab = 1;
-        self.load_paths(cx);
+        self.select_tab(1, cx);
+        cx.notify();
+    }
+    pub fn select_tab(&mut self, tab: usize, cx: &mut Context<Self>) {
+        self.tab = tab;
+        self.document_open = false;
+        if tab == 1 {
+            self.load_paths(cx);
+        }
+        if tab == 2 {
+            self.load_checks(true, cx);
+        }
+        if tab == 3 {
+            self.load_artifacts(cx);
+        }
+        cx.emit(ReviewEvent::Selected(tab));
         cx.notify();
     }
     pub fn show_changes(&mut self, cx: &mut Context<Self>) {
-        self.tab = 0;
-        cx.notify();
+        self.select_tab(0, cx);
     }
     pub fn has_changes(&self) -> bool {
         !self.files.is_empty()
     }
     pub fn show_checks(&mut self, cx: &mut Context<Self>) {
-        self.tab = 2;
-        self.load_checks(true, cx);
-        cx.notify();
+        self.select_tab(2, cx);
     }
     pub fn set_agent(&mut self, agent: Option<p::AgentId>, cx: &mut Context<Self>) {
         if self.agent != agent {
@@ -1489,27 +1501,6 @@ impl Render for ReviewPanel {
             .collect();
         v_flex()
             .size_full()
-            .child(
-                TabBar::new("review-tabs")
-                    .selected_index(self.tab)
-                    .on_click(cx.listener(|this, ix: &usize, _, cx| {
-                        this.tab = *ix;
-                        if *ix == 1 {
-                            this.load_paths(cx);
-                        }
-                        if *ix == 2 {
-                            this.load_checks(true, cx);
-                        }
-                        if *ix == 3 {
-                            this.load_artifacts(cx);
-                        }
-                        cx.notify();
-                    }))
-                    .children(
-                        ["Changes", "All files", "Checks", "Artifacts"]
-                            .map(|t| Tab::new().label(t)),
-                    ),
-            )
             .children(self.error.clone().map(|e| {
                 div()
                     .p_2()
