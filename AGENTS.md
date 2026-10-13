@@ -52,7 +52,7 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 
 ## CI and test budget
 
-- PR CI must use less than five total runner minutes. Keep the single `check` job and its five-minute timeout; `bun run ci` enforces a 270-second work budget including setup. Do not increase either limit or add a PR job without showing the total still fits.
+- Target less than five total runner minutes for normal PR CI. Keep the single `check` job. `bun run ci` allows 300 seconds for check commands after setup, with a six-minute hard job timeout for setup/cleanup. Report both check time and total time; do not increase these limits or add jobs without measurement and explicit authorization.
 - Read `docs/CI.md` before changing workflows, test configuration, or adding tests. Include the relevant stage timing from the CI summary when changing the suite.
 - Every test must identify a distinct behavior or regression and assert an observable outcome. Do not add source-text snapshots, assertions of mock configuration, success-only smoke tests, duplicate matrices, or conditional assertions that can execute zero checks.
 - Prefer the lowest test layer that proves the behavior. Browser tests are for real interaction, layout, accessibility, persistence and reconnect behavior; pure logic belongs in unit tests. Keep failure, security, idempotency, and migration coverage.

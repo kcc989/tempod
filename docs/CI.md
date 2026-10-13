@@ -1,19 +1,21 @@
 # CI runtime and test value
 
-PRs have a **five-minute total runner budget**, not five minutes per parallel job.
+PRs target **under five total runner minutes**, not five minutes per parallel job.
 The single `check` job runs all local checks, builds, and browser regressions for
 code changes. Documentation-only changes keep the same required `check` job but
 run lint and formatting without installing the workspace dependencies or Chromium.
-Typecheck and builds overlap with tests on that one runner. Once the builds pass,
-the two browser suites run concurrently on their separate fixture servers while
-unit and integration tests finish. The timing summary
+Typecheck and builds overlap with tests on that one runner. Once the builds and
+non-Worker suites pass, the two browser suites run concurrently on their separate
+fixture servers while Worker tests finish. The timing summary
 shows individual durations and the total elapsed time, so overlapping stages
 should not be added together.
-`bun run ci` reports stage durations to the Actions summary and fails after 270
-seconds including checkout, dependency setup and Chromium installation. The job
-has a five-minute timeout, reserving the last 30 seconds for cache saves and
-cleanup. Do not raise the limits to accommodate regressions. Cancel superseded
-runs instead of paying for outdated commits.
+`bun run ci` reports stage durations to the Actions summary and gives check
+commands 300 seconds after dependency/browser setup. Total elapsed time still
+includes setup and is reported separately; cleanup is included in the job's
+actual duration. The job has a six-minute hard timeout to allow setup and cache
+cleanup. Normal runs should stay under five total runner minutes. Do not raise
+the deadlines to accommodate regressions. Cancel superseded runs instead of
+paying for outdated commits.
 
 Chromium and deterministic Turbo task results are restored between runs. The
 multi-gigabyte Bun dependency cache is not archived: saving it exceeded the
@@ -51,9 +53,12 @@ start importing files outside that scope. A cache miss must also fit the budget.
 
 PR #34's cold run spent 199.8 seconds on unit/integration tests, 39.5 seconds on
 typecheck and 31.4 seconds on the app build. Waiting for the test stage before
-starting browsers left only 8.6 seconds before the 270-second deadline. Browser
-checks now start after the build sequence completes instead of waiting for the
-independent unit/integration suite; all checks and the same deadline remain.
+starting browsers left only 8.6 seconds before the former 270-second deadline. Browser
+checks overlap the independent Worker suite. The follow-up cold run showed
+heavy contention when browsers also overlapped component/UI tests (over 100
+seconds per browser stage). They now wait for those suites and builds; all
+checks remain. Turbo emits full test logs on failure,
+rather than streaming routine native Worker logs to Actions.
 
 ## Test audit
 

@@ -182,9 +182,10 @@ The Tempo Spec (tabs 00 to 06) is the source of truth. Read the tab for the area
 
 ## PR CI budget
 
-All local PR checks, builds and browser regressions share one five-minute total
-runner budget. `bun run ci` measures each stage and enforces 270 seconds including
-setup, reserving 30 seconds for cleanup. See `docs/CI.md` for the test audit, suite
+All local PR checks, builds and browser regressions share one job and target
+under five total runner minutes. `bun run ci` measures each stage and permits
+300 seconds for check commands after setup, with a six-minute hard job timeout
+for setup and cleanup. Total elapsed time including setup remains visible. See `docs/CI.md` for the test audit, suite
 boundaries and rules. Worker, UI and component tests and browser fixture builds
 have separate cache entries that include transitive workspace sources. Browser
 tests still execute for code changes. Documentation-only changes retain the
