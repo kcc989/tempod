@@ -193,7 +193,8 @@ still execute for code changes in a shared Playwright worker pool. RPC tests can
 use configurable isolated ready-workspace fixtures and explicit agent credentials;
 lifecycle tests still exercise real initialization and operation steps.
 Documentation-only changes retain the
-required check with lint/format only; unavailable change bases run the full suite.
+required check with a root-tooling-only install and lint/format only; unavailable
+change bases run the full suite with every workspace installed.
 Hosted acceptance and installed-agent conformance remain
 explicit gates; skipped tests do not satisfy them.
 The daemon image workflow and test image install only root tooling and the daemon's

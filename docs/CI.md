@@ -6,7 +6,8 @@ run-history evidence and the filtered image-install change.
 PRs target **under five total runner minutes**, not five minutes per parallel job.
 The single `check` job runs all local checks, builds, and browser regressions for
 code changes. Documentation-only changes keep the same required `check` job but
-install the pinned tooling dependencies and run lint and formatting without Chromium.
+install only the pinned root tooling dependencies with `--filter tempo` and run
+lint and formatting without Chromium.
 The vendored anti-slop plugin resolves `@oxlint/plugins` from that installation.
 Typecheck and builds overlap with tests on that one runner. Once the builds and
 non-Worker suites pass, both browser suites run in one Playwright invocation with
@@ -147,7 +148,7 @@ checked, and missing shallow-history bases are fetched with bounded,
 noninteractive Git operations. Manual dispatch runs the full suite.
 
 The lightweight path runs the existing pinned oxlint/Oxfmt binaries through
-`bunx` after the frozen dependency installation needed by the anti-slop plugin,
+`bunx` after a frozen root-only dependency installation needed by the anti-slop plugin,
 and publishes its mode/timings. Workflow-level path
 ignores are not used, so a required check never stays pending on a docs-only PR.
 

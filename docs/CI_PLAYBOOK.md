@@ -50,7 +50,7 @@ that it is advisory.
 | 6 | Resilient checkout | Withhold: checkout is 1 second median, at most 4 seconds, with no measured stall tail; progress logs are unavailable. |
 | 7 | Move writes off the critical path | Keep the 3-second task-cache save in the single required job; an extra job would violate the approved design and add setup/artifact handoff, while required-check settings cannot be read. |
 | 8 | Preinstall shared dependencies | No repeated setup across multiple PR jobs: PR CI has one job; its installed Bun and Chromium are used. |
-| 9 | Filtered installs | Apply the equivalent Bun workspace filters to image-workflow and test-image installs; keep the full installation in PR CI, which uses every workspace. |
+| 9 | Filtered installs | Apply the equivalent Bun workspace filters to image-workflow and test-image installs and root-only filters to documentation-only PRs; code PRs still install every workspace. |
 | 10 | Drop costly caches / fix unstable keys | Keep caches: no dependency archive exists, hit/miss log evidence is unavailable, and the unique Turbo archive key intentionally publishes new immutable cumulative task results with stable restore prefixes. |
 | 11 | Schema snapshots | No separately measured expensive migration-replay step exists; preserve real migration and storage-isolation coverage. |
 | 12 | Batch short checks | Already one PR job with overlapping independent commands; do not add concurrency without the required full cold-workload benchmark. |
@@ -73,6 +73,11 @@ the Worker, UI, or Playwright workspace dependencies. The full production image
 still installs its pinned agent tools and Chromium, and all image tests remain.
 No package manifest, lockfile, test selection, runtime deadline, or runner changes.
 
+Documentation-only PRs install with `--filter tempo`, retaining Oxlint, Oxfmt and
+the anti-slop plugin's `@oxlint/plugins` dependency. They do not read the Playwright
+manifest or restore/install Chromium. A code or unknown-base PR still installs
+every workspace and reads the installed Playwright version for its browser cache.
+
 Fresh installations in two copies of the same commit on this managed Linux
 machine installed **847 packages in 19.05 seconds** without filters and **251
 packages in 14.98 seconds** with filters. Both used Bun 1.4.2, the frozen lockfile
@@ -80,6 +85,11 @@ and the same package-store configuration. This is one local comparison, not a
 hosted median or a promised CI saving. Compare the image workflow's install step
 on subsequent relevant main pushes; the image install may have different cache
 and network costs. The install command can be reverted independently.
+
+A fresh root-only installation installed **215 packages in 13.37 seconds**;
+`bun run ci --docs-only` then passed lint (including the anti-slop plugin) and
+formatting in 9.3 seconds. The daemon-only host suite passed 154 tests with four
+image-only cases skipped; those cases must pass in the complete test image.
 
 For a broader history-based audit, the optional upstream skill is available with
 `npx skills add starslingdev/skills --skill ci-speedup`. It was not installed as
