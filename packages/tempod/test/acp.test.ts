@@ -413,6 +413,10 @@ describe("session.prompt", () => {
       await ended("t4");
       await prompt("s1", "t5", "read /etc/hostname");
       await ended("t5");
+      await prompt("s1", "t6", "read /home/tempo/roles/retired-result.json");
+      await ended("t6");
+      await prompt("s1", "t7", "write /home/tempo/roles/retired-result.json");
+      await ended("t7");
 
       const texts = c
         .of("item.created")
@@ -424,6 +428,8 @@ describe("session.prompt", () => {
       expect(texts[2]).toStartWith("write error");
       expect(texts[3]).toBe("read ok: attached");
       expect(texts[4]).toStartWith("read error");
+      expect(texts[5]).toContain("path is outside the allowed folders");
+      expect(texts[6]).toContain("path is outside the allowed folders");
     },
     T,
   );

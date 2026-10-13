@@ -32,7 +32,7 @@ import {
   TurnStatus,
   WorkspaceState,
 } from "./enums.ts";
-import { ProfileIssue, SessionCustomAgent } from "./agents.ts";
+import { ProfileIssue } from "./agents.ts";
 import { ErrorCodeSchema } from "./errors.ts";
 import { Settings, SettingsLayer, SettingsSource } from "./settings.ts";
 import { PendingEnvironmentProposal } from "./environments.ts";
@@ -155,7 +155,10 @@ export const Session = Schema.Struct({
   usage: Usage,
   sortOrder: Schema.Number,
   steering: Schema.optional(Schema.Boolean),
-  customAgent: Schema.optional(SessionCustomAgent),
+  agentId: Schema.optional(Schema.String),
+  agentName: Schema.optional(Schema.String),
+  agentVersion: Schema.optional(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))),
+  agentSha: Schema.optional(Schema.String),
   profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
 });
 

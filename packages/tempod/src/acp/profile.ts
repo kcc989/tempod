@@ -12,7 +12,7 @@ import {
 } from "@tempo/protocol";
 
 /**
- * How tempod applies a custom agent profile per base agent (01, Custom agents). Prompt and tool
+ * How tempod applies a agent profile per base agent (01, Agent profiles). Prompt and tool
  * limits use each adapter's own extension; whatever an agent cannot take is reported as an issue.
  */
 
@@ -115,7 +115,7 @@ const expand = (value: string, env: Record<string, string>): string | null => {
   return name !== undefined && env[name] !== undefined ? env[name] : null;
 };
 
-/** A custom agent server as an `McpServerSpec`, refs expanded; null when a name is missing. */
+/** A agent server as an `McpServerSpec`, refs expanded; null when a name is missing. */
 const toSpec = (s: McpServerDef, env: Record<string, string>): McpServerSpec | null => {
   const vars: Array<{ name: string; value: string }> = [];
 
@@ -139,7 +139,7 @@ interface SessionProfileMeta {
 
 export interface SessionProfile {
   readonly meta: SessionProfileMeta | undefined;
-  /** The custom agent's servers, added to the user's servers in `session/new` (01, User MCP servers). */
+  /** The agent's servers, added to the user's servers in `session/new` (01, User MCP servers). */
   readonly specs: McpServerSpec[];
   /** Leave Playwright out of the ACP `mcpServers`. */
   readonly dropPlaywright: boolean;

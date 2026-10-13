@@ -762,9 +762,9 @@ The tab 02 rules apply. The `/api/v1` routes for native clients mirror them (tab
 | `sendRunToChat` | `{workspaceId, runId}` | `{turnId}` | `NOT_FOUND`, `RUN_NOT_COMPLETED`, `RUN_ALREADY_SENT`, `RUN_NO_CHAT` |
 | `resolveAgentProposal` | `{workspaceId, proposalId, apply}` | `{}` | `NOT_FOUND`, `AGENT_INVALID`, `ATTACHMENT_INVALID` |
 
-`createSession` keeps its custom agent option, renamed `agentId`, and reads the definition from D1. `listLifecycleEvents` and `getTrace` stay. `getTrace` returns runs with `handle`, `agentSha` and the matched hook.
+`createSession` accepts `agentId` and reads the definition from D1. `listLifecycleEvents` and `getTrace` stay. `getTrace` returns runs with `handle`, `agentSha` and the matched hook.
 
-Workspace channel: `roleRun {run}` becomes `run {run}`. `Session` gains `runId?` and loses `roleRunId?`.
+Workspace channel publishes `run {run}`. `Session` exposes optional flat `runId`, `agentId`, `agentName`, `agentVersion` and `agentSha`. Migration `0012_session_agents` preserves old profiles and commit SHAs while renaming their metadata columns and adding nullable version; old chats omit `agentVersion`.
 
 **Agent and run error codes.**
 
@@ -1044,7 +1044,7 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `ENVIRONMENT_EXISTS` | Another environment has that name | An environment with this name already exists. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |
-| `AGENT_INVALID` | An Artifacts read, create, token or push failed | Could not reach agent storage. Try again. |
+| `AGENT_INVALID` | A definition or proposal is invalid | Check the agent definition. |
 | `INTERNAL` | Anything else | Something went wrong. |
 
 `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle` are the GitHub PR title regardless of open, closed or merged state; null means no title has been fetched. The WorkspaceDO persists it and sends detail updates when the title changes.

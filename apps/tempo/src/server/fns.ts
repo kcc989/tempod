@@ -40,26 +40,6 @@ export const deleteProjectAgent = createServerFn({ method: "POST" })
   .validator((data: FnInput<"deleteProjectAgent">) => data)
   .handler(({ data }) => run("deleteProjectAgent", data));
 
-export const listRoles = createServerFn({ method: "GET" })
-  .validator((data: FnInput<"listRoles">) => data)
-  .handler(({ data }) => run("listRoles", data));
-
-export const getRoleText = createServerFn({ method: "GET" })
-  .validator((data: FnInput<"getRoleText">) => data)
-  .handler(({ data }) => run("getRoleText", data));
-
-export const putUserRole = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"putUserRole">) => data)
-  .handler(({ data }) => run("putUserRole", data));
-
-export const deleteUserRole = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"deleteUserRole">) => data)
-  .handler(({ data }) => run("deleteUserRole", data));
-
-export const reloadRoles = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"reloadRoles">) => data)
-  .handler(({ data }) => run("reloadRoles", data));
-
 export const requestAgent = createServerFn({ method: "POST" })
   .validator((data: FnInput<"requestAgent">) => data)
   .handler(({ data }) => run("requestAgent", data));
@@ -375,22 +355,6 @@ export const listArtifacts = createServerFn({ method: "GET" })
 export const openArtifact = createServerFn({ method: "POST" })
   .validator((data: FnInput<"openArtifact">) => data)
   .handler(({ data }) => run("openArtifact", data));
-
-export const listCustomAgents = createServerFn({ method: "GET" })
-  .validator((data: FnInput<"listCustomAgents">) => data)
-  .handler(({ data }) => run("listCustomAgents", data));
-
-export const getCustomAgent = createServerFn({ method: "GET" })
-  .validator((data: FnInput<"getCustomAgent">) => data)
-  .handler(({ data }) => run("getCustomAgent", data));
-
-export const saveCustomAgent = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"saveCustomAgent">) => data)
-  .handler(({ data }) => run("saveCustomAgent", data));
-
-export const deleteCustomAgent = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"deleteCustomAgent">) => data)
-  .handler(({ data }) => run("deleteCustomAgent", data));
 
 export const getCredentialStatus = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getCredentialStatus">) => data)

@@ -1,8 +1,6 @@
-import * as roles from "./handlers/roles.ts";
 import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protocol";
 import * as conversations from "./handlers/conversations.ts";
 import * as library from "./handlers/agent-library.ts";
-import * as agents from "./handlers/agents.ts";
 import * as credentials from "./handlers/credentials.ts";
 import * as environments from "./handlers/environments.ts";
 import * as mcp from "./handlers/mcp.ts";
@@ -26,8 +24,6 @@ const own = {
   listProjectAgents: library.listProjectAgents,
   putProjectAgent: library.putProjectAgent,
   deleteProjectAgent: library.deleteProjectAgent,
-  putUserRole: roles.putUserRole,
-  deleteUserRole: roles.deleteUserRole,
   listInstallationRepos: projects.listInstallationReposFn,
   listInstallations: projects.listInstallations,
   linkProject: projects.linkProject,
@@ -62,10 +58,6 @@ const own = {
   listMcpServers: mcp.listMcpServers,
   saveMcpServer: mcp.saveMcpServer,
   deleteMcpServer: mcp.deleteMcpServer,
-  listCustomAgents: agents.listCustomAgents,
-  getCustomAgent: agents.getCustomAgent,
-  saveCustomAgent: agents.saveCustomAgent,
-  deleteCustomAgent: agents.deleteCustomAgent,
 } satisfies { [K in NonWorkspace]: Handler<K> };
 
 /** One handler per function in the API contract (07, One handler per function). */
@@ -78,6 +70,4 @@ export const HANDLERS = {
   ...own,
   ...workspace,
   createSession,
-  listRoles: roles.listRoles,
-  getRoleText: roles.getRoleText,
 } satisfies { [K in FnName]: Handler<K> };

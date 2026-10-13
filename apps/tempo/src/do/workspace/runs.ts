@@ -26,8 +26,8 @@ import {
 import { EMPTY_PROMPT, json } from "../../db/json.ts";
 import { toLibraryProfile } from "../../agents/library.ts";
 import { runInputs, sentResultText, RUN_FOLLOW_UP } from "../../agents/run-inputs.ts";
-import { roleFileHashes, roleFilesChanged } from "../../roles/guard.ts";
-import { lifecycleRedactor } from "../../roles/secrets.ts";
+import { protectedFileHashes, protectedFilesChanged } from "../../agents/protected-files.ts";
+import { lifecycleRedactor } from "../../agents/secrets.ts";
 import { migrateRunDefinition } from "../../agents/run-migration.ts";
 import { afterTurnEnded, credentialKeys, finishTurn, hasCredential, sessionModel } from "./queue.ts";
 import { takeCheckpoint } from "./durability.ts";
@@ -220,7 +220,7 @@ export class Runs {
 
       try {
         if (!hasCredential(agent, keys)) throw new TempoError("RUN_NO_AGENT");
-        sessionModel(agent, { model: definition.model }, this.core.settings());
+        sessionModel(agent, { model: definition.model }, this.core.settings(), true);
       } catch {
         this.fail(row, "RUN_NO_AGENT");
         continue;
@@ -236,7 +236,7 @@ export class Runs {
             agent,
             title: definition.name,
             status: "idle",
-            configJson: JSON.stringify(definition.model ? { model: definition.model } : {}),
+            configJson: JSON.stringify({ model: definition.model }),
             modesJson: "[]",
             configOptionsJson: "[]",
             commandsJson: "[]",
@@ -246,9 +246,10 @@ export class Runs {
             generalPromptSent: 0,
             profileJson: JSON.stringify(toLibraryProfile(definition)),
             profileIssuesJson: "[]",
-            customAgentId: row.agentId,
-            customAgentName: definition.name,
-            customAgentCommit: row.agentSha,
+            agentId: row.agentId,
+            agentName: definition.name,
+            agentSha: row.agentSha,
+            agentVersion: row.agentVersion,
             sortOrder:
               (this.core.db
                 .select({ n: sql<number>`coalesce(max(${sessions.sortOrder}),0)` })
@@ -347,7 +348,7 @@ export class Runs {
       this.update(run.id, { pinCheckpointId: checkpoint.checkpointId });
     }
 
-    const guard = await roleFileHashes(this.core);
+    const guard = await protectedFileHashes(this.core);
 
     if (this.row(run.id).status !== "running") return false;
     this.core.setKv(`runGuard:${turn.id}`, guard);
@@ -444,7 +445,7 @@ export class Runs {
     if (turn.status !== "completed") return this.fail(run, "RUN_TURN_FAILED", undefined, causeId);
 
     try {
-      if (await roleFilesChanged(this.core, turn.id))
+      if (await protectedFilesChanged(this.core, turn.id))
         return this.fail(run, "RUN_ACCESS_VIOLATION", "Protected login or config files changed.", causeId);
     } catch {
       return this.fail(

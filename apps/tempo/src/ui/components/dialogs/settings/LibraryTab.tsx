@@ -357,7 +357,7 @@ function AgentEditor({
             className="text-destructive"
             disabled={remove.isPending}
             onClick={async () => {
-              if (await confirm(CONFIRM_TEXT.deleteCustomAgent(initial.name))) remove.mutate({ agentId });
+              if (await confirm(CONFIRM_TEXT.deleteAgent(initial.name))) remove.mutate({ agentId });
             }}
           >
             <Trash2Icon aria-hidden /> Delete

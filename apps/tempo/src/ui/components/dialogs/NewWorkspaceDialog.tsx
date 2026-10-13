@@ -45,10 +45,10 @@ import { getHubStore } from "~/ui/stores/hub-store";
 import { closeDialog, openDialog, setPhonePane, type DialogOf } from "~/ui/state/workspace-ui";
 import { BranchPicker } from "./BranchPicker";
 import {
-  customAgentOf,
+  libraryAgentOf,
   agentsWithLogin,
-  customAgentValue,
-  customAgentsWithLogin,
+  libraryAgentValue,
+  libraryAgentsWithLogin,
   createInput,
   emptySource,
   filterPullRequests,
@@ -127,18 +127,18 @@ function NewWorkspaceForm({
   const creating = useRef(false);
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
-  const customAgents = useAgentChoices(project.settings.agent?.default ?? "claude");
+  const libraryAgents = useAgentChoices(project.settings.agent?.default ?? "claude");
   const available = agentsWithLogin(credentials.data);
   const choices = modelChoices(available, models.data ?? []);
 
   const selected =
     choices.find((choice) => choice.key === pickedModel) ?? initialModel(choices, models.data ?? [], project);
 
-  const custom = customAgentsWithLogin(customAgents.data, available);
-  const pickedCustom = customAgentOf(pickedModel, custom);
+  const custom = libraryAgentsWithLogin(libraryAgents.data, available);
+  const pickedAgent = libraryAgentOf(pickedModel, custom);
 
-  const input = pickedCustom
-    ? createInput(project, source, pickedCustom.baseAgent, prompt, undefined, pickedCustom.id, true)
+  const input = pickedAgent
+    ? createInput(project, source, pickedAgent.baseAgent, prompt, undefined, pickedAgent.id)
     : models.isSuccess && selected
       ? createInput(project, source, selected.agent, prompt, selected.model)
       : !prompt.trim()
@@ -323,7 +323,7 @@ function NewWorkspaceForm({
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4">
           <div className="min-w-0 flex-1">
             <Select
-              value={pickedCustom ? customAgentValue(pickedCustom.id) : (selected?.key ?? "")}
+              value={pickedAgent ? libraryAgentValue(pickedAgent.id) : (selected?.key ?? "")}
               onValueChange={setPickedModel}
               disabled={!choices.length && !custom.length}
             >
@@ -346,7 +346,7 @@ function NewWorkspaceForm({
                 ))}
                 {custom.length > 0 && <SelectSeparator />}
                 {custom.map((a) => (
-                  <SelectItem key={a.id} value={customAgentValue(a.id)}>
+                  <SelectItem key={a.id} value={libraryAgentValue(a.id)}>
                     {a.name} <span className="text-muted-foreground">· {agentLabel(a.baseAgent)}</span>
                   </SelectItem>
                 ))}

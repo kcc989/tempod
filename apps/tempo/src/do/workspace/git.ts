@@ -1,4 +1,4 @@
-import { lifecycleRedactor } from "../../roles/secrets.ts";
+import { lifecycleRedactor } from "../../agents/secrets.ts";
 import { desc } from "drizzle-orm";
 import { TempoError, type ChangedFile, type ChangesSummary, type FnOutput } from "@tempo/protocol";
 import { EMPTY_PROMPT, json } from "../../db/json.ts";

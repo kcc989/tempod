@@ -176,40 +176,15 @@ pub const FIELDS: &[FieldDef] = &[
             Kind::Multiline,
         )
     },
-    field(
-        "roles.enabled",
-        "Roles",
-        "Enable role triggers and requests",
-        Kind::Bool,
-    ),
-    field(
-        "roles.max_chain_depth",
-        "Roles",
-        "Maximum chain depth",
-        Kind::Number,
-    ),
-    field(
-        "roles.max_runs_per_change",
-        "Roles",
-        "Maximum runs per change",
-        Kind::Number,
-    ),
-    field(
-        "roles.max_tokens_per_change",
-        "Roles",
-        "Maximum tokens per change",
-        Kind::Number,
-    ),
 ];
 
-pub const SECTIONS: [&str; 7] = [
+pub const SECTIONS: [&str; 6] = [
     "Agent",
     "Browser",
     "Scripts",
     "Environment",
     "Git",
     "Prompts",
-    "Roles",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -394,17 +369,6 @@ fn whole(text: &str) -> Option<i64> {
 pub fn from_edit(def: &FieldDef, edit: &EditValue) -> Result<Value, String> {
     match edit {
         EditValue::Text(text) => match def.kind {
-            Kind::Number if def.path.starts_with("roles.") => {
-                let min = if def.path == "roles.max_tokens_per_change" {
-                    0
-                } else {
-                    1
-                };
-                match whole(text) {
-                    Some(n) if n >= min && n <= 9_007_199_254_740_991 => Ok(json!(n)),
-                    _ => Err(format!("Use a whole number of at least {min}.")),
-                }
-            }
             Kind::Number => match whole(text) {
                 Some(n) if (5..=240).contains(&n) => Ok(json!(n)),
                 _ => Err("Use a whole number from 5 to 240.".into()),

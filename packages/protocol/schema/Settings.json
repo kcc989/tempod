@@ -3,9 +3,6 @@
   "title": "Settings",
   "type": "object",
   "properties": {
-    "roles": {
-      "$ref": "RolesSettings.json"
-    },
     "agent": {
       "type": "object",
       "properties": {

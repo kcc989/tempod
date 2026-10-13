@@ -29,16 +29,6 @@
         }
       ]
     },
-    "customAgentId": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "agentId": {
       "anyOf": [
         {

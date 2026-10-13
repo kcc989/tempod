@@ -13,12 +13,10 @@ import {
   type AgentProfile,
 } from "@tempo/protocol";
 import { STARTERS } from "@tempo/agents-starter";
-import { parseAgentFile, parseRoleFile } from "@tempo/settings";
-import { agentStore } from "./store.ts";
+import { parseRoleFile } from "@tempo/settings/migrations/roles";
 import {
   agentMigrations,
   agents,
-  customAgents,
   userRoles,
   workspaces,
   type AgentRow,
@@ -172,29 +170,6 @@ export const migrateAgents = async (env: Env, userId: string): Promise<void> => 
         deletedAt: null,
       });
     };
-
-    const oldAgents = await db
-      .select()
-      .from(customAgents)
-      .where(and(eq(customAgents.userId, userId), isNull(customAgents.deletedAt)))
-      .orderBy(asc(customAgents.createdAt), asc(customAgents.id))
-      .all();
-
-    for (const row of oldAgents) {
-      const text = await agentStore.forEnv(env).read(row.repo, row.commitSha, row.path);
-
-      if (text === null) throw new TempoError("AGENT_INVALID");
-      const { systemPrompt, ...definition } = parseAgentFile(text);
-      await add(
-        Schema.decodeUnknownSync(AgentDefinition, { onExcessProperty: "error" })({
-          ...definition,
-          prompt: systemPrompt,
-          handle: migrationHandle(row.name, handles),
-          name: migrationName(row.name, names),
-        }),
-        row.id,
-      );
-    }
 
     const oldRoles = await db
       .select()

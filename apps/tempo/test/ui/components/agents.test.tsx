@@ -13,7 +13,7 @@ import { SettingsPage } from "../../../src/ui/components/settings/SettingsPage";
 
 import { openDialog, resetUiState } from "../../../src/ui/state/workspace-ui";
 
-/** Settings → Agents (04, Settings; 01, Custom agents). */
+/** Settings → Agents (04, Settings; 01, Saved agents). */
 
 const reviewer: Agent = {
   id: "01ca",

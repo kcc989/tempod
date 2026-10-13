@@ -10,10 +10,10 @@ These are fixed. Do not reopen them. If the code or the spec conflicts with one,
 
 | # | Decision |
 | --- | --- |
-| A1 | One concept: **agent**. Custom agents and roles merge. The words "role" and "custom agent" leave the product, the spec and the wire types. |
-| A2 | Agents are data: one library per user, in D1. No agent files in the repo, no Artifacts store and no YAML. Tempo stops reading `.tempo/roles/`. |
+| A1 | One concept: **agent**. Saved and event-triggered definitions use the same product, spec and wire vocabulary. |
+| A2 | Agents are data: one library per user, in D1. No agent files in the repo, no Artifacts store and no YAML. Tempo stops reading legacy repository definitions. |
 | A3 | Built-in agents are **starters**: rows that Tempo copies into each user's library once. The user can edit or delete them. A later starter change does not change existing rows. |
-| A4 | A project **attaches** agents. One D1 row per project and agent. All wiring lives there. `roles.*` leaves the settings file. |
+| A4 | A project **attaches** agents. One D1 row per project and agent. All wiring lives there. Legacy agent wiring leaves the settings file. |
 | A5 | A hook is an event type and an optional question. Tempo matches the event type exactly, then asks the question. No question means "always". |
 | A6 | The decision model is Clef-flash on Workers AI (`@cf/cloudflare/clef-flash`) through a Worker `AI` binding. The owner approves this binding. Add no other library. |
 | A7 | A run has its own session. The session is hidden from the tab bar. The run shows as a `run` item (the run card) in the chat that caused the change. |
@@ -21,7 +21,7 @@ These are fixed. Do not reopen them. If the code or the spec conflicts with one,
 | A9 | Read-only uses the agent's own controls. Tempo's tree compare becomes a warning on the card, not a failure. |
 | A10 | Limits: `max_runs` per attachment per change, and a timeout per run. Remove rounds, continues, chain depth, runs per change and both token caps. |
 | A11 | The user can create and change agents and attachments by asking in chat. The agent proposes; the owner applies in the app, as with `propose_environment_change`. |
-| A12 | The decision state may hold the change's prompt text, cut to 4 KiB and redacted. It never holds file contents, env values or secrets. |
+| A12 | The decision state may hold the change's prompt text, cut to 4 KiB and redacted. It may include redacted typed run results, including file-derived result text. It never reads raw files or includes env values or secrets. |
 
 ## Vocabulary
 
@@ -159,7 +159,7 @@ CREATE TABLE agent_migrations (
 - Delete sets `deleted_at`. An attachment whose agent is deleted stays, does not run, and shows "This agent was deleted." with a Remove action.
 - A session that started from an agent keeps its profile, as today. A run freezes the definition text in WorkspaceDO storage, for every run, and stores `agent_version` and `agent_sha`.
 
-**Starters.** `packages/agents-starter/` exports three definitions as TypeScript data: `planner` (plan, read-only), `reviewer` (review, read-only) and `check-fixer` (note, write). Write each prompt from the matching role file in `packages/roles-builtin/`. Tempo copies the starters into a library once, during the migration below, and sets `starter`. Tempo never attaches a starter to a project by itself.
+**Starters.** `packages/agents-starter/` exports three definitions as TypeScript data: `planner` (plan, read-only), `reviewer` (review, read-only) and `check-fixer` (note, write). The initial prompts were copied from the retired built-in definitions; the TypeScript data is now their source. Tempo copies the starters into a library once, during the migration below, and sets `starter`. Tempo never attaches a starter to a project by itself.
 
 ## Attachments and hooks
 
@@ -376,7 +376,7 @@ CREATE INDEX runs_by_change ON runs(change_id, created_at);
 
 A one-time, idempotent step in the Worker. It runs for a user on the first `listAgents`, `saveAgent` or `listProjectAgents` call after deploy, when the user has no `agent_migrations` row.
 
-1. For each active `custom_agents` row, read its file at `commit_sha` and write an `agents` row. Take the handle from the name: lowercase, runs of other characters become `-`, cut to 32 characters, and add `-2`, `-3` and so on for a repeat.
+1. The sole owner waived importing legacy file definitions on 2026-10-13. Do not read Artifacts or recreate those definitions. Keep the old D1 pointer rows read-only until Gate I passes; frozen chat profiles survive independently.
 2. For each `user_roles` row that parses, write an `agents` row: the role body becomes `prompt`, `agent` becomes `baseAgent` (`other` becomes `auto`), and `access` and `model` copy. Use `review` as the output kind when the role name is `reviewer` or `ci`, else `note`. A row that does not parse is skipped and logged by name only.
 3. Copy the starters (A3), skipping a handle that already exists.
 
@@ -435,7 +435,7 @@ Web (tab 04) and Mac (tab 07) change in the same milestone.
 
 | Where | What |
 | --- | --- |
-| Settings → Agents (personal) | One list replaces the Agents and Roles tabs. Add, edit, duplicate and delete. A form for every field, plus a read-only JSON view of the definition. |
+| Settings → Agents (personal) | One library list. Add, edit, duplicate and delete. A form for every field, plus a read-only JSON view of the definition. |
 | Project settings → Agents | The attached agents: enabled, hooks (event, question, threshold), auto-send, max runs, timeout. Add agent opens the library. |
 | Chat transcript | The run card: handle, name, hook event, decision probability, base agent, access, status and time. While running: Cancel. When done: the result by output kind, then Approve or Send to chat, Open transcript, Dismiss. A `files_changed` warning shows with Revert. |
 | Chat transcript | One quiet line per event that had skipped decisions: each handle with its probability. |

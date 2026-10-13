@@ -4,11 +4,21 @@ import { runs, turns, type RunRow } from "../db/workspace-do.ts";
 import { EMPTY_PROMPT, json } from "../db/json.ts";
 import { CheckRun } from "@tempo/protocol";
 import { Schema } from "effect";
-import { cutInput } from "../roles/inputs.ts";
+
 import type { WorkspaceCore } from "../do/workspace/core.ts";
 import { requireTempod } from "../do/workspace/container.ts";
 
-export { cutInput } from "../roles/inputs.ts";
+export const cutInput = (text: string, limit: number): string => {
+  const bytes = new TextEncoder().encode(text);
+
+  if (bytes.length <= limit) return text;
+  const marker = "[cut by Tempo]";
+
+  if (limit < marker.length) return "";
+  const prefix = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(0, limit - marker.length));
+
+  return prefix.replace(/\uFFFD$/, "") + marker;
+};
 
 export const RUN_ACCESS_TEXT = {
   "read-only":

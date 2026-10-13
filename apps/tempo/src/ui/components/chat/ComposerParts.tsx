@@ -66,7 +66,7 @@ export function LoginBanner({ text }: { text: string }) {
   );
 }
 
-/** Fields of a custom agent the base agent did not apply; dismissed per session until reload. */
+/** Fields of a saved agent the base agent did not apply; dismissed per session until reload. */
 export function ProfileIssuesNotice({ text, onDismiss }: { text: string; onDismiss: () => void }) {
   return (
     <div role="status" className="flex items-center gap-2 border-t bg-muted px-3 py-1.5 text-sm">

@@ -129,15 +129,17 @@ export const MODEL_REQUIRED_AGENTS: ReadonlySet<AgentId> = new Set(["opencode", 
 
 /**
  * The `model` of session.start (01, Start a session 2): the session's own choice, else
- * `agent.models.<agent>`, else none. OpenCode and Pi without one fail with MODEL_REQUIRED.
+ * `agent.models.<agent>`, else none. New library sessions keep the frozen choice, including
+ * an empty adapter default. OpenCode and Pi without a model fail with MODEL_REQUIRED.
  */
 export const sessionModel = (
   agent: AgentId,
   config: import("@tempo/protocol").Session["config"],
   settings: Settings,
+  frozen = false,
 ): string | null => {
   const own = Schema.is(Schema.String)(config["model"]) ? config["model"] : "";
-  const model = own || settings.agent.models[agent];
+  const model = frozen ? own : own || settings.agent.models[agent];
 
   if (model) return model;
 
@@ -161,7 +163,7 @@ export const ensureSessionLive = async (
   const tempod = requireTempod(core);
   const agent = session.agent;
   const config = json.config.read(session.configJson, {});
-  const model = sessionModel(agent, config, core.settings());
+  const model = sessionModel(agent, config, core.settings(), session.agentVersion !== null);
   let env = await agentEnv(core, agent, signal);
   const run = session.runId ? core.lifecycle.runs.row(session.runId) : null;
 
@@ -689,8 +691,8 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
     if (session.runId && turn.origin !== "user")
       core.lifecycle.runs.fail(
         core.lifecycle.runs.row(session.runId),
-        err.code === "ROLE_ACCESS_VIOLATION" ? "ROLE_ACCESS_VIOLATION" : "RUN_TURN_FAILED",
-        err.code === "ROLE_ACCESS_VIOLATION"
+        err.code === "RUN_ACCESS_VIOLATION" ? "RUN_ACCESS_VIOLATION" : "RUN_TURN_FAILED",
+        err.code === "RUN_ACCESS_VIOLATION"
           ? "Protected login or config files could not be checked."
           : undefined,
       );

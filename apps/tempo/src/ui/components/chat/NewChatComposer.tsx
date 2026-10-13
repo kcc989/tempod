@@ -22,16 +22,16 @@ export function NewChatComposer({
 }) {
   const settings = useWorkspaceSelector(workspaceId, (s) => s.workspace?.settings ?? DEFAULT_SETTINGS);
   const selection = useLaunchModels(settings);
-  const agent = selection.pickedCustom?.baseAgent ?? selection.selected?.agent ?? selection.fallbackAgent;
+  const agent = selection.pickedAgent?.baseAgent ?? selection.selected?.agent ?? selection.fallbackAgent;
 
-  const model = selection.pickedCustom
+  const model = selection.pickedAgent
     ? undefined
     : (selection.selected?.model ?? (agent ? settings.agent.models[agent] || undefined : undefined));
 
-  const customAgentId = selection.pickedCustom?.id;
+  const agentId = selection.pickedAgent?.id;
 
   const canCreate =
-    agent !== null && (customAgentId !== undefined || model !== undefined || !needsModel(agent, settings));
+    agent !== null && (agentId !== undefined || model !== undefined || !needsModel(agent, settings));
 
   const [prompt, setPrompt] = useState("");
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -50,7 +50,7 @@ export function NewChatComposer({
 
       if (model) input = { ...input, model };
 
-      if (customAgentId) input = { ...input, agentId: customAgentId };
+      if (agentId) input = { ...input, agentId: agentId };
       const session = created ?? (await create.mutateAsync(input));
 
       setCreated(session);

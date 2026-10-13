@@ -1,22 +1,17 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import {
-  API,
-  CustomAgentDefinition,
-  ERROR_MESSAGES,
-  TEMPOD_REQUESTS,
-  customAgentPath,
-  customAgentRepo,
-  toAgentProfile,
-} from "../src/index.ts";
+import { AgentDefinition } from "../src/index.ts";
 
-const base: CustomAgentDefinition = {
+const base: AgentDefinition = {
+  handle: "reviewer",
+  access: "read-only",
+  outputKind: "review",
   name: "Reviewer",
   description: "",
   baseAgent: "claude",
   model: "",
   thoughtLevel: "",
-  systemPrompt: "Review only.",
+  prompt: "Review only.",
   tools: { allow: [], deny: ["Edit"] },
   mcp: {
     playwright: true,
@@ -24,14 +19,11 @@ const base: CustomAgentDefinition = {
   },
 };
 
-const valid = Schema.is(CustomAgentDefinition);
+const valid = Schema.is(AgentDefinition);
 
-describe("custom agent definition (01, Custom agents)", () => {
-  it("accepts a full definition", () => {
+describe("agent definition (08)", () => {
+  it("refuses literal env and header values, so no secret reaches stored definitions", () => {
     expect(valid(base)).toBe(true);
-  });
-
-  it("refuses literal env and header values, so no secret reaches Artifacts", () => {
     const env = { ...base.mcp.servers[0], env: { T: "abc123" } };
     expect(valid({ ...base, mcp: { ...base.mcp, servers: [env] } })).toBe(false);
     const headers = { name: "s", type: "http", url: "https://x.dev/mcp", headers: { A: "Bearer ${X}" } };
@@ -49,9 +41,9 @@ describe("custom agent definition (01, Custom agents)", () => {
 
   it("checks names, limits and tool names", () => {
     expect(valid({ ...base, name: "" })).toBe(false);
-    expect(valid({ ...base, name: " padded" })).toBe(false);
+    expect(valid({ ...base, handle: "1bad" })).toBe(false);
     expect(valid({ ...base, name: "x".repeat(61) })).toBe(false);
-    expect(valid({ ...base, systemPrompt: "x".repeat(32_001) })).toBe(false);
+    expect(valid({ ...base, prompt: "x".repeat(32_001) })).toBe(false);
     expect(valid({ ...base, tools: { allow: ["mcp__docs__*", "read"], deny: [] } })).toBe(true);
     expect(valid({ ...base, tools: { allow: ["a,b"], deny: [] } })).toBe(false);
     expect(
@@ -59,28 +51,5 @@ describe("custom agent definition (01, Custom agents)", () => {
     ).toBe(false);
     const many = Array.from({ length: 11 }, (_, i) => ({ ...base.mcp.servers[0], name: `s${i}` }));
     expect(valid({ ...base, mcp: { ...base.mcp, servers: many } })).toBe(false);
-  });
-
-  it("builds the session profile and storage names", () => {
-    expect(toAgentProfile(base)).toEqual({
-      systemPrompt: "Review only.",
-      toolsAllow: [],
-      toolsDeny: ["Edit"],
-      playwright: true,
-      mcpServers: base.mcp.servers,
-      thoughtLevel: "",
-    });
-    expect(customAgentRepo("abc")).toBe("user-abc");
-    expect(customAgentPath("01x")).toBe("agents/01x.yaml");
-  });
-
-  it("has the functions, codes and session.start fields from 02", () => {
-    for (const f of ["listCustomAgents", "getCustomAgent", "saveCustomAgent", "deleteCustomAgent"]) {
-      expect(f in API).toBe(true);
-    }
-
-    for (const c of ["CUSTOM_AGENT_EXISTS", "CUSTOM_AGENT_LIMIT", "ARTIFACTS_ERROR"])
-      expect(c in ERROR_MESSAGES).toBe(true);
-    expect("profile" in TEMPOD_REQUESTS["session.start"].params.fields).toBe(true);
   });
 });

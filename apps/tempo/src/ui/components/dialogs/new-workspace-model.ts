@@ -4,7 +4,7 @@ import {
   type AgentId,
   type AgentModelOptions,
   type CredentialStatus,
-  type CustomAgentSummary,
+  type AgentSummary,
   type FnInput,
   type NewSource,
   type Project,
@@ -12,6 +12,10 @@ import {
 import { hasLogin } from "~/ui/lib/agents";
 
 /** New workspace (04, Dialogs): source tabs, agent and prompt. Pure, so it is unit-tested. */
+export type SavedAgentChoice = Pick<AgentSummary, "id" | "name" | "description" | "updatedAt"> & {
+  readonly baseAgent: AgentId;
+};
+
 export type SourceTab = "new" | "branch" | "pr";
 
 export const SOURCE_TABS: ReadonlyArray<{ readonly id: SourceTab; readonly label: string }> = [
@@ -62,24 +66,24 @@ export const initialAgent = (
   );
 };
 
-/** Custom agents whose base agent has a login, after the plain agents (04, New workspace). */
-export const customAgentsWithLogin = (
-  agents: ReadonlyArray<CustomAgentSummary> | undefined,
+/** Saved agents whose base agent has a login, after the plain agents (04, New workspace). */
+export const libraryAgentsWithLogin = (
+  agents: ReadonlyArray<SavedAgentChoice> | undefined,
   available: ReadonlyArray<AgentId>,
-): CustomAgentSummary[] => (agents ?? []).filter((a) => available.includes(a.baseAgent));
+): SavedAgentChoice[] => (agents ?? []).filter((a) => available.includes(a.baseAgent));
 
-const CUSTOM_PREFIX = "custom:";
+const LIBRARY_PREFIX = "agent:";
 
-/** The agent select's value: an agent id, or `custom:<customAgentId>`. */
-export const customAgentValue = (customAgentId: string): string => `${CUSTOM_PREFIX}${customAgentId}`;
+/** The agent select's value: an agent id, or `agent:<agentId>`. */
+export const libraryAgentValue = (agentId: string): string => `${LIBRARY_PREFIX}${agentId}`;
 
-/** The custom agent a select value stands for; null for a model choice or one no longer offered. */
-export const customAgentOf = (
+/** The saved agent a select value stands for; null for a model choice or one no longer offered. */
+export const libraryAgentOf = (
   value: string | null,
-  custom: ReadonlyArray<CustomAgentSummary>,
-): CustomAgentSummary | null =>
-  value?.startsWith(CUSTOM_PREFIX)
-    ? (custom.find((a) => a.id === value.slice(CUSTOM_PREFIX.length)) ?? null)
+  custom: ReadonlyArray<SavedAgentChoice>,
+): SavedAgentChoice | null =>
+  value?.startsWith(LIBRARY_PREFIX)
+    ? (custom.find((a) => a.id === value.slice(LIBRARY_PREFIX.length)) ?? null)
     : null;
 
 export const createInput = (
@@ -88,8 +92,7 @@ export const createInput = (
   agent: AgentId | null,
   prompt: string,
   model?: string,
-  customAgentId?: string,
-  library = false,
+  agentId?: string,
 ): FnInput<"createWorkspace"> | null => {
   const source = buildSource(draft, project);
 
@@ -101,7 +104,7 @@ export const createInput = (
 
   if (model) input = { ...input, model };
 
-  if (customAgentId) input = library ? { ...input, agentId: customAgentId } : { ...input, customAgentId };
+  if (agentId) input = { ...input, agentId: agentId };
 
   if (text) input = { ...input, prompt: { text } };
 

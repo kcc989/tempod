@@ -64,7 +64,7 @@
         "package.json",
         "tsconfig.json",
         "worker-runtime.d.ts",
-        "$TURBO_ROOT$/packages/roles-builtin/**"
+        "$TURBO_ROOT$/packages/agents-starter/**"
       ]
     },
     "@tempo/app#test:ui": {
@@ -78,7 +78,7 @@
         "package.json",
         "tsconfig.json",
         "worker-runtime.d.ts",
-        "$TURBO_ROOT$/packages/roles-builtin/**"
+        "$TURBO_ROOT$/packages/agents-starter/**"
       ]
     },
     "@tempo/app#test:components": {
@@ -92,7 +92,7 @@
         "package.json",
         "tsconfig.json",
         "worker-runtime.d.ts",
-        "$TURBO_ROOT$/packages/roles-builtin/**"
+        "$TURBO_ROOT$/packages/agents-starter/**"
       ]
     },
     "@tempo/app#build:web-fixture": {
@@ -106,7 +106,7 @@
         "package.json",
         "tsconfig.json",
         "worker-runtime.d.ts",
-        "$TURBO_ROOT$/packages/roles-builtin/**"
+        "$TURBO_ROOT$/packages/agents-starter/**"
       ]
     },
     "@tempo/app#build:browser-fixture": {
@@ -120,11 +120,11 @@
         "package.json",
         "tsconfig.json",
         "worker-runtime.d.ts",
-        "$TURBO_ROOT$/packages/roles-builtin/**"
+        "$TURBO_ROOT$/packages/agents-starter/**"
       ]
     },
     "@tempo/app#build": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/roles-builtin/**"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/agents-starter/**"],
       "cache": false,
       "env": ["TEMPO_WRANGLER_CONFIG", "CLOUDFLARE_ENV", "NODE_ENV", "VITE_*"]
     },
@@ -138,7 +138,7 @@
         "!vite.web-test.config.ts",
         ".env*",
         ".dev.vars*",
-        "$TURBO_ROOT$/packages/roles-builtin/**",
+        "$TURBO_ROOT$/packages/agents-starter/**",
         "$TURBO_ROOT$/container/**"
       ],
       "env": ["CLOUDFLARE_ENV", "NODE_ENV", "VITE_*", "PWD"]

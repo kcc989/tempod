@@ -439,3 +439,10 @@ Local visual evidence uses synthetic real-component web fixtures. Native fixture
 M3 replaces file-result execution with frozen library runs and typed `report_result` frames. The owner approved daemon request/response frames outside the raw event log and keeping Send to chat in the existing change/budget. `session.start.access?` carries read-only intent; supported modes are selected after advertisement and Pi receives edit-tool denial. Both clients hide run sessions and expose cards, side transcripts and activity. The migration preserves legacy active statuses and frozen data; real adapter/S23/Gate I acceptance remains open.
 
 M3 rebases onto the owner's workspace-tools change (#44). Run activity uses that tool launcher, and hidden run transcripts open as tool documents beside the chat in both clients; the chat/tool layout stays intact.
+
+
+## Goal 4 final cleanup
+
+The sole owner waived legacy Artifacts definition imports on 2026-10-13. The binding, reader, writer, parsers and old editors are removed; old D1 pointer tables stay read-only until Gate I. Stored chat profiles and commit SHAs survive `0012_session_agents`. The owner approved flat Session fields `agentId`, `agentName`, `agentVersion` and `agentSha`; new library sessions freeze versions while older chats omit them and retain their model fallback. Empty models on new library sessions and runs select the adapter default.
+
+The owner allows redacted file-derived text in typed run results sent to Clef. The report schemas do not have a `snippet` field; unknown report fields remain errors. Decision state includes typed event results and changed paths, with no raw-file reads or env values. S20/S23 and deployed Gate I remain open pending real login setup.

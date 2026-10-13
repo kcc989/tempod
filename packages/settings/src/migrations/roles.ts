@@ -1,4 +1,5 @@
-import { RoleFile, RoleName, RoleResult, TempoError } from "@tempo/protocol";
+import { RoleFile, RoleName } from "@tempo/protocol/migrations/legacy-agents";
+import { TempoError } from "@tempo/protocol";
 import { Schema } from "effect";
 import { parseDocument } from "yaml";
 
@@ -38,21 +39,6 @@ export const parseRoleFile = (name: string, text: string) => {
 
     return { file, body: match[2]! };
   } catch {
-    throw new TempoError("ROLE_INVALID", undefined, "Check the role name, YAML fields, triggers and limits.");
-  }
-};
-
-export const parseRoleResult = (text: string): RoleResult => {
-  if (new TextEncoder().encode(text).length > 65536)
-    throw new TempoError("ROLE_RESULT_INVALID", undefined, "result exceeds 64 KiB");
-
-  try {
-    return Schema.decodeUnknownSync(RoleResult, { onExcessProperty: "error" })(JSON.parse(text));
-  } catch {
-    throw new TempoError(
-      "ROLE_RESULT_INVALID",
-      undefined,
-      "Expected status, summary and optional findings with the documented types and limits.",
-    );
+    throw new TempoError("AGENT_INVALID", undefined, "The legacy definition could not be migrated.");
   }
 };

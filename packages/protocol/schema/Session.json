@@ -80,10 +80,47 @@
         }
       ]
     },
-    "customAgent": {
+    "agentId": {
       "anyOf": [
         {
-          "$ref": "SessionCustomAgent.json"
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentName": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentVersion": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 1
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentSha": {
+      "anyOf": [
+        {
+          "type": "string"
         },
         {
           "type": "null"

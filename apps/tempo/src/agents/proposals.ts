@@ -13,7 +13,7 @@ import { agents, agentProposalApplications } from "../db/d1.ts";
 import { agentProposals } from "../db/workspace-do.ts";
 import { d1 } from "../server/handlers/common.ts";
 import { agentsChanged, definitionSha, definitionText, migrateAgents, summary } from "./library.ts";
-import { lifecycleRedactor } from "../roles/secrets.ts";
+import { lifecycleRedactor } from "../agents/secrets.ts";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
 
 const strict = Schema.decodeUnknownSync(AgentProposal, { onExcessProperty: "error" });

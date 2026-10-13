@@ -1,4 +1,4 @@
-//! Settings → Agents (04; 07 "Same"): the user's agents and an editor (01, Custom agents).
+//! Settings → Agents (04; 07 "Same"): the user's agents and an editor (01, Agent profiles).
 use super::agents_model::{self, AgentForm, ServerForm};
 use super::chat_model::{AGENTS, agent_label};
 use super::tokens::{Token, color};
@@ -235,7 +235,7 @@ impl AgentsSettings {
     fn bump_rev(cx: &mut Context<Self>) {
         if let Some(app) = crate::app::AppState::try_global(cx) {
             app.update(cx, |a, cx| {
-                a.custom_agents_rev += 1;
+                a.agent_library_rev += 1;
                 cx.notify();
             });
         }
@@ -649,7 +649,7 @@ impl Render for AgentsSettings {
         let muted = color(Token::MutedForeground, cx);
         let list = self.agents.iter().map(|a| {
             let id = a.id.clone();
-            Button::new(SharedString::from(format!("custom-agent-{}", a.id)))
+            Button::new(SharedString::from(format!("library-agent-{}", a.id)))
                 .ghost()
                 .selected(self.selected == Selected::Agent(a.id.clone()))
                 .label(format!(

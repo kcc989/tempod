@@ -225,7 +225,7 @@ Each milestone is one pull request and merges when its own tests pass.
 | Milestone | Content | Demo |
 | --- | --- | --- |
 | M1 Spec | All spec changes above, with S22 done | The owner approves the spec |
-| M2 Library | `agents`, `project_agents`, the migration, starters, agent and attachment functions, both Settings pages, chat sessions from an agent | A migrated custom agent starts a chat. A new agent attaches to a project with no deploy. |
+| M2 Library | `agents`, `project_agents`, the migration, starters, agent and attachment functions, both Settings pages, chat sessions from an agent | A saved definition starts a chat. A new agent attaches to a project with no deploy. |
 | M3 Runs | `runs` rebuild, the run engine, `report_result`, the run card, Send to chat, read-only controls, requests | `@reviewer` shows a findings card, and Send to chat queues the turn |
 | M4 Decisions | `AI` binding, the decision step, `run.decided`, skip lines, Diagnostics | A push that touches auth code runs the reviewer. A push that does not shows a skip line. |
 | M5 Proposals | `list_agents`, `propose_agent_change`, the proposal card, `resolveAgentProposal` | "Make me an agent that checks migrations on push" ends with an applied agent and attachment |

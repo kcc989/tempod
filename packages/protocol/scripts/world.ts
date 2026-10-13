@@ -248,13 +248,16 @@ export const codexSession: P.Session = {
   sortOrder: 1,
 };
 
-export const reviewerDefinition: P.CustomAgentDefinition = {
+export const reviewerDefinition: P.AgentDefinition = {
+  handle: "reviewer",
+  access: "read-only",
+  outputKind: "review",
   name: "Reviewer",
   description: "Reviews code without editing it",
   baseAgent: "claude",
   model: "opus",
   thoughtLevel: "high",
-  systemPrompt: "You review code. You do not edit files.",
+  prompt: "You review code. You do not edit files.",
   tools: { allow: [], deny: ["Edit", "Write"] },
   mcp: {
     playwright: false,
@@ -276,12 +279,15 @@ export const reviewerDefinition: P.CustomAgentDefinition = {
   },
 };
 
-export const CUSTOM_AGENT_ID = uid(601);
+export const LIBRARY_AGENT_ID = uid(601);
 
-export const reviewerAgent: P.CustomAgent = {
+export const reviewerAgent: P.Agent = {
   ...reviewerDefinition,
-  id: CUSTOM_AGENT_ID,
-  commitSha: "3c1f0e9d8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d",
+  id: LIBRARY_AGENT_ID,
+  sha: "a".repeat(64),
+  version: 1,
+  starter: null,
+  createdAt: 1_791_000_000_000,
   updatedAt: 1_791_000_000_000,
 };
 
@@ -290,7 +296,10 @@ export const reviewerSession: P.Session = {
   id: uid(602),
   title: "Reviewer",
   sortOrder: 2,
-  customAgent: { id: CUSTOM_AGENT_ID, name: "Reviewer", commitSha: reviewerAgent.commitSha },
+  agentId: LIBRARY_AGENT_ID,
+  agentName: "Reviewer",
+  agentVersion: reviewerAgent.version,
+  agentSha: reviewerAgent.sha,
   profileIssues: ["thoughtLevel"],
 };
 

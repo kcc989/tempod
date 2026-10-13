@@ -42,7 +42,7 @@ describe("the field list", () => {
       });
 
     expect(FIELDS.map((f) => f.path).sort()).toEqual(leaves(DEFAULT_SETTINGS).sort());
-    expect(SECTIONS).toEqual(["Agent", "Browser", "Scripts", "Environment", "Git", "Prompts", "Roles"]);
+    expect(SECTIONS).toEqual(["Agent", "Browser", "Scripts", "Environment", "Git", "Prompts"]);
   });
 
   it("has one free-text default model per agent and a Browser Run toggle (04, Settings → Project)", () => {

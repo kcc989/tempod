@@ -19,7 +19,6 @@ import {
   type Turn,
   type WorkspaceFnName,
   type AgentProfile,
-  type SessionCustomAgent,
 } from "@tempo/protocol";
 import { environments, workspaces } from "../../db/d1.ts";
 import { EMPTY_PROMPT, json, readItemContent } from "../../db/json.ts";
@@ -60,30 +59,34 @@ import { listArtifacts, openArtifact } from "./artifacts.ts";
 import type { OpInput, OpResult, OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
 
-/** Session columns for a custom agent (02, sessions). */
-export const customSessionColumns = (custom: SessionAgentProfile | null | undefined) =>
-  custom
+/** Session columns for a library agent (02, sessions). */
+export const agentSessionColumns = (savedProfile: SessionAgentProfile | null | undefined) =>
+  savedProfile
     ? {
-        customAgentId: custom.customAgent.id,
-        customAgentName: custom.customAgent.name,
-        customAgentCommit: custom.customAgent.commitSha,
-        profileJson: JSON.stringify(custom.profile),
+        agentId: savedProfile.agentId,
+        agentName: savedProfile.agentName,
+        agentSha: savedProfile.agentSha,
+        agentVersion: savedProfile.agentVersion,
+        profileJson: JSON.stringify(savedProfile.profile),
       }
     : {};
 
-/** A custom agent resolved by the Worker (01, Custom agents): what the session row stores. */
+/** A library agent resolved by the Worker (01, Agents): what the session row stores. */
 export interface SessionAgentProfile {
-  readonly customAgent: SessionCustomAgent;
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly agentVersion: number;
+  readonly agentSha: string;
   readonly profile: AgentProfile;
   readonly model: string;
 }
 
 /**
  * The method input: the server function's input minus workspaceId (02, WorkspaceDO RPC).
- * createSession also takes the custom agent the Worker resolved from `customAgentId`.
+ * createSession also takes the library agent the Worker resolved from `agentId`.
  */
 export type MethodInput<K extends WorkspaceFnName> = Omit<FnInput<K>, "workspaceId"> &
-  (K extends "createSession" ? { readonly custom?: SessionAgentProfile } : unknown);
+  (K extends "createSession" ? { readonly savedProfile?: SessionAgentProfile } : unknown);
 
 export type Methods = { [K in WorkspaceFnName]: (input: MethodInput<K>) => Promise<FnOutput<K>> };
 
@@ -279,15 +282,6 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
   };
 
   return {
-    listRoles: () => core.lifecycle.list(),
-    getRoleText: ({ name, scope }) => core.lifecycle.text(name, scope),
-    reloadRoles: async () => {
-      rt.requireReady();
-      await core.lifecycle.load(true);
-      core.lifecycle.kick();
-
-      return core.lifecycle.list();
-    },
     requestAgent: async ({ agentId, text, sessionId }) => {
       notArchived(core);
       rt.ensureAwake();
@@ -587,10 +581,10 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
           })),
       };
     },
-    createSession: async ({ agent, model, modeId, custom }): Promise<Session> => {
+    createSession: async ({ agent, model, modeId, savedProfile }): Promise<Session> => {
       notArchived(core);
       await requireCredential(core, agent);
-      const chosenModel = model || custom?.model || "";
+      const chosenModel = model ?? savedProfile?.model ?? "";
       const now = Date.now();
       const id = newId();
 
@@ -607,7 +601,7 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
           acpSessionId: null,
           status: "starting",
           modeId: modeId ?? null,
-          configJson: json.config.write(chosenModel ? { model: chosenModel } : {}),
+          configJson: json.config.write(savedProfile || chosenModel ? { model: chosenModel } : {}),
           modesJson: "[]",
           configOptionsJson: "[]",
           commandsJson: "[]",
@@ -616,7 +610,7 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
           handoffPending: 0,
           pendingNote: null,
           generalPromptSent: 0,
-          ...customSessionColumns(custom),
+          ...agentSessionColumns(savedProfile),
           sortOrder: order + 1,
           createdAt: now,
           updatedAt: now,

@@ -38,7 +38,7 @@ These are fixed. Do not reopen them. If the code or the spec conflicts with one,
 | A9 | Read-only uses the agent's own controls. Tempo's tree compare becomes a warning on the card, not a failure. |
 | A10 | Limits: `max_runs` per attachment per change, and a timeout per run. Remove rounds, continues, chain depth, runs per change and both token caps. |
 | A11 | The user can create and change agents and attachments by asking in chat. The agent proposes; the owner applies in the app, as with `propose_environment_change`. |
-| A12 | The decision state may hold the change's prompt text, cut to 4 KiB and redacted. It never holds file contents, env values or secrets. |
+| A12 | The decision state may hold the change's prompt text, cut to 4 KiB and redacted. It may include redacted typed run results, including file-derived result text. It never reads raw files or includes env values or secrets. |
 
 ## Vocabulary
 
@@ -120,7 +120,7 @@ CREATE TABLE agent_migrations (
 - Delete sets `deleted_at`. An attachment whose agent is deleted stays, does not run, and shows "This agent was deleted." with a Remove action.
 - A session that started from an agent keeps its profile, as today. A run freezes the definition text in WorkspaceDO storage, as role runs do today, and stores `agent_version` and `agent_sha`.
 
-**Starters.** `packages/agents-starter/` exports three definitions as TypeScript data: `planner` (plan, read-only), `reviewer` (review, read-only) and `check-fixer` (note, write). Write each prompt from the matching role file in `packages/roles-builtin/`. Tempo copies the starters into a library once, during the migration below, and sets `starter`. Tempo never attaches a starter to a project by itself.
+**Starters.** `packages/agents-starter/` exports three definitions as TypeScript data: `planner` (plan, read-only), `reviewer` (review, read-only) and `check-fixer` (note, write). The initial prompts were copied from the retired built-in definitions; the TypeScript data is now their source. Tempo copies the starters into a library once, during the migration below, and sets `starter`. Tempo never attaches a starter to a project by itself.
 
 ## Attachments and hooks
 
@@ -317,7 +317,7 @@ CREATE INDEX runs_by_change ON runs(change_id, created_at);
 
 A one-time, idempotent step in the Worker. It runs for a user on the first `listAgents`, `saveAgent` or `listProjectAgents` call after deploy, when the user has no `agent_migrations` row.
 
-1. For each active `custom_agents` row, read its file at `commit_sha` and write an `agents` row. Take the handle from the name: lowercase, runs of other characters become `-`, cut to 32 characters, and add `-2`, `-3` and so on for a repeat.
+1. The sole owner waived importing legacy file definitions on 2026-10-13. Do not read Artifacts or recreate those definitions. Keep the old D1 pointer rows read-only until Gate I passes; frozen chat profiles survive independently.
 2. For each `user_roles` row that parses, write an `agents` row: the role body becomes `prompt`, `agent` becomes `baseAgent` (`other` becomes `auto`), and `access` and `model` copy. Use `review` as the output kind when the role name is `reviewer` or `ci`, else `note`. A row that does not parse is skipped and logged by name only.
 3. Copy the starters (A3), skipping a handle that already exists.
 
@@ -351,9 +351,9 @@ The tab 02 rules apply. The `/api/v1` routes for native clients mirror them (tab
 | `sendRunToChat` | `{workspaceId, runId}` | `{turnId}` | `NOT_FOUND`, `RUN_NOT_COMPLETED`, `RUN_ALREADY_SENT`, `RUN_NO_CHAT` |
 | `resolveAgentProposal` | `{workspaceId, proposalId, apply}` | `{}` | `NOT_FOUND`, `AGENT_INVALID`, `ATTACHMENT_INVALID` |
 
-`createSession` keeps its custom agent option, renamed `agentId`, and reads the definition from D1. `listLifecycleEvents` and `getTrace` stay. `getTrace` returns runs with `handle`, `agentSha` and the matched hook.
+`createSession` accepts `agentId` and reads the definition from D1. `listLifecycleEvents` and `getTrace` stay. `getTrace` returns runs with `handle`, `agentSha` and the matched hook.
 
-Workspace channel: `roleRun {run}` becomes `run {run}`. `Session` gains `runId?` and loses `roleRunId?`.
+Workspace channel publishes `run {run}`. `Session` has optional flat `runId`, `agentId`, `agentName`, `agentVersion` and `agentSha` fields. Migration `0012_session_agents` renames the three old metadata columns, adds nullable `agent_version`, and preserves `profile_json` and the original commit SHA. Old chats omit `agentVersion`; newly created library chats and runs freeze it.
 
 **Error codes.** Remove the `ROLE_*` codes. Add these to tab 02.
 
@@ -380,13 +380,13 @@ Web (tab 04) and Mac (tab 07) change in the same milestone.
 
 | Where | What |
 | --- | --- |
-| Settings → Agents (personal) | One list replaces the Agents and Roles tabs. Add, edit, duplicate and delete. A form for every field, plus a read-only JSON view of the definition. |
+| Settings → Agents (personal) | One library list. Add, edit, duplicate and delete. A form for every field, plus a read-only JSON view of the definition. |
 | Project settings → Agents | The attached agents: enabled, hooks (event, question, threshold), auto-send, max runs, timeout. Add agent opens the library. |
 | Chat transcript | The run card: handle, name, hook event, decision probability, base agent, access, status and time. While running: Cancel. When done: the result by output kind, then Approve or Send to chat, Open transcript, Dismiss. A `files_changed` warning shows with Revert. |
 | Chat transcript | One quiet line per event that had skipped decisions: each handle with its probability. |
 | Tab bar | Run sessions do not show. Open transcript shows one in a side panel. |
 | Workspace activity | Runs with no origin session |
-| Composer | `@handle` in a group named `Agents`, and `/agent`. Remove `/role`. |
+| Composer | `@handle` in a group named `Agents`, and `/agent`.  |
 | Chat transcript | The agent proposal card, with Apply and Reject |
 | Diagnostics → Events | `run.decided` rows show the question from the attachment, the probability and the threshold |
 

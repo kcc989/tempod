@@ -10,18 +10,6 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     input: MethodInput<K>,
   ): Promise<Result<FnOutput<K>>>;
 
-  listRoles(input: MethodInput<"listRoles">): Promise<Result<FnOutput<"listRoles">>> {
-    return this.rpc("listRoles", input);
-  }
-
-  getRoleText(input: MethodInput<"getRoleText">): Promise<Result<FnOutput<"getRoleText">>> {
-    return this.rpc("getRoleText", input);
-  }
-
-  reloadRoles(input: MethodInput<"reloadRoles">): Promise<Result<FnOutput<"reloadRoles">>> {
-    return this.rpc("reloadRoles", input);
-  }
-
   requestAgent(input: MethodInput<"requestAgent">): Promise<Result<FnOutput<"requestAgent">>> {
     return this.rpc("requestAgent", input);
   }

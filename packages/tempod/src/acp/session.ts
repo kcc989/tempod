@@ -349,7 +349,7 @@ export class AgentSession {
     }
   }
   private readTextFile(params: ReadTextFileRequest) {
-    const path = insideRoots([this.deps.workspace, this.deps.attachments, "/home/tempo/roles"], params.path);
+    const path = insideRoots([this.deps.workspace, this.deps.attachments], params.path);
 
     if (!path) throw RequestError.invalidParams(undefined, "path is outside the allowed folders");
     let text: string;
@@ -371,7 +371,7 @@ export class AgentSession {
     return { content: lines.slice(start, end).join("\n") } satisfies { content: string };
   }
   private writeTextFile(params: WriteTextFileRequest): Record<string, never> {
-    const path = insideRoots([this.deps.workspace, this.deps.attachments, "/home/tempo/roles"], params.path);
+    const path = insideRoots([this.deps.workspace, this.deps.attachments], params.path);
 
     if (!path) throw RequestError.invalidParams(undefined, "path is outside the allowed folders");
     mkdirSync(dirname(path), { recursive: true });
@@ -409,7 +409,7 @@ export class AgentSession {
     this.capabilities["steering"] = isObj(steering) && steering["supported"] === true;
     const profile = sessionProfile(this.agent, p.profile, this.env);
     const issues = new Set<ProfileIssue>(profile.issues);
-    // A custom agent's server replaces a user server of the same name.
+    // An agent's server replaces a user server of the same name.
     const names = new Set(profile.specs.map((s) => s.name));
     const specs = [...(p.mcpServers ?? []).filter((s) => !names.has(s.name)), ...profile.specs];
 
@@ -514,7 +514,7 @@ export class AgentSession {
       }
     }
 
-    // The reasoning level comes after the model: the levels on offer can depend on it (01, Custom agents).
+    // The reasoning level comes after the model: the levels on offer can depend on it (01, Agent profiles).
     const level = p.profile?.thoughtLevel;
 
     if (level) {

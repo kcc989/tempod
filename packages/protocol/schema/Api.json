@@ -122,92 +122,6 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "listRoles": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "GET"
-        },
-        "input": {
-          "$ref": "ListRolesIn.json"
-        },
-        "output": {
-          "type": "array",
-          "items": {
-            "$ref": "RoleInfo.json"
-          }
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
-    "getRoleText": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "GET"
-        },
-        "input": {
-          "$ref": "GetRoleTextIn.json"
-        },
-        "output": {
-          "$ref": "GetRoleTextOut.json"
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
-    "putUserRole": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "POST"
-        },
-        "input": {
-          "$ref": "PutUserRoleIn.json"
-        },
-        "output": {
-          "$ref": "RoleInfo.json"
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
-    "deleteUserRole": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "POST"
-        },
-        "input": {
-          "$ref": "DeleteUserRoleIn.json"
-        },
-        "output": {
-          "$ref": "Empty.json"
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
-    "reloadRoles": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "POST"
-        },
-        "input": {
-          "$ref": "ReloadRolesIn.json"
-        },
-        "output": {
-          "type": "array",
-          "items": {
-            "$ref": "RoleInfo.json"
-          }
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
     "requestAgent": {
       "type": "object",
       "properties": {
@@ -1520,73 +1434,6 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "listCustomAgents": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "GET"
-        },
-        "input": {
-          "$ref": "Empty.json"
-        },
-        "output": {
-          "type": "array",
-          "items": {
-            "$ref": "CustomAgentSummary.json"
-          }
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
-    "getCustomAgent": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "GET"
-        },
-        "input": {
-          "$ref": "GetCustomAgentIn.json"
-        },
-        "output": {
-          "$ref": "CustomAgent.json"
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
-    "saveCustomAgent": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "POST"
-        },
-        "input": {
-          "$ref": "SaveCustomAgentIn.json"
-        },
-        "output": {
-          "$ref": "CustomAgent.json"
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
-    "deleteCustomAgent": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "const": "POST"
-        },
-        "input": {
-          "$ref": "DeleteCustomAgentIn.json"
-        },
-        "output": {
-          "$ref": "Empty.json"
-        }
-      },
-      "required": ["method", "input", "output"],
-      "additionalProperties": false
-    },
     "getCredentialStatus": {
       "type": "object",
       "properties": {
@@ -1823,11 +1670,6 @@
     "listProjectAgents",
     "putProjectAgent",
     "deleteProjectAgent",
-    "listRoles",
-    "getRoleText",
-    "putUserRole",
-    "deleteUserRole",
-    "reloadRoles",
     "requestAgent",
     "cancelRun",
     "listRuns",
@@ -1907,10 +1749,6 @@
     "readFileAt",
     "listArtifacts",
     "openArtifact",
-    "listCustomAgents",
-    "getCustomAgent",
-    "saveCustomAgent",
-    "deleteCustomAgent",
     "getCredentialStatus",
     "setClaudeToken",
     "setCodexAuth",

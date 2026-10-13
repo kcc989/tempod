@@ -27,9 +27,9 @@ pub struct Dialogs {
     library_default_agent: p::AgentId,
     models: Vec<p::AgentModelOptions>,
     model: Option<String>,
-    /// A custom agent picked in the model menu; its base agent is `agent` (04, New workspace).
-    custom_agent: Option<String>,
-    custom_agents: Vec<p::AgentSummary>,
+    /// A saved agent picked in the model menu; its base agent is `agent` (04, New workspace).
+    library_agent: Option<String>,
+    library_agents: Vec<p::AgentSummary>,
     models_loading: bool,
     workspace_options: bool,
     branches: Vec<p::ListBranchesItem>,
@@ -85,8 +85,8 @@ impl Dialogs {
             library_default_agent: p::AgentId::Claude,
             models: vec![],
             model: None,
-            custom_agent: None,
-            custom_agents: vec![],
+            library_agent: None,
+            library_agents: vec![],
             models_loading: false,
             workspace_options: false,
             branches: vec![],
@@ -209,7 +209,7 @@ impl Dialogs {
     fn create_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.pending
             || self.models_loading
-            || (self.model.is_none() && self.custom_agent.is_none())
+            || (self.model.is_none() && self.library_agent.is_none())
         {
             return;
         }
@@ -219,8 +219,8 @@ impl Dialogs {
             return;
         };
         let created = self.created_chat.clone();
-        let custom_agent_id = self.custom_agent.clone();
-        let model = if custom_agent_id.is_some() {
+        let library_agent_id = self.library_agent.clone();
+        let model = if library_agent_id.is_some() {
             None
         } else {
             self.model.clone()
@@ -236,8 +236,7 @@ impl Dialogs {
                             .call::<api::CreateSession>(p::CreateSessionIn {
                                 workspace_id: workspace_id.clone(),
                                 agent,
-                                agent_id: custom_agent_id,
-                                custom_agent_id: None,
+                                agent_id: library_agent_id,
                                 model,
                                 mode_id: None,
                             })
@@ -290,7 +289,7 @@ impl Dialogs {
             let result = agents.await;
             let _ = this.update(cx, |this, cx| {
                 if let Ok(agents) = result {
-                    this.custom_agents = agents;
+                    this.library_agents = agents;
                 }
                 cx.notify();
             });
@@ -469,7 +468,7 @@ impl Dialogs {
         let text = self.prompt.read(cx).value().trim().to_string();
         if self.pending
             || (!text.is_empty()
-                && (self.models_loading || (self.model.is_none() && self.custom_agent.is_none())))
+                && (self.models_loading || (self.model.is_none() && self.library_agent.is_none())))
         {
             return;
         }
@@ -510,13 +509,12 @@ impl Dialogs {
             project_id,
             source,
             agent: self.agent,
-            model: if self.custom_agent.is_some() {
+            model: if self.library_agent.is_some() {
                 None
             } else {
                 self.model.clone()
             },
-            agent_id: self.custom_agent.clone(),
-            custom_agent_id: None,
+            agent_id: self.library_agent.clone(),
             prompt,
         });
         self.pending = true;
@@ -702,7 +700,7 @@ impl Render for Dialogs {
             p::AgentBase::Pi => p::AgentId::Pi,
         };
         let custom: Vec<(p::AgentId, String, String)> = self
-            .custom_agents
+            .library_agents
             .iter()
             .filter(|a| {
                 !self.models_loading && self.models.iter().any(|m| m.agent == base(a.base_agent))
@@ -719,7 +717,7 @@ impl Render for Dialogs {
                 )
             })
             .collect();
-        let model_label = match &self.custom_agent {
+        let model_label = match &self.library_agent {
             Some(id) => custom
                 .iter()
                 .find(|(_, c, _)| c == id)
@@ -751,7 +749,7 @@ impl Render for Dialogs {
                         let _ = weak.update(cx, |this, cx| {
                             this.agent = Some(agent);
                             this.model = Some(value.clone());
-                            this.custom_agent = None;
+                            this.library_agent = None;
                             cx.notify();
                         });
                     }))
@@ -768,7 +766,7 @@ impl Render for Dialogs {
                     menu.item(PopupMenuItem::new(label.clone()).on_click(move |_, _, cx| {
                         let _ = weak.update(cx, |this, cx| {
                             this.agent = Some(agent);
-                            this.custom_agent = Some(id.clone());
+                            this.library_agent = Some(id.clone());
                             cx.notify();
                         });
                     }))
@@ -812,7 +810,7 @@ impl Render for Dialogs {
                     || self.project.is_none()
                     || (!self.prompt.read(cx).value().trim().is_empty()
                         && (self.models_loading
-                            || (self.model.is_none() && self.custom_agent.is_none()))),
+                            || (self.model.is_none() && self.library_agent.is_none()))),
             )
             .on_click(cx.listener(|this, _, window, cx| this.create(window, cx)));
         let body = match kind {
@@ -917,7 +915,7 @@ impl Render for Dialogs {
                             .disabled(
                                 self.pending
                                     || self.models_loading
-                                    || (self.model.is_none() && self.custom_agent.is_none()),
+                                    || (self.model.is_none() && self.library_agent.is_none()),
                             )
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.create_chat(window, cx)),

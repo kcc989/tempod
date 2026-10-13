@@ -1,5 +1,5 @@
 import { Run } from "./runs.ts";
-import { RoleInfo, RoleName, RoleScope, LifecyclePage, LifecycleTrace } from "./lifecycle.ts";
+import { LifecyclePage, LifecycleTrace } from "./lifecycle.ts";
 import { Schema } from "effect";
 import { AgentId, ApiKeyProvider, DiffScope, EgressStatusFilter, MergeMethod, ReviewSide } from "./enums.ts";
 import { EgressPolicy } from "./enums.ts";
@@ -12,7 +12,6 @@ import {
 } from "./environments.ts";
 import { McpServer, McpServerInput } from "./mcp.ts";
 import { Artifact } from "./artifacts.ts";
-import { CustomAgent, CustomAgentDefinition, CustomAgentSummary } from "./agents.ts";
 import { Agent, AgentDefinition, AgentSummary, AgentAttachment, AttachmentOptions } from "./agent-library.ts";
 import { EnvName } from "./settings.ts";
 import {
@@ -83,15 +82,6 @@ export const API = {
     AgentAttachment,
   ),
   deleteProjectAgent: fn("POST", Schema.Struct({ projectId: S, agentId: S }), Empty),
-  listRoles: fn("GET", Schema.Struct({ workspaceId: opt(S) }), Schema.Array(RoleInfo)),
-  getRoleText: fn(
-    "GET",
-    Schema.Struct({ name: RoleName, scope: RoleScope, workspaceId: opt(S) }),
-    Schema.Struct({ text: S }),
-  ),
-  putUserRole: fn("POST", Schema.Struct({ name: S, text: S }), RoleInfo),
-  deleteUserRole: fn("POST", Schema.Struct({ name: RoleName }), Empty),
-  reloadRoles: fn("POST", Schema.Struct(W), Schema.Array(RoleInfo)),
   requestAgent: fn(
     "POST",
     Schema.Struct({ ...W, agentId: S, text: opt(S), sessionId: opt(S) }),
@@ -183,7 +173,6 @@ export const API = {
       source: NewSource,
       agent: opt(AgentId),
       model: opt(S),
-      customAgentId: opt(S),
       agentId: opt(S),
       prompt: opt(Schema.Struct({ text: NonEmpty })),
     }),
@@ -225,7 +214,6 @@ export const API = {
     Schema.Struct({
       ...W,
       agent: AgentId,
-      customAgentId: opt(S),
       agentId: opt(S),
       model: opt(S),
       modeId: opt(S),
@@ -334,17 +322,7 @@ export const API = {
     Schema.Struct({ url: S }),
   ),
 
-  // Custom agents (01, Custom agents)
-  listCustomAgents: fn("GET", Empty, Schema.Array(CustomAgentSummary)),
-  getCustomAgent: fn("GET", Schema.Struct({ customAgentId: S }), CustomAgent),
-  saveCustomAgent: fn(
-    "POST",
-    Schema.Struct({ customAgentId: opt(S), definition: CustomAgentDefinition }),
-    CustomAgent,
-  ),
-  deleteCustomAgent: fn("POST", Schema.Struct({ customAgentId: S }), Empty),
-
-  // Credentials
+  // Agent profiles (01, Agent profiles)
   getCredentialStatus: fn("GET", Empty, CredentialStatus),
   setClaudeToken: fn(
     "POST",

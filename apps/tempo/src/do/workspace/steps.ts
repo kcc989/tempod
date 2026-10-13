@@ -275,7 +275,7 @@ export const operationSteps = (handlers: ConnectHandlers) => {
         errors: res.errors,
         sources: res.sources ?? {},
       });
-      await core.lifecycle.load(true);
+      await core.lifecycle.load();
       core.lifecycle.kick();
       await sendEnv(core);
       core.broadcastDetailSoon();

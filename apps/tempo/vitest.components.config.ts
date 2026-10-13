@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
+    deps: { optimizer: { web: { enabled: true, include: ["effect", "@tempo/protocol"] } } },
     name: "components",
     expect: { requireAssertions: true },
     pool: "vmThreads",

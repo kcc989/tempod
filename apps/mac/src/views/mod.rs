@@ -66,4 +66,4 @@ pub fn format_bytes(n: f64) -> String {
     }
 }
 
-pub mod roles;
+pub mod events;

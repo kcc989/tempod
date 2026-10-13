@@ -58,7 +58,7 @@ pub fn diagnostics_input(
 }
 
 pub struct DiagnosticsView {
-    events: Entity<super::roles::EventsView>,
+    events: Entity<super::events::EventsView>,
     client: tempo_client::Client,
     id: String,
     data: Option<p::Diagnostics>,
@@ -79,7 +79,7 @@ impl DiagnosticsView {
         cx: &mut Context<Self>,
     ) -> Self {
         let events =
-            cx.new(|cx| super::roles::EventsView::new(client.clone(), id.clone(), window, cx));
+            cx.new(|cx| super::events::EventsView::new(client.clone(), id.clone(), window, cx));
         let host = cx.new(|cx| InputState::new(window, cx).placeholder("Filter by host"));
         let status =
             cx.new(|cx| SelectState::new(status_choices(), Some(IndexPath::default()), window, cx));

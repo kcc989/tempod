@@ -573,17 +573,19 @@ export class WorkspaceCore {
 
     const session = r.runId ? { ...wire, runId: r.runId } : wire;
 
-    return r.customAgentId
-      ? {
-          ...session,
-          customAgent: {
-            id: r.customAgentId,
-            name: r.customAgentName ?? "",
-            commitSha: r.customAgentCommit ?? "",
-          },
-          profileIssues: [...json.profileIssues.read(r.profileIssuesJson, [])],
-        }
-      : session;
+    if (!r.agentId) return session;
+
+    const saved: Session = {
+      ...session,
+      agentId: r.agentId,
+      agentName: r.agentName ?? "",
+      agentSha: r.agentSha ?? "",
+      profileIssues: [...json.profileIssues.read(r.profileIssuesJson, [])],
+    };
+
+    if (r.agentVersion !== null) return { ...saved, agentVersion: r.agentVersion };
+
+    return saved;
   }
   updateSession(id: string, patch: Partial<typeof sessions.$inferInsert>): Session {
     this.db
