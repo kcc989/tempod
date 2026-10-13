@@ -14,7 +14,8 @@ sources, transitive dependencies, root TypeScript configuration, Bun configurati
 and dependency patches. Image tests have a separate `TEMPO_IMAGE_TEST` hash. Live
 agent/deployment tasks are never cached. Builds used by CI still execute, and
 browser fixtures build before previewing to avoid development-server transform
-costs. A cache miss must also fit the budget.
+costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
+to avoid loading the same dependency module graph into every workerd isolate. A cache miss must also fit the budget.
 
 ## Test audit
 

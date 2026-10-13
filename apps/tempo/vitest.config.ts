@@ -23,6 +23,22 @@ export default defineConfig({
   resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
     expect: { requireAssertions: true },
+    deps: {
+      optimizer: {
+        ssr: {
+          enabled: true,
+          include: [
+            "effect",
+            "effect/Schema",
+            "drizzle-orm",
+            "drizzle-orm/d1",
+            "drizzle-orm/durable-sqlite",
+            "drizzle-orm/durable-sqlite/migrator",
+            "drizzle-orm/sqlite-core",
+          ],
+        },
+      },
+    },
     maxWorkers: 2,
     silent: "passed-only",
     include: ["test/worker/**/*.test.ts"],
