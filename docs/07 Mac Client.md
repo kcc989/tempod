@@ -182,7 +182,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 - Themes: GPUI Kit `Default Light` and `Default Dark`. Follow the macOS appearance unless Settings → Appearance says otherwise.
 - Read every color through `cx.theme()`. Map the tokens of 04 (`--primary`, `--destructive`, `--warning`, `--muted-foreground`) to `ThemeColor` fields once, in `src/views/tokens.rs`. No color values in views.
 - Every custom control sets an element id, an `a11y_role()` and an `.aria_label(...)`, so AccessKit can expose it.
-- Settings uses left-aligned navigation, a bounded form column, grouped login cards and content-sized action buttons, matching 04. Chat uses a bounded reading column and a compact composer toolbar.
+- Settings uses left-aligned navigation with a `Search settings` filter and a `Search workspaces` button with a `⌘K` hint for the command palette. Section icons match 04. It uses a bounded form column, grouped login cards and content-sized action buttons. Chat uses a bounded reading column and a compact composer toolbar.
 - Minimum window size: 900 × 600 pt. Below 1,100 pt wide, the right side collapses behind its toggle.
 
 ## Transcript, composer and permissions

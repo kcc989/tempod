@@ -10,6 +10,7 @@ use super::tokens::{Token, color};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::Root;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{Selectable as _, h_flex, v_flex};
 use gpui_kit::{
     App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
@@ -69,6 +70,7 @@ pub struct SettingsView {
     pub(crate) focus: FocusHandle,
     environments: Entity<EnvironmentsPage>,
     agents: Entity<AgentsSettings>,
+    search: Entity<InputState>,
 }
 
 impl SettingsView {
@@ -79,6 +81,8 @@ impl SettingsView {
             form
         });
         cx.observe(&form, |_, _, cx| cx.notify()).detach();
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search settings"));
+        cx.observe(&search, |_, _, cx| cx.notify()).detach();
         if let Some(app) = crate::app::AppState::try_global(cx) {
             let hub = app.read(cx).hub.clone();
             cx.observe(&hub, |_, _, cx| cx.notify()).detach();
@@ -88,6 +92,7 @@ impl SettingsView {
             focus: cx.focus_handle(),
             environments: cx.new(|cx| EnvironmentsPage::new(window, cx)),
             agents: cx.new(|cx| AgentsSettings::new(window, cx)),
+            search,
         }
     }
 }
@@ -95,6 +100,8 @@ impl SettingsView {
 impl Render for SettingsView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = color(Token::MutedForeground, cx);
+        let query = self.search.read(cx).value().trim().to_lowercase();
+        let matches = |label: &str| label.to_lowercase().contains(&query);
         let projects = crate::app::AppState::try_global(cx)
             .map(|a| a.read(cx).hub.read(cx).projects.clone())
             .unwrap_or_default();
@@ -140,6 +147,23 @@ impl Render for SettingsView {
                     .on_click(|_, _, cx| close(cx)),
             )
             .child(div().mt_4().text_lg().child("Settings"))
+            .child(Input::new(&self.search))
+            .child(
+                Button::new("settings-command-palette")
+                    .ghost()
+                    .icon(IconName::Search)
+                    .accessibility_label("Search workspaces and actions (⌘K)")
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .justify_between()
+                            .child("Search workspaces")
+                            .child(div().text_color(muted).child("⌘K")),
+                    )
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(Box::new(crate::actions::CommandPalette), cx)
+                    }),
+            )
             .child(div().mt_4().text_color(muted).child("Personal"))
             .children(
                 [
@@ -151,12 +175,17 @@ impl Render for SettingsView {
                     2,
                     4,
                 ]
+                .into_iter()
+                .filter(|ix| matches(TABS[*ix]))
                 .map(|ix| {
                     Button::new(SharedString::from(format!("settings-nav-{ix}")))
                         .ghost()
                         .icon(match ix {
                             TAB_GENERAL => IconName::Bell,
                             TAB_LOGINS => IconName::KeyRound,
+                            TAB_AGENTS | 8 => IconName::Bot,
+                            TAB_ENVIRONMENTS => IconName::Network,
+                            TAB_MCP => IconName::Server,
                             2 => IconName::Palette,
                             _ => IconName::Keyboard,
                         })
@@ -169,61 +198,82 @@ impl Render for SettingsView {
                 }),
             )
             .child(div().mt_4().text_color(muted).child("Projects"))
-            .children(projects.iter().map(|project| {
-                let project = project.clone();
-                let name = format!("{}/{}", project.owner, project.name);
-                let selected = tab == TAB_PROJECT
-                    && selected_project
-                        .as_ref()
-                        .is_some_and(|p| p.id == project.id);
-                let target = project.clone();
-                v_flex()
-                    .gap_1()
-                    .child(
-                        Button::new(SharedString::from(format!(
-                            "settings-project-{}",
-                            project.id
-                        )))
-                        .ghost()
-                        .icon(IconName::FolderGit2)
-                        .accessibility_label(name.clone())
-                        .child(div().w_full().text_left().truncate().child(name))
-                        .selected(selected)
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                this.form.update(cx, |form, cx| {
-                                    form.show_project(target.clone(), 0, window, cx)
-                                });
-                            },
-                        )),
-                    )
-                    .children(selected.then(|| {
+            .children(
+                projects
+                    .iter()
+                    .filter(|project| {
+                        matches(&format!("{}/{}", project.owner, project.name))
+                            || PROJECT_PAGES.iter().any(|(label, _)| matches(label))
+                    })
+                    .map(|project| {
+                        let project = project.clone();
+                        let name = format!("{}/{}", project.owner, project.name);
+                        let selected = tab == TAB_PROJECT
+                            && selected_project
+                                .as_ref()
+                                .is_some_and(|p| p.id == project.id);
+                        let target = project.clone();
                         v_flex()
-                            .ml_4()
-                            .pl_2()
                             .gap_1()
-                            .border_l_1()
-                            .border_color(color(Token::Border, cx))
-                            .children(PROJECT_PAGES.iter().enumerate().map(|(ix, (label, _))| {
-                                let target = project.clone();
+                            .child(
                                 Button::new(SharedString::from(format!(
-                                    "project-settings-nav-{}-{ix}",
+                                    "settings-project-{}",
                                     project.id
                                 )))
                                 .ghost()
-                                .accessibility_label(*label)
-                                .child(div().w_full().text_left().child(*label))
-                                .selected(section == ix)
+                                .icon(IconName::FolderGit2)
+                                .accessibility_label(name.clone())
+                                .child(div().w_full().text_left().truncate().child(name.clone()))
+                                .selected(selected)
                                 .on_click(cx.listener(
                                     move |this, _, window, cx| {
                                         this.form.update(cx, |form, cx| {
-                                            form.show_project(target.clone(), ix, window, cx)
+                                            form.show_project(target.clone(), 0, window, cx)
                                         });
                                     },
-                                ))
+                                )),
+                            )
+                            .children(selected.then(|| {
+                                v_flex()
+                                    .ml_4()
+                                    .pl_2()
+                                    .gap_1()
+                                    .border_l_1()
+                                    .border_color(color(Token::Border, cx))
+                                    .children(
+                                        PROJECT_PAGES
+                                            .iter()
+                                            .enumerate()
+                                            .filter(|(_, (label, _))| {
+                                                matches(label) || matches(&name)
+                                            })
+                                            .map(|(ix, (label, _))| {
+                                                let target = project.clone();
+                                                Button::new(SharedString::from(format!(
+                                                    "project-settings-nav-{}-{ix}",
+                                                    project.id
+                                                )))
+                                                .ghost()
+                                                .accessibility_label(*label)
+                                                .child(div().w_full().text_left().child(*label))
+                                                .selected(section == ix)
+                                                .on_click(cx.listener(
+                                                    move |this, _, window, cx| {
+                                                        this.form.update(cx, |form, cx| {
+                                                            form.show_project(
+                                                                target.clone(),
+                                                                ix,
+                                                                window,
+                                                                cx,
+                                                            )
+                                                        });
+                                                    },
+                                                ))
+                                            }),
+                                    )
                             }))
-                    }))
-            }));
+                    }),
+            );
         let title = if tab == TAB_PROJECT {
             PROJECT_PAGES[section].0
         } else {
