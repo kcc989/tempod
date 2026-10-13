@@ -172,15 +172,17 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
           <PlusIcon />
         </Button>
       </SimpleTooltip>
-      <NewChatComposer
-        workspaceId={workspaceId}
-        open={menuOpen}
-        onOpenChange={setMenuOpen}
-        onCreated={(session) => {
-          activateWhenShown.current = session.id;
-          openTab(workspaceId, { kind: "chat", sessionId: session.id });
-        }}
-      />
+      {menuOpen && (
+        <NewChatComposer
+          workspaceId={workspaceId}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          onCreated={(session) => {
+            activateWhenShown.current = session.id;
+            openTab(workspaceId, { kind: "chat", sessionId: session.id });
+          }}
+        />
+      )}
     </>
   );
   const closedMenu =

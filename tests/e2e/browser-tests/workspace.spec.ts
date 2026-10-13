@@ -169,3 +169,46 @@ test("blocked browser storage preserves composer typing", async ({ page }) => {
   await page.getByRole("tab", { name: "Working Chat", exact: true }).click();
   await expect(message).toHaveValue("Typing with blocked storage");
 });
+
+test("new chat discovers models only when opened and sends from its composer", async ({ page }) => {
+  const app = await browserFixture(page);
+  await page.goto("/w/w1");
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+  expect(app.requests.filter((r) => r.name === "listModels")).toHaveLength(0);
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New chat", exact: true });
+  const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
+  await expect(prompt).toBeFocused();
+  await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
+  await page.getByRole("option", { name: "Fixture Codex · Codex", exact: true }).click();
+  await prompt.fill("Fix the new chat flow");
+  await prompt.press("Enter");
+  await expect(dialog).toBeHidden();
+  expect(app.requests.find((r) => r.name === "createSession")?.input).toMatchObject({
+    workspaceId: "w1",
+    agent: "codex",
+    model: "fixture-codex",
+  });
+  expect(app.requests.find((r) => r.name === "sendPrompt")?.input).toMatchObject({
+    text: "Fix the new chat flow",
+  });
+  await expect(page.getByRole("tab", { name: "New chat", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+});
+
+test("blank Enter in the new chat composer opens a chat without a message", async ({ page }) => {
+  const app = await browserFixture(page);
+  await page.goto("/w/w1");
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New chat", exact: true });
+  const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
+  await expect(dialog.getByRole("combobox", { name: "Model", exact: true })).toContainText("Fixture Sonnet");
+  await prompt.press("Shift+Enter");
+  expect(app.requests.filter((r) => r.name === "createSession")).toHaveLength(0);
+  await prompt.press("Enter");
+  await expect(dialog).toBeHidden();
+  expect(app.requests.filter((r) => r.name === "createSession")).toHaveLength(1);
+  expect(app.requests.filter((r) => r.name === "sendPrompt")).toHaveLength(0);
+});
