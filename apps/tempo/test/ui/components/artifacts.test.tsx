@@ -76,8 +76,11 @@ describe("artifact card", () => {
     expect(screen.getByText("v2")).toBeDefined();
     expect(screen.getByText("login.png · 2.0 KiB")).toBeDefined();
     expect(screen.getByText("After the fix")).toBeDefined();
-    expect(screen.getByRole("img").getAttribute("src")).toBe(`/api/workspaces/w1/artifacts/${A}/2`);
-    const card = screen.getByRole("button", { name: "Artifact: Login screen" });
+    expect(screen.getByAltText("Login screen").getAttribute("src")).toBe(
+      `/api/workspaces/w1/artifacts/${A}/2`,
+    );
+    const card = screen.getByLabelText("Artifact: Login screen", { selector: '[role="button"]' });
+    expect(card.getAttribute("role")).toBe("button");
     fireEvent.click(card);
     fireEvent.keyDown(card, { key: "Enter" });
     expect(openArtifactTab).toHaveBeenCalledTimes(2);

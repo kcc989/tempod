@@ -41,6 +41,7 @@ import { github } from "../../github/provider.ts";
 import { errorText, log } from "../../log.ts";
 import { containerRunning, requireTempod } from "./container.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
+import { saveConversation } from "./conversations.ts";
 import { sendEnv } from "./events.ts";
 import { defaultPrBody, getGithubToken, refreshPullRequest, requirePushed } from "./git.ts";
 import {
@@ -359,6 +360,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     deleteWorkspace: async () => {
       const row = core.ws();
       if (row.state !== "archived") throw new TempoError("WORKSPACE_NOT_ARCHIVED");
+      await saveConversation(core, true);
       for (const prefix of ["checkpoints", "homes", "attachments", "logs", "artifacts"]) {
         let cursor: string | undefined;
         do {

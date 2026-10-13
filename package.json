@@ -11,11 +11,11 @@
   "scripts": {
     "dev": "turbo run dev --filter=@tempo/app",
     "build": "turbo run build",
-    "typecheck": "turbo run typecheck && tsc -p tsconfig.json",
+    "typecheck": "turbo run typecheck typecheck:root --concurrency=2",
     "lint": "oxlint --deny-warnings .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "test": "turbo run test && bun test scripts/*.test.ts",
+    "test": "turbo run test --filter=!@tempo/e2e --filter=!@tempo/conformance && bun test scripts/*.test.ts",
     "test:conformance": "bun run --cwd tests/conformance test",
     "test:e2e": "bun run --cwd tests/e2e test",
     "check:versions": "bun container/check-versions.ts",
@@ -27,7 +27,9 @@
     "mac:test": "cargo test --workspace",
     "mac:release": "bash scripts/mac/release.sh",
     "test:tempod:container": "bun scripts/test-tempod-container.ts",
-    "test:web": "bun run --cwd tests/e2e test:web"
+    "test:web": "bun run --cwd tests/e2e test:web",
+    "ci": "bun scripts/ci.ts",
+    "typecheck:root": "tsc --checkers 2 -p tsconfig.json"
   },
   "devDependencies": {
     "@effect/platform-bun": "4.0.3",
@@ -39,7 +41,7 @@
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "turbo": "2.11.7",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "packageManager": "bun@1.4.2",
   "patchedDependencies": {

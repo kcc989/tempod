@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "bun build --compile --target=bun-linux-x64 --env=TEMPO_BUILD_* --outfile ../../dist/tempod src/main.ts",
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "bun test"
+    "typecheck": "tsc --checkers 2 -p tsconfig.json",
+    "test": "bun test --parallel=2 --no-orphans"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.8.0",

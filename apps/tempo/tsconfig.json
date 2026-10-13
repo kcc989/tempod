@@ -16,7 +16,9 @@
     "vitest.config.ts",
     "worker-runtime.d.ts",
     "vitest.components.config.ts",
-    "vite.web-test.config.ts"
+    "vite.web-test.config.ts",
+    "vitest.worker.config.ts",
+    "vitest.ui.config.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

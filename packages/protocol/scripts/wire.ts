@@ -74,6 +74,8 @@ export const SHARED = {
   SessionCustomAgent: P.SessionCustomAgent,
 
   Project: P.Project,
+  ConversationSummary: P.ConversationSummary,
+  ConversationArtifact: P.ConversationArtifact,
   WorkspaceSummary: P.WorkspaceSummary,
   OpProgress: P.OpProgress,
   ChangedFile: P.ChangedFile,
