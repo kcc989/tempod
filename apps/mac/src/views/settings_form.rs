@@ -25,7 +25,6 @@ use gpui_kit::{
     Window, div, px,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::Duration;
 use tempo_protocol::{self as p, api};
 
 pub const TAB_LOGINS: usize = 0;
@@ -383,7 +382,7 @@ pub struct SettingsForm {
     pending: bool,
     credential_changed: Option<p::CredentialProvider>,
     permission: Option<Permission>,
-    codex_login: Option<p::StartCodexLoginOut>,
+    codex_login: Option<tempo_client::CodexLogin>,
     codex_busy: bool,
     codex_login_task: Option<Task<()>>,
     codex_upload: bool,
@@ -1153,7 +1152,7 @@ impl SettingsForm {
         cx.notify();
     }
 
-    /// Codex device-code login (04, Logins): start, then poll until connected or expired.
+    /// OpenAI device sign-in runs on tokio; CredentialDO stores the completed login (07).
     fn connect_codex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(client) = self.client.clone() else {
             return;
@@ -1165,13 +1164,21 @@ impl SettingsForm {
         self.login_error = None;
         cx.notify();
         self.codex_login_task = Some(cx.spawn_in(window, async move |this, cx| {
-            let result = client.call::<api::StartCodexLogin>(p::Empty {}).await;
-            let login = match result {
+            let runtime = client.server().runtime().clone();
+            let result = runtime
+                .run(async {
+                    let auth = tempo_client::CodexAuth::new()?;
+                    let login = auth.start().await?;
+                    Ok::<_, tempo_client::ApiError>((auth, login))
+                })
+                .await
+                .unwrap_or(Err(tempo_client::ApiError::Cancelled));
+            let (auth, login) = match result {
                 Ok(login) => login,
                 Err(error) => {
                     let _ = this.update(cx, |this, cx| {
                         this.codex_busy = false;
-                        this.login_error = Some(super::toast::error_text(&error, None));
+                        this.login_error = Some(codex_error_text(&error));
                         cx.notify();
                     });
                     return;
@@ -1187,18 +1194,17 @@ impl SettingsForm {
                 return;
             }
             loop {
-                cx.background_executor()
-                    .timer(Duration::from_secs_f64((login.interval_ms / 1000.).max(1.)))
-                    .await;
-                let Ok(login_id) = login.login_id.clone().try_into() else {
-                    return;
-                };
-                let result = client
-                    .call::<api::PollCodexLogin>(p::PollCodexLoginIn { login_id })
-                    .await;
+                cx.background_executor().timer(login.poll_delay()).await;
+                let auth = auth.clone();
+                let attempt = login.clone();
+                let target = client.clone();
+                let result = runtime
+                    .run(async move { auth.poll(&attempt, &target).await })
+                    .await
+                    .unwrap_or(Err(tempo_client::ApiError::Cancelled));
                 match result {
-                    Ok(result) if result.status == p::PollCodexLoginOutStatus::Pending => continue,
-                    Ok(result) if result.status == p::PollCodexLoginOutStatus::Connected => {
+                    Ok(tempo_client::CodexLoginStatus::Pending) => continue,
+                    Ok(tempo_client::CodexLoginStatus::Connected) => {
                         let _ =
                             this.update_in(cx, |this, window, cx| this.codex_connected(window, cx));
                     }
@@ -1207,7 +1213,7 @@ impl SettingsForm {
                             this.codex_login = None;
                             this.codex_busy = false;
                             this.login_error = Some(match result {
-                                Err(error) => super::toast::error_text(&error, None),
+                                Err(error) => codex_error_text(&error),
                                 _ => "Codex login expired. Connect again to get a new code.".into(),
                             });
                             cx.notify();
@@ -1220,29 +1226,11 @@ impl SettingsForm {
     }
 
     fn cancel_codex(&mut self, cx: &mut Context<Self>) {
-        let Some(client) = self.client.clone() else {
-            return;
-        };
-        let Some(login) = &self.codex_login else {
-            return;
-        };
-        let Ok(login_id) = login.login_id.clone().try_into() else {
-            return;
-        };
         self.codex_login_task.take();
-        self.codex_login_task = Some(cx.spawn(async move |this, cx| {
-            let result = client
-                .call::<api::CancelCodexLogin>(p::CancelCodexLoginIn { login_id })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                this.codex_login = None;
-                this.codex_busy = false;
-                this.login_error = result
-                    .err()
-                    .map(|error| super::toast::error_text(&error, None));
-                cx.notify();
-            });
-        }));
+        self.codex_login = None;
+        self.codex_busy = false;
+        self.login_error = None;
+        cx.notify();
     }
 
     fn upload_codex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2784,8 +2772,37 @@ impl Render for SettingsForm {
     }
 }
 
+fn codex_error_text(error: &tempo_client::ApiError) -> String {
+    match error {
+        tempo_client::ApiError::Server { error, .. }
+            if error.code == p::ErrorCode::CredentialInvalid =>
+        {
+            error.message.clone()
+        }
+        _ => super::toast::error_text(error, Some(p::AgentId::Codex)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn codex_sign_in_retains_safe_error_context() {
+        let error = tempo_client::ApiError::Server {
+            status: 502,
+            error: serde_json::from_value(serde_json::json!({
+                "code": "CREDENTIAL_INVALID",
+                "message": "OpenAI rejected the Codex device-code request (HTTP 403). Try again."
+            }))
+            .unwrap(),
+        };
+        assert!(super::codex_error_text(&error).contains("HTTP 403"));
+        assert_eq!(
+            super::codex_error_text(&tempo_client::ApiError::Network(
+                "private transport text".into()
+            )),
+            "Something went wrong."
+        );
+    }
     use super::*;
 
     #[test]

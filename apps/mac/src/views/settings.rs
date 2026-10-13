@@ -28,7 +28,7 @@ pub const TABS: [&str; 8] = [
     "Agents",
 ];
 
-/// The shortcut table of 04 with its Conductor column, read-only.
+/// The shortcut table of 04 with its Mac column, read-only.
 pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Command palette", "⌘K"),
     ("New workspace", "⌘N"),

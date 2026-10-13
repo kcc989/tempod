@@ -31,16 +31,20 @@ const def: CustomAgentDefinition = {
 };
 
 describe("custom agent file (01, Custom agents)", () => {
-  it("round-trips a definition through TOML with snake_case keys", () => {
+  it("round-trips a definition through YAML with snake_case keys", () => {
     const text = stringifyAgentFile(def);
-    expect(text).toContain('base_agent = "claude"');
-    expect(text).toContain('thought_level = "high"');
-    expect(text).toContain("[[mcp.servers]]");
+    expect(text).toContain("base_agent: claude\n");
+    expect(text).toContain("thought_level: high\n");
+    expect(text).toContain("  servers:\n");
     expect(parseAgentFile(text)).toEqual(def);
   });
 
+  it("reads an empty file as missing required keys", () => {
+    expect(() => parseAgentFile("")).toThrow(expect.objectContaining({ code: "VALIDATION_FAILED" }));
+  });
+
   it("reads the spec example with defaults for missing optional keys", () => {
-    const parsed = parseAgentFile('name = "Min"\nbase_agent = "pi"\n');
+    const parsed = parseAgentFile("name: Min\nbase_agent: pi\n");
     expect(parsed).toEqual({
       name: "Min",
       description: "",
@@ -53,13 +57,13 @@ describe("custom agent file (01, Custom agents)", () => {
     });
   });
 
-  it("fails with VALIDATION_FAILED on bad TOML, bad values and literal secrets", () => {
-    expect(() => parseAgentFile("name = ")).toThrow(expect.objectContaining({ code: "VALIDATION_FAILED" }));
-    expect(() => parseAgentFile('name = "x"\nbase_agent = "gpt"\n')).toThrow(
+  it("fails with VALIDATION_FAILED on bad YAML, bad values and literal secrets", () => {
+    expect(() => parseAgentFile("name: [")).toThrow(expect.objectContaining({ code: "VALIDATION_FAILED" }));
+    expect(() => parseAgentFile("name: x\nbase_agent: gpt\n")).toThrow(
       expect.objectContaining({ code: "VALIDATION_FAILED" }),
     );
     const literal =
-      'name = "x"\nbase_agent = "claude"\n[[mcp.servers]]\nname = "a"\ntype = "stdio"\ncommand = "a"\nenv = { K = "secret" }\n';
+      "name: x\nbase_agent: claude\nmcp:\n  servers:\n    - name: a\n      type: stdio\n      command: a\n      env: { K: secret }\n";
     expect(() => parseAgentFile(literal)).toThrow(expect.objectContaining({ code: "VALIDATION_FAILED" }));
   });
 });

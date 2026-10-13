@@ -39,7 +39,7 @@ describe("new chat menu", () => {
     },
   });
 
-  it("disables agents without a login (claude: claude or anthropic; codex: codex or openai; opencode and pi: openrouter)", () => {
+  it("hides agents without a login (claude: claude or anthropic; codex: codex or openai; opencode and pi: openrouter)", () => {
     const enabled = (s: CredentialStatus) =>
       agentMenu(s, models())
         .filter((e) => e.enabled)
@@ -48,8 +48,11 @@ describe("new chat menu", () => {
     expect(enabled(status({ anthropic: on }))).toEqual(["claude"]);
     expect(enabled(status({ openai: on }))).toEqual(["codex"]);
     expect(enabled(status({ openrouter: on }))).toEqual(["opencode", "pi"]);
-    expect(agentMenu(status(), models()).map((e) => e.label)).toEqual(["Claude", "Codex", "OpenCode", "Pi"]);
-    expect(agentMenu(status(), models()).map((e) => e.hint)).toEqual(Array(4).fill("Add login in Settings"));
+    expect(agentMenu(status(), models())).toEqual([]);
+    expect(agentMenu(status({ claude: on }), models()).map((e) => e.agent)).toEqual(["claude"]);
+    expect(agentMenu(status({ codex: { ...on, lastRefresh: 1 } }), models()).map((e) => e.agent)).toEqual([
+      "codex",
+    ]);
   });
 
   it("disables OpenCode and Pi with an empty agent.models.<agent> (04, Tabs)", () => {
@@ -66,17 +69,12 @@ describe("new chat menu", () => {
         .filter((e) => !e.enabled)
         .map((e) => e.agent),
     ).toEqual(["opencode", "pi"]);
-    // A missing login is the first thing to fix.
-    expect(agentMenu(status(), DEFAULT_SETTINGS)[2]!.hint).toBe("Add login in Settings");
+    expect(agentMenu(status(), DEFAULT_SETTINGS)).toEqual([]);
   });
 
-  it("offers every agent while the status and settings load", () => {
-    expect(agentMenu(undefined, null).every((e) => e.enabled && e.hint === null)).toBe(true);
-    expect(
-      agentMenu(undefined, DEFAULT_SETTINGS)
-        .filter((e) => e.enabled)
-        .map((e) => e.agent),
-    ).toEqual(["claude", "codex"]);
+  it("hides agents until credential status is known", () => {
+    expect(agentMenu(undefined, null)).toEqual([]);
+    expect(agentMenu(undefined, DEFAULT_SETTINGS)).toEqual([]);
   });
 });
 

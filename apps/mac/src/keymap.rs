@@ -1,4 +1,4 @@
-//! Key bindings: the Conductor column of the shortcut table in 04 (07, Shortcuts).
+//! Key bindings: the Mac column of the shortcut table in 04 (07, Shortcuts).
 use crate::actions::*;
 use gpui_kit::{App, KeyBinding, NoAction};
 
@@ -137,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn conductor_column_of_04() {
+    fn mac_column_of_04() {
         let expected = [
             ("tempo::CommandPalette", "cmd-k"),
             ("tempo::NewWorkspace", "cmd-n"),

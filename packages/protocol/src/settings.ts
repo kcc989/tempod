@@ -137,7 +137,7 @@ export const SettingsLayer = Schema.Struct({
 });
 export type SettingsLayer = typeof SettingsLayer.Type;
 
-export const SETTINGS_SOURCES = ["tempo", ".tempo", ".conductor", "conductor.json", "default"] as const;
+export const SETTINGS_SOURCES = ["tempo", ".tempo", "default"] as const;
 export const SettingsSource = Schema.Literals(SETTINGS_SOURCES);
 export type SettingsSource = typeof SettingsSource.Type;
 
@@ -145,8 +145,6 @@ export type SettingsSource = typeof SettingsSource.Type;
 export const SETTINGS_SOURCE_LABELS: Record<SettingsSource, string> = {
   tempo: "Tempo",
   ".tempo": ".tempo",
-  ".conductor": ".conductor",
-  "conductor.json": "conductor.json",
   default: "default",
 };
 

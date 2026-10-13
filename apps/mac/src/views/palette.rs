@@ -12,7 +12,7 @@ use gpui_kit::{
 };
 use tempo_protocol as p;
 
-/// One action of 04's shortcut table that the Mac app runs, with its Conductor binding.
+/// One action of 04's shortcut table that the Mac app runs, with its Mac binding.
 pub struct PaletteAction {
     pub label: &'static str,
     pub keys: &'static str,

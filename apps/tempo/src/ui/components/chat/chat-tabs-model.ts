@@ -3,7 +3,6 @@ import { AGENT_IDS, agentLabel, hasLogin, needsModel } from "~/ui/lib/agents";
 
 /** Pure helpers for the center tab strip (04, Tabs). */
 
-export const NO_LOGIN_HINT = "Add login in Settings";
 export const NO_MODEL_HINT = "Set a model in Settings → Project";
 
 export interface AgentMenuEntry {
@@ -11,25 +10,16 @@ export interface AgentMenuEntry {
   readonly label: string;
   readonly enabled: boolean;
   /** Why the agent is disabled. */
-  readonly hint: typeof NO_LOGIN_HINT | typeof NO_MODEL_HINT | null;
+  readonly hint: typeof NO_MODEL_HINT | null;
 }
 
-/**
- * The four agents for New chat. An agent without a login, or OpenCode or Pi with an empty
- * `agent.models.<agent>` in the workspace's effective settings, is disabled. While the credential
- * status or the settings load, they do not disable anything.
- */
+/** New chat offers only agents with a confirmed login. */
 export const agentMenu = (
   status: CredentialStatus | undefined,
   settings: Settings | null | undefined,
 ): AgentMenuEntry[] =>
-  AGENT_IDS.map((agent) => {
-    const hint =
-      status !== undefined && !hasLogin(agent, status)
-        ? NO_LOGIN_HINT
-        : settings && needsModel(agent, settings)
-          ? NO_MODEL_HINT
-          : null;
+  AGENT_IDS.filter((agent) => status !== undefined && hasLogin(agent, status)).map((agent) => {
+    const hint = settings && needsModel(agent, settings) ? NO_MODEL_HINT : null;
     return { agent, label: agentLabel(agent), enabled: hint === null, hint };
   });
 
@@ -39,23 +29,21 @@ export interface CustomAgentMenuEntry extends AgentMenuEntry {
   readonly baseLabel: string;
 }
 
-/** The user's custom agents for New chat; disabled when the base agent has no login. */
+/** Custom agents need a confirmed login for their base agent. */
 export const customAgentMenu = (
   agents: ReadonlyArray<CustomAgentSummary> | undefined,
   status: CredentialStatus | undefined,
 ): CustomAgentMenuEntry[] =>
-  (agents ?? []).map((a) => {
-    // A custom agent's own model can satisfy `agent.models.<agent>`, so only a login disables it.
-    const enabled = status === undefined || hasLogin(a.baseAgent, status);
-    return {
+  (agents ?? [])
+    .filter((a) => status !== undefined && hasLogin(a.baseAgent, status))
+    .map((a) => ({
       agent: a.baseAgent,
       customAgentId: a.id,
       label: a.name,
       baseLabel: agentLabel(a.baseAgent),
-      enabled,
-      hint: enabled ? null : NO_LOGIN_HINT,
-    };
-  });
+      enabled: true,
+      hint: null,
+    }));
 
 const bySortOrder = (a: Session, b: Session) => a.sortOrder - b.sortOrder;
 

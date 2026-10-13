@@ -107,8 +107,8 @@ describe("saveCustomAgent, getCustomAgent, listCustomAgents, deleteCustomAgent",
     const saved = ok(await call("saveCustomAgent", o, { definition: def }));
     expect(conforms(CustomAgent, saved)).toBe(true);
     expect(store.writes).toHaveLength(1);
-    expect(store.writes[0]).toMatchObject({ repo: `user-${o.userId}`, path: `agents/${saved.id}.toml` });
-    expect(store.writes[0]!.content).toContain('base_agent = "claude"');
+    expect(store.writes[0]).toMatchObject({ repo: `user-${o.userId}`, path: `agents/${saved.id}.yaml` });
+    expect(store.writes[0]!.content).toContain("base_agent: claude\n");
     const row = await env.DB.prepare("SELECT * FROM custom_agents WHERE id = ?").bind(saved.id).first<any>();
     expect(row).toMatchObject({
       name: "Reviewer",
@@ -140,8 +140,8 @@ describe("saveCustomAgent, getCustomAgent, listCustomAgents, deleteCustomAgent",
     expect(second.id).toBe(first.id);
     expect(second.commitSha).not.toBe(first.commitSha);
     expect(ok(await call("getCustomAgent", o, { customAgentId: first.id })).model).toBe("sonnet");
-    const old = await store.read(`user-${o.userId}`, first.commitSha, `agents/${first.id}.toml`);
-    expect(old).toContain('model = "opus"');
+    const old = await store.read(`user-${o.userId}`, first.commitSha, `agents/${first.id}.yaml`);
+    expect(old).toContain("model: opus\n");
   });
 
   it("refuses a duplicate name, an unknown id and a literal secret", async () => {
@@ -184,7 +184,7 @@ describe("saveCustomAgent, getCustomAgent, listCustomAgents, deleteCustomAgent",
     const o = await owner();
     const saved = ok(await call("saveCustomAgent", o, { definition: def }));
     ok(await call("deleteCustomAgent", o, { customAgentId: saved.id }));
-    expect(store.writes.at(-1)).toMatchObject({ content: null, path: `agents/${saved.id}.toml` });
+    expect(store.writes.at(-1)).toMatchObject({ content: null, path: `agents/${saved.id}.yaml` });
     expect(ok(await call("listCustomAgents", o))).toEqual([]);
     expect(codeOf(await call("getCustomAgent", o, { customAgentId: saved.id }))).toBe("NOT_FOUND");
     expect(codeOf(await call("deleteCustomAgent", o, { customAgentId: saved.id }))).toBe("NOT_FOUND");
@@ -370,15 +370,15 @@ describe("memoryFs (isomorphic-git's file system)", () => {
     const { promises: fs } = memoryFs();
     await fs.mkdir("/r");
     await fs.mkdir("/r/agents");
-    await fs.writeFile("/r/agents/a.toml", "x = 1");
-    expect(await fs.readFile("/r/agents/a.toml", "utf8")).toBe("x = 1");
+    await fs.writeFile("/r/agents/a.yaml", "x: 1");
+    expect(await fs.readFile("/r/agents/a.yaml", "utf8")).toBe("x: 1");
     expect(await fs.readdir("/r")).toEqual(["agents"]);
     expect((await fs.stat("/r/agents")).isDirectory()).toBe(true);
     await expect(fs.mkdir("/r")).rejects.toMatchObject({ code: "EEXIST" });
     await expect(fs.readFile("/nope")).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.writeFile("/x/y", "z")).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.rmdir("/r/agents")).rejects.toMatchObject({ code: "ENOTEMPTY" });
-    await fs.unlink("/r/agents/a.toml");
+    await fs.unlink("/r/agents/a.yaml");
     await fs.rmdir("/r/agents");
     expect(await fs.readdir("/r")).toEqual([]);
   });
