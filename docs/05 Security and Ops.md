@@ -58,7 +58,8 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 
 **Rules**
 
-- MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, or in R2.
+- MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, in lifecycle events (08), or in R2.
+- Role files (08) are prompts, not code, and run with no approval step. A repo role on a branch can start agent runs with write access; limits bound every run, and role files are read only on clone, fresh-disk wake and `reloadRoles`.
 - MUST NOT store a secret in Artifacts. Custom agent files hold only `${NAME}` references in MCP `env` and `headers`; validation refuses literal values (01, Custom agents).
 - Artifacts write tokens are minted per save with a 300 s TTL, kept in memory only, and revoked when the save ends. They never reach a container or the browser.
 - The log helper redacts any field whose name matches `/token|key|secret|password|authorization|auth_json|cookie/i`.
@@ -75,7 +76,7 @@ A container has no internet of its own. Every HTTP and HTTPS request goes throug
 - Git over SSH does not work. Repos use HTTPS only.
 - **Rule 0**, before the rules in 01: a request whose host is `APP_HOST` returns 403. Containers MUST NOT call the Tempo API.
 - The egress policy and allowlist come from the workspace's environment (01, Environments). With no environment, they come from the project's Tempo overrides.
-- Egress settings come only from Tempo. `egress_policy` and `egress_allowlist` in `.tempo/settings.toml`, `.conductor/settings.toml` or `conductor.json` are ignored with a warning, because the agent can write those files.
+- Egress settings come only from Tempo. `egress_policy` and `egress_allowlist` in `.tempo/settings.yaml` are ignored with a warning, because the agent can write those files.
 - Policy `open`: every host passes, with credentials added only by rules 2 to 6.
 - Policy `allowlist` (default): only the built-in agent hosts (01), the `egress_allowlist` patterns, and the hosts of the owner's enabled `http` and `sse` MCP servers pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
 - Every request is logged to `egress_log`: host, path without query, status, time, rule number. The WorkspaceDO keeps the newest 10,000 rows. Diagnostics searches all of them (Observability).

@@ -412,7 +412,7 @@ const stable = (u: unknown): unknown =>
 export const sameLayer = (a: unknown, b: unknown): boolean =>
   JSON.stringify(stable(a)) === JSON.stringify(stable(b));
 
-// Effective values and where they came from (04: Tempo, .tempo, .conductor, conductor.json or default).
+// Effective values and where they came from (04: Tempo, .tempo or default).
 
 export interface EffectiveContext {
   /** The open workspace's effective settings, when it belongs to this project. */

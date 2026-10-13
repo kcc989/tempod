@@ -29,10 +29,15 @@ const withModels = (models: Partial<Settings["agent"]["models"]>): Settings => (
   agent: { ...DEFAULT_SETTINGS.agent, models: { ...DEFAULT_SETTINGS.agent.models, ...models } },
 });
 
-const show = (settings: Settings, status: CredentialStatus = credentials) => {
+const show = (settings: Settings, status: CredentialStatus | Promise<CredentialStatus> = credentials) => {
   fixture.state = { ...emptyWorkspaceState, ready: true, workspace: detail({ settings }) };
   vi.mocked(call).mockImplementation(async (name) => {
     if (name === "getCredentialStatus") return status as never;
+    if (name === "listCustomAgents")
+      return [
+        { id: "a1", name: "Reviewer", description: "", baseAgent: "codex", updatedAt: 1 },
+        { id: "a2", name: "Router tester", description: "", baseAgent: "pi", updatedAt: 1 },
+      ] as never;
     throw new Error(`unexpected ${name}`);
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -72,15 +77,36 @@ describe("New chat menu (04, Tabs)", () => {
     expect(screen.getAllByText("Set a model in Settings → Project")).toHaveLength(1);
   });
 
-  it("does not require a model for Claude or Codex, and a missing login wins", async () => {
+  it("hides unsigned agents even when they have a model", async () => {
     show(withModels({ opencode: "openrouter/oc" }), {
       ...credentials,
       openrouter: { set: false, updatedAt: null },
     });
-    await waitFor(() => expect(disabled(/^OpenCode/)).toBe(true));
-    expect(text(/^OpenCode/)).toBe("OpenCodeAdd login in Settings");
-    expect(text(/^Pi/)).toBe("PiAdd login in Settings");
+    await waitFor(() => expect(item(/^Claude/)).toBeDefined());
+    expect(screen.queryByRole("menuitem", { name: /^OpenCode/ })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /^Pi/ })).toBeNull();
     expect(screen.queryByText("Set a model in Settings → Project")).toBeNull();
     expect([disabled(/^Claude/), disabled(/^Codex/)]).toEqual([false, false]);
+    await waitFor(() => expect(item(/^Reviewer/)).toBeDefined());
+    expect(screen.queryByRole("menuitem", { name: /^Router tester/ })).toBeNull();
+  });
+
+  it("keeps Manage agents available when no harness has a login", async () => {
+    const off = { set: false, updatedAt: null };
+    show(DEFAULT_SETTINGS, {
+      claude: off,
+      codex: { ...off, lastRefresh: null },
+      openrouter: off,
+      anthropic: off,
+      openai: off,
+    });
+    await waitFor(() => expect(vi.mocked(call)).toHaveBeenCalledWith("getCredentialStatus", {}));
+    expect(screen.getAllByRole("menuitem").map((e) => e.textContent)).toEqual(["Manage agents…"]);
+    expect(screen.queryByRole("separator")).toBeNull();
+  });
+
+  it("shows no harness choices while logins load", () => {
+    show(DEFAULT_SETTINGS, new Promise(() => undefined));
+    expect(screen.getAllByRole("menuitem").map((e) => e.textContent)).toEqual(["Manage agents…"]);
   });
 });

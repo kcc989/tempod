@@ -144,7 +144,7 @@ pub(crate) mod tests {
     fn atomic_write_is_private_to_the_owner() {
         use std::os::unix::fs::PermissionsExt as _;
         let dir = temp_dir("mode");
-        let path = dir.join("config.toml");
+        let path = dir.join("config.yaml");
         write_atomic(&path, b"x").unwrap();
         let mode = fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
@@ -196,7 +196,7 @@ pub(crate) mod tests {
     #[test]
     fn invalid_utf8_counts_as_not_parsing() {
         let dir = temp_dir("utf8");
-        let path = dir.join("config.toml");
+        let path = dir.join("config.yaml");
         fs::write(&path, [0xff, 0xfe, b'1']).unwrap();
         let loaded = load_or_recover(&path, parse_number);
         assert_eq!(loaded.outcome, LoadOutcome::Bad { renamed: true });
@@ -206,8 +206,8 @@ pub(crate) mod tests {
     #[test]
     fn bad_path_appends_the_suffix() {
         assert_eq!(
-            bad_path(Path::new("/a/config.toml")),
-            Path::new("/a/config.toml.bad")
+            bad_path(Path::new("/a/config.yaml")),
+            Path::new("/a/config.yaml.bad")
         );
     }
 }

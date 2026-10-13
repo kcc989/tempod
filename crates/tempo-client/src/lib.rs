@@ -2,6 +2,7 @@
 //! and the store logic shared with the app. It has no GPUI dependency.
 
 mod channel;
+mod codex_login;
 mod environments;
 mod error;
 mod prng;
@@ -18,6 +19,7 @@ pub use channel::{
     TerminalChannelEvent, TerminalFrame, TerminalHandle, TerminalInput, WorkspaceChannelEvent,
     WorkspaceHandle, reconnect_delay,
 };
+pub use codex_login::{CodexAuth, CodexLogin, CodexLoginStatus};
 pub use environments::{
     ENVIRONMENT_NAME_MAX, ProposalApplied, ProposalApply, merge_proposal, unique_name,
 };

@@ -117,13 +117,13 @@ CREATE INDEX workspaces_by_activity ON workspaces(user_id, archived_at, last_act
 
 ```sql
 CREATE TABLE custom_agents (
-  id           TEXT PRIMARY KEY,           -- ULID; also the file name agents/<id>.toml
+  id           TEXT PRIMARY KEY,           -- ULID; also the file name agents/<id>.yaml
   user_id      TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
   name         TEXT NOT NULL,
   description  TEXT NOT NULL DEFAULT '',
   base_agent   TEXT NOT NULL CHECK (base_agent IN ('claude','codex','opencode','pi')),
   repo         TEXT NOT NULL,              -- Artifacts repo name, user-<userId>
-  path         TEXT NOT NULL,              -- agents/<id>.toml
+  path         TEXT NOT NULL,              -- agents/<id>.yaml
   commit_sha   TEXT NOT NULL,              -- commit that holds the current version
   created_at   INTEGER NOT NULL,
   updated_at   INTEGER NOT NULL,
@@ -297,7 +297,7 @@ CREATE TABLE events (
 CREATE TABLE checkpoints (
   id            TEXT PRIMARY KEY,
   turn_id       TEXT,
-  reason        TEXT NOT NULL CHECK (reason IN ('turn_end','pre_revert','pre_sleep','pre_archive','sigterm')),
+  reason        TEXT NOT NULL CHECK (reason IN ('turn_end','pre_revert','pre_sleep','pre_archive','sigterm','role_pin')),
   commit_sha    TEXT NOT NULL,
   tree_sha      TEXT NOT NULL,
   parent_sha    TEXT NOT NULL,
@@ -443,6 +443,7 @@ CREATE TABLE environment_proposals (
 - Every change to `items` increments `workspace.items_rev` by 1 and sets `items.rev` to the new value, in the same transaction.
 - Each `checkpoints.id` is a ULID. Its git ref is `refs/tempo/checkpoints/<checkpoint id>`.
 - Delete `events` rows older than 7 days in the daily `housekeeping` op.
+- Lifecycle event and role run tables, new columns on `sessions` and `turns`, the D1 `user_roles` table, new server functions, the `roleRun` channel message and new error codes are in 08. They are part of this contract.
 
 ## CredentialDO and UserHubDO
 

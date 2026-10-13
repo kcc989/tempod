@@ -19,7 +19,7 @@ pub enum TranscriptDetail {
     Detailed,
 }
 
-/// `config.toml` (07, Local storage): the Tempo URL, the theme, transcript detail, and
+/// `config.yaml` (07, Local storage): the Tempo URL, the theme, transcript detail, and
 /// notifications and sound on or off. Keys the app does not know are ignored.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -45,12 +45,16 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
-        toml::from_str(text)
+    pub fn parse(text: &str) -> Result<Self, serde_yaml_ng::Error> {
+        // An empty YAML document is null, not an empty mapping.
+        match serde_yaml_ng::from_str::<Option<Self>>(text)? {
+            Some(config) => Ok(config),
+            None => Ok(Self::default()),
+        }
     }
 
-    pub fn to_toml(&self) -> String {
-        toml::to_string(self).unwrap_or_default()
+    pub fn to_yaml(&self) -> String {
+        serde_yaml_ng::to_string(self).unwrap_or_default()
     }
 }
 
@@ -68,6 +72,7 @@ mod tests {
         assert!(!c.notifications);
         assert!(c.sound);
         assert_eq!(Config::parse("").unwrap(), c);
+        assert_eq!(Config::parse("# only a comment\n").unwrap(), c);
     }
 
     #[test]
@@ -80,21 +85,21 @@ mod tests {
             sound: false,
         };
         assert_eq!(
-            c.to_toml(),
-            "url = \"https://tempo.example.com\"\ntheme = \"dark\"\ntranscript_detail = \"detailed\"\nnotifications = true\nsound = false\n"
+            c.to_yaml(),
+            "url: https://tempo.example.com\ntheme: dark\ntranscript_detail: detailed\nnotifications: true\nsound: false\n"
         );
         assert!(
             Config::default()
-                .to_toml()
-                .contains("transcript_detail = \"default\"\n")
+                .to_yaml()
+                .contains("transcript_detail: default\n")
         );
-        assert!(!Config::default().to_toml().contains("url"));
+        assert!(!Config::default().to_yaml().contains("url"));
     }
 
     #[test]
     fn round_trips_through_disk() {
         let dir = temp_dir("config");
-        let path = dir.join("config.toml");
+        let path = dir.join("config.yaml");
         let c = Config {
             url: Some("https://t.example.com/\"quoted\"".into()),
             theme: Theme::Light,
@@ -102,7 +107,7 @@ mod tests {
             notifications: true,
             sound: true,
         };
-        write_atomic(&path, c.to_toml().as_bytes()).unwrap();
+        write_atomic(&path, c.to_yaml().as_bytes()).unwrap();
         let loaded = load_or_recover(&path, Config::parse);
         assert_eq!(loaded.outcome, LoadOutcome::Loaded);
         assert_eq!(loaded.value, c);
@@ -110,7 +115,7 @@ mod tests {
 
     #[test]
     fn missing_keys_take_defaults_and_unknown_keys_are_ignored() {
-        let c = Config::parse("# hand edited\ntheme = 'light'\nlater = 1\n").unwrap();
+        let c = Config::parse("# hand edited\ntheme: 'light'\nlater: 1\n").unwrap();
         assert_eq!(
             c,
             Config {
@@ -123,13 +128,13 @@ mod tests {
     #[test]
     fn transcript_detail_parses_both_values() {
         assert_eq!(
-            Config::parse("transcript_detail = \"detailed\"")
+            Config::parse("transcript_detail: detailed")
                 .unwrap()
                 .transcript_detail,
             TranscriptDetail::Detailed
         );
         assert_eq!(
-            Config::parse("transcript_detail = \"default\"")
+            Config::parse("transcript_detail: default")
                 .unwrap()
                 .transcript_detail,
             TranscriptDetail::Default
@@ -138,20 +143,20 @@ mod tests {
 
     #[test]
     fn a_wrong_value_does_not_parse() {
-        assert!(Config::parse("theme = \"blue\"").is_err());
-        assert!(Config::parse("transcript_detail = \"compact\"").is_err());
-        assert!(Config::parse("notifications = \"yes\"").is_err());
-        assert!(Config::parse("url = ").is_err());
+        assert!(Config::parse("theme: blue").is_err());
+        assert!(Config::parse("transcript_detail: compact").is_err());
+        assert!(Config::parse("notifications: \"yes\"").is_err());
+        assert!(Config::parse("url: [").is_err());
     }
 
     #[test]
     fn a_config_that_does_not_parse_becomes_dot_bad() {
         let dir = temp_dir("config-bad");
-        let path = dir.join("config.toml");
-        std::fs::write(&path, "theme = [").unwrap();
+        let path = dir.join("config.yaml");
+        std::fs::write(&path, "theme: [").unwrap();
         let loaded = load_or_recover(&path, Config::parse);
         assert_eq!(loaded.value, Config::default());
         assert_eq!(loaded.outcome, LoadOutcome::Bad { renamed: true });
-        assert!(dir.join("config.toml.bad").exists());
+        assert!(dir.join("config.yaml.bad").exists());
     }
 }

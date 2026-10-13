@@ -434,7 +434,7 @@ export function NewChatMenu({
             {e.hint && <DropdownMenuShortcut className="tracking-normal">{e.hint}</DropdownMenuShortcut>}
           </DropdownMenuItem>
         ))}
-        {custom.length > 0 && <DropdownMenuSeparator />}
+        {entries.length > 0 && custom.length > 0 && <DropdownMenuSeparator />}
         {custom.map((e) => (
           <DropdownMenuItem
             key={e.customAgentId}
@@ -442,12 +442,10 @@ export function NewChatMenu({
             onSelect={() => onPick(e.agent, e.customAgentId)}
           >
             <span className="min-w-0 flex-1 truncate">{e.label}</span>
-            <DropdownMenuShortcut className="tracking-normal">
-              {e.enabled ? e.baseLabel : "Add login in Settings"}
-            </DropdownMenuShortcut>
+            <DropdownMenuShortcut className="tracking-normal">{e.baseLabel}</DropdownMenuShortcut>
           </DropdownMenuItem>
         ))}
-        <DropdownMenuSeparator />
+        {(entries.length > 0 || custom.length > 0) && <DropdownMenuSeparator />}
         <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", tab: "agents" })}>
           Manage agents…
         </DropdownMenuItem>

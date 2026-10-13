@@ -78,12 +78,12 @@ describe("settings page", () => {
     expect(screen.getByRole("button", { name: "Appearance" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Logins" })).toBeNull();
   });
-  it("shows the Tempo and Conductor keys on Shortcuts", () => {
+  it("shows the Tempo and Mac keys on Shortcuts", () => {
     openDialog({ kind: "settings", tab: "shortcuts" });
     show();
     const table = screen.getByRole("table", { name: "Keyboard shortcuts" });
     expect(within(table).getByRole("columnheader", { name: "Tempo" })).toBeTruthy();
-    expect(within(table).getByRole("columnheader", { name: "Conductor" })).toBeTruthy();
+    expect(within(table).getByRole("columnheader", { name: "Mac" })).toBeTruthy();
     expect(within(table).getByRole("row", { name: /^Settings/ }).textContent).toContain("⌘,");
   });
   it("shows a default model per agent and Browser Run on Agents", () => {

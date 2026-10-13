@@ -43,6 +43,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 05 Security and Ops | Threat model, auth, secrets, egress, previews, deploy, logs, upgrades, cost |
 | 06 Build Plan | Repo layout, phases, spikes, acceptance tests, rules for coding agents |
 | 07 Mac Client | Tempo for Mac on GPUI Kit: native API, device sign-in, layout, macOS integration, release, phase 4 and gate E |
+| 08 Events and Roles | Lifecycle events, markdown roles, role runs, limits, phase 6 and gate H |
 
 ## Goals and non-goals
 
@@ -70,7 +71,7 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 - More than one user, teams, or sharing.
 - A hosted service for other people. Anthropic does not allow third parties to offer Claude sign-in.
 - Billing, quotas, or a platform model proxy (SAM's `sam` mode).
-- Tempo's own agent harness.
+- Tempo's own agent harness. Roles (08) drive the existing agents through ACP; they are not a harness.
 - Devcontainers. Version 1 uses one Tempo base image plus a per-project setup script.
 - Docker inside the container.
 - Approval policies. Version 1 runs each agent in its most permissive mode inside the container. It MUST still show any permission request an agent sends, such as a plan approval.
@@ -93,8 +94,9 @@ Use these words exactly, in code, UI and docs.
 | Checkpoint | A hidden git commit of the full working tree, made at the end of each turn | `checkpoint` |
 | Preview | An owner-only URL to one port inside a container | `preview` |
 | Artifact | A file that an agent published for the owner to see. Each publish adds a version, kept in R2. | `artifact` |
-| Setup, run, archive scripts | Per-project shell scripts, as in Conductor | `setupScript`, `runScript`, `archiveScript` |
+| Setup, run, archive scripts | Per-project shell scripts | `setupScript`, `runScript`, `archiveScript` |
 | `tempod` | The daemon inside each container. It runs agents and talks to the WorkspaceDO. | `tempod` |
+| Lifecycle event, change, role, role run, result | Defined in 08, Vocabulary | `lifecycleEvent`, `change`, `role`, `roleRun`, `result` |
 
 **Banned words.** Do not use these in code, UI or docs: "VM", "node" (as a machine), "task", "worktree". SAM uses them, and they mean different things there. Use "Sandbox" only for the Cloudflare product and its SDK classes. In the UI, say "container".
 
@@ -265,7 +267,7 @@ Example: 5 workspaces running 4 hours a day for 22 days is 440 hours, about $46 
 
 ## Phases
 
-Build in six phases. Each phase ends at a gate: gate A is the spike results, and gates B to F are passing acceptance tests. Spikes, tests and the gates are in 06 Build Plan.
+Build in seven phases. Each phase ends at a gate: gate A is the spike results, and gates B to H are passing acceptance tests. Gate G covers custom agents (06). Spikes, tests and the gates are in 06 Build Plan.
 
 1. **Phase 0, spikes.** Prove the risky parts in throwaway code: the container API, egress injection, each agent's login through the egress proxy, snapshots, previews, Playwright.
 2. **Phase 1, one workspace.** Claude Code only. Create, chat, stream, checkpoint, sleep, wake and resume, with the transcript intact.
@@ -273,6 +275,7 @@ Build in six phases. Each phase ends at a gate: gate A is the spike results, and
 4. **Phase 3, ship.** Commit and push, pull requests, checks, merge, archive and restore, settings, and optional Browser Run.
 5. **Phase 4, Mac client.** The native API and device sign-in on the server, then Tempo for Mac on GPUI Kit (07).
 6. **Phase 5, artifacts.** The `publish_artifact` tool, artifact storage in R2, the artifact host, the Artifact and Artifacts tabs, image and Markdown views in file and diff tabs, and Mermaid diagrams, in the web UI and the Mac app.
+7. **Phase 6, roles.** Lifecycle events and user-defined roles (08). It MAY run in parallel with phases 2 to 5.
 
 ## Risks and open questions
 

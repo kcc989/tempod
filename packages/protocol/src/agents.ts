@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { AgentId } from "./enums.ts";
 
-/** Custom agents (01, Custom agents). Snake_case in the TOML file, camelCase on the wire. */
+/** Custom agents (01, Custom agents). Snake_case in the YAML file, camelCase on the wire. */
 
 export const CUSTOM_AGENT_LIMIT = 50;
 export const MAX_TOOL_NAMES = 100;
@@ -110,4 +110,4 @@ export const toAgentProfile = (def: CustomAgentDefinition): AgentProfile => ({
 });
 
 export const customAgentRepo = (userId: string): string => `user-${userId}`;
-export const customAgentPath = (customAgentId: string): string => `agents/${customAgentId}.toml`;
+export const customAgentPath = (customAgentId: string): string => `agents/${customAgentId}.yaml`;
