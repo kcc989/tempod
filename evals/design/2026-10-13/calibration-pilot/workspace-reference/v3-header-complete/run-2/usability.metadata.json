@@ -1,0 +1,14 @@
+{
+  "area": "usability",
+  "run": 2,
+  "version": "3.0-header-complete-input",
+  "calibrated": false,
+  "requestSha256": "d7934850d1153178d60f98311d471ec4cc84640eff69aaa0dfb360311b347461",
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-13T22:16:27Z",
+  "stateless": true,
+  "priorResultsIncluded": false,
+  "groupLabelIncluded": false
+}

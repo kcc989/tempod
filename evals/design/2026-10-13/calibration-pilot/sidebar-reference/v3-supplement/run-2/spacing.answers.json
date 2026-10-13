@@ -1,0 +1,32 @@
+{
+  "status": 200,
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "spacing_navigation_density": {
+          "type": "score",
+          "score": 1.7094,
+          "legend": {
+            "0": "Short workspace names and state labels occupy oversized cards or rows about twice as tall as nearby navigation actions, with padding that dominates the content.",
+            "1": "The rows fit their content, but some workspace rows or gaps are noticeably larger than related navigation controls without adding useful detail.",
+            "2": "Project and workspace entries use compact content-fit rows, with consistent padding and enough room for the labels and status."
+          },
+          "probabilities": {
+            "0": 0.0655,
+            "1": 0.1596,
+            "2": 0.7749
+          },
+          "confidence": 0.4454
+        }
+      },
+      "usage": {
+        "input_tokens": 2058,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

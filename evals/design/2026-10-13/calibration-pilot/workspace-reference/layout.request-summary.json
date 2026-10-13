@@ -1,0 +1,134 @@
+{
+  "model": "clef",
+  "state": {
+    "app": {
+      "name": "Conductor",
+      "category": "Agent coding workspace",
+      "platform": "desktop",
+      "primary_user": "Developer",
+      "primary_job": "Read agent work, edit a project, and manage chats"
+    },
+    "screen": {
+      "name": "Workspace",
+      "purpose": "Read a conversation and inspect project changes beside it"
+    },
+    "image_legend": [
+      "Image 1: supplied full frame",
+      "Image 2: sidebar",
+      "Image 3: header controls",
+      "Image 4: composer"
+    ]
+  },
+  "images": [
+    {
+      "content_type": "image/png",
+      "file": "full.png",
+      "sha256": "5b079100225978a2de6af5c803a42c0b6482ffe8a725c07c566b03cc126b0f71",
+      "bytes": 651167
+    },
+    {
+      "content_type": "image/png",
+      "file": "detail-1.png",
+      "sha256": "742d37b3949109bb8f6e634cea174958b11069ada2dc24bc838d51dcfe4ddc8c",
+      "bytes": 97833
+    },
+    {
+      "content_type": "image/png",
+      "file": "detail-2.png",
+      "sha256": "9ddf3c4d968fd340000efc4b74802e0208e86320a62345eeb9fe9c513120a753",
+      "bytes": 36518
+    },
+    {
+      "content_type": "image/png",
+      "file": "detail-3.png",
+      "sha256": "4fcf6c8282f16eea21c99d7d89adb345740576d9faf4be12988706fa95eb05c1",
+      "bytes": 24589
+    }
+  ],
+  "questions": {
+    "focus_content_share": {
+      "type": "score",
+      "instructions": "In the images, how much of the screen goes to the user's own content, compared to controls, banners, and decoration?",
+      "criteria": [
+        "Controls, banners, promotions, or decoration take most of the screen",
+        "Content and controls take similar space",
+        "The user's content takes most of the screen, and controls sit in a sidebar, a header, or a footer"
+      ]
+    },
+    "focus_reading_order": {
+      "type": "noul",
+      "instructions": "Do the images show a clear reading order: navigation at one edge, then a page title, then the main content?"
+    },
+    "focus_space_fit": {
+      "type": "noul",
+      "instructions": "In the images, does each panel's width fit its content, with no large panel that holds only a few items?"
+    },
+    "overflow_long_text": {
+      "type": "choice",
+      "instructions": "In the images, how does long text, such as names, titles, and file paths, fit its space?",
+      "criteria": {
+        "ellipsis": "It is cut at the end with an ellipsis, and the layout stays the same",
+        "cut": "It is cut with no ellipsis, or cut in the middle of a letter",
+        "breaks_layout": "It wraps or pushes other elements out of place",
+        "not_shown": "No text in the images is too long for its space"
+      }
+    },
+    "overflow_scroll_cue": {
+      "type": "choice",
+      "instructions": "In the images, when a region scrolls, does it show that more content exists?",
+      "criteria": {
+        "cue": "Yes: a partly visible item, a fade, a shadow, or a scrollbar shows more content",
+        "no_cue": "The region ends at an item edge, with no sign that more content exists",
+        "not_shown": "No region in the images scrolls"
+      }
+    },
+    "quality_long_lines": {
+      "type": "noul",
+      "instructions": "In the images, do lines of body text run very long, much wider than a comfortable paragraph?"
+    },
+    "quality_text_covered": {
+      "type": "noul",
+      "instructions": "In the images, does an element cover text that the user needs to read?"
+    },
+    "quality_overflow": {
+      "type": "noul",
+      "instructions": "In the images, does content spill out of its container, or is a menu, a tooltip, or a popover cut off?"
+    },
+    "quality_scroll_edge": {
+      "type": "noul",
+      "instructions": "In the images, does scrolled content run under a fixed header or tab bar with no divider or shadow, so the content looks cut off?"
+    },
+    "type_hierarchy": {
+      "type": "noul",
+      "instructions": "Do the images show clear type hierarchy, made with size, weight, and grey tone, with at most two type families?"
+    },
+    "type_scale": {
+      "type": "score",
+      "instructions": "In the images, how are text sizes and weights used?",
+      "criteria": [
+        "Many sizes with small differences, or no clear pattern",
+        "A few sizes, but some styles look almost the same",
+        "A small set of clearly different sizes and weights, used the same way for the same role everywhere"
+      ]
+    },
+    "type_numbers": {
+      "type": "choice",
+      "instructions": "In the images, in tables or columns of numbers, do the digits line up?",
+      "criteria": {
+        "aligned": "Digits line up in columns, and numbers align to the right or on a shared edge",
+        "ragged": "Digits do not line up, so values are hard to compare",
+        "not_shown": "The images show no columns of numbers"
+      }
+    },
+    "type_mono": {
+      "type": "choice",
+      "instructions": "In the images, what font do code, commands, IDs, and file paths use?",
+      "criteria": {
+        "mono": "A monospace font, often on a subtle background",
+        "mixed": "Some use monospace and some use the body font",
+        "not_shown": "The images show no code, commands, IDs, or file paths"
+      }
+    }
+  },
+  "originalRequestSha256": "264c2168d894c7817f603201433fa73e7612a25165093937cae012390ef76968"
+}
