@@ -252,7 +252,12 @@ function Row({
   if (!item) return null;
   return (
     <div className={cn("py-1.5", row.dim && "opacity-50")}>
-      <ItemView ctx={ctx} item={item} turn={row.turnId ? turns[row.turnId] : undefined} />
+      <ItemView
+        ctx={ctx}
+        item={item}
+        turn={row.turnId ? turns[row.turnId] : undefined}
+        permission={row.permissionId ? items[row.permissionId] : undefined}
+      />
     </div>
   );
 }

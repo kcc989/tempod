@@ -36,6 +36,7 @@ import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { BROWSER_IDLE_MS, browserConnect, browserFetch, browserIdleCheck, closeBrowser } from "./browser.ts";
 import { newPreviewKey, previewEnter, previewFetch } from "./preview.ts";
+import { artifactEnter, artifactFetch, artifactRow, artifactToWire } from "./artifacts.ts";
 import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
 import {
   customSessionColumns,
@@ -414,6 +415,25 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   /** 05 Enter: the preview cookie value for a good code, else null. */
   async previewEnter(port: number, code: string): Promise<string | null> {
     return previewEnter(this.core, port, code);
+  }
+
+  /** 05 Artifact access, Enter: the cookie value and the redirect path for a good code, else null. */
+  async artifactEnter(
+    artifactId: string,
+    code: string,
+  ): Promise<{ cookie: string; location: string } | null> {
+    return artifactEnter(this.core, artifactId, code);
+  }
+
+  async artifactFetch(request: Request, artifactId: string, cookie: string): Promise<Response> {
+    return artifactFetch(this.core, request, artifactId, cookie);
+  }
+
+  /** For the artifact route (02): one version's metadata, or null. */
+  async getArtifact(artifactId: string, version: number): Promise<import("@tempo/protocol").Artifact | null> {
+    if (!this.core.wsOrNull()) return null;
+    const row = artifactRow(this.core, artifactId, version);
+    return row ? artifactToWire(row) : null;
   }
 
   // ---------- fetch: UI channel, terminal, preview ----------

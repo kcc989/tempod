@@ -193,6 +193,24 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { code: "CREDENTIAL_INVALID" },
     { code: "INTERNAL", detail: "exit 137" },
   ],
+  ArtifactItemContent: [
+    w.artifactContent,
+    {
+      artifactId: w.ARTIFACT_ID,
+      version: 1,
+      title: "Login screen",
+      name: "login.png",
+      path: "/workspace/shots/login.png",
+      mime: "image/png",
+      artifactKind: "image",
+      size: 48213,
+    },
+  ],
+  Artifact: [
+    w.artifact,
+    { ...w.artifact, version: 1, summary: null, turnId: null, status: "uploading" },
+    { ...w.artifact, version: 3, status: "lost" },
+  ],
   Item: w.itemsOfEveryKind,
   ScriptRun: [w.scriptRun, w.setupRun],
   ScriptRunWithLog: [{ ...w.setupRun, logTail: "installed 412 packages in 3.1s\n" }],
@@ -497,6 +515,9 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   continueAfterSetupFailure: [ws],
   listTerminals: [ws],
   listScriptRuns: [ws],
+  readFileAt: [{ ...ws, path: "src/logo.png", sha: "9f2c1e0b7a6d5c4b3a291807f6e5d4c3b2a19087" }],
+  listArtifacts: [ws],
+  openArtifact: [{ ...ws, artifactId: w.ARTIFACT_ID, version: 2 }],
   listModels: [{}],
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
@@ -598,6 +619,12 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   OpenPreviewOut: [
     {
       url: `https://3000-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
+    },
+  ],
+  ReadFileAtOut: [{ content: "iVBORw0KGgo=", encoding: "base64", size: 8 }],
+  OpenArtifactOut: [
+    {
+      url: `https://a-${w.ARTIFACT_ID}-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
     },
   ],
   ListProjectSecretNamesOut: [{ names: ["DATABASE_URL", "STRIPE_KEY"] }],

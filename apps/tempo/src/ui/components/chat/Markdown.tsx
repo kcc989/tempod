@@ -3,9 +3,11 @@ import { createContext, memo, useContext, useEffect, useState } from "react";
 import Markdown, { defaultUrlTransform, type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "~/ui/components/ui/button";
+import { useTheme } from "~/ui/hooks/useTheme";
 import { cn } from "~/ui/lib/utils";
 import { openFile } from "~/ui/state/workspace-ui";
 import { highlight, type HighlightLines } from "./highlight";
+import { renderMermaid } from "./mermaid";
 import { fileLinkTarget } from "./transcript-model";
 
 interface MarkdownEnv {
@@ -74,7 +76,9 @@ const components: Components = {
   pre: ({ node }) => {
     const code = node?.children.find((c): c is Element => c.type === "element" && c.tagName === "code");
     const text = code ? textOf(code) : node ? textOf(node) : "";
-    return <CodeBlock code={text.replace(/\n$/, "")} lang={languageOf(code)} />;
+    const lang = languageOf(code);
+    if (lang === "mermaid") return <MermaidBlock code={text.replace(/\n$/, "")} />;
+    return <CodeBlock code={text.replace(/\n$/, "")} lang={lang} />;
   },
 };
 
@@ -100,6 +104,43 @@ export const MessageMarkdown = memo(function MessageMarkdown({
     </Env.Provider>
   );
 });
+
+/**
+ * A `mermaid` code block as a diagram, shown through `<img>`. While the message streams it stays a
+ * code block; when rendering fails the code block stays with a note under it (04).
+ */
+export function MermaidBlock({ code }: { code: string }) {
+  const { streaming } = useContext(Env);
+  const dark = useTheme().resolved === "dark";
+  const [result, setResult] = useState<{ key: string; src: string | null } | null>(null);
+  const key = `${dark ? "d" : "l"}:${code}`;
+  useEffect(() => {
+    if (streaming) return;
+    let live = true;
+    renderMermaid(code, dark).then(
+      (src) => live && setResult({ key, src }),
+      () => live && setResult({ key, src: null }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [code, dark, key, streaming]);
+  const current = result?.key === key ? result : null;
+  if (current?.src)
+    return (
+      <div className="my-2 overflow-x-auto rounded-md border bg-background p-2">
+        <img src={current.src} alt="Diagram" className="max-w-full" />
+      </div>
+    );
+  return (
+    <>
+      <CodeBlock code={code} lang="mermaid" />
+      {current && current.src === null && (
+        <p className="-mt-1 mb-2 text-xs text-destructive">Diagram failed to render.</p>
+      )}
+    </>
+  );
+}
 
 /** A code block with lazy Shiki highlighting and a copy button. */
 export function CodeBlock({ code, lang, className }: { code: string; lang: string; className?: string }) {

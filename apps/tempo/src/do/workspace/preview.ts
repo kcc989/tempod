@@ -1,6 +1,6 @@
 import { and, eq, gt, lte } from "drizzle-orm";
 import { TEMPOD_PORT, TempoError, randomToken } from "@tempo/protocol";
-import { ports, previewCodes } from "../../db/workspace-do.ts";
+import { artifactCodes, ports, previewCodes } from "../../db/workspace-do.ts";
 import { previewNotFound, stripInternalHeaders } from "../../http/preview.ts";
 import {
   base64UrlToBytes,
@@ -102,6 +102,7 @@ export const previewEnter = async (
 export const rotatePreviewKey = (core: WorkspaceCore): void => {
   core.updateWs({ previewKey: newPreviewKey() });
   core.db.delete(previewCodes).run();
+  core.db.delete(artifactCodes).run();
   core.closePreviews(1008, "preview access reset");
 };
 

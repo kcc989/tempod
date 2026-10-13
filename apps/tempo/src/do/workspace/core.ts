@@ -25,6 +25,7 @@ import {
   type WorkspaceSummary,
   CloseCode,
   newId,
+  TEMPO_ARTIFACTS_DIR,
 } from "@tempo/protocol";
 import { resolveSettings } from "@tempo/settings";
 import { environments, mcpServers, projects, workspaces, type McpServerRow } from "../../db/d1.ts";
@@ -374,6 +375,7 @@ export class WorkspaceCore {
       TEMPO_WORKSPACE_PATH: "/workspace",
       TEMPO_DEFAULT_BRANCH: row.baseBranch,
       TEMPO_PORT: "3000",
+      TEMPO_ARTIFACTS_DIR,
     };
     return { ...settings.environment_variables, ...envSecrets, ...secrets, ...base };
   }

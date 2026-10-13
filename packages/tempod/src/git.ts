@@ -12,7 +12,7 @@ import {
 import { MESSAGE_BUDGET } from "./bounds.ts";
 import type { TempodDb } from "./db.ts";
 import { ExecError, run, tail, type ExecResult } from "./exec.ts";
-import { relativeToWorkspace, resolveWorkspacePath } from "./fs.ts";
+import { encodeFileBytes, relativeToWorkspace, resolveWorkspacePath } from "./fs.ts";
 
 export const BIG_FILE_BYTES = 50 * 1024 * 1024;
 const CKPT_REF = "refs/tempo/checkpoints/";
@@ -392,6 +392,28 @@ export class Git {
       );
       if (Buffer.byteLength(JSON.stringify(diff)) > MESSAGE_BUDGET) throw new TempoError("FILE_TOO_LARGE");
       return { diff };
+    });
+  }
+
+  /** `git.readFile` (02): the file as it is in a commit, `git show <sha>:<path>`. */
+  readFileAt(sha: string, path: string, maxBytes: number) {
+    return this.op("read", false, async () => {
+      if (!/^[0-9a-f]{4,64}$/i.test(sha)) throw new TempoError("NOT_FOUND", "Not a commit.");
+      const rel = relativeToWorkspace(this.deps.workspace, resolveWorkspacePath(this.deps.workspace, path));
+      const spec = `${sha}:${rel}`;
+      const type = await this.git(["cat-file", "-t", spec], { readOnly: true });
+      if (type.code !== 0 || type.stdout.trim() !== "blob") throw new TempoError("NOT_FOUND");
+      const size = Number((await this.gitOk(["cat-file", "-s", spec], { readOnly: true })).trim());
+      if (!(size <= maxBytes)) throw new TempoError("FILE_TOO_LARGE");
+      const proc = Bun.spawn(["git", "cat-file", "blob", spec], {
+        cwd: this.deps.workspace,
+        env: this.env({ readOnly: true }),
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      const bytes = Buffer.from(await new Response(proc.stdout).arrayBuffer());
+      if ((await proc.exited) !== 0) throw new TempoError("NOT_FOUND");
+      return encodeFileBytes(bytes, maxBytes);
     });
   }
 

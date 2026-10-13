@@ -48,7 +48,13 @@ const bridged = (spec: Extract<McpServerSpec, { transport: "http" | "sse" }>) =>
 
 describe("acpMcpServers (01, User MCP servers)", () => {
   test("Playwright first; remote transports pass through when the agent supports them", () => {
-    const list = acpMcpServers([fs, linear, legacy], { mcpCapabilities: { http: true, sse: true } }, bridge);
+    const list = acpMcpServers(
+      [fs, linear, legacy],
+      { mcpCapabilities: { http: true, sse: true } },
+      bridge,
+      "local",
+      "s1",
+    );
     expect(list.map((s) => s.name)).toEqual([PLAYWRIGHT_MCP_SERVER.name, "tempo", "fs", "linear", "old"]);
     expect(list[2]).toEqual({
       name: "fs",
@@ -58,21 +64,38 @@ describe("acpMcpServers (01, User MCP servers)", () => {
     });
     expect(list[3]).toEqual({ type: "http", name: "linear", url: linear.url, headers: [...linear.headers] });
     expect(list[4]).toEqual({ type: "sse", name: "old", url: legacy.url, headers: [] });
+    expect(list[1]).toEqual({
+      name: "tempo",
+      command: "/usr/local/bin/tempod",
+      args: ["mcp"],
+      env: [{ name: "TEMPO_SESSION_ID", value: "s1" }],
+    });
   });
 
   test("a transport the agent lacks goes through the tempod bridge", () => {
-    const list = acpMcpServers([linear, legacy], { mcpCapabilities: { http: true, sse: false } }, bridge);
+    const list = acpMcpServers(
+      [linear, legacy],
+      { mcpCapabilities: { http: true, sse: false } },
+      bridge,
+      "local",
+      "s1",
+    );
     expect(list[2]).toMatchObject({ type: "http" });
     expect(list[3]).toEqual(bridged(legacy));
-    expect(acpMcpServers([linear], {}, bridge)[2]).toEqual(bridged(linear));
+    expect(acpMcpServers([linear], {}, bridge, "local", "s1")[2]).toEqual(bridged(linear));
   });
 });
 
 describe("pi mcp.json (01, Pi)", () => {
   test("holds Playwright and every server; sse uses the bridge", () => {
-    const config = piMcpConfig([fs, linear, legacy], bridge);
+    const config = piMcpConfig([fs, linear, legacy], bridge, "local", "s1");
     expect(Object.keys(config.mcpServers)).toEqual(["playwright", "tempo", "fs", "linear", "old"]);
     expect(config.mcpServers["fs"]).toEqual({ command: "npx", args: ["-y", "fs"], env: { ROOT: "/w" } });
+    expect(config.mcpServers["tempo"]).toEqual({
+      command: "/usr/local/bin/tempod",
+      args: ["mcp"],
+      env: { TEMPO_SESSION_ID: "s1" },
+    });
     expect(config.mcpServers["linear"]).toEqual({
       url: linear.url,
       headers: { Authorization: linear.headers[0]!.value },
@@ -86,8 +109,8 @@ describe("pi mcp.json (01, Pi)", () => {
 
   test("is written with mode 0600 and replaced on each write", () => {
     const dir = join(tmpDir(), ".pi", "agent");
-    writePiMcpConfig(dir, [fs, linear], bridge);
-    writePiMcpConfig(dir, [fs], bridge);
+    writePiMcpConfig(dir, [fs, linear], bridge, "local", "s1");
+    writePiMcpConfig(dir, [fs], bridge, "local", "s1");
     const path = join(dir, "mcp.json");
     expect(statSync(path).mode & 0o777).toBe(0o600);
     expect(Object.keys(JSON.parse(readFileSync(path, "utf8")).mcpServers)).toEqual([

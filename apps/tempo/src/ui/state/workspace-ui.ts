@@ -15,11 +15,16 @@ export type CenterTab =
   | { readonly kind: "file"; readonly path: string; readonly line: number | null }
   | { readonly kind: "diff"; readonly path: string | null }
   | { readonly kind: "browser"; readonly url: string }
-  | { readonly kind: "liveView" };
+  | { readonly kind: "liveView" }
+  /** `version` null: the newest version (04, Artifact tab). */
+  | { readonly kind: "artifact"; readonly artifactId: string; readonly version: number | null };
 
 export type CenterTabKind = CenterTab["kind"];
 
-/** Identity: one tab per session, one per file path, one diff tab, one per browser URL, one Live View. */
+/**
+ * Identity: one tab per session, one per file path, one diff tab, one per browser URL, one Live View,
+ * one per artifact.
+ */
 export const tabKey = (t: CenterTab): string => {
   switch (t.kind) {
     case "chat":
@@ -32,12 +37,14 @@ export const tabKey = (t: CenterTab): string => {
       return `browser:${t.url}`;
     case "liveView":
       return "liveView";
+    case "artifact":
+      return `artifact:${t.artifactId}`;
   }
 };
 
 /**
  * Serialized form: `chat:<sessionId>`, `file:<path>:<line?>`, `diff:<path?>`, `browser:<url>`,
- * `liveView:`.
+ * `liveView:`, `artifact:<artifactId>:<version?>`.
  */
 export const tabRef = (t: CenterTab): string => {
   switch (t.kind) {
@@ -51,6 +58,8 @@ export const tabRef = (t: CenterTab): string => {
       return `browser:${t.url}`;
     case "liveView":
       return "liveView:";
+    case "artifact":
+      return `artifact:${t.artifactId}:${t.version ?? ""}`;
   }
 };
 
@@ -77,6 +86,13 @@ export const parseTabRef = (ref: string): CenterTab | null => {
       return rest ? { kind: "browser", url: rest } : null;
     case "liveView":
       return rest === "" ? { kind: "liveView" } : null;
+    case "artifact": {
+      const [artifactId = "", versionText = "", ...extra] = rest.split(":");
+      const version = versionText === "" ? null : Number(versionText);
+      if (!/^[0-9a-z]{26}$/.test(artifactId) || extra.length > 0) return null;
+      if (version !== null && (!Number.isInteger(version) || version < 1)) return null;
+      return { kind: "artifact", artifactId, version };
+    }
     default:
       return null;
   }
@@ -89,7 +105,7 @@ export interface OpenTab {
   readonly seq: number;
 }
 
-export type RightTab = "changes" | "files" | "checks";
+export type RightTab = "changes" | "files" | "checks" | "artifacts";
 export type BottomTab = "setup" | "run" | "terminal";
 
 export type ComposerInsertion =
@@ -257,6 +273,12 @@ export const openDiff = (workspaceId: string, path: string | null = null): strin
 
 export const openBrowser = (workspaceId: string, url: string): string =>
   openTab(workspaceId, { kind: "browser", url });
+
+export const openArtifactTab = (
+  workspaceId: string,
+  artifactId: string,
+  version: number | null = null,
+): string => openTab(workspaceId, { kind: "artifact", artifactId, version });
 
 /** The tab holds no link: a Live View link is a secret, so the tab asks for its own (04, Browser tabs). */
 export const openLiveView = (workspaceId: string): string => openTab(workspaceId, { kind: "liveView" });

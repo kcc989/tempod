@@ -169,6 +169,7 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
         workspaceId={workspaceId}
         file={f}
         scope={changes.scope}
+        beforeSha={changes.beforeSha}
         view={view}
         live={changes.live}
         viewedHash={marks[f.path]}

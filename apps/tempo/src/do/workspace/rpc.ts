@@ -52,6 +52,7 @@ import {
 } from "./queue.ts";
 import { browserLiveView } from "./browser.ts";
 import { openPreview, rotatePreviewKey } from "./preview.ts";
+import { listArtifacts, openArtifact } from "./artifacts.ts";
 import type { OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
 
@@ -275,7 +276,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     deleteWorkspace: async () => {
       const row = core.ws();
       if (row.state !== "archived") throw new TempoError("WORKSPACE_NOT_ARCHIVED");
-      for (const prefix of ["checkpoints", "homes", "attachments", "logs"]) {
+      for (const prefix of ["checkpoints", "homes", "attachments", "logs", "artifacts"]) {
         let cursor: string | undefined;
         do {
           const list = await core.env.DATA.list({
@@ -930,6 +931,15 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const res = await core.tempod.request("terminal.list", {});
       return res.terminalIds.map((terminalId) => ({ terminalId }));
     },
+
+    readFileAt: async ({ path, sha }) => {
+      rt.requireReady();
+      return requireTempod(core).request("git.readFile", { sha, path, maxBytes: 1024 * 1024 });
+    },
+
+    listArtifacts: async () => listArtifacts(core),
+
+    openArtifact: ({ artifactId, version }) => openArtifact(core, artifactId, version),
 
     listScriptRuns: async () =>
       core.db

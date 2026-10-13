@@ -10,7 +10,7 @@ import {
 } from "@tempo/protocol";
 import type { DiffLine } from "~/ui/lib/diff";
 import { formatTokens } from "~/ui/lib/format";
-import { foldsIntoWork, type TranscriptDetail } from "./work-model";
+import { foldsIntoWork, planProposalText, type TranscriptDetail } from "./work-model";
 
 /** Pure helpers for the transcript (04, Transcript; 02, Item model). */
 
@@ -22,6 +22,8 @@ export type TranscriptRow =
       readonly turnId: string | null;
       /** The item's turn was reverted: 50% opacity. */
       readonly dim: boolean;
+      /** A plan proposal's permission item, shown under its card (04, Plan proposals). */
+      readonly permissionId?: string;
     }
   | {
       readonly kind: "work";
@@ -73,6 +75,19 @@ export const buildTranscriptRows = (
   });
   placed.sort((a, b) => a.at - b.at || a.rank - b.rank || a.index - b.index);
 
+  const planByToolCall = new Map<string, string>();
+  for (const { item } of placed)
+    if (item.kind === "tool_call" && planProposalText(item) !== null)
+      planByToolCall.set(item.content.toolCallId, item.id);
+  const permissionOfPlan = new Map<string, string>();
+  for (let i = placed.length - 1; i >= 0; i--) {
+    const item = placed[i]!.item;
+    const plan = item.kind === "permission" ? planByToolCall.get(item.content.toolCallId ?? "") : undefined;
+    if (plan === undefined) continue;
+    permissionOfPlan.set(plan, item.id);
+    placed.splice(i, 1);
+  }
+
   const last = new Map<string, number>();
   placed.forEach((p, i) => {
     if (p.item.turnId) last.set(p.item.turnId, i);
@@ -103,8 +118,17 @@ export const buildTranscriptRows = (
       placedWork.add(turn.id);
       rows.push({ kind: "work", key: `work:${turn.id}`, turnId: turn.id, itemIds: work, dim });
     }
-    if (!work?.includes(p.item.id))
-      rows.push({ kind: "item", key: p.item.id, itemId: p.item.id, turnId: p.item.turnId, dim });
+    if (!work?.includes(p.item.id)) {
+      const permissionId = permissionOfPlan.get(p.item.id);
+      rows.push({
+        kind: "item",
+        key: p.item.id,
+        itemId: p.item.id,
+        turnId: p.item.turnId,
+        dim,
+        ...(permissionId ? { permissionId } : {}),
+      });
+    }
     if (!turn || last.get(turn.id) !== i) return;
     if (isEnded(turn))
       rows.push({

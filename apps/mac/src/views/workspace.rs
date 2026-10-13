@@ -1600,6 +1600,16 @@ impl WorkspaceView {
                         }
                     }
                 }
+                TranscriptEvent::OpenArtifact {
+                    artifact_id,
+                    version,
+                } => {
+                    this.review.update(cx, |r, cx| {
+                        r.open_artifact(artifact_id.clone(), Some(*version), window, cx)
+                    });
+                    cx.emit(RevealRight);
+                    cx.notify();
+                }
                 TranscriptEvent::Retry { turn_id } => {
                     let prompt = this
                         .store

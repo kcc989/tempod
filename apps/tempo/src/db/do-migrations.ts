@@ -384,6 +384,58 @@ FROM review_comments`,
       "ALTER TABLE sessions ADD COLUMN profile_issues_json TEXT NOT NULL DEFAULT '[]'",
     ],
   },
+  {
+    tag: "0008_artifacts",
+    when: 1792353600000,
+    statements: [
+      `CREATE TABLE items_new (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL,
+  turn_id       TEXT,
+  kind          TEXT NOT NULL CHECK (kind IN ('user_message','agent_message','agent_thought','tool_call',
+                                             'plan','permission','notice','handoff','revert_marker','error',
+                                             'artifact')),
+  status        TEXT NOT NULL CHECK (status IN ('streaming','pending','in_progress','completed','failed','cancelled')),
+  content_json  TEXT NOT NULL,
+  rev           INTEGER NOT NULL,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+)`,
+      `INSERT INTO items_new (id, session_id, turn_id, kind, status, content_json, rev, created_at, updated_at)
+SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, updated_at FROM items`,
+      "DROP TABLE items",
+      "ALTER TABLE items_new RENAME TO items",
+      "CREATE INDEX items_by_session ON items(session_id, created_at)",
+      "CREATE INDEX items_by_rev ON items(rev)",
+      `CREATE TABLE artifacts (
+  id           TEXT NOT NULL,
+  version      INTEGER NOT NULL,
+  session_id   TEXT NOT NULL,
+  turn_id      TEXT,
+  item_id      TEXT NOT NULL,
+  path         TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  title        TEXT NOT NULL,
+  summary      TEXT,
+  mime         TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('image','markdown','pdf','html','text')),
+  size_bytes   INTEGER NOT NULL,
+  sha256       TEXT NOT NULL,
+  staged_path  TEXT NOT NULL,
+  status       TEXT NOT NULL CHECK (status IN ('uploading','ready','lost')),
+  attempt      INTEGER NOT NULL DEFAULT 0,
+  r2_key       TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (id, version)
+)`,
+      `CREATE TABLE artifact_codes (
+  code_hash    TEXT PRIMARY KEY,
+  artifact_id  TEXT NOT NULL,
+  version      INTEGER NOT NULL,
+  expires_at   INTEGER NOT NULL
+)`,
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

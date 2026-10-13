@@ -280,6 +280,18 @@ export const listScriptRuns = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listScriptRuns">) => data)
   .handler(({ data }) => run("listScriptRuns", data));
 
+export const readFileAt = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"readFileAt">) => data)
+  .handler(({ data }) => run("readFileAt", data));
+
+export const listArtifacts = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listArtifacts">) => data)
+  .handler(({ data }) => run("listArtifacts", data));
+
+export const openArtifact = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"openArtifact">) => data)
+  .handler(({ data }) => run("openArtifact", data));
+
 export const listCustomAgents = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listCustomAgents">) => data)
   .handler(({ data }) => run("listCustomAgents", data));

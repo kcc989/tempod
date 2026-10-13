@@ -24,7 +24,7 @@ pub use environments::{
 pub use error::{ApiError, DENIED_MESSAGE, NOT_TEMPO_MESSAGE, SignInError};
 pub use runtime::{Runtime, RuntimeHandle, Signal};
 pub use server::{
-    AttachmentFile, CLIENT_ID, Client, DEVICE_GRANT_TYPE, DeviceAuthorization,
+    AttachmentFile, CLIENT_ID, Client, DEVICE_GRANT_TYPE, DeviceAuthorization, MAX_ARTIFACT_BYTES,
     MAX_ATTACHMENT_BYTES, SLOW_DOWN_STEP, Server, TokenStatus,
 };
 pub use token::Token;

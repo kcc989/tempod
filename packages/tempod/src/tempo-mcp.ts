@@ -1,16 +1,26 @@
 import { chmodSync, rmSync } from "node:fs";
 import { Schema } from "effect";
-import { EnvironmentProposal, type EnvironmentSummary } from "@tempo/protocol";
+import {
+  ARTIFACT_SUMMARY_MAX,
+  ARTIFACT_TITLE_MAX,
+  ARTIFACT_TOOL_DESCRIPTION,
+  EnvironmentProposal,
+  PublishArtifactRequest,
+  TEMPO_SESSION_ID_ENV,
+  type EnvironmentSummary,
+} from "@tempo/protocol";
+import type { PublishAnswer } from "./artifacts.ts";
 import { VERSION } from "./config.ts";
 
 /**
- * The `tempo` MCP server (01, Environments). `tempod mcp` speaks MCP over stdio and forwards the
- * two tools to the daemon over a Unix socket. The agent can read its environment and propose
- * changes; only the owner can apply them.
+ * The `tempo` MCP server (01, Environments; Artifacts). `tempod mcp` speaks MCP over stdio and
+ * forwards its tools to the daemon over a Unix socket. The agent can read its environment, propose
+ * changes that only the owner can apply, and publish artifacts.
  */
 
 const PROTOCOL_VERSION = "2025-06-18";
 const decodeProposal = Schema.decodeUnknownExit(EnvironmentProposal);
+const decodePublish = Schema.decodeUnknownExit(PublishArtifactRequest);
 
 const hostList = {
   type: "array",
@@ -63,12 +73,29 @@ export const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: "publish_artifact",
+    description: ARTIFACT_TOOL_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path of the file." },
+        title: { type: "string", minLength: 1, maxLength: ARTIFACT_TITLE_MAX },
+        summary: { type: "string", maxLength: ARTIFACT_SUMMARY_MAX },
+      },
+      required: ["path", "title"],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 export interface McpBackend {
   readonly summary: () => EnvironmentSummary | null;
   readonly propose: (proposal: EnvironmentProposal) => void;
+  readonly publish: (req: PublishArtifactRequest) => Promise<PublishAnswer>;
 }
+
+const firstLines = (cause: unknown) => String(cause).split("\n").slice(0, 6).join(" ");
 
 /** The daemon side: answers on the Unix socket. Started after hello. */
 export const startMcpSocket = (path: string, backend: McpBackend): { stop: () => void } => {
@@ -87,13 +114,21 @@ export const startMcpSocket = (path: string, backend: McpBackend): { stop: () =>
           return Response.json({ error: "body is not JSON" }, { status: 400 });
         }
         const exit = decodeProposal(body, { onExcessProperty: "error" });
-        if (exit._tag === "Failure")
-          return Response.json(
-            { error: String(exit.cause).split("\n").slice(0, 6).join(" ") },
-            { status: 400 },
-          );
+        if (exit._tag === "Failure") return Response.json({ error: firstLines(exit.cause) }, { status: 400 });
         backend.propose(exit.value);
         return Response.json({ ok: true });
+      }
+      if (req.method === "POST" && url.pathname === "/artifacts") {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "body is not JSON" }, { status: 400 });
+        }
+        const exit = decodePublish(body, { onExcessProperty: "error" });
+        if (exit._tag === "Failure") return Response.json({ error: firstLines(exit.cause) }, { status: 400 });
+        const answer = await backend.publish(exit.value);
+        return Response.json(answer, { status: "error" in answer ? 400 : 200 });
       }
       return new Response("not found", { status: 404 });
     },
@@ -116,7 +151,11 @@ const describeSummary = (s: EnvironmentSummary | null): string => {
 };
 
 /** Handles one JSON-RPC message; returns the response, or null for a notification. */
-export const handleMcpMessage = async (msg: Json, call: Call): Promise<Json | null> => {
+export const handleMcpMessage = async (
+  msg: Json,
+  call: Call,
+  sessionId: string | undefined = process.env[TEMPO_SESSION_ID_ENV],
+): Promise<Json | null> => {
   const id = msg["id"];
   const method = msg["method"];
   if (id === undefined || id === null) return null;
@@ -153,6 +192,16 @@ export const handleMcpMessage = async (msg: Json, call: Call): Promise<Json | nu
             return reply(text(`The proposal is not valid: ${body.error ?? res.status}`, true));
           }
           return reply(text("Sent to the owner for review."));
+        }
+        if (params["name"] === "publish_artifact") {
+          const res = await call("/artifacts", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...args, sessionId: sessionId ?? "" }),
+          });
+          const body = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+          if (!res.ok) return reply(text(body.error ?? `tempod answered ${res.status}`, true));
+          return reply(text(body.text ?? ""));
         }
         return fail(-32602, `unknown tool ${String(params["name"])}`);
       } catch {

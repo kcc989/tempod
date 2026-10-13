@@ -274,6 +274,167 @@ pub struct ArchiveWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`Artifact`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct Artifact {
+    #[serde(rename = "createdAt")]
+    pub created_at: f64,
+    pub id: ::std::string::String,
+    #[serde(rename = "itemId")]
+    pub item_id: ::std::string::String,
+    pub kind: ArtifactKind,
+    pub mime: ::std::string::String,
+    pub name: ::std::string::String,
+    pub path: ::std::string::String,
+    #[serde(rename = "sessionId")]
+    pub session_id: ::std::string::String,
+    pub sha256: ::std::string::String,
+    pub size: f64,
+    pub status: ArtifactStatus,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub summary: ::std::option::Option<::std::string::String>,
+    pub title: ::std::string::String,
+    #[serde(
+        rename = "turnId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub turn_id: ::std::option::Option<::std::string::String>,
+    pub version: f64,
+}
+///`ArtifactItemContent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ArtifactItemContent {
+    #[serde(rename = "artifactId")]
+    pub artifact_id: ::std::string::String,
+    #[serde(rename = "artifactKind")]
+    pub artifact_kind: ArtifactKind,
+    pub mime: ::std::string::String,
+    pub name: ::std::string::String,
+    pub path: ::std::string::String,
+    pub size: f64,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub summary: ::std::option::Option<::std::string::String>,
+    pub title: ::std::string::String,
+    pub version: f64,
+}
+///`ArtifactKind`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ArtifactKind {
+    #[serde(rename = "image")]
+    Image,
+    #[serde(rename = "markdown")]
+    Markdown,
+    #[serde(rename = "pdf")]
+    Pdf,
+    #[serde(rename = "html")]
+    Html,
+    #[serde(rename = "text")]
+    Text,
+}
+impl ::std::fmt::Display for ArtifactKind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Image => f.write_str("image"),
+            Self::Markdown => f.write_str("markdown"),
+            Self::Pdf => f.write_str("pdf"),
+            Self::Html => f.write_str("html"),
+            Self::Text => f.write_str("text"),
+        }
+    }
+}
+impl ::std::str::FromStr for ArtifactKind {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "image" => Ok(Self::Image),
+            "markdown" => Ok(Self::Markdown),
+            "pdf" => Ok(Self::Pdf),
+            "html" => Ok(Self::Html),
+            "text" => Ok(Self::Text),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ArtifactKind {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ArtifactKind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`ArtifactStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ArtifactStatus {
+    #[serde(rename = "uploading")]
+    Uploading,
+    #[serde(rename = "ready")]
+    Ready,
+    #[serde(rename = "lost")]
+    Lost,
+}
+impl ::std::fmt::Display for ArtifactStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Uploading => f.write_str("uploading"),
+            Self::Ready => f.write_str("ready"),
+            Self::Lost => f.write_str("lost"),
+        }
+    }
+}
+impl ::std::str::FromStr for ArtifactStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "uploading" => Ok(Self::Uploading),
+            "ready" => Ok(Self::Ready),
+            "lost" => Ok(Self::Lost),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ArtifactStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ArtifactStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`Attachment`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Attachment {
@@ -1998,6 +2159,8 @@ pub enum ErrorCode {
     PathOutsideWorkspace,
     #[serde(rename = "CHECKPOINT_NOT_FOUND")]
     CheckpointNotFound,
+    #[serde(rename = "ARTIFACT_NOT_READY")]
+    ArtifactNotReady,
     #[serde(rename = "MODEL_REQUIRED")]
     ModelRequired,
     #[serde(rename = "SETTINGS_INVALID")]
@@ -2054,6 +2217,7 @@ impl ::std::fmt::Display for ErrorCode {
             Self::FileTooLarge => f.write_str("FILE_TOO_LARGE"),
             Self::PathOutsideWorkspace => f.write_str("PATH_OUTSIDE_WORKSPACE"),
             Self::CheckpointNotFound => f.write_str("CHECKPOINT_NOT_FOUND"),
+            Self::ArtifactNotReady => f.write_str("ARTIFACT_NOT_READY"),
             Self::ModelRequired => f.write_str("MODEL_REQUIRED"),
             Self::SettingsInvalid => f.write_str("SETTINGS_INVALID"),
             Self::EnvironmentExists => f.write_str("ENVIRONMENT_EXISTS"),
@@ -2105,6 +2269,7 @@ impl ::std::str::FromStr for ErrorCode {
             "FILE_TOO_LARGE" => Ok(Self::FileTooLarge),
             "PATH_OUTSIDE_WORKSPACE" => Ok(Self::PathOutsideWorkspace),
             "CHECKPOINT_NOT_FOUND" => Ok(Self::CheckpointNotFound),
+            "ARTIFACT_NOT_READY" => Ok(Self::ArtifactNotReady),
             "MODEL_REQUIRED" => Ok(Self::ModelRequired),
             "SETTINGS_INVALID" => Ok(Self::SettingsInvalid),
             "ENVIRONMENT_EXISTS" => Ok(Self::EnvironmentExists),
@@ -2560,6 +2725,8 @@ pub enum ItemKind {
     RevertMarker,
     #[serde(rename = "error")]
     Error,
+    #[serde(rename = "artifact")]
+    Artifact,
 }
 impl ::std::fmt::Display for ItemKind {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -2574,6 +2741,7 @@ impl ::std::fmt::Display for ItemKind {
             Self::Handoff => f.write_str("handoff"),
             Self::RevertMarker => f.write_str("revert_marker"),
             Self::Error => f.write_str("error"),
+            Self::Artifact => f.write_str("artifact"),
         }
     }
 }
@@ -2591,6 +2759,7 @@ impl ::std::str::FromStr for ItemKind {
             "handoff" => Ok(Self::Handoff),
             "revert_marker" => Ok(Self::RevertMarker),
             "error" => Ok(Self::Error),
+            "artifact" => Ok(Self::Artifact),
             _ => Err("invalid value".into()),
         }
     }
@@ -2683,6 +2852,12 @@ pub struct LinkProjectIn {
     pub installation_id: f64,
     #[serde(rename = "repoId")]
     pub repo_id: f64,
+}
+///`ListArtifactsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListArtifactsIn {
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
 }
 ///`ListBranchesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3579,6 +3754,70 @@ impl ::std::convert::TryFrom<::std::string::String> for OpStatus {
         value.parse()
     }
 }
+///`OpenArtifactIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct OpenArtifactIn {
+    #[serde(rename = "artifactId")]
+    pub artifact_id: OpenArtifactInArtifactId,
+    pub version: f64,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`OpenArtifactInArtifactId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct OpenArtifactInArtifactId(::std::string::String);
+impl ::std::ops::Deref for OpenArtifactInArtifactId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<OpenArtifactInArtifactId> for ::std::string::String {
+    fn from(value: OpenArtifactInArtifactId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for OpenArtifactInArtifactId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for OpenArtifactInArtifactId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for OpenArtifactInArtifactId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for OpenArtifactInArtifactId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`OpenArtifactOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct OpenArtifactOut {
+    pub url: ::std::string::String,
+}
 ///`OpenPreviewIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct OpenPreviewIn {
@@ -3964,6 +4203,122 @@ pub struct Project {
     pub settings: SettingsLayer,
     #[serde(rename = "sortOrder")]
     pub sort_order: f64,
+}
+///`ReadFileAtIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ReadFileAtIn {
+    pub path: ::std::string::String,
+    pub sha: ReadFileAtInSha,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`ReadFileAtInSha`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ReadFileAtInSha(::std::string::String);
+impl ::std::ops::Deref for ReadFileAtInSha {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ReadFileAtInSha> for ::std::string::String {
+    fn from(value: ReadFileAtInSha) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ReadFileAtInSha {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ReadFileAtInSha {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ReadFileAtInSha {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ReadFileAtInSha {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`ReadFileAtOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ReadFileAtOut {
+    pub content: ::std::string::String,
+    pub encoding: ReadFileAtOutEncoding,
+    pub size: f64,
+}
+///`ReadFileAtOutEncoding`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ReadFileAtOutEncoding {
+    #[serde(rename = "utf8")]
+    Utf8,
+    #[serde(rename = "base64")]
+    Base64,
+}
+impl ::std::fmt::Display for ReadFileAtOutEncoding {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Utf8 => f.write_str("utf8"),
+            Self::Base64 => f.write_str("base64"),
+        }
+    }
+}
+impl ::std::str::FromStr for ReadFileAtOutEncoding {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "utf8" => Ok(Self::Utf8),
+            "base64" => Ok(Self::Base64),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ReadFileAtOutEncoding {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ReadFileAtOutEncoding {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`ReadFileIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -7498,6 +7853,15 @@ pub mod api {
         type Input = crate::LinkProjectIn;
         type Output = crate::Project;
     }
+    /// `listArtifacts`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListArtifacts;
+    impl crate::Function for ListArtifacts {
+        const NAME: &'static str = "listArtifacts";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListArtifactsIn;
+        type Output = ::std::vec::Vec<crate::Artifact>;
+    }
     /// `listBranches`
     #[derive(Clone, Copy, Debug)]
     pub struct ListBranches;
@@ -7669,6 +8033,15 @@ pub mod api {
         type Input = crate::MergePullRequestIn;
         type Output = crate::Empty;
     }
+    /// `openArtifact`
+    #[derive(Clone, Copy, Debug)]
+    pub struct OpenArtifact;
+    impl crate::Function for OpenArtifact {
+        const NAME: &'static str = "openArtifact";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::OpenArtifactIn;
+        type Output = crate::OpenArtifactOut;
+    }
     /// `openPreview`
     #[derive(Clone, Copy, Debug)]
     pub struct OpenPreview;
@@ -7695,6 +8068,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ReadFileIn;
         type Output = crate::ReadFileOut;
+    }
+    /// `readFileAt`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ReadFileAt;
+    impl crate::Function for ReadFileAt {
+        const NAME: &'static str = "readFileAt";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ReadFileAtIn;
+        type Output = crate::ReadFileAtOut;
     }
     /// `refreshPullRequest`
     #[derive(Clone, Copy, Debug)]
@@ -8033,6 +8415,7 @@ pub mod api {
         ("getFileDiff", crate::Method::Get),
         ("getWorkspace", crate::Method::Get),
         ("linkProject", crate::Method::Post),
+        ("listArtifacts", crate::Method::Get),
         ("listBranches", crate::Method::Get),
         ("listCheckRuns", crate::Method::Get),
         ("listCheckpoints", crate::Method::Get),
@@ -8052,9 +8435,11 @@ pub mod api {
         ("listWorkspaces", crate::Method::Get),
         ("markViewed", crate::Method::Post),
         ("mergePullRequest", crate::Method::Post),
+        ("openArtifact", crate::Method::Post),
         ("openPreview", crate::Method::Post),
         ("pollCodexLogin", crate::Method::Post),
         ("readFile", crate::Method::Get),
+        ("readFileAt", crate::Method::Get),
         ("refreshPullRequest", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
         ("renameSession", crate::Method::Post),
@@ -8105,6 +8490,10 @@ pub mod wire {
         "ApiMeta",
         "AppSetupStatus",
         "ArchiveWorkspaceIn",
+        "Artifact",
+        "ArtifactItemContent",
+        "ArtifactKind",
+        "ArtifactStatus",
         "Attachment",
         "Attention",
         "AvailableCommand",
@@ -8181,6 +8570,7 @@ pub mod wire {
         "ItemKind",
         "ItemStatus",
         "LinkProjectIn",
+        "ListArtifactsIn",
         "ListBranchesIn",
         "ListBranchesItem",
         "ListCheckRunsIn",
@@ -8219,6 +8609,8 @@ pub mod wire {
         "OpKind",
         "OpProgress",
         "OpStatus",
+        "OpenArtifactIn",
+        "OpenArtifactOut",
         "OpenPreviewIn",
         "OpenPreviewOut",
         "PendingEnvironmentProposal",
@@ -8233,6 +8625,8 @@ pub mod wire {
         "PrState",
         "ProfileIssue",
         "Project",
+        "ReadFileAtIn",
+        "ReadFileAtOut",
         "ReadFileIn",
         "ReadFileOut",
         "RefreshPullRequestIn",
@@ -8335,6 +8729,10 @@ pub mod wire {
             "ApiMeta" => crate::roundtrip::<crate::ApiMeta>(text),
             "AppSetupStatus" => crate::roundtrip::<crate::AppSetupStatus>(text),
             "ArchiveWorkspaceIn" => crate::roundtrip::<crate::ArchiveWorkspaceIn>(text),
+            "Artifact" => crate::roundtrip::<crate::Artifact>(text),
+            "ArtifactItemContent" => crate::roundtrip::<crate::ArtifactItemContent>(text),
+            "ArtifactKind" => crate::roundtrip::<crate::ArtifactKind>(text),
+            "ArtifactStatus" => crate::roundtrip::<crate::ArtifactStatus>(text),
             "Attachment" => crate::roundtrip::<crate::Attachment>(text),
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
@@ -8415,6 +8813,7 @@ pub mod wire {
             "ItemKind" => crate::roundtrip::<crate::ItemKind>(text),
             "ItemStatus" => crate::roundtrip::<crate::ItemStatus>(text),
             "LinkProjectIn" => crate::roundtrip::<crate::LinkProjectIn>(text),
+            "ListArtifactsIn" => crate::roundtrip::<crate::ListArtifactsIn>(text),
             "ListBranchesIn" => crate::roundtrip::<crate::ListBranchesIn>(text),
             "ListBranchesItem" => crate::roundtrip::<crate::ListBranchesItem>(text),
             "ListCheckRunsIn" => crate::roundtrip::<crate::ListCheckRunsIn>(text),
@@ -8457,6 +8856,8 @@ pub mod wire {
             "OpKind" => crate::roundtrip::<crate::OpKind>(text),
             "OpProgress" => crate::roundtrip::<crate::OpProgress>(text),
             "OpStatus" => crate::roundtrip::<crate::OpStatus>(text),
+            "OpenArtifactIn" => crate::roundtrip::<crate::OpenArtifactIn>(text),
+            "OpenArtifactOut" => crate::roundtrip::<crate::OpenArtifactOut>(text),
             "OpenPreviewIn" => crate::roundtrip::<crate::OpenPreviewIn>(text),
             "OpenPreviewOut" => crate::roundtrip::<crate::OpenPreviewOut>(text),
             "PendingEnvironmentProposal" => {
@@ -8473,6 +8874,8 @@ pub mod wire {
             "PrState" => crate::roundtrip::<crate::PrState>(text),
             "ProfileIssue" => crate::roundtrip::<crate::ProfileIssue>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
+            "ReadFileAtIn" => crate::roundtrip::<crate::ReadFileAtIn>(text),
+            "ReadFileAtOut" => crate::roundtrip::<crate::ReadFileAtOut>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
             "ReadFileOut" => crate::roundtrip::<crate::ReadFileOut>(text),
             "RefreshPullRequestIn" => crate::roundtrip::<crate::RefreshPullRequestIn>(text),
