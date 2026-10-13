@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS, type Session } from "@tempo/protocol";
 import { CornerDownLeftIcon } from "lucide-react";
 import { Button } from "~/ui/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/ui/components/ui/dialog";
-import { Textarea } from "~/ui/components/ui/textarea";
+import { ComposerSurface, ComposerInput, ComposerToolbar } from "./ComposerControls";
 import { useCallMutation } from "~/ui/hooks/useCall";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { needsModel } from "~/ui/lib/agents";
@@ -83,7 +83,7 @@ export function NewChatComposer({
       }}
     >
       <DialogContent
-        className="gap-0 rounded-2xl bg-muted p-0"
+        className="gap-0 rounded-2xl border-0 bg-transparent p-0 shadow-none"
         style={{ width: "min(48rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
         overlayClassName="backdrop-blur-sm"
         onSubmitShortcut={() => void submit()}
@@ -96,31 +96,33 @@ export function NewChatComposer({
         <DialogDescription className="sr-only">
           Choose a model and start a chat. Enter opens an empty chat too.
         </DialogDescription>
-        <Textarea
-          ref={textarea}
-          aria-label="Prompt"
-          placeholder="What do you want to work on?"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          disabled={busy}
-          className="max-h-[min(24rem,50dvh)] min-h-48 resize-none rounded-none border-0 bg-transparent p-4 focus-visible:ring-0 dark:bg-transparent"
-          onKeyDown={(e) => {
-            if (e.key !== "Enter" || e.shiftKey || e.altKey || e.nativeEvent.isComposing) return;
-            e.preventDefault();
-            void submit();
-          }}
-        />
-        <div className="flex items-center justify-between gap-2 px-3 pb-3">
-          <LaunchModelPicker
-            selection={selection}
-            disabled={busy || created !== null}
-            onClosed={() => textarea.current?.focus()}
+        <ComposerSurface>
+          <ComposerInput
+            ref={textarea}
+            aria-label="Prompt"
+            placeholder="What do you want to work on?"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            disabled={busy}
+            className="max-h-[min(24rem,50dvh)] min-h-48"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || e.shiftKey || e.altKey || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              void submit();
+            }}
           />
-          <Button size="sm" disabled={busy || !canCreate} onClick={() => void submit()}>
-            {busy ? "Starting…" : "Create chat"}
-            <CornerDownLeftIcon className="size-3.5" />
-          </Button>
-        </div>
+          <ComposerToolbar className="justify-between">
+            <LaunchModelPicker
+              selection={selection}
+              disabled={busy || created !== null}
+              onClosed={() => textarea.current?.focus()}
+            />
+            <Button size="sm" disabled={busy || !canCreate} onClick={() => void submit()}>
+              {busy ? "Starting…" : "Create chat"}
+              <CornerDownLeftIcon className="size-3.5" />
+            </Button>
+          </ComposerToolbar>
+        </ComposerSurface>
       </DialogContent>
     </Dialog>
   );

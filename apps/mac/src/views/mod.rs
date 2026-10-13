@@ -9,6 +9,7 @@ pub mod chat_model;
 pub mod checks;
 pub mod composer;
 pub mod composer_model;
+mod composer_parts;
 pub mod diagnostics;
 pub mod dialogs;
 pub mod diff;
