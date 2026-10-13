@@ -124,7 +124,24 @@
       ]
     },
     "@tempo/app#build": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/roles-builtin/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/roles-builtin/**"],
+      "cache": false,
+      "env": ["TEMPO_WRANGLER_CONFIG", "CLOUDFLARE_ENV", "NODE_ENV", "VITE_*"]
+    },
+    "@tempo/app#build:ci": {
+      "dependsOn": ["^transit"],
+      "outputs": ["dist/**", ".wrangler/deploy/config.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!test/**",
+        "!vitest*.config.ts",
+        "!vite.web-test.config.ts",
+        ".env*",
+        ".dev.vars*",
+        "$TURBO_ROOT$/packages/roles-builtin/**",
+        "$TURBO_ROOT$/container/**"
+      ],
+      "env": ["CLOUDFLARE_ENV", "NODE_ENV", "VITE_*", "PWD"]
     }
   },
   "globalDependencies": ["tsconfig*.json", "bunfig.toml", "patches/**"],

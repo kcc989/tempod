@@ -1,5 +1,5 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { newId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
+import { newId, type AgentId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import type { WorkspaceCore } from "../../src/do/workspace/core.ts";
 import type { OpRunner } from "../../src/do/workspace/runner.ts";
@@ -29,6 +29,30 @@ export class FakeTempod {
   /** Every request proxied through /v1/proxy, with the headers tempod received. */
   readonly proxyRequests: Array<{ path: string; headers: Headers }> = [];
   healthy = true;
+  private healthGate: Promise<void> | null = null;
+  private onHealthProbe: (() => void) | null = null;
+
+  /** Blocks the actual health response until the test releases startup. */
+  holdHealth() {
+    let markEntered!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+    this.healthGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.onHealthProbe = markEntered;
+    return {
+      entered,
+      release: () => {
+        this.healthy = true;
+        this.healthGate = null;
+        this.onHealthProbe = null;
+        release();
+      },
+    };
+  }
 
   constructor() {
     const ok = () => ({});
@@ -129,6 +153,8 @@ export class FakeTempod {
         if (req.headers.get("Authorization") !== `Bearer ${token()}`)
           return new Response("unauthorized", { status: 401 });
         if (url.pathname === "/v1/health") {
+          this.onHealthProbe?.();
+          if (this.healthGate) await this.healthGate;
           if (!this.healthy) return new Response("starting", { status: 503 });
           return Response.json({ ok: true, version: this.version, incarnation: this.incarnation });
         }
@@ -468,10 +494,14 @@ export const seedWorkspace = async (
   return { workspaceId, stub, ...fakes };
 };
 
-/** Gives the user a credential for every agent. */
-export const seedCredentials = async (userId: string): Promise<void> => {
+/** Gives the user credentials for the selected agents (all agents when omitted). */
+export const seedCredentials = async (
+  userId: string,
+  agents: readonly AgentId[] = ["claude", "codex", "opencode", "pi"],
+): Promise<void> => {
   const creds = env.CREDENTIALS.getByName(userId);
-  await creds.putSecret("claude.oauth_token", "sk-ant-oat01-test-token-value");
-  await creds.putSecret("openrouter.api_key", "sk-or-test");
-  await creds.putSecret("openai.api_key", "sk-openai-test");
+  if (agents.includes("claude")) await creds.putSecret("claude.oauth_token", "sk-ant-oat01-test-token-value");
+  if (agents.includes("opencode") || agents.includes("pi"))
+    await creds.putSecret("openrouter.api_key", "sk-or-test");
+  if (agents.includes("codex")) await creds.putSecret("openai.api_key", "sk-openai-test");
 };

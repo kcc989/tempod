@@ -25,9 +25,8 @@ const checks = {
   workerTests: ["Worker tests", ["bun", "scripts/test.ts", "--worker-only"]],
   otherTests: ["Other tests", ["bun", "scripts/test.ts", "--other-only"]],
   daemon: ["Daemon build", ["bun", "run", "build:tempod"]],
-  app: ["App build", ["bun", "run", "--cwd", "apps/tempo", "build"]],
-  web: ["Web client", ["bun", "run", "test:web"]],
-  browser: ["Browser regressions", ["bun", "run", "--cwd", "tests/e2e", "test:browser"]],
+  app: ["App build", ["bun", "run", "turbo", "run", "build:ci", "--filter=@tempo/app"]],
+  browsers: ["Browser suites", ["bun", "run", "--cwd", "tests/e2e", "test:ci"]],
 } satisfies Record<string, Check>;
 
 let exitCode = 0;
@@ -64,7 +63,7 @@ if (!docsOnly && exitCode === 0) {
         runCheck(checks.otherTests),
       ]);
       if (exitCode === 0) {
-        await Promise.all([runCheck(checks.web), runCheck(checks.browser)]);
+        await runCheck(checks.browsers);
       }
     })(),
     runCheck(checks.workerTests),

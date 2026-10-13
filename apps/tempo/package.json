@@ -17,7 +17,8 @@
     "test:ui": "vitest run --config vitest.ui.config.ts",
     "test:components": "vitest run --config vitest.components.config.ts",
     "build:web-fixture": "vite build --config vite.web-test.config.ts",
-    "build:browser-fixture": "vite build --config test/browser/vite.config.ts"
+    "build:browser-fixture": "vite build --config test/browser/vite.config.ts",
+    "build:ci": "TEMPO_WRANGLER_CONFIG=./wrangler.jsonc vite build"
   },
   "dependencies": {
     "@cloudflare/sandbox": "1.0.0",

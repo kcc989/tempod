@@ -40,7 +40,7 @@ export default defineConfig({
         },
       },
     },
-    maxWorkers: 2,
+    maxWorkers: 4,
     maxConcurrency: 4,
     // Native workerd logging avoids console RPCs crossing Durable Object I/O contexts at teardown.
     disableConsoleIntercept: true,
