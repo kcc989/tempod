@@ -968,6 +968,7 @@ impl Render for Dialogs {
                 let weak_options = cx.weak_entity();
                 let weak_open = weak_options.clone();
                 let options = Popover::new("workspace-options-popover")
+                    .track_focus(&self.branch.read(cx).focus_handle(cx))
                     .open(self.workspace_options)
                     .trigger(
                         Button::new("workspace-options")
@@ -975,9 +976,12 @@ impl Render for Dialogs {
                             .icon(IconName::Ellipsis)
                             .accessibility_label("Workspace options"),
                     )
-                    .on_open_change(move |open, _, cx| {
+                    .on_open_change(move |open, window, cx| {
                         let _ = weak_open.update(cx, |this, cx| {
                             this.workspace_options = *open;
+                            if *open {
+                                this.branch.update(cx, |input, cx| input.focus(window, cx));
+                            }
                             cx.notify();
                         });
                     })

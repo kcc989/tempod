@@ -106,6 +106,7 @@ function NewWorkspaceForm({
   const [tried, setTried] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const creating = useRef(false);
+  const sourceFocus = useRef<HTMLButtonElement>(null);
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
   const selection = useLaunchModels(project.settings);
@@ -216,6 +217,12 @@ function NewWorkspaceForm({
               <PopoverContent
                 align="start"
                 className="w-[min(24rem,calc(100vw-3rem))] space-y-3"
+                onOpenAutoFocus={(event) => {
+                  if (sourceFocus.current) {
+                    event.preventDefault();
+                    sourceFocus.current.focus();
+                  }
+                }}
               >
                 <Tabs
                   value={source.tab}
@@ -227,7 +234,7 @@ function NewWorkspaceForm({
                       <TabsTrigger
                         key={t.id}
                         value={t.id}
-
+                        ref={source.tab === t.id ? sourceFocus : undefined}
                       >
                         {t.label}
                       </TabsTrigger>
