@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+import { type WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { WORKSPACE_MIGRATIONS } from "../../src/db/do-migrations.ts";
@@ -11,27 +13,32 @@ import { seedCredentials, seedProject, seedWorkspace, waitFor } from "./fakes.ts
  * Preview request path), 02 (openPreview, rotatePreviewKey, preview_codes), 03 (init step 1).
  */
 
-type Stub = DurableObjectStub<WorkspaceDO>;
-type Row = Record<string, any>;
-type Res = { readonly ok: boolean };
+type Stub = WorkspaceStub;
+
+type Row = Record<string, SqlStorageValue>;
+
+type Res<T = import("@tempo/protocol").JsonData> = import("@tempo/protocol").Result<T>;
 
 const PAGE = "This preview opens only from Tempo.";
+
 const KEY = /^[A-Za-z0-9_-]{43}$/;
+
 const COOKIE =
   /^__Host-tempo_preview=(\d+\.[A-Za-z0-9_-]{43}); Path=\/; Secure; HttpOnly; SameSite=None; Partitioned; Max-Age=86400$/;
 
-const ok = (r: Res): any => {
+const ok = <T>(r: Res<T>): T => {
   if (!r.ok) throw new Error(`expected ok, got ${JSON.stringify(r)}`);
-  return (r as unknown as { value: unknown }).value;
+
+  return r.value;
 };
-const codeOf = (r: Res): string => (r.ok ? "OK" : (r as unknown as { error: { code: string } }).error.code);
+
+const codeOf = <T>(r: Res<T>): string => (r.ok ? "OK" : r.error.code);
 
 const rows = (stub: Stub, query: string, ...binds: Array<string | number | null>): Promise<Row[]> =>
-  runInDurableObject(
-    stub,
-    (_i: WorkspaceDO, state: DurableObjectState) =>
-      state.storage.sql.exec(query, ...binds).toArray() as Row[],
+  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) =>
+    state.storage.sql.exec(query, ...binds).toArray(),
   );
+
 const keyOf = async (stub: Stub): Promise<string> =>
   String((await rows(stub, "SELECT preview_key FROM workspace WHERE id = 1"))[0]!["preview_key"]);
 
@@ -40,34 +47,45 @@ const readyWs = async () => {
   await seedCredentials(seeded.userId);
   const w = await seedWorkspace(seeded);
   const deadline = Date.now() + 20_000;
+
   while (!["ready", "working"].includes(ok(await w.stub.getWorkspace({})).state)) {
     if (Date.now() > deadline) throw new Error("timed out driving to ready");
     await runDurableObjectAlarm(w.stub);
     await new Promise((r) => setTimeout(r, 25));
   }
+
   await rows(w.stub, "INSERT INTO ports (port, first_seen_at) VALUES (3000, 0), (5173, 0)");
+
   return w;
 };
+
 type Ws = Awaited<ReturnType<typeof readyWs>>;
 
 const send = (url: string, init: RequestInit = {}) => {
   const request = new Request(url, init);
+
   return handlePreview(request, env, new URL(request.url));
 };
+
 const host = (w: Ws, port = 3000) => `https://${port}-${w.workspaceId}.previews.test`;
+
 const isPreview404 = async (res: Response, label = "") => {
   expect(res.status, label).toBe(404);
   expect(await res.text(), label).toContain(PAGE);
   expect(res.headers.get("Referrer-Policy"), label).toBe("no-referrer");
   expect(res.headers.get("X-Robots-Tag"), label).toBe("noindex, nofollow");
 };
+
 const link = async (w: Ws, port = 3000): Promise<string> => ok(await w.stub.openPreview({ port })).url;
+
 /** Follows an entry link and returns the cookie value it set. */
 const enter = async (w: Ws, port = 3000): Promise<string> => {
   const res = await send(await link(w, port));
   expect(res.status).toBe(303);
+
   return COOKIE.exec(res.headers.get("Set-Cookie") ?? "")![1]!;
 };
+
 const withCookie = (value: string, extra = "") => ({
   Cookie: extra ? `${extra}; __Host-tempo_preview=${value}` : `__Host-tempo_preview=${value}`,
 });
@@ -89,13 +107,16 @@ describe("WorkspaceDO.init (03 init 1)", { timeout: 30_000 }, () => {
 describe("DO migration 0003_preview_access", { timeout: 30_000 }, () => {
   it("gives an existing workspace a fresh preview_key, keeps preview_token and adds preview_codes", async () => {
     const migration = WORKSPACE_MIGRATIONS.find((m) => m.tag === "0003_preview_access")!;
+
     const migrate = (stub: Stub) =>
       runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => {
         const sql = state.storage.sql;
         sql.exec("DROP TABLE preview_codes");
         sql.exec("ALTER TABLE workspace DROP COLUMN preview_key");
-        for (const st of migration.statements) sql.exec(typeof st === "string" ? st : st());
+
+        for (const st of migration.statements) sql.exec(Predicate.isFunction(st) ? st() : st);
       });
+
     const seeded = await seedProject();
     const a = await seedWorkspace(seeded, { slug: "alpha" });
     const b = await seedWorkspace(seeded, { slug: "beta" });
@@ -192,6 +213,7 @@ describe("preview request path through the Worker (01, 05)", { timeout: 30_000 }
     const key = await keyOf(w.stub);
     const expired = (await previewCookie(key, 3000, Date.now() - 86_401_000))!;
     const otherPort = (await previewCookie(key, 5173))!;
+
     for (const [label, headers] of [
       ["missing", {}],
       ["other cookies only", { Cookie: "session=abc" }],
@@ -203,6 +225,7 @@ describe("preview request path through the Worker (01, 05)", { timeout: 30_000 }
     ] as const) {
       await isPreview404(await send(`${host(w)}/`, { headers }), label);
     }
+
     expect(w.tempod.proxyRequests).toHaveLength(0);
     expect((await send(`${host(w)}/`, { headers: withCookie(value) })).status).toBe(200);
   });
@@ -210,6 +233,7 @@ describe("preview request path through the Worker (01, 05)", { timeout: 30_000 }
   it("removes the preview cookie before the request reaches the app and keeps the app's cookies", async () => {
     const w = await readyWs();
     const value = await enter(w);
+
     const res = await send(`${host(w)}/`, {
       headers: {
         Cookie: `app=1; __Host-tempo_preview=${value}; theme=dark`,
@@ -217,6 +241,7 @@ describe("preview request path through the Worker (01, 05)", { timeout: 30_000 }
         "x-tempo-preview": "1:forged",
       },
     });
+
     expect(res.status).toBe(200);
     const seen = w.tempod.proxyRequests[0]!.headers;
     expect(seen.get("Cookie")).toBe("app=1; theme=dark");
@@ -227,6 +252,7 @@ describe("preview request path through the Worker (01, 05)", { timeout: 30_000 }
     const only = await send(`${host(w)}/x`, { headers: withCookie(value) });
     expect(only.status).toBe(200);
     expect(w.tempod.proxyRequests[1]!.headers.get("Cookie")).toBeNull();
+
     for (const r of w.tempod.proxyRequests) expect([...r.headers.values()].join("\n")).not.toContain(value);
   });
 
@@ -234,9 +260,11 @@ describe("preview request path through the Worker (01, 05)", { timeout: 30_000 }
     const w = await readyWs();
     const value = await enter(w);
     await isPreview404(await send(`${host(w)}/hmr`, { headers: { Upgrade: "websocket" } }), "no cookie");
+
     const res = await send(`${host(w)}/hmr`, {
       headers: { Upgrade: "websocket", ...withCookie(value, "a=1") },
     });
+
     expect(res.status).toBe(101);
     const socket = res.webSocket!;
     socket.accept();

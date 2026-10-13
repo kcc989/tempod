@@ -21,8 +21,10 @@ function LoadingText({ label, className }: { label: string; className?: string }
   const [showWords, setShowWords] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setShowWords(true), WORDS_AFTER_MS);
+
     return () => clearTimeout(t);
   }, []);
+
   return (
     <span
       role="status"

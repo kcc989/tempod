@@ -95,6 +95,7 @@ describe("changesView: where the list comes from", () => {
       expect(v.source).toBe("lastKnown");
       expect(v.files.map((x) => x.path)).toEqual(["old.ts"]);
     }
+
     expect(
       changesView({ state: "archived", scope: "branch", data: undefined, errorCode: null, lastKnown: null }),
     ).toMatchObject({ source: "lastKnown", files: [], hasList: true });
@@ -121,6 +122,7 @@ describe("changesView: where the list comes from", () => {
     expect(
       changesView({ state: "ready", scope: "uncommitted", data: undefined, errorCode: null, lastKnown }),
     ).toMatchObject({ source: "loading", hasList: false });
+
     const branch = changesView({
       state: "ready",
       scope: "branch",
@@ -128,6 +130,7 @@ describe("changesView: where the list comes from", () => {
       errorCode: null,
       lastKnown,
     });
+
     expect(branch).toMatchObject({ source: "loading", hasList: true });
     expect(branch.files.map((x) => x.path)).toEqual(["old.ts"]);
   });

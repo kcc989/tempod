@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseRoleFile, parseRoleResult, resolveSettings } from "../src/index.ts";
+
 const role = (front: string, body = "Body\n") => `---\ndescription: Job\n${front}\n---\n${body}`;
+
 describe("role files", () => {
   it("uses YAML 1.2, applies defaults and preserves the body", () => {
     const parsed = parseRoleFile("reviewer", role("on:\n  - event: agent.turn.ended"));
@@ -35,6 +37,7 @@ describe("role files", () => {
   });
   it("validates bounded result JSON without echoing its contents", () => {
     expect(parseRoleResult('{"status":"pass","summary":"okay"}').status).toBe("pass");
+
     for (const invalid of [
       '{"status":"unknown","summary":"secret-value"}',
       JSON.stringify({ status: "done", summary: "x".repeat(4001) }),

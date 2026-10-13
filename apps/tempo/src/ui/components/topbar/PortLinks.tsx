@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { isMacPlatform } from "~/ui/lib/shortcuts";
 import { cn } from "~/ui/lib/utils";
@@ -20,8 +21,11 @@ export function PortLinks({
   browserActive: boolean;
   className?: string;
 }) {
+  const call = useApiCall();
+
   if (ports.length === 0 && !browserActive) return null;
   const altClick = isMacPlatform() ? "⌥-click" : "Alt+click";
+
   return (
     <nav aria-label="Previews" className={cn("flex min-w-0 items-center gap-1 overflow-hidden", className)}>
       {ports.map((p) => (
@@ -32,13 +36,14 @@ export function PortLinks({
             rel="noopener noreferrer"
             onClick={(e) => {
               e.preventDefault();
+
               if (e.altKey) openBrowser(workspaceId, p.url);
-              else void openPreviewTab(workspaceId, p.port);
+              else void openPreviewTab(workspaceId, p.port, call);
             }}
             onAuxClick={(e) => {
               if (e.button !== 1) return;
               e.preventDefault();
-              void openPreviewTab(workspaceId, p.port);
+              void openPreviewTab(workspaceId, p.port, call);
             }}
             className="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-muted-foreground tabular-nums outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >

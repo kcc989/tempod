@@ -150,6 +150,7 @@ function RenameField({
   onDone: () => void;
 }) {
   const actions = useWorkspaceActions(workspaceId);
+
   return <InlineEdit value={title} label="Workspace title" onSave={actions.rename} onDone={onDone} />;
 }
 
@@ -164,6 +165,7 @@ function RowMenu({
   onRename: () => void;
 }) {
   const actions = useWorkspaceActions(w.id);
+
   return (
     <>
       <ContextMenuItem onSelect={onRename}>
@@ -211,12 +213,15 @@ function RowHoverCard({
   const detail = useCallQuery("getWorkspace", { workspaceId: w.id }, { staleTime: 10_000 });
   const actions = useWorkspaceActions(w.id);
   const view = workspaceView(w, detail.data) ?? { w, d: null };
+
   const pill = pillText(view.w.state, {
     op: view.d?.op ?? null,
     instance: view.d?.settings.environment.instance,
   });
+
   const primary = detail.data ? topPrimary(view) : null;
   const power = powerAction(view.w.state);
+
   const checksUrl =
     project && w.prNumber !== null ? githubChecksUrl(project.owner, project.name, w.prNumber) : undefined;
 

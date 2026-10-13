@@ -5,6 +5,7 @@ import type { WorkspaceView } from "./topbar-logic";
 export function EditableBranch({ view, onSave }: { view: WorkspaceView; onSave: (branch: string) => void }) {
   const [editing, setEditing] = useState(false);
   const locked = !view.d || view.d.pushed || !["ready", "working", "sleeping"].includes(view.w.state);
+
   if (editing && !locked)
     return (
       <InlineEdit
@@ -16,6 +17,7 @@ export function EditableBranch({ view, onSave }: { view: WorkspaceView; onSave: 
         className="w-56 font-mono"
       />
     );
+
   return (
     <button
       type="button"

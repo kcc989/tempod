@@ -13,19 +13,27 @@ export const applyHubMessage = (state: HubState, msg: HubServerMessage): HubStat
   switch (msg.type) {
     case "hello": {
       const workspaces: Record<string, WorkspaceSummary> = {};
+
       for (const w of msg.workspaces) workspaces[w.id] = w;
+
       return { ready: true, workspaces };
     }
+
     case "workspace": {
       const prev = state.workspaces[msg.summary.id];
+
       if (prev && prev.rev >= msg.summary.rev) return state;
+
       return { ...state, workspaces: { ...state.workspaces, [msg.summary.id]: msg.summary } };
     }
+
     case "workspace.removed": {
       if (!(msg.workspaceId in state.workspaces)) return state;
       const { [msg.workspaceId]: _removed, ...rest } = state.workspaces;
+
       return { ...state, workspaces: rest };
     }
+
     case "pong":
       return state;
   }
@@ -51,9 +59,12 @@ export interface NotifyEvent {
 export const notifyEvents = (prev: HubState, next: HubState): NotifyEvent[] => {
   if (!prev.ready || prev === next) return [];
   const out: NotifyEvent[] = [];
+
   for (const [id, w] of Object.entries(next.workspaces)) {
     const p = prev.workspaces[id];
+
     if (!p || p === w) continue;
+
     if (w.attention === "needs_input" && p.attention !== "needs_input") {
       out.push({ kind: "needs_input", workspace: w });
     } else if (w.attention === "error" && p.attention !== "error") {
@@ -65,6 +76,7 @@ export const notifyEvents = (prev: HubState, next: HubState): NotifyEvent[] => {
       out.push({ kind: "finished", workspace: w });
     }
   }
+
   return out;
 };
 
@@ -83,14 +95,18 @@ export const sidebarSections = (
   sort: SortMode,
 ): SidebarSection[] => {
   const listed = Object.values(workspaces).filter(isListed);
+
   const cmp = (a: WorkspaceSummary, b: WorkspaceSummary) =>
     sort === "created"
       ? b.createdAt - a.createdAt
       : b.lastActivityAt - a.lastActivityAt || b.createdAt - a.createdAt;
+
   const sections: SidebarSection[] = [];
   const pinned = listed.filter((w) => w.pinned).sort(cmp);
+
   if (pinned.length > 0) sections.push({ key: "pinned", projectId: null, workspaces: pinned });
   const ordered = [...projects].sort((a, b) => a.sortOrder - b.sortOrder);
+
   for (const p of ordered) {
     sections.push({
       key: p.id,
@@ -98,5 +114,6 @@ export const sidebarSections = (
       workspaces: listed.filter((w) => !w.pinned && w.projectId === p.id).sort(cmp),
     });
   }
+
   return sections;
 };

@@ -8,6 +8,7 @@ import { isTranscriptDetail, setTranscriptDetail, useTranscriptDetail } from "~/
 export function AppearanceTab() {
   const { preference, setPreference } = useTheme();
   const detail = useTranscriptDetail();
+
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-6 border-t py-6">

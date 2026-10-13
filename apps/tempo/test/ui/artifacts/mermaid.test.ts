@@ -1,32 +1,28 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { createMermaidRenderer } from "~/ui/components/chat/mermaid";
 
-const api = vi.hoisted(() => ({
-  load: vi.fn(),
-  initialize: vi.fn(),
-  render: vi.fn().mockResolvedValue({ svg: "<svg/>" }),
-}));
-vi.mock("mermaid", () => {
-  api.load();
-  return { default: { initialize: api.initialize, render: api.render } };
-});
-beforeEach(() => {
-  vi.resetModules();
-  vi.clearAllMocks();
-});
+const setup = () => {
+  const initialize = vi.fn();
+  const render = vi.fn(async () => ({ svg: "<svg/>" }));
+  const load = vi.fn(async () => ({ initialize, render }));
+
+  return { initialize, render, load, renderMermaid: createMermaidRenderer(load) };
+};
+
 afterEach(() => vi.unstubAllEnvs());
 
 it("keeps browser diagram dependencies out of server rendering", async () => {
   vi.stubEnv("SSR", true);
-  const { renderMermaid } = await import("~/ui/components/chat/mermaid");
-  await expect(renderMermaid("graph TD; A-->B", false)).rejects.toThrow("browser");
+  const api = setup();
+  await expect(api.renderMermaid("graph TD; A-->B", false)).rejects.toThrow("browser");
   expect(api.load).not.toHaveBeenCalled();
   expect(api.render).not.toHaveBeenCalled();
 });
 
 it("loads diagrams in the browser with strict security and theme settings", async () => {
   vi.stubEnv("SSR", false);
-  const { renderMermaid } = await import("~/ui/components/chat/mermaid");
-  await expect(renderMermaid("graph TD; A-->B", true)).resolves.toMatch(/^data:image\/svg\+xml/);
+  const api = setup();
+  await expect(api.renderMermaid("graph TD; A-->B", true)).resolves.toMatch(/^data:image\/svg\+xml/);
   expect(api.load).toHaveBeenCalledOnce();
   expect(api.initialize).toHaveBeenCalledWith({
     startOnLoad: false,

@@ -9,23 +9,32 @@ const CROCKFORD = "0123456789abcdefghjkmnpqrstvwxyz";
 export const uid = (n: number): string => {
   let out = "";
   let v = n;
+
   for (let i = 0; i < 22; i++) {
     out = CROCKFORD[v % 32]! + out;
     v = Math.floor(v / 32);
   }
+
   return `01k7${out}`;
 };
 
 /** 2026-10-11T09:00:00Z. */
 export const T0 = 1_791_709_200_000;
+
 export const at = (seconds: number): number => T0 + seconds * 1000;
 
 export const PROJECT_ID = uid(1);
+
 export const W1 = uid(11);
+
 export const W2 = uid(12);
+
 export const W3 = uid(13);
+
 export const W4 = uid(14);
+
 export const S1 = uid(21);
+
 export const S2 = uid(22);
 
 export const settings: P.Settings = {
@@ -95,6 +104,7 @@ export const lisbon = summary(W1, {
   rev: 41,
   lastActivityAt: at(60),
 });
+
 export const oslo = summary(W2, {
   slug: "oslo",
   title: "Fix flaky checkout test",
@@ -107,6 +117,7 @@ export const oslo = summary(W2, {
   rev: 17,
   lastActivityAt: at(-3_600),
 });
+
 export const kyoto = summary(W3, {
   slug: "kyoto",
   title: "Upgrade to React 19",
@@ -319,14 +330,16 @@ type ItemInit<K extends P.Item["kind"]> = {
   readonly content: P.ItemOf<K>["content"];
 };
 
-export const item = <K extends P.Item["kind"]>(kind: K, init: ItemInit<K>): P.Item =>
-  ({
+export const item = <K extends P.Item["kind"]>(kind: K, init: ItemInit<K>): P.Item => {
+  const base = {
     ...itemBase(init.n, init.turnId === undefined ? uid(101) : init.turnId, init.rev, init.seconds),
-    ...(init.sessionId ? { sessionId: init.sessionId } : {}),
-    kind,
-    status: init.status ?? "completed",
-    content: init.content,
-  }) as P.Item;
+  };
+
+  if (init.sessionId) base.sessionId = init.sessionId;
+
+  // SAFETY: ItemInit<K> couples content to kind; itemBase supplies all common Item fields.
+  return { ...base, kind, status: init.status ?? "completed", content: init.content } as P.Item;
+};
 
 export const userMessageContent: P.UserMessageContent = {
   text: "Add a dark mode toggle to the header. Keep @src/app.tsx tidy.",

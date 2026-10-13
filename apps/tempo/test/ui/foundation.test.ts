@@ -1,9 +1,11 @@
+import { toast } from "sonner";
 import { TempoError } from "@tempo/protocol";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installLocalStorage, removeLocalStorage } from "./storage-stub";
 
-const toastError = vi.fn();
-vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
+const toastError = vi.spyOn(toast, "error");
+
+afterAll(() => toastError.mockRestore());
 
 const {
   errorCode,
@@ -13,9 +15,12 @@ const {
   showBanner,
   toastError: showToast,
 } = await import("~/ui/lib/toast");
+
 const { readThemePreference, resolveTheme, setThemePreference, themeStore, THEME_BOOT_SCRIPT } =
   await import("~/ui/lib/theme");
+
 const { firstRunSteps, isFirstRunDone } = await import("~/ui/lib/first-run");
+
 const { githubBranchUrl, macWorkspaceUrl, workspacePath } = await import("~/ui/lib/links");
 
 const creds = (
@@ -146,6 +151,7 @@ describe("first run", () => {
     for (const k of ["claude", "codex", "openrouter", "anthropic", "openai"] as const) {
       expect(firstRunSteps({ ...base, credentials: creds({ [k]: true }) })[2]!.done).toBe(true);
     }
+
     expect(firstRunSteps({ ...base, credentials: undefined })[2]!.done).toBe(false);
   });
 });

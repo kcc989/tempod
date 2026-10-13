@@ -10,11 +10,14 @@ export const openUiChannel = (core: WorkspaceCore, request: Request): Response =
   const pair = new WebSocketPair();
   const [client, server] = [pair[0], pair[1]];
   const row = core.wsOrNull();
+
   if (!row) {
     server.accept();
     server.close(CloseCode.workspaceNotFound, "workspace not found");
+
     return new Response(null, { status: 101, webSocket: client });
   }
+
   core.ctx.acceptWebSocket(server, ["ui"]);
   const sinceRev = Math.max(0, Number(new URL(request.url).searchParams.get("sinceRev") ?? "0") || 0);
   core.sendTo(server, {
@@ -35,15 +38,20 @@ export const openUiChannel = (core: WorkspaceCore, request: Request): Response =
       .map((t) => core.turnToWire(t)),
     itemsRev: row.itemsRev,
   });
+
   for (const run of core.lifecycle.listRuns()) core.sendTo(server, { type: "roleRun", run });
   let after = sinceRev;
+
   for (;;) {
     const page = core.itemsSince(after, PAGE);
     const done = page.length < PAGE;
     core.sendTo(server, { type: "items", items: page, itemsRev: row.itemsRev, done });
+
     if (done) break;
     after = page[page.length - 1]!.rev;
   }
+
   core.scheduleAlarm();
+
   return new Response(null, { status: 101, webSocket: client });
 };

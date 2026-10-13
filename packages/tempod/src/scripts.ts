@@ -9,17 +9,22 @@ import { resolveWorkspacePath } from "./fs.ts";
 import type { Logger } from "./log.ts";
 
 const SAFE_RUN_ID = /^[0-9A-Za-z_-]{1,128}$/;
+
 const READ_GRACE_MS = 500;
+
 const LOG_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const TRUNCATED_LINE = "[tempo: log truncated at 50 MiB]\n";
 
 /** Deletes script logs older than 7 days. */
 export const pruneLogs = (dir: string, now = Date.now()): number => {
   let removed = 0;
+
   try {
     for (const name of readdirSync(dir)) {
       if (!name.endsWith(".log")) continue;
       const p = join(dir, name);
+
       try {
         if (now - statSync(p).mtimeMs > LOG_KEEP_MS) {
           rmSync(p, { force: true });
@@ -32,6 +37,7 @@ export const pruneLogs = (dir: string, now = Date.now()): number => {
   } catch {
     // no dir yet
   }
+
   return removed;
 };
 
@@ -86,19 +92,23 @@ export class ScriptManager {
     command: string;
     cwd: string;
     timeoutMs: number | null;
-  }): { pid: number } {
+  }) {
     if (!SAFE_RUN_ID.test(p.runId)) throw new TempoError("VALIDATION_FAILED", "Bad run id.");
     const existing = this.runs.get(p.runId);
-    if (existing) return { pid: existing.pid };
+
+    if (existing) return { pid: existing.pid } satisfies { pid: number };
     const cwd = resolveWorkspacePath(this.deps.workspace, p.cwd === "" ? "." : p.cwd);
+
     try {
       if (!statSync(cwd).isDirectory()) throw new Error("not a directory");
     } catch {
       throw new TempoError("NOT_FOUND", `The script folder does not exist: ${p.cwd || "."}`);
     }
+
     mkdirSync(this.deps.logsDir, { recursive: true });
     const logFd = openSync(this.logPath(p.runId), "w", 0o644);
     let proc: Subprocess<"ignore", "pipe", "pipe">;
+
     try {
       proc = Bun.spawn(["bash", "-lc", p.command], {
         cwd,
@@ -115,7 +125,9 @@ export class ScriptManager {
         `The script did not start: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
+
     let resolveDone!: () => void;
+
     const run: Run = {
       runId: p.runId,
       proc,
@@ -132,6 +144,7 @@ export class ScriptManager {
       logTruncated: false,
       done: new Promise<void>((r) => (resolveDone = r)),
     };
+
     this.runs.set(p.runId, run);
     this.deps.db.addProcess(p.runId, "script", proc.pid);
     this.deps.log.info("script started", {
@@ -140,24 +153,29 @@ export class ScriptManager {
       scriptId: p.scriptId,
       pid: proc.pid,
     });
+
     if (p.timeoutMs !== null && p.timeoutMs > 0) {
       run.timeoutTimer = setTimeout(() => {
         run.timedOut = true;
         this.terminate(run);
       }, p.timeoutMs);
     }
+
     const readers = [this.read(run, "stdout", proc.stdout), this.read(run, "stderr", proc.stderr)];
     void this.finish(run, readers).finally(resolveDone);
-    return { pid: proc.pid };
+
+    return { pid: proc.pid } satisfies { pid: number };
   }
 
   private async read(run: Run, stream: Stream, body: ReadableStream<Uint8Array>): Promise<void> {
     const decoder = new TextDecoder();
     const reader = body.getReader();
     run.readers.push(reader);
+
     try {
       for (;;) {
         const { value, done } = await reader.read();
+
         if (done) break;
         this.writeLog(run, value);
         this.buffer(run, stream, decoder.decode(value, { stream: true }));
@@ -173,13 +191,16 @@ export class ScriptManager {
   /** Appends to the full log. A write error (a full disk) ends the log but never the output stream. */
   private writeLog(run: Run, chunk: Uint8Array): void {
     if (run.logFd === null || run.logTruncated) return;
+
     try {
       const room = this.deps.logMaxBytes - run.logBytes;
       const part = chunk.byteLength > room ? chunk.subarray(0, Math.max(0, room)) : chunk;
+
       if (part.byteLength > 0) {
         writeSync(run.logFd, part);
         run.logBytes += part.byteLength;
       }
+
       if (chunk.byteLength > room) {
         writeSync(
           run.logFd,
@@ -189,11 +210,13 @@ export class ScriptManager {
       }
     } catch (e) {
       run.logTruncated = true;
+
       try {
         closeSync(run.logFd);
       } catch {
         // already closed
       }
+
       run.logFd = null;
       this.deps.log.warn("script log write failed; the log is cut here", {
         runId: run.runId,
@@ -205,20 +228,26 @@ export class ScriptManager {
   private buffer(run: Run, stream: Stream, text: string): void {
     if (text === "") return;
     run.buffers[stream] += text;
+
     if (run.buffers[stream].length >= MAX_TEXT_CHARS) {
       this.flush(run);
+
       return;
     }
+
     if (!run.flushTimer) run.flushTimer = setTimeout(() => this.flush(run), this.deps.mergeMs);
   }
 
   private flush(run: Run): void {
     if (run.flushTimer) clearTimeout(run.flushTimer);
     run.flushTimer = null;
+
     for (const stream of ["stdout", "stderr"] as const) {
       const data = run.buffers[stream];
+
       if (data === "") continue;
       run.buffers[stream] = "";
+
       for (const piece of splitText(data))
         this.deps.emit({ kind: "script.output", runId: run.runId, stream, data: piece });
     }
@@ -227,21 +256,27 @@ export class ScriptManager {
   private async finish(run: Run, readers: Promise<void>[]): Promise<void> {
     await run.proc.exited;
     const drained = Promise.all(readers);
+
     const timedOut = await Promise.race([
       drained.then(() => false),
       Bun.sleep(READ_GRACE_MS).then(() => true),
     ]);
+
     if (timedOut) {
       // A process left in the group still holds the pipes; the run is over for Tempo anyway.
       await Promise.allSettled(run.readers.map((r) => r.cancel()));
       await Promise.race([drained, Bun.sleep(100)]);
     }
+
     this.flush(run);
+
     if (run.logFd !== null) {
       closeSync(run.logFd);
       run.logFd = null;
     }
+
     if (run.timeoutTimer) clearTimeout(run.timeoutTimer);
+
     if (!run.stopRequested && run.killTimer) clearTimeout(run.killTimer);
     this.runs.delete(run.runId);
     this.deps.db.removeProcess(run.runId);
@@ -264,6 +299,7 @@ export class ScriptManager {
 
   async stop(runId: string): Promise<void> {
     const run = this.runs.get(runId);
+
     if (!run) return;
     this.terminate(run);
     await Promise.race([run.done, Bun.sleep(this.deps.killGraceMs + 3_000)]);

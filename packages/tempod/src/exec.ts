@@ -27,6 +27,7 @@ export class ExecError extends Error {
 
 export const tail = (text: string, max: number): string => {
   const t = text.trimEnd();
+
   return t.length > max ? t.slice(t.length - max) : t;
 };
 
@@ -34,6 +35,7 @@ export const tail = (text: string, max: number): string => {
 export const killGroup = (pid: number, signal: NodeJS.Signals): boolean => {
   try {
     process.kill(-pid, signal);
+
     return true;
   } catch {
     return false;
@@ -45,6 +47,7 @@ const which = new Map<string, string | null>();
 /** Path of a binary on PATH, cached; null when missing. */
 export const findBinary = (name: string): string | null => {
   if (!which.has(name)) which.set(name, Bun.which(name));
+
   return which.get(name) ?? null;
 };
 
@@ -55,10 +58,12 @@ const PIPE_GRACE_MS = 2_000;
 const collect = (stream: ReadableStream<Uint8Array>) => {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
+
   const done = (async () => {
     try {
       for (;;) {
         const { value, done } = await reader.read();
+
         if (done) break;
         chunks.push(value);
       }
@@ -66,6 +71,7 @@ const collect = (stream: ReadableStream<Uint8Array>) => {
       // cancelled
     }
   })();
+
   return {
     done,
     cancel: () => reader.cancel().catch(() => undefined),
@@ -80,15 +86,22 @@ const collect = (stream: ReadableStream<Uint8Array>) => {
 export const run = async (cmd: ReadonlyArray<string>, opts: ExecOptions = {}): Promise<ExecResult> => {
   const proc = Bun.spawn([...cmd], {
     cwd: opts.cwd,
-    env: opts.env as Record<string, string> | undefined,
+    env:
+      opts.env === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(opts.env).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]])),
+          ),
     stdin: opts.input === undefined ? "ignore" : "pipe",
     stdout: "pipe",
     stderr: "pipe",
     detached: true,
   });
+
   const out = collect(proc.stdout);
   const err = collect(proc.stderr);
   let timedOut = false;
+
   const timer =
     opts.timeoutMs !== undefined && opts.timeoutMs > 0
       ? setTimeout(() => {
@@ -97,6 +110,7 @@ export const run = async (cmd: ReadonlyArray<string>, opts: ExecOptions = {}): P
           setTimeout(() => killGroup(proc.pid, "SIGKILL"), opts.killGraceMs ?? 2_000);
         }, opts.timeoutMs)
       : undefined;
+
   if (opts.input !== undefined && proc.stdin) {
     try {
       proc.stdin.write(opts.input);
@@ -105,13 +119,18 @@ export const run = async (cmd: ReadonlyArray<string>, opts: ExecOptions = {}): P
       // the child exited without reading its input
     }
   }
+
   await proc.exited;
+
   if (timer) clearTimeout(timer);
+
   const drained = await Promise.race([
     Promise.all([out.done, err.done]).then(() => true),
     Bun.sleep(timedOut ? 100 : PIPE_GRACE_MS).then(() => false),
   ]);
+
   if (!drained) await Promise.all([out.cancel(), err.cancel()]);
+
   return {
     code: proc.exitCode,
     signal: proc.signalCode ?? null,
@@ -124,6 +143,8 @@ export const run = async (cmd: ReadonlyArray<string>, opts: ExecOptions = {}): P
 /** Like `run`, but throws `ExecError` on a non-zero exit. */
 export const runOk = async (cmd: ReadonlyArray<string>, opts: ExecOptions = {}): Promise<ExecResult> => {
   const r = await run(cmd, opts);
+
   if (r.code !== 0) throw new ExecError(cmd, r);
+
   return r;
 };

@@ -1,3 +1,5 @@
+import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
+import type { WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Schema } from "effect";
@@ -14,12 +16,21 @@ import { agentStore, type AgentRepoStore } from "../../src/agents/store.ts";
 import { memoryFs } from "../../src/agents/memfs.ts";
 import { sessions as sessionsTable, turns as turnsTable } from "../../src/db/workspace-do.ts";
 import { runFn } from "../../src/server/run.ts";
-import { driveToState, seedCredentials, seedProject, seedWorkspace, waitFor, type Seeded } from "./fakes.ts";
+import {
+  internals,
+  driveToState,
+  seedCredentials,
+  seedProject,
+  seedWorkspace,
+  waitFor,
+  type Seeded,
+} from "./fakes.ts";
 
 /** Custom agents (01, Custom agents; 02, custom_agents and Server functions). */
 
 const BEARER = { allowCookie: false, allowBearer: true } as const;
-type Res = { ok: boolean; value?: any; error?: { code: string; detail?: string } };
+
+type Res<T = import("@tempo/protocol").JsonData> = import("@tempo/protocol").Result<T>;
 
 const def: CustomAgentDefinition = {
   name: "Reviewer",
@@ -44,7 +55,9 @@ class FakeStore implements AgentRepoStore {
 
   async read(repo: string, ref: string, path: string): Promise<string | null> {
     const files = this.commits.get(`${repo}@${ref}`);
+
     if (!files) throw new TempoError("ARTIFACTS_ERROR", undefined, "read: NOT_FOUND");
+
     return files.get(path) ?? null;
   }
 
@@ -54,25 +67,30 @@ class FakeStore implements AgentRepoStore {
       this.failNext = null;
       throw new TempoError("ARTIFACTS_ERROR", undefined, step);
     }
+
     this.writes.push({ repo, path, content, message });
     const head = this.heads.get(repo);
     const files = new Map(head ? this.commits.get(`${repo}@${head}`) : []);
+
     if (content === null) files.delete(path);
     else files.set(path, content);
     const sha = newId().padEnd(40, "0").slice(0, 40);
     this.commits.set(`${repo}@${sha}`, files);
     this.heads.set(repo, sha);
+
     return sha;
   }
 }
 
-const inDo = runInDurableObject as unknown as (stub: unknown, f: (instance: any) => unknown) => Promise<any>;
+const inDo = runInDurableObject;
 
 let store: FakeStore;
+
 beforeEach(() => {
   store = new FakeStore();
   vi.spyOn(agentStore, "forEnv").mockReturnValue(store);
 });
+
 afterEach(() => vi.restoreAllMocks());
 
 const signIn = async (userId: string): Promise<string> => {
@@ -83,29 +101,39 @@ const signIn = async (userId: string): Promise<string> => {
   )
     .bind(newId(), now + 86_400_000, token, now, now, userId)
     .run();
+
   return token;
 };
 
 type Owner = Seeded & { token: string };
+
 const owner = async (): Promise<Owner> => {
   const s = await seedProject();
+
   return { ...s, token: await signIn(s.userId) };
 };
-const call = (name: FnName, o: Owner, input: unknown = {}): Promise<Res> =>
-  runFn(name, env, new Headers({ Authorization: `Bearer ${o.token}` }), input, BEARER) as Promise<Res>;
-const ok = (r: Res): any => {
-  if (!r.ok) throw new Error(`expected ok, got ${r.error?.code} ${r.error?.detail ?? ""}`);
-  return r.value;
+
+const call = <K extends FnName>(
+  name: K,
+  o: Owner,
+  input: import("@tempo/protocol").JsonData | import("@tempo/protocol").FnInput<FnName> = {},
+) => runFn(name, env, new Headers({ Authorization: `Bearer ${o.token}` }), input, BEARER);
+
+const ok = <T>(result: Res<T>): T => {
+  if (!result.ok) throw new Error(`expected ok, got ${result.error.code} ${result.error.detail ?? ""}`);
+
+  return result.value;
 };
-const codeOf = (r: Res): string => (r.ok ? "OK" : r.error!.code);
-const conforms = (schema: Schema.Top, v: unknown) =>
-  Schema.decodeUnknownExit(schema as unknown as Schema.Decoder<unknown>)(v)._tag === "Success";
+
+const codeOf = <T>(result: Res<T>): string => (result.ok ? "OK" : result.error.code);
+
+const conforms = <S extends Schema.ConstraintDecoder<unknown>>(schema: S) => Schema.is(schema);
 
 describe("saveCustomAgent, getCustomAgent, listCustomAgents, deleteCustomAgent", () => {
   it("saves a file in the user's repo, points D1 at the commit, and reads it back", async () => {
     const o = await owner();
     const saved = ok(await call("saveCustomAgent", o, { definition: def }));
-    expect(conforms(CustomAgent, saved)).toBe(true);
+    expect(conforms(CustomAgent)(saved)).toBe(true);
     expect(store.writes).toHaveLength(1);
     expect(store.writes[0]).toMatchObject({ repo: `user-${o.userId}`, path: `agents/${saved.id}.yaml` });
     expect(store.writes[0]!.content).toContain("base_agent: claude\n");
@@ -128,15 +156,17 @@ describe("saveCustomAgent, getCustomAgent, listCustomAgents, deleteCustomAgent",
         updatedAt: saved.updatedAt,
       },
     ]);
-    expect(list.every((s: unknown) => conforms(CustomAgentSummary, s))).toBe(true);
+    expect(list.every((s) => conforms(CustomAgentSummary)(s))).toBe(true);
   });
 
   it("updates in place with a new commit; reads use the pinned commit, not main", async () => {
     const o = await owner();
     const first = ok(await call("saveCustomAgent", o, { definition: def }));
+
     const second = ok(
       await call("saveCustomAgent", o, { customAgentId: first.id, definition: { ...def, model: "sonnet" } }),
     );
+
     expect(second.id).toBe(first.id);
     expect(second.commitSha).not.toBe(first.commitSha);
     expect(ok(await call("getCustomAgent", o, { customAgentId: first.id })).model).toBe("sonnet");
@@ -151,11 +181,13 @@ describe("saveCustomAgent, getCustomAgent, listCustomAgents, deleteCustomAgent",
     expect(codeOf(await call("saveCustomAgent", o, { customAgentId: newId(), definition: def }))).toBe(
       "NOT_FOUND",
     );
+
     const literal = {
       ...def,
       name: "Leaky",
       mcp: { playwright: true, servers: [{ ...def.mcp.servers[0], env: { T: "sk-live-123" } }] },
     };
+
     expect(codeOf(await call("saveCustomAgent", o, { definition: literal }))).toBe("VALIDATION_FAILED");
     expect(store.writes).toHaveLength(1);
   });
@@ -209,6 +241,7 @@ describe("sessions from a custom agent", () => {
       .bind(o.userId, w.workspaceId)
       .run();
     await driveToState(w.stub, ["ready"]);
+
     return { o, w };
   };
 
@@ -226,6 +259,7 @@ describe("sessions from a custom agent", () => {
       handoff: false,
     }));
     const saved = ok(await call("saveCustomAgent", o, { definition: def }));
+
     const session = ok(
       await call("createSession", o, {
         workspaceId: w.workspaceId,
@@ -233,7 +267,8 @@ describe("sessions from a custom agent", () => {
         customAgentId: saved.id,
       }),
     );
-    expect(conforms(Session, session)).toBe(true);
+
+    expect(conforms(Session)(session)).toBe(true);
     expect(session.customAgent).toEqual({ id: saved.id, name: "Reviewer", commitSha: saved.commitSha });
     expect(session.config).toEqual({ model: "opus" });
     await waitFor(() => w.tempod.requestsOf("session.start").length === 1, 5000, "session.start");
@@ -261,6 +296,7 @@ describe("sessions from a custom agent", () => {
   it("an explicit model wins, and a plain session carries no custom agent", async () => {
     const { o, w } = await ready();
     const saved = ok(await call("saveCustomAgent", o, { definition: def }));
+
     const s = ok(
       await call("createSession", o, {
         workspaceId: w.workspaceId,
@@ -269,6 +305,7 @@ describe("sessions from a custom agent", () => {
         model: "haiku",
       }),
     );
+
     expect(s.config).toEqual({ model: "haiku" });
     const plain = ok(await call("createSession", o, { workspaceId: w.workspaceId, agent: "codex" }));
     expect(plain.customAgent).toBeUndefined();
@@ -302,6 +339,7 @@ describe("sessions from a custom agent", () => {
   it("an open session keeps its profile after the agent changes", async () => {
     const { o, w } = await ready();
     const saved = ok(await call("saveCustomAgent", o, { definition: def }));
+
     const s = ok(
       await call("createSession", o, {
         workspaceId: w.workspaceId,
@@ -309,6 +347,7 @@ describe("sessions from a custom agent", () => {
         customAgentId: saved.id,
       }),
     );
+
     ok(
       await call("saveCustomAgent", o, {
         customAgentId: saved.id,
@@ -324,18 +363,21 @@ describe("createWorkspace with a custom agent", () => {
     const o = await owner();
     const saved = ok(await call("saveCustomAgent", o, { definition: { ...def, baseAgent: "pi" } }));
     const fetch = vi.spyOn(globalThis, "fetch");
+
     const res = await call("createWorkspace", o, {
       projectId: o.projectId,
       source: { kind: "new", baseBranch: "main" },
       agent: "claude",
       customAgentId: saved.id,
     });
+
     expect(codeOf(res)).toBe("VALIDATION_FAILED");
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("init makes the first session from the custom agent, even without a prompt", async () => {
     const o = await owner();
+
     const custom = {
       customAgent: { id: newId(), name: "Reviewer", commitSha: "c".repeat(40) },
       profile: {
@@ -348,22 +390,33 @@ describe("createWorkspace with a custom agent", () => {
       },
       model: "opus",
     };
+
     const w = await seedWorkspace(o, { custom });
-    const sessions = await inDo(w.stub, (instance) => instance.core.db.select().from(sessionsTable).all());
+
+    const sessions = await inDo(w.stub, (instance: WorkspaceDO) =>
+      internals(instance).core.db.select().from(sessionsTable).all(),
+    );
+
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toMatchObject({
       customAgentId: custom.customAgent.id,
       customAgentName: "Reviewer",
       configJson: JSON.stringify({ model: "opus" }),
     });
-    expect(JSON.parse(sessions[0].profileJson)).toEqual(custom.profile);
-    const turns = await inDo(w.stub, (instance) => instance.core.db.select().from(turnsTable).all());
+    expect(JSON.parse(sessions[0]!.profileJson!)).toEqual(custom.profile);
+
+    const turns = await inDo(w.stub, (instance: WorkspaceDO) =>
+      internals(instance).core.db.select().from(turnsTable).all(),
+    );
+
     expect(turns).toHaveLength(0);
   });
 });
 
-const getSession = (w: { stub: unknown }, id: string): Promise<any> =>
-  inDo(w.stub, (instance) => instance.core.sessionToWire(instance.core.sessionRow(id)));
+const getSession = (w: { stub: WorkspaceStub }, id: string): Promise<any> =>
+  inDo(w.stub, (instance: WorkspaceDO) =>
+    internals(instance).core.sessionToWire(internals(instance).core.sessionRow(id)),
+  );
 
 describe("memoryFs (isomorphic-git's file system)", () => {
   it("supports the calls a commit needs and fails like node fs", async () => {

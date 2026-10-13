@@ -9,6 +9,7 @@ const WORKSPACE_PATH = /^\/w\/([^/]+)/;
 export function useOpenWorkspaceId(): string | null {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const m = WORKSPACE_PATH.exec(path);
+
   return m ? decodeURIComponent(m[1]!) : null;
 }
 
@@ -21,5 +22,6 @@ export function useOpenWorkspaceDetail(): WorkspaceDetail | null {
   const store = id ? peekWorkspaceStore(id) : undefined;
   const subscribe = useCallback((l: () => void) => (store ? store.subscribe(l) : () => {}), [store]);
   const get = () => store?.getSnapshot().workspace ?? null;
+
   return useSyncExternalStore(subscribe, get, () => null);
 }

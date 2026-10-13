@@ -1,4 +1,5 @@
 import { mcpPlaceholder, type McpServer, type McpServerSpec } from "@tempo/protocol";
+import { Schema, Option } from "effect";
 import type { McpServerRow } from "../db/d1.ts";
 
 /** One entry of `headers_json` (02): a plain header, or a secret whose value is in CredentialDO. */
@@ -7,6 +8,7 @@ export interface StoredHeader {
   readonly value?: string;
   readonly secret?: true;
 }
+
 export interface StoredEnv {
   readonly name: string;
   readonly value: string;
@@ -21,18 +23,24 @@ export interface McpEgress {
 
 export const mcpHeaderKey = (serverId: string, header: string) =>
   `mcp.${serverId}.header.${header.toLowerCase()}`;
+
 export const mcpKeyPrefix = (serverId: string) => `mcp.${serverId}.header.`;
 
-const parse = <A>(text: string): A[] => {
-  try {
-    const v: unknown = JSON.parse(text);
-    return Array.isArray(v) ? (v as A[]) : [];
-  } catch {
-    return [];
-  }
-};
+const StoredHeaderSchema = Schema.Struct({
+  name: Schema.String,
+  value: Schema.optional(Schema.String),
+  secret: Schema.optional(Schema.Literal(true)),
+});
 
-export const storedHeaders = (row: McpServerRow): StoredHeader[] => parse<StoredHeader>(row.headersJson);
+const StoredEnvSchema = Schema.Struct({ name: Schema.String, value: Schema.String });
+
+const parse =
+  <A>(schema: Schema.ConstraintDecoder<ReadonlyArray<A>>) =>
+  (text: string): ReadonlyArray<A> =>
+    Option.getOrElse(Schema.decodeUnknownOption(Schema.fromJsonString(schema))(text), () => []);
+
+export const storedHeaders = (row: McpServerRow): ReadonlyArray<StoredHeader> =>
+  parse(Schema.Array(StoredHeaderSchema))(row.headersJson);
 
 const isSecret = (h: StoredHeader) => h.secret === true;
 
@@ -42,8 +50,8 @@ export const mcpToWire = (row: McpServerRow, storedSecrets: ReadonlySet<string>)
   enabled: row.enabled === 1,
   transport: row.transport,
   command: row.command,
-  args: parse<string>(row.argsJson),
-  env: parse<StoredEnv>(row.envJson),
+  args: parse(Schema.Array(Schema.String))(row.argsJson),
+  env: parse(Schema.Array(StoredEnvSchema))(row.envJson),
   url: row.url,
   headers: storedHeaders(row).map((h) =>
     isSecret(h)
@@ -61,8 +69,8 @@ export const mcpToSpec = (row: McpServerRow): McpServerSpec =>
         name: row.name,
         transport: "stdio",
         command: row.command ?? "",
-        args: parse<string>(row.argsJson),
-        env: parse<StoredEnv>(row.envJson),
+        args: parse(Schema.Array(Schema.String))(row.argsJson),
+        env: parse(Schema.Array(StoredEnvSchema))(row.envJson),
       }
     : {
         name: row.name,
@@ -77,11 +85,13 @@ export const mcpToSpec = (row: McpServerRow): McpServerSpec =>
 export const mcpToEgress = (row: McpServerRow): McpEgress | null => {
   if (row.transport === "stdio" || !row.url) return null;
   let host: string;
+
   try {
     host = new URL(row.url).hostname.toLowerCase();
   } catch {
     return null;
   }
+
   return {
     serverId: row.id,
     host,

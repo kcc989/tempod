@@ -1,32 +1,31 @@
+import { detail } from "../fixtures";
+import { resetUiState } from "../../../src/ui/state/workspace-ui";
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TempoError } from "@tempo/protocol";
 import { createElement, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FilesView } from "../../../src/ui/components/review/FilesView";
 import { FileTab } from "../../../src/ui/components/review/FileTab";
-import { call } from "../../../src/ui/lib/api";
 
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
-vi.mock("~/ui/hooks/useWorkspace", () => ({
-  useWorkspaceSelector: (_id: string, select: (state: unknown) => unknown) =>
-    select({ workspace: { state: "sleeping" }, changesSeq: 0 }),
-}));
-vi.mock("~/ui/hooks/useHub", () => ({ useHubWorkspace: () => undefined }));
-vi.mock("~/ui/hooks/useWorkspaceUi", () => ({
-  useWorkspaceUiSelector: (_id: string, select: (state: unknown) => unknown) =>
-    select({ tabs: [], activeKey: null }),
-}));
-vi.mock("~/ui/components/review/highlight", () => ({
-  highlightFile: async () => null,
-  splitLines: (text: string) => text.split("\n"),
-}));
+beforeEach(() => {
+  resetUiState();
+  environment.setState({ workspace: detail({ state: "sleeping" }) });
+});
 
 const show = (child: ReactNode) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(createElement(QueryClientProvider, { client }, child));
+
+  return render(createElement(QueryClientProvider, { client }, child), { wrapper: environment.Provider });
 };
 
 describe("browsing sleeping files", () => {
@@ -36,8 +35,10 @@ describe("browsing sleeping files", () => {
     await screen.findByRole("tree");
     expect(screen.getByText("README.md")).toBeDefined();
     expect(screen.getByText("Last synced files. May be out of date.")).toBeDefined();
-    expect((screen.getByRole("button", { name: /Open file/ }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: /Search/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(elementOf(screen.getByRole("button", { name: /Open file/ }), HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    expect(elementOf(screen.getByRole("button", { name: /Search/ }), HTMLButtonElement).disabled).toBe(true);
     expect(vi.mocked(call).mock.calls.every(([name]) => name === "listFiles")).toBe(true);
   });
 

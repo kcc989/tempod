@@ -32,6 +32,7 @@ describe.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")("workspace image", () =
     const pid = Number((await new Response(parent.stdout).text()).trim());
     expect(pid).toBeGreaterThan(1);
     expect(await parent.exited).toBe(0);
+
     for (let i = 0; i < 100 && existsSync(`/proc/${pid}`); i++) await sleep(20);
     expect(existsSync(`/proc/${pid}`)).toBe(false);
   });

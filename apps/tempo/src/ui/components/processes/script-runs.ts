@@ -14,11 +14,15 @@ export const mergeRuns = (
   live: Readonly<Record<string, ScriptRun>>,
 ): ScriptRun[] => {
   const byId = new Map<string, ScriptRun>();
+
   for (const r of listed) byId.set(r.id, r);
+
   for (const r of Object.values(live)) {
     const prev = byId.get(r.id);
+
     if (!prev || !ended(prev) || ended(r)) byId.set(r.id, r);
   }
+
   return [...byId.values()].sort(
     (a, b) => b.startedAt - a.startedAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
   );
@@ -104,7 +108,9 @@ export const selectedRunScriptId = (
   picked: string | null,
 ): string | null => {
   const entries = runScriptEntries(settings);
+
   if (picked !== null && entries.some((s) => s.id === picked)) return picked;
+
   return defaultRunScriptId(settings) ?? entries[0]?.id ?? null;
 };
 
@@ -116,6 +122,7 @@ export type RunToggle =
 export const runToggle = (runs: ReadonlyArray<ScriptRun>, scriptId: string | null): RunToggle | null => {
   if (scriptId === null) return null;
   const running = runsOf(runs, "run", scriptId).find(isRunning);
+
   return running ? { kind: "stop", runId: running.id } : { kind: "start", scriptId };
 };
 

@@ -497,7 +497,7 @@ interface DurableObject {
     alarm?(alarmInfo?: AlarmInvocationInfo): void | Promise<void>;
     webSocketMessage?(ws: WebSocket, message: string | ArrayBuffer): void | Promise<void>;
     webSocketClose?(ws: WebSocket, code: number, reason: string, wasClean: boolean): void | Promise<void>;
-    webSocketError?(ws: WebSocket, error: unknown): void | Promise<void>;
+    webSocketError?(ws: WebSocket, cause: unknown): void | Promise<void>;
 }
 type DurableObjectStub<T extends Rpc.DurableObjectBranded | undefined = undefined> = Fetcher<T, "alarm" | "connect" | "webSocketMessage" | "webSocketClose" | "webSocketError"> & {
     readonly id: DurableObjectId;
@@ -14333,7 +14333,7 @@ declare namespace CloudflareWorkersModule {
         connect?(socket: Socket): void | Promise<void>;
         webSocketMessage?(ws: WebSocket, message: string | ArrayBuffer): void | Promise<void>;
         webSocketClose?(ws: WebSocket, code: number, reason: string, wasClean: boolean): void | Promise<void>;
-        webSocketError?(ws: WebSocket, error: unknown): void | Promise<void>;
+        webSocketError?(ws: WebSocket, cause: unknown): void | Promise<void>;
     }
     export type WorkflowDurationLabel = 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
     export type WorkflowSleepDuration = `${number} ${WorkflowDurationLabel}${'s' | ''}` | number;

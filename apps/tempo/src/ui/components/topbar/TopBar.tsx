@@ -48,6 +48,7 @@ export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
       </header>
     );
   }
+
   return variant === "phone" ? (
     <PhoneTopBar view={view} actions={actions} />
   ) : (
@@ -75,6 +76,7 @@ function pillFor({ w, d }: WorkspaceView) {
 
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
+
   return (
     <header className="flex h-10 shrink-0 items-center gap-3 border-b bg-card px-2">
       <div className="flex min-w-0 shrink items-center gap-1.5">
@@ -123,7 +125,9 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
 
 function PrLinkAnchor({ workspace: w }: { workspace: WorkspaceSummary }) {
   const link = prLink(useProject(w.projectId), w);
+
   if (!link) return null;
+
   return (
     <a
       href={link.url}
@@ -142,6 +146,7 @@ function PrLinkAnchor({ workspace: w }: { workspace: WorkspaceSummary }) {
 
 function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
+
   return (
     <header className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3">
       <StatusIcon workspace={w} op={d?.op ?? null} />
@@ -164,6 +169,7 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
 
 function EditableTitle({ title, onSave }: { title: string; onSave: (title: string) => void }) {
   const [editing, setEditing] = useState(false);
+
   if (editing) {
     return (
       <InlineEdit
@@ -175,6 +181,7 @@ function EditableTitle({ title, onSave }: { title: string; onSave: (title: strin
       />
     );
   }
+
   return (
     <h1 className="flex min-w-0">
       <button

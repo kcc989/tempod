@@ -33,7 +33,9 @@ import {
 } from "~/ui/components/dialogs/new-workspace-model";
 
 const off = { set: false, updatedAt: null };
+
 const on = { set: true, updatedAt: 1000 };
+
 const status = (over: Partial<CredentialStatus> = {}): CredentialStatus => ({
   claude: off,
   codex: { ...off, lastRefresh: null },
@@ -77,6 +79,7 @@ describe("Settings → Logins checks", () => {
       tokens: { access_token: "a", refresh_token: "r" },
       last_refresh: "2026-10-01T00:00:00Z",
     });
+
     expect(checkCodexAuth(good)).toBeNull();
     expect(checkCodexAuth("")).not.toBeNull();
     expect(checkCodexAuth("{")).not.toBeNull();
@@ -193,6 +196,7 @@ describe("New workspace", () => {
         ],
       },
     ];
+
     const configured = { settings: { agent: { default: "codex" as const, models: { codex: "custom" } } } };
     const choices = modelChoices(["claude", "codex"], reports);
     expect(new Set(choices.map((choice) => choice.key)).size).toBe(3);
@@ -215,6 +219,7 @@ describe("New workspace", () => {
       { number: 12, title: "Add login", headBranch: "feat/login" },
       { number: 3, title: "Fix crash", headBranch: "fix/crash" },
     ];
+
     expect(filterPullRequests(prs, "")).toEqual(prs);
     expect(filterPullRequests(prs, "#1").map((p) => p.number)).toEqual([12]);
     expect(filterPullRequests(prs, "CRASH").map((p) => p.number)).toEqual([3]);

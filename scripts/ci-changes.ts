@@ -8,6 +8,7 @@ export const changedFiles = async (
   cwd = process.cwd(),
 ): Promise<string[] | null> => {
   if (!base || !/^[a-f0-9]{40}$/.test(base) || /^0+$/.test(base)) return null;
+
   const git = async (args: string[]) => {
     const child = Bun.spawn(["git", ...args], {
       cwd,
@@ -15,20 +16,27 @@ export const changedFiles = async (
       stdout: "pipe",
       stderr: "pipe",
     });
+
     const timer = setTimeout(() => child.kill("SIGKILL"), 10_000);
+
     const [code, output] = await Promise.all([
       child.exited,
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
     ]);
+
     clearTimeout(timer);
+
     return { code, output };
   };
+
   if ((await git(["cat-file", "-e", `${base}^{commit}`])).code !== 0) {
     if ((await git(["fetch", "--no-tags", "--depth=1", "origin", base])).code !== 0) return null;
   }
+
   // Include both sides of a rename so code moved into docs cannot skip its checks.
   const diff = await git(["diff", "--no-renames", "--name-only", "-z", base, "HEAD"]);
+
   return diff.code === 0 ? diff.output.split("\0").filter(Boolean) : null;
 };
 
@@ -36,9 +44,11 @@ if (import.meta.main) {
   const files = await changedFiles(process.env["CI_BASE_SHA"]);
   const docsOnly = files !== null && isDocsOnly(files);
   const output = process.env["GITHUB_OUTPUT"];
+
   if (output) {
     const { appendFileSync } = await import("node:fs");
     appendFileSync(output, `docs_only=${docsOnly}\n`);
   }
+
   console.log(docsOnly ? "Documentation only: run lint and formatting." : "Run the complete CI suite.");
 }

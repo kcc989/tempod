@@ -19,9 +19,13 @@ export const statusIndicator = (
   op?: OpProgress | null,
 ): Indicator | null => {
   if (s.attention === "needs_input") return { kind: "needs_input", tooltip: "Waiting for you" };
+
   if (s.attention === "error") return { kind: "error", tooltip: "Needs attention" };
+
   if (s.state === "working") return { kind: "working", tooltip: "Working" };
+
   if (s.attention === "unread") return { kind: "unread", tooltip: "New activity" };
+
   if (
     s.state === "creating" ||
     s.state === "starting" ||
@@ -30,11 +34,13 @@ export const statusIndicator = (
   ) {
     return { kind: "busy", tooltip: pillText(s.state, { op: op ?? null }).text };
   }
+
   if (s.state === "sleeping") return { kind: "sleeping", tooltip: "Sleeping" };
+
   return null;
 };
 
-const STEP_LABELS: Record<string, string> = {
+const STEP_LABELS = {
   "container.start": "Starting container",
   "tempod.connect": "Connecting",
   "repo.clone": "Cloning repo",
@@ -60,16 +66,19 @@ const STEP_LABELS: Record<string, string> = {
   "events.prune": "Pruning events",
   "r2.retention": "Cleaning up storage",
   "egress.trim": "Trimming egress log",
-};
+} satisfies Record<string, string>;
 
 export const stepLabel = (step: string): string => {
-  const known = STEP_LABELS[step];
+  const known = Object.entries(STEP_LABELS).find(([key]) => key === step)?.[1];
+
   if (known) return known;
+
   const words = step
     .replace(/[._]/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .trim();
+
   return words ? words[0]!.toUpperCase() + words.slice(1) : step;
 };
 
@@ -86,8 +95,10 @@ export const pillText = (
   switch (state) {
     case "starting": {
       const step = ctx.op?.step ? ` ${stepLabel(ctx.op.step)}` : "";
+
       return { text: `Starting…${step}`, tone: "busy" };
     }
+
     case "setting_up":
       return { text: "Running setup", tone: "busy" };
     case "ready":
@@ -132,18 +143,25 @@ export interface PrimaryActionInput {
 export const primaryAction = (i: PrimaryActionInput): PrimaryAction | null => {
   if (i.hasUncommitted || i.hasUnpushedCommits) return { kind: "commitPush", label: "Commit and push" };
   const prOpen = i.prNumber !== null && (i.prState === "open" || i.prState === "draft");
+
   if (i.pushed && i.prNumber === null) return { kind: "createPr", label: "Create PR" };
+
   if (prOpen && i.checksState === "failure") return { kind: "viewChecks", label: "View checks" };
+
   if (prOpen) return { kind: "merge", label: "Merge" };
+
   if (i.prNumber !== null && (i.prState === "merged" || i.prState === "closed")) {
     return { kind: "archive", label: "Archive" };
   }
+
   return null;
 };
 
 export const countsForTitle = (summaries: Iterable<Pick<WorkspaceSummary, "attention">>): number => {
   let n = 0;
+
   for (const s of summaries) if (s.attention !== "none") n++;
+
   return n;
 };
 

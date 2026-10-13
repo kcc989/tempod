@@ -12,6 +12,7 @@ describe("pickSlug", () => {
   });
   it("every animal is a valid, unique slug", () => {
     expect(new Set(ANIMALS).size).toBe(ANIMALS.length);
+
     for (const c of ANIMALS) expect(c).toMatch(SLUG_PATTERN);
   });
 });

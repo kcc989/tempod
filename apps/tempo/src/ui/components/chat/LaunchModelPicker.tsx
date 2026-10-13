@@ -31,9 +31,12 @@ export function useLaunchModels(settings: Project["settings"]) {
   const choices = modelChoices(available, models.data ?? []);
   const custom = customAgentsWithLogin(useCustomAgents().data, available);
   const [picked, setPicked] = useState<string | null>(null);
+
   const selected =
     choices.find((choice) => choice.key === picked) ?? initialModel(choices, models.data ?? [], { settings });
+
   const pickedCustom = customAgentOf(picked, custom);
+
   return {
     credentials,
     models,
@@ -57,6 +60,7 @@ export function LaunchModelPicker({
   onClosed: () => void;
 }) {
   const { credentials, models, choices, custom, selected, pickedCustom, setPicked } = selection;
+
   return (
     <div className="min-w-0">
       <Select

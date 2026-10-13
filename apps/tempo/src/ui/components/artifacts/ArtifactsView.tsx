@@ -1,4 +1,8 @@
-import { ChevronDownIcon, ShapesIcon } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
+import * as Icons from "lucide-react";
+
+const ArtifactsEmptyIcon = Icons.ShapesIcon;
+
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { sessionTitle } from "~/ui/components/chat/chat-tabs-model";
 import { Button } from "~/ui/components/ui/button";
@@ -21,13 +25,17 @@ export const NO_ARTIFACTS = "No artifacts yet. Agents publish them with publish_
 export function ArtifactsView({ workspaceId }: { workspaceId: string }) {
   const { artifacts, error, refetch } = useArtifacts(workspaceId);
   const sessions = useWorkspaceSelector(workspaceId, (s) => s.sessions);
+
   if (!artifacts) return error ? <ErrorState error={error} onRetry={refetch} /> : <SkeletonRows />;
   const groups = artifactGroups(artifacts);
-  if (groups.length === 0) return <EmptyState icon={ShapesIcon} title={NO_ARTIFACTS} />;
+
+  if (groups.length === 0) return <EmptyState icon={ArtifactsEmptyIcon} title={NO_ARTIFACTS} />;
+
   return (
     <ul className="min-h-0 flex-1 overflow-auto py-1">
       {groups.map(({ id, versions }) => {
         const newest = versions[0]!;
+
         return (
           <li key={id} className="group flex items-center gap-1 px-2">
             <button

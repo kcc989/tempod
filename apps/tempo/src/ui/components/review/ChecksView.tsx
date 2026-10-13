@@ -44,29 +44,26 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
   const prNumber = w?.prNumber ?? null;
   const prState = w?.prState ?? null;
   const checksState = w?.checksState ?? null;
-
   const runs = useCallQuery("listCheckRuns", { workspaceId }, { enabled: prNumber !== null, retry: false });
   const refresh = useCallMutation("refreshPullRequest", { toast: false });
   const { mutate } = refresh;
   const { refetch } = runs;
-
   useEffect(() => {
     if (prNumber !== null) mutate({ workspaceId });
   }, [prNumber, workspaceId, mutate]);
-
   const seen = useRef({ checksState, prState });
   useEffect(() => {
     if (seen.current.checksState === checksState && seen.current.prState === prState) return;
     seen.current = { checksState, prState };
+
     if (prNumber !== null) void refetch();
   }, [checksState, prState, prNumber, refetch]);
-
   const title = detail?.prTitle ?? refresh.data?.prTitle ?? null;
   const sorted = useMemo(() => sortRuns(runs.data ?? []), [runs.data]);
 
   if (!w) return <SkeletonRows />;
-  if (prNumber === null) return <EmptyState title="No pull request yet." />;
 
+  if (prNumber === null) return <EmptyState title="No pull request yet." />;
   const pr = prStateLabel(prState);
   const checks = checksStateLabel(checksState);
   const url = project ? githubPullUrl(project.owner, project.name, prNumber) : null;
@@ -122,6 +119,7 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
               const outcome = runOutcome(run);
               const { icon: Icon, className } = OUTCOME_ICON[outcome];
               const href = safeHttpUrl(run.url);
+
               const content = (
                 <>
                   <Icon aria-hidden className={cn("size-3.5 shrink-0", className)} />
@@ -130,6 +128,7 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
                   {href && <ExternalLinkIcon aria-hidden className="size-3 shrink-0 text-muted-foreground" />}
                 </>
               );
+
               return (
                 <li key={`${run.name}:${i}`}>
                   {href ? (

@@ -1,6 +1,7 @@
 /** A Map-backed localStorage for node tests. */
 export const installLocalStorage = (): Map<string, string> => {
   const data = new Map<string, string>();
+
   const storage = {
     getItem: (k: string) => data.get(k) ?? null,
     setItem: (k: string, v: string) => void data.set(k, String(v)),
@@ -11,7 +12,9 @@ export const installLocalStorage = (): Map<string, string> => {
       return data.size;
     },
   };
+
   Object.defineProperty(globalThis, "localStorage", { value: storage, configurable: true, writable: true });
+
   return data;
 };
 

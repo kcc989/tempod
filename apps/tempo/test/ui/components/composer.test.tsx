@@ -1,21 +1,22 @@
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { TempoError, type CredentialStatus } from "@tempo/protocol";
+import { TempoError, type RoleInfo, type CredentialStatus } from "@tempo/protocol";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
 import { Composer } from "../../../src/ui/components/chat/Composer";
-import { call } from "../../../src/ui/lib/api";
+
 import { insertIntoComposer, syncChatTabs } from "../../../src/ui/state/workspace-ui";
 import { emptyWorkspaceState } from "../../../src/ui/stores/workspace-state";
 import { detail, session, turn } from "../fixtures";
 
-const fixture = vi.hoisted(() => ({ state: null as unknown }));
-vi.mock("~/ui/hooks/useWorkspace", () => ({
-  useWorkspaceSelector: (_: string, select: (state: unknown) => unknown) => select(fixture.state),
-  useWorkspaceStore: () => ({ getSnapshot: () => fixture.state, clearCredentialInvalid: vi.fn() }),
-}));
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
 const credentials: CredentialStatus = {
   claude: { set: true, updatedAt: 1 },
   codex: { set: true, updatedAt: 1, lastRefresh: 1 },
@@ -28,6 +29,7 @@ const show = (sessionId = "s1") => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+
   return {
     ...render(
       createElement(
@@ -39,39 +41,49 @@ const show = (sessionId = "s1") => {
           createElement(Composer, { workspaceId: "composer-w", sessionId }),
         ),
       ),
+      { wrapper: environment.Provider },
     ),
     client,
   };
 };
+
 const message = () => screen.getByRole("textbox", { name: "Message" });
+
 const type = (text: string) =>
   fireEvent.change(message(), { target: { value: text, selectionStart: text.length } });
+
 const enter = () => fireEvent.keyDown(message(), { key: "Enter", code: "Enter" });
+
 const pending = <T,>() => {
   let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
+  let reject!: (cause: unknown) => void;
+
   const promise = new Promise<T>((yes, no) => {
     resolve = yes;
     reject = no;
   });
+
   return { promise, resolve, reject };
 };
 
 beforeEach(() => {
   localStorage.clear();
-  fixture.state = {
+  environment.setState({
     ...emptyWorkspaceState,
     ready: true,
     backlogDone: true,
     workspace: detail({ runningTurnId: "t1", state: "working" }),
     sessions: { s1: session({ steering: true }), s2: session({ id: "s2" }) },
     turns: { t1: turn() },
-  };
+  });
   vi.mocked(call).mockImplementation(async (name) => {
-    if (name === "getCredentialStatus") return credentials as never;
-    if (name === "listRoles") return [] as never;
-    if (name === "listFiles") return { paths: ["src/main.ts"] } as never;
-    return turn({ status: "queued" }) as never;
+    if (name === "getCredentialStatus") return credentials;
+
+    if (name === "listRoles") return [];
+
+    if (name === "listFiles") return { paths: ["src/main.ts"] };
+
+    return turn({ status: "queued" });
   });
   syncChatTabs("composer-w", ["s1", "s2"]);
 });
@@ -87,7 +99,7 @@ describe("composer delivery and draft recovery", () => {
         expect.objectContaining({ text: "Queued prompt", delivery: "queue" }),
       ),
     );
-    await waitFor(() => expect((message() as HTMLTextAreaElement).value).toBe(""));
+    await waitFor(() => expect(elementOf(message(), HTMLTextAreaElement).value).toBe(""));
     type("Live guidance");
     fireEvent.click(screen.getByRole("button", { name: "Send now" }));
     await waitFor(() =>
@@ -100,9 +112,9 @@ describe("composer delivery and draft recovery", () => {
   });
 
   it("keeps the saved draft until acknowledgement and guards repeated Enter", async () => {
-    const request = pending<never>();
+    const request = pending<import("@tempo/protocol").Turn>();
     vi.mocked(call).mockImplementation(async (name) =>
-      name === "sendPrompt" ? request.promise : (credentials as never),
+      name === "sendPrompt" ? request.promise : credentials,
     );
     show();
     type("Keep until saved");
@@ -111,16 +123,16 @@ describe("composer delivery and draft recovery", () => {
     await waitFor(() =>
       expect(vi.mocked(call).mock.calls.filter(([name]) => name === "sendPrompt")).toHaveLength(1),
     );
-    expect((message() as HTMLTextAreaElement).value).toBe("Keep until saved");
+    expect(elementOf(message(), HTMLTextAreaElement).value).toBe("Keep until saved");
     expect(localStorage.getItem("tempo:composer:draft:composer-w:s1")).toContain("Keep until saved");
-    await act(async () => request.resolve(turn() as never));
-    await waitFor(() => expect((message() as HTMLTextAreaElement).value).toBe(""));
+    await act(async () => request.resolve(turn()));
+    await waitFor(() => expect(elementOf(message(), HTMLTextAreaElement).value).toBe(""));
   });
 
   it("keeps edits made during a failed request", async () => {
-    const request = pending<never>();
+    const request = pending<import("@tempo/protocol").Turn>();
     vi.mocked(call).mockImplementation(async (name) =>
-      name === "sendPrompt" ? request.promise : (credentials as never),
+      name === "sendPrompt" ? request.promise : credentials,
     );
     show();
     type("First draft");
@@ -128,18 +140,19 @@ describe("composer delivery and draft recovery", () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith("sendPrompt", expect.anything()));
     type("First draft plus my next thought");
     await act(async () => request.reject(new TempoError("INTERNAL")));
-    expect((message() as HTMLTextAreaElement).value).toBe("First draft plus my next thought");
+    expect(elementOf(message(), HTMLTextAreaElement).value).toBe("First draft plus my next thought");
   });
 
   it("does not resend a pending draft after switching away and back", async () => {
-    const request = pending<never>();
+    const request = pending<import("@tempo/protocol").Turn>();
     vi.mocked(call).mockImplementation(async (name) =>
-      name === "sendPrompt" ? request.promise : (credentials as never),
+      name === "sendPrompt" ? request.promise : credentials,
     );
     const view = show();
     type("One delivery");
     enter();
     await waitFor(() => expect(call).toHaveBeenCalledWith("sendPrompt", expect.anything()));
+
     const switchTo = (sessionId: string) =>
       view.rerender(
         createElement(
@@ -152,19 +165,20 @@ describe("composer delivery and draft recovery", () => {
           ),
         ),
       );
+
     switchTo("s2");
     switchTo("s1");
-    expect((screen.getByRole("button", { name: "Queue" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(elementOf(screen.getByRole("button", { name: "Queue" }), HTMLButtonElement).disabled).toBe(true);
     enter();
     expect(vi.mocked(call).mock.calls.filter(([name]) => name === "sendPrompt")).toHaveLength(1);
-    await act(async () => request.resolve(turn() as never));
-    await waitFor(() => expect((message() as HTMLTextAreaElement).value).toBe(""));
+    await act(async () => request.resolve(turn()));
+    await waitFor(() => expect(elementOf(message(), HTMLTextAreaElement).value).toBe(""));
   });
 
   it("clears only the submitted draft after switching tabs during a successful send", async () => {
-    const request = pending<never>();
+    const request = pending<import("@tempo/protocol").Turn>();
     vi.mocked(call).mockImplementation(async (name) =>
-      name === "sendPrompt" ? request.promise : (credentials as never),
+      name === "sendPrompt" ? request.promise : credentials,
     );
     const view = show();
     type("Sent from first chat");
@@ -173,8 +187,8 @@ describe("composer delivery and draft recovery", () => {
     view.unmount();
     show("s2");
     type("Unsent second chat");
-    await act(async () => request.resolve(turn() as never));
-    expect((message() as HTMLTextAreaElement).value).toBe("Unsent second chat");
+    await act(async () => request.resolve(turn()));
+    expect(elementOf(message(), HTMLTextAreaElement).value).toBe("Unsent second chat");
     expect(JSON.parse(localStorage.getItem("tempo:composer:draft:composer-w:s1")!).text).toBe("");
   });
 
@@ -201,12 +215,12 @@ describe("composer delivery and draft recovery", () => {
   it("accepts legacy text drafts and keeps typing when storage is blocked", () => {
     localStorage.setItem("tempo:composer:draft:composer-w:s1", JSON.stringify("Old draft"));
     show();
-    expect((message() as HTMLTextAreaElement).value).toBe("Old draft");
+    expect(elementOf(message(), HTMLTextAreaElement).value).toBe("Old draft");
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("quota");
     });
     type("New typing survives");
-    expect((message() as HTMLTextAreaElement).value).toBe("New typing survives");
+    expect(elementOf(message(), HTMLTextAreaElement).value).toBe("New typing survives");
   });
   it("sends a role request from the Roles picker without sending it to the agent", async () => {
     const role = {
@@ -219,21 +233,22 @@ describe("composer delivery and draft recovery", () => {
       requestable: true,
       on: [],
       limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
-    };
-    vi.mocked(call).mockImplementation(async (name) =>
-      name === "listRoles"
-        ? ([role] as never)
-        : name === "listFiles"
-          ? ({ paths: [] } as never)
-          : name === "requestRole"
-            ? ({ changeId: "change", roleRunId: "run" } as never)
-            : (credentials as never),
-    );
+    } satisfies RoleInfo;
+
+    call.mockImplementation(async (name) => {
+      if (name === "listRoles") return [role];
+
+      if (name === "listFiles") return { paths: [] };
+
+      if (name === "requestRole") return { changeId: "change", roleRunId: "run" };
+
+      return credentials;
+    });
     show();
     type("@reviewer");
     await screen.findByRole("option");
     enter();
-    await waitFor(() => expect((message() as HTMLTextAreaElement).value).toBe("/role reviewer "));
+    await waitFor(() => expect(elementOf(message(), HTMLTextAreaElement).value).toBe("/role reviewer "));
     type("/role reviewer focus on auth");
     enter();
     await waitFor(() =>

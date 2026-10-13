@@ -31,6 +31,7 @@ const setup = async () => {
   const tempod = new FakeTempod();
   tempod.on("session.start", ({ agent }) => sessionResult(agent));
   const { container } = await installFakes(stub, tempod);
+
   return { userId, stub, tempod, container, credentials: env.CREDENTIALS.getByName(userId) };
 };
 
@@ -38,10 +39,12 @@ describe("model discovery", { timeout: 30_000 }, () => {
   it("discovers all configured adapters without creating chats and shares simultaneous requests", async () => {
     const w = await setup();
     await seedCredentials(w.userId);
+
     const [first, second] = await Promise.all([
       w.stub.discoverModels(w.userId),
       w.stub.discoverModels(w.userId),
     ]);
+
     expect(first).toEqual(second);
     expect(unwrap(first).map((entry) => entry.agent)).toEqual(["claude", "codex", "opencode", "pi"]);
     expect(w.tempod.requestsOf("session.start")).toHaveLength(4);
@@ -75,11 +78,14 @@ describe("model discovery", { timeout: 30_000 }, () => {
     const w = await setup();
     await w.credentials.putSecret("claude.oauth_token", "claude-token");
     let release: () => void = () => undefined;
+
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
+
     w.tempod.on("session.start", async ({ agent }) => {
       if (w.tempod.requestsOf("session.start").length === 1) await gate;
+
       return sessionResult(agent);
     });
     const first = w.stub.discoverModels(w.userId);
@@ -108,14 +114,17 @@ describe("model discovery", { timeout: 30_000 }, () => {
 
   it("returns refreshed Codex auth to CredentialDO without writing secret events", async () => {
     const w = await setup();
+
     const initial = JSON.stringify({
       tokens: { access_token: "old", refresh_token: "refresh" },
       last_refresh: "2026-10-11T00:00:00Z",
     });
+
     const refreshed = JSON.stringify({
       tokens: { access_token: "new", refresh_token: "refresh" },
       last_refresh: "2026-10-12T00:00:00Z",
     });
+
     await w.credentials.replaceCodexAuth(initial, Date.parse("2026-10-11T00:00:00Z"));
     w.tempod.on("session.start", ({ agent }) => {
       w.tempod.emit({
@@ -124,6 +133,7 @@ describe("model discovery", { timeout: 30_000 }, () => {
         content: refreshed,
         lastRefresh: Date.parse("2026-10-12T00:00:00Z"),
       });
+
       return sessionResult(agent);
     });
     await w.stub.discoverModels(w.userId);

@@ -38,6 +38,7 @@ import { PendingEnvironmentProposal } from "./environments.ts";
 import { ArtifactItemContent } from "./artifacts.ts";
 
 const N = Schema.NullOr;
+
 const Ms = Schema.Number;
 
 export const Project = Schema.Struct({
@@ -51,6 +52,7 @@ export const Project = Schema.Struct({
   sortOrder: Schema.Number,
   environmentId: Schema.optional(N(Schema.String)),
 });
+
 export type Project = typeof Project.Type;
 
 export const WorkspaceSummary = Schema.Struct({
@@ -72,6 +74,7 @@ export const WorkspaceSummary = Schema.Struct({
   archivedAt: N(Ms),
   rev: Schema.Number,
 });
+
 export type WorkspaceSummary = typeof WorkspaceSummary.Type;
 
 export const OpProgress = Schema.Struct({
@@ -86,6 +89,7 @@ export const OpProgress = Schema.Struct({
     }),
   ),
 });
+
 export type OpProgress = typeof OpProgress.Type;
 
 export const ChangedFile = Schema.Struct({
@@ -95,6 +99,7 @@ export const ChangedFile = Schema.Struct({
   additions: Schema.Number,
   deletions: Schema.Number,
 });
+
 export type ChangedFile = typeof ChangedFile.Type;
 
 export const ChangesSummary = Schema.Struct({
@@ -102,6 +107,7 @@ export const ChangesSummary = Schema.Struct({
   additions: Schema.Number,
   deletions: Schema.Number,
 });
+
 export type ChangesSummary = typeof ChangesSummary.Type;
 
 export const WorkspaceDetail = Schema.Struct({
@@ -130,6 +136,7 @@ export const WorkspaceDetail = Schema.Struct({
   environmentId: Schema.optional(N(Schema.String)),
   environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
 });
+
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
 
 export const Session = Schema.Struct({
@@ -149,6 +156,7 @@ export const Session = Schema.Struct({
   customAgent: Schema.optional(SessionCustomAgent),
   profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
 });
+
 export type Session = typeof Session.Type;
 
 export const AgentModelOptions = Schema.Struct({
@@ -156,9 +164,11 @@ export const AgentModelOptions = Schema.Struct({
   options: Schema.Array(ConfigSelectOption),
   currentValue: Schema.String,
 });
+
 export type AgentModelOptions = typeof AgentModelOptions.Type;
 
 export const Mention = Schema.Struct({ path: Schema.String });
+
 export type Mention = typeof Mention.Type;
 
 export const TurnPrompt = Schema.Struct({
@@ -167,6 +177,7 @@ export const TurnPrompt = Schema.Struct({
   attachmentIds: Schema.Array(Schema.String),
   reviewCommentIds: Schema.Array(Schema.String),
 });
+
 export type TurnPrompt = typeof TurnPrompt.Type;
 
 export const Turn = Schema.Struct({
@@ -186,6 +197,7 @@ export const Turn = Schema.Struct({
   endedAt: N(Ms),
   usage: Schema.optional(TurnUsage),
 });
+
 export type Turn = typeof Turn.Type;
 
 // Item content per kind (02, Item model).
@@ -195,6 +207,7 @@ export const Attachment = Schema.Struct({
   mime: Schema.String,
   size: Schema.Number,
 });
+
 export type Attachment = typeof Attachment.Type;
 
 export const UserMessageContent = Schema.Struct({
@@ -203,11 +216,14 @@ export const UserMessageContent = Schema.Struct({
   attachments: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String, mime: Schema.String })),
   reviewCommentIds: Schema.Array(Schema.String),
 });
+
 export const AgentMessageContent = Schema.Struct({
   text: Schema.String,
   blocks: Schema.optional(Schema.Array(ContentBlock)),
 });
+
 export const AgentThoughtContent = Schema.Struct({ text: Schema.String });
+
 export const ToolCallItemContent = Schema.Struct({
   toolCallId: Schema.String,
   title: Schema.String,
@@ -217,7 +233,9 @@ export const ToolCallItemContent = Schema.Struct({
   rawInput: Schema.optional(Schema.Unknown),
   rawOutput: Schema.optional(Schema.Unknown),
 });
+
 export const PlanContent = Schema.Struct({ entries: Schema.Array(PlanEntry) });
+
 export const PermissionContent = Schema.Struct({
   requestId: Schema.String,
   toolCallId: Schema.optional(N(Schema.String)),
@@ -225,22 +243,33 @@ export const PermissionContent = Schema.Struct({
   options: Schema.Array(PermissionOption),
   chosenOptionId: Schema.optional(N(Schema.String)),
 });
+
 export const NoticeContent = Schema.Struct({
   level: NoticeLevel,
   text: Schema.String,
   checkpointId: Schema.optional(Schema.String),
 });
+
 export const HandoffContent = Schema.Struct({ text: Schema.String });
+
 export const RevertMarkerContent = Schema.Struct({ checkpointId: Schema.String, toTurnSeq: Schema.Number });
+
 export const ErrorContent = Schema.Struct({ code: Schema.String, detail: Schema.optional(N(Schema.String)) });
 
 export type UserMessageContent = typeof UserMessageContent.Type;
+
 export type AgentMessageContent = typeof AgentMessageContent.Type;
+
 export type ToolCallItemContent = typeof ToolCallItemContent.Type;
+
 export type PlanContent = typeof PlanContent.Type;
+
 export type PermissionContent = typeof PermissionContent.Type;
+
 export type NoticeContent = typeof NoticeContent.Type;
+
 export type RevertMarkerContent = typeof RevertMarkerContent.Type;
+
 export type ErrorContent = typeof ErrorContent.Type;
 
 export const ITEM_CONTENT = {
@@ -283,7 +312,9 @@ export const Item = Schema.Union([
   itemOf("error"),
   itemOf("artifact"),
 ]);
+
 export type Item = typeof Item.Type;
+
 export type ItemOf<K extends Item["kind"]> = Extract<Item, { kind: K }>;
 
 export const ScriptRun = Schema.Struct({
@@ -297,6 +328,7 @@ export const ScriptRun = Schema.Struct({
   startedAt: Ms,
   endedAt: N(Ms),
 });
+
 export type ScriptRun = typeof ScriptRun.Type;
 
 export const ReviewComment = Schema.Struct({
@@ -310,6 +342,7 @@ export const ReviewComment = Schema.Struct({
   sentTurnId: N(Schema.String),
   createdAt: Ms,
 });
+
 export type ReviewComment = typeof ReviewComment.Type;
 
 export const PermissionRequest = Schema.Struct({
@@ -320,6 +353,7 @@ export const PermissionRequest = Schema.Struct({
   title: Schema.String,
   options: Schema.Array(PermissionOption),
 });
+
 export type PermissionRequest = typeof PermissionRequest.Type;
 
 export const CheckpointInfo = Schema.Struct({
@@ -329,6 +363,7 @@ export const CheckpointInfo = Schema.Struct({
   reason: CheckpointReason,
   createdAt: Ms,
 });
+
 export type CheckpointInfo = typeof CheckpointInfo.Type;
 
 export const CheckRun = Schema.Struct({
@@ -337,9 +372,11 @@ export const CheckRun = Schema.Struct({
   conclusion: N(Schema.String),
   url: Schema.String,
 });
+
 export type CheckRun = typeof CheckRun.Type;
 
 export const CredentialState = Schema.Struct({ set: Schema.Boolean, updatedAt: N(Ms) });
+
 export const CredentialStatus = Schema.Struct({
   claude: CredentialState,
   codex: Schema.Struct({ ...CredentialState.fields, lastRefresh: N(Ms) }),
@@ -347,6 +384,7 @@ export const CredentialStatus = Schema.Struct({
   anthropic: CredentialState,
   openai: CredentialState,
 });
+
 export type CredentialStatus = typeof CredentialStatus.Type;
 
 export const Diagnostics = Schema.Struct({
@@ -412,6 +450,7 @@ export const Diagnostics = Schema.Struct({
     }),
   ),
 });
+
 export type Diagnostics = typeof Diagnostics.Type;
 
 export const ErrorCodeField = ErrorCodeSchema;
@@ -424,6 +463,7 @@ export const ConversationSummary = Schema.Struct({
   branch: Schema.String,
   updatedAt: Schema.Number,
 });
+
 export type ConversationSummary = typeof ConversationSummary.Type;
 
 export const ConversationArtifact = Schema.Struct({
@@ -442,4 +482,5 @@ export const ConversationArtifact = Schema.Struct({
   turns: Schema.Array(Turn),
   items: Schema.Array(Item),
 });
+
 export type ConversationArtifact = typeof ConversationArtifact.Type;

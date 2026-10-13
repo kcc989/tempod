@@ -1,3 +1,4 @@
+import { AGENT_IDS, ATTENTIONS, CHECKS_STATES, PR_STATES, WORKSPACE_STATES } from "@tempo/protocol";
 import { sql } from "drizzle-orm";
 import { primaryKey, check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema.ts";
@@ -106,12 +107,12 @@ export const workspaces = sqliteTable(
     title: text("title").notNull().default(""),
     branch: text("branch").notNull(),
     baseBranch: text("base_branch").notNull(),
-    state: text("state").notNull(),
-    attention: text("attention").notNull().default("none"),
-    defaultAgent: text("default_agent").notNull(),
+    state: text("state", { enum: WORKSPACE_STATES }).notNull(),
+    attention: text("attention", { enum: ATTENTIONS }).notNull().default("none"),
+    defaultAgent: text("default_agent", { enum: AGENT_IDS }).notNull(),
     prNumber: integer("pr_number"),
-    prState: text("pr_state"),
-    checksState: text("checks_state"),
+    prState: text("pr_state", { enum: PR_STATES }),
+    checksState: text("checks_state", { enum: CHECKS_STATES }),
     pinned: integer("pinned").notNull().default(0),
     lastActivityAt: integer("last_activity_at").notNull(),
     createdAt: integer("created_at").notNull(),
@@ -164,10 +165,15 @@ export const customAgents = sqliteTable(
 );
 
 export type CustomAgentRow = typeof customAgents.$inferSelect;
+
 export type ProjectRow = typeof projects.$inferSelect;
+
 export type WorkspaceRow = typeof workspaces.$inferSelect;
+
 export type EnvironmentRow = typeof environments.$inferSelect;
+
 export type McpServerRow = typeof mcpServers.$inferSelect;
+
 export type InstallationRow = typeof githubInstallations.$inferSelect;
 
 export const userRoles = sqliteTable(

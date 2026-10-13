@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import { ExternalLinkIcon, GlobeIcon, RotateCwIcon } from "lucide-react";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { CenterTabProps } from "~/ui/components/chat/tab-kinds";
@@ -6,7 +7,7 @@ import { openPreviewTab } from "~/ui/components/topbar/open-preview";
 import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
-import { call } from "~/ui/lib/api";
+
 import { errorText } from "~/ui/lib/toast";
 import { normalizeUrl, PREVIEW_SANDBOX, previewPortOf, safeHttpUrl } from "./browser-model";
 
@@ -16,8 +17,10 @@ import { normalizeUrl, PREVIEW_SANDBOX, previewPortOf, safeHttpUrl } from "./bro
  */
 export function BrowserTab({ workspaceId, tab, seq }: CenterTabProps<"browser">) {
   const url = safeHttpUrl(tab.url);
+
   if (!url)
     return <EmptyState className="h-full" icon={GlobeIcon} title="Only web addresses can open here." />;
+
   return (
     <BrowserView
       key={`${url}\u0000${seq}`}
@@ -29,17 +32,20 @@ export function BrowserTab({ workspaceId, tab, seq }: CenterTabProps<"browser">)
 }
 
 function BrowserView({ url, workspaceId, port }: { url: string; workspaceId: string; port: number | null }) {
+  const call = useApiCall();
+
   const inputId = useId();
+
   // `entry`: src is a one-time entry link, so a reload needs a new one.
   const [src, setSrc] = useState<{ url: string; entry: boolean } | null>(
     port === null ? { url, entry: false } : null,
   );
+
   const [failure, setFailure] = useState<string | null>(null);
   const [text, setText] = useState(url);
   const [invalid, setInvalid] = useState(false);
   const [nonce, setNonce] = useState(0);
   const [attempt, setAttempt] = useState(0);
-
   useEffect(() => {
     if (port === null) return;
     let live = true;
@@ -47,14 +53,15 @@ function BrowserView({ url, workspaceId, port }: { url: string; workspaceId: str
       (r) => {
         if (live) setSrc((cur) => cur ?? { url: r.url, entry: true });
       },
-      (e: unknown) => {
-        if (live) setFailure(errorText(e));
+      (cause: unknown) => {
+        if (live) setFailure(errorText(cause));
       },
     );
+
     return () => {
       live = false;
     };
-  }, [workspaceId, port, attempt]);
+  }, [workspaceId, port, attempt, call]);
 
   const reload = () => {
     if (port !== null && (src === null || src.entry)) {
@@ -67,13 +74,17 @@ function BrowserView({ url, workspaceId, port }: { url: string; workspaceId: str
   const go = (e: FormEvent) => {
     e.preventDefault();
     const next = normalizeUrl(text, src && !src.entry ? src.url : url);
+
     if (!next) {
       setInvalid(true);
+
       return;
     }
+
     setInvalid(false);
     setFailure(null);
     setText(next);
+
     if (src?.url === next) setNonce((n) => n + 1);
     else setSrc({ url: next, entry: false });
   };
@@ -117,7 +128,7 @@ function BrowserView({ url, workspaceId, port }: { url: string; workspaceId: str
               onClick={(e) => {
                 if (port === null) return;
                 e.preventDefault();
-                void openPreviewTab(workspaceId, port);
+                void openPreviewTab(workspaceId, port, call);
               }}
             >
               <ExternalLinkIcon />

@@ -1,6 +1,8 @@
 import type { Page, WebSocketRoute } from "@playwright/test";
 import {
   API,
+  FN_NAMES,
+  type FnOutput,
   type FnName,
   type Item,
   type Project,
@@ -25,17 +27,21 @@ export async function browserFixture(page: Page) {
     session({ steering: true }),
     session({ id: "s2", title: "Second chat", sortOrder: 1 }),
   ];
+
   let turns: Turn[] = [turn({ startedAt: Date.now() - 15_000 })];
+
   let items: Item[] = [
     userMessage("u1", "Build the interface", { createdAt: Date.now() - 15_000 }),
     agentMessage("a1", "Starting the implementation.", { createdAt: Date.now() - 14_000 }),
   ];
+
   let comments: ReviewComment[] = [];
   let itemsRev = 1;
   let nextId = 2;
   const sockets = new Set<WebSocketRoute>();
   const hubSockets = new Set<WebSocketRoute>();
-  const requests: Array<{ name: FnName; input: Record<string, unknown> }> = [];
+  const requests: Array<{ name: FnName; input: Schema.JsonObject }> = [];
+
   const project: Project = {
     id: "p1",
     installationId: 1,
@@ -46,17 +52,22 @@ export async function browserFixture(page: Page) {
     settings: {},
     sortOrder: 0,
   };
+
   const changes = [{ path: "src/main.ts", status: "M", additions: 1, deletions: 1, binary: false }];
+
   let workspace = detail({
     state: "working",
     runningTurnId: "t1",
     changes: { files: changes, additions: 1, deletions: 1 },
   });
+
   const broadcast = (message: WorkspaceServerMessage) => {
     for (const socket of sockets) socket.send(JSON.stringify(message));
   };
+
   const publishWorkspace = () => {
     broadcast({ type: "workspace", workspace });
+
     for (const socket of hubSockets) socket.send(JSON.stringify({ type: "workspace", summary: workspace }));
   };
 
@@ -79,12 +90,17 @@ export async function browserFixture(page: Page) {
     }),
   );
   await page.route("**/__fixture/rpc/*", async (route) => {
-    const name = route.request().url().split("/").pop() as FnName;
-    const input = Schema.decodeUnknownSync(API[name].input as Schema.ConstraintDecoder<unknown, never>)(
+    const name = Schema.decodeUnknownSync(Schema.Literals(FN_NAMES))(route.request().url().split("/").pop());
+
+    const input = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json))(
       route.request().postDataJSON(),
-    ) as Record<string, unknown>;
+    );
+
+    Schema.decodeUnknownSync(API[name].input)(input);
+
     requests.push({ name, input });
-    let value: unknown = {};
+    let value: FnOutput<FnName> = {};
+
     switch (name) {
       case "listModels":
         value = [
@@ -150,21 +166,25 @@ export async function browserFixture(page: Page) {
         value = comments;
         break;
       case "addReviewComment": {
+        const args = Schema.decodeUnknownSync(API.addReviewComment.input)(input);
+
         const comment: ReviewComment = {
           id: `r${nextId++}`,
-          path: String(input["path"]),
-          lineStart: (input["lineStart"] as number) ?? null,
-          lineEnd: (input["lineEnd"] as number) ?? null,
-          side: (input["side"] as "old" | "new") ?? null,
-          body: String(input["body"]),
+          path: args.path,
+          lineStart: args.lineStart ?? null,
+          lineEnd: args.lineEnd ?? null,
+          side: args.side ?? null,
+          body: args.body,
           status: "draft",
           sentTurnId: null,
           createdAt: Date.now(),
         };
+
         comments = [...comments, comment];
         value = comment;
         break;
       }
+
       case "sendPrompt": {
         const queued = turn({
           id: `t${nextId++}`,
@@ -176,24 +196,29 @@ export async function browserFixture(page: Page) {
           queuedAt: Date.now(),
           prompt: {
             text: String(input["text"]),
-            mentions: input["mentions"] as Turn["prompt"]["mentions"],
-            attachmentIds: input["attachmentIds"] as string[],
-            reviewCommentIds: input["reviewCommentIds"] as string[],
+            mentions: Schema.decodeUnknownSync(API.sendPrompt.input)(input).mentions ?? [],
+            attachmentIds: Schema.decodeUnknownSync(Schema.Array(Schema.String))(input["attachmentIds"]),
+            reviewCommentIds: Schema.decodeUnknownSync(Schema.Array(Schema.String))(
+              input["reviewCommentIds"],
+            ),
           },
         });
+
         turns = [...turns, queued];
         broadcast({ type: "turn", turn: queued });
+
         if (input["delivery"] === "steer") {
           broadcast({ type: "turn", turn: { ...queued, steeringPending: true } });
           broadcast({ type: "turn.deleted", turnId: queued.id });
           turns = turns.filter((t) => t.id !== queued.id);
-          value = turns[0];
+          value = turns[0] ?? queued;
         } else value = queued;
         comments = comments.map((c) =>
           queued.prompt.reviewCommentIds.includes(c.id) ? { ...c, status: "sent", sentTurnId: queued.id } : c,
         );
         break;
       }
+
       case "editQueuedTurn": {
         const old = turns.find((t) => t.id === input["turnId"])!;
         const updated = { ...old, prompt: { ...old.prompt, text: String(input["text"]) } };
@@ -202,6 +227,7 @@ export async function browserFixture(page: Page) {
         value = updated;
         break;
       }
+
       case "deleteQueuedTurn":
         turns = turns.filter((t) => t.id !== input["turnId"]);
         broadcast({ type: "turn.deleted", turnId: String(input["turnId"]) });
@@ -217,30 +243,36 @@ export async function browserFixture(page: Page) {
               }
             : i,
         );
+
         for (const item of items.filter((i) => i.kind === "permission"))
           broadcast({ type: "item.upsert", item, itemsRev });
         break;
       }
+
       case "createSession": {
         const chat = session({
           id: `s${nextId++}`,
-          agent: input["agent"] as Session["agent"],
+          agent: Schema.decodeUnknownSync(API.createSession.input)(input).agent,
           title: "New chat",
           sortOrder: sessions.length,
         });
+
         sessions = [...sessions, chat];
         broadcast({ type: "session", session: chat });
         value = chat;
         break;
       }
+
       case "closeSession":
         sessions = sessions.map((s) => (s.id === input["sessionId"] ? { ...s, status: "closed" } : s));
+
         for (const s of sessions) broadcast({ type: "session", session: s });
         break;
       case "cancelTurn":
         turns = turns.map((t) =>
           t.id === input["turnId"] ? { ...t, status: "cancelled", endedAt: Date.now() } : t,
         );
+
         for (const t of turns) broadcast({ type: "turn", turn: t });
         workspace = { ...workspace, state: "ready", runningTurnId: null, rev: workspace.rev + 1 };
         publishWorkspace();
@@ -259,7 +291,8 @@ export async function browserFixture(page: Page) {
         };
         break;
     }
-    Schema.decodeUnknownSync(API[name].output as Schema.ConstraintDecoder<unknown, never>)(value);
+
+    Schema.decodeUnknownSync(API[name].output)(value);
     await route.fulfill({ json: { ok: true, value } });
   });
 
@@ -274,15 +307,18 @@ export async function browserFixture(page: Page) {
       socket.send(JSON.stringify({ type: "items", items, itemsRev, done: true }));
       socket.onClose(() => sockets.delete(socket));
     }
+
     socket.onMessage((raw) => {
       if (String(raw).includes('"ping"')) socket.send(JSON.stringify({ type: "pong" }));
     });
   });
+
   return {
     requests,
     broadcast,
     stream(text: string) {
       const item = items.find((i) => i.id === "a1")!;
+
       if (item.kind !== "agent_message") return;
       items = items.map((i) =>
         i.id === item.id ? { ...item, content: { text: item.content.text + text }, rev: ++itemsRev } : i,
@@ -309,6 +345,7 @@ export async function browserFixture(page: Page) {
           ],
         },
       };
+
       items = [...items, item];
       broadcast({ type: "item.upsert", item, itemsRev });
     },

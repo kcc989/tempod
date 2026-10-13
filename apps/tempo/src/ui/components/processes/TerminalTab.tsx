@@ -33,6 +33,7 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
     (listed.data ?? []).map((t) => t.terminalId),
     opened,
   );
+
   const settled = listed.isSuccess || listed.isError;
   const tabs: ReadonlyArray<TerminalId> = known.length === 0 && settled ? ["t1"] : known;
 
@@ -50,12 +51,16 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
       />
     );
   }
+
   if (availability === "archived") return <EmptyState title="Restore this workspace first." />;
+
   if (availability === "loading" || tabs.length === 0) return <SkeletonRows rows={3} />;
 
   const current = picked !== null && tabs.includes(picked) ? picked : tabs[0]!;
+
   if (!visited.has(current)) setVisited(new Set([...visited, current]));
   const next = nextTerminalId(tabs);
+
   const show = (id: TerminalId) => {
     setPicked(id);
     setFocusSeq((n) => n + 1);

@@ -25,13 +25,11 @@ describe("/proc/net/tcp parsing", () => {
     expect(parseProcNetTcp(TCP).sort((a, b) => a - b)).toEqual([80, 3000, 7070]);
     expect(parseProcNetTcp(TCP6).sort((a, b) => a - b)).toEqual([3000, 8000, 65535]);
   });
-
   test("handles empty and malformed input", () => {
     expect(parseProcNetTcp("")).toEqual([]);
     expect(parseProcNetTcp("header only\n")).toEqual([]);
     expect(parseProcNetTcp("h\n garbage line\n 0: nocolon 0 0A\n")).toEqual([]);
   });
-
   test("preview ports: 1024 to 65535, without 7070, deduplicated and sorted", () => {
     expect(previewPorts([TCP, TCP6], [7070])).toEqual([3000, 8000, 65535]);
   });
@@ -43,12 +41,14 @@ describe("port scanner", () => {
     const file = join(dir, "tcp");
     writeFileSync(file, TCP);
     const seen: number[][] = [];
+
     const scanner = new PortScanner({
       intervalMs: 60_000,
       exclude: () => [7070],
       onChange: (p) => seen.push(p),
       files: [file, join(dir, "missing-tcp6")],
     });
+
     scanner.scan();
     scanner.scan();
     expect(seen).toEqual([[3000]]);
@@ -56,16 +56,18 @@ describe("port scanner", () => {
     scanner.scan();
     expect(seen).toEqual([[3000], [3001]]);
   });
-
   test("real /proc/net/tcp sees a Bun listener", async () => {
     const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("x") });
+
     try {
       const seen: number[][] = [];
+
       const scanner = new PortScanner({
         intervalMs: 60_000,
         exclude: () => [7070],
         onChange: (p) => seen.push(p),
       });
+
       scanner.scan();
       expect(seen).toHaveLength(1);
       expect(seen[0]).toContain(server.port!);

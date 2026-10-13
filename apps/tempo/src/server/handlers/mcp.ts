@@ -24,7 +24,9 @@ export const listMcpServers = async (c: HandlerCtx): Promise<FnOutput<"listMcpSe
     .where(eq(mcpServers.userId, c.user.id))
     .orderBy(asc(mcpServers.name))
     .all();
+
   const stored = await storedSecretKeys(c);
+
   return rows.map((r) => mcpToWire(r, stored));
 };
 
@@ -35,33 +37,43 @@ export const saveMcpServer = async (
   const db = d1(c.env);
   const mine = await db.select().from(mcpServers).where(eq(mcpServers.userId, c.user.id)).all();
   let existing: McpServerRow | undefined;
+
   if (input.id !== undefined) {
     existing = mine.find((r) => r.id === input.id);
+
     if (!existing) throw new TempoError("NOT_FOUND", undefined, "MCP server not found");
   } else if (mine.length >= MCP_MAX_SERVERS) {
     throw new TempoError("VALIDATION_FAILED", `You can add at most ${MCP_MAX_SERVERS} MCP servers.`);
   }
+
   if (mine.some((r) => r.name === input.name && r.id !== input.id))
     throw new TempoError("VALIDATION_FAILED", `An MCP server named ${input.name} already exists.`);
   const id = existing?.id ?? newId();
   const allStored = await storedSecretKeys(c);
+
   const storedHere = new Set(
-    [...allStored].filter((k) => k.startsWith(mcpKeyPrefix(id))).map((k) => k.slice(mcpKeyPrefix(id).length)),
+    [...allStored].flatMap((k) => (k.startsWith(mcpKeyPrefix(id)) ? [k.slice(mcpKeyPrefix(id).length)] : [])),
   );
+
   const problem = mcpInputProblem(input, storedHere);
+
   if (problem) throw new TempoError("VALIDATION_FAILED", problem);
 
   const stdio = input.transport === "stdio";
   const headers = stdio ? [] : (input.headers ?? []);
   const store = creds(c);
+
   for (const h of headers) {
     if (h.secret && h.value !== undefined && h.value !== "")
       await store.putSecret(mcpHeaderKey(id, h.name), h.value);
   }
+
   const keep = new Set(headers.filter((h) => h.secret).map((h) => h.name.toLowerCase()));
+
   for (const name of storedHere) if (!keep.has(name)) await store.deleteSecret(mcpHeaderKey(id, name));
 
   const now = Date.now();
+
   const values = {
     name: input.name,
     transport: input.transport,
@@ -77,6 +89,7 @@ export const saveMcpServer = async (
     ),
     updatedAt: now,
   };
+
   const row = existing
     ? await db
         .update(mcpServers)
@@ -89,6 +102,7 @@ export const saveMcpServer = async (
         .values({ ...values, id, userId: c.user.id, createdAt: now })
         .returning()
         .get();
+
   return mcpToWire(row, await storedSecretKeys(c));
 };
 
@@ -97,15 +111,21 @@ export const deleteMcpServer = async (
   { id }: FnInput<"deleteMcpServer">,
 ): Promise<FnOutput<"deleteMcpServer">> => {
   const db = d1(c.env);
+
   const row = await db
     .select()
     .from(mcpServers)
     .where(and(eq(mcpServers.id, id), eq(mcpServers.userId, c.user.id)))
     .get();
+
   const store = creds(c);
   const keys = [...(await storedSecretKeys(c))].filter((k) => k.startsWith(mcpKeyPrefix(id)));
+
   for (const h of row ? storedHeaders(row) : []) keys.push(mcpHeaderKey(id, h.name));
+
   for (const key of new Set(keys)) await store.deleteSecret(key);
+
   if (row) await db.delete(mcpServers).where(eq(mcpServers.id, id)).run();
+
   return {};
 };

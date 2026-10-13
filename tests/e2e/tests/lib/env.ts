@@ -2,6 +2,7 @@
 
 export const env = (name: string): string | undefined => {
   const value = process.env[name]?.trim();
+
   return value ? value : undefined;
 };
 
@@ -29,7 +30,9 @@ export const NO_UI_REASON = "TEMPO_E2E_STORAGE_STATE is not set: browser UI test
 /** A variable the current test cannot run without, once TEMPO_E2E_URL is set. */
 export const required = (name: string): string => {
   const value = env(name);
+
   if (value === undefined) throw new Error(`${name} must be set to run this test (tests/e2e/README.md)`);
+
   return value;
 };
 

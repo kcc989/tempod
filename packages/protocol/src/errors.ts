@@ -60,20 +60,25 @@ export const ERROR_MESSAGES = {
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;
+
+// SAFETY: ERROR_MESSAGES is a closed literal whose enumerable keys are exactly the ErrorCode union.
 export const ERROR_CODES = Object.keys(ERROR_MESSAGES) as ReadonlyArray<ErrorCode>;
-export const ErrorCodeSchema = Schema.Literals(ERROR_CODES as readonly [ErrorCode, ...ErrorCode[]]);
+
+export const ErrorCodeSchema = Schema.Literals(ERROR_CODES);
 
 export const ErrorBody = Schema.Struct({
   code: ErrorCodeSchema,
   message: Schema.String,
   detail: Schema.optional(Schema.String),
 });
+
 export type ErrorBody = typeof ErrorBody.Type;
 
 export const AGENT_LABELS = { claude: "Claude", codex: "Codex", opencode: "OpenCode", pi: "Pi" } as const;
 
 export const errorMessage = (code: ErrorCode, agent?: keyof typeof AGENT_LABELS): string => {
   const text: string = ERROR_MESSAGES[code];
+
   return agent ? text.replace("<agent>", AGENT_LABELS[agent]) : text.replace("<agent> ", "");
 };
 
@@ -106,20 +111,18 @@ export type Result<A> =
   | { readonly ok: false; readonly error: ErrorBody };
 
 export const ok = <A>(value: A): Result<A> => ({ ok: true, value });
+
 export const err = (error: ErrorBody): Result<never> => ({ ok: false, error });
 
 export const toErrorBody = (cause: unknown): ErrorBody => {
   if (cause instanceof TempoError) return cause.toBody();
+
   if (isErrorBody(cause)) return cause;
+
   return { code: "INTERNAL", message: errorMessage("INTERNAL") };
 };
 
-export const isErrorBody = (u: unknown): u is ErrorBody =>
-  typeof u === "object" &&
-  u !== null &&
-  typeof (u as { code?: unknown }).code === "string" &&
-  (ERROR_CODES as ReadonlyArray<string>).includes((u as { code: string }).code) &&
-  typeof (u as { message?: unknown }).message === "string";
+export const isErrorBody = Schema.is(ErrorBody);
 
 export const unwrap = <A>(result: Result<A>): A => {
   if (result.ok) return result.value;

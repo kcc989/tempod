@@ -51,7 +51,9 @@ export function ProjectTab({
   const envs = useCallQuery("listEnvironments", {});
 
   if (projects.isPending) return <SkeletonRows rows={8} />;
+
   if (projects.isError) return <ErrorState error={projects.error} onRetry={() => void projects.refetch()} />;
+
   if (projects.data.length === 0) {
     return (
       <EmptyState
@@ -61,9 +63,12 @@ export function ProjectTab({
       />
     );
   }
+
   const list = projects.data;
+
   const project =
     list.find((p) => p.id === projectId) ?? list.find((p) => p.id === open?.projectId) ?? list[0]!;
+
   const workspace = open?.projectId === project.id ? open : null;
   const environment = findEnvironment(envs.data, project.environmentId);
 
@@ -154,18 +159,23 @@ function ProjectSettingsForm({
 
   const change = (path: FieldPath, next: FieldState) => {
     setForm((f) => ({ ...f, [path]: next }));
+
     if (errors[path]) setErrors(({ [path]: _gone, ...rest }) => rest);
   };
 
   const submit = () => {
     const { layer, errors: found } = layerFromForm(form);
     setErrors(found);
+
     if (Object.keys(found).length > 0) {
       setProblem("Check the highlighted fields.");
       const invalid = FIELDS.find((field) => found[field.path]);
+
       if (invalid) onSectionChange?.(sectionPage(invalid.section));
+
       return;
     }
+
     setProblem(null);
     save.mutate({ projectId: project.id, settings: layer });
   };
@@ -258,8 +268,10 @@ function ProjectSettingsForm({
 /** 04: egress policy and allowlist come from the project's environment while one is selected. */
 const lockedValue = (path: string, env: Environment): { by: string; text: string } | undefined => {
   if (path === "environment.egress_policy") return { by: env.name, text: policyLabel(env.egressPolicy) };
+
   if (path === "environment.egress_allowlist")
     return { by: env.name, text: env.egressAllowlist.length > 0 ? env.egressAllowlist.join(", ") : "None" };
+
   return undefined;
 };
 
@@ -282,6 +294,7 @@ function ProjectEnvironmentSelect({
       toast.success(name ? `${project.owner}/${project.name} uses ${name}` : "Environment removed");
     },
   });
+
   return (
     <div className="grid gap-1.5">
       <label htmlFor="ps-environment" className="text-sm font-medium">
@@ -323,6 +336,7 @@ function ProjectSecrets({ projectId }: { projectId: string }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   const set = useCallMutation("setProjectSecret", {
     toast: false,
     invalidates: ["listProjectSecretNames"],
@@ -334,10 +348,12 @@ function ProjectSecrets({ projectId }: { projectId: string }) {
     },
     onError: (e) => (errorCode(e) === "VALIDATION_FAILED" ? setError(errorText(e)) : toastError(e)),
   });
+
   const remove = useCallMutation("deleteProjectSecret", {
     invalidates: ["listProjectSecretNames"],
     onSuccess: (_, input) => toast.success(`${input.name} deleted`),
   });
+
   const existing = names.data?.names ?? [];
   const trimmed = name.trim();
 
@@ -380,14 +396,19 @@ function ProjectSecrets({ projectId }: { projectId: string }) {
         autoComplete="off"
         onSubmit={(e) => {
           e.preventDefault();
+
           if (!isSecretName(trimmed)) {
             setError("Use capital letters, digits and _, starting with a letter or _.");
+
             return;
           }
+
           if (value === "") {
             setError("Enter a value.");
+
             return;
           }
+
           setError(null);
           set.mutate({ projectId, name: trimmed, value });
         }}
@@ -431,6 +452,7 @@ function UnlinkProject({ project }: { project: Project }) {
     invalidates: ["listProjects", "listWorkspaces"],
     onSuccess: () => toast.success(`Unlinked ${project.owner}/${project.name}`),
   });
+
   return (
     <section aria-labelledby="ps-unlink" className="grid gap-2 border-t pt-3">
       <h3 id="ps-unlink" className="text-sm font-semibold">
@@ -453,6 +475,7 @@ function UnlinkProject({ project }: { project: Project }) {
             confirmLabel: "Unlink",
             destructive: true,
           });
+
           if (ok) unlink.mutate({ projectId: project.id });
         }}
       >

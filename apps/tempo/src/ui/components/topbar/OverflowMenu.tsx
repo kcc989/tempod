@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import {
   ArchiveIcon,
   EllipsisIcon,
@@ -42,11 +43,14 @@ export function OverflowMenu({
   actions: WorkspaceActions;
   phone?: boolean;
 }) {
+  const call = useApiCall();
+
   const { w, d } = view;
   const project = useProject(w.projectId);
   const power = powerAction(w.state);
   const ports = phone ? (d?.ports ?? []) : [];
   const live = phone && (d?.browserActive ?? false);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -59,13 +63,13 @@ export function OverflowMenu({
           <>
             <DropdownMenuLabel>Previews</DropdownMenuLabel>
             {ports.map((p) => (
-              <DropdownMenuItem key={p.port} onSelect={() => void openPreviewTab(w.id, p.port)}>
+              <DropdownMenuItem key={p.port} onSelect={() => void openPreviewTab(w.id, p.port, call)}>
                 <ExternalLinkIcon />
                 <span className="font-mono tabular-nums">{p.port} ↗</span>
               </DropdownMenuItem>
             ))}
             {live && (
-              <DropdownMenuItem onSelect={() => void openLiveViewTab(w.id)}>
+              <DropdownMenuItem onSelect={() => void openLiveViewTab(w.id, call)}>
                 <span className="flex size-4 items-center justify-center">
                   <LiveDot />
                 </span>

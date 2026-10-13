@@ -1,3 +1,4 @@
+import { elementOf } from "../elements.ts";
 import { DEFAULT_SETTINGS, type SettingsLayer } from "@tempo/protocol";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createElement, useState } from "react";
@@ -20,8 +21,10 @@ function Form({ path, layer = {} }: { path: FieldPath; layer?: SettingsLayer }) 
       run: { dev: { command: "bun dev", cwd: "", default: true } },
     },
   };
+
   const [form, setForm] = useState(() => formFromLayer(layer, settings));
   const [saved, setSaved] = useState<SettingsLayer | null>(null);
+
   return createElement(
     "div",
     null,
@@ -49,7 +52,7 @@ const savedLayer = () => JSON.parse(screen.getByLabelText("Saved layer").textCon
 describe("direct project field editing", () => {
   it("shows inherited values and saves untouched fields without overrides", () => {
     render(createElement(Form, { path: "scripts.setup" }));
-    expect((screen.getByRole("textbox", { name: "Setup script" }) as HTMLTextAreaElement).value).toBe(
+    expect(elementOf(screen.getByRole("textbox", { name: "Setup script" }), HTMLTextAreaElement).value).toBe(
       "bun install",
     );
     expect(screen.getByText(".tempo")).toBeDefined();
@@ -67,7 +70,7 @@ describe("direct project field editing", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Reset Setup script to repository or default value" }),
     );
-    expect((screen.getByRole("textbox", { name: "Setup script" }) as HTMLTextAreaElement).value).toBe(
+    expect(elementOf(screen.getByRole("textbox", { name: "Setup script" }), HTMLTextAreaElement).value).toBe(
       "bun install",
     );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -91,7 +94,7 @@ describe("direct project field editing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(savedLayer()).toEqual({});
     fireEvent.click(screen.getByRole("button", { name: "Undo reset" }));
-    expect((screen.getByRole("textbox", { name: "Setup script" }) as HTMLTextAreaElement).value).toBe(
+    expect(elementOf(screen.getByRole("textbox", { name: "Setup script" }), HTMLTextAreaElement).value).toBe(
       "make setup",
     );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));

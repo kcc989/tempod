@@ -16,23 +16,25 @@ import {
   emptySource,
 } from "../../src/ui/components/dialogs/new-workspace-model";
 
-const creds = (set: string[]) =>
-  Object.fromEntries(
-    ["claude", "codex", "openrouter", "anthropic", "openai"].map((p) => [
-      p,
-      { set: set.includes(p), updatedAt: null },
-    ]),
-  ) as never;
+const creds = (set: string[]) => ({
+  claude: { set: set.includes("claude"), updatedAt: null },
+  codex: { set: set.includes("codex"), updatedAt: null, lastRefresh: null },
+  openrouter: { set: set.includes("openrouter"), updatedAt: null },
+  anthropic: { set: set.includes("anthropic"), updatedAt: null },
+  openai: { set: set.includes("openai"), updatedAt: null },
+});
 
 describe("agent form (04, Settings → Agents)", () => {
   it("builds a definition with trimmed values and env refs", () => {
     const server = { ...emptyServer(), name: "docs", command: "docs-mcp", vars: "TOKEN=${DOCS_TOKEN}\n\n" };
+
     const { errors, definition } = validateForm({
       ...emptyForm(),
       name: " Tester ",
       model: " opus ",
       servers: [server],
     });
+
     expect(errors).toEqual({});
     expect(definition).toMatchObject({
       name: "Tester",
@@ -48,12 +50,14 @@ describe("agent form (04, Settings → Agents)", () => {
   it("reports field errors for names, URLs, literal values and tool names", () => {
     const a = { ...emptyServer(), name: "playwright", type: "http" as const, url: "http://x" };
     const b = { ...emptyServer(), name: "Bad Name", command: "x", vars: "K=literal" };
+
     const { errors, definition } = validateForm({
       ...emptyForm(),
       name: "",
       allow: ["a,b"],
       servers: [a, b],
     });
+
     expect(definition).toBeNull();
     expect(errors["name"]).toBe("Enter a name.");
     expect(errors["allow"]).toBe("Not a valid tool name: a,b");
@@ -80,6 +84,7 @@ describe("agent form (04, Settings → Agents)", () => {
         servers: [{ name: "s", type: "http", url: "https://x.dev", headers: { A: "${B}" } }],
       },
     });
+
     expect(form.servers[0]).toMatchObject({ name: "s", type: "http", url: "https://x.dev", vars: "A=${B}" });
     expect(validateForm(form).definition?.mcp.servers[0]).toEqual({
       name: "s",
@@ -138,6 +143,7 @@ describe("custom agents in New chat and New workspace (04)", () => {
       agent: "codex" as const,
       customAgent: { id: "a1", name: "Reviewer", commitSha: "c" },
     };
+
     expect(sessionTitle(s)).toBe("Reviewer");
     expect(sessionTooltip(s)).toBe("Reviewer · Codex");
     expect(sessionTooltip({ agent: "codex" })).toBeNull();
@@ -149,6 +155,7 @@ describe("custom agents in New chat and New workspace (04)", () => {
       customAgent: { id: "a1", name: "Reviewer", commitSha: "c" },
       profileIssues: ["tools", "thoughtLevel"] as const,
     };
+
     expect(profileIssuesText(s)).toBe(
       "Codex ignored some settings of Reviewer: tool limits, reasoning level",
     );

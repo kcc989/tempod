@@ -58,12 +58,15 @@ const DEFAULT_MODE: Record<AgentId, string | null> = {
 
 export const planModeId = (session: Pick<Session, "agent" | "modes">): string | null => {
   const id = PLAN_MODE[session.agent];
+
   if (!id) return null;
+
   return session.modes.length === 0 || session.modes.some((m) => m.id === id) ? id : null;
 };
 
 export const isPlanMode = (session: Pick<Session, "agent" | "modes" | "modeId">): boolean => {
   const id = planModeId(session);
+
   return id !== null && session.modeId === id;
 };
 
@@ -76,11 +79,16 @@ export const togglePlanTarget = (
   previous: string | null,
 ): string | null => {
   const plan = planModeId(session);
+
   if (!plan) return null;
+
   if (session.modeId !== plan) return plan;
   const ids = session.modes.map((m) => m.id);
+
   if (previous && previous !== plan && (ids.length === 0 || ids.includes(previous))) return previous;
   const def = DEFAULT_MODE[session.agent];
+
   if (def && (ids.length === 0 || ids.includes(def))) return def;
+
   return ids.find((id) => id !== plan) ?? null;
 };

@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { DurableObject } from "cloudflare:workers";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -33,11 +34,12 @@ export class UserHubDO extends DurableObject<Env> {
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server, ["ui"]);
     this.send(server, { type: "hello", v: 1, workspaces: this.stored() });
+
     return new Response(null, { status: 101, webSocket: client });
   }
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    if (typeof message === "string" && message.includes('"ping"')) this.send(ws, { type: "pong" });
+    if (Schema.is(Schema.String)(message) && message.includes('"ping"')) this.send(ws, { type: "pong" });
   }
 
   override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
@@ -50,6 +52,7 @@ export class UserHubDO extends DurableObject<Env> {
 
   async publish(summary: WorkspaceSummary): Promise<void> {
     const prev = this.db.select().from(summaries).where(eq(summaries.workspaceId, summary.id)).get();
+
     if (prev && prev.rev >= summary.rev) return;
     const summaryJson = json.summary.write(summary);
     this.db
@@ -72,6 +75,7 @@ export class UserHubDO extends DurableObject<Env> {
       .all()
       .flatMap((r) => {
         const s = json.summary.read(r.summaryJson, null);
+
         return s ? [s] : [];
       });
   }
@@ -79,26 +83,33 @@ export class UserHubDO extends DurableObject<Env> {
   /** If the table is empty, loads it once from D1. Sockets that open meanwhile wait for the same load. */
   private loadOnce(): Promise<void> {
     if (this.loading) return this.loading;
+
     if (this.ctx.storage.kv.get("loadedFromD1")) return Promise.resolve();
+
     if (this.db.select({ id: summaries.workspaceId }).from(summaries).get()) return Promise.resolve();
     this.loading ??= this.loadFromD1().finally(() => {
       this.loading = null;
     });
+
     return this.loading;
   }
 
   private async loadFromD1(): Promise<void> {
     const userId = this.ctx.id.name;
+
     if (!userId) return;
+
     const list = await drizzleD1(this.env.DB)
       .select()
       .from(workspaces)
       .where(and(eq(workspaces.userId, userId), isNull(workspaces.archivedAt)))
       .orderBy(desc(workspaces.lastActivityAt))
       .all();
+
     for (const r of list) {
       const s = summaryFromD1Row(r);
       const summaryJson = json.summary.tryWrite(s);
+
       if (summaryJson === null) continue;
       // A summary published during the load is newer than D1's copy.
       this.db
@@ -107,6 +118,7 @@ export class UserHubDO extends DurableObject<Env> {
         .onConflictDoNothing()
         .run();
     }
+
     this.ctx.storage.kv.put("loadedFromD1", true);
   }
 
@@ -116,11 +128,16 @@ export class UserHubDO extends DurableObject<Env> {
 
   private send(ws: WebSocket, message: HubServerMessage): void {
     try {
-      const buffered = (ws as unknown as { bufferedAmount?: number }).bufferedAmount ?? 0;
+      const buffered = Schema.is(Schema.Struct({ bufferedAmount: Schema.Number }))(ws)
+        ? ws.bufferedAmount
+        : 0;
+
       if (buffered > MAX_BUFFERED) {
         ws.close(CloseCode.tooMuchBuffered, "too much buffered");
+
         return;
       }
+
       ws.send(JSON.stringify(message));
     } catch {
       // socket gone

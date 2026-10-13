@@ -28,6 +28,7 @@ export type Env = TempoEnv;
 declare global {
   namespace Cloudflare {
     interface Env extends TempoEnv {}
+
     interface GlobalProps {
       mainModule: typeof import("./worker.ts");
       durableNamespaces: "WorkspaceDO" | "UserHubDO" | "CredentialDO";

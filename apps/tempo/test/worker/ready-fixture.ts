@@ -1,3 +1,4 @@
+import { workspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runInDurableObject } from "cloudflare:test";
 import { newId, randomToken, type AgentId, type Settings } from "@tempo/protocol";
 import { workspace } from "../../src/db/workspace-do.ts";
@@ -23,6 +24,7 @@ export interface ReadyFixtureOptions {
 /** Fresh, sessionless ready state for RPC contracts; lifecycle tests must use seedWorkspace. */
 export const seedReadyWorkspace = async (options: ReadyFixtureOptions = {}) => {
   const seeded = await seedProject();
+
   if (options.credentials?.length) await seedCredentials(seeded.userId, options.credentials);
   const workspaceId = newId();
   const slug = options.slug ?? `ready-${workspaceId}`;
@@ -33,7 +35,7 @@ export const seedReadyWorkspace = async (options: ReadyFixtureOptions = {}) => {
   )
     .bind(workspaceId, seeded.projectId, seeded.userId, slug, options.title ?? slug, branch, now, now)
     .run();
-  const stub = env.WORKSPACE.getByName(workspaceId);
+  const stub = workspaceStub(env.WORKSPACE, workspaceId);
   const { container, tempod } = await installFakes(stub);
   await runInDurableObject(stub, async (instance: WorkspaceDO) => {
     const core = internals(instance).core;
@@ -85,5 +87,6 @@ export const seedReadyWorkspace = async (options: ReadyFixtureOptions = {}) => {
     await instance.reconnectTempod();
     core.publish();
   });
+
   return { workspaceId, stub, seeded, tempod, container, slug, branch };
 };

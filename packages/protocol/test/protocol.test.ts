@@ -34,6 +34,7 @@ import {
 describe("ids", () => {
   it("makes lowercase, monotonic ULIDs (02, IDs)", () => {
     const ids = Array.from({ length: 100 }, () => newId());
+
     for (const id of ids) expect(id).toMatch(ULID_PATTERN);
     expect([...ids].sort()).toEqual(ids);
   });
@@ -56,6 +57,7 @@ describe("errors", () => {
     const res = await capture(() => {
       throw new TempoError("PUSH_REJECTED", undefined, "remote said no");
     });
+
     expect(res).toEqual({
       ok: false,
       error: { code: "PUSH_REJECTED", message: ERROR_MESSAGES.PUSH_REJECTED, detail: "remote said no" },
@@ -82,6 +84,7 @@ describe("settings (01, Project settings file)", () => {
   it("defaults to an empty model for each agent and Browser Run off", () => {
     expect(Schema.decodeUnknownSync(Settings)(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
     expect(Object.keys(DEFAULT_SETTINGS.agent.models).sort()).toEqual([...AGENT_IDS].sort());
+
     for (const agent of AGENT_IDS) expect(DEFAULT_SETTINGS.agent.models[agent]).toBe("");
     expect(DEFAULT_SETTINGS.browser.run).toBe(false);
   });
@@ -99,6 +102,7 @@ describe("settings (01, Project settings file)", () => {
 describe("contract", () => {
   it("lists every function with a method", () => {
     expect(FN_NAMES.length).toBeGreaterThan(50);
+
     for (const name of FN_NAMES) expect(["GET", "POST"]).toContain(API[name].method);
   });
   it("routes exactly the functions that take workspaceId to the WorkspaceDO", () => {
@@ -182,6 +186,7 @@ describe("wire messages", () => {
       createdAt: 1,
       updatedAt: 2,
     });
+
     expect(item.kind).toBe("plan");
   });
   it("decodes tempod events and channel messages", () => {
@@ -250,6 +255,7 @@ describe("environments (01, Environments)", () => {
         injectors: [{ name: "y", hosts: ["y.com"], code: "2" }],
       },
     );
+
     expect(next.egressPolicy).toBe("allowlist");
     expect(next.egressAllowlist).toEqual(["a.com", "b.com"]);
     expect(next.secrets).toEqual([

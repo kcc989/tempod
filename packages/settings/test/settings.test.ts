@@ -13,12 +13,12 @@ describe("resolveSettings", () => {
     expect(r.effective).toEqual(DEFAULT_SETTINGS);
     expect(r.errors).toEqual([]);
   });
-
   it("applies precedence: overrides > .tempo > defaults", () => {
     const r = resolveSettings(
       { scripts: { setup: "ui" } },
       { tempoYaml: `scripts:\n  setup: tempo\n  archive: t-archive\n` },
     );
+
     expect(r.effective.scripts.setup).toBe("ui");
     expect(r.effective.scripts.archive).toBe("t-archive");
     expect(r.effective.scripts.run_mode).toBe(DEFAULT_SETTINGS.scripts.run_mode);
@@ -26,7 +26,6 @@ describe("resolveSettings", () => {
     expect(r.sources?.["scripts.archive"]).toBe(".tempo");
     expect(r.sources?.["scripts.run_mode"]).toBeUndefined();
   });
-
   it("ignores egress keys in repo files, but not in Tempo overrides", () => {
     const yaml = `environment:\n  egress_policy: open\n  egress_allowlist: [evil.example]\n  instance: standard-4\n`;
     const r = resolveSettings({}, { tempoYaml: yaml });
@@ -37,19 +36,16 @@ describe("resolveSettings", () => {
     const o = resolveSettings({ environment: { egress_policy: "open" } }, { tempoYaml: yaml });
     expect(o.effective.environment.egress_policy).toBe("open");
   });
-
   it("ignores a file that fails to parse and reports it", () => {
     const r = resolveSettings({}, { tempoYaml: "scripts: [\nsetup:" });
     expect(r.effective).toEqual(DEFAULT_SETTINGS);
     expect(r.errors[0]).toContain(".tempo/settings.yaml");
   });
-
   it("ignores a file that fails validation", () => {
     const r = resolveSettings({}, { tempoYaml: `environment:\n  sleep_after_idle_minutes: 1\n` });
     expect(r.effective.environment.sleep_after_idle_minutes).toBe(15);
     expect(r.errors).toHaveLength(1);
   });
-
   it("merges agent.models per agent and tracks each one's source (01, [agent.models])", () => {
     const r = resolveSettings(
       { agent: { models: { pi: "openrouter/pi-ui" } } },
@@ -57,6 +53,7 @@ describe("resolveSettings", () => {
         tempoYaml: `agent:\n  default: opencode\n  models:\n    opencode: openrouter/oc\n    pi: openrouter/pi-file\n`,
       },
     );
+
     expect(r.errors).toEqual([]);
     expect(r.warnings).toEqual([]);
     expect(r.effective.agent).toEqual({
@@ -68,7 +65,6 @@ describe("resolveSettings", () => {
     expect(r.sources?.["agent.models.pi"]).toBe("tempo");
     expect(r.sources?.["agent.models.claude"]).toBeUndefined();
   });
-
   it("reads browser.run, off by default", () => {
     expect(resolveSettings({}, {}).effective.browser).toEqual({ run: false });
     const r = resolveSettings({}, { tempoYaml: `browser:\n  run: true\n` });
@@ -79,35 +75,34 @@ describe("resolveSettings", () => {
         .run,
     ).toBe(false);
   });
-
   it("turns Browser Run off under the allowlist egress policy, with a warning (01)", () => {
     const open = resolveSettings(
       { environment: { egress_policy: "open" } },
       { tempoYaml: `browser:\n  run: true\n` },
     );
+
     expect(browserRunOn(open.effective)).toBe(true);
     expect(open.warnings).not.toContain(BROWSER_RUN_ALLOWLIST_WARNING);
+
     const allow = resolveSettings(
       { environment: { egress_policy: "allowlist" } },
       { tempoYaml: `browser:\n  run: true\n` },
     );
+
     expect(browserRunOn(allow.effective)).toBe(false);
     expect(allow.warnings).toContain(BROWSER_RUN_ALLOWLIST_WARNING);
     expect(resolveSettings({ environment: { egress_policy: "allowlist" } }, {}).warnings).toEqual([]);
   });
-
   it("reads an empty file as no settings", () => {
     const r = resolveSettings({}, { tempoYaml: "" });
     expect(r.errors).toEqual([]);
     expect(r.effective).toEqual(DEFAULT_SETTINGS);
   });
-
   it("treats the old agent.model key as unknown", () => {
     const r = resolveSettings({}, { tempoYaml: `agent:\n  model: x\n` });
     expect(r.warnings.join()).toContain("agent.model");
     expect(r.effective.agent.models).toEqual(DEFAULT_SETTINGS.agent.models);
   });
-
   it("warns on unknown keys", () => {
     const r = resolveSettings({}, { tempoYaml: `scripts:\n  setup: x\n  foo: 1\n` });
     expect(r.effective.scripts.setup).toBe("x");

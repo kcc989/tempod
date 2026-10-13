@@ -36,12 +36,14 @@ export function BaseBranchPicker({
   locked: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
   const label = (
     <>
       <ArrowRightIcon aria-hidden className="size-3 shrink-0" />
       <span className="truncate">{baseBranch}</span>
     </>
   );
+
   if (locked) {
     return (
       <span
@@ -52,6 +54,7 @@ export function BaseBranchPicker({
       </span>
     );
   }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -96,12 +99,15 @@ function BranchList({
   const [query, setQuery] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), DEBOUNCE_MS);
+
     return () => clearTimeout(t);
   }, [search]);
+
   const branches = useCallQuery("listBranches", query ? { projectId, query } : { projectId }, {
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
+
   const setBase = useCallMutation("setBaseBranch");
   const options = baseBranchOptions(branches.data ?? [], branch);
 

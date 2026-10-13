@@ -16,8 +16,11 @@ import { tempodFetch } from "./tempod-client.ts";
 const WAKING_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="3"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Waking workspace</title><style>body{font:14px system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;color:#555}@media(prefers-color-scheme:dark){body{background:#111;color:#aaa}}</style></head><body><p>Waking workspace…</p></body></html>`;
 
 export const PREVIEW_CODE = /^[a-z0-9]{32}$/;
+
 export const PREVIEW_CODE_MS = 60_000;
+
 export const PREVIEW_COOKIE_SECONDS = 86_400;
+
 const COOKIE_VALUE = /^(\d{1,12})\.([A-Za-z0-9_-]{43})$/;
 
 /** 03 init 1: 32 random bytes from crypto.getRandomValues, base64url. */
@@ -30,12 +33,15 @@ const closed = (state: string) => state === "archived" || state === "archiving";
 
 const previewMac = async (key: string, port: number, expiresAt: number): Promise<string | null> => {
   let raw: Uint8Array<ArrayBuffer>;
+
   try {
     raw = base64UrlToBytes(key);
   } catch {
     return null;
   }
+
   if (raw.length === 0) return null;
+
   return hmacSha256Base64Url(raw, `${port}.${expiresAt}`);
 };
 
@@ -43,6 +49,7 @@ const previewMac = async (key: string, port: number, expiresAt: number): Promise
 export const previewCookie = async (key: string, port: number, now = Date.now()): Promise<string | null> => {
   const expiresAt = Math.floor(now / 1000) + PREVIEW_COOKIE_SECONDS;
   const mac = await previewMac(key, port, expiresAt);
+
   return mac === null ? null : `${expiresAt}.${mac}`;
 };
 
@@ -53,10 +60,13 @@ export const verifyPreviewCookie = async (
   now = Date.now(),
 ): Promise<boolean> => {
   const m = COOKIE_VALUE.exec(value);
+
   if (!m) return false;
   const expiresAt = Number(m[1]);
+
   if (expiresAt * 1000 <= now) return false;
   const expected = await previewMac(key, port, expiresAt);
+
   return expected !== null && timingSafeEqual(m[2]!, expected);
 };
 
@@ -64,6 +74,7 @@ export const verifyPreviewCookie = async (
 export const openPreview = async (core: WorkspaceCore, port: number): Promise<{ url: string }> => {
   const row = core.ws();
   const detected = core.db.select().from(ports).where(eq(ports.port, port)).get();
+
   if (!detected || !validPort(port) || closed(row.state))
     throw new TempoError("NOT_FOUND", undefined, "port not detected");
   const code = randomToken(32);
@@ -74,6 +85,7 @@ export const openPreview = async (core: WorkspaceCore, port: number): Promise<{ 
     .insert(previewCodes)
     .values({ codeHash, port, expiresAt: now + PREVIEW_CODE_MS })
     .run();
+
   return { url: `${core.previewUrl(port)}/__tempo/enter?code=${code}` };
 };
 
@@ -86,6 +98,7 @@ export const previewEnter = async (
   if (!core.wsOrNull() || !validPort(port) || !PREVIEW_CODE.test(code)) return null;
   const codeHash = await sha256Hex(code);
   const now = Date.now();
+
   const used = core.db
     .delete(previewCodes)
     .where(
@@ -93,8 +106,11 @@ export const previewEnter = async (
     )
     .returning()
     .get();
+
   const row = core.wsOrNull();
+
   if (!used || !row || closed(row.state)) return null;
+
   return previewCookie(row.previewKey, port, now);
 };
 
@@ -122,10 +138,14 @@ export const previewFetch = async (
   ensureAwake: () => void,
 ): Promise<Response> => {
   const key = core.wsOrNull()?.previewKey;
+
   if (key === undefined || !validPort(port)) return previewNotFound();
+
   if (!(await verifyPreviewCookie(key, port, cookie))) return previewNotFound();
   const row = core.wsOrNull();
+
   if (!row || row.previewKey !== key || closed(row.state)) return previewNotFound();
+
   return proxyToPort(core, request, port, ensureAwake, true);
 };
 
@@ -144,20 +164,24 @@ export const proxyToPort = async (
   const row = core.ws();
   core.lastPreviewAt = Date.now();
   core.touchActivity();
+
   if (
     !containerRunning(core) ||
     !core.tempod?.open ||
     !["ready", "working", "setting_up"].includes(row.state)
   ) {
     ensureAwake();
+
     if (isHtmlGet(request)) {
       return new Response(WAKING_PAGE, {
         status: 200,
         headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
       });
     }
+
     return new Response("Workspace is waking", { status: 503, headers: { "Retry-After": "5" } });
   }
+
   const url = new URL(request.url);
   const headers = new Headers(request.headers);
   stripInternalHeaders(headers);
@@ -166,6 +190,7 @@ export const proxyToPort = async (
   headers.set("X-Forwarded-Proto", "https");
   const path = `/v1/proxy/${port}${url.pathname}${url.search}`;
   const upgrade = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+
   if (!upgrade) {
     return tempodFetch(core, path, {
       method: request.method,
@@ -174,18 +199,22 @@ export const proxyToPort = async (
       redirect: "manual",
     });
   }
+
   const upstream = await tempodFetch(core, path, { headers });
   const remote = upstream.webSocket;
+
   if (!remote) return new Response("Bad gateway", { status: 502 });
   remote.accept();
   const pair = new WebSocketPair();
   const [client, server] = [pair[0], pair[1]];
   server.accept();
+
   // rotatePreviewKey closes every open preview relay (05 Preview access).
   if (resettable) {
     core.previewSockets.add(server);
     core.previewSockets.add(remote);
   }
+
   const relay = (from: WebSocket, to: WebSocket) => {
     from.addEventListener("message", (e) => {
       try {
@@ -193,11 +222,13 @@ export const proxyToPort = async (
       } catch {
         // peer closed
       }
+
       core.lastPreviewAt = Date.now();
     });
     from.addEventListener("close", (e) => {
       core.previewSockets.delete(from);
       core.previewSockets.delete(to);
+
       try {
         to.close(e.code === 1005 ? 1000 : e.code, e.reason);
       } catch {
@@ -205,7 +236,9 @@ export const proxyToPort = async (
       }
     });
   };
+
   relay(server, remote);
   relay(remote, server);
+
   return new Response(null, { status: 101, webSocket: client });
 };

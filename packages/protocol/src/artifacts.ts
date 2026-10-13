@@ -3,17 +3,19 @@ import { Schema } from "effect";
 /** Agent artifacts (01, Artifacts; 02; 05, Artifact access). */
 
 export const ARTIFACT_KINDS = ["image", "markdown", "pdf", "html", "text"] as const;
+
 export const ArtifactKind = Schema.Literals(ARTIFACT_KINDS);
+
 export type ArtifactKind = typeof ArtifactKind.Type;
 
 export const ARTIFACT_STATUSES = ["uploading", "ready", "lost"] as const;
+
 export const ArtifactStatus = Schema.Literals(ARTIFACT_STATUSES);
+
 export type ArtifactStatus = typeof ArtifactStatus.Type;
 
 /** 01, Allowed files: extension (lowercase, no dot) → mime and kind. */
-export const ARTIFACT_TYPES: Readonly<
-  Record<string, { readonly mime: string; readonly kind: ArtifactKind }>
-> = {
+export const ARTIFACT_TYPES = {
   png: { mime: "image/png", kind: "image" },
   jpg: { mime: "image/jpeg", kind: "image" },
   jpeg: { mime: "image/jpeg", kind: "image" },
@@ -30,19 +32,26 @@ export const ARTIFACT_TYPES: Readonly<
   log: { mime: "text/plain", kind: "text" },
   json: { mime: "application/json", kind: "text" },
   csv: { mime: "text/csv", kind: "text" },
-};
+} satisfies Readonly<Record<string, { readonly mime: string; readonly kind: ArtifactKind }>>;
 
 /** The type of a file name by its extension, case-insensitive; null when it cannot be published. */
 export const artifactTypeOf = (name: string): { mime: string; kind: ArtifactKind } | null => {
   const dot = name.lastIndexOf(".");
+
   if (dot < 0) return null;
-  return ARTIFACT_TYPES[name.slice(dot + 1).toLowerCase()] ?? null;
+
+  const extension = name.slice(dot + 1).toLowerCase();
+
+  return Object.entries(ARTIFACT_TYPES).find(([key]) => key === extension)?.[1] ?? null;
 };
 
 /** 01: at most 25 MiB per version. */
 export const ARTIFACT_MAX_BYTES = 25 * 1024 * 1024;
+
 export const ARTIFACT_TITLE_MAX = 120;
+
 export const ARTIFACT_SUMMARY_MAX = 500;
+
 /** 01, Scripts env `TEMPO_ARTIFACTS_DIR`. */
 export const TEMPO_ARTIFACTS_DIR = "/home/tempo/artifacts";
 
@@ -66,12 +75,14 @@ export const PublishArtifactRequest = Schema.Struct({
   title: Schema.String.check(Schema.isBetweenLength(1, ARTIFACT_TITLE_MAX)),
   summary: Schema.optional(Schema.String.check(Schema.isMaxLength(ARTIFACT_SUMMARY_MAX))),
 });
+
 export type PublishArtifactRequest = typeof PublishArtifactRequest.Type;
 
 export const PublishArtifactResponse = Schema.Union([
   Schema.Struct({ text: Schema.String }),
   Schema.Struct({ error: Schema.String }),
 ]);
+
 export type PublishArtifactResponse = typeof PublishArtifactResponse.Type;
 
 /** 02 Item model: content of an `artifact` item. */
@@ -86,6 +97,7 @@ export const ArtifactItemContent = Schema.Struct({
   artifactKind: ArtifactKind,
   size: Schema.Number,
 });
+
 export type ArtifactItemContent = typeof ArtifactItemContent.Type;
 
 /** 02 Shared types: one artifact version. */
@@ -106,6 +118,7 @@ export const Artifact = Schema.Struct({
   status: ArtifactStatus,
   createdAt: Schema.Number,
 });
+
 export type Artifact = typeof Artifact.Type;
 
 /** 02 R2 layout. */

@@ -28,6 +28,7 @@ const paletteFilter = (value: string, search: string, keywords?: string[]): numb
  */
 export function CommandPalette() {
   const { open, onOpenChange } = useDialog("palette");
+
   return (
     <CommandDialog
       open={open}
@@ -62,6 +63,7 @@ function PaletteBody() {
                 keywords={[w.title, w.branch, w.slug]}
                 onSelect={() => {
                   closeDialog("palette");
+
                   if (isPhone) setPhonePane("chat");
                   closeDialog("settings");
                   void navigate({ to: "/w/$workspaceId", params: { workspaceId: w.id } });

@@ -10,13 +10,17 @@ export function MacClientInfo() {
     queryKey: ["mac", "meta"],
     queryFn: async () => {
       const response = await fetch("/api/v1/meta", { credentials: "same-origin" });
+
       if (!response.ok) throw new TempoError("INTERNAL");
+
       return Schema.decodeUnknownSync(ApiMeta)(await response.json());
     },
     staleTime: 60_000,
     retry: false,
   });
+
   const version = meta.data?.latestMacClient;
+
   return (
     <section aria-labelledby="mac-client-title" className="grid gap-2 rounded-lg border p-3">
       <h3 id="mac-client-title" className="flex items-center gap-2 text-sm font-semibold">

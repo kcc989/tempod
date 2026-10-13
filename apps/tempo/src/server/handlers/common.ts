@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { SettingsLayer, TempoError, type Project } from "@tempo/protocol";
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import * as schema from "../../db/d1.ts";
 import type { Env } from "../../env.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
@@ -13,6 +13,7 @@ const decodeLayer = Schema.decodeUnknownOption(SettingsLayer);
 
 export const projectToWire = (r: schema.ProjectRow): Project => {
   const settings = decodeLayer(safeJson(r.settingsJson));
+
   return {
     id: r.id,
     installationId: r.installationId,
@@ -20,13 +21,13 @@ export const projectToWire = (r: schema.ProjectRow): Project => {
     owner: r.repoOwner,
     name: r.repoName,
     defaultBranch: r.defaultBranch,
-    settings: settings._tag === "Some" ? settings.value : {},
+    settings: Option.isSome(settings) ? settings.value : {},
     sortOrder: r.sortOrder,
     environmentId: r.environmentId,
   };
 };
 
-export const safeJson = (text: string): unknown => {
+export const safeJson = (text: string): Schema.Json => {
   try {
     return JSON.parse(text);
   } catch {
@@ -44,7 +45,9 @@ export const requireProject = async (
     .from(schema.projects)
     .where(and(eq(schema.projects.id, projectId), eq(schema.projects.userId, userId)))
     .get();
+
   if (!row) throw new TempoError("NOT_FOUND", undefined, "project not found");
+
   return row;
 };
 
@@ -63,7 +66,9 @@ export const requireInstallation = async (
       ),
     )
     .get();
+
   if (!row) throw new TempoError("NOT_FOUND", undefined, "installation not found");
+
   return row;
 };
 
@@ -77,16 +82,21 @@ export const installationToken = async (
 ): Promise<string> => {
   const key = `${installationId}:${repoId ?? "*"}`;
   const hit = tokenCache.get(key);
+
   if (hit && hit.expiresAt - 5 * 60_000 > Date.now()) return hit.token;
+
   const token = await mintInstallationToken(
     await requireGithubAppConfig(env),
     installationId,
     repoId ? [repoId] : undefined,
   );
+
   tokenCache.set(key, token);
+
   return token.token;
 };
 
 export const projectToken = (env: Env, p: schema.ProjectRow) =>
   installationToken(env, p.installationId, p.repoId);
+
 export const repoOf = (p: schema.ProjectRow) => ({ owner: p.repoOwner, name: p.repoName });

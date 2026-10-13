@@ -1,4 +1,5 @@
-import { AGENT_IDS, type AgentId } from "@tempo/protocol";
+import { Schema } from "effect";
+import { AGENT_IDS, AgentId, McpTransport } from "@tempo/protocol";
 import { BotIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ export function AgentsTab() {
   const [selected, setSelected] = useState<string | "new" | null>(null);
 
   if (agents.isPending) return <SkeletonRows rows={3} />;
+
   if (agents.isError) return <ErrorState error={agents.error} onRetry={() => void agents.refetch()} />;
 
   return (
@@ -88,8 +90,11 @@ function LoadedEditor({
   onDone: (id: string | null) => void;
 }) {
   const agent = useCallQuery("getCustomAgent", { customAgentId });
+
   if (agent.isPending) return <SkeletonRows rows={6} />;
+
   if (agent.isError) return <ErrorState error={agent.error} onRetry={() => void agent.refetch()} />;
+
   return (
     <AgentEditor
       key={agent.data.commitSha}
@@ -112,6 +117,7 @@ function AgentEditor({
   const [form, setForm] = useState(initial);
   const [shown, setShown] = useState<FormErrors>({});
   const change = (patch: Partial<AgentForm>) => setForm((f) => ({ ...f, ...patch }));
+
   const save = useCallMutation("saveCustomAgent", {
     invalidates: ["listCustomAgents", "getCustomAgent"],
     onSuccess: (saved) => {
@@ -119,6 +125,7 @@ function AgentEditor({
       onDone(saved.id);
     },
   });
+
   const remove = useCallMutation("deleteCustomAgent", {
     invalidates: ["listCustomAgents"],
     onSuccess: () => {
@@ -130,9 +137,14 @@ function AgentEditor({
   const submit = () => {
     const { errors, definition } = validateForm(form);
     setShown(errors);
+
     if (!definition) return;
-    save.mutate({ ...(customAgentId ? { customAgentId } : {}), definition });
+    let input: import("@tempo/protocol").FnInput<"saveCustomAgent"> = { definition };
+
+    if (customAgentId) input = { ...input, customAgentId };
+    save.mutate(input);
   };
+
   const err = (field: string) => shown[field] ?? null;
   const note = UNSUPPORTED_NOTE[form.baseAgent];
 
@@ -156,7 +168,12 @@ function AgentEditor({
           />
         </Field>
         <Field label="Base agent" htmlFor="ca-base" hint={note}>
-          <Select value={form.baseAgent} onValueChange={(v) => change({ baseAgent: v as AgentId })}>
+          <Select
+            value={form.baseAgent}
+            onValueChange={(v) => {
+              if (Schema.is(AgentId)(v)) change({ baseAgent: v });
+            }}
+          >
             <SelectTrigger id="ca-base" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -314,6 +331,7 @@ function ServerRow({
   const id = (f: string) => `ca-${server.key}-${f}`;
   const err = (f: string) => errors[`server.${server.key}.${f}`] ?? null;
   const set = (patch: Partial<ServerForm>) => onChange({ ...server, ...patch });
+
   return (
     <div className="grid gap-3 rounded-md border p-3">
       <div className="grid gap-3 md:grid-cols-[1fr_8rem_auto] md:items-end">
@@ -321,7 +339,12 @@ function ServerRow({
           <Input id={id("name")} value={server.name} onChange={(e) => set({ name: e.target.value })} />
         </Field>
         <Field label="Type" htmlFor={id("type")}>
-          <Select value={server.type} onValueChange={(v) => set({ type: v as ServerForm["type"] })}>
+          <Select
+            value={server.type}
+            onValueChange={(v) => {
+              if (Schema.is(McpTransport)(v)) set({ type: v });
+            }}
+          >
             <SelectTrigger id={id("type")} className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -394,10 +417,12 @@ function TagInput({
   onChange: (values: string[]) => void;
 }) {
   const [text, setText] = useState("");
+
   const commit = () => {
     if (text.trim()) onChange(addTags(values, text));
     setText("");
   };
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === "," || e.key === " ") {
       if (!text.trim()) return;
@@ -405,6 +430,7 @@ function TagInput({
       commit();
     } else if (e.key === "Backspace" && !text && values.length > 0) onChange(values.slice(0, -1));
   };
+
   return (
     <div className="flex min-h-9 flex-wrap items-center gap-1 rounded-md border px-2 py-1">
       {values.map((v) => (

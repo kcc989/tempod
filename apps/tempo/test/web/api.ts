@@ -1,12 +1,14 @@
-import { unwrap, type FnInput, type FnName, type FnOutput, type Result } from "@tempo/protocol";
+import { createApiClient } from "../../src/ui/lib/api-client";
 
 export { TempoError } from "@tempo/protocol";
 
-export const call = async <K extends FnName>(name: K, input: FnInput<K>): Promise<FnOutput<K>> => {
+/** Fixture HTTP transport uses the production API envelope decoder. */
+export const call = createApiClient(async (name, input) => {
   const response = await fetch(`/__fixture/${name}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  return unwrap((await response.json()) as Result<FnOutput<K>>);
-};
+
+  return response.text();
+});

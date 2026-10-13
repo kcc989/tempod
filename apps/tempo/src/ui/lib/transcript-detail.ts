@@ -9,10 +9,12 @@ export const isTranscriptDetail = (u: unknown): u is TranscriptDetail => u === "
 
 const read = (): TranscriptDetail => {
   const raw = readString(DETAIL_KEY);
+
   return isTranscriptDetail(raw) ? raw : "default";
 };
 
 let store: Store<TranscriptDetail> | null = null;
+
 const detailStore = (): Store<TranscriptDetail> => (store ??= new Store<TranscriptDetail>(read()));
 
 export const setTranscriptDetail = (detail: TranscriptDetail): void => {

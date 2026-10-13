@@ -18,6 +18,7 @@ export interface Bridge {
 }
 
 type Remote = Extract<McpServerSpec, { transport: "http" | "sse" }>;
+
 type Stdio = Extract<McpServer, { command: string }>;
 
 /** 01 Browser Run: with `"run"`, Playwright MCP drives the Browser Run session instead of local Chromium. */
@@ -38,6 +39,7 @@ export const tempoServer = (sessionId: string): Stdio => ({
 
 export const bridgeServer = (spec: Remote, bridge: Bridge): Stdio => {
   const [command, ...prefix] = bridge.command;
+
   return {
     name: spec.name,
     command: command ?? "tempod",
@@ -55,20 +57,25 @@ export const bridgeServer = (spec: Remote, bridge: Bridge): Stdio => {
 };
 
 /** Transports the agent reported in `agentCapabilities.mcpCapabilities`. */
-export const mcpTransports = (capabilities: Record<string, unknown>): { http: boolean; sse: boolean } => {
+export const mcpTransports = (capabilities: import("@tempo/protocol").AcpFields) => {
   const mcp = capabilities["mcpCapabilities"];
-  return { http: isObj(mcp) && mcp["http"] === true, sse: isObj(mcp) && mcp["sse"] === true };
+
+  return { http: isObj(mcp) && mcp["http"] === true, sse: isObj(mcp) && mcp["sse"] === true } satisfies {
+    http: boolean;
+    sse: boolean;
+  };
 };
 
 /** The `mcpServers` of `session/new` and `session/load`: Playwright, tempo, then the user's servers (01). */
 export const acpMcpServers = (
   specs: ReadonlyArray<McpServerSpec>,
-  capabilities: Record<string, unknown>,
+  capabilities: import("@tempo/protocol").AcpFields,
   bridge: Bridge,
   browser: BrowserMode,
   sessionId: string,
 ): McpServer[] => {
   const supports = mcpTransports(capabilities);
+
   return [
     playwrightServer(browser),
     tempoServer(sessionId),
@@ -80,7 +87,9 @@ export const acpMcpServers = (
           args: [...spec.args],
           env: spec.env.map((e) => ({ ...e })),
         };
+
       if (!supports[spec.transport]) return bridgeServer(spec, bridge);
+
       return {
         type: spec.transport,
         name: spec.name,
@@ -111,11 +120,12 @@ export const piMcpConfig = (
   bridge: Bridge,
   browser: BrowserMode,
   sessionId: string,
-): { mcpServers: Record<string, PiEntry> } => {
+) => {
   const servers: Record<string, PiEntry> = {};
   const playwright = playwrightServer(browser);
   servers[playwright.name] = stdioEntry(playwright);
   servers[TEMPO_MCP_SERVER.name] = stdioEntry(tempoServer(sessionId));
+
   for (const spec of specs) {
     if (spec.transport === "stdio") servers[spec.name] = stdioEntry(spec);
     else if (spec.transport === "http")
@@ -125,7 +135,8 @@ export const piMcpConfig = (
       };
     else servers[spec.name] = stdioEntry(bridgeServer(spec, bridge));
   }
-  return { mcpServers: servers };
+
+  return { mcpServers: servers } satisfies { mcpServers: Record<string, PiEntry> };
 };
 
 export const writePiMcpConfig = (

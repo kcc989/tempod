@@ -1,17 +1,19 @@
 import { Lifecycle } from "./lifecycle.ts";
+import type { OpResult } from "./runner.ts";
 import { and, asc, desc, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
   DEFAULT_SETTINGS,
+  AcpFields,
   secretPlaceholder,
   type EnvironmentSummary,
   type PendingEnvironmentProposal,
   TempoError,
-  type AgentId,
+  type JsonData,
   type Attention,
   type ChangesSummary,
-  type Item,
+  Item,
   type ItemKind,
   type ItemStatus,
   type Session,
@@ -29,8 +31,9 @@ import {
   TEMPO_ARTIFACTS_DIR,
 } from "@tempo/protocol";
 import { resolveSettings } from "@tempo/settings";
+import { Match, Schema, Option } from "effect";
 import { environments, mcpServers, projects, workspaces, type McpServerRow } from "../../db/d1.ts";
-import { EMPTY_PROMPT, json, readItemContent, validItemContent, type ItemContent } from "../../db/json.ts";
+import { EMPTY_PROMPT, json, readItemContent, itemContentDecoder, type ItemContent } from "../../db/json.ts";
 import { parseEnvironment, type EnvironmentConfig } from "../../lib/environments.ts";
 import {
   egressLog,
@@ -74,18 +77,16 @@ export interface Author {
 
 const MAX_BUFFERED = 4 * 1024 * 1024;
 
-/** Unvalidated: only for internal columns (op state and input, raw events, backup records). */
-export const parseJson = <T>(text: string | null | undefined, fallback: T): T => {
-  if (!text) return fallback;
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return fallback;
-  }
-};
+export const parseJson =
+  <T>(schema: Schema.ConstraintDecoder<T>) =>
+  (text: string | null | undefined, fallback: T): T =>
+    text
+      ? Option.getOrElse(Schema.decodeUnknownOption(Schema.fromJsonString(schema))(text), () => fallback)
+      : fallback;
 
 const withUsage = (text: string | null): { usage?: TurnUsage } => {
   const usage = json.turnUsage.read(text, null);
+
   return usage ? { usage } : {};
 };
 
@@ -111,7 +112,7 @@ export class WorkspaceCore {
   private projectCache: { info: ProjectInfo; at: number } | null = null;
   readonly opWaiters = new Map<
     string,
-    Array<{ resolve: (v: unknown) => void; reject: (e: unknown) => void }>
+    Array<{ resolve: (v: OpResult) => void; reject: (cause: unknown) => void }>
   >();
   /** Set by index.ts: runs the queue runner after any change to state, turns, sessions or setup. */
   kickQueue: () => void = () => undefined;
@@ -133,7 +134,6 @@ export class WorkspaceCore {
   /** Open preview WebSocket relays: the browser side and the tempod side. */
   readonly previewSockets = new Set<WebSocket>();
   private detailTimer: ReturnType<typeof setTimeout> | null = null;
-
   closePreviews(code: number, reason: string): void {
     for (const ws of this.previewSockets) {
       try {
@@ -142,9 +142,9 @@ export class WorkspaceCore {
         // already closed
       }
     }
+
     this.previewSockets.clear();
   }
-
   closeTerminals(code: number, reason: string): void {
     for (const [ws, t] of this.terminals) {
       try {
@@ -152,34 +152,38 @@ export class WorkspaceCore {
       } catch {
         // already gone
       }
+
       try {
         ws.close(code, reason);
       } catch {
         // already closed
       }
     }
+
     this.terminals.clear();
   }
-
   /** Sends the workspace detail to UI sockets soon, coalescing bursts (op progress, ports). */
   broadcastDetailSoon(): void {
     if (this.detailTimer || this.uiSockets().length === 0) return;
     this.detailTimer = setTimeout(() => {
       this.detailTimer = null;
+
       if (this.wsOrNull()) this.broadcast({ type: "workspace", workspace: this.detail() });
     }, 50);
   }
-
   /** The container API (ctx.container). A field, so tests can put a fake in its place. */
   container: Container | undefined;
   /** The Browser Run binding (01, Browser Run). A field, so tests can put a fake in its place. */
-  browser: BrowserRun | undefined;
+  browser:
+    | (Pick<BrowserRun, "acquire" | "getSession" | "connectSession" | "closeSession" | "getLiveView"> & {
+        readonly devtools: Pick<BrowserRun["devtools"], "listTargets">;
+      })
+    | undefined;
   /** BrowserOutbound for this workspace: Browser Run's route to `localhost`. */
   browserOutbound: () => Fetcher = () =>
     this.ctx.exports.BrowserOutbound({ props: { workspaceId: this.workspaceId } });
   /** The Browser Run acquire in flight, shared by concurrent CDP connections. */
   browserAcquire: Promise<string | null> | null = null;
-
   constructor(
     readonly ctx: DurableObjectState,
     readonly env: Env,
@@ -189,40 +193,38 @@ export class WorkspaceCore {
     this.lifecycle = new Lifecycle(this);
     this.browser = env.BROWSER;
   }
-
   // ---------- workspace row ----------
-
   wsOrNull(): WorkspaceRowDO | null {
     return this.db.select().from(workspace).where(eq(workspace.id, 1)).get() ?? null;
   }
-
   ws(): WorkspaceRowDO {
     const row = this.wsOrNull();
+
     if (!row) throw new TempoError("NOT_FOUND");
+
     return row;
   }
-
   get workspaceId(): string {
     const row = this.wsOrNull();
+
     if (row) return row.workspaceId;
     const userId = this.kv<string>("catalogUserId");
+
     if (userId && this.ctx.id.name === `models:${userId}`) return this.ctx.id.name;
     throw new TempoError("NOT_FOUND");
   }
-
   updateWs(patch: Partial<typeof workspace.$inferInsert>): void {
     this.db.update(workspace).set(patch).where(eq(workspace.id, 1)).run();
   }
-
   get state(): WorkspaceState {
-    return this.ws().state as WorkspaceState;
+    return this.ws().state;
   }
-
   /** Moves the state machine (03). Throws on any transition not in the table. */
   setState(next: WorkspaceState, error?: { code: string; detail?: string | null }): void {
     const row = this.ws();
-    const from = row.state as WorkspaceState;
+    const from = row.state;
     assertTransition(from, next);
+
     if (from === next && !error) return;
     this.updateWs({
       state: next,
@@ -237,38 +239,37 @@ export class WorkspaceCore {
     this.kickQueue();
     this.scheduleAlarm();
   }
-
   // ---------- settings ----------
-
   settings(): Settings {
     const stored = json.settings.read(this.ws().settingsJson, null);
+
     if (stored) return stored;
     const overrides = this.projectCache?.info.overrides ?? {};
+
     return resolveSettings(overrides, {}).effective ?? DEFAULT_SETTINGS;
   }
-
   kv<T>(key: string): T | undefined {
     return this.ctx.storage.kv.get<T>(key);
   }
-
-  setKv(key: string, value: unknown): void {
+  setKv(key: string, value: JsonData): void {
     if (value === undefined) this.ctx.storage.kv.delete(key);
     else this.ctx.storage.kv.put(key, value);
   }
-
   settingsIssues(): { warnings: string[]; errors: string[]; sources: Record<string, SettingsSource> } {
     return this.kv("settingsIssues") ?? { warnings: [], errors: [], sources: {} };
   }
-
   async project(fresh = false): Promise<ProjectInfo> {
     if (!fresh && this.projectCache && Date.now() - this.projectCache.at < 30_000)
       return this.projectCache.info;
+
     const row = await drizzleD1(this.env.DB)
       .select()
       .from(projects)
       .where(eq(projects.id, this.ws().projectId))
       .get();
+
     if (!row) throw new TempoError("NOT_FOUND", undefined, "project not found");
+
     const info: ProjectInfo = {
       id: row.id,
       installationId: row.installationId,
@@ -279,14 +280,14 @@ export class WorkspaceCore {
       overrides: json.projectSettings.read(row.settingsJson, {}),
       environmentId: row.environmentId,
     };
+
     this.projectCache = { info, at: Date.now() };
+
     return info;
   }
-
   author(): Author {
     return this.kv<Author>("author") ?? { name: "Tempo", email: "tempo@users.noreply.github.com" };
   }
-
   /** The owner's enabled MCP servers (01, User MCP servers), read from D1 each time. */
   async mcpServers(): Promise<McpServerRow[]> {
     return drizzleD1(this.env.DB)
@@ -296,48 +297,54 @@ export class WorkspaceCore {
       .orderBy(asc(mcpServers.name))
       .all();
   }
-
   credentials() {
     const userId = this.wsOrNull()?.userId ?? this.kv<string>("catalogUserId");
+
     if (!userId) throw new TempoError("NOT_FOUND");
+
     return this.env.CREDENTIALS.getByName(userId);
   }
-
   /** The workspace override, else the project's environment, else none (01, Environments). */
   async environment(fresh = false): Promise<EnvironmentConfig | null> {
     const project = await this.project(fresh);
     const row = this.ws();
+
     for (const id of [row.environmentId, project.environmentId]) {
       if (!id) continue;
+
       const env = await drizzleD1(this.env.DB)
         .select()
         .from(environments)
         .where(and(eq(environments.id, id), eq(environments.userId, row.userId)))
         .get();
+
       if (env) return parseEnvironment(env);
     }
+
     return null;
   }
-
   /** Environment secrets for the container: placeholders when bound to hosts, else values (01). */
   private async environmentEnv(env: EnvironmentConfig | null): Promise<Record<string, string>> {
     if (!env || env.secrets.length === 0) return {};
     const values = await this.credentials().listEnvironmentSecrets(env.id);
     const out: Record<string, string> = {};
+
     for (const s of env.secrets) {
       if (s.hosts.length > 0) out[s.name] = secretPlaceholder(s.name);
       else if (values[s.name] !== undefined) out[s.name] = values[s.name]!;
     }
+
     return out;
   }
-
   /** What the agent may see (01, Environments): no secret values. */
   async environmentSummary(): Promise<EnvironmentSummary> {
     const env = await this.environment();
     const settings = this.settings().environment;
+
     const set = env
       ? new Set(await this.credentials().listEnvironmentSecretNames(env.id))
       : new Set<string>();
+
     return {
       name: env?.name ?? null,
       egressPolicy: env?.egressPolicy ?? settings.egress_policy,
@@ -347,7 +354,6 @@ export class WorkspaceCore {
       blockedHosts: this.blockedHosts(),
     };
   }
-
   /** Distinct hosts blocked by rule 7 or 10 in the last 24 h, newest first, at most 50 (02). */
   blockedHosts(): string[] {
     const rows = this.db
@@ -357,9 +363,9 @@ export class WorkspaceCore {
       .orderBy(desc(egressLog.id))
       .limit(2000)
       .all();
+
     return [...new Set(rows.map((r) => r.host))].slice(0, 50);
   }
-
   pendingProposals(): PendingEnvironmentProposal[] {
     return this.db
       .select()
@@ -369,16 +375,17 @@ export class WorkspaceCore {
       .all()
       .flatMap((r) => {
         const proposal = json.environmentProposal.read(r.proposalJson, null);
+
         return proposal ? [{ id: r.id, createdAt: r.createdAt, proposal }] : [];
       });
   }
-
   /** Script env (01, Scripts): TEMPO_* vars plus the project's env vars and secrets. */
   async scriptEnv(): Promise<Record<string, string>> {
     const row = this.ws();
     const settings = this.settings();
     const envSecrets = await this.environmentEnv(await this.environment());
     const secrets = await this.credentials().listProjectEnv(row.projectId);
+
     const base = {
       TEMPO_WORKSPACE_ID: row.workspaceId,
       TEMPO_WORKSPACE_NAME: row.slug,
@@ -387,19 +394,21 @@ export class WorkspaceCore {
       TEMPO_PORT: "3000",
       TEMPO_ARTIFACTS_DIR,
     };
+
     return { ...settings.environment_variables, ...envSecrets, ...secrets, ...base };
   }
-
   // ---------- attention, summary, detail ----------
-
   computeAttention(): Attention {
     const row = this.ws();
+
     const pending = this.db
       .select({ id: permissions.requestId })
       .from(permissions)
       .where(eq(permissions.status, "pending"))
       .get();
+
     if (pending) return "needs_input";
+
     const newest = this.db
       .select()
       .from(turns)
@@ -407,21 +416,24 @@ export class WorkspaceCore {
       .orderBy(desc(turns.endedAt))
       .limit(1)
       .get();
+
     if (row.state === "error" || row.setupStatus === "failed" || newest?.status === "failed") return "error";
+
     if (newest?.endedAt && (row.lastViewedAt === null || newest.endedAt > row.lastViewedAt)) return "unread";
+
     return "none";
   }
-
   /** Recomputes attention (03). Publishes when it changed, unless the caller publishes itself. */
   recomputeAttention(publish = true): void {
     const row = this.ws();
     const next = this.computeAttention();
+
     if (next !== row.attention) {
       this.updateWs({ attention: next });
+
       if (publish) this.publish();
     }
   }
-
   summary(row: WorkspaceRowDO = this.ws()): WorkspaceSummary {
     return {
       id: row.workspaceId,
@@ -430,12 +442,12 @@ export class WorkspaceCore {
       title: row.title,
       branch: row.branch,
       baseBranch: row.baseBranch,
-      state: row.state as WorkspaceState,
-      attention: row.attention as Attention,
-      defaultAgent: row.defaultAgent as AgentId,
+      state: row.state,
+      attention: row.attention,
+      defaultAgent: row.defaultAgent,
       prNumber: row.prNumber,
-      prState: row.prState as WorkspaceSummary["prState"],
-      checksState: row.checksState as WorkspaceSummary["checksState"],
+      prState: row.prState,
+      checksState: row.checksState,
       pinned: row.pinned === 1,
       lastActivityAt: row.lastActivityAt,
       createdAt: row.createdAt,
@@ -443,17 +455,15 @@ export class WorkspaceCore {
       rev: row.summaryRev,
     };
   }
-
   previewUrl(port: number, row: WorkspaceRowDO = this.ws()): string {
     return `https://${port}-${row.workspaceId}.${this.env.PREVIEW_DOMAIN}`;
   }
-
   /** Set by the op runner: the running op, else the next pending op. */
   opProgress: () => WorkspaceDetail["op"] = () => null;
-
   detail(): WorkspaceDetail {
     const row = this.ws();
     const running = this.db.select({ id: turns.id }).from(turns).where(eq(turns.status, "running")).get();
+
     const queue = this.db
       .select({ id: turns.id })
       .from(turns)
@@ -461,12 +471,14 @@ export class WorkspaceCore {
       .orderBy(asc(turns.queuePos))
       .all()
       .map((t) => t.id);
+
     const issues = this.settingsIssues();
+
     return {
       ...this.summary(row),
       errorCode: row.errorCode,
       errorDetail: row.errorDetail,
-      setupStatus: row.setupStatus as WorkspaceDetail["setupStatus"],
+      setupStatus: row.setupStatus,
       pushed: row.pushed === 1,
       prTitle: row.prNumber === null ? null : (this.kv<string>("prTitle") ?? null),
       ports: this.db
@@ -490,7 +502,6 @@ export class WorkspaceCore {
       environmentProposals: this.pendingProposals(),
     };
   }
-
   /**
    * Writes the D1 summary row with a monotonic `summary_rev`, publishes to UserHubDO, and
    * sends the detail to every UI socket (02, Write rules). The hub gets the summary even when
@@ -502,6 +513,7 @@ export class WorkspaceCore {
     this.updateWs({ summaryRev: rev });
     const fresh = this.ws();
     const summary = this.summary(fresh);
+
     const writeD1 = async () => {
       await drizzleD1(this.env.DB)
         .update(workspaces)
@@ -524,29 +536,29 @@ export class WorkspaceCore {
         .where(and(eq(workspaces.id, summary.id), sql`${workspaces.summaryRev} < ${rev}`))
         .run();
     };
+
     const done = writeD1()
       .catch((e) => log("warn", "summary D1 write failed", { workspaceId: summary.id, error: errorText(e) }))
       .then(() => this.env.USER_HUB.getByName(fresh.userId).publish(summary))
       .catch((e) => log("warn", "summary publish failed", { workspaceId: summary.id, error: errorText(e) }));
+
     this.ctx.waitUntil(done);
     this.broadcast({ type: "workspace", workspace: this.detail() });
   }
-
   // ---------- sessions and turns ----------
-
   sessionRow(id: string): SessionRow {
     const row = this.db.select().from(sessions).where(eq(sessions.id, id)).get();
+
     if (!row) throw new TempoError("NOT_FOUND", undefined, "session not found");
+
     return row;
   }
-
   sessionToWire(r: SessionRow): Session {
-    return {
+    const wire = {
       id: r.id,
-      ...(r.roleRunId ? { roleRunId: r.roleRunId } : {}),
-      agent: r.agent as AgentId,
+      agent: r.agent,
       title: r.title,
-      status: r.status as Session["status"],
+      status: r.status,
       modeId: r.modeId,
       modes: json.modes.read(r.modesJson, []),
       configOptions: json.configOptions.read(r.configOptionsJson, []),
@@ -555,19 +567,22 @@ export class WorkspaceCore {
       usage: json.usage.read(r.usageJson, {}),
       sortOrder: r.sortOrder,
       steering: json.capabilities.read(r.capabilitiesJson, {})["steering"] === true,
-      ...(r.customAgentId
-        ? {
-            customAgent: {
-              id: r.customAgentId,
-              name: r.customAgentName ?? "",
-              commitSha: r.customAgentCommit ?? "",
-            },
-            profileIssues: [...json.profileIssues.read(r.profileIssuesJson, [])],
-          }
-        : {}),
-    };
-  }
+    } satisfies Session;
 
+    const session = r.roleRunId ? { ...wire, roleRunId: r.roleRunId } : wire;
+
+    return r.customAgentId
+      ? {
+          ...session,
+          customAgent: {
+            id: r.customAgentId,
+            name: r.customAgentName ?? "",
+            commitSha: r.customAgentCommit ?? "",
+          },
+          profileIssues: [...json.profileIssues.read(r.profileIssuesJson, [])],
+        }
+      : session;
+  }
   updateSession(id: string, patch: Partial<typeof sessions.$inferInsert>): Session {
     this.db
       .update(sessions)
@@ -576,21 +591,22 @@ export class WorkspaceCore {
       .run();
     const s = this.sessionToWire(this.sessionRow(id));
     this.broadcast({ type: "session", session: s });
+
     return s;
   }
-
   turnRow(id: string): TurnRow {
     const row = this.db.select().from(turns).where(eq(turns.id, id)).get();
+
     if (!row) throw new TempoError("NOT_FOUND", undefined, "turn not found");
+
     return row;
   }
-
   turnToWire(r: TurnRow): Turn {
     return {
       id: r.id,
       sessionId: r.sessionId,
       seq: r.seq,
-      status: r.status as Turn["status"],
+      status: r.status,
       queuePos: r.queuePos,
       steeringPending: r.steeringPending === 1,
       prompt: json.prompt.read(r.promptJson, EMPTY_PROMPT),
@@ -604,18 +620,16 @@ export class WorkspaceCore {
       ...withUsage(r.usageJson),
     };
   }
-
   updateTurn(id: string, patch: Partial<typeof turns.$inferInsert>): Turn {
     this.db.update(turns).set(patch).where(eq(turns.id, id)).run();
     const t = this.turnToWire(this.turnRow(id));
     this.broadcast({ type: "turn", turn: t });
+
     return t;
   }
-
   runningTurn(): TurnRow | null {
     return this.db.select().from(turns).where(eq(turns.status, "running")).get() ?? null;
   }
-
   queuedTurns(): TurnRow[] {
     return this.db
       .select()
@@ -624,33 +638,31 @@ export class WorkspaceCore {
       .orderBy(asc(turns.queuePos))
       .all();
   }
-
   nextTurnSeq(): number {
     const row = this.db
       .select({ max: sql<number>`coalesce(max(${turns.seq}), 0)` })
       .from(turns)
       .get();
+
     return (row?.max ?? 0) + 1;
   }
-
   nextQueuePos(): number {
     const row = this.db
       .select({ max: sql<number>`coalesce(max(${turns.queuePos}), 0)` })
       .from(turns)
       .get();
+
     return (row?.max ?? 0) + 1;
   }
-
   // ---------- items ----------
-
   private bumpItemsRev(): number {
     const rev = this.ws().itemsRev + 1;
     this.updateWs({ itemsRev: rev });
+
     return rev;
   }
-
   itemToWire(r: ItemRow, content: ItemContent = readItemContent(r.kind, r.contentJson)): Item {
-    return {
+    return Schema.decodeUnknownSync(Item)({
       id: r.id,
       sessionId: r.sessionId,
       turnId: r.turnId,
@@ -660,13 +672,11 @@ export class WorkspaceCore {
       rev: r.rev,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
-    } as Item;
+    });
   }
-
   itemRow(id: string): ItemRow | null {
     return this.db.select().from(items).where(eq(items.id, id)).get() ?? null;
   }
-
   /** Inserts an item and bumps items_rev in one transaction (02, Rules). Broadcasts item.upsert. */
   insertItem(input: {
     id?: string;
@@ -679,10 +689,12 @@ export class WorkspaceCore {
   }): Item {
     const now = Date.now();
     const id = input.id ?? newId();
-    const content = validItemContent(input.kind, input.content);
+    const content = itemContentDecoder(input.kind)(input.content);
     const contentJson = JSON.stringify(content);
+
     const row = this.ctx.storage.transactionSync(() => {
       const rev = this.bumpItemsRev();
+
       const values = {
         id,
         sessionId: input.sessionId,
@@ -694,39 +706,44 @@ export class WorkspaceCore {
         createdAt: input.createdAt ?? now,
         updatedAt: now,
       };
+
       this.db.insert(items).values(values).onConflictDoNothing().run();
+
       return this.itemRow(id)!;
     });
+
     const item = row.contentJson === contentJson ? this.itemToWire(row, content) : this.itemToWire(row);
     this.broadcast({ type: "item.upsert", item, itemsRev: row.rev });
+
     return item;
   }
-
   updateItem(id: string, patch: { status?: ItemStatus; content?: unknown; turnId?: string }): Item | null {
     const result = this.ctx.storage.transactionSync(() => {
       const existing = this.itemRow(id);
+
       if (!existing) return null;
-      const content = patch.content !== undefined ? validItemContent(existing.kind, patch.content) : null;
+      const content = patch.content !== undefined ? itemContentDecoder(existing.kind)(patch.content) : null;
       const rev = this.bumpItemsRev();
-      this.db
-        .update(items)
-        .set({
-          ...(patch.status ? { status: patch.status } : {}),
-          ...(content ? { contentJson: JSON.stringify(content) } : {}),
-          ...(patch.turnId !== undefined ? { turnId: patch.turnId } : {}),
-          rev,
-          updatedAt: Date.now(),
-        })
-        .where(eq(items.id, id))
-        .run();
+      const changes: Partial<ItemRow> = {};
+
+      if (patch.status) changes.status = patch.status;
+
+      if (content) changes.contentJson = JSON.stringify(content);
+
+      if (patch.turnId !== undefined) changes.turnId = patch.turnId;
+      changes.rev = rev;
+      changes.updatedAt = Date.now();
+      this.db.update(items).set(changes).where(eq(items.id, id)).run();
+
       return { row: this.itemRow(id)!, content };
     });
+
     if (!result) return null;
     const item = result.content ? this.itemToWire(result.row, result.content) : this.itemToWire(result.row);
     this.broadcast({ type: "item.upsert", item, itemsRev: result.row.rev });
+
     return item;
   }
-
   /**
    * Appends streamed text. Every change bumps items_rev; the delta goes to live sockets only.
    * Appending to a string keeps valid content valid, so only content without a string `text` is re-validated.
@@ -734,24 +751,29 @@ export class WorkspaceCore {
   appendItemText(id: string, text: string): void {
     const rev = this.ctx.storage.transactionSync(() => {
       const existing = this.itemRow(id);
+
       if (!existing) return null;
-      const raw = parseJson<unknown>(existing.contentJson, null);
-      const content: Record<string, unknown> =
-        typeof raw === "object" && raw !== null && typeof (raw as { text?: unknown }).text === "string"
-          ? (raw as Record<string, unknown>)
-          : { ...validItemContent(existing.kind, raw) };
-      content["text"] = String(content["text"] ?? "") + text;
+      const raw = Schema.decodeUnknownOption(Schema.fromJsonString(AcpFields))(existing.contentJson);
+
+      const content =
+        Option.isSome(raw) && Schema.is(Schema.String)(raw.value["text"])
+          ? raw.value
+          : readItemContent(existing.kind, existing.contentJson);
+
+      const currentText = "text" in content ? content.text : "";
+      const appended = { ...content, text: String(currentText ?? "") + text };
       const rev = this.bumpItemsRev();
       this.db
         .update(items)
-        .set({ contentJson: JSON.stringify(content), rev, updatedAt: Date.now() })
+        .set({ contentJson: JSON.stringify(appended), rev, updatedAt: Date.now() })
         .where(eq(items.id, id))
         .run();
+
       return rev;
     });
+
     if (rev !== null) this.broadcast({ type: "item.delta", itemId: id, append: { text }, itemsRev: rev });
   }
-
   /**
    * Deletes a turn and its items in one transaction (02, Rules: items_rev goes up when items go),
    * runs `alsoInTransaction`, then broadcasts turn.deleted.
@@ -759,13 +781,13 @@ export class WorkspaceCore {
   deleteTurn(turnId: string, alsoInTransaction?: () => void): void {
     this.ctx.storage.transactionSync(() => {
       const removed = this.db.delete(items).where(eq(items.turnId, turnId)).returning({ id: items.id }).all();
+
       if (removed.length > 0) this.bumpItemsRev();
       this.db.delete(turns).where(eq(turns.id, turnId)).run();
       alsoInTransaction?.();
     });
     this.broadcast({ type: "turn.deleted", turnId });
   }
-
   /** Closes open items of a turn: completed for a normal end, cancelled otherwise (02, Status). */
   closeTurnItems(turnId: string, outcome: "completed" | "cancelled"): void {
     const open = this.db
@@ -773,6 +795,7 @@ export class WorkspaceCore {
       .from(items)
       .where(and(eq(items.turnId, turnId), inArray(items.status, ["streaming", "pending", "in_progress"])))
       .all();
+
     for (const it of open) {
       const status =
         outcome === "completed" && it.status === "streaming"
@@ -780,10 +803,10 @@ export class WorkspaceCore {
           : outcome === "cancelled"
             ? "cancelled"
             : it.status;
-      if (status !== it.status) this.updateItem(it.id, { status: status as ItemStatus });
+
+      if (status !== it.status) this.updateItem(it.id, { status: status });
     }
   }
-
   itemsSince(rev: number, limit: number, afterRev?: number): Item[] {
     return this.db
       .select()
@@ -794,7 +817,6 @@ export class WorkspaceCore {
       .all()
       .map((r) => this.itemToWire(r));
   }
-
   /** A notice in the transcript of the given (or newest) session. */
   notice(
     level: "info" | "warning" | "error",
@@ -810,12 +832,23 @@ export class WorkspaceCore {
         .where(ne(sessions.status, "closed"))
         .orderBy(desc(sessions.updatedAt))
         .get()?.id;
+
     if (!sid) {
-      log(level === "error" ? "error" : level === "warning" ? "warn" : "info", text, {
-        workspaceId: this.wsOrNull()?.workspaceId,
-      });
+      log(
+        Match.value(level).pipe(
+          Match.when("error", () => "error" as const),
+          Match.when("warning", () => "warn" as const),
+          Match.orElse(() => "info" as const),
+        ),
+        text,
+        {
+          workspaceId: this.wsOrNull()?.workspaceId,
+        },
+      );
+
       return;
     }
+
     this.insertItem({
       sessionId: sid,
       turnId: turnId ?? null,
@@ -824,49 +857,51 @@ export class WorkspaceCore {
       content: { level, text },
     });
   }
-
   // ---------- sockets ----------
-
   uiSockets(): WebSocket[] {
     return this.ctx.getWebSockets("ui");
   }
-
   broadcast(message: WorkspaceServerMessage): void {
     if (["workspace", "session", "turn", "turn.deleted", "item.upsert", "item.delta"].includes(message.type))
       markConversationDirty(this);
+
     if (message.type === "turn" && !["queued", "running"].includes(message.turn.status)) {
       this.setKv("conversationDueAt", Date.now());
       this.scheduleAlarm();
     }
+
     const sockets = this.uiSockets();
+
     if (sockets.length === 0) return;
     const text = JSON.stringify(message);
+
     for (const ws of sockets) this.sendTo(ws, text);
   }
-
   sendTo(ws: WebSocket, message: WorkspaceServerMessage | string): void {
     try {
-      const buffered = (ws as unknown as { bufferedAmount?: number }).bufferedAmount ?? 0;
+      const buffered = ws.bufferedAmount ?? 0;
+
       if (buffered > MAX_BUFFERED) {
         ws.close(CloseCode.tooMuchBuffered, "too much buffered");
+
         return;
       }
-      ws.send(typeof message === "string" ? message : JSON.stringify(message));
+
+      ws.send(Schema.is(Schema.String)(message) ? message : JSON.stringify(message));
     } catch {
       // socket gone
     }
   }
-
   error(code: string, message: string): void {
     this.broadcast({ type: "error", code, message });
   }
-
   // ---------- activity ----------
-
   /** 03, Activity. Open UI sockets do not count. */
   isActive(terminalsOpen: number): boolean {
     if (this.lifecycle.runs.hasActive()) return true;
+
     if (this.runningTurn() || this.queuedTurns().length > 0) return true;
+
     if (
       this.db
         .select({ id: permissions.requestId })
@@ -875,18 +910,20 @@ export class WorkspaceCore {
         .get()
     )
       return true;
+
     if (terminalsOpen > 0) return true;
+
     if (Date.now() - this.lastPreviewAt < 5 * 60_000) return true;
+
     return this.hasRunningScripts();
   }
-
   hasRunningScripts(): boolean {
     const row = this.ctx.storage.sql
       .exec("SELECT 1 FROM script_runs WHERE status = 'running' AND kind IN ('setup','run') LIMIT 1")
       .toArray();
+
     return row.length > 0;
   }
-
   touchActivity(): void {
     this.setKv("lastBusyAt", Date.now());
   }

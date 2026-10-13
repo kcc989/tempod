@@ -15,7 +15,9 @@ import { getWorkspaceUi, openTab, resetUiState, syncChatTabs } from "~/ui/state/
 import { session, turn } from "../fixtures";
 
 const off = { set: false, updatedAt: null };
+
 const on = { set: true, updatedAt: 1 };
+
 const status = (over: Partial<CredentialStatus> = {}): CredentialStatus => ({
   claude: off,
   codex: { ...off, lastRefresh: null },
@@ -44,6 +46,7 @@ describe("new chat menu", () => {
       agentMenu(s, models())
         .filter((e) => e.enabled)
         .map((e) => e.agent);
+
     expect(enabled(status())).toEqual([]);
     expect(enabled(status({ anthropic: on }))).toEqual(["claude"]);
     expect(enabled(status({ openai: on }))).toEqual(["codex"]);

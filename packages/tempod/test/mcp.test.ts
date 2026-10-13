@@ -1,7 +1,9 @@
+import { Schema } from "effect";
+import { AcpFields } from "@tempo/protocol";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { PLAYWRIGHT_MCP_SERVER, type McpServerSpec, type SessionStartResult } from "@tempo/protocol";
+import { PLAYWRIGHT_MCP_SERVER, type McpServerSpec } from "@tempo/protocol";
 import { acpMcpServers, piMcpConfig, writePiMcpConfig, type Bridge } from "../src/acp/mcp.ts";
 import { parseBridgeArgs, runBridge, sseEvents, streamLines } from "../src/mcp-bridge.ts";
 import {
@@ -17,6 +19,7 @@ import {
 afterAll(cleanupDirs);
 
 const bridge: Bridge = { command: ["/usr/local/bin/tempod"], env: { SSL_CERT_FILE: "/ca.crt" } };
+
 const fs: McpServerSpec = {
   name: "fs",
   transport: "stdio",
@@ -24,12 +27,14 @@ const fs: McpServerSpec = {
   args: ["-y", "fs"],
   env: [{ name: "ROOT", value: "/w" }],
 };
+
 const linear: McpServerSpec = {
   name: "linear",
   transport: "http",
   url: "https://mcp.linear.app/mcp",
   headers: [{ name: "Authorization", value: "tempo-placeholder:mcp:abc:authorization" }],
 };
+
 const legacy: McpServerSpec = { name: "old", transport: "sse", url: "https://old.test/sse", headers: [] };
 
 const bridged = (spec: Extract<McpServerSpec, { transport: "http" | "sse" }>) => ({
@@ -55,6 +60,7 @@ describe("acpMcpServers (01, User MCP servers)", () => {
       "local",
       "s1",
     );
+
     expect(list.map((s) => s.name)).toEqual([PLAYWRIGHT_MCP_SERVER.name, "tempo", "fs", "linear", "old"]);
     expect(list[2]).toEqual({
       name: "fs",
@@ -80,6 +86,7 @@ describe("acpMcpServers (01, User MCP servers)", () => {
       "local",
       "s1",
     );
+
     expect(list[2]).toMatchObject({ type: "http" });
     expect(list[3]).toEqual(bridged(legacy));
     expect(acpMcpServers([linear], {}, bridge, "local", "s1")[2]).toEqual(bridged(linear));
@@ -136,7 +143,7 @@ describe("session.start with mcpServers", () => {
     await c.hello();
     await c.waitEvent("incarnation.changed");
     const state = tmpDir("fake-agent-");
-    await c.ok<SessionStartResult>(
+    await c.ok(
       "session.start",
       {
         sessionId: "s1",
@@ -147,12 +154,16 @@ describe("session.start with mcpServers", () => {
       },
       20_000,
     );
+
     const line = readFileSync(join(state, "calls.log"), "utf8")
       .split("\n")
       .find((l) => l.includes(" mcpjson "))!;
+
     return {
       config,
-      servers: JSON.parse(line.slice(line.indexOf(" mcpjson ") + 9)) as Array<Record<string, unknown>>,
+      servers: Schema.decodeUnknownSync(Schema.Array(AcpFields))(
+        JSON.parse(line.slice(line.indexOf(" mcpjson ") + 9)),
+      ),
     };
   };
 
@@ -191,6 +202,7 @@ describe("session.start with mcpServers", () => {
 
 const lines = async function* (items: string[], waitFor?: Promise<unknown>) {
   for (const item of items) yield item;
+
   if (waitFor) await waitFor;
 };
 
@@ -211,7 +223,9 @@ describe("mcp-bridge", () => {
     const body = new Response(
       'event: endpoint\ndata: /m?s=1\n\n: comment\ndata: {"a":1}\r\n\r\ndata: x\ndata: y\n',
     ).body!;
+
     const events = [];
+
     for await (const e of sseEvents(body)) events.push(e);
     expect(events).toEqual([
       { event: "endpoint", data: "/m?s=1" },
@@ -222,19 +236,24 @@ describe("mcp-bridge", () => {
 
   test("streamable HTTP: JSON and SSE replies, session id, protocol version and headers", async () => {
     const seen: Array<{ method: string; headers: Headers; body: string }> = [];
+
     const server = Bun.serve({
       port: 0,
       async fetch(req) {
         const body = req.method === "POST" ? await req.text() : "";
         seen.push({ method: req.method, headers: req.headers, body });
+
         if (req.method === "GET") return new Response(null, { status: 405 });
+
         if (req.method === "DELETE") return new Response(null, { status: 200 });
         const msg = JSON.parse(body);
+
         if (msg.method === "initialize")
           return Response.json(
             { jsonrpc: "2.0", id: msg.id, result: { protocolVersion: "2025-06-18", capabilities: {} } },
             { headers: { "mcp-session-id": "sess-1" } },
           );
+
         if (msg.method === "tools/call")
           return new Response(
             `event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { ok: 1 } })}\n\n`,
@@ -242,18 +261,23 @@ describe("mcp-bridge", () => {
               headers: { "content-type": "text/event-stream" },
             },
           );
+
         if (msg.method === "boom") return new Response("no", { status: 500 });
+
         return new Response(null, { status: 202 });
       },
     });
+
     try {
       const out: string[] = [];
       const url = `http://127.0.0.1:${server.port}/mcp`;
+
       const code = await runBridge(
         { transport: "http", url, headers: [["Authorization", "Bearer x"]] },
         {
           lines: (async function* () {
             yield JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+
             while (out.length < 1) await Bun.sleep(5);
             yield JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" });
             yield JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: {} });
@@ -263,6 +287,7 @@ describe("mcp-bridge", () => {
           log: () => {},
         },
       );
+
       expect(code).toBe(0);
       expect(out.map((l) => JSON.parse(l).id).sort()).toEqual([1, 2, 3]);
       expect(JSON.parse(out.find((l) => JSON.parse(l).id === 3)!).error.message).toContain("500");
@@ -282,12 +307,15 @@ describe("mcp-bridge", () => {
 
   test("SSE transport: posts to the endpoint and relays message events", async () => {
     let push: (data: string) => void = () => {};
+
     const posts: Array<{ url: string; auth: string | null }> = [];
+
     const server = Bun.serve({
       port: 0,
       idleTimeout: 0,
       async fetch(req) {
         const url = new URL(req.url);
+
         if (req.method === "GET") {
           const stream = new ReadableStream<string>({
             start(ctrl) {
@@ -295,18 +323,24 @@ describe("mcp-bridge", () => {
               push = (data) => ctrl.enqueue(`event: message\ndata: ${data}\n\n`);
             },
           });
+
           return new Response(stream, { headers: { "content-type": "text/event-stream" } });
         }
+
         posts.push({ url: url.pathname + url.search, auth: req.headers.get("authorization") });
         const msg = JSON.parse(await req.text());
         push(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { echo: msg.method } }));
+
         return new Response("Accepted", { status: 202 });
       },
     });
+
     try {
       const out: string[] = [];
       let done: () => void = () => {};
+
       const finished = new Promise<void>((r) => (done = r));
+
       const run = runBridge(
         {
           transport: "sse",
@@ -322,6 +356,7 @@ describe("mcp-bridge", () => {
           log: () => {},
         },
       );
+
       expect(await run).toBe(0);
       expect(posts).toEqual([{ url: "/messages?session=7", auth: "Bearer s" }]);
       expect(JSON.parse(out[0]!)).toEqual({ jsonrpc: "2.0", id: 9, result: { echo: "tools/list" } });
@@ -336,9 +371,11 @@ describe("mcp-bridge", () => {
       async fetch(req) {
         if (req.method !== "POST") return new Response(null, { status: 405 });
         const msg = JSON.parse(await req.text());
+
         return Response.json({ jsonrpc: "2.0", id: msg.id, result: { protocolVersion: "2025-06-18" } });
       },
     });
+
     try {
       const proc = Bun.spawn(
         [
@@ -352,9 +389,11 @@ describe("mcp-bridge", () => {
         ],
         { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
       );
+
       proc.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })}\n`);
       await proc.stdin.end();
       const out: string[] = [];
+
       for await (const l of streamLines(proc.stdout)) out.push(l);
       expect(await proc.exited).toBe(0);
       expect(JSON.parse(out[0]!).result.protocolVersion).toBe("2025-06-18");

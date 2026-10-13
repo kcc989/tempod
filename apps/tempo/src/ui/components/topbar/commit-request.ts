@@ -27,5 +27,6 @@ export const clearCommitRequest = (workspaceId: string): void => {
 export const takeCommitRequest = (workspaceId: string): boolean => {
   if (!isCommitRequested(workspaceId)) return false;
   clearCommitRequest(workspaceId);
+
   return true;
 };

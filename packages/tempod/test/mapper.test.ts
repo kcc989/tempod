@@ -10,6 +10,7 @@ const setup = (opts: { mergeMs?: number; maxBytes?: number } = {}) => {
   const events: TempodEvent[] = [];
   let n = 0;
   const log = quietLogger();
+
   const mapper = new SessionMapper("s1", {
     emit: (e) => events.push(validate(e)),
     log,
@@ -18,8 +19,10 @@ const setup = (opts: { mergeMs?: number; maxBytes?: number } = {}) => {
     mergeMs: opts.mergeMs ?? 50,
     maxBytes: opts.maxBytes ?? 8 * 1024,
   });
+
   const of = <K extends TempodEvent["kind"]>(k: K) =>
-    events.filter((e) => e.kind === k) as Array<TempodEventOf<K>>;
+    events.filter((e): e is TempodEventOf<K> => e.kind === k);
+
   return { mapper, events, of, log };
 };
 
@@ -67,7 +70,7 @@ describe("ACP update to items", () => {
   });
 
   test("other updates flush pending deltas first and a new item completes the streaming one", () => {
-    const { mapper, events } = setup({ mergeMs: 10_000 });
+    const { mapper, events, of } = setup({ mergeMs: 10_000 });
     mapper.startTurn("t1");
     mapper.handle(text("agent_thought_chunk", "think"));
     mapper.handle(text("agent_thought_chunk", "ing"));
@@ -86,7 +89,7 @@ describe("ACP update to items", () => {
       itemId: "item1",
       patch: { status: "completed" },
     });
-    const tool = events[3] as TempodEventOf<"item.created">;
+    const tool = of("item.created")[1]!;
     expect(tool.item.kind).toBe("tool_call");
     expect(tool.item.status).toBe("pending");
     expect(tool.item.content).toEqual({
@@ -219,7 +222,7 @@ describe("ACP update to items", () => {
   });
 
   test("notice becomes a notice item; user chunks are ignored; unknown updates are logged and dropped", () => {
-    const { mapper, events, log } = setup();
+    const { mapper, events, log, of } = setup();
     mapper.startTurn("t1");
     mapper.handle(text("user_message_chunk", "hi"));
     mapper.handle({
@@ -230,7 +233,7 @@ describe("ACP update to items", () => {
     });
     mapper.handle({ sessionUpdate: "subagent_update", whatever: 1 });
     expect(events).toHaveLength(1);
-    const created = events[0] as TempodEventOf<"item.created">;
+    const created = of("item.created")[0]!;
     expect(created.item.kind).toBe("notice");
     expect(created.item.content).toEqual({ level: "warning", text: "Rate limited\nretrying" });
     expect(log.lines.some((l) => l.includes('"level":"warn"') && l.includes("subagent_update"))).toBe(true);
@@ -270,10 +273,15 @@ describe("ACP update to items", () => {
     const { mapper, of } = setup();
     mapper.startTurn("t1");
     mapper.handle({ sessionUpdate: "tool_call", toolCallId: "tc1", title: "Delete files" });
-    const p = mapper.addPermission("req1", { toolCallId: "tc1" }, [
-      { optionId: "allow", name: "Allow", kind: "allow_once" },
-      { optionId: "deny", name: "Deny", kind: "reject_once" },
-    ]);
+
+    const p = mapper.addPermission("req1", {
+      toolCall: { toolCallId: "tc1" },
+      options: [
+        { optionId: "allow", name: "Allow", kind: "allow_once" },
+        { optionId: "deny", name: "Deny", kind: "reject_once" },
+      ],
+    });
+
     expect(p.title).toBe("Delete files");
     const created = of("item.created")[1]!;
     expect(created.item).toMatchObject({ kind: "permission", status: "pending" });
@@ -304,6 +312,7 @@ describe("ACP update to items", () => {
 describe("mode config updates", () => {
   test("refreshes modes and current selection, including grouped choices and replay", () => {
     const { mapper, of } = setup();
+
     const update = {
       sessionUpdate: "config_option_update",
       configOptions: [
@@ -326,6 +335,7 @@ describe("mode config updates", () => {
         },
       ],
     };
+
     mapper.captureState(update);
     expect(of("session.updated")).toHaveLength(0);
     expect(mapper.state.modeId).toBe("plan");

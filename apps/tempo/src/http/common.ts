@@ -42,6 +42,7 @@ export const closeWith = (code: number, reason: string): Response => {
   const pair = new WebSocketPair();
   pair[1].accept();
   pair[1].close(code, reason);
+
   return new Response(null, { status: 101, webSocket: pair[0] });
 };
 

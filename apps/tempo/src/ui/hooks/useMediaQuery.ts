@@ -6,10 +6,12 @@ export function useMediaQuery(query: string): boolean {
     (listener: () => void) => {
       const mql = globalThis.matchMedia?.(query);
       mql?.addEventListener("change", listener);
+
       return () => mql?.removeEventListener("change", listener);
     },
     [query],
   );
+
   return useSyncExternalStore(
     subscribe,
     () => globalThis.matchMedia?.(query).matches ?? false,

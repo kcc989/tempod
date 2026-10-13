@@ -6,6 +6,7 @@ const pressMod = async (page: Page, key: string) => {
   const mac = await page.evaluate(
     () => /mac|iphone|ipad|ipod/i.test(navigator.platform) || /Mac OS X/.test(navigator.userAgent),
   );
+
   await page.keyboard.press(`${mac ? "Meta" : "Control"}+${key}`);
 };
 
@@ -27,6 +28,7 @@ test(
     ).toBeVisible();
     const message = page.getByRole("textbox", { name: "Message", exact: true });
     await message.fill("Draft for Claude");
+
     if (test.info().project.name.startsWith("phone")) {
       await page.getByRole("button", { name: "Switch tab" }).click();
       await page.getByRole("menuitem", { name: "Second chat" }).click();
@@ -101,12 +103,14 @@ test("a pending send survives tab switches and restores its draft after failure"
   await message.fill("Restore this on failure");
   await message.press("Enter");
   await expect.poll(() => fixture.inputs("sendPrompt").length).toBe(1);
+
   if (test.info().project.name.startsWith("phone")) {
     await page.getByRole("button", { name: "Switch tab" }).click();
     await page.getByRole("menuitem", { name: "Second chat" }).click();
   } else await page.getByRole("tab", { name: "Second chat", exact: true }).click();
   release();
   await expect(page.getByText("Lost contact with the workspace. Reconnecting.")).toBeVisible();
+
   if (test.info().project.name.startsWith("phone")) {
     await page.getByRole("button", { name: "Switch tab" }).click();
     await page.getByRole("menuitem", { name: "Claude chat" }).click();
@@ -131,6 +135,7 @@ test(
       .locator('input[type="file"]')
       .setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("notes") });
     await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
+
     if (test.info().project.name.startsWith("phone")) {
       await page.getByRole("button", { name: "Switch tab" }).click();
       await page.getByRole("menuitem", { name: "Second chat" }).click();
@@ -142,6 +147,7 @@ test(
       await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeHidden();
       await page.getByRole("tab", { name: "Claude chat", exact: true }).click();
     }
+
     await expect(page.getByRole("button", { name: "Remove README.md" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
     await message.fill("Review this");
@@ -163,6 +169,7 @@ test("announces completed live messages once and leaves the historical backlog q
   await expect(page.getByLabel("Transcript", { exact: true })).toBeVisible();
   const announcement = page.locator('section[aria-label="Chat"] [aria-live="polite"].sr-only');
   await expect(announcement).toHaveText("");
+
   const message: Item = {
     id: "live-message",
     sessionId: "s1",
@@ -174,6 +181,7 @@ test("announces completed live messages once and leaves the historical backlog q
     createdAt: 3000,
     updatedAt: 3000,
   };
+
   fixture.emit({ type: "item.upsert", item: message, itemsRev: 3 });
   await expect(announcement).toHaveText("");
   fixture.emit({ type: "item.upsert", item: { ...message, status: "completed", rev: 4 }, itemsRev: 4 });
@@ -191,6 +199,7 @@ test(
   { tag: "@mobile" },
   async ({ page, fixture }) => {
     await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+
     if (test.info().project.name.startsWith("phone")) {
       await page
         .getByRole("navigation", { name: "Sections" })
@@ -222,9 +231,11 @@ test("git primary action advances from commit through PR, merge and archive", as
   if (test.info().project.name.startsWith("phone")) {
     await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "Changes" }).click();
   }
+
   const primary = test.info().project.name.startsWith("phone")
     ? page.getByRole("region", { name: "Changes", exact: true })
     : page.locator("header").first();
+
   await primary.getByRole("button", { name: "Commit and push" }).click();
   await page.getByRole("textbox", { name: "Commit message" }).last().fill("Document keeled");
   await page.getByRole("button", { name: "Commit and push", exact: true }).last().click();
@@ -244,6 +255,7 @@ test("git primary action advances from commit through PR, merge and archive", as
 
 test("permission keyboard replies close the live card", async ({ page, fixture }) => {
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+
   const permission: Item = {
     id: "permission-item",
     sessionId: "s1",
@@ -262,6 +274,7 @@ test("permission keyboard replies close the live card", async ({ page, fixture }
       ],
     },
   };
+
   fixture.items.push(permission);
   fixture.emit({ type: "item.upsert", item: permission, itemsRev: 3 });
   const card = page.getByRole("group", { name: "Permission: Write README" });

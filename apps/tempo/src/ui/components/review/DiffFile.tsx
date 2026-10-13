@@ -83,30 +83,38 @@ export function DiffFile({
   useLayoutEffect(() => {
     const el = sectionRef.current;
     register(path, el);
+
     return () => register(path, null);
   }, [path, register]);
 
   useEffect(() => {
     const el = sectionRef.current;
+
     if (!el || near || typeof IntersectionObserver === "undefined") return;
+
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) setNear(true);
       },
       { root: scrollRoot.current, rootMargin: "800px 0px" },
     );
+
     io.observe(el);
+
     return () => io.disconnect();
   }, [near, scrollRoot]);
 
   const [lastReveal, setLastReveal] = useState(0);
+
   if (reveal !== lastReveal) {
     setLastReveal(reveal);
+
     if (reveal !== 0) {
       setNear(true);
       setOpenOverride(true);
     }
   }
+
   const load = near || typeof IntersectionObserver === "undefined";
 
   const diff = useCallQuery(
@@ -114,6 +122,7 @@ export function DiffFile({
     { workspaceId, scope, path },
     { enabled: load && live, retry: false, staleTime: 30_000, refetchInterval: retryWhileWaking },
   );
+
   const text = diff.data?.diff;
   const parsed = useMemo(() => (text === undefined ? null : parseUnifiedDiff(text)), [text]);
   const hash = useMemo(() => (text === undefined ? null : diffHash(text)), [text]);
@@ -126,15 +135,18 @@ export function DiffFile({
   // Before the diff loads, a stored mark keeps the file folded so it does not jump open and shut.
   const folded = hash === null ? viewedHash !== undefined : viewed;
   const [lastMark, setLastMark] = useState(viewedHash);
+
   if (lastMark !== viewedHash) {
     setLastMark(viewedHash);
     setOpenOverride(null);
   }
+
   const open = openOverride ?? !folded;
   const placed = useMemo(() => placeComments(parsed, drafts), [parsed, drafts]);
   const deleted = statusLetter(file.status) === "D";
 
   let body;
+
   if (!open) body = null;
   else if (!diff.data && !live) {
     body = <Note>Wake the workspace to see this diff.</Note>;

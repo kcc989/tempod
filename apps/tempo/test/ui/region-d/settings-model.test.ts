@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, SettingsLayer, type Settings } from "@tempo/protocol";
+import { DEFAULT_SETTINGS, SettingsLayer, type Settings, type JsonDataFields } from "@tempo/protocol";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
@@ -32,12 +32,15 @@ const effective: Settings = {
 
 describe("the field list", () => {
   it("covers every settings key exactly once", () => {
-    const leaves = (o: object, prefix = ""): string[] =>
+    const leaves = (o: JsonDataFields, prefix = ""): string[] =>
       Object.entries(o).flatMap(([k, v]) => {
         const path = prefix ? `${prefix}.${k}` : k;
+
         if (path === "scripts.run" || path === "environment_variables") return [path];
-        return typeof v === "object" && v !== null && !Array.isArray(v) ? leaves(v, path) : [path];
+
+        return Schema.is(Schema.JsonObject)(v) ? leaves(v, path) : [path];
       });
+
     expect(FIELDS.map((f) => f.path).sort()).toEqual(leaves(DEFAULT_SETTINGS).sort());
     expect(SECTIONS).toEqual(["Agent", "Browser", "Scripts", "Environment", "Git", "Prompts", "Roles"]);
   });
@@ -61,7 +64,9 @@ describe("toEdit and fromEdit", () => {
       const value = getAt(effective, def.path);
       const parsed = fromEdit(def, toEdit(def, value));
       expect(parsed.ok, def.path).toBe(true);
+
       if (!parsed.ok) continue;
+
       if (def.kind === "run") {
         expect(parsed.value).toEqual({ dev: { command: "bun run dev", default: true } });
       } else {
@@ -172,19 +177,23 @@ describe("the form", () => {
 
   it("adds a key when it is set, drops it when it is unset, and reports bad fields", () => {
     const form = formFromLayer(layer, effective);
+
     const next: SettingsForm = {
       ...form,
       "git.branch_prefix": { set: true, value: { kind: "text", text: " me/ " } },
       "environment.sleep_after_idle_minutes": { ...form["environment.sleep_after_idle_minutes"], set: false },
     };
+
     expect(layerFromForm(next).layer).toEqual({
       git: { branch_prefix: "me/" },
       scripts: { run: { web: { command: "bun web" } } },
     });
+
     const bad: SettingsForm = {
       ...form,
       "environment.sleep_after_idle_minutes": { set: true, value: { kind: "text", text: "1" } },
     };
+
     expect(Object.keys(layerFromForm(bad).errors)).toEqual(["environment.sleep_after_idle_minutes"]);
   });
 
@@ -193,11 +202,13 @@ describe("the form", () => {
     expect(form["agent.models.codex"]).toEqual({ set: true, value: { kind: "text", text: "gpt-5-codex" } });
     expect(form["agent.models.pi"]).toEqual({ set: false, value: { kind: "text", text: "" } });
     expect(form["browser.run"]).toEqual({ set: false, value: { kind: "bool", on: false } });
+
     const next: SettingsForm = {
       ...form,
       "agent.models.pi": { set: true, value: { kind: "text", text: " openrouter/pi " } },
       "browser.run": { set: true, value: { kind: "bool", on: true } },
     };
+
     const { layer: out, errors } = layerFromForm(next);
     expect(errors).toEqual({});
     expect(out).toEqual({
@@ -231,6 +242,7 @@ describe("effective values and sources (04: Tempo, .tempo or default)", () => {
       sources: { "scripts.setup": ".tempo" as const, "scripts.run.dev": "default" as const },
       layer,
     };
+
     expect(effectiveLeaf(fieldDef("scripts.setup"), ctx)).toEqual({ text: "bun install", source: ".tempo" });
     expect(effectiveLeaf(fieldDef("git.branch_prefix"), ctx)).toEqual({ text: "tempo/", source: "default" });
     expect(effectiveEntries(fieldDef("scripts.run"), ctx)).toEqual([
@@ -247,11 +259,13 @@ describe("effective values and sources (04: Tempo, .tempo or default)", () => {
       agent: { default: "claude", models: { ...effective.agent.models, pi: "openrouter/pi" } },
       browser: { run: true },
     };
+
     const ctx = {
       settings,
       sources: { "agent.models.pi": ".tempo" as const, "browser.run": "tempo" as const },
       layer: { browser: { run: true } },
     };
+
     expect(effectiveLeaf(fieldDef("agent.models.pi"), ctx)).toEqual({
       text: "openrouter/pi",
       source: ".tempo",

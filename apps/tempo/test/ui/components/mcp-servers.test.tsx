@@ -1,15 +1,19 @@
+import { Schema } from "effect";
+import { API } from "@tempo/protocol";
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TempoError, type McpServer } from "@tempo/protocol";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { McpServersTab } from "../../../src/ui/components/dialogs/settings/McpServersTab";
 import { SettingsPage } from "../../../src/ui/components/settings/SettingsPage";
-import { call } from "../../../src/ui/lib/api";
-import { dialogStore, openDialog, resetUiState, resolveConfirm } from "../../../src/ui/state/workspace-ui";
 
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
-vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { dialogStore, openDialog, resetUiState, resolveConfirm } from "../../../src/ui/state/workspace-ui";
 
 const stdio: McpServer = {
   id: "m1",
@@ -24,6 +28,7 @@ const stdio: McpServer = {
   createdAt: 1,
   updatedAt: 1,
 };
+
 const http: McpServer = {
   id: "m2",
   name: "linear",
@@ -44,19 +49,26 @@ const http: McpServer = {
 const show = (servers: ReadonlyArray<McpServer> = [stdio, http]) => {
   vi.mocked(call).mockImplementation(async (name) => {
     if (name === "listMcpServers") return servers;
+
     if (name === "saveMcpServer") return stdio;
+
     return {};
   });
+
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+
   return render(
     <QueryClientProvider client={client}>
       <McpServersTab />
     </QueryClientProvider>,
+    { wrapper: environment.Provider },
   );
 };
+
 const saved = () => vi.mocked(call).mock.calls.filter(([n]) => n === "saveMcpServer");
+
 afterEach(resetUiState);
 
 describe("MCP servers settings", () => {
@@ -67,12 +79,15 @@ describe("MCP servers settings", () => {
       <QueryClientProvider client={new QueryClient()}>
         <SettingsPage />
       </QueryClientProvider>,
+      { wrapper: environment.Provider },
     );
     expect(screen.getByRole("heading", { name: "MCP servers" })).toBeTruthy();
     const nav = screen.getByRole("navigation", { name: "Settings" });
+
     const labels = within(nav)
       .getAllByRole("button")
       .map((b) => b.textContent);
+
     expect(labels.indexOf("MCP servers")).toBe(labels.indexOf("Environments") + 1);
   });
 
@@ -130,15 +145,17 @@ describe("MCP servers settings", () => {
   it("keeps a stored secret header when its field is left empty and never shows it", async () => {
     show();
     fireEvent.click(await screen.findByRole("button", { name: "Edit linear" }));
+
     const secret = screen
       .getByRole("form", { name: "Edit linear" })
       .querySelector<HTMLInputElement>('input[aria-label="Header 1 value"]');
+
     expect(secret?.type).toBe("password");
     expect(secret?.value).toBe("");
     expect(secret?.placeholder).toContain("leave empty to keep");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(saved()).toHaveLength(1));
-    const input = saved()[0]?.[1] as { headers: unknown; command?: unknown };
+    const input = Schema.decodeUnknownSync(API.saveMcpServer.input)(saved()[0]?.[1]);
     expect(input.headers).toEqual([
       { name: "Authorization", secret: true },
       { name: "X-Team", secret: false, value: "eng" },

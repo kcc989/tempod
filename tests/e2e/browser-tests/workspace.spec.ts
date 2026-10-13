@@ -39,11 +39,13 @@ test("file dialogs and Run shortcut remain available with the right side hidden"
   const app = await browserFixture(page);
   await page.goto("/w/w1");
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+
   const mod = await page.evaluate(() =>
     /mac|iphone|ipad|ipod/i.test(navigator.platform) || /Mac OS X/.test(navigator.userAgent)
       ? "Meta"
       : "Control",
   );
+
   await page.keyboard.press(`${mod}+Alt+b`);
   await expect(page.getByRole("tab", { name: "All files", exact: true })).toBeHidden();
   await page.keyboard.press(`${mod}+p`);

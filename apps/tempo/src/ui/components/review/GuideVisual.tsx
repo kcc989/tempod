@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { GuideVisual as Visual } from "@tempo/protocol";
 import { useState } from "react";
 import { MessageMarkdown } from "~/ui/components/chat/Markdown";
@@ -7,6 +8,7 @@ import { errorText } from "~/ui/lib/toast";
 import { openDiff } from "~/ui/state/workspace-ui";
 
 export const ARTIFACT_SANDBOX = "allow-scripts";
+
 export const ARTIFACT_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
@@ -15,6 +17,7 @@ export const isolatedArtifact = (html: string): string =>
 
 const imageMime = (path: string): string | null => {
   const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+
   return (
     { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" }[ext] ??
     null
@@ -33,12 +36,12 @@ export function GuideVisual({
   return (
     <section aria-label={visual.title} className="overflow-hidden rounded-md border">
       <h4 className="border-b bg-muted/30 px-3 py-2 text-sm font-medium">{visual.title}</h4>
-      {visual.kind === "comparison" ? (
-        <Comparison workspaceId={workspaceId} before={visual.before} after={visual.after} />
-      ) : visual.kind === "flow" ? (
-        <Flow workspaceId={workspaceId} visual={visual} />
-      ) : (
-        <Artifact workspaceId={workspaceId} visual={visual} live={live} />
+      {Match.value(visual).pipe(
+        Match.when({ kind: "comparison" }, (visual) => (
+          <Comparison workspaceId={workspaceId} before={visual.before} after={visual.after} />
+        )),
+        Match.when({ kind: "flow" }, (visual) => <Flow workspaceId={workspaceId} visual={visual} />),
+        Match.orElse((visual) => <Artifact workspaceId={workspaceId} visual={visual} live={live} />),
       )}
     </section>
   );
@@ -54,6 +57,7 @@ export function Comparison({
   after: string;
 }) {
   const [side, setSide] = useState<"before" | "after" | "both">("both");
+
   return (
     <div>
       <div className="flex gap-1 border-b p-1" role="group" aria-label="Before and after view">
@@ -65,7 +69,11 @@ export function Comparison({
             aria-pressed={side === s}
             onClick={() => setSide(s)}
           >
-            {s === "both" ? "Side by side" : s === "before" ? "Before" : "After"}
+            {Match.value(s).pipe(
+              Match.when("both", () => "Side by side"),
+              Match.when("before", () => "Before"),
+              Match.orElse(() => "After"),
+            )}
           </Button>
         ))}
       </div>
@@ -94,6 +102,7 @@ export function Comparison({
 function Flow({ workspaceId, visual }: { workspaceId: string; visual: Extract<Visual, { kind: "flow" }> }) {
   const [selected, setSelected] = useState(visual.nodes[0]!.id);
   const node = visual.nodes.find((n) => n.id === selected) ?? visual.nodes[0]!;
+
   return (
     <div className="space-y-3 p-3">
       <div className="flex flex-wrap gap-2" role="group" aria-label="Flow nodes">
@@ -147,6 +156,7 @@ function Artifact({
   live: boolean;
 }) {
   const [opened, setOpened] = useState(false);
+
   const file = useCallQuery(
     "readFile",
     { workspaceId, path: visual.path },
@@ -155,8 +165,10 @@ function Artifact({
       retry: false,
     },
   );
+
   const mime = imageMime(visual.path);
   let body;
+
   if (!opened) {
     body = (
       <Button size="sm" variant="outline" disabled={!live} onClick={() => setOpened(true)}>
@@ -205,6 +217,7 @@ function Artifact({
   } else {
     body = <MessageMarkdown workspaceId={workspaceId} text={file.data.content} streaming={false} />;
   }
+
   return (
     <div className="space-y-2 p-3">
       {visual.caption && (

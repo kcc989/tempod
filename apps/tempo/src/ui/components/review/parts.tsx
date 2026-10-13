@@ -61,6 +61,7 @@ export function WakeButton({
   className?: string;
 }) {
   const wake = useCallMutation("wakeWorkspace");
+
   return (
     <Button
       size="sm"
@@ -88,9 +89,11 @@ export function SourceNote({ source, className }: { source: ChangesSource; class
       </p>
     );
   }
+
   if (source === "lastKnown") {
     return <p className={cn("px-3 py-1 text-xs text-muted-foreground", className)}>Last known changes.</p>;
   }
+
   return null;
 }
 

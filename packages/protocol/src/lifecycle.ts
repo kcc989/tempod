@@ -4,25 +4,36 @@ import { Id as Ulid } from "./ids.ts";
 import { TurnUsage } from "./acp.ts";
 
 const S = Schema.String;
+
 const opt = Schema.optional;
+
 const Int = Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0));
+
 export const RoleName = S.check(Schema.isPattern(/^[a-z][a-z0-9-]{1,31}$/));
+
 export const RoleScope = Schema.Literals(["builtin", "user", "repo"]);
+
 export const RoleAccess = Schema.Literals(["read-only", "write"]);
+
 export const RoleAgent = Schema.Literals(["claude", "codex", "opencode", "pi", "auto", "other"]);
+
 export const RoleResultStatus = Schema.Literals(["done", "pass", "fail", "blocked"]);
+
 export const RoleFinding = Schema.Struct({
   path: S,
   line: opt(Int.check(Schema.isGreaterThanOrEqualTo(1))),
   text: S,
   blocking: Schema.Boolean,
 });
+
 export const RoleResult = Schema.Struct({
   status: RoleResultStatus,
   summary: S.check(Schema.isMaxLength(4000)),
   findings: opt(Schema.Array(RoleFinding).check(Schema.isMaxLength(200))),
 });
+
 export type RoleResult = typeof RoleResult.Type;
+
 export const RoleLimits = Schema.Struct({
   rounds: Int.check(Schema.isBetween({ minimum: 1, maximum: 10 })),
   continues: Int.check(Schema.isLessThanOrEqualTo(10)),
@@ -34,6 +45,7 @@ export const RoleLimits = Schema.Struct({
   ),
   tokens: Int,
 });
+
 export const RoleTrigger = Schema.Union([
   Schema.Struct({
     event: Schema.Literal("role.run.completed"),
@@ -51,7 +63,9 @@ export const RoleTrigger = Schema.Union([
   Schema.Struct({ event: Schema.Literal("tempo.check.failed") }),
   Schema.Struct({ event: Schema.Literal("tempo.change.created") }),
 ]);
+
 export type RoleTrigger = typeof RoleTrigger.Type;
+
 export const RoleFile = Schema.Struct({
   description: S.check(Schema.isMaxLength(500)),
   agent: RoleAgent,
@@ -62,7 +76,9 @@ export const RoleFile = Schema.Struct({
   on: Schema.Array(RoleTrigger),
   limits: RoleLimits,
 }).check(Schema.makeFilter((r) => r.requestable || r.on.length > 0 || "a role needs on or requestable"));
+
 export type RoleFile = typeof RoleFile.Type;
+
 export const RoleInfo = Schema.Struct({
   name: S,
   scope: RoleScope,
@@ -76,7 +92,9 @@ export const RoleInfo = Schema.Struct({
   error: opt(S),
   shadowedBy: opt(RoleScope),
 });
+
 export type RoleInfo = typeof RoleInfo.Type;
+
 export const RoleRunStatus = Schema.Literals([
   "queued",
   "running",
@@ -85,6 +103,7 @@ export const RoleRunStatus = Schema.Literals([
   "cancelled",
   "timed_out",
 ]);
+
 export const RoleRun = Schema.Struct({
   id: Ulid,
   changeId: Ulid,
@@ -111,7 +130,9 @@ export const RoleRun = Schema.Struct({
   endedAt: Schema.NullOr(Int),
   trigger: opt(RoleTrigger),
 });
+
 export type RoleRun = typeof RoleRun.Type;
+
 const envelope = {
   id: Ulid,
   occurredAt: Int,
@@ -124,21 +145,28 @@ const envelope = {
   causationId: opt(Ulid),
   dedupeKey: S,
 };
+
 export const LifecycleTempoSource = Schema.Literal("tempo");
+
 export const LifecycleAgentSource = Schema.Literal("agent");
+
 export const LifecycleRoleSource = Schema.Literal("role");
+
 const sources = { tempo: LifecycleTempoSource, agent: LifecycleAgentSource, role: LifecycleRoleSource };
+
 export const LifecycleChangeCreatedPayload = Schema.Struct({
   origin: Schema.Literals(["prompt", "request", "event"]),
   role: opt(RoleName),
   text: opt(S.check(Schema.isMaxLength(65536))),
 });
+
 export const LifecycleTurnEndedPayload = Schema.Struct({
   status: Schema.Literals(["completed", "cancelled", "failed", "interrupted"]),
   stopReason: Schema.NullOr(S),
   errorCode: opt(S),
   usage: opt(TurnUsage),
 });
+
 export const LifecycleRunStartedPayload = Schema.Struct({
   role: RoleName,
   scope: RoleScope,
@@ -147,23 +175,30 @@ export const LifecycleRunStartedPayload = Schema.Struct({
   agent: Schema.NullOr(AgentId),
   access: RoleAccess,
 });
+
 export const LifecycleRunCompletedPayload = Schema.Struct({ role: RoleName, round: Int, result: RoleResult });
+
 export const LifecycleRunFailedPayload = Schema.Struct({
   role: RoleName,
   round: Int,
   errorCode: S,
   detail: opt(S),
 });
+
 export const LifecycleChangeEndedPayload = Schema.Struct({
   status: Schema.Literals(["done", "failed", "cancelled"]),
 });
+
 export const LifecycleBranchPushedPayload = Schema.Struct({ branch: S, commitSha: S });
+
 export const LifecycleCheckPayload = Schema.Struct({ prNumber: Int });
+
 const event = <T extends string, Source extends keyof typeof sources, P extends Schema.Top>(
   type: T,
   source: Source,
   payload: P,
 ) => Schema.Struct({ ...envelope, type: Schema.Literal(type), source: sources[source], payload });
+
 export const LifecycleEvent = Schema.Union([
   event("tempo.change.created", "tempo", LifecycleChangeCreatedPayload),
   event("agent.turn.ended", "agent", LifecycleTurnEndedPayload),
@@ -175,12 +210,18 @@ export const LifecycleEvent = Schema.Union([
   event("tempo.check.passed", "tempo", LifecycleCheckPayload),
   event("tempo.check.failed", "tempo", LifecycleCheckPayload),
 ]);
+
 export type LifecycleEvent = typeof LifecycleEvent.Type;
+
 export const LifecycleLogEvent = Schema.Struct({ seq: Int, event: LifecycleEvent });
+
+export type LifecycleLogEvent = typeof LifecycleLogEvent.Type;
+
 export const LifecyclePage = Schema.Struct({
   events: Schema.Array(LifecycleLogEvent),
   nextBeforeSeq: Schema.NullOr(Int),
 });
+
 export const LifecycleTrace = Schema.Struct({
   chain: Schema.Array(LifecycleLogEvent),
   children: Schema.Array(LifecycleLogEvent),

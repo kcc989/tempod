@@ -9,6 +9,7 @@ import "./styles.css";
 const client = new QueryClient({
   defaultOptions: { queries: { staleTime: Infinity, retry: false, refetchOnWindowFocus: false } },
 });
+
 client.setQueryData(["call", "getCredentialStatus", {}], {
   claude: { set: true, updatedAt: null },
   codex: { set: true, updatedAt: null, lastRefresh: null },
@@ -16,6 +17,7 @@ client.setQueryData(["call", "getCredentialStatus", {}], {
   anthropic: { set: false, updatedAt: null },
   openrouter: { set: false, updatedAt: null },
 });
+
 client.setQueryData(
   ["call", "listModels", {}],
   [
@@ -31,9 +33,11 @@ client.setQueryData(
     { agent: "pi", currentValue: "pi-one", options: [{ value: "pi-one", name: "Disconnected Pi model" }] },
   ],
 );
+
 function Preview() {
   const [initial] = useState(() => formFromLayer({}, DEFAULT_SETTINGS));
   const [form, setForm] = useState(initial);
+
   return (
     <main className="mx-auto max-w-4xl px-8 py-12">
       <p className="mb-4 text-xs text-muted-foreground">Local preview · fixture models · no server changes</p>
@@ -51,6 +55,7 @@ function Preview() {
     </main>
   );
 }
+
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={client}>
     <Preview />

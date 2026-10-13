@@ -30,6 +30,7 @@ export function GlobalChrome() {
   }, [n, path]);
   useBrowserNotifications();
   useWorkspaceNavigation();
+
   return null;
 }
 
@@ -44,17 +45,21 @@ function useBrowserNotifications(): void {
       permission: notificationPermission(),
       prefs,
     });
+
     if (!ok) return;
     const content = notificationFor(e);
+
     try {
       const notification = new Notification(content.title, {
         body: content.body,
         tag: content.tag,
         silent: !prefs.sound,
       });
+
       notification.onclick = () => {
         window.focus();
         notification.close();
+
         if (isPhone) setPhonePane("chat");
         void navigate({ to: "/w/$workspaceId", params: { workspaceId: content.workspaceId } });
       };

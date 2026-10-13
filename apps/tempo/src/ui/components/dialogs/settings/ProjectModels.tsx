@@ -19,8 +19,11 @@ import {
 } from "../settings-model";
 
 const modelPath = (agent: AgentId): FieldPath => `agent.models.${agent}`;
+
 const inherited = "agent-default";
+
 const text = (state: FieldState): string => (state.value.kind === "text" ? state.value.text : "");
+
 const override = (value: string): FieldState => ({ set: true, value: { kind: "text", text: value } });
 
 export function ProjectModels({
@@ -38,11 +41,13 @@ export function ProjectModels({
 }) {
   const credentials = useCredentialStatus();
   const available = AGENT_IDS.filter((agent) => hasLogin(agent, credentials.data));
+
   const models = useCallQuery(
     "listModels",
     {},
     { staleTime: 30_000, enabled: credentials.isSuccess && available.length > 0 },
   );
+
   const choices = modelChoices(available, models.data ?? []);
   const agent = AGENT_IDS.find((a) => a === text(form["agent.default"])) ?? DEFAULT_SETTINGS.agent.default;
   const path = modelPath(agent);
@@ -88,6 +93,7 @@ export function ProjectModels({
           disabled={disabled || loading || failure !== null || choices.length === 0}
           onValueChange={(key) => {
             const choice = choices.find((c) => c.key === key);
+
             if (!choice) return;
             onChange({
               "agent.default": override(choice.agent),
@@ -174,6 +180,7 @@ export function ProjectModels({
               const options = choices.filter((c) => c.agent === a);
               const savedOverride = initial[key].set && !form[key].set;
               const known = options.some((c) => c.model === value);
+
               return (
                 <div key={a} className="mt-4 grid gap-2">
                   <label htmlFor={`project-model-${a}`} className="text-sm">

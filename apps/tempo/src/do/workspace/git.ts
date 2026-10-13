@@ -18,6 +18,7 @@ export const getGithubToken = async (core: WorkspaceCore): Promise<string> => {
   const config = await requireGithubAppConfig(core.env);
   const token = await mintInstallationToken(config, project.installationId, [project.repoId]);
   core.ghToken = token;
+
   return token.token;
 };
 
@@ -37,6 +38,7 @@ export const refreshChanges = async (core: WorkspaceCore): Promise<void> => {
   const res = await requireTempod(core).request("git.changes", { scope: "branch" });
   storeChanges(core, summarize(res.files));
   const unpushed = (res.dirty ?? false) || (res.ahead ?? 0) > 0;
+
   if (unpushed !== (core.kv<boolean>("hasUnpushedCommits") ?? false)) {
     core.setKv("hasUnpushedCommits", unpushed);
     core.broadcastDetailSoon();
@@ -46,6 +48,7 @@ export const refreshChanges = async (core: WorkspaceCore): Promise<void> => {
 /** 03, Status polling: PR state, then check runs for the PR head. */
 export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<"refreshPullRequest">> => {
   const row = core.ws();
+
   if (row.prNumber === null) return { prNumber: null, prState: null, checksState: null, prTitle: null };
   const project = await core.project();
   const token = await getGithubToken(core);
@@ -56,9 +59,11 @@ export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<
   const checksState = checksStateOf(runs);
   const titleChanged = core.kv<string>("prTitle") !== pr.title;
   core.setKv("prTitle", pr.title);
+
   if (prState !== row.prState || checksState !== row.checksState || titleChanged) {
     core.ctx.storage.transactionSync(() => {
       core.updateWs({ prState, checksState });
+
       if (checksState !== row.checksState && (checksState === "success" || checksState === "failure")) {
         const type = checksState === "success" ? "tempo.check.passed" : "tempo.check.failed";
         core.lifecycle.append({
@@ -73,6 +78,7 @@ export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<
     core.lifecycle.kick();
     core.publish();
   }
+
   return { prNumber: row.prNumber, prState, checksState, prTitle: pr.title };
 };
 
@@ -95,6 +101,7 @@ export const defaultPrBody = (core: WorkspaceCore): string => {
     .map((t) => json.prompt.read(t.promptJson, EMPTY_PROMPT).text.split("\n")[0]?.trim() ?? "")
     .filter((l) => l.length > 0)
     .slice(0, 20);
+
   return ["Created with Tempo.", "", ...lines.map((l) => `- ${l}`)].join("\n");
 };
 

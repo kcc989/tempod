@@ -12,7 +12,6 @@ import {
 import { hasLogin } from "~/ui/lib/agents";
 
 /** New workspace (04, Dialogs): source tabs, agent and prompt. Pure, so it is unit-tested. */
-
 export type SourceTab = "new" | "branch" | "pr";
 
 export const SOURCE_TABS: ReadonlyArray<{ readonly id: SourceTab; readonly label: string }> = [
@@ -57,6 +56,7 @@ export const initialAgent = (
   project: Pick<Project, "settings"> | undefined,
 ): AgentId | null => {
   const preferred = [project?.settings.agent?.default, DEFAULT_SETTINGS.agent.default];
+
   return (
     preferred.find((a): a is AgentId => a !== undefined && available.includes(a)) ?? available[0] ?? null
   );
@@ -69,6 +69,7 @@ export const customAgentsWithLogin = (
 ): CustomAgentSummary[] => (agents ?? []).filter((a) => available.includes(a.baseAgent));
 
 const CUSTOM_PREFIX = "custom:";
+
 /** The agent select's value: an agent id, or `custom:<customAgentId>`. */
 export const customAgentValue = (customAgentId: string): string => `${CUSTOM_PREFIX}${customAgentId}`;
 
@@ -90,16 +91,20 @@ export const createInput = (
   customAgentId?: string,
 ): FnInput<"createWorkspace"> | null => {
   const source = buildSource(draft, project);
+
   if (!source) return null;
   const text = prompt.trim();
-  return {
-    projectId: project.id,
-    source,
-    ...(agent ? { agent } : {}),
-    ...(model ? { model } : {}),
-    ...(customAgentId ? { customAgentId } : {}),
-    ...(text ? { prompt: { text } } : {}),
-  };
+  let input: FnInput<"createWorkspace"> = { projectId: project.id, source };
+
+  if (agent) input = { ...input, agent };
+
+  if (model) input = { ...input, model };
+
+  if (customAgentId) input = { ...input, customAgentId };
+
+  if (text) input = { ...input, prompt: { text } };
+
+  return input;
 };
 
 /** Pull requests matching the search by number, title or head branch. */
@@ -108,7 +113,9 @@ export const filterPullRequests = <P extends { number: number; title: string; he
   search: string,
 ): P[] => {
   const q = search.trim().toLowerCase().replace(/^#/, "");
+
   if (!q) return [...prs];
+
   return prs.filter(
     (p) =>
       String(p.number).startsWith(q) ||
@@ -146,8 +153,10 @@ export const initialModel = (
     choices.map((choice) => choice.agent),
     project,
   );
+
   const preferred = agent ? project.settings.agent?.models?.[agent] : undefined;
   const current = reported.find((entry) => entry.agent === agent)?.currentValue;
+
   return (
     choices.find((choice) => choice.agent === agent && choice.model === preferred) ??
     choices.find((choice) => choice.agent === agent && choice.model === current) ??

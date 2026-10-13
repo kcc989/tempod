@@ -1,3 +1,4 @@
+import { elementOf } from "../elements.ts";
 import { createElement } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -30,6 +31,8 @@ describe("branch editor", () => {
   ])("locks branch editing for %s", (overrides) => {
     const w = detail(overrides);
     render(createElement(EditableBranch, { view: { w, d: w }, onSave: vi.fn() }));
-    expect((screen.getByRole("button", { name: "Rename branch" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(elementOf(screen.getByRole("button", { name: "Rename branch" }), HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 });

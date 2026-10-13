@@ -7,7 +7,7 @@ import { runFn } from "./run.ts";
 
 // The Result envelope travels as JSON text: wire types hold `unknown` fields (ACP pass-through)
 // that TanStack's serializability check rejects.
-const run = async <K extends FnName>(name: K, data: unknown): Promise<string> =>
+const run = async <K extends FnName>(name: K, data: FnInput<K>): Promise<string> =>
   JSON.stringify(
     await runFn(name, env, getRequest().headers, data, { allowCookie: true, allowBearer: false }),
   );

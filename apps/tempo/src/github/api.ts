@@ -1,3 +1,5 @@
+import { GhInstallation, GhRepo, GhPull } from "@tempo/protocol";
+import { Schema, SchemaGetter } from "effect";
 import type { GithubAppConfig } from "../do/credential.ts";
 import { appJwt } from "./app.ts";
 import { githubFetch, githubPaginate } from "./client.ts";
@@ -22,59 +24,47 @@ export const mintInstallationToken = async (
   installationId: number,
   repoIds?: ReadonlyArray<number>,
 ): Promise<InstallationToken> => {
-  const res = await githubFetch<{ token: string; expires_at: string }>({
-    method: "POST",
-    path: `/app/installations/${installationId}/access_tokens`,
-    token: await appJwt(config),
-    body: repoIds
-      ? { repository_ids: repoIds, permissions: TOKEN_PERMISSIONS }
-      : { permissions: TOKEN_PERMISSIONS },
-  });
+  const res = await githubFetch(
+    {
+      method: "POST",
+      path: `/app/installations/${installationId}/access_tokens`,
+      token: await appJwt(config),
+      body: repoIds
+        ? { repository_ids: repoIds, permissions: TOKEN_PERMISSIONS }
+        : { permissions: TOKEN_PERMISSIONS },
+    },
+    Schema.Struct({ token: Schema.String, expires_at: Schema.String }),
+  );
+
   return { token: res.token, expiresAt: Date.parse(res.expires_at) };
 };
 
-export interface GhInstallation {
-  readonly id: number;
-  readonly account: { readonly login: string; readonly type: string } | null;
-  readonly suspended_at: string | null;
-}
-
 export const listAppInstallations = async (config: GithubAppConfig): Promise<GhInstallation[]> =>
-  githubPaginate<GhInstallation>({ path: "/app/installations", token: await appJwt(config) }, 1000);
-
-export interface GhRepo {
-  readonly id: number;
-  readonly name: string;
-  readonly owner: { readonly login: string };
-  readonly default_branch: string;
-  readonly private: boolean;
-}
+  githubPaginate(
+    { path: "/app/installations", token: await appJwt(config) },
+    1000,
+    Schema.Array(GhInstallation),
+  );
 
 export const listInstallationRepos = async (token: string): Promise<GhRepo[]> =>
-  githubPaginate<GhRepo>(
+  githubPaginate(
     { path: "/installation/repositories", token },
     5000,
-    (page) => (page as { repositories: GhRepo[] }).repositories,
+    Schema.Struct({ repositories: Schema.Array(GhRepo) }).pipe(
+      Schema.decodeTo(Schema.Array(GhRepo), {
+        decode: SchemaGetter.transform((page) => page.repositories),
+        encode: SchemaGetter.transform((repositories) => ({ repositories })),
+      }),
+    ),
   );
 
 export const getRepoById = (token: string, repoId: number) =>
-  githubFetch<GhRepo>({ path: `/repositories/${repoId}`, token });
+  githubFetch({ path: `/repositories/${repoId}`, token }, GhRepo);
 
 export const getUserById = (token: string, id: string) =>
-  githubFetch<{ login: string; name: string | null; id: number }>({ path: `/user/${id}`, token });
+  githubFetch(
+    { path: `/user/${id}`, token },
+    Schema.Struct({ login: Schema.String, name: Schema.NullOr(Schema.String), id: Schema.Number }),
+  );
 
-export interface GhPull {
-  readonly number: number;
-  readonly title: string;
-  readonly state: "open" | "closed";
-  readonly draft: boolean;
-  readonly merged: boolean;
-  readonly merged_at: string | null;
-  readonly html_url: string;
-  readonly head: {
-    readonly ref: string;
-    readonly sha: string;
-    readonly repo: { readonly id: number } | null;
-  };
-  readonly base: { readonly ref: string };
-}
+export { GhInstallation, GhRepo, GhPull };

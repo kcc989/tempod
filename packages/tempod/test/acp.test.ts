@@ -1,7 +1,9 @@
+import { AcpFields } from "@tempo/protocol";
+import { Schema } from "effect";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { rmSync, existsSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { MAX_MESSAGE_BYTES, type SessionStartResult } from "@tempo/protocol";
+import { MAX_MESSAGE_BYTES } from "@tempo/protocol";
 import { TRUNCATED } from "../src/bounds.ts";
 import {
   cleanupDirs,
@@ -19,6 +21,7 @@ import {
 afterAll(cleanupDirs);
 
 let h: Harness | null = null;
+
 afterEach(async () => {
   await h?.close();
   h = null;
@@ -28,6 +31,7 @@ const T = 30_000;
 
 const setup = async (opts: { maxLiveAgents?: number } = {}) => {
   const cmd = fakeAgentCommand();
+
   const config = testConfig({
     agentCommands: { claude: cmd, codex: cmd, opencode: cmd, pi: cmd },
     limits: {
@@ -37,11 +41,13 @@ const setup = async (opts: { maxLiveAgents?: number } = {}) => {
       deltaMergeMs: 20,
     },
   });
+
   h = startTempod(config);
   const c = new DoClient(h.base);
   await c.hello();
   await c.waitEvent("incarnation.changed");
   const state = tmpDir("fake-agent-");
+
   const calls = () => {
     try {
       return readFileSync(join(state, "calls.log"), "utf8");
@@ -49,24 +55,34 @@ const setup = async (opts: { maxLiveAgents?: number } = {}) => {
       return "";
     }
   };
-  const start = (sessionId: string, extra: Record<string, unknown> = {}, env: Record<string, string> = {}) =>
-    c.ok<SessionStartResult>(
+
+  const start = (
+    sessionId: string,
+    extra: Partial<import("@tempo/protocol").TempodParams<"session.start">> = {},
+    env: Record<string, string> = {},
+  ) =>
+    c.ok(
       "session.start",
       { sessionId, agent: "claude", env: { FAKE_STATE_DIR: state, ...env }, browser: "local", ...extra },
       20_000,
     );
+
   const prompt = (sessionId: string, turnId: string, text: string) =>
     c.ok("session.prompt", { sessionId, turnId, content: [{ type: "text", text }] });
+
   const ended = (turnId: string) => c.waitEvent("turn.ended", (e) => e.turnId === turnId, 15_000);
+
   return { c, config, state, calls, start, prompt, ended, h: h! };
 };
 
 const textOf = (c: DoClient, itemId: string): string => {
   const created = c.of("item.created").find((e) => e.item.id === itemId);
+
   const deltas = c
     .of("item.delta")
     .filter((e) => e.itemId === itemId)
     .map((e) => e.append.text);
+
   return String(created?.item.content["text"] ?? "") + deltas.join("");
 };
 
@@ -75,6 +91,7 @@ test.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")(
   async () => {
     const { start, prompt, ended, c } = await setup();
     const dir = `/home/tempo/roles/test-${Date.now()}`;
+
     try {
       await start("role-session");
       await prompt("role-session", "role-write", `write ${dir}/result.json`);
@@ -109,11 +126,13 @@ describe("session.start", () => {
       expect(failed.ok).toBe(false);
       expect((await start("mode-config")).modeId).toBe("default");
       await c.ok("session.close", { sessionId: "mode-config" });
+
       const loaded = await start(
         "mode-config",
         { acpSessionId: result.acpSessionId },
         { FAKE_MODE_CONFIG: "1" },
       );
+
       expect(loaded.reloaded).toBe(true);
       expect(loaded.modeId).toBe("default");
       expect(loaded.configOptions.find((o) => o.category === "model")?.currentValue).toBe("m2");
@@ -156,10 +175,12 @@ describe("session.start", () => {
       const { start, calls } = await setup();
       await start("local");
       await start("remote", { browser: "run" });
+
       const mcp = calls()
         .split("\n")
         .filter((l) => l.includes(" mcp "))
         .map((l) => l.slice(l.indexOf(" mcp ") + 5));
+
       expect(mcp).toEqual([
         "playwright --headless --isolated --browser chromium",
         "tempo mcp",
@@ -229,11 +250,13 @@ describe("session.start", () => {
       h = startTempod(config);
       const c = new DoClient(h.base);
       await c.hello();
+
       const res = await c.req(
         "session.start",
         { sessionId: "s1", agent: "claude", env: {}, browser: "local" },
         20_000,
       );
+
       expect(res).toMatchObject({ ok: false, error: { code: "AGENT_START_FAILED" } });
     },
     T,
@@ -273,10 +296,12 @@ describe("session.prompt", () => {
       const message = created[1]!.item;
       expect(textOf(c, message.id)).toBe("Hello world");
       expect(c.of("item.delta").filter((e) => e.itemId === message.id).length).toBeLessThanOrEqual(2);
+
       const statuses = c
         .of("item.updated")
         .filter((e) => e.itemId === message.id)
         .map((e) => e.patch.status);
+
       expect(statuses).toContain("completed");
       expect(c.of("session.updated").some((e) => e.patch.title === "Greeting")).toBe(true);
       // The same turn id is not run twice.
@@ -359,11 +384,13 @@ describe("session.prompt", () => {
     "prompts to a session with no live agent fail with NOT_FOUND",
     async () => {
       const { c } = await setup();
+
       const res = await c.req("session.prompt", {
         sessionId: "nope",
         turnId: "t1",
         content: [{ type: "text", text: "x" }],
       });
+
       expect(res).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
     },
     T,
@@ -392,10 +419,12 @@ describe("session.prompt", () => {
       await ended("t4");
       await prompt("s1", "t5", "read /etc/hostname");
       await ended("t5");
+
       const texts = c
         .of("item.created")
         .filter((e) => e.item.kind === "agent_message")
         .map((e) => textOf(c, e.item.id));
+
       expect(texts[0]).toBe("write ok");
       expect(texts[1]).toStartWith("write error");
       expect(texts[2]).toStartWith("write error");
@@ -414,23 +443,25 @@ describe("session.steer", () => {
       const result = await start("s1", {}, { FAKE_STEERING: "1" });
       expect(result.capabilities["steering"]).toBe(true);
       await prompt("s1", "t1", "slow");
+
       const input = {
         sessionId: "s1",
         turnId: "t1",
         messageId: "m1",
         content: [{ type: "text", text: "Use the smaller change" }],
       };
-      expect(await c.ok<{ outcome: string }>("session.steer", input)).toEqual({ outcome: "injected" });
-      expect(await c.ok<{ outcome: string }>("session.steer", input)).toEqual({ outcome: "injected" });
+
+      expect(await c.ok("session.steer", input)).toEqual({ outcome: "injected" });
+      expect(await c.ok("session.steer", input)).toEqual({ outcome: "injected" });
       expect(
         calls()
           .split("\n")
           .filter((l) => l.includes(" steer ")),
       ).toHaveLength(1);
       expect(c.of("turn.ended")).toHaveLength(0);
-      expect(
-        await c.ok<{ outcome: string }>("session.steer", { ...input, turnId: "old", messageId: "m2" }),
-      ).toEqual({ outcome: "promptRequired" });
+      expect(await c.ok("session.steer", { ...input, turnId: "old", messageId: "m2" })).toEqual({
+        outcome: "promptRequired",
+      });
       await c.ok("session.cancel", { sessionId: "s1", turnId: "t1" });
       expect((await ended("t1")).stopReason).toBe("cancelled");
     },
@@ -443,19 +474,21 @@ describe("session.steer", () => {
       const { c, start, prompt, calls } = await setup();
       await start("s1");
       await prompt("s1", "t1", "slow");
+
       const input = {
         sessionId: "s1",
         turnId: "t1",
         messageId: "m1",
         content: [{ type: "text", text: "Follow up" }],
       };
-      expect(await c.ok<{ outcome: string }>("session.steer", input)).toEqual({ outcome: "unsupported" });
+
+      expect(await c.ok("session.steer", input)).toEqual({ outcome: "unsupported" });
       expect(calls()).not.toContain(" steer ");
       await start("s2", {}, { FAKE_STEERING: "1", FAKE_STEERING_IDLE: "1" });
       await prompt("s2", "t2", "slow");
-      expect(
-        await c.ok<{ outcome: string }>("session.steer", { ...input, sessionId: "s2", turnId: "t2" }),
-      ).toEqual({ outcome: "promptRequired" });
+      expect(await c.ok("session.steer", { ...input, sessionId: "s2", turnId: "t2" })).toEqual({
+        outcome: "promptRequired",
+      });
       expect(calls()).toContain('"idleBehavior":"promptRequired"');
     },
     T,
@@ -470,14 +503,13 @@ describe("session.setMode, session.setConfig, session.close", () => {
       await start("s1");
       await c.ok("session.setMode", { sessionId: "s1", modeId: "plan" });
       expect(c.of("session.updated").some((e) => e.patch.modeId === "plan")).toBe(true);
-      const cfg = await c.ok<{ configOptions: Array<{ id: string; currentValue: unknown }> }>(
-        "session.setConfig",
-        {
-          sessionId: "s1",
-          configId: "model",
-          value: "m2",
-        },
-      );
+
+      const cfg = await c.ok("session.setConfig", {
+        sessionId: "s1",
+        configId: "model",
+        value: "m2",
+      });
+
       expect(cfg.configOptions[0]).toMatchObject({ id: "model", currentValue: "m2" });
       expect(calls()).toContain("mode plan");
       expect(calls()).toContain("config model=m2");
@@ -499,10 +531,10 @@ describe("session.setMode, session.setConfig, session.close", () => {
       });
       await c.ok("session.cancel", { sessionId: "s1", turnId: "t1" }, 20_000);
       await ended("t1");
-      expect(await c.ok<unknown>("session.close", { sessionId: "s1" }, 20_000)).toEqual({});
+      expect(await c.ok("session.close", { sessionId: "s1" }, 20_000)).toEqual({});
       expect(h.app.agents.liveCount).toBe(0);
       expect(calls()).toContain("close acp-");
-      expect(await c.ok<unknown>("session.close", { sessionId: "s1" })).toEqual({});
+      expect(await c.ok("session.close", { sessionId: "s1" })).toEqual({});
       expect(await c.req("session.setMode", { sessionId: "s1", modeId: "plan" })).toMatchObject({
         ok: false,
         error: { code: "NOT_FOUND" },
@@ -523,7 +555,11 @@ describe("message size", () => {
       await prompt("s1", "t1", "big-image");
       await ended("t1");
       const tool = c.of("item.created").find((e) => e.item.kind === "tool_call")!.item;
-      const block = (tool.content["content"] as Array<{ content: Record<string, unknown> }>)[0]!.content;
+
+      const block = Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ content: AcpFields })))(
+        tool.content["content"],
+      )[0]!.content;
+
       expect(block["type"]).toBe("resource_link");
       expect(block["mimeType"]).toBe("image/png");
       const uri = String(block["uri"]);
@@ -540,10 +576,15 @@ describe("message size", () => {
       await start("s1");
       await prompt("s1", "t1", "big-text");
       await ended("t1");
+
       for (const m of c.raw) expect(Buffer.byteLength(JSON.stringify(m))).toBeLessThan(MAX_MESSAGE_BYTES);
       const tool = c.of("item.created").find((e) => e.item.kind === "tool_call")!.item;
       const upd = c.of("item.updated").find((e) => e.itemId === tool.id && e.patch.content)!;
-      const diff = (upd.patch.content!["content"] as Array<Record<string, string>>)[0]!;
+
+      const diff = Schema.decodeUnknownSync(Schema.Array(Schema.Record(Schema.String, Schema.String)))(
+        upd.patch.content!["content"],
+      )[0]!;
+
       expect(diff["type"]).toBe("diff");
       expect(diff["oldText"]!.endsWith(TRUNCATED)).toBe(true);
       const message = c.of("item.created").find((e) => e.item.kind === "agent_message")!.item;
@@ -591,11 +632,13 @@ describe("cancel, eviction and crashes", () => {
       expect(c.of("item.updated").some((e) => e.itemId === opened.id && e.patch.status === "cancelled")).toBe(
         true,
       );
+
       const res = await c.req("session.prompt", {
         sessionId: "s1",
         turnId: "t2",
         content: [{ type: "text", text: "x" }],
       });
+
       expect(res).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
       const again = await start("s1", { acpSessionId: first.acpSessionId });
       expect(again.reloaded).toBe(true);
@@ -644,12 +687,14 @@ describe("cancel, eviction and crashes", () => {
       await start("a");
       await prompt("a", "ta", "slow");
       await c.waitEvent("item.created", (e) => e.turnId === "ta");
+
       const result = await c.req("session.start", {
         sessionId: "b",
         agent: "claude",
         env: {},
         browser: "local",
       });
+
       expect(result).toMatchObject({ ok: false, error: { code: "AGENT_START_FAILED" } });
       expect(h.app.agents.liveCount).toBe(1);
       expect(h.app.agents.get("a")?.busy).toBe(true);
@@ -684,6 +729,7 @@ describe("cancel, eviction and crashes", () => {
       await c.waitEvent("agent.exited");
       const pid = Number(readFileSync(join(state, "child.pid"), "utf8"));
       const alive = () => isAlive(pid);
+
       for (let i = 0; i < 40 && alive(); i++) await sleep(50);
       expect(alive()).toBe(false);
     },
@@ -701,11 +747,13 @@ describe("cancel, eviction and crashes", () => {
       const end = await ended("t1");
       expect(end.interrupted).toBe(true);
       await c.waitEvent("tempod.stopping");
+
       const res = await c.req("session.prompt", {
         sessionId: "s1",
         turnId: "t2",
         content: [{ type: "text", text: "x" }],
       });
+
       expect(res).toMatchObject({ ok: false, error: { code: "CONTAINER_NOT_READY" } });
       await c.ok("shutdown", { reason: "test" }, 20_000);
       expect(h.app.agents.liveCount).toBe(0);

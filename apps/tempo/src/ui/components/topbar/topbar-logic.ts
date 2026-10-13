@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { PrState, WorkspaceDetail, WorkspaceState, WorkspaceSummary } from "@tempo/protocol";
 import {
   isContainerUp,
@@ -20,7 +21,9 @@ export const workspaceView = (
   detail: WorkspaceDetail | null | undefined,
 ): WorkspaceView | null => {
   if (!detail) return summary ? { w: summary, d: null } : null;
+
   if (!summary || detail.rev >= summary.rev) return { w: detail, d: detail };
+
   return { w: summary, d: detail };
 };
 
@@ -34,6 +37,7 @@ const pushedOf = (v: WorkspaceView): boolean => v.d?.pushed ?? v.w.prNumber !== 
 /** 04, Primary action. `hasUnpushedCommits` is set by the DO for a dirty tree or local commits. */
 export const topPrimary = (v: WorkspaceView): PrimaryAction | null => {
   if (isGone(v.w.state)) return null;
+
   return primaryAction({
     hasUncommitted: false,
     hasUnpushedCommits: v.d?.hasUnpushedCommits ?? false,
@@ -67,6 +71,7 @@ export interface ShortcutAvailability {
 /** ⌥Y, ⌥P, ⌥M and ⌥A work whenever their own row of the primary-action table applies. */
 export const shortcutAvailability = (v: WorkspaceView): ShortcutAvailability => {
   const gone = isGone(v.w.state);
+
   return {
     commitPush: !gone && (v.d?.hasUnpushedCommits ?? false) && isContainerUp(v.w.state),
     createPr: !gone && pushedOf(v) && v.w.prNumber === null,
@@ -77,7 +82,11 @@ export const shortcutAvailability = (v: WorkspaceView): ShortcutAvailability => 
 
 /** Commit and push needs a running container. */
 export const primaryEnabled = (a: PrimaryAction, state: WorkspaceState): boolean =>
-  a.kind === "commitPush" ? isContainerUp(state) : a.kind === "archive" ? canArchive(state) : true;
+  Match.value(a.kind).pipe(
+    Match.when("commitPush", () => isContainerUp(state)),
+    Match.when("archive", () => canArchive(state)),
+    Match.orElse(() => true),
+  );
 
 export interface PowerAction {
   readonly kind: "wake" | "sleep";
@@ -109,7 +118,9 @@ export const githubUrlFor = (
   pushed: boolean | undefined,
 ): string => {
   if (w.prNumber !== null) return githubPullUrl(project.owner, project.name, w.prNumber);
+
   if (pushed === false) return githubRepoUrl(project.owner, project.name);
+
   return githubBranchUrl(project.owner, project.name, w.branch);
 };
 
@@ -133,6 +144,7 @@ export const prLink = (
   w: Pick<WorkspaceSummary, "prNumber" | "prState">,
 ): PrLink | null => {
   if (!project || w.prNumber === null) return null;
+
   return {
     label: `#${w.prNumber} ↗`,
     url: githubPullUrl(project.owner, project.name, w.prNumber),
@@ -144,6 +156,7 @@ export const prLink = (
 /** The title a rename should save, or null when nothing changes. */
 export const renameValue = (next: string, current: string): string | null => {
   const t = next.trim().slice(0, 200);
+
   return t === "" || t === current ? null : t;
 };
 
@@ -151,4 +164,4 @@ export const renameValue = (next: string, current: string): string | null => {
 export const baseBranchOptions = (
   branches: ReadonlyArray<{ readonly name: string }>,
   ownBranch: string,
-): string[] => branches.map((b) => b.name).filter((n) => n !== ownBranch);
+): string[] => branches.flatMap((b) => (b.name !== ownBranch ? [b.name] : []));

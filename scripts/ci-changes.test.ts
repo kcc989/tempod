@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { changedFiles, isDocsOnly } from "./ci-changes.ts";
 
 const repos: string[] = [];
+
 afterEach(async () => {
   await Promise.all(repos.splice(0).map((repo) => rm(repo, { recursive: true, force: true })));
 });
@@ -12,6 +13,7 @@ afterEach(async () => {
 const repository = async () => {
   const cwd = await mkdtemp(join(tmpdir(), "tempo-ci-changes-"));
   repos.push(cwd);
+
   const git = async (...args: string[]) => {
     const child = Bun.spawn(["git", ...args], {
       cwd,
@@ -25,19 +27,24 @@ const repository = async () => {
       stdout: "pipe",
       stderr: "pipe",
     });
+
     const [code, stdout, stderr] = await Promise.all([
       child.exited,
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
     ]);
+
     if (code) throw new Error(stderr);
+
     return stdout.trim();
   };
+
   await git("init", "-q");
   await Bun.write(join(cwd, "README.md"), "Initial documentation\n");
   await Bun.write(join(cwd, "code.ts"), "export const value = 1;\n");
   await git("add", ".");
   await git("commit", "-qm", "initial");
+
   return { cwd, git, base: await git("rev-parse", "HEAD") };
 };
 
@@ -46,6 +53,7 @@ describe("CI documentation-only classification", () => {
     expect(isDocsOnly(["README.md", "AGENTS.md", "docs/CI.md", "docs/screenshot.png", "spikes/S1.md"])).toBe(
       true,
     );
+
     for (const file of [
       "package.json",
       "bun.lock",
@@ -98,6 +106,7 @@ describe("CI documentation-only classification", () => {
 
   it("uses the full suite when the base is missing, invalid, unavailable or unchanged", async () => {
     const { cwd, base } = await repository();
+
     for (const sha of [undefined, "HEAD", "0".repeat(40), "a".repeat(40)])
       expect(await changedFiles(sha, cwd)).toBeNull();
     expect(isDocsOnly((await changedFiles(base, cwd))!)).toBe(false);

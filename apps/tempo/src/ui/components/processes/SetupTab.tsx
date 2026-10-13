@@ -117,7 +117,9 @@ function SetupStatusIcon({ status }: { status: SetupStatus }) {
 function SettingsIssues({ workspace }: { workspace: WorkspaceDetail }) {
   const errors = workspace.settingsErrors ?? [];
   const warnings = workspace.settingsWarnings ?? [];
+
   if (errors.length === 0 && warnings.length === 0) return null;
+
   return (
     <ul aria-label="Settings issues" className="flex flex-col gap-1 border-b px-3 py-1.5 text-xs">
       {errors.map((e, i) => (
@@ -132,6 +134,7 @@ function SettingsIssues({ workspace }: { workspace: WorkspaceDetail }) {
 
 function Issue({ tone, text }: { tone: "error" | "warning"; text: string }) {
   const Icon = tone === "error" ? AlertCircleIcon : AlertTriangleIcon;
+
   return (
     <li className="flex items-start gap-1.5">
       <Icon

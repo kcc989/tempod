@@ -11,12 +11,7 @@ import { mergeRuns, toggleRunTarget } from "./script-runs";
  * Script runs of one workspace: history from listScriptRuns (with its log tail seeded into the
  * store once per run) merged with live `script.run` messages, newest first.
  */
-export function useScriptRuns(workspaceId: string): {
-  readonly runs: ScriptRun[];
-  readonly isPending: boolean;
-  readonly error: Error | null;
-  readonly refetch: () => void;
-} {
+export function useScriptRuns(workspaceId: string) {
   const store = useWorkspaceStore(workspaceId);
   const live = useWorkspaceSelector(workspaceId, (s) => s.scriptRuns);
   const listed = useCallQuery("listScriptRuns", { workspaceId }, { staleTime: 30_000 });
@@ -26,31 +21,41 @@ export function useScriptRuns(workspaceId: string): {
     for (const r of listed.data ?? []) {
       if (seeded.current.has(r.id)) continue;
       seeded.current.add(r.id);
+
       if (r.logTail) store.seedScriptOutput(r.id, r.logTail);
     }
   }, [listed.data, store]);
 
   const runs = useMemo(() => mergeRuns(listed.data ?? [], live), [listed.data, live]);
+
   return {
     runs,
     isPending: listed.isPending,
     error: listed.error,
     refetch: () => void listed.refetch(),
+  } satisfies {
+    readonly runs: ScriptRun[];
+    readonly isPending: boolean;
+    readonly error: Error | null;
+    readonly refetch: () => void;
   };
 }
 
 /** runScript, stopScript, rerunSetup and continueAfterSetupFailure. A new run shows at once. */
 export function useScriptMutations(workspaceId: string) {
   const queryClient = useQueryClient();
+
   const addRun = (run: ScriptRun) =>
     queryClient.setQueryData<ReadonlyArray<ScriptRunWithLog>>(
       callKey("listScriptRuns", { workspaceId }),
       (old) => [{ ...run, logTail: "" }, ...(old ?? []).filter((r) => r.id !== run.id)],
     );
+
   const start = useCallMutation("runScript", { onSuccess: addRun });
   const stop = useCallMutation("stopScript");
   const rerunSetup = useCallMutation("rerunSetup", { onSuccess: addRun });
   const continueAnyway = useCallMutation("continueAfterSetupFailure");
+
   return { start, stop, rerunSetup, continueAnyway };
 }
 
@@ -69,6 +74,7 @@ export function useToggleRunAction(workspaceId: string, enabled = true): void {
     () => {
       if (!target || busy) return;
       setBottomTab(workspaceId, "run");
+
       if (target.kind === "start") start.mutate({ workspaceId, scriptId: target.scriptId });
       else stop.mutate({ workspaceId, runId: target.runId });
     },

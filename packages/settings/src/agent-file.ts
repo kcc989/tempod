@@ -6,11 +6,15 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 const decode = Schema.decodeUnknownSync(CustomAgentDefinition);
 
-type Doc = Record<string, unknown>;
-const obj = (u: unknown): Doc => (typeof u === "object" && u !== null && !Array.isArray(u) ? (u as Doc) : {});
+const JsonObject = Schema.Record(Schema.String, Schema.Json);
 
-const serverFromDoc = (raw: unknown): unknown => {
+type Doc = typeof JsonObject.Type;
+
+const obj = (value: Schema.Json | undefined): Doc => (Schema.is(JsonObject)(value) ? value : {});
+
+const serverFromDoc = (raw: Schema.Json) => {
   const s = obj(raw);
+
   return s["type"] === "stdio"
     ? { name: s["name"], type: s["type"], command: s["command"], args: s["args"] ?? [], env: s["env"] ?? {} }
     : { name: s["name"], type: s["type"], url: s["url"], headers: s["headers"] ?? {} };
@@ -18,36 +22,31 @@ const serverFromDoc = (raw: unknown): unknown => {
 
 /** Throws VALIDATION_FAILED with the first problem as detail. */
 export const parseAgentFile = (text: string): CustomAgentDefinition => {
-  let doc: Doc;
   try {
-    doc = obj(parseYaml(text));
+    const doc = obj(Schema.decodeUnknownSync(Schema.Union([Schema.Json, Schema.Undefined]))(parseYaml(text)));
+    const servers = obj(doc["mcp"])["servers"] ?? [];
+
+    if (!Array.isArray(servers)) throw new Error("mcp.servers must be an array");
+
+    return decode(
+      {
+        name: doc["name"],
+        description: doc["description"] ?? "",
+        baseAgent: doc["base_agent"],
+        model: doc["model"] ?? "",
+        thoughtLevel: doc["thought_level"] ?? "",
+        systemPrompt: doc["system_prompt"] ?? "",
+        tools: { allow: obj(doc["tools"])["allow"] ?? [], deny: obj(doc["tools"])["deny"] ?? [] },
+        mcp: { playwright: obj(doc["mcp"])["playwright"] ?? true, servers: servers.map(serverFromDoc) },
+      },
+      { onExcessProperty: "error" },
+    );
   } catch (cause) {
     throw new TempoError("VALIDATION_FAILED", undefined, cause instanceof Error ? cause.message : "bad YAML");
   }
-  return validateAgentDefinition({
-    name: doc["name"],
-    description: doc["description"] ?? "",
-    baseAgent: doc["base_agent"],
-    model: doc["model"] ?? "",
-    thoughtLevel: doc["thought_level"] ?? "",
-    systemPrompt: doc["system_prompt"] ?? "",
-    tools: { allow: obj(doc["tools"])["allow"] ?? [], deny: obj(doc["tools"])["deny"] ?? [] },
-    mcp: {
-      playwright: obj(doc["mcp"])["playwright"] ?? true,
-      servers: ((obj(doc["mcp"])["servers"] as unknown[] | undefined) ?? []).map(serverFromDoc),
-    },
-  });
 };
 
-export const validateAgentDefinition = (u: unknown): CustomAgentDefinition => {
-  try {
-    return decode(u, { onExcessProperty: "error" });
-  } catch (cause) {
-    throw new TempoError("VALIDATION_FAILED", undefined, cause instanceof Error ? cause.message : undefined);
-  }
-};
-
-const serverToDoc = (s: McpServerDef): Doc =>
+const serverToDoc = (s: McpServerDef) =>
   s.type === "stdio"
     ? { name: s.name, type: s.type, command: s.command, args: [...s.args], env: { ...s.env } }
     : { name: s.name, type: s.type, url: s.url, headers: { ...s.headers } };

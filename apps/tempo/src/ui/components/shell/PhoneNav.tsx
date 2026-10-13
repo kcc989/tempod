@@ -7,7 +7,7 @@ import { setPhonePane, type PhonePane } from "~/ui/state/workspace-ui";
 
 /** 04, Phone width: bottom navigation Workspaces, Chat, Changes. */
 export function PhoneNav() {
-  const params = useParams({ strict: false }) as { workspaceId?: string };
+  const params = useParams({ strict: false });
   const navigate = useNavigate();
   const { phonePane, lastWorkspaceId } = useLayout();
   const current = params.workspaceId ?? null;
@@ -15,6 +15,7 @@ export function PhoneNav() {
 
   const showPane = (pane: PhonePane) => {
     setPhonePane(pane);
+
     if (!current && target) void navigate({ to: "/w/$workspaceId", params: { workspaceId: target } });
   };
 

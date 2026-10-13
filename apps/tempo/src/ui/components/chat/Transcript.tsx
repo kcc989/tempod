@@ -26,10 +26,13 @@ const EMPTY: ReadonlyArray<string> = [];
 
 /** Distance from the bottom, in px, that still counts as following new output. */
 const STICK_PX = 48;
+
 const positions = new Map<string, { top: number; following: boolean; measurements: VirtualItem[] }>();
+
 const rememberPosition = (key: string, position: NonNullable<ReturnType<typeof positions.get>>) => {
   positions.delete(key);
   positions.set(key, position);
+
   if (positions.size > 100) positions.delete(positions.keys().next().value!);
 };
 
@@ -39,12 +42,15 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
   const order = ws.order[sessionId] ?? EMPTY;
   const session = ws.sessions[sessionId];
   const detail = useTranscriptDetail();
+
   const rows = useMemo(
     () => buildTranscriptRows(order, ws.items, ws.turns, detail),
     [order, ws.items, ws.turns, detail],
   );
+
   const archived = ws.workspace?.state === "archived" || ws.workspace?.state === "archiving";
   const idle = ws.workspace ? ws.workspace.runningTurnId === null && ws.workspace.queue.length === 0 : false;
+
   const ctx = useMemo<ItemContext>(
     () => ({
       workspaceId,
@@ -82,6 +88,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
 
   const toBottom = useCallback(() => {
     const el = scrollRef.current;
+
     if (el) {
       el.scrollTop = el.scrollHeight;
       rememberPosition(positionKey, {
@@ -94,6 +101,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
 
   const onScroll = () => {
     const el = scrollRef.current;
+
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
     stick.current = atBottom;
@@ -107,24 +115,29 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
 
   useLayoutEffect(() => {
     measurements.current = virtual ? virtualizer.takeSnapshot() : [];
+
     if (!restored.current && scrollRef.current) {
       restored.current = true;
+
       if (initialPosition.current && !stick.current)
         scrollRef.current.scrollTop = initialPosition.current.top;
     }
+
     if (stick.current) toBottom();
   }, [rows, ws.items, toBottom, virtual, virtualizer]);
-
   useEffect(() => {
     const el = contentRef.current;
+
     if (!el || typeof ResizeObserver === "undefined") return;
+
     const ro = new ResizeObserver(() => {
       if (stick.current) toBottom();
     });
+
     ro.observe(el);
+
     return () => ro.disconnect();
   }, [virtual, empty, toBottom]);
-
   const announcement = useAnnouncement(order, ws.items, ws.backlogDone);
 
   if (empty) {
@@ -168,7 +181,9 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
             <div ref={contentRef} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
               {virtualizer.getVirtualItems().map((v) => {
                 const row = rows[v.index];
+
                 if (!row) return null;
+
                 return (
                   <div
                     key={v.key}
@@ -197,6 +212,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
           onClick={() => {
             stick.current = true;
             setAway(false);
+
             if (virtual) virtualizer.scrollToIndex(rows.length - 1, { align: "end" });
             toBottom();
           }}
@@ -225,31 +241,39 @@ function Row({
 }) {
   if (row.kind === "working") {
     const turn = turns[row.turnId];
+
     return turn ? (
       <div className="py-1.5">
         <WorkingRow turn={turn} />
       </div>
     ) : null;
   }
+
   if (row.kind === "footer") {
     const turn = turns[row.turnId];
+
     return turn ? (
       <div className={cn("pb-3", row.dim && "opacity-50")}>
         <TurnFooter turn={turn} worked={row.worked} />
       </div>
     ) : null;
   }
+
   if (row.kind === "work") {
     const turn = turns[row.turnId];
     const folded = row.itemIds.map((id) => items[id]).filter((i) => i !== undefined);
+
     return turn ? (
       <div className={cn("py-1.5", row.dim && "opacity-50")}>
         <WorkRow ctx={ctx} turn={turn} items={folded} />
       </div>
     ) : null;
   }
+
   const item = items[row.itemId];
+
   if (!item) return null;
+
   return (
     <div className={cn("py-1.5", row.dim && "opacity-50")}>
       <ItemView
@@ -281,19 +305,24 @@ function useAnnouncement(
       seen.current ??= new Set();
       messagesToAnnounce(seen.current, order, items);
       initialized.current = backlogDone;
+
       return;
     }
+
     const ids = messagesToAnnounce(seen.current!, order, items);
+
     if (ids.length > 0)
       setText({
         key: ids.join(":"),
         text: ids
           .map((id) => {
             const item = items[id];
+
             return item?.kind === "agent_message" ? announceText(item.content.text) : "";
           })
           .join(" "),
       });
   }, [order, items, backlogDone]);
+
   return text;
 }

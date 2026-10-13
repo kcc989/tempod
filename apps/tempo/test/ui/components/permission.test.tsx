@@ -4,9 +4,12 @@ import type { ItemOf } from "@tempo/protocol";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ItemView } from "../../../src/ui/components/chat/TranscriptItems";
-import { call } from "../../../src/ui/lib/api";
+import { createApiClient, type ApiTransport } from "../../../src/ui/lib/api-client";
+import { ApiCallContext } from "../../../src/ui/hooks/useCall";
 
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn(async () => ({})) }));
+const request = vi.fn<ApiTransport>(async () => JSON.stringify({ ok: true, value: {} }));
+
+const api = createApiClient(request);
 
 const permission = (over: Partial<ItemOf<"permission">> = {}): ItemOf<"permission"> => ({
   id: "i1",
@@ -29,17 +32,23 @@ const permission = (over: Partial<ItemOf<"permission">> = {}): ItemOf<"permissio
   },
   ...over,
 });
+
 const show = (item = permission(), writable = true) => {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+
   return render(
     createElement(
-      QueryClientProvider,
-      { client },
-      createElement(ItemView, {
-        ctx: { workspaceId: "w1", sessionId: "s1", agent: "claude", writable, canRevert: false },
-        item,
-        turn: undefined,
-      }),
+      ApiCallContext.Provider,
+      { value: api },
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(ItemView, {
+          ctx: { workspaceId: "w1", sessionId: "s1", agent: "claude", writable, canRevert: false },
+          item,
+          turn: undefined,
+        }),
+      ),
     ),
   );
 };
@@ -51,7 +60,7 @@ describe("permission card (04)", () => {
     expect(document.activeElement).toBe(card);
     fireEvent.keyDown(card, { key: "Enter", code: "Enter" });
     await waitFor(() =>
-      expect(call).toHaveBeenCalledWith("respondPermission", {
+      expect(request).toHaveBeenCalledWith("respondPermission", {
         workspaceId: "w1",
         requestId: "r1",
         optionId: "allow",
@@ -62,7 +71,7 @@ describe("permission card (04)", () => {
     show();
     fireEvent.keyDown(screen.getByRole("group"), { key: "Backspace", code: "Backspace" });
     await waitFor(() =>
-      expect(call).toHaveBeenCalledWith("respondPermission", {
+      expect(request).toHaveBeenCalledWith("respondPermission", {
         workspaceId: "w1",
         requestId: "r1",
         optionId: "reject",
@@ -76,21 +85,22 @@ describe("permission card (04)", () => {
     show();
     expect(document.activeElement).toBe(input);
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
-    expect(call).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
     input.remove();
   });
   it("disables options in an archived or closed chat", () => {
     show(permission(), false);
     const buttons = screen.getAllByRole("button");
-    for (const button of buttons) expect((button as HTMLButtonElement).disabled).toBe(true);
+
+    for (const button of buttons) expect(button.getAttribute("disabled")).not.toBeNull();
     fireEvent.keyDown(screen.getByRole("group"), { key: "Enter", code: "Enter" });
-    expect(call).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
   it("shows the saved answer and removes action buttons", () => {
     const item = permission();
     show({ ...item, status: "completed", content: { ...item.content, chosenOptionId: "allow" } });
     expect(screen.getByText("Chose: Allow once")).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
-    expect(call).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 });

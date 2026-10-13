@@ -62,8 +62,10 @@ describe("custom agent file (01, Custom agents)", () => {
     expect(() => parseAgentFile("name: x\nbase_agent: gpt\n")).toThrow(
       expect.objectContaining({ code: "VALIDATION_FAILED" }),
     );
+
     const literal =
       "name: x\nbase_agent: claude\nmcp:\n  servers:\n    - name: a\n      type: stdio\n      command: a\n      env: { K: secret }\n";
+
     expect(() => parseAgentFile(literal)).toThrow(expect.objectContaining({ code: "VALIDATION_FAILED" }));
   });
 });

@@ -2,31 +2,44 @@ import type { Env } from "../env.ts";
 import { log } from "../log.ts";
 
 export const PREVIEW_HEADER = "x-tempo-preview";
+
 /** 01 Browser Run: TempoOutbound rule 11 (CDP) and BrowserOutbound (the app on `localhost`). */
 export const BROWSER_CDP_HEADER = "x-tempo-browser-cdp";
+
 export const BROWSER_APP_HEADER = "x-tempo-browser-app";
 
 /** Removes the headers the WorkspaceDO's fetch() trusts. Every caller sets its own after this. */
 export const stripInternalHeaders = (headers: Headers): Headers => {
   const internal = Array.from(headers.keys()).filter((n) => n.toLowerCase().startsWith("x-tempo-"));
+
   for (const name of internal) headers.delete(name);
+
   return headers;
 };
+
 export const PREVIEW_COOKIE = "__Host-tempo_preview";
+
 export const PREVIEW_NOT_FOUND_TEXT = "This preview opens only from Tempo.";
 
 const LABEL = /^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})$/;
+
 const ENTER_PATH = "/__tempo/enter";
+
 const CODE = /^[a-z0-9]{32}$/;
 
-export const isPreviewHost = (host: string, env: Env): boolean =>
+export const isPreviewHost = (host: string, env: Pick<Env, "PREVIEW_DOMAIN">): boolean =>
   host.toLowerCase().endsWith(`.${env.PREVIEW_DOMAIN.toLowerCase()}`);
 
-export const parsePreviewHost = (host: string, env: Env): { port: number; workspaceId: string } | null => {
+export const parsePreviewHost = (
+  host: string,
+  env: Pick<Env, "PREVIEW_DOMAIN">,
+): { port: number; workspaceId: string } | null => {
   const suffix = `.${env.PREVIEW_DOMAIN.toLowerCase()}`;
   const label = host.toLowerCase().slice(0, -suffix.length);
   const m = LABEL.exec(label);
+
   if (!m) return null;
+
   return { port: Number(m[1]), workspaceId: m[2]! };
 };
 
@@ -45,17 +58,21 @@ export const previewNotFound = (): Response =>
  * Splits the Cookie header into the preview cookie's value and the app's other cookies. With
  * several preview cookies the last one wins; none of them reach the app.
  */
-export const takePreviewCookie = (header: string | null): { value: string | null; rest: string } => {
+export const takePreviewCookie = (header: string | null) => {
   let value: string | null = null;
   const rest: string[] = [];
+
   for (const part of (header ?? "").split(";")) {
     const pair = part.trim();
+
     if (pair === "") continue;
     const eq = pair.indexOf("=");
+
     if (eq >= 0 && pair.slice(0, eq).trim() === PREVIEW_COOKIE) value = pair.slice(eq + 1).trim();
     else rest.push(pair);
   }
-  return { value, rest: rest.join("; ") };
+
+  return { value, rest: rest.join("; ") } satisfies { value: string | null; rest: string };
 };
 
 const enterResponse = (cookie: string): Response =>
@@ -74,22 +91,37 @@ const enterResponse = (cookie: string): Response =>
  * previewEnter and every other request to the WorkspaceDO with the preview cookie taken out
  * (05, Preview access). Never logs codes, cookie values or request URLs.
  */
-export const handlePreview = async (request: Request, env: Env, url: URL): Promise<Response> => {
+type PreviewEnv = Pick<Env, "PREVIEW_DOMAIN"> & {
+  readonly WORKSPACE: {
+    getByName(
+      id: string,
+    ): Pick<DurableObjectStub<import("../do/workspace/index.ts").WorkspaceDO>, "fetch" | "previewEnter">;
+  };
+};
+
+export const handlePreview = async (request: Request, env: PreviewEnv, url: URL): Promise<Response> => {
   const parsed = parsePreviewHost(url.hostname, env);
+
   if (!parsed || parsed.port < 1024 || parsed.port > 65535) return previewNotFound();
   const stub = env.WORKSPACE.getByName(parsed.workspaceId);
   let res: Response;
+
   try {
     if (url.pathname.startsWith("/__tempo/")) {
       if (url.pathname !== ENTER_PATH || request.method !== "GET") return previewNotFound();
       const code = url.searchParams.get("code") ?? "";
+
       if (!CODE.test(code)) return previewNotFound();
       const cookie = await stub.previewEnter(parsed.port, code);
+
       return cookie ? enterResponse(cookie) : previewNotFound();
     }
+
     const { value, rest } = takePreviewCookie(request.headers.get("Cookie"));
+
     if (!value) return previewNotFound();
     const headers = stripInternalHeaders(new Headers(request.headers));
+
     if (rest === "") headers.delete("Cookie");
     else headers.set("Cookie", rest);
     // previewFetch runs inside the DO's fetch(), because RPC cannot carry a WebSocket upgrade.
@@ -101,10 +133,14 @@ export const handlePreview = async (request: Request, env: Env, url: URL): Promi
       port: parsed.port,
       error: e instanceof Error ? e.name : "unknown",
     });
+
     return new Response("Something went wrong.", { status: 502, headers: PRIVACY_HEADERS });
   }
+
   if (res.webSocket) return res;
   const out = new Response(res.body, res);
+
   for (const [k, v] of Object.entries(PRIVACY_HEADERS)) out.headers.set(k, v);
+
   return out;
 };

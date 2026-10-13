@@ -7,19 +7,22 @@ import { cleanupDirs, tmpDir } from "./helpers.ts";
 afterAll(cleanupDirs);
 
 class FakeSink implements OutboxSink {
-  sent: Array<{ seq: number; event: { kind: string; [k: string]: unknown } }> = [];
+  sent: Array<{ seq: number; event: { kind: string; [k: string]: import("@tempo/protocol").JsonData } }> = [];
   buffered = 0;
   mode: "ok" | "backpressure" | "dead" = "ok";
   send(data: string): number {
     if (this.mode === "dead") return 0;
     const msg = JSON.parse(data);
     expect(msg.type).toBe("event");
-    expect(typeof msg.ts).toBe("number");
+    expect(msg.ts).toBeTypeOf("number");
     this.sent.push({ seq: msg.seq, event: msg.event });
+
     if (this.mode === "backpressure") {
       this.buffered = 10 * 1024 * 1024;
+
       return -1;
     }
+
     return data.length;
   }
   getBufferedAmount(): number {
@@ -35,6 +38,7 @@ const open = (
   limits = { maxEvents: 50_000, maxBytes: 200 * 1024 * 1024 },
 ) => {
   const db = new TempodDb(path);
+
   return { db, outbox: new Outbox(db, limits), path };
 };
 
@@ -56,6 +60,7 @@ describe("outbox", () => {
 
   test("ack deletes acknowledged events; a matching hello resends the rest", () => {
     const { outbox } = open();
+
     for (let i = 0; i < 5; i++) outbox.append(port(3000 + i));
     const a = new FakeSink();
     outbox.attach(a);
@@ -73,6 +78,7 @@ describe("outbox", () => {
 
   test("a different incarnation gets incarnation.changed at seq 1 and the pending events renumbered", () => {
     const { outbox } = open();
+
     for (let i = 0; i < 4; i++) outbox.append(port(3000 + i));
     outbox.ack(2);
     const sink = new FakeSink();
@@ -137,6 +143,7 @@ describe("outbox", () => {
 
   test("overflow drops the oldest events and sends one outbox.overflow", () => {
     const { outbox } = open(undefined, { maxEvents: 10, maxBytes: 1_000_000 });
+
     for (let i = 0; i < 11; i++) outbox.append(port(3000 + i));
     const sink = new FakeSink();
     outbox.attach(sink);
@@ -151,6 +158,7 @@ describe("outbox", () => {
   test("overflow by bytes", () => {
     const { outbox } = open(undefined, { maxEvents: 1_000, maxBytes: 2_000 });
     const big = { kind: "log" as const, level: "info" as const, msg: "x".repeat(400) };
+
     for (let i = 0; i < 6; i++) outbox.append(big);
     expect(outbox.pendingBytes).toBeLessThanOrEqual(2_000);
     const sink = new FakeSink();
@@ -161,6 +169,7 @@ describe("outbox", () => {
 
   test("backpressure stops sending until pump after drain", () => {
     const { outbox } = open();
+
     for (let i = 0; i < 3; i++) outbox.append(port(3000 + i));
     const sink = new FakeSink();
     sink.mode = "backpressure";

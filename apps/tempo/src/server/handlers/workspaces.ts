@@ -17,6 +17,7 @@ import { getUserById } from "../../github/api.ts";
 import { github, prStateOf } from "../../github/provider.ts";
 import { getOwnedWorkspace } from "../../http/common.ts";
 import { summaryFromD1Row } from "../../lib/summary.ts";
+import { workspaceStub } from "../../do/workspace/stub.ts";
 import type { InitInput } from "../../do/workspace/index.ts";
 import { isValidBranch, type SessionAgentProfile } from "../../do/workspace/rpc.ts";
 import { resolveCustomAgent } from "./agents.ts";
@@ -29,11 +30,14 @@ const authorCache = new Map<string, { name: string; email: string }>();
 const authorFor = async (env: HandlerCtx["env"], token: string, fallbackName: string) => {
   const id = env.TEMPO_OWNER_GITHUB_ID;
   const hit = authorCache.get(id);
+
   if (hit) return hit;
+
   try {
     const u = await getUserById(token, id);
     const author = { name: u.name || u.login, email: `${id}+${u.login}@users.noreply.github.com` };
     authorCache.set(id, author);
+
     return author;
   } catch {
     return { name: fallbackName || "Tempo", email: `${id}@users.noreply.github.com` };
@@ -41,8 +45,9 @@ const authorFor = async (env: HandlerCtx["env"], token: string, fallbackName: st
 };
 
 /** Drizzle wraps D1 errors ("Failed query: ..."); the constraint text is on `cause`. */
-const isUniqueViolation = (e: unknown, column: "branch" | "slug") => {
-  const text = String((e as { cause?: unknown } | null)?.cause ?? e);
+const isUniqueViolation = (cause: unknown, column: "branch" | "slug") => {
+  const text = String(cause instanceof Error && cause.cause !== undefined ? cause.cause : cause);
+
   return text.includes("UNIQUE") && text.includes(`workspaces.${column}`);
 };
 
@@ -57,11 +62,11 @@ export const createWorkspace = async (
   const defaults = resolveSettings(project.settings, {}).effective;
   const token = await projectToken(env, p);
   const repo = repoOf(p);
-
   let branch: string;
   let baseBranch: string;
   let wsSource: Source;
   let pr: InitInput["pr"] = null;
+
   if (source.kind === "new") {
     baseBranch = source.baseBranch;
     wsSource = { kind: "new" };
@@ -74,9 +79,11 @@ export const createWorkspace = async (
     wsSource = { kind: "branch" };
   } else {
     const ghPr = await github.getPullRequest(token, repo, source.number);
+
     if (ghPr.head.repo?.id !== p.repoId) {
       throw new TempoError("VALIDATION_FAILED", "Pull requests from forks are not supported.");
     }
+
     branch = ghPr.head.ref;
     baseBranch = ghPr.base.ref || p.defaultBranch;
     wsSource = { kind: "pr", number: source.number };
@@ -88,15 +95,19 @@ export const createWorkspace = async (
   const defaultAgent: AgentId = custom?.agent ?? agent ?? defaults.agent.default;
   const now = Date.now();
   const id = newId();
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const used = await db
       .select({ slug: workspaces.slug })
       .from(workspaces)
       .where(and(eq(workspaces.projectId, projectId), isNull(workspaces.archivedAt)))
       .all();
+
     const slug = pickSlug(used.map((u) => u.slug));
     const wsBranch = source.kind === "new" ? `${defaults.git.branch_prefix}${slug}` : branch;
+
     if (!isValidBranch(wsBranch)) throw new TempoError("BRANCH_INVALID");
+
     try {
       await db
         .insert(workspaces)
@@ -121,9 +132,11 @@ export const createWorkspace = async (
         .run();
     } catch (e) {
       if (isUniqueViolation(e, "branch")) throw new TempoError("BRANCH_IN_USE");
+
       if (isUniqueViolation(e, "slug")) continue;
       throw e;
     }
+
     const res = await env.WORKSPACE.getByName(id).init({
       workspaceId: id,
       projectId,
@@ -141,8 +154,10 @@ export const createWorkspace = async (
       author,
       createdAt: now,
     });
+
     return unwrap(res);
   }
+
   throw new TempoError("INTERNAL", undefined, "could not pick a slug");
 };
 
@@ -157,6 +172,7 @@ const resolveProfile = async (
   agent: AgentId | undefined,
 ): Promise<{ agent: AgentId; custom: SessionAgentProfile }> => {
   const { customAgent, definition } = await resolveCustomAgent(env, userId, customAgentId, agent);
+
   return {
     agent: definition.baseAgent,
     custom: { customAgent, profile: toAgentProfile(definition), model: definition.model },
@@ -166,10 +182,13 @@ const resolveProfile = async (
 /** createSession resolves a custom agent here: the WorkspaceDO never reads D1 or Artifacts for it. */
 export const createSession: Handler<"createSession"> = async ({ env, user }, input) => {
   const { workspaceId, customAgentId, ...rest } = input;
+
   if (!(await getOwnedWorkspace(env, user.id, workspaceId))) throw new TempoError("NOT_FOUND");
+
   const custom = customAgentId
     ? (await resolveProfile(env, user.id, customAgentId, rest.agent)).custom
     : undefined;
+
   return unwrap(
     await env.WORKSPACE.getByName(workspaceId).createSession(custom ? { ...rest, custom } : rest),
   );
@@ -180,10 +199,13 @@ export const listWorkspaces = async (
   { includeArchived }: FnInput<"listWorkspaces">,
 ): Promise<FnOutput<"listWorkspaces">> => {
   const db = d1(env);
+
   const where = includeArchived
     ? eq(workspaces.userId, user.id)
     : and(eq(workspaces.userId, user.id), isNull(workspaces.archivedAt));
+
   const rows = await db.select().from(workspaces).where(where).orderBy(desc(workspaces.lastActivityAt)).all();
+
   return rows.map(summaryFromD1Row);
 };
 
@@ -194,11 +216,16 @@ export const listWorkspaces = async (
 export const viaWorkspace =
   <K extends WorkspaceFnName>(name: K): Handler<K> =>
   async ({ env, user }, input) => {
-    const { workspaceId, ...rest } = input as FnInput<K> & { workspaceId: string };
-    if (!(await getOwnedWorkspace(env, user.id, workspaceId))) throw new TempoError("NOT_FOUND");
-    const stub = env.WORKSPACE.getByName(workspaceId) as unknown as Record<
-      K,
-      (i: unknown) => Promise<import("@tempo/protocol").Result<FnOutput<K>>>
-    >;
-    return unwrap(await stub[name](rest));
+    const { workspaceId, ...rest } = input;
+
+    if (!workspaceId || !(await getOwnedWorkspace(env, user.id, workspaceId)))
+      throw new TempoError("NOT_FOUND");
+    const stub = workspaceStub(env.WORKSPACE, workspaceId);
+
+    // SAFETY: name indexes the generated RPC method and its matching MethodInput<K>/FnOutput<K> contract.
+    const invoke = stub[name] as (
+      input: Omit<FnInput<K>, "workspaceId">,
+    ) => Promise<import("@tempo/protocol").Result<FnOutput<K>>>;
+
+    return unwrap(await invoke(rest));
   };

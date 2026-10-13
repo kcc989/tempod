@@ -26,6 +26,8 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+Oxlint and Oxfmt run through `bun run lint`, `bun run format`, and `bun run format:check`; CI runs both checks. Oxlint also enables all generic and Effect rules from [anti-slop](https://github.com/dmmulroy/anti-slop), vendored in `tools/oxlint/anti-slop/`. The plugin source, license, and upstream revision are recorded in its `UPSTREAM.md`. Oxlint and `@oxlint/plugins` are pinned to the same version and must be upgraded together. Agent assets and the vendored plugin are excluded from linting and formatting.
+
 `bun run test:web` runs local browser acceptance across Chromium, Firefox, WebKit, dark mode and phone width. See [`Web acceptance`](docs/WEB_ACCEPTANCE.md) for the harness, coverage and the hosted test plan using keeled.
 
 `bun run mac:dev` builds and opens the native app on an Apple silicon Mac with macOS 15 or later. First run `bash scripts/mac/setup-dev-signing.sh` to create a local development signing identity, or set `TEMPO_MAC_SIGN_IDENTITY` to an installed identity. Development builds reuse an unchanged `TempoKeychain` helper so UI rebuilds do not invalidate Keychain approval. Choose **Always Allow** for that helper once; it accepts only Tempo signed with the same certificate. Native and hosted acceptance is still pending.

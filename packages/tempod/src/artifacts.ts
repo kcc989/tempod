@@ -52,7 +52,9 @@ export class Artifacts {
       () => this.doPublish(req),
       () => this.doPublish(req),
     );
+
     this.chain = next.catch(() => undefined);
+
     return next;
   }
 
@@ -61,11 +63,14 @@ export class Artifacts {
     const path = isAbsolute(req.path) ? realOrNull(req.path) : null;
     const st = path ? statSync(path, { throwIfNoEntry: false }) : undefined;
     const roots = [realOrNull(this.deps.workspace), realOrNull(this.deps.artifactsDir)];
+
     if (!path || !st?.isFile() || !roots.some((r) => under(r, path)))
       return { error: ARTIFACT_MESSAGES.path };
     const name = basename(path);
     const type = artifactTypeOf(name);
+
     if (!type) return { error: ARTIFACT_MESSAGES.type };
+
     if (st.size > ARTIFACT_MAX_BYTES) return { error: ARTIFACT_MESSAGES.size };
 
     const row = db.db
@@ -73,6 +78,7 @@ export class Artifacts {
         "SELECT artifact_id, last_version FROM artifacts WHERE session_id = ? AND path = ?",
       )
       .get(req.sessionId, path);
+
     const artifactId = row?.artifact_id ?? newId();
     const version = (row?.last_version ?? 0) + 1;
 
@@ -81,18 +87,23 @@ export class Artifacts {
     const hasher = new Bun.CryptoHasher("sha256");
     const writer = Bun.file(staged).writer();
     let size = 0;
+
     try {
       for await (const chunk of Bun.file(path).stream()) {
         size += chunk.byteLength;
+
         if (size > ARTIFACT_MAX_BYTES) throw new RangeError("too large");
         hasher.update(chunk);
         writer.write(chunk);
       }
+
       await writer.end();
     } catch (e) {
       await Promise.resolve(writer.end()).catch(() => undefined);
       rmSync(staged, { force: true });
+
       if (e instanceof RangeError) return { error: ARTIFACT_MESSAGES.size };
+
       return { error: ARTIFACT_MESSAGES.path };
     }
 
@@ -102,7 +113,8 @@ export class Artifacts {
          ON CONFLICT(artifact_id) DO UPDATE SET last_version = excluded.last_version`,
       )
       .run(artifactId, req.sessionId, path, version);
-    this.deps.emit({
+
+    const event = {
       kind: "artifact.published",
       sessionId: req.sessionId,
       turnId: this.deps.runningTurnId(req.sessionId),
@@ -111,13 +123,15 @@ export class Artifacts {
       path,
       name,
       title: req.title,
-      ...(req.summary !== undefined ? { summary: req.summary } : {}),
       mime: type.mime,
       artifactKind: type.kind,
       size,
       sha256: hasher.digest("hex"),
       stagedPath: staged,
-    });
+    } satisfies TempodEvent;
+
+    this.deps.emit(req.summary === undefined ? event : { ...event, summary: req.summary });
+
     return { text: publishedText(req.title, version) };
   }
 
@@ -125,6 +139,7 @@ export class Artifacts {
   release(artifactId: string, version: number): void {
     if (!ID.test(artifactId) || !Number.isInteger(version) || version < 1) return;
     rmSync(this.stagedPath(artifactId, version), { force: true });
+
     try {
       rmdirSync(join(this.deps.stageDir, artifactId));
     } catch {

@@ -44,7 +44,6 @@ jobs:
             ci-v1-${{ runner.os }}-bun-1.4.2-
       - name: Install dependencies
         id: install
-        if: steps.changes.outputs.docs_only != 'true'
         run: |
           bun install --frozen-lockfile
           bun -e 'console.log("playwright_version=" + (await Bun.file("tests/e2e/node_modules/@playwright/test/package.json").json()).version)' >> "$GITHUB_OUTPUT"

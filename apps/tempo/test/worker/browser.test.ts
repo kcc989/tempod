@@ -37,6 +37,7 @@ class FakeBrowserRun {
     this.acquires.push(options);
     const sessionId = `br-${++this.next}`;
     this.sessions.set(sessionId, { sessionId, startTime: Date.now() });
+
     return { sessionId };
   }
   async getSession(id: string): Promise<BrowserRunSession | null> {
@@ -48,15 +49,20 @@ class FakeBrowserRun {
     s.connectionId = `c-${this.connects.length}`;
     s.connectionStartTime = Date.now();
     delete s.connectionEndTime;
+
     return {
       sessionId: id,
       webSocket: {
+        connect() {
+          throw new Error("TCP is not used by the browser fixture");
+        },
         fetch: async () => {
           const pair = new WebSocketPair();
           pair[1].accept();
+
           return new Response(null, { status: 101, webSocket: pair[0] });
         },
-      } as unknown as Fetcher,
+      },
     };
   }
   disconnect(id: string, endedAt: number): void {
@@ -66,11 +72,14 @@ class FakeBrowserRun {
   async closeSession(id: string): Promise<BrowserRunCloseSessionResult> {
     this.closed.push(id);
     const s = this.sessions.get(id);
+
     if (s) s.endTime = Date.now();
+
     return { status: "closed" };
   }
   async getLiveView(sessionId: string, options: BrowserRunLiveViewOptions = {}): Promise<BrowserRunLiveView> {
     this.liveViews.push({ sessionId, ...options });
+
     return {
       devtoolsFrontendUrl: `https://live.browser.run/ui/view?s=${sessionId}&t=${options.targetId}&jwt=secret`,
       webSocketDebuggerUrl: "wss://live.browser.run/x",
@@ -93,7 +102,7 @@ interface Ctx {
 
 const installBrowser = (stub: Stub, browser: FakeBrowserRun | undefined) =>
   runInDurableObject(stub, (instance: WorkspaceDO) => {
-    internals(instance).core.browser = browser as unknown as BrowserRun | undefined;
+    internals(instance).core.browser = browser;
   });
 
 const readyWorkspace = async (
@@ -101,29 +110,25 @@ const readyWorkspace = async (
 ): Promise<Ctx> => {
   const seeded = await seedProject();
   await seedCredentials(seeded.userId);
+
   const { workspaceId, stub, tempod } = await seedWorkspace(
     seeded,
     opts.prompt ? { prompt: opts.prompt } : {},
   );
+
   const effective = opts.effective ?? BROWSER_ON;
   tempod.on("settings.read", () => ({ effective, warnings: [], errors: [], sources: {} }));
   const browser = new FakeBrowserRun();
   await installBrowser(stub, opts.binding === false ? undefined : browser);
   await driveToState(stub, ["ready", "working"]);
+
   return { workspaceId, stub, tempod, browser, userId: seeded.userId };
 };
 
 const outbound = (workspaceId: string, userId: string) =>
-  (
-    exports as unknown as {
-      TempoOutbound: (o: { props: { workspaceId: string; userId: string } }) => Fetcher;
-    }
-  ).TempoOutbound({ props: { workspaceId, userId } });
+  exports.TempoOutbound({ props: { workspaceId, userId } });
 
-const browserOutbound = (workspaceId: string) =>
-  (
-    exports as unknown as { BrowserOutbound: (o: { props: { workspaceId: string } }) => Fetcher }
-  ).BrowserOutbound({ props: { workspaceId } });
+const browserOutbound = (workspaceId: string) => exports.BrowserOutbound({ props: { workspaceId } });
 
 const cdp = (ctx: Ctx, headers: Record<string, string> = {}) =>
   outbound(ctx.workspaceId, ctx.userId).fetch("https://browser.tempo.internal/", {
@@ -132,7 +137,9 @@ const cdp = (ctx: Ctx, headers: Record<string, string> = {}) =>
 
 const detail = async (stub: Stub) => {
   const d = await stub.getWorkspace({});
+
   if (!d.ok) throw new Error(d.error.code);
+
   return d.value;
 };
 
@@ -158,6 +165,7 @@ describe("session.start browser mode (01, Browser Run)", { timeout: 30_000 }, ()
       },
       { binding: false },
     ];
+
     for (const c of cases) {
       const ctx = await readyWorkspace({ ...c, prompt: "Check the app" });
       await waitFor(() => ctx.tempod.requestsOf("session.start").length === 1, 5000, "session.start");
@@ -194,9 +202,11 @@ describe("TempoOutbound rule 11 (01, Browser Run)", { timeout: 30_000 }, () => {
 
   it("returns 404 for a plain request, and when Browser Run is off", async () => {
     const on = await readyWorkspace();
+
     const plain = await outbound(on.workspaceId, on.userId).fetch(
       "https://browser.tempo.internal/json/version",
     );
+
     expect(plain.status).toBe(404);
     expect(on.browser.acquires).toHaveLength(0);
 
@@ -219,9 +229,11 @@ describe("BrowserOutbound (01, Browser Run)", { timeout: 30_000 }, () => {
   it("forwards localhost:<port> through tempod and drops internal headers", async () => {
     const ctx = await readyWorkspace();
     (await cdp(ctx)).webSocket!.accept();
+
     const res = await browserOutbound(ctx.workspaceId).fetch("http://localhost:3000/app?x=1", {
       headers: { "x-tempo-preview": "3000:forged", "x-tempo-browser-cdp": "1", Accept: "text/html" },
     });
+
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("proxied /v1/proxy/3000/app?x=1");
     const sent = ctx.tempod.proxyRequests.at(-1)!;
@@ -270,8 +282,9 @@ describe("Browser Run session end (01, Browser Run)", { timeout: 30_000 }, () =>
     runInDurableObject(stub, (instance: WorkspaceDO) => {
       const core = internals(instance).core;
       const since = core.kv<number>("browserIdleSince");
+
       if (since !== undefined) core.setKv("browserIdleSince", since - ms);
-      (instance as unknown as { lastBrowserCheck: number }).lastBrowserCheck = 0;
+      instance["lastBrowserCheck"] = 0;
     });
 
   it("closes the session after 60 s with no CDP connection, not while one is open", async () => {

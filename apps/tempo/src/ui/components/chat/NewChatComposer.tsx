@@ -23,12 +23,16 @@ export function NewChatComposer({
   const settings = useWorkspaceSelector(workspaceId, (s) => s.workspace?.settings ?? DEFAULT_SETTINGS);
   const selection = useLaunchModels(settings);
   const agent = selection.pickedCustom?.baseAgent ?? selection.selected?.agent ?? selection.fallbackAgent;
+
   const model = selection.pickedCustom
     ? undefined
     : (selection.selected?.model ?? (agent ? settings.agent.models[agent] || undefined : undefined));
+
   const customAgentId = selection.pickedCustom?.id;
+
   const canCreate =
     agent !== null && (customAgentId !== undefined || model !== undefined || !needsModel(agent, settings));
+
   const [prompt, setPrompt] = useState("");
   const textarea = useRef<HTMLTextAreaElement>(null);
   const [created, setCreated] = useState<Session | null>(null);
@@ -36,19 +40,21 @@ export function NewChatComposer({
   const create = useCallMutation("createSession");
   const send = useCallMutation("sendPrompt");
   const busy = create.isPending || send.isPending;
+
   const submit = async () => {
     if (submitting.current || !agent || !canCreate) return;
     submitting.current = true;
+
     try {
-      const session =
-        created ??
-        (await create.mutateAsync({
-          workspaceId,
-          agent,
-          ...(model ? { model } : {}),
-          ...(customAgentId ? { customAgentId } : {}),
-        }));
+      let input: import("@tempo/protocol").FnInput<"createSession"> = { workspaceId, agent };
+
+      if (model) input = { ...input, model };
+
+      if (customAgentId) input = { ...input, customAgentId };
+      const session = created ?? (await create.mutateAsync(input));
+
       setCreated(session);
+
       if (prompt.trim())
         await send.mutateAsync({
           workspaceId,
@@ -68,6 +74,7 @@ export function NewChatComposer({
       submitting.current = false;
     }
   };
+
   return (
     <Dialog
       open={open}

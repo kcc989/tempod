@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import type { CredentialProvider, CredentialStatus, FnOutput } from "@tempo/protocol";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileJsonIcon, Trash2Icon, UploadIcon } from "lucide-react";
@@ -9,7 +10,7 @@ import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
 import { Textarea } from "~/ui/components/ui/textarea";
 import { invalidateCalls, useCallMutation } from "~/ui/hooks/useCall";
-import { call } from "~/ui/lib/api";
+
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { formatRelative } from "~/ui/lib/format";
 import { errorCode, errorDetail, errorText, toastError } from "~/ui/lib/toast";
@@ -29,8 +30,11 @@ import { CommandLine } from "../parts";
 /** Settings → Logins (04). Values are write-only: once saved they are never shown again. */
 export function LoginsTab() {
   const status = useCredentialStatus();
+
   if (status.isPending) return <SkeletonRows rows={6} />;
+
   if (status.isError) return <ErrorState error={status.error} onRetry={() => void status.refetch()} />;
+
   return (
     <div className="grid gap-3">
       <p className="text-xs text-muted-foreground">
@@ -48,19 +52,21 @@ const forgetInvalid = (provider: CredentialProvider) => {
 };
 
 /** Server-side validation shows next to the field; other errors toast. */
-const inlineOrToast = (e: unknown, setError: (s: string) => void) => {
-  if (errorCode(e) === "VALIDATION_FAILED") {
-    const detail = errorDetail(e);
-    setError(detail ? `${errorText(e)} ${detail}` : errorText(e));
-  } else toastError(e);
+const inlineOrToast = (cause: unknown, setError: (s: string) => void) => {
+  if (errorCode(cause) === "VALIDATION_FAILED") {
+    const detail = errorDetail(cause);
+    setError(detail ? `${errorText(cause)} ${detail}` : errorText(cause));
+  } else toastError(cause);
 };
 
 function LoginCard({ row, status }: { row: LoginRow; status: CredentialStatus }) {
   const state = loginState(status, row.provider);
+
   const remove = useCallMutation("deleteCredential", {
     invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => toast.success(`${row.label} removed`),
   });
+
   const lastRefresh = row.provider === "codex" ? status.codex.lastRefresh : null;
 
   return (
@@ -133,6 +139,7 @@ function SecretForm({
 function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   const save = useCallMutation("setClaudeToken", {
     toast: false,
     invalidates: ["getCredentialStatus", "listModels"],
@@ -144,7 +151,9 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
     },
     onError: (e) => inlineOrToast(e, setError),
   });
+
   const id = `login-${row.provider}`;
+
   return (
     <SecretForm
       error={error}
@@ -153,6 +162,7 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
       onSubmit={() => {
         const problem = checkClaudeToken(token);
         setError(problem);
+
         if (!problem) save.mutate({ token: token.trim() });
       }}
     >
@@ -188,10 +198,13 @@ function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
 }
 
 export function CodexDeviceLogin({ replacing }: { replacing: boolean }) {
+  const call = useApiCall();
+
   const queryClient = useQueryClient();
   const [login, setLogin] = useState<FnOutput<"startCodexLogin"> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+
   const start = useCallMutation("startCodexLogin", {
     toast: false,
     onSuccess: (result) => {
@@ -205,18 +218,24 @@ export function CodexDeviceLogin({ replacing }: { replacing: boolean }) {
     if (!login || cancelling) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+
     const poll = async () => {
       try {
         const result =
           Date.now() >= login.expiresAt
             ? { status: "expired" as const }
             : await call("pollCodexLogin", { loginId: login.loginId });
+
         if (stopped) return;
+
         if (result.status === "pending") {
           timer = setTimeout(() => void poll(), login.intervalMs);
+
           return;
         }
+
         setLogin(null);
+
         if (result.status === "connected") {
           forgetInvalid("codex");
           await invalidateCalls(queryClient, "getCredentialStatus");
@@ -229,16 +248,19 @@ export function CodexDeviceLogin({ replacing }: { replacing: boolean }) {
         }
       }
     };
+
     timer = setTimeout(() => void poll(), login.intervalMs);
+
     return () => {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [login, cancelling, queryClient]);
+  }, [login, cancelling, queryClient, call]);
 
   const cancel = async () => {
     if (!login) return;
     setCancelling(true);
+
     try {
       await call("cancelCodexLogin", { loginId: login.loginId });
       setLogin(null);
@@ -303,6 +325,7 @@ function CodexUploadForm({ row, replacing }: { row: LoginRow; replacing: boolean
   const [file, setFile] = useState<{ readonly name: string; readonly text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
   const save = useCallMutation("setCodexAuth", {
     toast: false,
     invalidates: ["getCredentialStatus", "listModels"],
@@ -315,14 +338,18 @@ function CodexUploadForm({ row, replacing }: { row: LoginRow; replacing: boolean
     },
     onError: (e) => inlineOrToast(e, setError),
   });
+
   const id = `login-${row.provider}`;
 
   const readFile = async (f: File | undefined) => {
     if (!f) return;
+
     if (f.size > MAX_AUTH_JSON_BYTES) {
       setError("That file is too big for an auth.json.");
+
       return;
     }
+
     const text = await f.text();
     setPasted("");
     setFile({ name: f.name, text });
@@ -338,6 +365,7 @@ function CodexUploadForm({ row, replacing }: { row: LoginRow; replacing: boolean
         const text = file?.text ?? pasted;
         const problem = checkCodexAuth(text);
         setError(problem);
+
         if (!problem) save.mutate({ authJson: text });
       }}
     >
@@ -397,6 +425,7 @@ function CodexUploadForm({ row, replacing }: { row: LoginRow; replacing: boolean
 function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   const save = useCallMutation("setApiKey", {
     toast: false,
     invalidates: ["getCredentialStatus", "listModels"],
@@ -408,7 +437,9 @@ function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
     },
     onError: (e) => inlineOrToast(e, setError),
   });
+
   const id = `login-${row.provider}`;
+
   return (
     <SecretForm
       error={error}
@@ -417,6 +448,7 @@ function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
       onSubmit={() => {
         const problem = checkApiKey(key);
         setError(problem);
+
         if (!problem && isApiKeyProvider(row.provider))
           save.mutate({ provider: row.provider, key: key.trim() });
       }}

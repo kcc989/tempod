@@ -1,17 +1,20 @@
 import { asc } from "drizzle-orm";
-import { ConversationArtifact, redact } from "@tempo/protocol";
+import { ConversationArtifact, redactPayload } from "@tempo/protocol";
 import { Schema } from "effect";
 import { items, sessions, turns } from "../../db/workspace-do.ts";
 import type { WorkspaceCore } from "./core.ts";
 
 export const CONVERSATION_INTERVAL_MS = 60_000;
+
 export const conversationPrefix = (projectId: string) => `artifacts/projects/${projectId}/conversations/`;
+
 export const conversationKey = (projectId: string, conversationId: string) =>
   `${conversationPrefix(projectId)}${conversationId}.json`;
 
 export const markConversationDirty = (core: WorkspaceCore): void => {
   if (!core.wsOrNull()) return;
   core.setKv("conversationRevision", (core.kv<number>("conversationRevision") ?? 0) + 1);
+
   if (core.kv<number>("conversationDueAt") === undefined)
     core.setKv("conversationDueAt", Date.now() + CONVERSATION_INTERVAL_MS);
   core.scheduleAlarm();
@@ -21,11 +24,14 @@ export const markConversationDirty = (core: WorkspaceCore): void => {
 export const saveConversation = async (core: WorkspaceCore, force = false): Promise<void> => {
   while (core.conversationUpload) {
     await core.conversationUpload;
+
     if (!force) return;
   }
+
   if (!core.wsOrNull() || (!force && core.kv<number>("conversationDueAt") === undefined)) return;
   const revision = core.kv<number>("conversationRevision") ?? 0;
   const row = core.ws();
+
   const artifact = Schema.decodeUnknownSync(ConversationArtifact)({
     version: 1,
     conversationId: row.workspaceId,
@@ -59,9 +65,11 @@ export const saveConversation = async (core: WorkspaceCore, force = false): Prom
       .all()
       .map((r) => {
         const item = core.itemToWire(r);
-        return item.kind === "tool_call" ? { ...item, content: redact(item.content) } : item;
+
+        return item.kind === "tool_call" ? { ...item, content: redactPayload(item.content) } : item;
       }),
   });
+
   const upload = core.env.DATA.put(
     conversationKey(row.projectId, row.workspaceId),
     JSON.stringify(artifact),
@@ -71,10 +79,13 @@ export const saveConversation = async (core: WorkspaceCore, force = false): Prom
     },
   ).then(() => {
     core.setKv("conversationSavedRevision", revision);
+
     if ((core.kv<number>("conversationRevision") ?? 0) === revision)
       core.setKv("conversationDueAt", undefined);
   });
+
   core.conversationUpload = upload;
+
   try {
     await upload;
   } finally {

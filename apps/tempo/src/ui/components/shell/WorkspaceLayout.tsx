@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeftIcon } from "lucide-react";
 import { useEffect } from "react";
@@ -57,7 +58,9 @@ export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
       />
     );
   }
+
   if (!ready && !summary) return <CenteredLoading label="Loading workspace" />;
+
   return (
     <>
       {isPhone ? (
@@ -85,21 +88,27 @@ function useWorkspaceActions(workspaceId: string, projectId: string | undefined)
 
 function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
   const layout = useLayout();
+
   const quiet = useWorkspaceSelector(workspaceId, (s) => {
     const w = s.workspace;
+
     if (!w) return false;
+
     return (
       w.state === "sleeping" || (((s.changes ?? w.changes)?.files.length ?? 0) === 0 && w.prNumber === null)
     );
   });
+
   useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
   const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
   const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned });
+
   const horizontal = useDefaultLayout({
     id: "workspace",
     panelIds: rightOpen ? ["center", "right"] : ["center"],
     storage: safeLayoutStorage,
   });
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TopBar workspaceId={workspaceId} variant="desktop" />
@@ -134,11 +143,13 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
 
 function RightSide({ workspaceId }: { workspaceId: string }) {
   const { bottomOpen } = useLayout();
+
   const vertical = useDefaultLayout({
     id: "right",
     panelIds: bottomOpen ? ["review", "processes"] : ["review"],
     storage: safeLayoutStorage,
   });
+
   return (
     <ResizablePanelGroup
       id="right"
@@ -167,32 +178,37 @@ function RightSide({ workspaceId }: { workspaceId: string }) {
 
 function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
   const { phonePane } = useLayout();
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TopBar workspaceId={workspaceId} variant="phone" />
-      {phonePane === "changes" ? (
-        <section aria-label="Changes" className="flex min-h-0 flex-1 flex-col">
-          <RightPanel workspaceId={workspaceId} variant="phone" />
-        </section>
-      ) : phonePane === "setup" ? (
-        <section aria-label="Setup" className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center border-b px-2 py-1">
-            <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
-              <ChevronLeftIcon aria-hidden />
-              Back to chat
-            </Button>
-          </div>
-          <div className="min-h-0 flex-1">
-            <SetupTab workspaceId={workspaceId} />
-          </div>
-        </section>
-      ) : (
-        <section aria-label="Chat" className="flex min-h-0 flex-1 flex-col">
-          <WorkspaceBanners workspaceId={workspaceId} />
-          <div className="min-h-0 flex-1">
-            <ChatTabs workspaceId={workspaceId} variant="phone" />
-          </div>
-        </section>
+      {Match.value(phonePane).pipe(
+        Match.when("changes", () => (
+          <section aria-label="Changes" className="flex min-h-0 flex-1 flex-col">
+            <RightPanel workspaceId={workspaceId} variant="phone" />
+          </section>
+        )),
+        Match.when("setup", () => (
+          <section aria-label="Setup" className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-center border-b px-2 py-1">
+              <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
+                <ChevronLeftIcon aria-hidden />
+                Back to chat
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <SetupTab workspaceId={workspaceId} />
+            </div>
+          </section>
+        )),
+        Match.orElse(() => (
+          <section aria-label="Chat" className="flex min-h-0 flex-1 flex-col">
+            <WorkspaceBanners workspaceId={workspaceId} />
+            <div className="min-h-0 flex-1">
+              <ChatTabs workspaceId={workspaceId} variant="phone" />
+            </div>
+          </section>
+        )),
       )}
     </div>
   );

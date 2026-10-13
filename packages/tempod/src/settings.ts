@@ -41,6 +41,7 @@ export class SettingsState {
     this.persist(overrides);
     const files = readSettingsFiles(this.workspace);
     this.lastFingerprint = fingerprint(files);
+
     return resolveSettings(overrides, files);
   }
 
@@ -48,10 +49,13 @@ export class SettingsState {
   reReadIfChanged(): SettingsReadResult | null {
     const files = readSettingsFiles(this.workspace);
     const fp = fingerprint(files);
+
     if (fp === this.lastFingerprint) return null;
     this.lastFingerprint = fp;
+
     // Without a settings.read the UI overrides are unknown, and settings without them would be wrong.
     if (!this.known) return null;
+
     return resolveSettings(this.overrides, files);
   }
 

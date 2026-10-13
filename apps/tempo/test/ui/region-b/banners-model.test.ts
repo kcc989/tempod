@@ -64,6 +64,7 @@ describe("workspace banners", () => {
     const banners = workspaceBanners(
       detail({ state: "error", errorCode: "CLONE_FAILED", setupStatus: "failed" }),
     );
+
     expect(bannerCodes(banners)).toEqual(["CLONE_FAILED"]);
     expect(bannerCodes(workspaceBanners(detail({ setupStatus: "failed" })))).toEqual(["SETUP_FAILED"]);
   });

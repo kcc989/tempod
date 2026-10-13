@@ -1,19 +1,30 @@
 import type { WorkspaceSummary } from "@tempo/protocol";
-import { useEffect, useSyncExternalStore } from "react";
-import { getHubStore, type HubSnapshot } from "~/ui/stores/hub-store";
+import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
+import { getHubStore, type HubSnapshot, type HubStore } from "~/ui/stores/hub-store";
+
+/** An externally managed hub for replay views and alternate channel transports. */
+export const HubStoreContext = createContext<HubStore | null>(null);
 
 /** The hub channel snapshot (every workspace summary). Starts the hub socket if needed. */
 export function useHub(): HubSnapshot {
-  const hub = getHubStore();
-  useEffect(() => hub.start(), [hub]);
+  const provided = useContext(HubStoreContext);
+  const hub = provided ?? getHubStore();
+  useEffect(() => {
+    if (!provided) hub.start();
+  }, [hub, provided]);
+
   return useSyncExternalStore(hub.subscribe, hub.getSnapshot, hub.getSnapshot);
 }
 
 /** One workspace's summary from the hub, or undefined. */
 export function useHubWorkspace(workspaceId: string | null | undefined): WorkspaceSummary | undefined {
-  const hub = getHubStore();
-  useEffect(() => hub.start(), [hub]);
+  const provided = useContext(HubStoreContext);
+  const hub = provided ?? getHubStore();
+  useEffect(() => {
+    if (!provided) hub.start();
+  }, [hub, provided]);
   const get = () => (workspaceId ? hub.getSnapshot().workspaces[workspaceId] : undefined);
+
   return useSyncExternalStore(hub.subscribe, get, get);
 }
 
@@ -22,6 +33,7 @@ export function useHubConnection(): void {
   useEffect(() => {
     const hub = getHubStore();
     hub.start();
+
     return () => hub.stop();
   }, []);
 }

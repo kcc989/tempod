@@ -1,4 +1,7 @@
+import { SettingsLayer as SettingsLayerSchema } from "@tempo/protocol";
+import { Predicate, Schema } from "effect";
 import type {
+  FnInput,
   AgentId,
   PermissionRequest,
   Project,
@@ -18,11 +21,14 @@ import { waitFor } from "./util.ts";
 export const testProject = async (): Promise<Project> => {
   const id = E2E.projectId || required("TEMPO_E2E_PROJECT_ID");
   const project = (await rpc("listProjects", {})).find((p) => p.id === id);
+
   if (!project) throw new Error(`TEMPO_E2E_PROJECT_ID ${id} is not a linked project`);
+
   return project;
 };
 
 const perTest = new Set<string>();
+
 const perFile = new Set<string>();
 
 export interface NewWorkspace {
@@ -42,14 +48,20 @@ export const newWorkspace = async (
 ): Promise<NewWorkspace> => {
   const project = await testProject();
   const startedAt = Date.now();
-  const summary = await rpc("createWorkspace", {
+
+  let input: FnInput<"createWorkspace"> = {
     projectId: project.id,
     source: { kind: "new", baseBranch: project.defaultBranch },
-    ...(opts.agent ? { agent: opts.agent } : {}),
-    ...(opts.prompt ? { prompt: { text: opts.prompt } } : {}),
-  });
+  };
+
+  if (opts.agent) input = { ...input, agent: opts.agent };
+
+  if (opts.prompt) input = { ...input, prompt: { text: opts.prompt } };
+  const summary = await rpc("createWorkspace", input);
+
   (opts.scope === "file" ? perFile : perTest).add(summary.id);
   const watch = await WorkspaceWatch.open(summary.id);
+
   return { summary, watch, startedAt };
 };
 
@@ -66,11 +78,13 @@ export const pollState = (
     `workspace ${workspaceId} state ${states.join(" or ")}`,
     async () => {
       const d = await getState(workspaceId);
+
       if (d.state === "error" && !states.includes("error")) {
         throw new Error(
           `workspace ${workspaceId} went to error: ${d.errorCode ?? ""} ${d.errorDetail ?? ""}`,
         );
       }
+
       return states.includes(d.state) ? d : undefined;
     },
     timeoutMs,
@@ -78,23 +92,27 @@ export const pollState = (
 
 const dispose = async (workspaceId: string): Promise<void> => {
   const detail = await getState(workspaceId).catch(() => null);
+
   if (!detail) return;
+
   if (detail.state !== "archived") {
     await rpcRetry("archiveWorkspace", { workspaceId }, 10 * 60_000, ["WORKSPACE_BUSY"]);
     await pollState(workspaceId, ["archived"], 15 * 60_000);
   }
+
   await rpc("deleteWorkspace", { workspaceId });
 };
 
 const disposeAll = async (ids: Set<string>): Promise<void> => {
   const list = [...ids];
   ids.clear();
+
   if (E2E.keep) return;
   await Promise.all(
     list.map((id) =>
-      dispose(id).catch((e: unknown) => {
+      dispose(id).catch((cause: unknown) => {
         console.warn(
-          `cleanup: workspace ${id} was not deleted: ${e instanceof Error ? e.message : String(e)}`,
+          `cleanup: workspace ${id} was not deleted: ${cause instanceof Error ? cause.message : String(cause)}`,
         );
       }),
     ),
@@ -116,7 +134,9 @@ export const cleanupFile = async (): Promise<void> => {
 
 export const firstTurn = (watch: WorkspaceWatch): Turn => {
   const turn = [...watch.turns.values()].sort((a, b) => a.seq - b.seq)[0];
+
   if (!turn) throw new Error("the workspace has no turn; was it created with a prompt?");
+
   return turn;
 };
 
@@ -144,6 +164,7 @@ export const promptAndWait = async (
   extra: Parameters<typeof sendPrompt>[3] = {},
 ): Promise<Turn> => {
   const turn = await sendPrompt(watch, sessionId, text, extra);
+
   return watch.waitTurnEnded(turn.id, timeoutMs);
 };
 
@@ -167,6 +188,7 @@ export const readySession = async (
 ): Promise<string> => {
   await watch.waitState(["ready"], 15 * 60_000);
   const session = await rpc("createSession", { workspaceId: watch.workspaceId, agent, ...extra });
+
   return session.id;
 };
 
@@ -183,17 +205,21 @@ export const answerPermissionsUntilEnd = async (
   const answered: PermissionRequest[] = [];
   const done = new Set<string>();
   const deadline = Date.now() + timeoutMs;
+
   for (;;) {
     const next = await watch.until(
       `permission request or end of turn ${turnId}`,
       () => {
         const t = watch.turns.get(turnId);
+
         if (t && isEnded(t)) return { kind: "ended" as const, turn: t };
         const req = watch.pendingPermissions().find((p) => p.turnId === turnId && !done.has(p.requestId));
+
         return req ? { kind: "request" as const, req } : undefined;
       },
       Math.max(1_000, deadline - Date.now()),
     );
+
     if (next.kind === "ended") return { turn: next.turn, answered };
     done.add(next.req.requestId);
     answered.push(next.req);
@@ -203,24 +229,28 @@ export const answerPermissionsUntilEnd = async (
 
 export const allowOption = (req: PermissionRequest): { optionId: string; name: string } => {
   const option = req.options.find((o) => o.kind.startsWith("allow"));
+
   if (!option)
     throw new Error(
       `permission request ${req.requestId} has no allow option: ${JSON.stringify(req.options)}`,
     );
+
   return option;
 };
 
-type Layer = Record<string, unknown>;
+type Layer = import("@tempo/protocol").JsonDataFields;
 
-const mergeLayer = (base: Layer, patch: Layer): Layer => {
-  const out: Layer = { ...base };
+const isFields = (value: import("@tempo/protocol").JsonData): value is Layer =>
+  Predicate.isObject(value) && !Array.isArray(value);
+
+const mergeLayer = (base: Layer, patch: Layer) => {
+  const out = { ...base } satisfies Layer;
+
   for (const [k, v] of Object.entries(patch)) {
     const prev = out[k];
-    out[k] =
-      typeof v === "object" && v !== null && !Array.isArray(v) && typeof prev === "object" && prev !== null
-        ? mergeLayer(prev as Layer, v as Layer)
-        : v;
+    out[k] = isFields(v) && isFields(prev) ? mergeLayer(prev, v) : v;
   }
+
   return out;
 };
 
@@ -228,11 +258,13 @@ const mergeLayer = (base: Layer, patch: Layer): Layer => {
 export const withProjectSettings = async (patch: SettingsLayer): Promise<() => Promise<void>> => {
   const project = await testProject();
   const before = project.settings;
-  const settings = mergeLayer(before as Layer, patch as Layer) as SettingsLayer;
+  const settings = Schema.decodeUnknownSync(SettingsLayerSchema)(mergeLayer(before, patch));
   await rpc("updateProjectSettings", { projectId: project.id, settings });
+
   return async () => {
     await rpc("updateProjectSettings", { projectId: project.id, settings: before });
   };
 };
 
-export const isRpcError = (e: unknown, code: string): boolean => e instanceof RpcError && e.code === code;
+export const isRpcError = (cause: unknown, code: string): boolean =>
+  cause instanceof RpcError && cause.code === code;

@@ -36,6 +36,7 @@ export function BranchPicker({
   invalid?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
@@ -86,8 +87,10 @@ function BranchList({
   const [query, setQuery] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), DEBOUNCE_MS);
+
     return () => clearTimeout(t);
   }, [search]);
+
   const branches = useCallQuery("listBranches", query ? { projectId, query } : { projectId }, {
     staleTime: 30_000,
     placeholderData: (prev) => prev,

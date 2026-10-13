@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import type { DiffScope } from "@tempo/protocol";
 import { readJson, writeJson } from "~/ui/lib/storage";
 import { Store } from "~/ui/lib/store";
@@ -6,10 +7,8 @@ import { Store } from "~/ui/lib/store";
  * Shared UI state that crosses regions (sidebar, chat, review, processes, dialogs). Framework-free:
  * React reads it through the hooks in ~/ui/hooks/useWorkspaceUi. Documented in ~/ui/CONTRACT.md.
  */
-
 // ---------------------------------------------------------------------------------------------
 // Center tabs
-
 export type CenterTab =
   | { readonly kind: "chat"; readonly sessionId: string }
   | { readonly kind: "file"; readonly path: string; readonly line: number | null }
@@ -70,21 +69,27 @@ export const tabRef = (t: CenterTab): string => {
 
 export const parseTabRef = (ref: string): CenterTab | null => {
   const i = ref.indexOf(":");
+
   if (i < 0) return null;
   const kind = ref.slice(0, i);
   const rest = ref.slice(i + 1);
+
   switch (kind) {
     case "chat":
       return rest ? { kind: "chat", sessionId: rest } : null;
     case "file": {
       const j = rest.lastIndexOf(":");
+
       if (j < 0) return rest ? { kind: "file", path: rest, line: null } : null;
       const path = rest.slice(0, j);
       const lineText = rest.slice(j + 1);
       const line = lineText === "" ? null : Number(lineText);
+
       if (!path || (line !== null && (!Number.isInteger(line) || line < 1))) return null;
+
       return { kind: "file", path, line };
     }
+
     case "diff":
       return { kind: "diff", path: rest === "" ? null : rest };
     case "guide":
@@ -96,10 +101,14 @@ export const parseTabRef = (ref: string): CenterTab | null => {
     case "artifact": {
       const [artifactId = "", versionText = "", ...extra] = rest.split(":");
       const version = versionText === "" ? null : Number(versionText);
+
       if (!/^[0-9a-z]{26}$/.test(artifactId) || extra.length > 0) return null;
+
       if (version !== null && (!Number.isInteger(version) || version < 1)) return null;
+
       return { kind: "artifact", artifactId, version };
     }
+
     default:
       return null;
   }
@@ -113,6 +122,7 @@ export interface OpenTab {
 }
 
 export type RightTab = "changes" | "files" | "checks" | "artifacts";
+
 export type BottomTab = "setup" | "run" | "terminal";
 
 export type ComposerInsertion =
@@ -161,10 +171,12 @@ const workspaceStores = new Map<string, Store<WorkspaceUiState>>();
 
 export const workspaceUiStore = (workspaceId: string): Store<WorkspaceUiState> => {
   let s = workspaceStores.get(workspaceId);
+
   if (!s) {
     s = new Store(emptyWorkspaceUi);
     workspaceStores.set(workspaceId, s);
   }
+
   return s;
 };
 
@@ -177,7 +189,9 @@ const update = (workspaceId: string, f: (s: WorkspaceUiState) => WorkspaceUiStat
 const withActive = (s: WorkspaceUiState, key: string | null): WorkspaceUiState => {
   const open = key === null ? undefined : s.tabs.find((t) => t.key === key);
   const lastChatSessionId = open?.tab.kind === "chat" ? open.tab.sessionId : s.lastChatSessionId;
+
   if (s.activeKey === key && s.lastChatSessionId === lastChatSessionId) return s;
+
   return { ...s, activeKey: key, lastChatSessionId };
 };
 
@@ -196,26 +210,33 @@ export const openTab = (
     const entry: OpenTab = { key, tab, seq: ++tabSeq };
     const tabs = i < 0 ? [...s.tabs, entry] : s.tabs.map((t, k) => (k === i ? entry : t));
     const next = { ...s, tabs };
+
     return activate || s.activeKey === null ? withActive(next, key) : next;
   });
+
   return key;
 };
 
 export const closeTab = (workspaceId: string, key: string): void =>
   update(workspaceId, (s) => {
     const i = s.tabs.findIndex((t) => t.key === key);
+
     if (i < 0) return s;
     const tabs = s.tabs.filter((t) => t.key !== key);
     let next: WorkspaceUiState = { ...s, tabs };
+
     if (s.activeKey === key) {
       const neighbor = tabs[Math.min(i, tabs.length - 1)];
       next = withActive({ ...next, activeKey: null }, neighbor?.key ?? null);
     }
+
     const closed = s.tabs[i]!.tab;
+
     if (closed.kind === "chat" && next.lastChatSessionId === closed.sessionId) {
       const chat = tabs.find((t) => t.tab.kind === "chat");
       next = { ...next, lastChatSessionId: chat?.tab.kind === "chat" ? chat.tab.sessionId : null };
     }
+
     return next;
   });
 
@@ -228,16 +249,19 @@ export const cycleTab = (workspaceId: string, delta: 1 | -1): void =>
     if (s.tabs.length === 0) return s;
     const i = s.tabs.findIndex((t) => t.key === s.activeKey);
     const j = i < 0 ? 0 : (i + delta + s.tabs.length) % s.tabs.length;
+
     return withActive(s, s.tabs[j]!.key);
   });
 
 export const moveTab = (workspaceId: string, key: string, toIndex: number): void =>
   update(workspaceId, (s) => {
     const i = s.tabs.findIndex((t) => t.key === key);
+
     if (i < 0) return s;
     const tabs = s.tabs.slice();
     const [moved] = tabs.splice(i, 1);
     tabs.splice(Math.max(0, Math.min(toIndex, tabs.length)), 0, moved!);
+
     return { ...s, tabs };
   });
 
@@ -252,23 +276,30 @@ export const syncChatTabs = (workspaceId: string, sessionIds: ReadonlyArray<stri
     const kept = s.tabs.filter((t) => t.tab.kind !== "chat" || wanted.has(t.tab.sessionId));
     const have = new Set(kept.filter((t) => t.tab.kind === "chat").map((t) => t.key));
     const added: OpenTab[] = [];
+
     for (const id of sessionIds) {
       const key = `chat:${id}`;
+
       if (!have.has(key)) added.push({ key, tab: { kind: "chat", sessionId: id }, seq: ++tabSeq });
     }
+
     if (added.length === 0 && kept.length === s.tabs.length) {
       return s.activeKey === null && kept.length > 0 ? withActive(s, kept[0]!.key) : s;
     }
+
     const lastChat = kept.reduce((acc, t, k) => (t.tab.kind === "chat" ? k : acc), -1);
     const tabs = [...kept.slice(0, lastChat + 1), ...added, ...kept.slice(lastChat + 1)];
     let next: WorkspaceUiState = { ...s, tabs };
+
     if (!tabs.some((t) => t.key === s.activeKey)) {
       const firstChat = tabs.find((t) => t.tab.kind === "chat") ?? tabs[0];
       next = withActive({ ...next, activeKey: null }, firstChat?.key ?? null);
     }
+
     if (next.lastChatSessionId !== null && !wanted.has(next.lastChatSessionId)) {
       next = { ...next, lastChatSessionId: sessionIds[0] ?? null };
     }
+
     return next;
   });
 
@@ -295,7 +326,9 @@ export const openLiveView = (workspaceId: string): string => openTab(workspaceId
 /** The session of the active chat tab, else of the chat shown most recently. */
 export const targetChatSession = (s: WorkspaceUiState): string | null => {
   const active = s.tabs.find((t) => t.key === s.activeKey);
+
   if (active?.tab.kind === "chat") return active.tab.sessionId;
+
   return s.lastChatSessionId;
 };
 
@@ -312,13 +345,16 @@ export const insertIntoComposer = (
 ): void =>
   update(workspaceId, (s) => {
     const target = sessionId ?? targetChatSession(s);
+
     let next: WorkspaceUiState = {
       ...s,
       insertions: [...s.insertions, { id: ++insertionSeq, sessionId: target, insertion }],
       composerFocusSeq: s.composerFocusSeq + 1,
     };
+
     if (target !== null && next.tabs.some((t) => t.key === `chat:${target}`))
       next = withActive(next, `chat:${target}`);
+
     return next;
   });
 
@@ -326,12 +362,14 @@ export const insertIntoComposer = (
 export const takeInsertions = (workspaceId: string, sessionId: string): PendingInsertion[] => {
   const s = getWorkspaceUi(workspaceId);
   const mine = s.insertions.filter((p) => p.sessionId === sessionId || p.sessionId === null);
+
   if (mine.length > 0) {
     update(workspaceId, (cur) => ({
       ...cur,
       insertions: cur.insertions.filter((p) => !mine.some((m) => m.id === p.id)),
     }));
   }
+
   return mine;
 };
 
@@ -340,6 +378,7 @@ export const focusComposer = (workspaceId: string): void =>
   update(workspaceId, (s) => {
     const target = targetChatSession(s);
     const next = { ...s, composerFocusSeq: s.composerFocusSeq + 1 };
+
     return target !== null ? withActive(next, `chat:${target}`) : next;
   });
 
@@ -392,7 +431,6 @@ export const showBottomTab = (workspaceId: string, tab: BottomTab): void => {
 
 // ---------------------------------------------------------------------------------------------
 // Layout (global, kept in localStorage)
-
 /** `setup` has no bottom-navigation entry; the Setup banners open it. */
 export type PhonePane = "chat" | "changes" | "setup";
 
@@ -410,12 +448,13 @@ const LAYOUT_KEY = "layout:panels";
 
 type StoredLayout = Pick<LayoutState, "sidebarOpen" | "rightOpen" | "bottomOpen">;
 
-const isStoredLayout = (u: unknown): u is StoredLayout =>
-  typeof u === "object" &&
-  u !== null &&
-  typeof (u as StoredLayout).sidebarOpen === "boolean" &&
-  typeof (u as StoredLayout).rightOpen === "boolean" &&
-  typeof (u as StoredLayout).bottomOpen === "boolean";
+const isStoredLayout = Schema.is(
+  Schema.Struct({
+    sidebarOpen: Schema.Boolean,
+    rightOpen: Schema.Boolean,
+    bottomOpen: Schema.Boolean,
+  }),
+);
 
 const defaultLayout: LayoutState = {
   sidebarOpen: true,
@@ -432,8 +471,10 @@ export const layoutStore = (): Store<LayoutState> => {
     const stored = readJson<StoredLayout | null>(LAYOUT_KEY, null, (u): u is StoredLayout =>
       isStoredLayout(u),
     );
+
     layout = new Store<LayoutState>({ ...defaultLayout, ...stored });
   }
+
   return layout;
 };
 
@@ -442,10 +483,15 @@ export const getLayout = (): LayoutState => layoutStore().getSnapshot();
 export const setLayout = (patch: Partial<LayoutState>): void => {
   const store = layoutStore();
   const prev = store.getSnapshot();
-  const changed = (Object.keys(patch) as Array<keyof LayoutState>).some((k) => patch[k] !== prev[k]);
+
+  const changed = Object.entries(patch).some(([key, value]) =>
+    Object.entries(prev).some(([name, current]) => name === key && value !== current),
+  );
+
   if (!changed) return;
   store.update(patch);
   const next = store.getSnapshot();
+
   if (
     next.sidebarOpen !== prev.sidebarOpen ||
     next.rightOpen !== prev.rightOpen ||
@@ -468,6 +514,7 @@ const shownRight = (l: LayoutState): boolean =>
 /** ⌘⌥B. Opening pins the right side for the open workspace; closing is kept as the layout choice. */
 export const toggleRight = (): void => {
   const l = getLayout();
+
   if (shownRight(l)) setLayout({ rightOpen: false });
   else {
     pinRight(l.lastWorkspaceId);
@@ -478,6 +525,7 @@ export const toggleRight = (): void => {
 /** ⌥J. The bottom panel lives in the right side, so opening it also opens the right side. */
 export const toggleBottom = (): void => {
   const l = getLayout();
+
   if (!shownRight(l)) {
     pinRight(l.lastWorkspaceId);
     setLayout({ rightOpen: true, bottomOpen: true });
@@ -488,7 +536,6 @@ export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePan
 
 // ---------------------------------------------------------------------------------------------
 // App dialogs
-
 export type SettingsTab =
   | "roles"
   | "general"
@@ -513,6 +560,7 @@ export type DialogState =
   | { readonly kind: "searchFiles"; readonly workspaceId: string };
 
 export type DialogKind = DialogState["kind"];
+
 export type DialogOf<K extends DialogKind> = Extract<DialogState, { kind: K }>;
 
 export interface ConfirmOptions {
@@ -549,20 +597,26 @@ export const openDialog = (dialog: DialogState): void => {
 export const closeDialog = (kind?: DialogKind): void => {
   if (kind === "settings") {
     settingsStore.set(null);
+
     return;
   }
+
   const cur = dialogStore.getSnapshot().dialog;
+
   if (cur && (kind === undefined || cur.kind === kind)) dialogStore.update({ dialog: null });
 };
 
 let confirmSeq = 0;
+
 const confirmResolvers = new Map<number, (ok: boolean) => void>();
 
 /** Shows the confirmation dialog (dialogs/Confirm.tsx). A newer request cancels an older one. */
 export const confirm = (opts: ConfirmOptions): Promise<boolean> => {
   const prev = dialogStore.getSnapshot().confirm;
+
   if (prev) resolveConfirm(prev.id, false);
   const id = ++confirmSeq;
+
   return new Promise<boolean>((resolve) => {
     confirmResolvers.set(id, resolve);
     dialogStore.update({ confirm: { ...opts, id } });
@@ -572,6 +626,7 @@ export const confirm = (opts: ConfirmOptions): Promise<boolean> => {
 export const resolveConfirm = (id: number, ok: boolean): void => {
   const resolve = confirmResolvers.get(id);
   confirmResolvers.delete(id);
+
   if (dialogStore.getSnapshot().confirm?.id === id) dialogStore.update({ confirm: null });
   resolve?.(ok);
 };
@@ -613,6 +668,7 @@ export const CONFIRM_TEXT = {
 export const resetUiState = (): void => {
   workspaceStores.clear();
   layout = null;
+
   for (const resolve of confirmResolvers.values()) resolve(false);
   confirmResolvers.clear();
   dialogStore.set({ dialog: null, confirm: null });

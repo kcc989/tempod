@@ -39,6 +39,7 @@ describe("mergeRuns", () => {
     const merged = mergeRuns([run({ id: "a", startedAt: 1 }), run({ id: "b", startedAt: 3 })], {
       c: run({ id: "c", startedAt: 2 }),
     });
+
     expect(merged.map((r) => r.id)).toEqual(["b", "c", "a"]);
   });
 
@@ -90,6 +91,7 @@ describe("run scripts from settings", () => {
       dev: { command: "bun run dev", cwd: "", default: false },
       web: { command: "bun run web", cwd: "apps/web", default: true },
     });
+
     expect(runScriptEntries(s).map((e) => e.id)).toEqual(["dev", "web"]);
     expect(defaultRunScriptId(s)).toBe("web");
     expect(runScriptEntries(null)).toEqual([]);
@@ -100,6 +102,7 @@ describe("run scripts from settings", () => {
       dev: { command: "a", cwd: "", default: false },
       web: { command: "b", cwd: "", default: true },
     });
+
     expect(selectedRunScriptId(s, "dev")).toBe("dev");
     expect(selectedRunScriptId(s, "gone")).toBe("web");
     expect(selectedRunScriptId(s, null)).toBe("web");
@@ -113,6 +116,7 @@ describe("run scripts from settings", () => {
       dev: { command: "a", cwd: "", default: false },
       web: { command: "b", cwd: "", default: true },
     });
+
     expect(toggleRunTarget(s, [])).toEqual({ kind: "start", scriptId: "web" });
     expect(toggleRunTarget(s, [run({ id: "w", scriptId: "web" })])).toEqual({ kind: "stop", runId: "w" });
     expect(toggleRunTarget(withRun({ dev: { command: "a", cwd: "", default: false } }), [])).toEqual({

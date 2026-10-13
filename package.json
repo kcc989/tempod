@@ -34,6 +34,7 @@
   "devDependencies": {
     "@effect/platform-bun": "4.0.3",
     "@effect/platform-node": "4.0.3",
+    "@oxlint/plugins": "1.87.0",
     "@types/bun": "1.4.2",
     "@types/node": "22.20.5",
     "alchemy": "2.0.0-beta.81",

@@ -22,13 +22,17 @@ export function ArtifactCard({ workspaceId, item }: { workspaceId: string; item:
   const pending = item.status === "pending";
   const failed = item.status === "failed";
   const clickable = !pending && !failed;
+
   const open = () => {
     if (!clickable) return;
+
     if (!phone) openArtifactTab(workspaceId, artifactId, version);
     else if (isFramed(artifactKind)) void openArtifactInBrowser(workspaceId, artifactId, version);
     else setFullScreen(true);
   };
+
   const tag = versionLabel(version);
+
   return (
     <>
       <div

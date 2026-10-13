@@ -1,5 +1,6 @@
 import {
   AgentProfile,
+  AcpFields,
   API,
   Capabilities,
   EnvironmentProposal,
@@ -17,8 +18,9 @@ import {
   TurnUsage,
   WorkspaceSummary,
   type ItemKind,
+  type JsonData,
 } from "@tempo/protocol";
-import { Schema, type Exit } from "effect";
+import { Schema, SchemaGetter, Exit } from "effect";
 import { log } from "../log.ts";
 
 /** JSON columns are validated with Effect Schema on every read and write (02, Conventions). */
@@ -27,46 +29,40 @@ export interface JsonColumn<T> {
   read(text: string | null | undefined, fallback: T): T;
   read<F>(text: string | null | undefined, fallback: F): T | F;
   /** Throws INTERNAL for a value that does not match the column's schema. */
-  write(value: T): string;
+  write(value: T | JsonData): string;
   /** Like `write`, but logs at `warn` and returns null instead of throwing. */
-  tryWrite(value: T): string | null;
+  tryWrite(value: T | JsonData): string | null;
 }
-
-const UNREADABLE = Symbol("unreadable");
-
-const parse = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return UNREADABLE;
-  }
-};
-
-const isObject = (u: unknown): u is Record<string, unknown> =>
-  typeof u === "object" && u !== null && !Array.isArray(u);
 
 export const jsonColumn = <S extends Schema.ConstraintDecoder<unknown>>(
   column: string,
   schema: S,
 ): JsonColumn<S["Type"]> => {
   const decode = Schema.decodeUnknownExit(schema);
-  const valid = (value: unknown): boolean => decode(value)._tag === "Success";
+  const decodeText = Schema.decodeUnknownExit(Schema.fromJsonString(schema));
+  const valid = (value: S["Type"] | JsonData): boolean => Exit.isSuccess(decode(value));
+
   const read = <F>(text: string | null | undefined, fallback: F): S["Type"] | F => {
     if (text === null || text === undefined || text === "") return fallback;
-    const r = decode(parse(text));
-    if (r._tag === "Success") return r.value;
+    const r = decodeText(text);
+
+    if (Exit.isSuccess(r)) return r.value;
     log("warn", "invalid JSON column value", { column });
+
     return fallback;
   };
+
   return {
     read,
     write: (value) => {
       if (!valid(value)) throw new TempoError("INTERNAL", undefined, `invalid ${column}`);
+
       return JSON.stringify(value);
     },
     tryWrite: (value) => {
       if (valid(value)) return JSON.stringify(value);
       log("warn", "invalid JSON column value not written", { column });
+
       return null;
     },
   };
@@ -74,6 +70,7 @@ export const jsonColumn = <S extends Schema.ConstraintDecoder<unknown>>(
 
 /** codex: {"lastRefresh": <ms>} (02, CredentialDO). */
 export const SecretMeta = Schema.Struct({ lastRefresh: Schema.optional(Schema.Number) });
+
 export type SecretMeta = typeof SecretMeta.Type;
 
 export const json = {
@@ -105,7 +102,7 @@ export const EMPTY_PROMPT: TurnPrompt = { text: "", mentions: [], attachmentIds:
 
 export type ItemContent<K extends ItemKind = ItemKind> = (typeof ITEM_CONTENT)[K]["Type"];
 
-const ITEM_DEFAULTS: { readonly [K in ItemKind]: ItemContent<K> } = {
+const ITEM_DEFAULTS = {
   user_message: { text: "", mentions: [], attachments: [], reviewCommentIds: [] },
   agent_message: { text: "" },
   agent_thought: { text: "" },
@@ -126,35 +123,54 @@ const ITEM_DEFAULTS: { readonly [K in ItemKind]: ItemContent<K> } = {
     artifactKind: "text",
     size: 0,
   },
+} satisfies { readonly [K in ItemKind]: ItemContent<K> };
+
+const itemSchemas: ReadonlyMap<string, Schema.Codec<ItemContent>> = new Map(Object.entries(ITEM_CONTENT));
+
+const itemDefaults: ReadonlyMap<string, ItemContent> = new Map(Object.entries(ITEM_DEFAULTS));
+
+/** Decode content at its persistence boundary, repairing invalid fields against the kind's defaults. */
+export const itemContentDecoder = (kind: string) => {
+  const schema = itemSchemas.get(kind);
+  const defaults = itemDefaults.get(kind);
+
+  if (!schema || !defaults) throw new TempoError("INTERNAL", undefined, `unknown item kind ${kind}`);
+  const decode = Schema.decodeUnknownExit(schema);
+
+  return Schema.decodeUnknownSync(
+    Schema.Unknown.pipe(
+      Schema.decodeTo(schema, {
+        decode: SchemaGetter.transform((value) => {
+          const result = decode(value);
+
+          if (Exit.isSuccess(result)) return result.value;
+          log("warn", "invalid item content", { kind });
+          let repaired = defaults;
+
+          if (Schema.is(AcpFields)(value)) {
+            for (const [key, field] of Object.entries(value)) {
+              const next = decode({ ...repaired, [key]: field });
+
+              if (Exit.isSuccess(next)) repaired = next.value;
+            }
+          }
+
+          return repaired;
+        }),
+        encode: SchemaGetter.passthrough(),
+      }),
+    ),
+  );
 };
 
-const ITEM_DECODERS = Object.fromEntries(
-  Object.entries(ITEM_CONTENT).map(([kind, schema]) => [
-    kind,
-    Schema.decodeUnknownExit(schema as Schema.ConstraintDecoder<unknown>),
-  ]),
-) as Record<string, (input: unknown) => Exit.Exit<unknown, unknown>>;
+export const readItemContent = (kind: string, text: string): ItemContent => {
+  let value;
 
-/**
- * Content that matches the kind's schema (02, Item model): the value itself, else the kind's empty
- * content with each of the value's fields that keeps it valid. Anything but the first logs at warn.
- */
-export const validItemContent = (kind: string, value: unknown): ItemContent => {
-  const decode = ITEM_DECODERS[kind];
-  if (!decode) throw new TempoError("INTERNAL", undefined, `unknown item kind ${kind}`);
-  const r = decode(value);
-  if (r._tag === "Success") return r.value as ItemContent;
-  log("warn", "invalid item content", { kind });
-  let repaired: unknown = ITEM_DEFAULTS[kind as ItemKind];
-  if (isObject(value)) {
-    for (const [key, field] of Object.entries(value)) {
-      const next = { ...(repaired as Record<string, unknown>), [key]: field };
-      const ok = decode(next);
-      if (ok._tag === "Success") repaired = ok.value;
-    }
+  try {
+    value = JSON.parse(text);
+  } catch {
+    value = undefined;
   }
-  return repaired as ItemContent;
-};
 
-export const readItemContent = (kind: string, text: string): ItemContent =>
-  validItemContent(kind, parse(text));
+  return itemContentDecoder(kind)(value);
+};

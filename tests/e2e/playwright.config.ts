@@ -5,6 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
  * environment; see README.md. Without TEMPO_E2E_URL every test is skipped.
  */
 const repeat = Number(process.env["E2E_REPEAT"] ?? "1");
+
 const storageState = process.env["TEMPO_E2E_STORAGE_STATE"]?.trim();
 
 export default defineConfig({

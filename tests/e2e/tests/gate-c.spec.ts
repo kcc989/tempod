@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { AgentId } from "@tempo/protocol";
@@ -18,9 +19,10 @@ import { sh, Terminal, workingTreeHash } from "./lib/terminal.ts";
 import { nonce, waitFor } from "./lib/util.ts";
 
 /** Gate C: phase 2 (06, Acceptance tests AT-9 to AT-16). */
-
 test.skip(!ENABLED, SKIP_REASON);
+
 test.afterEach(cleanupTest);
+
 test.afterAll(cleanupFile);
 
 /** Vite for the AT-16 preview, installed at runtime inside the workspace. */
@@ -28,6 +30,7 @@ const VITE_VERSION = "6.3.5";
 
 const scriptLog = async (watch: WorkspaceWatch, runId: string): Promise<string> => {
   const runs = await rpc("listScriptRuns", { workspaceId: watch.workspaceId });
+
   return `${watch.scriptOutput.get(runId) ?? ""}\n${runs.find((r) => r.id === runId)?.logTail ?? ""}`;
 };
 
@@ -36,6 +39,7 @@ const scriptEnded = (watch: WorkspaceWatch, runId: string, timeoutMs: number) =>
     `script run ${runId} to end`,
     () => {
       const r = watch.scriptRuns.get(runId);
+
       return r && r.status !== "running" ? r : undefined;
     },
     timeoutMs,
@@ -59,9 +63,10 @@ test("AT-9 five workspaces run turns at the same time; the hub shows each state 
       ),
     ),
   );
-  const ended = await Promise.all(spaces.map((w, i) => w.watch.waitTurnEnded(turns[i]!.id, 20 * 60_000)));
-  for (const t of ended) expect(t.status).toBe("completed");
 
+  const ended = await Promise.all(spaces.map((w, i) => w.watch.waitTurnEnded(turns[i]!.id, 20 * 60_000)));
+
+  for (const t of ended) expect(t.status).toBe("completed");
   const ids = spaces.map((w) => w.summary.id);
   expect(hub.maxConcurrent(ids, "working"), "all five were working at the same moment").toBe(5);
   await Promise.all(
@@ -69,7 +74,6 @@ test("AT-9 five workspaces run turns at the same time; the hub shows each state 
       hub.until(`hub shows ${id} ready again`, () => hub.summaries.get(id)?.state === "ready", 2 * 60_000),
     ),
   );
-
   spaces.forEach((w, i) => {
     // Live: the hub showed `working` within 5 s of the turn starting on the workspace channel.
     const started = w.watch.turnStatusAt.get(turns[i]!.id)?.get("running");
@@ -77,7 +81,6 @@ test("AT-9 five workspaces run turns at the same time; the hub shows each state 
     expect(started, `turn of workspace ${i} was seen running`).toBeDefined();
     expect(shown, `hub showed workspace ${i} working`).toBeDefined();
     expect(Math.abs((shown ?? 0) - (started ?? 0))).toBeLessThan(5_000);
-
     const text = w.watch.agentText({});
     expect(text).toContain(tokens[i]);
     tokens.forEach((other, j) => {
@@ -93,37 +96,38 @@ test("AT-10 Codex, OpenCode and Pi each complete a turn in their own chat tab in
   const creds = await rpc("getCredentialStatus", {});
   expect(creds.codex.set || creds.openai.set, "a Codex login or an OpenAI key must be set").toBe(true);
   expect(creds.openrouter.set, "an OpenRouter key must be set for OpenCode and Pi").toBe(true);
-
   const tag = nonce();
   const { watch } = await newWorkspace();
   await watch.waitState(["ready"], 15 * 60_000);
   const agents: AgentId[] = ["codex", "opencode", "pi"];
   const sessions = new Map<AgentId, string>();
+
   for (const agent of agents) {
     const model = env(`TEMPO_E2E_MODEL_${agent.toUpperCase()}`);
-    const session = await rpc("createSession", {
-      workspaceId: watch.workspaceId,
-      agent,
-      ...(model ? { model } : {}),
-    });
+    const input = { workspaceId: watch.workspaceId, agent };
+    const session = await rpc("createSession", model ? { ...input, model } : input);
     expect(session.agent).toBe(agent);
     sessions.set(agent, session.id);
   }
+
   // One turn runs per workspace at a time; the other prompts queue (01, Send a prompt).
   const turns = await Promise.all(
     agents.map((agent) =>
       sendPrompt(watch, sessions.get(agent)!, `Reply with exactly: ${agent.toUpperCase()}-${tag}`),
     ),
   );
+
   for (const [i, agent] of agents.entries()) {
     const ended = await watch.waitTurnEnded(turns[i]!.id, 15 * 60_000);
     expect(ended.status, `${agent} turn`).toBe("completed");
     const sessionId = sessions.get(agent)!;
     expect(watch.agentText({ sessionId })).toContain(`${agent.toUpperCase()}-${tag}`);
+
     for (const other of agents) {
       if (other !== agent)
         expect(watch.agentText({ sessionId })).not.toContain(`${other.toUpperCase()}-${tag}`);
     }
+
     const session = watch.sessions.get(sessionId);
     expect(
       session?.configOptions.some((o) => o.category === "model"),
@@ -141,7 +145,11 @@ test("AT-11 a Codex token refresh in one workspace reaches a second running work
   );
   await requireChannels();
   const tag = nonce();
-  const auth = JSON.parse(readFileSync(file ?? "", "utf8")) as Record<string, unknown>;
+
+  const auth = {
+    ...Schema.decodeUnknownSync(Schema.JsonObject)(JSON.parse(readFileSync(file ?? "", "utf8"))),
+  };
+
   const stale = Date.now() - 9 * 24 * 60 * 60_000;
   auth["last_refresh"] = new Date(stale).toISOString();
   await rpc("setCodexAuth", { authJson: JSON.stringify(auth) });
@@ -161,16 +169,17 @@ test("AT-11 a Codex token refresh in one workspace reaches a second running work
   expect(Math.abs((await lastRefreshIn(b.summary.id)) - stale), "B holds the stale auth.json").toBeLessThan(
     1_000,
   );
-
   // A's turn makes Codex refresh the 9-day-old token.
   const a = await newWorkspace();
   const aSession = await readySession(a.watch, "codex");
   const aTurn = await promptAndWait(a.watch, aSession, `Reply with exactly: A-${tag}`);
   expect(aTurn.status).toBe("completed");
+
   const refreshed = await waitFor(
     "CredentialDO to accept the refreshed auth.json",
     async () => {
       const codex = (await rpc("getCredentialStatus", {})).codex;
+
       return codex.lastRefresh !== null && codex.lastRefresh > stale + 60_000 ? codex.lastRefresh : undefined;
     },
     5 * 60_000,
@@ -214,13 +223,11 @@ test("AT-12 changes and diffs are correct for added, changed, deleted, renamed a
       'printf "%s\\n" "${F[0]}" "${F[1]}" "${F[2]}" "$renamed" "$deleted"',
     ].join("\n"),
   );
-  const [changed, deleted, renameFrom, renameTo, deletedLines] = out.trimEnd().split("\n").slice(-5) as [
-    string,
-    string,
-    string,
-    string,
-    string,
-  ];
+
+  const [changed, deleted, renameFrom, renameTo, deletedLines] = Schema.decodeUnknownSync(
+    Schema.Tuple([Schema.String, Schema.String, Schema.String, Schema.String, Schema.String]),
+  )(out.trimEnd().split("\n").slice(-5));
+
   const added = `e2e-added-${tag}.txt`;
   const untracked = `e2e-untracked-${tag}.txt`;
   const committed = `e2e-committed-${tag}.txt`;
@@ -241,6 +248,7 @@ test("AT-12 changes and diffs are correct for added, changed, deleted, renamed a
       additions: 1,
       deletions: 0,
     });
+
     if (scope === "branch") {
       expect(byPath.get(committed), "branch: committed on the branch").toMatchObject({
         status: "A",
@@ -262,6 +270,7 @@ test("AT-12 changes and diffs are correct for added, changed, deleted, renamed a
     expect(rename).toContain(`rename to ${renameTo}`);
     expect(await diff(added)).toContain(`+added ${tag}`);
     expect(await diff(untracked)).toContain(`+untracked ${tag}`);
+
     if (scope === "branch") expect(await diff(committed)).toContain(`+committed ${tag}`);
   }
 
@@ -273,7 +282,9 @@ test("AT-12 changes and diffs are correct for added, changed, deleted, renamed a
     side: "new",
     body: `E2E-REVIEW-${tag}: please keep this line.`,
   });
+
   expect(comment.status).toBe("draft");
+
   const turn = await promptAndWait(
     watch,
     sessionId,
@@ -281,6 +292,7 @@ test("AT-12 changes and diffs are correct for added, changed, deleted, renamed a
     10 * 60_000,
     { reviewCommentIds: [comment.id] },
   );
+
   expect(turn.status).toBe("completed");
   expect(watch.agentText({ turnId: turn.id })).toContain(`E2E-REVIEW-${tag}`);
   const sent = (await rpc("listReviewComments", { workspaceId })).find((c) => c.id === comment.id);
@@ -297,17 +309,14 @@ test("AT-13 revert restores the exact tree of the chosen checkpoint, shows the m
   const workspaceId = summary.id;
   const fileA = `e2e-revert-${tag}.txt`;
   const fileB = `e2e-revert-b-${tag}.txt`;
-
   await sh(workspaceId, `printf 'v1\\n' > ${fileA}`);
   const t1 = await promptAndWait(watch, sessionId, "Reply with exactly: OK");
   expect(t1.status).toBe("completed");
   const c1 = await turnCheckpoint(watch, t1.id);
-
   await sh(workspaceId, `printf 'v2\\n' > ${fileA} && printf 'b\\n' > ${fileB}`);
   const t2 = await promptAndWait(watch, sessionId, "Reply with exactly: OK");
   expect(t2.status).toBe("completed");
   expect(await turnCheckpoint(watch, t2.id)).not.toBe(c1);
-
   const tree = (await sh(workspaceId, `git rev-parse 'refs/tempo/checkpoints/${c1}^{tree}'`)).trim();
   await rpc("revertToCheckpoint", { workspaceId, checkpointId: c1 });
 
@@ -316,11 +325,11 @@ test("AT-13 revert restores the exact tree of the chosen checkpoint, shows the m
     () => watch.itemsOf("revert_marker").find((i) => i.content.checkpointId === c1),
     2 * 60_000,
   );
+
   expect(marker.content.toTurnSeq).toBe(t1.seq);
   await watch.until("turn 2 marked reverted", () => watch.turns.get(t2.id)?.reverted === true, 60_000);
   expect(watch.turns.get(t1.id)?.reverted).toBe(false);
   expect((await rpc("listCheckpoints", { workspaceId })).some((c) => c.reason === "pre_revert")).toBe(true);
-
   expect(await workingTreeHash(workspaceId)).toBe(tree);
   expect((await rpcRetry("readFile", { workspaceId, path: fileA })).content).toBe("v1\n");
   expect((await rpcFails("readFile", { workspaceId, path: fileB })).code).toBe("NOT_FOUND");
@@ -330,6 +339,7 @@ test("AT-13 revert restores the exact tree of the chosen checkpoint, shows the m
     sessionId,
     "If this message contains a line that starts with 'Note:', repeat that line verbatim. Otherwise reply NO NOTE.",
   );
+
   expect(t3.status).toBe("completed");
   expect(watch.agentText({ turnId: t3.id })).toContain(
     `reverted the files to the state after turn ${t1.seq}`,
@@ -347,7 +357,6 @@ test("AT-14 a repo with only .tempo/settings.yaml runs its setup and run scripts
   const { summary, watch } = await newWorkspace();
   await watch.waitState(["ready"], 15 * 60_000);
   const workspaceId = summary.id;
-
   const setup = `echo E2E_SETUP_${tag}_PORT=$TEMPO_PORT`;
   const run = `echo E2E_RUN_${tag}_PORT=$TEMPO_PORT && exec python3 -m http.server $TEMPO_PORT --bind 127.0.0.1`;
   // JSON is valid YAML, so the file can be written without a YAML library.
@@ -362,15 +371,15 @@ test("AT-14 a repo with only .tempo/settings.yaml runs its setup and run scripts
     () => (watch.detail?.settings.scripts.setup === setup ? watch.detail : undefined),
     2 * 60_000,
   );
-  expect(effective.settings.scripts.run["e2e"]?.command).toBe(run);
-  if (effective.settingsSources) expect(effective.settingsSources["scripts.setup"]).toBe(".tempo");
 
+  expect(effective.settings.scripts.run["e2e"]?.command).toBe(run);
+
+  if (effective.settingsSources) expect(effective.settingsSources["scripts.setup"]).toBe(".tempo");
   const setupRun = await rpcRetry("rerunSetup", { workspaceId });
   expect(setupRun.kind).toBe("setup");
   expect(await scriptEnded(watch, setupRun.id, 5 * 60_000)).toMatchObject({ status: "exited", exitCode: 0 });
   expect(await scriptLog(watch, setupRun.id)).toContain(`E2E_SETUP_${tag}_PORT=3000`);
   await watch.until("setup_status succeeded", () => watch.detail?.setupStatus === "succeeded", 60_000);
-
   const runRun = await rpcRetry("runScript", { workspaceId, scriptId: "e2e" });
   expect(runRun.kind).toBe("run");
   await watch.until(
@@ -388,7 +397,6 @@ test("AT-15 a terminal runs commands; after a reconnect the session and scrollba
   const tag = nonce();
   const { summary, watch } = await newWorkspace();
   await watch.waitState(["ready"], 15 * 60_000);
-
   const first = await Terminal.open(summary.id, "t2", 120, 40);
   first.type(`export E2E_VAR=${tag}; echo "mark-${tag}-$((6*7))"; seq 1 200\r`);
   await first.waitFor(`mark-${tag}-42`);
@@ -397,17 +405,17 @@ test("AT-15 a terminal runs commands; after a reconnect the session and scrollba
   expect(Number(size[2])).toBe(120);
   first.resize(100, 30);
   first.type('echo "resized=$(stty size)="\r');
+
   const resized = await first.until(
     "stty size after resize",
     () => /resized=(\d+) (\d+)=/.exec(first.screen),
     30_000,
   );
+
   expect(Number(resized[2])).toBe(100);
   expect(Number(resized[1])).toBeLessThanOrEqual(30);
   first.close();
-
   expect((await rpc("listTerminals", { workspaceId: summary.id })).map((t) => t.terminalId)).toContain("t2");
-
   const second = await Terminal.open(summary.id, "t2", 100, 30);
   // tmux redraws the screen of the same session on attach.
   await second.until("the screen restored", () => /resized=\d+ 100=/.test(second.screen), 30_000);
@@ -450,12 +458,12 @@ test("AT-16 a Vite preview opened from Tempo works with hot reload; the bare pre
     () => watch.detail?.ports.find((p) => p.port === 5173),
     3 * 60_000,
   );
+
   if (E2E.previewDomain) expect(port.url).toBe(previewUrl(5173, summary.id));
   const PREVIEW_404 = "This preview opens only from Tempo.";
   const bare = await fetch(port.url);
   expect(bare.status, "the bare preview URL in a fresh browser").toBe(404);
   expect(await bare.text()).toContain(PREVIEW_404);
-
   const { url: entry } = await rpc("openPreview", { workspaceId: summary.id, port: 5173 });
   expect(entry.slice(0, port.url.length + 20)).toBe(`${port.url}/__tempo/enter?code=`);
   expect(entry.slice(port.url.length + 20)).toMatch(/^[a-z0-9]{32}$/);
@@ -471,9 +479,7 @@ test("AT-16 a Vite preview opened from Tempo works with hot reload; the bare pre
     sockets.some((u) => new URL(u).host === host),
     "hot reload runs over a WebSocket through the preview",
   ).toBe(true);
-
   expect((await fetch(entry)).status, "an entry link works once").toBe(404);
-
   await rpc("rotatePreviewKey", { workspaceId: summary.id });
   await page.reload();
   await expect(page.locator("body")).toContainText(PREVIEW_404, { timeout: 30_000 });
@@ -486,12 +492,15 @@ test("AT-16 a Vite preview opened from Tempo works with hot reload; the bare pre
     'Use the Playwright MCP browser tools to open http://localhost:5173 and read the text of the element with id "app". ' +
       "Do not use curl or a shell for this. Reply with that text only.",
   );
+
   expect(check.status).toBe("completed");
   expect(watch.agentText({ turnId: check.id })).toContain(`E2E-${tag}-v2`);
+
   const browserCalls = watch
     .itemsOf("tool_call", { turnId: check.id })
     .filter((t) =>
       /playwright|browser_/i.test(`${t.content.title} ${JSON.stringify(t.content.rawInput ?? null)}`),
     );
+
   expect(browserCalls.length, "the agent used the Playwright MCP server").toBeGreaterThan(0);
 });

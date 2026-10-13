@@ -91,6 +91,7 @@ describe("viewed marks with the diff hash", () => {
 
   it("drops the oldest marks past the cap", () => {
     let marks = EMPTY_MARKS;
+
     for (let i = 0; i <= MAX_VIEWED_MARKS; i++) marks = withViewed(marks, `f${i}`, "h", true);
     expect(Object.keys(marks)).toHaveLength(MAX_VIEWED_MARKS);
     expect(marks["f0"]).toBeUndefined();

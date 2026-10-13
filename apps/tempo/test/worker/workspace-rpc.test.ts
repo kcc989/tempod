@@ -1,3 +1,6 @@
+import { Schema } from "effect";
+import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.ts";
+import type { Result } from "@tempo/protocol";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi, type TestContext } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
@@ -23,61 +26,69 @@ import {
  * WorkspaceDO RPC methods (02, Server functions: Workspaces, Sessions and turns, Review and git,
  * Files) and the flows behind them (03, Prompt and turn, Revert, Archive and restore, Commit, push).
  */
+type Stub = WorkspaceStub;
 
-type Stub = DurableObjectStub<WorkspaceDO>;
-type Res = { readonly ok: boolean };
-type ErrorBody = { code: string; message: string; detail?: string };
-type Row = Record<string, any>;
+type Res<T = unknown> = Result<T>;
+
+type Row = Record<string, SqlStorageValue>;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Unwraps a Result envelope. RPC stubs widen the value types, so tests read values loosely. */
-const ok = (r: Res): any => {
-  if (!r.ok) {
-    const e = (r as unknown as { error: ErrorBody }).error;
-    throw new Error(`expected ok, got ${e.code}: ${e.message} ${e.detail ?? ""}`);
+const ok = <T>(result: Result<T>): T => {
+  if (!result.ok) {
+    const error = result.error;
+    throw new Error(`expected ok, got ${error.code}: ${error.message} ${error.detail ?? ""}`);
   }
-  return (r as unknown as { value: unknown }).value;
+
+  return result.value;
 };
-const codeOf = (r: Res): string => (r.ok ? "OK" : (r as unknown as { error: ErrorBody }).error.code);
+
+const codeOf = <T>(result: Result<T>): string => (result.ok ? "OK" : result.error.code);
 
 const ULID = /^[0-9a-hjkmnp-tv-z]{26}$/;
+
 const PREVIEW_KEY = /^[A-Za-z0-9_-]{43}$/;
 
 // ---------- storage helpers ----------
-
 const rows = (stub: Stub, query: string, ...binds: Array<string | number | null>): Promise<Row[]> =>
-  runInDurableObject(
-    stub,
-    (_i: WorkspaceDO, state: DurableObjectState) =>
-      state.storage.sql.exec(query, ...binds).toArray() as Row[],
+  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) =>
+    state.storage.sql.exec(query, ...binds).toArray(),
   );
+
 const one = async (
   stub: Stub,
   query: string,
   ...binds: Array<string | number | null>
 ): Promise<Row | undefined> => (await rows(stub, query, ...binds))[0];
+
 const exec = (stub: Stub, query: string, ...binds: Array<string | number | null>): Promise<void> =>
   runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => {
     state.storage.sql.exec(query, ...binds);
   });
 
 const turnOf = (stub: Stub, id: string) => one(stub, "SELECT * FROM turns WHERE id = ?", id);
+
 const sessionOf = (stub: Stub, id: string) => one(stub, "SELECT * FROM sessions WHERE id = ?", id);
+
 const wsRow = async (stub: Stub) => (await one(stub, "SELECT * FROM workspace WHERE id = 1"))!;
+
 const detail = async (stub: Stub) => ok(await stub.getWorkspace({}));
+
 const d1Row = (id: string) => env.DB.prepare("SELECT * FROM workspaces WHERE id = ?").bind(id).first<Row>();
+
 const hubRev = (userId: string, workspaceId: string): Promise<number | null> =>
-  runInDurableObject(env.USER_HUB.getByName(userId), (_i: unknown, state: DurableObjectState) => {
+  runInDurableObject(env.USER_HUB.getByName(userId), (_i, state: DurableObjectState) => {
     const r = state.storage.sql
       .exec("SELECT rev FROM summaries WHERE workspace_id = ?", workspaceId)
       .toArray();
+
     return r.length ? Number(r[0]!["rev"]) : null;
   });
+
 const opsOf = async (stub: Stub, kind: string) => (await stub.listOps()).filter((o) => o.kind === kind);
 
 // ---------- driving ----------
-
 const driveUntil = async (
   stub: Stub,
   check: () => Promise<boolean>,
@@ -85,8 +96,10 @@ const driveUntil = async (
   timeoutMs = 20_000,
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
+
   for (;;) {
     if (await check()) return;
+
     if (Date.now() > deadline) throw new Error(`timed out driving to ${label}`);
     // RPC assertions need op outcomes, not production retry delays.
     await exec(
@@ -97,12 +110,14 @@ const driveUntil = async (
     await sleep(25);
   }
 };
+
 const stateOf = async (stub: Stub): Promise<string> => (await detail(stub)).state;
+
 const driveToState = (stub: Stub, ...states: string[]) =>
   driveUntil(stub, async () => states.includes(await stateOf(stub)), `state ${states.join("|")}`);
 
 /** Runs alarms while an RPC call that waits on an op (revert, commit_push) is in flight. */
-const whileDriving = async (stub: Stub, rpc: PromiseLike<unknown>): Promise<Res> => {
+const whileDriving = async <T>(stub: Stub, rpc: PromiseLike<Result<T>>): Promise<Result<T>> => {
   const call = Promise.resolve(rpc);
   let settled = false;
   void call.then(
@@ -110,6 +125,7 @@ const whileDriving = async (stub: Stub, rpc: PromiseLike<unknown>): Promise<Res>
     () => (settled = true),
   );
   const deadline = Date.now() + 20_000;
+
   while (!settled && Date.now() < deadline) {
     // RPC assertions need op outcomes, not production retry delays.
     await exec(
@@ -119,15 +135,15 @@ const whileDriving = async (stub: Stub, rpc: PromiseLike<unknown>): Promise<Res>
     await runDurableObjectAlarm(stub);
     await sleep(25);
   }
-  return (await call) as Res;
+
+  return await call;
 };
 
 /** The fake tempod's socket belongs to the DO's I/O context, so events are sent from inside it. */
-const emit = (w: Ws, event: Record<string, unknown>): Promise<number> =>
-  runInDurableObject(w.stub, () => w.tempod.emit(event as unknown as TempodEvent));
+const emit = (w: Ws, event: TempodEvent): Promise<number> =>
+  runInDurableObject(w.stub, () => w.tempod.emit(event));
 
 // ---------- seeding ----------
-
 interface Ws {
   readonly workspaceId: string;
   readonly stub: Stub;
@@ -145,6 +161,7 @@ const hold = (tempod: FakeTempod, onTestFinished: TestContext["onTestFinished"])
 };
 
 let counter = 0;
+
 const author = { name: "Owner", email: `${OWNER_GITHUB_ID}+owner@users.noreply.github.com` };
 
 const initInput = (
@@ -188,6 +205,7 @@ const insertD1Workspace = async (
       w.archived ? now : null,
     )
     .run();
+
   return id;
 };
 
@@ -206,18 +224,20 @@ const seedHeld = async (
   } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
+
   if (opts.credentials !== false) await seedCredentials(seeded.userId, [opts.agent ?? "claude"]);
   counter++;
   const workspaceId = newId();
   const slug = `held-${counter}`;
   const branch = `tempo/${slug}`;
   await insertD1Workspace(seeded, { id: workspaceId, slug, branch });
-  const stub = env.WORKSPACE.getByName(workspaceId);
+  const stub = workspaceStub(env.WORKSPACE, workspaceId);
   const tempod = new FakeTempod();
   hold(tempod, onTestFinished);
   opts.prepare?.(tempod, stub);
   const { container } = await installFakes(stub, tempod);
   const summary = ok(await stub.init(initInput({ workspaceId, seeded, slug, branch }, opts)));
+
   return { workspaceId, stub, tempod, container, seeded, slug, branch, summary };
 };
 
@@ -226,10 +246,12 @@ const readyWs = async (
   opts: { prompt?: string; credentials?: boolean } = {},
 ): Promise<Ws & { first: { sessionId: string; turnId: string } | null }> => {
   const seeded = await seedProject();
+
   if (opts.credentials !== false) await seedCredentials(seeded.userId, ["claude"]);
   const w = await seedWorkspace(seeded, opts.prompt ? { prompt: opts.prompt } : {});
   await driveToState(w.stub, "ready", "working");
   let first: { sessionId: string; turnId: string } | null = null;
+
   if (opts.prompt && opts.credentials !== false) {
     await waitFor(() => w.tempod.requestsOf("session.prompt").length === 1, 5000, "first prompt");
     const p = w.tempod.requestsOf("session.prompt")[0];
@@ -240,12 +262,14 @@ const readyWs = async (
       "first turn running",
     );
   }
+
   return { ...w, seeded, first };
 };
 
 const liveSession = async (w: Ws, agent: AgentId = "claude") => {
   const s = ok(await w.stub.createSession({ agent }));
   await waitFor(async () => (await sessionOf(w.stub, s.id))?.["status"] === "idle", 5000, "session idle");
+
   return s;
 };
 
@@ -282,8 +306,8 @@ const archiveIt = async (w: Ws) => {
 };
 
 const settingsWith = (patch: {
-  scripts?: Record<string, unknown>;
-  environment?: Record<string, unknown>;
+  scripts?: Partial<import("@tempo/protocol").Settings["scripts"]>;
+  environment?: Partial<import("@tempo/protocol").Settings["environment"]>;
 }) => ({
   ...DEFAULT_EFFECTIVE,
   scripts: { ...DEFAULT_EFFECTIVE.scripts, ...patch.scripts },
@@ -291,7 +315,7 @@ const settingsWith = (patch: {
 });
 
 /** Makes tempod report new effective settings and has the DO read them again. */
-const useSettings = async (w: Ws, effective: unknown) => {
+const useSettings = async (w: Ws, effective: import("@tempo/protocol").Settings) => {
   w.tempod.on("settings.read", () => ({ effective, warnings: [], errors: [], sources: {} }));
   await w.stub.refreshSettings();
 };
@@ -299,16 +323,18 @@ const useSettings = async (w: Ws, effective: unknown) => {
 const uninitialised = (): Stub => env.WORKSPACE.getByName(newId());
 
 /** Opens the workspace channel (02) and collects what the DO sends. */
-const openUi = async (w: Ws) => {
+const openUi = async (w: Pick<Ws, "stub" | "workspaceId">) => {
   const res = await w.stub.fetch(`https://tempo.test/api/ws/workspace/${w.workspaceId}?sinceRev=0`, {
     headers: { Upgrade: "websocket" },
   });
+
   const socket = res.webSocket!;
   const messages: any[] = [];
   socket.accept();
   socket.addEventListener("message", (e) => {
     messages.push(JSON.parse(String(e.data)));
   });
+
   return { socket, messages };
 };
 
@@ -324,8 +350,10 @@ describe("ready RPC fixture contract", { timeout: 30_000 }, () => {
   it("matches lifecycle-created defaults and serves independent workspace RPCs", async ({ expect }) => {
     const full = await readyWs();
     const minimal = await seedReadyWorkspace();
+
     const defaults = async (w: Ws) => {
       const d = await detail(w.stub);
+
       return {
         state: d.state,
         attention: d.attention,
@@ -339,6 +367,7 @@ describe("ready RPC fixture contract", { timeout: 30_000 }, () => {
         runningTurnId: d.runningTurnId,
       };
     };
+
     expect(await defaults(minimal)).toEqual(await defaults(full));
     expect(ok(await minimal.stub.readFile({ path: "README.md" }))).toEqual(
       ok(await full.stub.readFile({ path: "README.md" })),
@@ -409,7 +438,7 @@ describe.concurrent("init", { timeout: 30_000 }, () => {
     const turns = await rows(w.stub, "SELECT * FROM turns");
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({ session_id: sessions[0]!["id"], status: "queued", seq: 1 });
-    expect(JSON.parse(turns[0]!["prompt_json"])).toEqual({
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(turns[0]!["prompt_json"]))).toEqual({
       text,
       mentions: [],
       attachmentIds: [],
@@ -423,7 +452,7 @@ describe.concurrent("init", { timeout: 30_000 }, () => {
       turn_id: turns[0]!["id"],
     });
     // 02 Item model: user_message content_json = {text, mentions: [{path}], attachments: [{id, name, mime}], reviewCommentIds: []}
-    expect(JSON.parse(items[0]!["content_json"])).toEqual({
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(items[0]!["content_json"]))).toEqual({
       text,
       mentions: [],
       attachments: [],
@@ -450,7 +479,9 @@ describe.concurrent("init", { timeout: 30_000 }, () => {
     const sessions = await rows(w.stub, "SELECT * FROM sessions");
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toMatchObject({ agent: "codex", status: "idle" });
-    expect(JSON.parse(sessions[0]!["config_json"])).toEqual({ model: "reported-model" });
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(sessions[0]!["config_json"]))).toEqual({
+      model: "reported-model",
+    });
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(0);
     expect(await rows(w.stub, "SELECT id FROM items")).toHaveLength(0);
     expect(await opsOf(w.stub, "create")).toHaveLength(1);
@@ -472,11 +503,13 @@ describe.concurrent("init", { timeout: 30_000 }, () => {
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "First prompt" });
     const before = await wsRow(w.stub);
+
     const again = ok(
       await w.stub.init(
         initInput({ ...w, slug: "other-slug", branch: "tempo/other" }, { prompt: "Second prompt" }),
       ),
     );
+
     expect(again.id).toBe(w.workspaceId);
     expect(again.title).toBe("First prompt");
     expect(again.slug).toBe(w.slug);
@@ -493,6 +526,7 @@ describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
   it("returns every WorkspaceDetail field for a ready workspace", async ({ expect }) => {
     const w = await readyWs();
     const d = await detail(w.stub);
+
     // 02 Shared types: WorkspaceDetail = WorkspaceSummary plus errorCode, errorDetail, setupStatus, pushed,
     // ports, settings, runningTurnId, queue, imageRef, op
     for (const key of [
@@ -526,6 +560,7 @@ describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
     ]) {
       expect(d, key).toHaveProperty(key);
     }
+
     expect(d).toMatchObject({
       id: w.workspaceId,
       projectId: w.seeded.projectId,
@@ -612,6 +647,7 @@ describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished);
+
     // 02 Error codes: BRANCH_INVALID = "Not a valid git branch name"
     for (const bad of [
       "",
@@ -636,9 +672,9 @@ describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
     ]) {
       expect(codeOf(await w.stub.renameBranch({ branch: bad })), JSON.stringify(bad)).toBe("BRANCH_INVALID");
     }
+
     expect((await detail(w.stub)).branch).toBe(w.branch);
   });
-
   // Regression (fixed): isValidBranch (src/do/workspace/rpc.ts:57-58) accepts names git refuses as branch names:
   // a first component that starts with ".", a component that ends in ".lock", a leading "-", and
   // "HEAD". renameBranch returns OK and stores them; git.renameBranch / repo.clone then fail.
@@ -647,6 +683,7 @@ describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished);
+
     for (const bad of [".hidden", "a.lock/b", "-oops", "HEAD"]) {
       expect(codeOf(await w.stub.renameBranch({ branch: bad })), JSON.stringify(bad)).toBe("BRANCH_INVALID");
     }
@@ -669,11 +706,9 @@ describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
     await insertD1Workspace(w.seeded, { slug: `taken-${++counter}`, branch: "feature/taken" });
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/taken" }))).toBe("BRANCH_IN_USE");
     expect((await detail(w.stub)).branch).toBe(w.branch);
-
     await insertD1Workspace(w.seeded, { slug: `old-${++counter}`, branch: "feature/old", archived: true });
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/old" }))).toBe("OK");
     expect((await detail(w.stub)).branch).toBe("feature/old");
-
     const other = await seedProject();
     await insertD1Workspace(other, { slug: `else-${++counter}`, branch: "feature/elsewhere" });
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/elsewhere" }))).toBe("OK");
@@ -737,6 +772,7 @@ describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["pinned"] === 1 && r["summary_rev"] === d1.rev;
       },
       5000,
@@ -749,6 +785,7 @@ describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["pinned"] === 0 && r["summary_rev"] === d2.rev;
       },
       5000,
@@ -758,18 +795,32 @@ describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
 
   it("publishes the summary to the hub even when the D1 write fails", async ({ expect }) => {
     const w = await seedReadyWorkspace();
-    const brokenD1 = {
-      prepare: () => {
-        throw new Error("D1 unavailable");
-      },
-    };
-    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
-      const core = internals(i).core as unknown as { env: object; realEnv?: object };
-      core.realEnv = core.env;
-      core.env = new Proxy(core.env, {
-        get: (target, key) => (key === "DB" ? brokenD1 : Reflect.get(target, key)),
+
+    let restoreD1 = () => {};
+
+    await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      const environment = core.env;
+      const database = environment.DB;
+
+      const unavailable = {
+        prepare: () => {
+          throw new Error("D1 unavailable");
+        },
+        batch: <T>(statements: D1PreparedStatement[]) => database.batch<T>(statements),
+        exec: (query: string) => database.exec(query),
+        withSession: (bookmark?: D1SessionBookmark | D1SessionConstraint) => database.withSession(bookmark),
+        dump: () => database.dump(),
+      } satisfies D1Database;
+
+      Object.defineProperty(core, "env", {
+        value: { ...environment, DB: unavailable } satisfies typeof environment,
       });
+      restoreD1 = () => {
+        Object.defineProperty(core, "env", { value: environment });
+      };
     });
+
     try {
       ok(await w.stub.renameWorkspace({ title: "Renamed while D1 is down" }));
       const rev = (await wsRow(w.stub))["summary_rev"];
@@ -777,11 +828,9 @@ describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
       await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) === rev, 5000, "hub rev");
       expect((await d1Row(w.workspaceId))!["title"]).not.toBe("Renamed while D1 is down");
     } finally {
-      await runInDurableObject(w.stub, (i: WorkspaceDO) => {
-        const core = internals(i).core as unknown as { env: object; realEnv?: object };
-        core.env = core.realEnv!;
-      });
+      await runInDurableObject(w.stub, () => restoreD1());
     }
+
     // The next publish brings D1 up to date.
     ok(await w.stub.setPinned({ pinned: true }));
     await waitFor(
@@ -825,11 +874,17 @@ describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
     expect(after.attention).toBe("none");
     expect(after.rev).toBeGreaterThan(before.rev);
     const turn = await turnOf(w.stub, turnId);
-    expect((await wsRow(w.stub))["last_viewed_at"]).toBeGreaterThanOrEqual(turn!["ended_at"]);
+    expect((await wsRow(w.stub))["last_viewed_at"]).toBeGreaterThanOrEqual(
+      Schema.decodeUnknownSync(Schema.Number)(turn!["ended_at"]),
+    );
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
-        return r?.["attention"] === "none" && r["summary_rev"] >= after.rev;
+
+        return (
+          r?.["attention"] === "none" &&
+          Schema.decodeUnknownSync(Schema.Number)(r["summary_rev"]) >= after.rev
+        );
       },
       5000,
       "D1 attention none",
@@ -913,6 +968,7 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["state"] === "sleeping" && r["archived_at"] === null;
       },
       5000,
@@ -944,12 +1000,10 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
       options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
     });
     await waitFor(async () => (await detail(w.stub)).attention === "needs_input", 5000, "needs_input");
-
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     // 03 Transitions: working → archiving (archive)
     expect(await stateOf(w.stub)).toBe("archiving");
     await driveToState(w.stub, "archived");
-
     // 03 Archive 1: "cancel the running turn and delete queued turns. Answer pending permission requests as cancelled."
     expect(w.tempod.requestsOf("session.cancel")).toEqual([{ sessionId, turnId }]);
     expect((await turnOf(w.stub, turnId))!["status"]).toBe("cancelled");
@@ -969,6 +1023,7 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["state"] === "archived" && r["archived_at"] === d.archivedAt;
       },
       5000,
@@ -1005,6 +1060,7 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["state"] === "sleeping" && r["archived_at"] === null;
       },
       5000,
@@ -1055,6 +1111,7 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
     await archiveIt(w);
     const id = w.workspaceId;
     const otherId = newId();
+
     // 02 R2 layout: checkpoints/, homes/, attachments/, logs/ per workspace
     const keys = [
       `checkpoints/${id}/c1.bundle`,
@@ -1062,20 +1119,23 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
       `attachments/${id}/a1/notes.txt`,
       `logs/${id}/run1.log`,
     ];
+
     for (const k of [...keys, `logs/${otherId}/run1.log`]) await env.DATA.put(k, "x");
     await waitFor(async () => (await hubRev(w.seeded.userId, id)) !== null, 5000, "hub summary");
-
     expect(codeOf(await w.stub.deleteWorkspace({}))).toBe("OK");
+
     // 03 Delete: "delete the R2 keys (02, R2 layout), the D1 row, and every row in the DO"; then UserHubDO.remove
     for (const k of keys) expect(await env.DATA.head(k), k).toBeNull();
     expect(await env.DATA.head(`logs/${otherId}/run1.log`)).not.toBeNull();
     expect(await d1Row(id)).toBeNull();
     expect(await hubRev(w.seeded.userId, id)).toBeNull();
+
     const tables = await runInDurableObject(w.stub, (_i: WorkspaceDO, state: DurableObjectState) =>
       state.storage.sql
         .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'workspace'")
         .toArray(),
     );
+
     if (tables.length > 0) expect(await rows(w.stub, "SELECT * FROM workspace")).toHaveLength(0);
     expect(codeOf(await w.stub.getWorkspace({}))).not.toBe("OK");
   });
@@ -1101,15 +1161,17 @@ describe.concurrent("open previews", { timeout: 30_000 }, () => {
   const cookieFor = async (w: Ws): Promise<string> => {
     await exec(w.stub, "INSERT OR IGNORE INTO ports (port, first_seen_at) VALUES (3000, 0)");
     const { url } = ok(await w.stub.openPreview({ port: 3000 }));
+
     return (await w.stub.previewEnter(3000, new URL(url).searchParams.get("code")!))!;
   };
-  const previewFetch = (w: Ws, cookie: string, init: { upgrade?: boolean } = {}) =>
-    w.stub.fetch(`https://3000-${w.workspaceId}.previews.test/live`, {
-      headers: {
-        "x-tempo-preview": `3000:${cookie}`,
-        ...(init.upgrade ? { Upgrade: "websocket" } : {}),
-      },
-    });
+
+  const previewFetch = (w: Ws, cookie: string, init: { upgrade?: boolean } = {}) => {
+    const headers = new Headers({ "x-tempo-preview": `3000:${cookie}` });
+
+    if (init.upgrade) headers.set("Upgrade", "websocket");
+
+    return w.stub.fetch(`https://3000-${w.workspaceId}.previews.test/live`, { headers });
+  };
 
   it("closes preview WebSockets that are already open when the key is reset, and the old cookie stops working", async ({
     expect,
@@ -1186,7 +1248,9 @@ describe.concurrent("createSession, renameSession and closeSession", { timeout: 
     await waitFor(async () => (await sessionOf(w.stub, s.id))?.["status"] === "idle", 5000, "idle");
     const row = (await sessionOf(w.stub, s.id))!;
     expect(row["acp_session_id"]).toMatch(/^acp-/);
-    expect(JSON.parse(row["modes_json"])).toEqual([{ id: "default", name: "Default" }]);
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(row["modes_json"]))).toEqual([
+      { id: "default", name: "Default" },
+    ]);
     const second = ok(await w.stub.createSession({ agent: "claude", modeId: "plan" }));
     expect(second.sortOrder).toBeGreaterThan(s.sortOrder);
     await waitFor(() => w.tempod.requestsOf("session.start").length === 2, 5000, "second session.start");
@@ -1207,12 +1271,17 @@ describe.concurrent("createSession, renameSession and closeSession", { timeout: 
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("starting");
   });
-
   it("renameSession stores the title; unknown sessions are NOT_FOUND", async ({ expect, onTestFinished }) => {
     const w = await seedHeld(onTestFinished, { prompt: "Hi" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     expect(codeOf(await w.stub.renameSession({ sessionId, title: "Billing" }))).toBe("OK");
-    expect((await sessionOf(w.stub, sessionId))!["title"]).toBe("Billing");
+    expect((await sessionOf(w.stub, Schema.decodeUnknownSync(Schema.String)(sessionId)))!["title"]).toBe(
+      "Billing",
+    );
     expect(codeOf(await w.stub.renameSession({ sessionId: newId(), title: "x" }))).toBe("NOT_FOUND");
   });
 
@@ -1222,24 +1291,32 @@ describe.concurrent("createSession, renameSession and closeSession", { timeout: 
     expect(codeOf(await w.stub.closeSession({ sessionId: w.first!.sessionId }))).toBe("SESSION_BUSY");
     expect((await sessionOf(w.stub, w.first!.sessionId))!["status"]).toBe("running");
   });
-
   it("closeSession cancels the session's queued turns and closes it; prompts to it are then refused", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "Queued work" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const turnId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM turns"))!["id"],
+    );
+
     expect(codeOf(await w.stub.closeSession({ sessionId }))).toBe("OK");
-    const turn = (await turnOf(w.stub, turnId))!;
+    const turn = (await turnOf(w.stub, Schema.decodeUnknownSync(Schema.String)(turnId)))!;
     expect(turn["status"]).toBe("cancelled");
     expect(turn["queue_pos"]).toBeNull();
-    const s = (await sessionOf(w.stub, sessionId))!;
+    const s = (await sessionOf(w.stub, Schema.decodeUnknownSync(Schema.String)(sessionId)))!;
     expect(s["status"]).toBe("closed");
     expect(s["closed_at"]).not.toBeNull();
     expect((await detail(w.stub)).queue).toEqual([]);
     // 03 sendPrompt 1: "the session is not closed"
-    expect(codeOf(await prompt(w, sessionId, "more"))).toBe("VALIDATION_FAILED");
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "more"))).toBe(
+      "VALIDATION_FAILED",
+    );
     expect(codeOf(await w.stub.closeSession({ sessionId }))).toBe("OK");
     expect(codeOf(await w.stub.closeSession({ sessionId: newId() }))).toBe("NOT_FOUND");
   });
@@ -1260,13 +1337,22 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const first = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const first = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
     const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 4, body: "Use a const" }));
     const c2 = ok(await w.stub.addReviewComment({ path: "src/other.ts", body: "Not sent" }));
+
     const t2 = ok(
-      await prompt(w, sessionId, "Second", { reviewCommentIds: [c1.id], mentions: [{ path: "src/app.ts" }] }),
+      await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Second", {
+        reviewCommentIds: [c1.id],
+        mentions: [{ path: "src/app.ts" }],
+      }),
     );
+
     // 03 sendPrompt 2: "status = 'queued', next seq, next queue_pos"
     expect(t2).toMatchObject({
       sessionId,
@@ -1283,17 +1369,19 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
       endedAt: null,
       reverted: false,
     });
-    const t3 = ok(await prompt(w, sessionId, "Third"));
+    const t3 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Third"));
     expect(t3).toMatchObject({ seq: 3, queuePos: 3, status: "queued" });
     expect((await detail(w.stub)).queue).toEqual([first, t2.id, t3.id]);
+
     // 03 sendPrompt 3 + 02 Item model user_message content
     const item = (await one(
       w.stub,
       "SELECT * FROM items WHERE turn_id = ? AND kind = 'user_message'",
       t2.id,
     ))!;
+
     expect(item["session_id"]).toBe(sessionId);
-    expect(JSON.parse(item["content_json"])).toEqual({
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"]))).toEqual({
       text: "Second",
       mentions: [{ path: "src/app.ts" }],
       attachments: [],
@@ -1310,35 +1398,57 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
       sentTurnId: null,
     });
   });
-
   it("returns VALIDATION_FAILED for review comment ids that do not exist or were already sent, and queues nothing", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 1, body: "Rename" }));
-    ok(await prompt(w, sessionId, "Uses c1", { reviewCommentIds: [c1.id] }));
+    ok(
+      await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Uses c1", {
+        reviewCommentIds: [c1.id],
+      }),
+    );
     const count = async () => (await rows(w.stub, "SELECT id FROM turns")).length;
     const before = await count();
     // 02 sendPrompt: VALIDATION_FAILED; 03 sendPrompt 3 marks only draft review comments sent.
-    expect(codeOf(await prompt(w, sessionId, "Again", { reviewCommentIds: [c1.id] }))).toBe(
-      "VALIDATION_FAILED",
-    );
-    expect(codeOf(await prompt(w, sessionId, "Ghost", { reviewCommentIds: [newId()] }))).toBe(
-      "VALIDATION_FAILED",
-    );
+    expect(
+      codeOf(
+        await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Again", {
+          reviewCommentIds: [c1.id],
+        }),
+      ),
+    ).toBe("VALIDATION_FAILED");
+    expect(
+      codeOf(
+        await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Ghost", {
+          reviewCommentIds: [newId()],
+        }),
+      ),
+    ).toBe("VALIDATION_FAILED");
     expect(await count()).toBe(before);
     const c2 = ok(await w.stub.addReviewComment({ path: "src/app.ts", body: "Draft" }));
-    ok(await prompt(w, sessionId, "Uses c2 twice", { reviewCommentIds: [c2.id, c2.id] }));
+    ok(
+      await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Uses c2 twice", {
+        reviewCommentIds: [c2.id, c2.id],
+      }),
+    );
     expect(await count()).toBe(before + 1);
   });
-
   it("broadcasts turn and item.upsert to the workspace channel", async ({ expect, onTestFinished }) => {
     const w = await seedHeld(onTestFinished, { prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     const { socket, messages } = await openUi(w);
-    const t = ok(await prompt(w, sessionId, "Broadcast me"));
+    const t = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Broadcast me"));
     // 03 sendPrompt 4: "Broadcast turn and item.upsert."
     await waitFor(() => messages.some((m) => m.type === "turn" && m.turn.id === t.id), 5000, "turn message");
     await waitFor(
@@ -1357,13 +1467,16 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
     expect(upsert.itemsRev).toBe(upsert.item.rev);
     socket.close();
   });
-
   it("accepts a prompt with only an attachment and returns VALIDATION_FAILED for an unknown attachment", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     const attId = newId();
     await w.stub.registerAttachment({
       id: attId,
@@ -1383,6 +1496,7 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
         }),
       ),
     ).toBe("VALIDATION_FAILED");
+
     const t = ok(
       await w.stub.sendPrompt({
         sessionId,
@@ -1392,10 +1506,11 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
         reviewCommentIds: [],
       }),
     );
+
     expect(t.prompt.attachmentIds).toEqual([attId]);
     const item = (await one(w.stub, "SELECT content_json FROM items WHERE turn_id = ?", t.id))!;
     // 02 Item model: user_message attachments: [{id, name, mime}]
-    expect(JSON.parse(item["content_json"]).attachments).toEqual([
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"])).attachments).toEqual([
       { id: attId, name: "shot.png", mime: "image/png" },
     ]);
     expect((await one(w.stub, "SELECT turn_id FROM attachments WHERE id = ?", attId))!["turn_id"]).toBe(t.id);
@@ -1422,28 +1537,40 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
   });
-
   it("returns VALIDATION_FAILED for an empty message or a closed session, and NOT_FOUND for an unknown session", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    expect(codeOf(await prompt(w, sessionId, "   "))).toBe("VALIDATION_FAILED");
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "   "))).toBe(
+      "VALIDATION_FAILED",
+    );
     expect(codeOf(await prompt(w, newId(), "hi"))).toBe("NOT_FOUND");
     ok(await w.stub.closeSession({ sessionId }));
-    expect(codeOf(await prompt(w, sessionId, "hi"))).toBe("VALIDATION_FAILED");
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "hi"))).toBe(
+      "VALIDATION_FAILED",
+    );
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
   });
-
   it("returns CREDENTIAL_MISSING when the session's agent has no login", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "First", credentials: false });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     // 03 sendPrompt 1: "the agent's credential is set (else CREDENTIAL_MISSING)"
-    expect(codeOf(await prompt(w, sessionId, "Second"))).toBe("CREDENTIAL_MISSING");
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Second"))).toBe(
+      "CREDENTIAL_MISSING",
+    );
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
   });
 
@@ -1501,13 +1628,19 @@ describe.concurrent("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeo
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "Original" });
-    const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+
+    const turnId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM turns"))!["id"],
+    );
+
     const before = (await one(w.stub, "SELECT * FROM items WHERE turn_id = ?", turnId))!;
     const t = ok(await w.stub.editQueuedTurn({ turnId, text: "Edited text" }));
     expect(t).toMatchObject({ id: turnId, status: "queued", prompt: { text: "Edited text" } });
     const item = (await one(w.stub, "SELECT * FROM items WHERE turn_id = ?", turnId))!;
-    expect(JSON.parse(item["content_json"]).text).toBe("Edited text");
-    expect(item["rev"]).toBeGreaterThan(before["rev"]);
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"])).text).toBe(
+      "Edited text",
+    );
+    expect(item["rev"]).toBeGreaterThan(Schema.decodeUnknownSync(Schema.Number)(before["rev"]));
     expect(item["rev"]).toBe((await wsRow(w.stub))["items_rev"]);
   });
 
@@ -1525,15 +1658,18 @@ describe.concurrent("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeo
     expect(codeOf(await w.stub.editQueuedTurn({ turnId: newId(), text: "x" }))).toBe("NOT_FOUND");
     expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: newId() }))).toBe("NOT_FOUND");
   });
-
   it("deleteQueuedTurn removes the turn and its items and broadcasts turn.deleted", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "Keep me" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const keep = (await one(w.stub, "SELECT id FROM turns"))!["id"];
-    const t2 = ok(await prompt(w, sessionId, "Delete me"));
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const keep = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Delete me"));
     const { socket, messages } = await openUi(w);
     expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("OK");
     expect(await turnOf(w.stub, t2.id)).toBeUndefined();
@@ -1547,48 +1683,59 @@ describe.concurrent("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeo
     );
     socket.close();
   });
-
   it("deleteQueuedTurn raises items_rev with the deleted items; a refused delete leaves it alone", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "Keep me" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const t2 = ok(await prompt(w, sessionId, "Delete me"));
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Delete me"));
     const before = (await wsRow(w.stub))["items_rev"];
     expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("OK");
     // 02 Rules: "Every change to items increments workspace.items_rev by 1"
-    expect((await wsRow(w.stub))["items_rev"]).toBe(before + 1);
+    expect((await wsRow(w.stub))["items_rev"]).toBe(Schema.decodeUnknownSync(Schema.Number)(before) + 1);
     expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("NOT_FOUND");
-    expect((await wsRow(w.stub))["items_rev"]).toBe(before + 1);
+    expect((await wsRow(w.stub))["items_rev"]).toBe(Schema.decodeUnknownSync(Schema.Number)(before) + 1);
   });
-
   it("reorderQueue sets the order of the queued turns", async ({ expect, onTestFinished }) => {
     const w = await seedHeld(onTestFinished, { prompt: "One" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const t1 = (await one(w.stub, "SELECT id FROM turns"))!["id"];
-    const t2 = ok(await prompt(w, sessionId, "Two")).id;
-    const t3 = ok(await prompt(w, sessionId, "Three")).id;
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const t1 = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Two")).id;
+    const t3 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Three")).id;
     expect(codeOf(await w.stub.reorderQueue({ turnIds: [t3, t1, t2] }))).toBe("OK");
     expect((await detail(w.stub)).queue).toEqual([t3, t1, t2]);
     const pos = await rows(w.stub, "SELECT id, queue_pos FROM turns ORDER BY queue_pos");
     expect(pos.map((r) => r["id"])).toEqual([t3, t1, t2]);
   });
-
   it("reorderQueue returns VALIDATION_FAILED unless turnIds are exactly the queued turns", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "One" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const t1 = (await one(w.stub, "SELECT id FROM turns"))!["id"];
-    const t2 = ok(await prompt(w, sessionId, "Two")).id;
-    const t3 = ok(await prompt(w, sessionId, "Three")).id;
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const t1 = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Two")).id;
+    const t3 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Three")).id;
+
     for (const turnIds of [[t1, t2], [t1, t2, t3, newId()], [t1, t1, t2], [t3, t2, newId()], []]) {
       expect(codeOf(await w.stub.reorderQueue({ turnIds })), JSON.stringify(turnIds)).toBe(
         "VALIDATION_FAILED",
       );
     }
+
     ok(await w.stub.cancelTurn({ turnId: t3 }));
     expect(codeOf(await w.stub.reorderQueue({ turnIds: [t2, t1, t3] }))).toBe("VALIDATION_FAILED");
     expect((await detail(w.stub)).queue).toEqual([t1, t2]);
@@ -1598,9 +1745,13 @@ describe.concurrent("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeo
 describe.concurrent("cancelTurn", { timeout: 30_000 }, () => {
   it("cancels a queued turn", async ({ expect, onTestFinished }) => {
     const w = await seedHeld(onTestFinished, { prompt: "Never mind" });
-    const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+
+    const turnId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM turns"))!["id"],
+    );
+
     expect(codeOf(await w.stub.cancelTurn({ turnId }))).toBe("OK");
-    const t = (await turnOf(w.stub, turnId))!;
+    const t = (await turnOf(w.stub, Schema.decodeUnknownSync(Schema.String)(turnId)))!;
     expect(t["status"]).toBe("cancelled");
     expect(t["queue_pos"]).toBeNull();
     expect(t["ended_at"]).not.toBeNull();
@@ -1644,21 +1795,24 @@ describe.concurrent("setSessionMode and setSessionConfig", { timeout: 30_000 }, 
     expect(w.tempod.requestsOf("session.setMode")).toHaveLength(0);
     expect(w.tempod.requestsOf("session.setConfig")).toHaveLength(0);
   });
-
   it("store the choice without a tempod request when the session has no live process", async ({
     expect,
     onTestFinished,
   }) => {
     const w = await seedHeld(onTestFinished, { prompt: "Queued" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     expect(codeOf(await w.stub.setSessionMode({ sessionId, modeId: "plan" }))).toBe("OK");
     expect(codeOf(await w.stub.setSessionConfig({ sessionId, configId: "effort", value: "high" }))).toBe(
       "OK",
     );
-    const s = (await sessionOf(w.stub, sessionId))!;
+    const s = (await sessionOf(w.stub, Schema.decodeUnknownSync(Schema.String)(sessionId)))!;
     expect(s["mode_id"]).toBe("plan");
     // 02 sessions.config_json: {configId: value} chosen by the user
-    expect(JSON.parse(s["config_json"])).toEqual({ effort: "high" });
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(s["config_json"]))).toEqual({ effort: "high" });
     expect(w.tempod.requestsOf("session.setMode")).toHaveLength(0);
     expect(w.tempod.requestsOf("session.setConfig")).toHaveLength(0);
     expect(codeOf(await w.stub.setSessionMode({ sessionId: newId(), modeId: "plan" }))).toBe("NOT_FOUND");
@@ -1679,7 +1833,9 @@ describe.concurrent("setSessionMode and setSessionConfig", { timeout: 30_000 }, 
     expect(w.tempod.requestsOf("session.setConfig")).toEqual([
       { sessionId: s.id, configId: "thinking", value: true },
     ]);
-    expect(JSON.parse((await sessionOf(w.stub, s.id))!["config_json"])).toMatchObject({ thinking: true });
+    expect(
+      JSON.parse(Schema.decodeUnknownSync(Schema.String)((await sessionOf(w.stub, s.id))!["config_json"])),
+    ).toMatchObject({ thinking: true });
   });
 
   it("keep the old mode when tempod fails session.setMode", async ({ expect }) => {
@@ -1703,10 +1859,12 @@ describe.concurrent("respondPermission", { timeout: 30_000 }, () => {
   it("sends permission.respond, records the answer and clears needs_input", async ({ expect }) => {
     const w = await readyWs({ prompt: "Install deps" });
     const { sessionId, turnId } = w.first!;
+
     const options = [
       { optionId: "allow", name: "Allow", kind: "allow_once" },
       { optionId: "deny", name: "Deny", kind: "reject_once" },
     ];
+
     await emit(w, {
       kind: "item.created",
       sessionId,
@@ -1744,7 +1902,9 @@ describe.concurrent("respondPermission", { timeout: 30_000 }, () => {
     });
     // 02 Item model: permission content gets chosenOptionId
     const item = (await one(w.stub, "SELECT content_json FROM items WHERE id = 'perm-item'"))!;
-    expect(JSON.parse(item["content_json"]).chosenOptionId).toBe("allow");
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"])).chosenOptionId).toBe(
+      "allow",
+    );
     expect((await detail(w.stub)).attention).toBe("none");
     expect(codeOf(await w.stub.respondPermission({ requestId: "req-9", optionId: "allow" }))).toBe(
       "NOT_FOUND",
@@ -1756,6 +1916,7 @@ describe.concurrent("review comments", { timeout: 30_000 }, () => {
   it("adds, lists and deletes review comments", async ({ expect, onTestFinished }) => {
     const w = await seedHeld(onTestFinished);
     expect(ok(await w.stub.listReviewComments({}))).toEqual([]);
+
     const c1 = ok(
       await w.stub.addReviewComment({
         path: "src/a.ts",
@@ -1765,6 +1926,7 @@ describe.concurrent("review comments", { timeout: 30_000 }, () => {
         body: "Rename this",
       }),
     );
+
     // 02 Shared types: ReviewComment = id, path, lineStart, lineEnd, side, body, status, sentTurnId, createdAt
     expect(c1).toMatchObject({
       path: "src/a.ts",
@@ -1776,7 +1938,7 @@ describe.concurrent("review comments", { timeout: 30_000 }, () => {
       sentTurnId: null,
     });
     expect(c1.id).toMatch(ULID);
-    expect(typeof c1.createdAt).toBe("number");
+    expect(c1.createdAt).toBeTypeOf("number");
     const c2 = ok(await w.stub.addReviewComment({ path: "README.md", body: "Whole file" }));
     // 02 review_comments.line_start: "null = whole file"
     expect(c2).toMatchObject({ path: "README.md", lineStart: null, side: null, status: "draft" });
@@ -1845,12 +2007,11 @@ describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 
     const { sessionId, turnId: t1 } = w.first!;
     await endTurn(w, sessionId, t1);
     await waitFor(async () => (await turnOf(w.stub, t1))?.["checkpoint_id"] != null, 5000, "checkpoint 1");
-    const c1 = (await turnOf(w.stub, t1))!["checkpoint_id"];
+    const c1 = Schema.decodeUnknownSync(Schema.String)((await turnOf(w.stub, t1))!["checkpoint_id"]);
     // 02 Review and git: listCheckpoints → [{id, turnId, turnSeq, reason, createdAt}]
     const list = ok(await w.stub.listCheckpoints({}));
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ id: c1, turnId: t1, turnSeq: 1, reason: "turn_end" });
-
     const t2 = ok(await prompt(w, sessionId, "Turn two"));
     await waitFor(
       async () => (await turnOf(w.stub, t2.id))?.["status"] === "running",
@@ -1862,7 +2023,6 @@ describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 
     await waitFor(async () => (await turnOf(w.stub, t2.id))?.["checkpoint_id"] != null, 5000, "checkpoint 2");
     await driveToState(w.stub, "ready");
     await exec(w.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?", "9".repeat(40));
-
     const res = await whileDriving(w.stub, w.stub.revertToCheckpoint({ checkpointId: c1 }));
     expect(codeOf(res)).toBe("OK");
     // 03 Revert 2: safety checkpoint with reason pre_revert; 3: git.revert {checkpointId}
@@ -1872,7 +2032,10 @@ describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 
     expect((await turnOf(w.stub, t2.id))!["reverted"]).toBe(1);
     expect((await turnOf(w.stub, t1))!["reverted"]).toBe(0);
     const marker = (await one(w.stub, "SELECT * FROM items WHERE kind = 'revert_marker'"))!;
-    expect(JSON.parse(marker["content_json"])).toEqual({ checkpointId: c1, toTurnSeq: 1 });
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(marker["content_json"]))).toEqual({
+      checkpointId: c1,
+      toTurnSeq: 1,
+    });
     // 03 Revert 5: pending_note, exactly
     expect((await sessionOf(w.stub, sessionId))!["pending_note"]).toBe(
       "Note: the user reverted the files to the state after turn 1. Changes made after that point are gone.",
@@ -1881,7 +2044,6 @@ describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 
     expect((await wsRow(w.stub))["force_push_lease"]).toBe(1);
     // The user starts revert, so the state does not change (03 Step runner).
     expect(await stateOf(w.stub)).toBe("ready");
-
     const push = await whileDriving(w.stub, w.stub.commitAndPush({ message: "After revert" }));
     expect(ok(push)).toEqual({ commitSha: "f".repeat(40) });
     // 03 Commit and push 3-4: --force-with-lease=<branch>:<last_pushed_sha>, then clear the force flag
@@ -2034,6 +2196,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
     const w = await readyWs();
     await putToSleep(w);
     expect(codeOf(await w.stub.readFile({ path: "uncached.ts" }))).toBe("CONTAINER_NOT_READY");
+
     for (const path of ["../README.md", "/etc/passwd", "/workspace/../etc/passwd"])
       expect(codeOf(await w.stub.readFile({ path }))).toBe("PATH_OUTSIDE_WORKSPACE");
     await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.setKv("filesSyncedAt", undefined));
@@ -2050,6 +2213,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
     await sync();
     w.tempod.on("fs.list", () => ({ paths: ["src/renamed.ts"] }));
     w.tempod.on("fs.read", () => ({ content: "updated", encoding: "utf8", size: 7 }));
+
     const seq = await emit(w, {
       kind: "git.changed",
       files: [
@@ -2058,6 +2222,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
       additions: 1,
       deletions: 1,
     });
+
     await waitFor(
       async () => Number((await wsRow(w.stub))["tempod_acked_seq"]) >= seq,
       5000,
@@ -2100,6 +2265,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
       expect(() => core.files.read(".env")).toThrow();
       core.files.rememberList(Array.from({ length: 20 }, (_, n) => `file-${n}.txt`));
       const content = "x".repeat(900_000);
+
       for (let n = 0; n < 20; n++)
         core.files.rememberFile(`file-${n}.txt`, { content, encoding: "utf8", size: content.length });
     });
@@ -2113,7 +2279,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
     await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const { files } = internals(i).core;
       await files.sync();
-      files.rememberFile("README.md", { content: "x", encoding: "latin1", size: 1 } as never);
+      files.rememberFile("README.md", { content: "x", encoding: "latin1", size: 1 });
       expect(() => files.read("README.md")).toThrow();
     });
     expect(await one(w.stub, "SELECT response_json FROM file_cache WHERE path = 'README.md'")).toEqual({
@@ -2224,9 +2390,11 @@ describe.concurrent("scripts", { timeout: 30_000 }, () => {
     const test = ok(await w.stub.runScript({ scriptId: "test" }));
     // 01 Run scripts: "With run_mode = nonconcurrent, starting one stops the others first."
     expect(w.tempod.requestsOf("script.stop")).toEqual([{ runId: dev.id }]);
+
     const order = w.tempod.requests
       .filter((r) => r.op === "script.stop" || r.op === "script.start")
       .map((r) => `${r.op}:${r.params.runId}`);
+
     expect(order).toEqual([`script.start:${dev.id}`, `script.stop:${dev.id}`, `script.start:${test.id}`]);
   });
 
@@ -2257,7 +2425,6 @@ describe.concurrent("scripts", { timeout: 30_000 }, () => {
     await sleep(200);
     expect(w.tempod.requestsOf("session.prompt")).toHaveLength(0);
     expect((await turnOf(w.stub, t.id))!["status"]).toBe("queued");
-
     expect(codeOf(await w.stub.continueAfterSetupFailure({}))).toBe("OK");
     // 03 Queue runner: "continueAfterSetupFailure sets it from failed to skipped"
     const d = await detail(w.stub);
@@ -2298,6 +2465,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
         },
       },
     });
+
     // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist, mcp}
     expect(await w.stub.getEgressConfig()).toEqual({
       owner: "acme",
@@ -2321,17 +2489,17 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       mcp: [],
     });
   });
-
   it("getEgressConfig fails for a workspace that was never created", async ({ expect }) => {
-    let error: unknown = null;
+    let errorText = "";
+
     try {
       await uninitialised().getEgressConfig();
     } catch (e) {
-      error = e;
+      errorText = String(e);
     }
-    expect(String(error)).toMatch(/not found/i);
-  });
 
+    expect(errorText).toMatch(/not found/i);
+  });
   it("logEgress keeps only the newest 10,000 rows on every insert", async ({ expect }) => {
     const w = await seedReadyWorkspace();
     await exec(
@@ -2356,6 +2524,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
     expect,
   }) => {
     const w = await seedReadyWorkspace();
+
     const a = {
       ts: 1000,
       method: "GET",
@@ -2365,13 +2534,16 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       ms: 12,
       rule: 3,
     };
+
     const b = { ts: 2000, method: "POST", host: "evil.example", path: "/x", status: 403, ms: 1, rule: 10 };
     await w.stub.logEgress(a);
     await w.stub.logEgress(b);
+
     const rowsNow = await rows(
       w.stub,
       "SELECT ts, method, host, path, status, ms, rule FROM egress_log ORDER BY id",
     );
+
     expect(rowsNow).toEqual([a, b]);
     // 05 Diagnostics: Egress = the newest 500 egress_log rows
     expect(ok(await w.stub.getDiagnostics({})).egress).toEqual([b, a]);
@@ -2442,18 +2614,20 @@ describe.concurrent("getDiagnostics", { timeout: 30_000 }, () => {
   });
 });
 
-describe.concurrent("first prompt while setup is pending", () => {
+describe.concurrent("first prompt while setup is pending", { timeout: 30_000 }, () => {
   it("preserves a manual override made before the pending rename runs", async ({
     expect,
     onTestFinished,
   }) => {
     let health!: ReturnType<FakeTempod["holdHealth"]>;
+
     const w = await seedHeld(onTestFinished, {
       prepare: (tempod, stub) => {
         health = tempod.holdHealth();
         onTestFinished(() => runInDurableObject(stub, health.release));
       },
     });
+
     await runInDurableObject(w.stub, () => health.entered);
     const session = ok(await w.stub.createSession({ agent: "claude" }));
     expect(
@@ -2470,16 +2644,20 @@ describe.concurrent("first prompt while setup is pending", () => {
     expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/override" }))).toBe("OK");
     let markWorking!: () => void;
+
     const working = new Promise<void>((resolve) => {
       markWorking = resolve;
     });
+
     await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
       const core = internals(instance).core;
       const original = core.setState.bind(core);
       core.setState = (next, error) => {
         original(next, error);
+
         if (next === "working") markWorking();
       };
+
       onTestFinished(() =>
         runInDurableObject(w.stub, () => {
           core.setState = original;
@@ -2509,6 +2687,7 @@ describe("PR title contract", () => {
     });
     const pull = vi.spyOn(github, "getPullRequest");
     const checks = vi.spyOn(github, "listCheckRuns").mockResolvedValue([]);
+
     try {
       for (const merged of [false, true]) {
         const title = merged ? "Merged title" : "Closed title";
@@ -2519,14 +2698,17 @@ describe("PR title contract", () => {
           merged,
           merged_at: merged ? "2026-10-11" : null,
           draft: false,
-          head: { sha: "abc" },
-        } as never);
+          html_url: "https://github.com/acme/repo/pull/17",
+          base: { ref: "main" },
+          head: { sha: "abc", ref: "tempo/lisbon", repo: { id: 1 } },
+        });
         expect(ok(await stub.refreshPullRequest({}))).toMatchObject({
           prTitle: title,
           prState: merged ? "merged" : "closed",
         });
         expect((await detail(stub)).prTitle).toBe(title);
       }
+
       pull.mockResolvedValue({
         number: 17,
         title: "Renamed merged title",
@@ -2534,8 +2716,10 @@ describe("PR title contract", () => {
         merged: true,
         merged_at: "2026-10-11",
         draft: false,
-        head: { sha: "abc" },
-      } as never);
+        html_url: "https://github.com/acme/repo/pull/17",
+        base: { ref: "main" },
+        head: { sha: "abc", ref: "tempo/lisbon", repo: { id: 1 } },
+      });
       await stub.refreshPullRequest({});
       expect((await detail(stub)).prTitle).toBe("Renamed merged title");
     } finally {
@@ -2555,6 +2739,7 @@ describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, ()
     await insertD1Workspace(seeded, { id: workspaceId, slug, branch });
     const stub = env.WORKSPACE.getByName(workspaceId);
     await installFakes(stub);
+
     const summary = ok(
       await stub.init({
         ...initInput({ workspaceId, seeded, slug, branch }),
@@ -2562,17 +2747,18 @@ describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, ()
         pr: { number: 42, state: "draft", title: "Add retries" },
       }),
     );
+
     // 03 init 1: "For source.kind = "pr", set pr_number and pr_state, and keep the PR title"
     expect(summary).toMatchObject({ prNumber: 42, prState: "draft" });
     expect(await detail(stub)).toMatchObject({ prNumber: 42, prState: "draft", prTitle: "Add retries" });
     expect(await wsRow(stub)).toMatchObject({ pr_number: 42, pr_state: "draft" });
     await waitFor(async () => (await d1Row(workspaceId))?.["pr_number"] === 42, 5000, "D1 pr_number");
     expect((await d1Row(workspaceId))!["pr_state"]).toBe("draft");
-
     // 03 Status polling: while a UI socket is open and pr_number is set.
     await runInDurableObject(stub, (i: WorkspaceDO) => {
       internals(i).core.ghToken = { token: "fake", expiresAt: Date.now() + 3_600_000 };
     });
+
     const pull = vi.spyOn(github, "getPullRequest").mockResolvedValue({
       number: 42,
       title: "Add retries to jobs",
@@ -2580,11 +2766,15 @@ describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, ()
       merged: false,
       merged_at: null,
       draft: false,
-      head: { sha: "abc" },
-    } as never);
+      html_url: "https://github.com/acme/repo/pull/17",
+      base: { ref: "main" },
+      head: { sha: "abc", ref: "tempo/lisbon", repo: { id: 1 } },
+    });
+
     const checks = vi.spyOn(github, "listCheckRuns").mockResolvedValue([]);
+
     try {
-      const ui = await openUi({ workspaceId, stub } as Ws);
+      const ui = await openUi({ workspaceId, stub });
       await runDurableObjectAlarm(stub);
       await waitFor(() => pull.mock.calls.length > 0, 5000, "PR poll");
       expect(pull.mock.calls[0]![2]).toBe(42);
@@ -2609,25 +2799,34 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
     const w = await seedHeld(onTestFinished, { prompt: "First" });
     await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       const { core, runner } = internals(i);
+
       for (const kind of ["create", "wake"] as const) {
         const op = runner.find(kind);
+
         if (op) runner.cancel(op.id);
       }
+
       core.setState("error", { code: "CONTAINER_START_FAILED", detail: "test" });
     });
     expect(await stateOf(w.stub)).toBe("error");
+
     return w;
   };
+
   const restarted = async (w: Ws) => {
     const wakes = (await opsOf(w.stub, "wake")).filter(
       (o) => o.status === "pending" || o.status === "running",
     );
+
     expect(wakes).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("starting");
   };
-  const sessionIdOf = async (w: Ws) => (await one(w.stub, "SELECT id FROM sessions"))!["id"] as string;
+
+  const sessionIdOf = async (w: Ws) =>
+    Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM sessions"))!["id"]);
 
   const NOT_READY = "CONTAINER_NOT_READY";
+
   const triggers: Array<[string, string, (w: Ws) => Promise<string>]> = [
     ["sendPrompt", "OK", async (w) => codeOf(await prompt(w, await sessionIdOf(w), "Again"))],
     ["createSession", "OK", async (w) => codeOf(await w.stub.createSession({ agent: "claude" }))],
@@ -2643,6 +2842,7 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
             settingsJson: JSON.stringify(settingsWith({ scripts: { run } })),
           });
         });
+
         return codeOf(await w.stub.runScript({ scriptId: "dev" }));
       },
     ],
@@ -2662,8 +2862,10 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
         const res = await w.stub.fetch(`https://tempo.test/api/ws/terminal/${w.workspaceId}/t1`, {
           headers: { Upgrade: "websocket" },
         });
+
         res.webSocket?.accept();
         res.webSocket?.close();
+
         return String(res.status);
       },
     ],
@@ -2674,12 +2876,15 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
         const cookie = await runInDurableObject(w.stub, (i: WorkspaceDO) =>
           previewCookie(internals(i).core.ws().previewKey, 3000),
         );
+
         const res = await w.stub.previewFetch(
           new Request("https://preview.test/", { headers: { Accept: "text/html" } }),
           3000,
           cookie ?? "",
         );
+
         await res.body?.cancel();
+
         return String(res.status);
       },
     ],
@@ -2698,6 +2903,7 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
     ["listFiles", (w) => w.stub.listFiles({})],
     ["readFile", (w) => w.stub.readFile({ path: "README.md" })],
   ];
+
   for (const [name, read] of cachedReads) {
     it(`${name} restarts it instead of answering from the file cache`, async ({ expect, onTestFinished }) => {
       const w = await errored(onTestFinished);
@@ -2724,21 +2930,26 @@ describe.concurrent("getDiagnostics egress filters (02, 05 Observability)", { ti
           status,
           rule,
         );
+
       add("tempo.example.com", 403, 0);
       add("api.github.com", 403, 7);
       add("evil.example.net", 403, 10);
       add("registry.npmjs.org", 404, 8);
       add("openrouter.ai", 502, 4);
       add("cdn.example.org", 301, 9);
+
       for (let n = 0; n < 700; n++) add("Registry.NPMJS.org", 200, 8);
+
       for (let n = 0; n < 600; n++) add("api.github.com", 200, 3);
     });
-  const egressOf = async (w: Ws, input: Record<string, unknown>) =>
-    ok(await w.stub.getDiagnostics(input as never)).egress as Array<{
-      host: string;
-      status: number;
-      rule: number;
-    }>;
+
+  const egressOf = async (
+    w: Ws,
+    input: import("../../src/do/workspace/rpc.ts").MethodInput<"getDiagnostics">,
+  ) =>
+    Schema.decodeUnknownSync(
+      Schema.Array(Schema.Struct({ host: Schema.String, status: Schema.Number, rule: Schema.Number })),
+    )(ok(await w.stub.getDiagnostics(input)).egress);
 
   it("filters every stored row on the server and returns the newest 500 matches", async ({ expect }) => {
     const w = await seedReadyWorkspace();

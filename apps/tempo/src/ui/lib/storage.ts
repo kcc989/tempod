@@ -23,17 +23,22 @@ export const writeString = (key: string, value: string | null): void => {
 
 export const readJson = <T>(key: string, fallback: T, guard?: (u: unknown) => u is T): T => {
   const raw = readString(key);
+
   if (raw === null) return fallback;
+
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (guard && !guard(parsed)) return fallback;
+
+    if (guard) return guard(parsed) ? parsed : fallback;
+
+    // SAFETY: callers without a guard explicitly trust their own persisted preference format.
     return parsed as T;
   } catch {
     return fallback;
   }
 };
 
-export const writeJson = (key: string, value: unknown): void => {
+export const writeJson = <T>(key: string, value: T): void => {
   try {
     writeString(key, JSON.stringify(value));
   } catch {

@@ -1,4 +1,5 @@
 import { syncIdleCredentials } from "./credential-sync.ts";
+import { Match, Schema } from "effect";
 import { Files } from "@cloudflare/sandbox";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
@@ -85,15 +86,20 @@ export const agentEnv = async (
   signal?: AbortSignal,
 ): Promise<Record<string, string>> => {
   const creds = core.credentials();
+
   switch (agent) {
     case "claude": {
       const token = await creds.getSecret(SECRET_KEYS.claude);
+
       if (token) return { CLAUDE_CODE_OAUTH_TOKEN: token };
+
       if (await creds.getSecret(SECRET_KEYS.anthropic)) return { ANTHROPIC_API_KEY: PLACEHOLDER };
       throw new TempoError("CREDENTIAL_MISSING", undefined, agent);
     }
+
     case "codex": {
       const auth = await creds.getCodexAuth();
+
       if (auth) {
         await requireTempod(core).request(
           "credential.put",
@@ -102,11 +108,14 @@ export const agentEnv = async (
         );
         await creds.addCodexLease(core.workspaceId);
         core.setKv("codexLease", true);
+
         return {};
       }
+
       if (await creds.getSecret(SECRET_KEYS.openai)) return { OPENAI_API_KEY: PLACEHOLDER };
       throw new TempoError("CREDENTIAL_MISSING", undefined, agent);
     }
+
     case "opencode":
     case "pi": {
       if (await creds.getSecret(SECRET_KEYS.openrouter)) return { OPENROUTER_API_KEY: PLACEHOLDER };
@@ -124,14 +133,17 @@ export const MODEL_REQUIRED_AGENTS: ReadonlySet<AgentId> = new Set(["opencode", 
  */
 export const sessionModel = (
   agent: AgentId,
-  config: Readonly<Record<string, unknown>>,
+  config: import("@tempo/protocol").Session["config"],
   settings: Settings,
 ): string | null => {
-  const own = typeof config["model"] === "string" ? config["model"] : "";
+  const own = Schema.is(Schema.String)(config["model"]) ? config["model"] : "";
   const model = own || settings.agent.models[agent];
+
   if (model) return model;
+
   if (MODEL_REQUIRED_AGENTS.has(agent))
     throw new TempoError("MODEL_REQUIRED", undefined, `agent.models.${agent} is empty`);
+
   return null;
 };
 
@@ -142,31 +154,35 @@ export const ensureSessionLive = async (
   signal?: AbortSignal,
 ): Promise<void> => {
   await core.sessionClosures.get(session.id);
+
   if (signal?.aborted) return;
+
   if (core.liveSessions.has(session.id)) return;
   const tempod = requireTempod(core);
-  const agent = session.agent as AgentId;
+  const agent = session.agent;
   const config = json.config.read(session.configJson, {});
   const model = sessionModel(agent, config, core.settings());
   const env = await agentEnv(core, agent, signal);
   const opts = signal ? { signal } : {};
-  const res = await tempod.request(
-    "session.start",
-    {
-      sessionId: session.id,
-      agent,
-      env,
-      modeId: session.modeId ?? DEFAULT_MODE[agent],
-      ...(model ? { model } : {}),
-      ...(session.profileJson ? { profile: json.profile.read(session.profileJson, undefined) } : {}),
-      browser: browserRunEnabled(core) ? "run" : "local",
-      acpSessionId: session.acpSessionId,
-      mcpServers: (await core.mcpServers()).map(mcpToSpec),
-    },
-    opts,
-  );
+
+  let input: import("@tempo/protocol").TempodParams<"session.start"> = {
+    sessionId: session.id,
+    agent,
+    env,
+    modeId: session.modeId ?? DEFAULT_MODE[agent],
+    browser: browserRunEnabled(core) ? "run" : "local",
+    acpSessionId: session.acpSessionId,
+    mcpServers: (await core.mcpServers()).map(mcpToSpec),
+  };
+
+  if (model) input = { ...input, model };
+
+  if (session.profileJson) input = { ...input, profile: json.profile.read(session.profileJson, undefined) };
+  const res = await tempod.request("session.start", input, opts);
+
   core.liveSessions.add(session.id);
-  core.updateSession(session.id, {
+
+  const sessionPatch: Partial<SessionRow> = {
     acpSessionId: res.acpSessionId,
     status: "idle",
     modesJson: json.modes.write(res.modes),
@@ -175,15 +191,19 @@ export const ensureSessionLive = async (
     commandsJson: json.commands.write(res.availableCommands),
     capabilitiesJson: json.capabilities.write(res.capabilities),
     profileIssuesJson: json.profileIssues.write(res.profileIssues ?? []),
-    ...(res.handoff ? { handoffPending: 1 } : {}),
-  });
+  };
+
+  if (res.handoff) sessionPatch.handoffPending = 1;
+  core.updateSession(session.id, sessionPatch);
+
   for (const [configId, value] of Object.entries(config)) {
     if (configId === "model") continue;
     const option = res.configOptions.find((o) => o.id === configId);
+
     if (
       option &&
       option.currentValue !== value &&
-      (typeof value === "string" || typeof value === "boolean")
+      (Schema.is(Schema.String)(value) || Schema.is(Schema.Boolean)(value))
     ) {
       const r = await tempod.request("session.setConfig", { sessionId: session.id, configId, value }, opts);
       core.updateSession(session.id, { configOptionsJson: json.configOptions.write(r.configOptions) });
@@ -205,25 +225,35 @@ export const buildHandoffText = (core: WorkspaceCore, sessionId: string, beforeT
     .orderBy(asc(items.createdAt))
     .all()
     .filter((r) => r.turnId !== beforeTurnId);
+
   const lines = rows.map((r) => {
-    const c = readItemContent(r.kind, r.contentJson) as { text?: string; title?: string };
-    if (r.kind === "user_message") return `User: ${c.text ?? ""}`;
-    if (r.kind === "agent_message") return `Agent: ${c.text ?? ""}`;
-    return `Tool: ${c.title ?? ""}`;
+    const c = readItemContent(r.kind, r.contentJson);
+
+    if (r.kind === "user_message") return `User: ${"text" in c ? c.text : ""}`;
+
+    if (r.kind === "agent_message") return `Agent: ${"text" in c ? c.text : ""}`;
+
+    return `Tool: ${"title" in c ? c.title : ""}`;
   });
+
   const budget = HANDOFF_MAX_CHARS - HANDOFF_FIRST_LINE.length - 1;
   const kept: string[] = [];
   let used = 0;
+
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i]!;
+
     if (used + line.length + 1 > budget) {
       const room = budget - used - 1;
+
       if (room > 0 && kept.length === 0) kept.unshift(line.slice(line.length - room));
       break;
     }
+
     kept.unshift(line);
     used += line.length + 1;
   }
+
   return [HANDOFF_FIRST_LINE, ...kept].join("\n");
 };
 
@@ -247,39 +277,50 @@ export const buildContent = async (
   const settings = core.settings();
   const patch: Partial<SessionRow> = {};
   let handoff: string | null = null;
+
   if (session.generalPromptSent === 0) {
     blocks.push(text(TURN_SUMMARY_RULE));
+
     if (settings.prompts.general) blocks.push(text(settings.prompts.general));
     patch.generalPromptSent = 1;
   }
+
   if (session.handoffPending === 1) {
     handoff = buildHandoffText(core, session.id, turn.id);
     blocks.push(text(handoff));
     patch.handoffPending = 0;
   }
+
   if (session.pendingNote) {
     blocks.push(text(session.pendingNote));
     patch.pendingNote = null;
   }
+
   if (session.roleRunId && turn.origin !== "user") {
     blocks.push(...(await core.lifecycle.runs.content(turn)));
+
     return { blocks, patch, handoff };
   }
+
   if (prompt.reviewCommentIds.length > 0) {
     const comments = core.db
       .select()
       .from(reviewComments)
       .where(inArray(reviewComments.id, [...prompt.reviewCommentIds]))
       .all();
+
     if (comments.length > 0) {
       const lines = comments.map(
         (c) =>
           `${c.path}:${c.lineStart === null ? "" : c.lineEnd && c.lineEnd !== c.lineStart ? `${c.lineStart}-${c.lineEnd}` : c.lineStart}: ${c.body}`,
       );
+
       blocks.push(text(["Review comments:", ...lines].join("\n")));
     }
   }
+
   if (prompt.text) blocks.push(text(prompt.text));
+
   for (const m of prompt.mentions) {
     const path = m.path.replace(/^\/+/, "");
     blocks.push({
@@ -288,22 +329,30 @@ export const buildContent = async (
       name: path.split("/").pop() ?? path,
     });
   }
+
   if (prompt.attachmentIds.length > 0) {
-    const caps = json.capabilities.read(session.capabilitiesJson, {}) as {
-      promptCapabilities?: { image?: boolean };
-    };
+    const caps = json.capabilities.read(session.capabilitiesJson, {});
+
+    const supportsImage = Schema.is(
+      Schema.Struct({ promptCapabilities: Schema.Struct({ image: Schema.Literal(true) }) }),
+    )(caps);
+
     const rows = core.db
       .select()
       .from(attachments)
       .where(inArray(attachments.id, [...prompt.attachmentIds]))
       .all();
+
     const files = new Files(core.container!);
+
     for (const a of rows) {
       const obj = await core.env.DATA.get(a.r2Key);
+
       if (!obj) continue;
       const containerPath = `/home/tempo/attachments/${turn.id}/${a.name}`;
       const isImage = a.mime.startsWith("image/");
-      if (isImage && caps.promptCapabilities?.image && a.sizeBytes <= MAX_INLINE_IMAGE_BYTES) {
+
+      if (isImage && supportsImage && a.sizeBytes <= MAX_INLINE_IMAGE_BYTES) {
         const bytes = new Uint8Array(await obj.arrayBuffer());
         blocks.push({ type: "image", mimeType: a.mime, data: bytesToBase64(bytes) });
         await files.writeFile(containerPath, bytes, { user: "1000:1000" }).catch(() => undefined);
@@ -317,6 +366,7 @@ export const buildContent = async (
           mimeType: a.mime,
         });
       }
+
       core.db
         .update(attachments)
         .set({ containerPath, turnId: turn.id })
@@ -324,6 +374,7 @@ export const buildContent = async (
         .run();
     }
   }
+
   return { blocks, patch, handoff };
 };
 
@@ -345,6 +396,7 @@ const commitContent = (
       createdAt: sentAt,
     });
   }
+
   if (Object.keys(content.patch).length > 0) core.updateSession(sessionId, content.patch);
 };
 
@@ -376,6 +428,7 @@ const whileQueueBusy = async <T>(core: WorkspaceCore, work: () => Promise<T>): P
   let release!: () => void;
   core.queueBusy = true;
   core.queueWork = new Promise<void>((resolve) => (release = resolve));
+
   try {
     return await work();
   } finally {
@@ -392,9 +445,12 @@ const turnAllowed = (core: WorkspaceCore): boolean => core.state === "ready" || 
 
 export const steerQueued = async (core: WorkspaceCore, queued: TurnRow): Promise<Turn | null> => {
   const running = core.runningTurn();
+
   if (!running || running.sessionId !== queued.sessionId || core.queueBusy) return null;
   const session = core.sessionRow(queued.sessionId);
+
   if (json.capabilities.read(session.capabilitiesJson, {})["steering"] !== true) return null;
+
   try {
     return await whileQueueBusy(core, () => steer(core, session, queued, running));
   } finally {
@@ -409,22 +465,29 @@ const steer = async (
   running: TurnRow,
 ): Promise<Turn | null> => {
   core.updateTurn(queued.id, { steeringPending: 1 });
+
   try {
     const content = await buildContent(core, session, queued);
+
     const result = await requireTempod(core).request("session.steer", {
       sessionId: session.id,
       turnId: running.id,
       messageId: queued.id,
       content: content.blocks,
     });
+
     if (result.outcome !== "injected") {
       core.updateTurn(queued.id, { steeringPending: 0 });
+
       return null;
     }
+
     commitContent(core, session.id, running.id, content, Date.now());
+
     for (const item of core.db.select().from(items).where(eq(items.turnId, queued.id)).all()) {
       core.updateItem(item.id, { turnId: running.id });
     }
+
     core.db.update(attachments).set({ turnId: running.id }).where(eq(attachments.turnId, queued.id)).run();
     core.db
       .update(reviewComments)
@@ -433,6 +496,7 @@ const steer = async (
       .run();
     core.deleteTurn(queued.id);
     core.broadcastDetailSoon();
+
     return core.turnToWire(core.turnRow(running.id));
   } catch (error) {
     // An ambiguous acknowledgement must never trigger an automatic duplicate prompt.
@@ -465,27 +529,35 @@ export const runQueue = async (
 ): Promise<void> => {
   if (core.queueBusy || core.credentialsBusy) return;
   const row = core.wsOrNull();
+
   if (!row) return;
+
   if (core.runningTurn()) return;
   const next = core.queuedTurns()[0];
+
   const canStart =
     next !== undefined &&
     turnAllowed(core) &&
     ["none", "succeeded", "skipped"].includes(row.setupStatus) &&
     !opsBusy() &&
     !core.turnEndInProgress;
+
   if (!next || !canStart) {
     // 03 turn.ended step 6: if no turn starts, the state goes back to ready.
     backToReady(core);
+
     return;
   }
+
   const abort = new AbortController();
+
   try {
     await whileQueueBusy(core, async () => {
       await syncIdleCredentials(core, true);
       core.turnStartAbort = abort;
       core.startingTurnId = next.id;
       await beforeStart();
+
       return startTurn(core, next, abort.signal);
     });
   } finally {
@@ -494,6 +566,7 @@ export const runQueue = async (
       .from(turns)
       .where(eq(turns.id, next.id))
       .get()?.status;
+
     if (status !== "queued") core.kickQueue();
   }
 };
@@ -504,73 +577,97 @@ const backToReady = (core: WorkspaceCore): void => {
 
 const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal): Promise<void> => {
   const session = core.sessionRow(turn.sessionId);
+
   if (session.status === "closed") {
     core.updateTurn(turn.id, { status: "cancelled", queuePos: null, endedAt: Date.now() });
+
     return;
   }
+
   let content: PromptContent | undefined;
   let sentAt = 0;
+
   try {
     await ensureSessionLive(core, session, signal);
+
     if (signal.aborted) return;
+
     if (!(await core.lifecycle.runs.beforeTurn(turn))) return;
     const fresh = core.sessionRow(session.id);
     content = await buildContent(core, fresh, turn);
+
     // The workspace left ready while the agent started (an archive): the turn stays queued and is not sent.
     if (signal.aborted || !turnAllowed(core)) {
       log("info", "turn start stopped before the prompt", { workspaceId: core.workspaceId });
+
       return;
     }
+
     sentAt = Date.now();
     await requireTempod(core).request("session.prompt", {
       sessionId: session.id,
       turnId: turn.id,
       content: content.blocks,
     });
+
     if (signal.aborted) {
       await requireTempod(core)
         .request("session.cancel", { sessionId: session.id, turnId: turn.id })
         .catch(() => undefined);
+
       return;
     }
+
     commitContent(core, session.id, turn.id, content, sentAt);
+
     if (core.turnRow(turn.id).status !== "queued") return;
+
     if (!turnAllowed(core)) {
       // The agent has the prompt, but the workspace may no longer run turns: cancel it at once.
       await requireTempod(core)
         .request("session.cancel", { sessionId: session.id, turnId: turn.id })
         .catch(() => undefined);
       finishTurn(core, turn.id, "cancelled", { stopReason: "cancelled" });
+
       return;
     }
+
     const now = Date.now();
     core.updateTurn(turn.id, { status: "running", startedAt: now, queuePos: null });
     core.updateSession(session.id, { status: "running" });
+
     if (core.state === "ready") core.setState("working");
     core.updateWs({ lastActivityAt: now });
     core.publish();
   } catch (e) {
     if (signal.aborted) {
       log("info", "turn start aborted", { workspaceId: core.workspaceId });
+
       return;
     }
+
     if (content && core.turnRow(turn.id).startedAt !== null) {
       commitContent(core, session.id, turn.id, content, sentAt);
+
       return;
     }
+
     const err = e instanceof TempoError ? e : new TempoError("AGENT_START_FAILED", undefined, errorText(e));
+
     if (err.code === "CONTAINER_NOT_READY" || err.code === "TEMPOD_UNREACHABLE") {
       // The turn stays queued; connectTempod runs the queue again once tempod is back.
       log("warn", "turn start deferred", { workspaceId: core.workspaceId, code: err.code });
       backToReady(core);
+
       return;
     }
-    const code =
-      err.code === "CREDENTIAL_MISSING"
-        ? "CREDENTIAL_MISSING"
-        : err.code === "TEMPOD_TIMEOUT"
-          ? "AGENT_START_FAILED"
-          : err.code;
+
+    const code = Match.value(err).pipe(
+      Match.when({ code: "CREDENTIAL_MISSING" }, () => "CREDENTIAL_MISSING"),
+      Match.when({ code: "TEMPOD_TIMEOUT" }, () => "AGENT_START_FAILED"),
+      Match.orElse((err) => err.code),
+    );
+
     log("warn", "turn start failed", {
       workspaceId: core.workspaceId,
       code,
@@ -583,6 +680,7 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
       errorCode: code,
       errorDetail: err.detail ?? err.message,
     });
+
     if (session.roleRunId && turn.origin !== "user")
       core.lifecycle.runs.fail(
         core.lifecycle.runs.row(session.roleRunId),
@@ -597,6 +695,7 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
   } finally {
     if (signal.aborted && session.roleRunId && turn.origin !== "user") {
       const run = core.lifecycle.runs.row(session.roleRunId);
+
       if (run.status !== "running") core.lifecycle.runs.close(run);
     }
   }
@@ -615,6 +714,7 @@ export const finishTurn = (
   },
 ): boolean => {
   const turn = core.db.select().from(turns).where(eq(turns.id, turnId)).get();
+
   if (!turn || (turn.status !== "running" && turn.status !== "queued")) return false;
   core.closeTurnItems(turnId, status === "completed" ? "completed" : "cancelled");
   // A request of an ended turn can no longer be answered (03 Activity and Attention count only pending ones).
@@ -623,6 +723,7 @@ export const finishTurn = (
     .set({ status: "cancelled", answeredAt: Date.now() })
     .where(and(eq(permissions.turnId, turnId), eq(permissions.status, "pending")))
     .run();
+
   if (status === "failed") {
     core.insertItem({
       sessionId: turn.sessionId,
@@ -632,17 +733,22 @@ export const finishTurn = (
       content: { code: info.errorCode ?? "INTERNAL", detail: info.errorDetail ?? null },
     });
   }
-  core.updateTurn(turnId, {
+
+  let patch: Parameters<WorkspaceCore["updateTurn"]>[1] = {
     status,
     stopReason: info.stopReason,
     errorCode: info.errorCode ?? null,
     errorDetail: info.errorDetail?.slice(0, 2000) ?? null,
     endedAt: Date.now(),
     queuePos: null,
-    ...(info.usage ? { usageJson: json.turnUsage.write(info.usage) } : {}),
-  });
+  };
+
+  if (info.usage) patch = { ...patch, usageJson: json.turnUsage.write(info.usage) };
+  core.updateTurn(turnId, patch);
   const session = core.db.select().from(sessions).where(eq(sessions.id, turn.sessionId)).get();
+
   if (session && session.status === "running") core.updateSession(session.id, { status: "idle" });
+
   return true;
 };
 
@@ -653,8 +759,10 @@ export const finishTurn = (
 export const afterTurnEnded = async (core: WorkspaceCore, turnId: string): Promise<void> => {
   core.turnEndInProgress = true;
   let bundle: Awaited<ReturnType<typeof takeCheckpoint>>["bundle"] = null;
+
   try {
     const res = await takeCheckpoint(core, "turn_end", turnId);
+
     if (res.checkpointId) core.updateTurn(turnId, { checkpointId: res.checkpointId });
     bundle = res.bundle;
   } catch (e) {
@@ -666,21 +774,25 @@ export const afterTurnEnded = async (core: WorkspaceCore, turnId: string): Promi
       core.turnEndInProgress = false;
     }
   }
+
   await syncIdleCredentials(core).catch((e) =>
     log("warn", "idle credential sync failed", { error: errorText(e) }),
   );
   const endedChange = core.turnRow(turnId).changeId;
+
   if (endedChange) core.lifecycle.checkEnd(endedChange);
   core.lifecycle.kick();
   core.updateWs({ lastActivityAt: Date.now() });
   core.recomputeAttention(false);
   core.publish();
   core.kickQueue();
+
   const background = (async () => {
     if (bundle) await uploadBundleWithRetry(core, bundle);
     await backupHomeIfDue(core);
     await refreshChanges(core).catch(() => undefined);
   })();
+
   core.ctx.waitUntil(background);
 };
 
@@ -691,5 +803,6 @@ export const dropQueuedTurnsOf = (core: WorkspaceCore, sessionId: string): void 
     .from(turns)
     .where(and(eq(turns.sessionId, sessionId), eq(turns.status, "queued")))
     .all();
+
   for (const t of queued) core.updateTurn(t.id, { status: "cancelled", queuePos: null, endedAt: Date.now() });
 };
