@@ -61,12 +61,7 @@ export function GuideTab({ workspaceId }: CenterTabProps<"guide">) {
     }
   }, [file.data]);
   const guide = result && "guide" in result ? result.guide : undefined;
-  const canGenerate =
-    live &&
-    session !== undefined &&
-    session.status !== "closed" &&
-    session.status !== "broken" &&
-    !generating;
+  const canGenerate = live && session !== undefined && session.status !== "closed" && !generating;
   const create = () => {
     if (!canGenerate || !sessionId) return;
     generate.mutate({
