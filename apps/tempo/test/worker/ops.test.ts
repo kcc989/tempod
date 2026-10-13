@@ -2509,6 +2509,9 @@ describe("idle check and tempod socket loss", { timeout: 60_000 }, () => {
     // 03 Transitions: ready → stopping when "Idle for sleep_after_idle_minutes"; Activity: "Open UI sockets do not count."
     await waitFor(async () => (await opsOf(w.stub, "sleep")).length === 1, 5000, "sleep op");
     await driveToState(w.stub, "sleeping");
+    expect(res.status).toBe(101);
+    expect(w.tempod.requestsOf("shutdown")).toEqual([{ reason: "sleep" }]);
+    expect(w.container.destroyed).toBe(1);
     socket.close(1000, "done");
   });
 

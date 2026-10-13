@@ -27,6 +27,12 @@
     },
     "@tempo/conformance#test": {
       "cache": false
+    },
+    "@tempo/tempod#test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["TEMPO_IMAGE_TEST"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/container/pi/**"]
     }
   },
   "globalDependencies": ["tsconfig*.json", "bunfig.toml", "patches/**"],

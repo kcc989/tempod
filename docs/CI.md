@@ -34,12 +34,12 @@ not a quality target.
 | Dark appearance browser test | Actual theme application, persistence and system media changes | Every PR; replaces duplicating every functional scenario in dark mode |
 | Workspace browser regressions | Streaming reloads, hidden-panel shortcuts, draft mentions, phone overflow, transcript scroll, closed chats and blocked storage | Every PR, independent browser contexts |
 | Deployment script tests | Preflight outcomes and isolation of the pinned Alchemy patch | Every PR |
-| Image tests | Image tools, uid, tini and orphan reaping | Main pushes and manual image workflow |
+| Image tests | Image tools, uid, tini and orphan reaping | Relevant main pushes and manual image workflow |
 | Hosted acceptance and adapter conformance | Real deployment/login and installed agent behavior | Explicit acceptance commands, outside the local PR suite |
 
 The port-scanner integration test now requires a scan and the listener's port;
-it previously passed when the scanner returned nothing. All app Vitest projects
-require assertions. Browser fixtures fail on unexpected calls and runtime errors.
+it previously passed when the scanner returned nothing. The idle-sleep test now asserts daemon shutdown and container destruction with an
+open UI socket. All app Vitest projects require assertions. Browser fixtures fail on unexpected calls and runtime errors.
 The complete dark functional matrix added no theme-specific assertion; a focused
 theme test now provides that coverage. Hosted and conformance tests no longer
 start in local CI merely to skip for missing deployments or binaries. Their
@@ -65,6 +65,10 @@ explicit commands and acceptance gates remain available.
    If cold CI misses the target, optimize the bottleneck before merging.
 7. Skipped external suites do not establish acceptance. Run their explicit commands
    in the appropriate environment when their contracts or adapters change.
+
+Image checks run on main only when the image, daemon, shared daemon packages or
+installation/build inputs change, and remain manually dispatchable. UI-only or
+native-only merges do not rebuild the full image. Superseded image runs cancel.
 
 The removed standalone `web` job is now part of `check`. If branch protection
 requires `web`, update the required check to `check` when adopting this workflow.

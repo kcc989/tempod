@@ -24,8 +24,10 @@ for (const [name, cmd] of checks) {
   const timer = setTimeout(() => child.kill("SIGTERM"), Math.max(0, remaining));
   const result = await child.exited;
   clearTimeout(timer);
-  timings.push({ name, seconds: (Date.now() - stepStarted) / 1000 });
+  const seconds = (Date.now() - stepStarted) / 1000;
+  timings.push({ name, seconds });
   console.log("::endgroup::");
+  console.log(`::notice title=${name} runtime::${seconds.toFixed(1)} seconds`);
   if (result !== 0 || Date.now() - started >= budgetMs) {
     exitCode = result || 1;
     break;
@@ -45,6 +47,7 @@ const summary = [
   "",
 ].join("\n");
 console.log(summary);
+console.log(`::notice title=Total CI runtime::${total.toFixed(1)} seconds including setup`);
 const summaryFile = process.env["GITHUB_STEP_SUMMARY"];
 if (summaryFile) appendFileSync(summaryFile, summary);
 if (total >= budgetMs / 1000) {

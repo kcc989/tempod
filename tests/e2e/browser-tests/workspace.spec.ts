@@ -1,10 +1,9 @@
 import { expect, test } from "@playwright/test";
-import path from "node:path";
 import { browserFixture } from "./fixture";
 
 test("streaming survives reload; Enter queues; Send now steers; permission answers work", async ({
   page,
-}, testInfo) => {
+}) => {
   const app = await browserFixture(page);
   await page.goto("/w/w1");
   const message = page.getByRole("textbox", { name: "Message", exact: true });
@@ -34,11 +33,6 @@ test("streaming survives reload; Enter queues; Send now steers; permission answe
   app.permission();
   await page.getByRole("button", { name: /Allow once/ }).click();
   await expect(page.getByText("Chose: Allow once")).toBeVisible();
-  if (testInfo.project.name === "chromium") {
-    await page.screenshot({
-      path: path.resolve(import.meta.dirname, "../../../docs/evidence/web-client/desktop-fixture.png"),
-    });
-  }
 });
 
 test("file dialogs and Run shortcut remain available with the right side hidden", async ({ page }) => {
@@ -59,8 +53,8 @@ test("file dialogs and Run shortcut remain available with the right side hidden"
   await expect(page.getByText("Read only", { exact: true })).toBeVisible();
   await page.keyboard.press(`${mod}+Shift+f`);
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeVisible();
-  // Radix adds its Escape listener just before it moves focus into the dialog.
-  await expect(page.getByRole("combobox", { name: "Search text" })).toBeFocused();
+  await page.getByRole("combobox", { name: "Search text" }).fill("ready");
+  await expect(page.getByRole("option", { name: /export const ready/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Search files" })).toBeHidden();
   app.setRunScript();
@@ -96,7 +90,7 @@ test("draft mentions survive switching chats and a page reload", async ({ page }
 
 test("phone layout reads, replies, approves, and reviews a unified diff without horizontal overflow", async ({
   page,
-}, testInfo) => {
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const app = await browserFixture(page);
   await page.goto("/w/w1");
@@ -115,11 +109,6 @@ test("phone layout reads, replies, approves, and reviews a unified diff without 
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
   await page.getByRole("button", { name: "Send 1 comment to Claude", exact: true }).click();
   await expect(page.getByText("1 review comment", { exact: true })).toBeVisible();
-  if (testInfo.project.name === "chromium") {
-    await page.screenshot({
-      path: path.resolve(import.meta.dirname, "../../../docs/evidence/web-client/phone-fixture.png"),
-    });
-  }
 });
 
 test("long transcripts retain their scroll position when switching chats", async ({ page }) => {

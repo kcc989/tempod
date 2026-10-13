@@ -3,7 +3,26 @@ name: Daemon image tests
 on:
   push:
     branches: [main]
+    paths:
+      - "container/**"
+      - "packages/tempod/**"
+      - "packages/protocol/**"
+      - "packages/settings/**"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "patches/**"
+      - "turbo.json"
+      - "scripts/test-tempod-container.ts"
+      - ".github/workflows/container-test.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daemon-image-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   daemon:
