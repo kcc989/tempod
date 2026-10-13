@@ -44,7 +44,7 @@ tempo/
   CLAUDE.md                     symlink to AGENTS.md
 ```
 
-**Tooling:** Bun, Vite, TypeScript in strict mode, Vitest with `@cloudflare/vitest-pool-workers` for DO tests, oxlint, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
+**Tooling:** Bun, Vite, TypeScript 7.0.2 (native compiler) in strict mode, Vitest with `@cloudflare/vitest-pool-workers` for DO tests, oxlint, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
 
 **Scripts** (root `package.json`): `dev`, `build`, `typecheck`, `lint`, `format`, `test`, `test:conformance`, `test:e2e`, `deploy`.
 
@@ -179,6 +179,14 @@ The Tempo Spec (tabs 00 to 06) is the source of truth. Read the tab for the area
 15. Before you finish: bun run typecheck, bun run lint and bun run test all pass.
 16. If behavior must change, change the spec in the same pull request, and say so in its description.
 ```
+
+## PR CI budget
+
+All local PR checks, builds and browser regressions share one five-minute total
+runner budget. `bun run ci` measures each stage and enforces 270 seconds including
+setup, reserving 30 seconds for cleanup. See `docs/CI.md` for the test audit, suite
+boundaries and rules. Hosted acceptance and installed-agent conformance remain
+explicit gates; skipped tests do not satisfy them.
 
 ## Definition of done
 

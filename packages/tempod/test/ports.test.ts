@@ -67,7 +67,8 @@ describe("port scanner", () => {
         onChange: (p) => seen.push(p),
       });
       scanner.scan();
-      if (seen.length > 0 && seen[0]!.length > 0) expect(seen[0]).toContain(server.port!);
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toContain(server.port!);
     } finally {
       await server.stop(true);
     }

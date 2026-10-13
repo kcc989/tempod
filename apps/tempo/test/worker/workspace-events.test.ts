@@ -7,7 +7,7 @@ import {
   TURN_SUMMARY_RULE,
   type TempodEvent,
 } from "@tempo/protocol";
-import { describe, expect, it } from "vitest";
+import { describe, it } from "vitest";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { recoverSteering } from "../../src/do/workspace/queue.ts";
 import {
@@ -146,7 +146,7 @@ const endTurn = async (
 const waitReady = (ctx: Ctx) =>
   waitFor(async () => (await wsRow(ctx.stub)).state === "ready", 5000, "state ready");
 
-describe("live steering", () => {
+describe.concurrent("live steering", () => {
   const send = (ctx: RunningCtx) =>
     ctx.stub.sendPrompt({
       sessionId: ctx.sessionId,
@@ -166,7 +166,7 @@ describe("live steering", () => {
 
   it(
     "delivers to the running turn and moves its durable user message without cancelling",
-    async () => {
+    async ({ expect }) => {
       const ctx = await runningTurn();
       await enable(ctx);
       ctx.tempod.on("session.steer", () => ({ outcome: "injected" }));
@@ -185,7 +185,7 @@ describe("live steering", () => {
 
   it(
     "keeps unsupported and settled steering messages queued",
-    async () => {
+    async ({ expect }) => {
       const ctx = await runningTurn();
       const unsupported = unwrap(await send(ctx));
       expect(unsupported.status).toBe("queued");
@@ -202,7 +202,7 @@ describe("live steering", () => {
 
   it(
     "does not replay a message when steering acknowledgement fails",
-    async () => {
+    async ({ expect }) => {
       const ctx = await runningTurn();
       await enable(ctx);
       ctx.tempod.on("session.steer", () => {
@@ -219,7 +219,7 @@ describe("live steering", () => {
 
   it(
     "recovers an interrupted steering attempt as uncertain rather than replaying it",
-    async () => {
+    async ({ expect }) => {
       const ctx = await runningTurn();
       const queued = unwrap(await send(ctx));
       await sql(ctx.stub, "UPDATE turns SET steering_pending = 1 WHERE id = ?", queued.id);
@@ -331,10 +331,10 @@ const d1Workspace = async (id: string): Promise<Row | null> =>
 // 02 Item model + Rules: items and items_rev
 // =============================================================================================
 
-describe("item events update items and items_rev", () => {
+describe.concurrent("item events update items and items_rev", () => {
   it(
     "item.created, item.delta and item.updated each bump items_rev by exactly 1 and set items.rev to it",
-    async () => {
+    async ({ expect }) => {
       // 02 WorkspaceDO schema, Rules: "Every change to items increments workspace.items_rev by 1 and sets
       // items.rev to the new value, in the same transaction."
       const ctx = await runningTurn();
@@ -382,7 +382,7 @@ describe("item events update items and items_rev", () => {
 
   it(
     "item.updated merges a tool_call status and replaces its content",
-    async () => {
+    async ({ expect }) => {
       // 02 Item model: tool_call_update "Update that item: merge title, status, locations; replace content when it is sent."
       // tool_call status copies the ACP status: pending, in_progress, completed, failed.
       const ctx = await runningTurn();
@@ -419,7 +419,7 @@ describe("item events update items and items_rev", () => {
 
   it(
     "a delta or update for an unknown item changes nothing and does not bump items_rev",
-    async () => {
+    async ({ expect }) => {
       // 02 Rules: items_rev counts changes to items; an event that changes no item is not a change.
       const ctx = await runningTurn();
       const before = Number((await wsRow(ctx.stub)).items_rev);
@@ -448,7 +448,7 @@ describe("item events update items and items_rev", () => {
 
   it(
     "session.updated applies mode, commands, usage and title to the session",
-    async () => {
+    async ({ expect }) => {
       // 02 Item model: current_mode_update → sessions.mode_id; available_commands_update → commands_json;
       // usage_update → usage_json; session_info_update → sessions.title (03 While it runs: "Apply session.updated").
       const ctx = await runningTurn();
@@ -485,10 +485,10 @@ describe("item events update items and items_rev", () => {
 // 02 Workspace channel
 // =============================================================================================
 
-describe("workspace channel", () => {
+describe.concurrent("workspace channel", () => {
   it(
     "sends hello first, then the item backlog with done:true, then live item.upsert and item.delta",
-    async () => {
+    async ({ expect }) => {
       // 02 Workspace channel: hello {v: 1, workspace, sessions, turns, itemsRev} is the first message;
       // items {items, itemsRev, done} is the backlog with rev > sinceRev, done:true on the last;
       // item.upsert {item, itemsRev} when an item was created or changed; item.delta {itemId, append, itemsRev} live only.
@@ -568,7 +568,7 @@ describe("workspace channel", () => {
 
   it(
     "a reconnect with sinceRev gets only newer items, and gets streamed items in full (no deltas)",
-    async () => {
+    async ({ expect }) => {
       // 02 Workspace channel: "sinceRev is the highest item rev the client has"; Rules: "item.delta is sent only to
       // live sockets. A client that reconnects gets the full item in the backlog."
       const ctx = await runningTurn();
@@ -609,7 +609,7 @@ describe("workspace channel", () => {
 
   it(
     "sends the backlog in pages of at most 500 items, ordered by rev, done only on the last",
-    async () => {
+    async ({ expect }) => {
       // 02 Workspace channel: items "Backlog with rev > sinceRev, 500 per message; done: true on the last".
       const ctx = await readyWorkspace();
       await runInDurableObject(ctx.stub, (instance: WorkspaceDO) => {
@@ -654,10 +654,10 @@ describe("workspace channel", () => {
 // 02 tempod protocol: ordering, dedupe, acks, incarnation
 // =============================================================================================
 
-describe("event delivery: dedupe, acks and incarnation", () => {
+describe.concurrent("event delivery: dedupe, acks and incarnation", () => {
   it(
     "drops an event whose seq was already applied and stores each (incarnation, seq) once",
-    async () => {
+    async ({ expect }) => {
       // 02 tempod protocol, Rules: "The DO MUST apply events in seq order and drop any (incarnation, seq) it has already stored."
       const ctx = await runningTurn();
       const a = newId();
@@ -688,7 +688,7 @@ describe("event delivery: dedupe, acks and incarnation", () => {
 
   it(
     "acks applied events in batches and stores the acked seq",
-    async () => {
+    async ({ expect }) => {
       // 02 tempod protocol: "The DO acks events in batches: at most every 250 ms or every 100 events."
       const ctx = await runningTurn();
       const acksBefore = ctx.tempod.acks.length;
@@ -710,7 +710,7 @@ describe("event delivery: dedupe, acks and incarnation", () => {
 
   it(
     "reconnects with the stored incarnation and acked seq; incarnation.changed resets the acked seq",
-    async () => {
+    async ({ expect }) => {
       // 03 Wake step 2: "send hello with the stored incarnation and tempod_acked_seq".
       // 01 tempod, Outbox: "If it does not match, send incarnation.changed and start from seq 1."
       const ctx = await runningTurn();
@@ -762,7 +762,7 @@ describe("event delivery: dedupe, acks and incarnation", () => {
 
   it(
     "a reconnect with the same incarnation does not reset the acked seq",
-    async () => {
+    async ({ expect }) => {
       // 01 tempod, Outbox: "if the incarnation matches, resend every event with seq > lastAckedSeq".
       const ctx = await runningTurn();
       const last = await emit(ctx, { kind: "log", level: "info", msg: "x" });
@@ -815,10 +815,11 @@ const openItems = async (ctx: RunningCtx) => {
   return ids;
 };
 
-describe("turn.ended", () => {
-  it.each(["end_turn", "max_tokens", "max_turn_requests", "refusal"])(
+describe.concurrent("turn.ended", () => {
+  it.for(["end_turn", "max_tokens", "max_turn_requests", "refusal"])(
     "stopReason %s → completed with the reason stored; streaming items become completed",
-    async (stopReason) => {
+    { timeout: T },
+    async (stopReason, { expect }) => {
       // 03 turn.ended table: end_turn, max_tokens, max_turn_requests, refusal → completed (the reason is stored).
       // 02 Item model, Status: agent_message and agent_thought are streaming until the turn ends, then completed.
       const ctx = await runningTurn();
@@ -838,12 +839,11 @@ describe("turn.ended", () => {
         await sql(ctx.stub, "SELECT id FROM items WHERE turn_id = ? AND kind = 'error'", ctx.turnId),
       ).toHaveLength(0);
     },
-    T,
   );
 
   it(
     "usage from the prompt response is stored on the turn and sent on the wire; bad counts are dropped",
-    async () => {
+    async ({ expect }) => {
       // 02 turns.usage_json and Turn.usage; 04 Transcript: "if the agent sends usage, tokens".
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId, {
@@ -867,7 +867,7 @@ describe("turn.ended", () => {
 
   it(
     "a turn without usage has no usage field",
-    async () => {
+    async ({ expect }) => {
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
       const wire = await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
@@ -882,7 +882,7 @@ describe("turn.ended", () => {
 
   it(
     "interrupted:true wins over the stop reason → interrupted, open items cancelled",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended table: "turn.ended carries interrupted: true (check this first) → interrupted".
       // 02 Status: "When a turn ends as cancelled, failed or interrupted, every open item in it becomes cancelled."
       const ctx = await runningTurn();
@@ -900,7 +900,7 @@ describe("turn.ended", () => {
 
   it(
     "stopReason cancelled → cancelled, open items cancelled",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended table: cancelled → cancelled. 02 Status: open items become cancelled.
       const ctx = await runningTurn();
       const ids = await openItems(ctx);
@@ -917,7 +917,7 @@ describe("turn.ended", () => {
 
   it(
     "an error → failed with an error item; open items cancelled; attention error",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended table: "turn.ended carries error → failed". 02 Item model: error item content {code, detail}.
       // 03 Attention: "error: ... the newest turn ended failed".
       const ctx = await runningTurn();
@@ -952,7 +952,7 @@ describe("turn.ended", () => {
 
   it(
     "a rejected credential → failed / CREDENTIAL_INVALID, and credential.invalid reaches the UI",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: "Credential rejected | turn.ended error, or credential.invalid | Turn failed / CREDENTIAL_INVALID; banner in the UI".
       // 02 Workspace channel: credential.invalid {provider}.
       const ctx = await runningTurn();
@@ -975,7 +975,7 @@ describe("turn.ended", () => {
 
   it(
     "a codex turn error that mentions 401 → CREDENTIAL_INVALID",
-    async () => {
+    async ({ expect }) => {
       // 01 Codex auth.json sync step 7: a codex turn that fails with an error containing 401 or refresh_token is a
       // rejected credential; 03 Failure handling: "Turn failed / CREDENTIAL_INVALID".
       const ctx = await runningTurn({ agent: "codex" });
@@ -992,7 +992,7 @@ describe("turn.ended", () => {
 
   it(
     "a turn.ended for a turn that is not running is ignored",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended applies to the running turn; a stray end (unknown or already-ended turn) changes nothing.
       const ctx = await runningTurn();
       const seq = await emit(ctx, {
@@ -1031,10 +1031,10 @@ const CKPT = (n: number) => ({
   bundleBytes: 2048,
 });
 
-describe("after a turn ends", () => {
+describe.concurrent("after a turn ends", () => {
   it(
     "requests git.checkpoint turn_end, then git.changes branch, broadcasts changes, updates activity and attention",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended steps 2, 4, 5: git.checkpoint {reason: "turn_end"}; git.changes {scope: "branch"} and broadcast
       // changes; last_activity_at = now, recompute attention, publish. 03 Attention: "unread: a turn ended after last_viewed_at".
       const files = [
@@ -1100,7 +1100,7 @@ describe("after a turn ends", () => {
 
   it(
     "a checkpoint result inserts a row and sets turns.checkpoint_id; unchanged reuses the newest checkpoint",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended step 2: "On a result, insert the checkpoint row, upload the bundle, and set turns.checkpoint_id to
       // the new id. On {unchanged: true}, insert no row and set turns.checkpoint_id to the newest existing checkpoint."
       const ctx = await runningTurn({ configure: (t) => t.on("git.checkpoint", () => CKPT(1)) });
@@ -1173,7 +1173,7 @@ describe("after a turn ends", () => {
 
   it(
     "a bundle that cannot be uploaded is marked local_only after 3 attempts",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: "Checkpoint bundle upload fails | bundle.upload | 3 attempts, then local_only".
       // (The fake container cannot read files, so every upload attempt fails.)
       const ctx = await runningTurn({ configure: (t) => t.on("git.checkpoint", () => CKPT(2)) });
@@ -1193,7 +1193,7 @@ describe("after a turn ends", () => {
 
   it(
     "unchanged with no earlier checkpoint inserts no row and leaves checkpoint_id null",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended step 2: unchanged → no row; checkpoint_id = the newest existing checkpoint (there is none).
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
@@ -1207,7 +1207,7 @@ describe("after a turn ends", () => {
 
   it(
     "a failed git.checkpoint does not block the turn end or the next queued turn",
-    async () => {
+    async ({ expect }) => {
       // 03 Step limits: git.checkpoint "Skip; log warn". 03 turn.ended: steps 2-4 "MUST NOT block the next queued turn
       // longer than the checkpoint request itself".
       const ctx = await runningTurn({
@@ -1225,7 +1225,7 @@ describe("after a turn ends", () => {
 
   it(
     "starts the next queued turn; the state stays working, then returns to ready when the queue is empty",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended step 6: "Run the queue runner. If no turn starts, the state goes back to ready."
       // 03 Transitions: working → working when another turn is queued; working → ready when the queue is empty.
       const ctx = await runningTurn();
@@ -1263,10 +1263,10 @@ describe("after a turn ends", () => {
 // Other events
 // =============================================================================================
 
-describe("permission.requested", () => {
+describe.concurrent("permission.requested", () => {
   it(
     "stores the request, sends a permission message and sets attention needs_input",
-    async () => {
+    async ({ expect }) => {
       // 03 While it runs: "Store permission.requested in permissions, create a permission item, recompute attention."
       // 02 Workspace channel: permission {request: PermissionRequest}. 03 Attention: "needs_input: a permission request is pending."
       const ctx = await runningTurn();
@@ -1336,7 +1336,7 @@ describe("permission.requested", () => {
 
   it(
     "pending permissions of a cancelled turn do not keep needs_input",
-    async () => {
+    async ({ expect }) => {
       // 01 Permission requests: "If the turn is cancelled first, it answers {outcome: cancelled}". 03 Attention needs_input
       // requires a pending request; the ended turn has none to answer.
       const ctx = await runningTurn();
@@ -1395,7 +1395,7 @@ describe("permission.requested", () => {
 
   it(
     "a turn that fails while a permission is pending (the agent crashed) shows error, not needs_input",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: "Adapter exits during a turn | Turn failed / AGENT_CRASHED". 03 Attention: needs_input needs a
       // pending request; then "error: ... the newest turn ended failed".
       const ctx = await runningTurn();
@@ -1450,10 +1450,10 @@ describe("permission.requested", () => {
   );
 });
 
-describe("agent.exited", () => {
+describe.concurrent("agent.exited", () => {
   it(
     "during a turn: turn failed / AGENT_CRASHED, a notice with the stderr tail, and the next prompt reloads the session",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: "Adapter exits during a turn | agent.exited | Turn failed / AGENT_CRASHED; notice with
       // stderrTail; next prompt reloads".
       const ctx = await runningTurn();
@@ -1507,7 +1507,7 @@ describe("agent.exited", () => {
 
   it(
     "with no running turn: no turn fails, but the next prompt reloads the session",
-    async () => {
+    async ({ expect }) => {
       // 01 Sessions, Crashes: "A running turn ends as failed" — only a running turn. 03: "next prompt reloads".
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
@@ -1531,7 +1531,7 @@ describe("agent.exited", () => {
 
   it(
     "for another session does not fail the running turn",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: the turn fails only when its own adapter exits.
       const ctx = await runningTurn();
       const seq = await emit(ctx, {
@@ -1548,7 +1548,7 @@ describe("agent.exited", () => {
   );
 });
 
-describe("script.output", () => {
+describe.concurrent("script.output", () => {
   const SETUP = { ...DEFAULT_EFFECTIVE, scripts: { ...DEFAULT_EFFECTIVE.scripts, setup: "bun install" } };
 
   /** A workspace whose setup script is running. */
@@ -1569,7 +1569,7 @@ describe("script.output", () => {
 
   it(
     "appends output to the run's log tail and sends script.output to the UI",
-    async () => {
+    async ({ expect }) => {
       // 01 Scripts, Output: "tempod sends script.output {runId, stream, data} ... The WorkspaceDO keeps the last 1 MiB of
       // each run in SQLite." 02 Workspace channel: script.output {runId, stream, data}.
       const ctx = await setupRunning();
@@ -1597,7 +1597,7 @@ describe("script.output", () => {
 
   it(
     "keeps only the last 1 MiB of output",
-    async () => {
+    async ({ expect }) => {
       // 01 Scripts, Output: "keeps the last 1 MiB of each run". 02 script_runs.log_tail: "last 1 MiB".
       const ctx = await setupRunning();
       const chunk = (c: string) => c.repeat(400 * 1024);
@@ -1621,7 +1621,7 @@ describe("script.output", () => {
   // output keeps up to 2-3 MiB (observed 2,097,149 bytes for 2-byte characters).
   it(
     "keeps at most 1 MiB (bytes) of non-ASCII output",
-    async () => {
+    async ({ expect }) => {
       // 01 Scripts, Output: "The WorkspaceDO keeps the last 1 MiB of each run in SQLite."
       const ctx = await setupRunning();
       const chunk = "é".repeat(300 * 1024); // 600 KiB of UTF-8 per message
@@ -1640,7 +1640,7 @@ describe("script.output", () => {
 
   it(
     "output for an unknown run is dropped without creating a run",
-    async () => {
+    async ({ expect }) => {
       // 01 Scripts, Output: the tail belongs to a run; output for no known run has nowhere to go.
       const ctx = await setupRunning();
       const unknown = newId();
@@ -1662,7 +1662,7 @@ describe("script.output", () => {
 
   it(
     "prompts queued during setup wait; a successful setup starts them in queue order, one at a time",
-    async () => {
+    async ({ expect }) => {
       // 01 Setup script: "Prompts sent before setup ends wait in the queue. On exit code 0, the queue continues."
       // 03 Queue runner: state ready, setup_status none/succeeded/skipped, no running turn.
       const ctx = await setupRunning({ prompt: "First prompt" });
@@ -1695,7 +1695,7 @@ describe("script.output", () => {
 
   it(
     "a failed setup blocks the queue until continueAfterSetupFailure",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: "Setup fails | script.exited with a non-zero code | setup_status = 'failed'; queue waits for
       // Rerun setup or Continue anyway". 03 Queue runner: "continueAfterSetupFailure sets it from failed to skipped."
       // 03 Attention: "error: ... setup_status is failed".
@@ -1728,10 +1728,10 @@ describe("script.output", () => {
   );
 });
 
-describe("ports.changed", () => {
+describe.concurrent("ports.changed", () => {
   it(
     "updates detail.ports with a preview URL per port and tells the UI",
-    async () => {
+    async ({ expect }) => {
       // 01 Ports: "Each port P becomes a preview." Preview URL:
       // "https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>". 02 WorkspaceDetail.ports: [{port, url}].
       const ctx = await readyWorkspace();
@@ -1763,10 +1763,10 @@ describe("ports.changed", () => {
   );
 });
 
-describe("settings.changed", () => {
+describe.concurrent("settings.changed", () => {
   it(
     "stores the effective settings and issues, and sends env.set with the new env",
-    async () => {
+    async ({ expect }) => {
       // 02 tempod protocol: "After settings.read, and whenever project env vars or secrets change, the DO sends env.set".
       // 02 WorkspaceDO schema: settings_json = effective settings, last read.
       const ctx = await readyWorkspace();
@@ -1815,7 +1815,7 @@ describe("settings.changed", () => {
 
   it(
     "an invalid settings.changed is dropped and later events still apply",
-    async () => {
+    async ({ expect }) => {
       // 01 Project settings: settings must validate; 02 Rules: events still apply in seq order after a bad one.
       const ctx = await readyWorkspace();
       const before = (await wsRow(ctx.stub)).settings_json;
@@ -1840,7 +1840,7 @@ describe("settings.changed", () => {
   );
 });
 
-describe("credential.changed", () => {
+describe.concurrent("credential.changed", () => {
   const authJson = (access: string, refresh: string) =>
     JSON.stringify({
       tokens: { access_token: access, refresh_token: refresh },
@@ -1849,7 +1849,7 @@ describe("credential.changed", () => {
 
   it(
     "goes to CredentialDO and is never stored in the events table",
-    async () => {
+    async ({ expect }) => {
       // 02 tempod protocol, Rules: "credential.changed carries a secret. The DO MUST NOT store it in events; it goes
       // straight to CredentialDO." 01 Codex auth.json sync step 4: offerCodexAuth stores it if lastRefresh is newer.
       const ctx = await readyWorkspace({ agent: "codex" });
@@ -1887,10 +1887,10 @@ describe("credential.changed", () => {
   );
 });
 
-describe("git.changed", () => {
+describe.concurrent("git.changed", () => {
   it(
     "broadcasts changes {files, additions, deletions} and keeps them on the workspace detail",
-    async () => {
+    async ({ expect }) => {
       // 02 Workspace channel: changes {files, additions, deletions} "git.changed from tempod".
       const ctx = await readyWorkspace();
       const ui = await openUi(ctx);
@@ -1910,10 +1910,10 @@ describe("git.changed", () => {
   );
 });
 
-describe("tempod.stopping", () => {
+describe.concurrent("tempod.stopping", () => {
   it(
     "SIGTERM: requests git.checkpoint sigterm, then shutdown; the interrupted turn gets a notice",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: "tempod gets SIGTERM | tempod | tempod sends tempod.stopping, and the running turn ends
       // interrupted. The DO requests git.checkpoint {reason: "sigterm"}, uploads the bundle, runs home.backup, then sends shutdown."
       const ctx = await runningTurn();
@@ -1945,10 +1945,10 @@ describe("tempod.stopping", () => {
   );
 });
 
-describe("outbox.overflow", () => {
+describe.concurrent("outbox.overflow", () => {
   it(
     "adds a warning notice that live events were lost",
-    async () => {
+    async ({ expect }) => {
       // 03 Failure handling: "Outbox overflow | outbox.overflow | Notice item: some live events were lost; the transcript may have gaps".
       // 02 Item model: notice {level: "info" or "warning" or "error", text}.
       const ctx = await runningTurn();
@@ -1971,13 +1971,13 @@ describe("outbox.overflow", () => {
 // Queue runner: content blocks (01 Sessions, Send a prompt) and scheduling (03 Queue runner)
 // =============================================================================================
 
-describe("prompt content blocks", () => {
+describe.concurrent("prompt content blocks", () => {
   const GENERAL = "Always run the tests before you finish.";
   const withGeneral = { ...DEFAULT_EFFECTIVE, prompts: { general: GENERAL } };
 
   it(
     "sends the general prompt only on the first prompt of each session",
-    async () => {
+    async ({ expect }) => {
       // 01 Send a prompt, block 1: "On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set."
       const ctx = await runningTurn({ prompt: "First", effective: withGeneral });
       const p1 = ctx.tempod.requestsOf("session.prompt")[0];
@@ -2011,7 +2011,7 @@ describe("prompt content blocks", () => {
 
   it(
     "sends only the turn-summary rule when prompts.general is empty",
-    async () => {
+    async ({ expect }) => {
       // 01 Send a prompt, block 1: "if it is set".
       const ctx = await runningTurn({ prompt: "Only text" });
       expect(ctx.tempod.requestsOf("session.prompt")[0].content).toEqual([
@@ -2048,7 +2048,7 @@ describe("prompt content blocks", () => {
 
   it(
     "after session.start returns handoff:true, sends the handoff block once, then clears handoff_pending",
-    async () => {
+    async ({ expect }) => {
       // 01 Reload after a restart step 5 (handoff: true → handoff_pending = 1); Send a prompt block 2: "On the first prompt
       // after a handoff only: the handoff text block; then clear handoff_pending."
       // 01 Handoff text: exact first line, then one line per item, "User: <text>", "Agent: <text>" or "Tool: <title>".
@@ -2095,7 +2095,7 @@ describe("prompt content blocks", () => {
 
   it(
     "cuts the handoff block from the oldest end to at most 24,000 characters",
-    async () => {
+    async ({ expect }) => {
       // 01 Handoff text: "Cut from the oldest end so the block is at most 24,000 characters."
       const texts: string[] = [];
       const ctx = await handoffCase(async (c) => {
@@ -2127,7 +2127,7 @@ describe("prompt content blocks", () => {
 
   it(
     "sends sessions.pending_note once, then clears it",
-    async () => {
+    async ({ expect }) => {
       // 01 Send a prompt block 2: "On any prompt: sessions.pending_note, if set (for example, the revert note in 03); then clear it."
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
@@ -2149,7 +2149,7 @@ describe("prompt content blocks", () => {
 
   it(
     "sends review comments as one block and each @-mention as a resource_link after the user's text",
-    async () => {
+    async ({ expect }) => {
       // 01 Send a prompt block 3: "Review comments:" followed by one line per comment, "<path>:<line>: <text>";
       // block 4: the user's text; block 5: one resource_link per @-mentioned file, uri file:///workspace/<path>, name = file name.
       // 03 sendPrompt step 3: mark the selected draft review comments sent with this turn id.
@@ -2191,7 +2191,7 @@ describe("prompt content blocks", () => {
 
   it(
     "orders the blocks: general prompt, handoff, pending note, review comments, user text, mentions",
-    async () => {
+    async ({ expect }) => {
       // 01 Send a prompt: "content is a list of ACP content blocks built in this order" (1 general, 2 handoff then note,
       // 3 review comments, 4 user text, 5 resource links).
       const ctx = await readyWorkspace({
@@ -2272,7 +2272,7 @@ describe("prompt content blocks", () => {
 
   it(
     "a deferred session.prompt keeps the general prompt, handoff and note for the retry",
-    async () => {
+    async ({ expect }) => {
       // 01 Send a prompt, blocks 1-2: the handoff block, "then clear handoff_pending"; the note, "then clear it".
       // Nothing is cleared until the prompt is sent; a turn deferred while tempod is away sends them when it starts.
       const { ctx, sessionId, note } = await handoffSession();
@@ -2313,7 +2313,7 @@ describe("prompt content blocks", () => {
 
   it(
     "a failed session.prompt keeps the general prompt, handoff and note for the next prompt",
-    async () => {
+    async ({ expect }) => {
       // 01 Send a prompt, blocks 1-2. The failed turn never reached the agent, so the next prompt still carries them.
       const { ctx, sessionId, note } = await handoffSession();
       ctx.tempod.fail("session.prompt", "INTERNAL", "adapter refused");
@@ -2348,10 +2348,10 @@ describe("prompt content blocks", () => {
   );
 });
 
-describe("queue runner scheduling", () => {
+describe.concurrent("queue runner scheduling", () => {
   it(
     "runs only one turn at a time across sessions",
-    async () => {
+    async ({ expect }) => {
       // 01 Sessions: "Only one turn runs per workspace at a time, across all its sessions. Other prompts wait in the queue."
       const ctx = await runningTurn();
       const b = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
@@ -2377,7 +2377,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "a pending op other than housekeeping holds the queue; housekeeping does not",
-    async () => {
+    async ({ expect }) => {
       // 03 Queue runner: "No op is pending or running, except housekeeping."
       const ctx = await runningTurn();
       expect(
@@ -2404,7 +2404,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "a turn whose session.start fails ends failed / AGENT_START_FAILED and the queue moves on",
-    async () => {
+    async ({ expect }) => {
       // 02 Error codes: AGENT_START_FAILED "session.start failed" (tempod answers session.start with that code).
       // 03 Queue runner runs after any change to turns.
       const ctx = await readyWorkspace({
@@ -2443,7 +2443,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "an OpenCode turn with an empty agent.models.opencode fails with MODEL_REQUIRED before session.start",
-    async () => {
+    async ({ expect }) => {
       // 01 Start a session 2: "For opencode and pi an empty model fails the session with MODEL_REQUIRED before
       // anything is sent, and the turn that waited for it fails with the same code." 06 AT-40.
       const ctx = await readyWorkspace({ prompt: "Start OpenCode", agent: "opencode" });
@@ -2485,7 +2485,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "session.start carries agent.models.<agent> of the session's agent, and no model when it is empty",
-    async () => {
+    async ({ expect }) => {
       // 01 Start a session 2: "model is agent.models.<agent> from the effective settings, or absent when empty."
       const models = { claude: "", codex: "gpt-5-codex", opencode: "", pi: "openrouter/pi" };
       const ctx = await readyWorkspace({
@@ -2510,7 +2510,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "a model chosen for the session itself wins over agent.models, so OpenCode starts without a default",
-    async () => {
+    async ({ expect }) => {
       // 02 createSession takes model?; agent.models.<agent> is the agent's default model (01, Project settings file).
       const ctx = await readyWorkspace();
       const s = unwrap(
@@ -2528,7 +2528,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "createSession for Pi with no model ends the start with a MODEL_REQUIRED notice and sends nothing",
-    async () => {
+    async ({ expect }) => {
       const ctx = await readyWorkspace();
       const s = unwrap((await ctx.stub.createSession({ agent: "pi" })) as never) as { id: string };
       await waitFor(
@@ -2551,7 +2551,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "a turn deferred while the tempod socket is down starts once tempod reconnects",
-    async () => {
+    async ({ expect }) => {
       // 03 Queue runner: "It runs after any change to state, turns, sessions or setup_status"; tempod coming back is
       // what the deferred turn waited for. 03 Failure handling: the socket closes, the DO reconnects.
       const ctx = await readyWorkspace();
@@ -2581,7 +2581,7 @@ describe("queue runner scheduling", () => {
 
   it(
     "after a turn ends, the state goes back to ready when the next queued turn cannot start yet",
-    async () => {
+    async ({ expect }) => {
       // 03 turn.ended step 6: "Run the queue runner. If no turn starts, the state goes back to ready."
       // 03 Queue runner: setup_status must be none, succeeded or skipped.
       const ctx = await runningTurn();

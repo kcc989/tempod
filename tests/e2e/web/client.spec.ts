@@ -340,3 +340,26 @@ test("phone navigation opens unified diffs and returns to the composer", async (
   await page.getByRole("link", { name: /Build keeled/ }).click();
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
 });
+
+test("theme follows the selected appearance and persists across reloads", async ({ page }) => {
+  const root = page.locator("html");
+  await expect(root).toHaveCSS(
+    "color-scheme",
+    test.info().project.use.colorScheme === "dark" ? "dark" : "light",
+  );
+  await page.keyboard.press("Alt+Comma");
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("radio", { name: "Dark", exact: true }).click();
+  await expect(root).toHaveCSS("color-scheme", "dark");
+  await page.reload();
+  await expect(root).toHaveCSS("color-scheme", "dark");
+  await page.keyboard.press("Alt+Comma");
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("radio", { name: "Light", exact: true }).click();
+  await expect(root).toHaveCSS("color-scheme", "light");
+  await page.getByRole("radio", { name: "System", exact: true }).click();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(root).toHaveCSS("color-scheme", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(root).toHaveCSS("color-scheme", "light");
+});
