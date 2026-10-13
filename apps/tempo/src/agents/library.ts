@@ -102,6 +102,31 @@ const migrationName = (name: string, used: Set<string>): string => {
   return result;
 };
 
+const migrationPrompt = (definition: AgentDefinition, original: string, name: string): AgentDefinition => {
+  let prompt = original.slice(0, 32000);
+
+  const bytes = (value: string) =>
+    new TextEncoder().encode(JSON.stringify(canonical({ ...definition, prompt: value }))).length;
+
+  if (bytes(prompt) > 65536) {
+    let low = 0;
+    let high = prompt.length;
+
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+
+      if (bytes(prompt.slice(0, middle)) <= 65536) low = middle;
+      else high = middle - 1;
+    }
+
+    prompt = prompt.slice(0, low);
+  }
+
+  if (prompt.length < original.length) log("warn", "Agent migration truncated a copied prompt", { name });
+
+  return { ...definition, prompt };
+};
+
 const migrations = new Map<string, Promise<void>>();
 
 export const migrateAgents = async (env: Env, userId: string): Promise<void> => {
@@ -125,8 +150,13 @@ export const migrateAgents = async (env: Env, userId: string): Promise<void> => 
     const names = new Set(existing.map((a) => a.name));
     const rows: Array<typeof agents.$inferInsert> = [];
 
-    const add = async (definition: AgentDefinition, id: string, starter: string | null = null) => {
-      const text = definitionText(definition);
+    const add = async (
+      definition: AgentDefinition,
+      id: string,
+      original = definition.prompt,
+      starter: string | null = null,
+    ) => {
+      const text = definitionText(migrationPrompt(definition, original, definition.name));
       const now = Date.now();
       rows.push({
         id,
@@ -192,17 +222,23 @@ export const migrateAgents = async (env: Env, userId: string): Promise<void> => 
           baseAgent: file.agent === "other" ? "auto" : file.agent,
           model: file.model === "default" ? "" : file.model,
           access: file.access,
-          prompt: body,
+          prompt: body.slice(0, 32000),
           outputKind: ["reviewer", "ci"].includes(row.name) ? "review" : "note",
         }),
         newId(),
+        body,
       );
     }
 
     for (const starter of STARTERS) {
       if (handles.has(starter.handle)) continue;
       handles.add(starter.handle);
-      await add({ ...starter, name: migrationName(starter.name, names) }, newId(), starter.handle);
+      await add(
+        { ...starter, name: migrationName(starter.name, names) },
+        newId(),
+        starter.prompt,
+        starter.handle,
+      );
     }
 
     // The sentinel and all imports commit together. Conditional inserts also protect cross-isolate races.

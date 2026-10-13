@@ -236,7 +236,7 @@ describe("agent library", () => {
       .bind(id, o.userId, "123")
       .run();
     await env.DB.prepare("INSERT INTO user_roles (user_id,name,text,updated_at) VALUES (?,?,?,0)")
-      .bind(o.userId, "planner", "---\ndescription: Plans\nrequestable: true\n---\nOld prompt.")
+      .bind(o.userId, "planner", "---\ndescription: Plans\nrequestable: true\n---\n" + "P".repeat(33000))
       .run();
     await env.DB.prepare("INSERT INTO user_roles (user_id,name,text,updated_at) VALUES (?,?,?,0)")
       .bind(o.userId, "invalid", "invalid")
@@ -246,6 +246,16 @@ describe("agent library", () => {
     const migrated = value(await call("getAgent", o, { agentId: id }));
     expect(migrated.prompt).toBe(old.systemPrompt);
     expect(migrated.model).toBe("opus");
+    const planner = list.find((a) => a.handle === "planner")!;
+    expect(value(await call("getAgent", o, { agentId: planner.id })).prompt).toBe("P".repeat(32000));
+
+    const original = await env.DB.prepare(
+      "SELECT text FROM user_roles WHERE user_id = ? AND name = 'planner'",
+    )
+      .bind(o.userId)
+      .first<{ text: string }>();
+
+    expect(original!.text.endsWith("P".repeat(33000))).toBe(true);
     value(await call("listAgents", o));
     expect(read).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledWith("old-repo", "old-commit", "old-path");

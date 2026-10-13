@@ -21,4 +21,4 @@ Both settings clients expose the definition fields, Duplicate/Delete, a read-onl
 
 `bun run ci` passed in 54.9 seconds with restored task results: typecheck 7.3 s, non-Worker tests 23.1 s and browser suites 29.4 s. The new Worker suite has eight cases, including a real DO session with frozen profile data. `cargo check -p tempo-mac` passed; `cargo test -p tempo-mac` passed all 264 native tests. Native compilation also required correcting four pre-existing chat accesses from the old tuple-shaped `ContentBlock` to the current named fields. This Linux verification does not establish macOS rendering or real-agent acceptance.
 
-The legacy long-prompt migration policy is awaiting owner clarification. M3–M6, S20/S23 and Gate I remain pending; hook execution is not provided by M2 alone.
+The owner approved truncating copied legacy prompts to the new character/JSON limits while preserving original legacy storage and logging affected names only; the migration regression verifies preservation. M3–M6, S20/S23 and Gate I remain pending; hook execution is not provided by M2 alone.
