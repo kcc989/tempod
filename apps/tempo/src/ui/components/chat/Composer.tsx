@@ -618,7 +618,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         />
       )}
       <div
-        className="relative px-[var(--chat-gutter,12px)] pt-2 pb-3"
+        className="relative mx-auto w-full max-w-[90ch] px-[var(--chat-gutter,12px)] pt-2 pb-3"
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
