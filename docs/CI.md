@@ -21,7 +21,11 @@ agent/deployment tasks are never cached. Builds used by CI still execute, and
 browser fixtures build before previewing to avoid development-server transform
 costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
 to avoid loading the same dependency module graph into every workerd isolate.
-Component tests use two workers to limit CPU and memory contention. TypeScript
+Worker, UI model and component projects share one Vitest invocation. UI and
+component files use isolated VM threads to avoid repeated process startup; each
+project is limited to two workers. Worker event cases use four-way concurrency
+with distinct users, projects and Durable Objects, and test-context assertions.
+Cases sharing DOM state, global mocks or cleanup lists remain sequential. TypeScript
 7.0.2 provides the native checker; use two checkers per project and at most two
 concurrent typecheck tasks. The root deployment/tooling typecheck is also cached
 with its own source/configuration inputs. Update those inputs if root scripts
@@ -69,7 +73,9 @@ explicit commands and acceptance gates remain available.
 4. Poll for a bounded condition or use a controlled promise. Avoid fixed sleeps
    except when elapsed time is the behavior under test. Scale test-only deadlines;
    do not change production timeouts for speed.
-5. Fix flaky tests without retries. Preserve isolation. Never remove security,
+5. Fix flaky tests without retries. Preserve isolation. Concurrent cases need
+   independent fixtures and test-context assertions; do not share global mocks,
+   fake timers, a DOM or cleanup lists between concurrent cases. Never remove security,
    failure, idempotency or migration coverage to meet the budget.
 6. Use the CI timing summary to identify the slow stage. Changes to tests or CI
    must report timings and stay within the total budget, including cold setup.

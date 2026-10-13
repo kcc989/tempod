@@ -7,7 +7,10 @@ export default defineConfig({
     alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   test: {
+    name: "ui",
+    maxWorkers: 2,
     expect: { requireAssertions: true },
+    pool: "vmThreads",
     environment: "node",
     include: ["test/ui/**/*.test.ts"],
   },
