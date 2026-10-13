@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type * as P from "../src/index.ts";
 import * as w from "./world.ts";
 
@@ -17,7 +18,9 @@ const { uid, at, S1, S2, W2, W3, W4 } = w;
 const hubWorkspace = (summary: P.WorkspaceSummary): P.HubServerMessage => ({ type: "workspace", summary });
 
 const lisbon = (rev: number, o: Partial<P.WorkspaceSummary> = {}) => ({ ...w.lisbon, rev, ...o });
+
 const oslo = (rev: number, o: Partial<P.WorkspaceSummary> = {}) => ({ ...w.oslo, rev, ...o });
+
 const nairobi = (rev: number, o: Partial<P.WorkspaceSummary> = {}) =>
   w.summary(W4, {
     slug: "nairobi",
@@ -69,8 +72,11 @@ const hubReconnect: ChannelSession = {
 };
 
 const T1 = uid(101);
+
 const T2 = uid(102);
+
 const T3 = uid(103);
+
 const T4 = uid(104);
 
 const turn1 = w.turn(1, {
@@ -81,6 +87,7 @@ const turn1 = w.turn(1, {
     reviewCommentIds: [],
   },
 });
+
 const turn2Running = w.turn(2, {
   status: "running",
   stopReason: null,
@@ -93,6 +100,7 @@ const turn2Running = w.turn(2, {
     reviewCommentIds: [],
   },
 });
+
 const turn2Done = {
   ...turn2Running,
   status: "completed" as const,
@@ -102,6 +110,7 @@ const turn2Done = {
 };
 
 const runningDetail = w.detail(w.lisbon, { runningTurnId: T2, ports: w.lisbonDetail.ports });
+
 const readyDetail = w.detail(
   { ...w.lisbon, state: "ready", attention: "unread", rev: 44 },
   { ports: w.lisbonDetail.ports, pushed: false },
@@ -115,6 +124,7 @@ const user = (n: number, rev: number, seconds: number, turnId: string, text: str
     turnId,
     content: { text, mentions: [], attachments: [], reviewCommentIds: [] },
   });
+
 const agent = (
   n: number,
   rev: number,
@@ -123,8 +133,10 @@ const agent = (
   text: string,
   status: P.Item["status"] = "completed",
 ) => w.item("agent_message", { n, rev, seconds, turnId, status, content: { text } });
+
 const thought = (n: number, rev: number, seconds: number, turnId: string, text: string) =>
   w.item("agent_thought", { n, rev, seconds, turnId, content: { text } });
+
 const tool = (
   n: number,
   rev: number,
@@ -449,30 +461,35 @@ const queue: ChannelSession = {
 const backlog = (): ChannelSession => {
   const items: P.Item[] = [];
   let rev = 0;
+
   for (let t = 0; t < 40; t++) {
     const turnId = uid(2000 + t);
     const sessionId = t % 4 === 3 ? S2 : S1;
+
     for (let k = 0; k < 16; k++) {
       rev++;
       const n = 10_000 + rev;
       const seconds = 1000 + t * 60 + k;
       const kind = k === 0 ? "user" : k % 5 === 0 ? "tool" : k % 7 === 0 ? "thought" : "agent";
-      const it =
-        kind === "user"
-          ? user(n, rev, seconds, turnId, `Step ${t + 1}`)
-          : kind === "tool"
-            ? tool(n, rev, seconds, turnId, "completed", `Run step ${t + 1}.${k}`)
-            : kind === "thought"
-              ? thought(n, rev, seconds, turnId, `Thinking about ${t + 1}.${k}`)
-              : agent(n, rev, seconds, turnId, `Part ${k} of step ${t + 1}.`);
+
+      const it = Match.value(kind).pipe(
+        Match.when("user", () => user(n, rev, seconds, turnId, `Step ${t + 1}`)),
+        Match.when("tool", () => tool(n, rev, seconds, turnId, "completed", `Run step ${t + 1}.${k}`)),
+        Match.when("thought", () => thought(n, rev, seconds, turnId, `Thinking about ${t + 1}.${k}`)),
+        Match.orElse(() => agent(n, rev, seconds, turnId, `Part ${k} of step ${t + 1}.`)),
+      );
+
       items.push({ ...it, sessionId });
     }
   }
+
   const itemsRev = rev;
   const pages: P.WorkspaceServerMessage[] = [];
+
   for (let i = 0; i < items.length; i += 500) {
     pages.push({ type: "items", items: items.slice(i, i + 500), itemsRev, done: i + 500 >= items.length });
   }
+
   const turns = Array.from({ length: 40 }, (_, t) =>
     w.turn(t + 1, {
       id: uid(2000 + t),
@@ -482,6 +499,7 @@ const backlog = (): ChannelSession => {
       endedAt: at(1015 + t * 60),
     }),
   );
+
   return {
     name: "workspace-backlog",
     channel: "workspace",

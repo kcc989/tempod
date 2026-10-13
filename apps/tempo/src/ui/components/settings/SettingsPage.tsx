@@ -72,6 +72,7 @@ const PERSONAL = [
   },
   { id: "devices", label: "Devices", description: "Manage devices signed in to Tempo.", icon: MonitorIcon },
 ] as const;
+
 const PROJECT_SECTIONS = [...new Set(SECTIONS.map(sectionPage)), "Secrets", "General"];
 
 export function SettingsPage() {
@@ -83,21 +84,31 @@ export function SettingsPage() {
   const heading = useRef<HTMLHeadingElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const tab = settings?.tab === "notifications" ? "general" : (settings?.tab ?? "general");
+
   const project =
     projects.data?.find((p) => p.id === settings?.projectId) ??
     projects.data?.find((p) => p.id === workspace?.projectId) ??
     projects.data?.[0];
+
   const personal = PERSONAL.find((p) => p.id === tab);
+
   const title =
     tab === "project" ? (section === "Agent" ? "Agents" : section) : (personal?.label ?? "Settings");
+
   const query = search.trim().toLowerCase();
   const matches = (label: string) => label.toLowerCase().includes(query);
-  const go = (next: SettingsTab, projectId = settings?.projectId) =>
-    openDialog({ kind: "settings", tab: next, ...(projectId ? { projectId } : {}) });
+
+  const go = (next: SettingsTab, projectId = settings?.projectId) => {
+    let dialog: import("~/ui/state/workspace-ui").DialogOf<"settings"> = { kind: "settings", tab: next };
+
+    if (projectId) dialog = { ...dialog, projectId };
+    openDialog(dialog);
+  };
 
   useEffect(() => {
     const previous = document.activeElement;
     heading.current?.focus();
+
     return () => {
       if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
@@ -112,15 +123,18 @@ export function SettingsPage() {
       data-settings-page
       onKeyDown={(e) => {
         if (e.defaultPrevented || e.nativeEvent.isComposing) return;
+
         if (e.code === "Escape") {
           e.preventDefault();
           closeDialog("settings");
         }
+
         if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
           if (e.code === "KeyF") {
             e.preventDefault();
             searchInput.current?.focus();
           }
+
           if (e.code === "Enter") {
             e.preventDefault();
             const form = e.target instanceof HTMLElement ? e.target.closest("form") : null;
@@ -154,13 +168,15 @@ export function SettingsPage() {
         <nav className="max-h-56 space-y-6 overflow-y-auto md:max-h-none md:flex-1" aria-label="Settings">
           <div>
             <p className="mb-2 px-2 text-xs text-muted-foreground">Personal</p>
-            {PERSONAL.filter((p) => matches(`${p.label} ${p.description}`)).map(
-              ({ id, label, icon: Icon }) => (
+            {PERSONAL.flatMap(({ id, label, description, icon: Icon }) =>
+              matches(`${label} ${description}`)
+                ? [
                 <NavItem key={id} active={tab === id} onClick={() => go(id)}>
                   <Icon aria-hidden className="size-4" />
                   {label}
-                </NavItem>
-              ),
+                    </NavItem>,
+                  ]
+                : [],
             )}
           </div>
           <div>
@@ -191,12 +207,14 @@ export function SettingsPage() {
                   </NavItem>
                   {tab === "project" && project?.id === p.id && (
                     <div className="my-1 ml-4 border-l pl-2">
-                      {PROJECT_SECTIONS.filter((s) => matches(s) || matches(`${p.owner}/${p.name}`)).map(
-                        (s) => (
+                      {PROJECT_SECTIONS.flatMap((s) =>
+                        matches(s) || matches(`${p.owner}/${p.name}`)
+                          ? [
                           <NavItem key={s} active={section === s} onClick={() => setSection(s)}>
                             {s === "Agent" ? "Agents" : s}
-                          </NavItem>
-                        ),
+                              </NavItem>,
+                            ]
+                          : [],
                       )}
                     </div>
                   )}

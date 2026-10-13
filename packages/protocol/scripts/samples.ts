@@ -64,7 +64,9 @@ const LIFE_LOG = { seq: 1, event: LIFE_EVENT };
 
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 const ENV_ID = uid(901);
+
 const INJECTOR_CODE = "export default { async fetch(request, env) { return fetch(request); } };\n";
+
 const ENVIRONMENT = {
   id: ENV_ID,
   name: "Payments",
@@ -80,13 +82,14 @@ const ENVIRONMENT = {
   createdAt: 1_790_000_000_000,
   updatedAt: 1_790_000_100_000,
 } as const;
+
 const PROPOSAL = {
   note: "The tests call the Stripe API and pip installs from PyPI.",
   allowlistAdd: ["pypi.org", "files.pythonhosted.org"],
   secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
 } as const;
 
-export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+export const SHARED_SAMPLES = {
   ConversationSummary: [
     {
       conversationId: W1,
@@ -265,7 +268,6 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   Usage: [{}, w.claudeSession.usage],
   Attachment: [{ id: uid(201), name: "shot.png", mime: "image/png", size: 8 }],
   Capabilities: [{}, { loadSession: true, promptCapabilities: { image: true } }],
-
   RunScript: Object.values(w.settings.scripts.run),
   CustomInstance: [
     { vcpu: 2, memoryMib: 8192, diskMb: 12000 },
@@ -282,7 +284,6 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       sources: { "agent.default": "tempo", "scripts.setup": ".tempo", "git.branch_prefix": "default" },
     },
   ],
-
   Project: [
     w.project,
     { ...w.project, id: uid(2), name: "docs", repoId: 812345679, settings: {}, sortOrder: 1 },
@@ -503,9 +504,9 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       latestMacClientSha256: "a".repeat(64),
     },
   ],
-};
+} satisfies Record<string, ReadonlyArray<unknown>>;
 
-export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+export const CHANNEL_SAMPLES = {
   WsRoleRun: [{ type: "roleRun", run: ROLE_RUN }],
   WsHello: [
     {
@@ -559,12 +560,13 @@ export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   HubWorkspaceRemoved: [{ type: "workspace.removed", workspaceId: w.W3 }],
   TerminalResize: [{ type: "resize", cols: 120, rows: 36 }],
   TerminalReady: [{ type: "ready" }],
-};
+} satisfies Record<string, ReadonlyArray<unknown>>;
 
 const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
-export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> } = {
+export const INPUT_SAMPLES = {
+readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> } = {
   listRoles: [{}, { workspaceId: W1 }],
   getRoleText: [{ name: "reviewer", scope: "builtin" }],
   putUserRole: [{ name: "reviewer", text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],
@@ -748,10 +750,10 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
     { customAgentId: w.CUSTOM_AGENT_ID, definition: { ...w.reviewerDefinition, thoughtLevel: "" } },
   ],
   deleteCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
-};
+} satisfies { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> };
 
 /** Outputs that are not shared types, by their wire type name. */
-export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+export const OUTPUT_SAMPLES = {
   ListProjectConversationsOut: [
     {
       conversations: [
@@ -832,4 +834,4 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { url: "https://live.browser.run/ui/view?wss=live.browser.run/api/devtools/browser/s1/page/p1?jwt=x" },
     { url: null },
   ],
-};
+} satisfies Record<string, ReadonlyArray<unknown>>;

@@ -1,3 +1,6 @@
+import { Schema } from "effect";
+import { OpKind } from "@tempo/protocol";
+import type { RedactableFields } from "@tempo/protocol";
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -46,7 +49,6 @@ import {
 } from "../../src/http/preview.ts";
 import { previewCookie, verifyPreviewCookie } from "../../src/do/workspace/preview.ts";
 import { sanitizeName } from "../../src/http/attachments.ts";
-
 import { HOME_EXCLUDES } from "../../src/do/workspace/durability.ts";
 
 afterEach(() => {
@@ -56,10 +58,10 @@ afterEach(() => {
 // ---------------------------------------------------------------------------------------------
 // egress/rules.ts — 01 "Credentials and egress" (TempoOutbound rules table) and 05 "Egress control"
 // ---------------------------------------------------------------------------------------------
-
 describe("egress decide()", () => {
   const APP = "tempo.test";
   const open_: EgressConfig = { owner: "acme", repo: "app", policy: "open", allowlist: [], mcp: [] };
+
   const allow: EgressConfig = {
     owner: "acme",
     repo: "app",
@@ -67,6 +69,7 @@ describe("egress decide()", () => {
     allowlist: ["pypi.org", "*.example.com"],
     mcp: [],
   };
+
   const d = (url: string, headers: Record<string, string> = {}, config: EgressConfig = open_) =>
     decide(new URL(url), new Headers(headers), APP, config);
 
@@ -80,7 +83,6 @@ describe("egress decide()", () => {
       });
     });
   });
-
   describe("rule 0: APP_HOST", () => {
     // 05 Egress control: "Rule 0 ... a request whose host is APP_HOST returns 403."
     it("blocks https to APP_HOST with 403 under open policy", () => {
@@ -101,7 +103,6 @@ describe("egress decide()", () => {
       expect(d("https://x.tempo.test/")).toMatchObject({ rule: 8, action: "forward" });
     });
   });
-
   describe("rule 1: http: scheme", () => {
     // 01: "Scheme http: | Skip rules 2 to 7 and apply rules 8 to 10. MUST NOT add credentials."
     it("adds no GitHub credentials to an http: repo path", () => {
@@ -131,7 +132,6 @@ describe("egress decide()", () => {
       });
     });
   });
-
   describe("rule 2: GitHub git over HTTPS for this repo", () => {
     // 01: "Host github.com or codeload.github.com, path starts with /<owner>/<repo> of this project
     // (case-insensitive, optional .git) | Set Authorization: Basic ..."
@@ -163,7 +163,6 @@ describe("egress decide()", () => {
       expect(d("https://github.com/acme/app.git/info/refs", {}, allow)).toEqual(rule2);
     });
   });
-
   describe("rule 3: GitHub API", () => {
     // 01: "Host api.github.com or uploads.github.com | Set Authorization: Bearer <token>"
     const rule3 = { rule: 3, action: "forward", set: { name: "authorization", value: "github-bearer" } };
@@ -180,7 +179,6 @@ describe("egress decide()", () => {
       expect(d("https://api.github.com.evil.test/")).toEqual({ rule: 8, action: "forward" });
     });
   });
-
   describe("rules 4 to 6: placeholder key swaps", () => {
     // 01: rule 4 "Host openrouter.ai, header Authorization: Bearer tempo-placeholder"
     it("rule 4 swaps the OpenRouter key", () => {
@@ -240,7 +238,6 @@ describe("egress decide()", () => {
       });
     });
   });
-
   describe("rule 12: MCP secret headers", () => {
     // 01: swap only the server's own placeholder, only for the server's own host.
     const sid = "01jmcpserver0000000000000a";
@@ -276,7 +273,6 @@ describe("egress decide()", () => {
       expect(d("https://mcp.linear.app/mcp", {}, allow)).toMatchObject({ rule: 10, action: "block" });
     });
   });
-
   describe("rule 7: placeholder anywhere else", () => {
     // 01: "Any request that still carries tempo-placeholder | Return 403. MUST NOT forward the placeholder."
     it.each([
@@ -316,7 +312,6 @@ describe("egress decide()", () => {
       });
     });
   });
-
   describe("rules 8 to 10: policy", () => {
     // 01: "8 | Egress policy open | Pass through unchanged"
     it("rule 8 passes any host through under policy open", () => {
@@ -440,7 +435,6 @@ describe("isRepoPath", () => {
 // ---------------------------------------------------------------------------------------------
 // do/workspace/transitions.ts — 03 "Transitions"
 // ---------------------------------------------------------------------------------------------
-
 describe("canTransition", () => {
   // 03 Transitions table, row by row ("Only these transitions are allowed").
   const ROWS: ReadonlyArray<readonly [WorkspaceState, WorkspaceState]> = [
@@ -465,6 +459,7 @@ describe("canTransition", () => {
     ["working", "starting"],
     ["setting_up", "starting"],
   ];
+
   // "Any state except archived | A step fails for good | error"
   const TO_ERROR: ReadonlyArray<WorkspaceState> = WORKSPACE_STATES.filter(
     (s) => s !== "archived" && s !== "error",
@@ -508,14 +503,18 @@ describe("canTransition", () => {
     const allowed = new Set(
       [...ROWS, ...TO_ERROR.map((s) => [s, "error"] as const)].map(([f, t]) => `${f}->${t}`),
     );
+
     const mismatches: string[] = [];
+
     for (const from of WORKSPACE_STATES) {
       for (const to of WORKSPACE_STATES) {
         if (from === to) continue;
         const want = allowed.has(`${from}->${to}`);
+
         if (canTransition(from, to) !== want) mismatches.push(`${from}->${to} want ${want}`);
       }
     }
+
     expect(mismatches).toEqual([]);
   });
   // 03: "Any other change of workspace.state is a bug and MUST throw."
@@ -531,29 +530,24 @@ describe("canTransition", () => {
 // ---------------------------------------------------------------------------------------------
 // github/provider.ts — 03 "Status polling"
 // ---------------------------------------------------------------------------------------------
-
 describe("prStateOf", () => {
   // 03: "merged if merged, else closed if state = closed, else draft if draft, else open."
   it("is merged when merged, even if closed and draft", () => {
-    expect(
-      prStateOf({ merged: true, merged_at: "2026-01-01T00:00:00Z", state: "closed", draft: true } as never),
-    ).toBe("merged");
+    expect(prStateOf({ merged: true, merged_at: "2026-01-01T00:00:00Z", state: "closed", draft: true })).toBe(
+      "merged",
+    );
   });
   it("is closed when closed and not merged", () => {
-    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: false } as never)).toBe(
-      "closed",
-    );
+    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: false })).toBe("closed");
   });
   it("is closed, not draft, when a draft PR is closed", () => {
-    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: true } as never)).toBe(
-      "closed",
-    );
+    expect(prStateOf({ merged: false, merged_at: null, state: "closed", draft: true })).toBe("closed");
   });
   it("is draft when open and draft", () => {
-    expect(prStateOf({ merged: false, merged_at: null, state: "open", draft: true } as never)).toBe("draft");
+    expect(prStateOf({ merged: false, merged_at: null, state: "open", draft: true })).toBe("draft");
   });
   it("is open otherwise", () => {
-    expect(prStateOf({ merged: false, merged_at: null, state: "open", draft: false } as never)).toBe("open");
+    expect(prStateOf({ merged: false, merged_at: null, state: "open", draft: false })).toBe("open");
   });
 });
 
@@ -586,18 +580,20 @@ describe("checksStateOf", () => {
 // ---------------------------------------------------------------------------------------------
 // github/app.ts — App JWT (RS256) and PKCS#1 → PKCS#8
 // ---------------------------------------------------------------------------------------------
-
 /** Reads one DER TLV at `at`: returns the tag, the content start and the content length. */
 const derTlv = (b: Uint8Array, at: number) => {
   const tag = b[at]!;
   let len = b[at + 1]!;
   let start = at + 2;
+
   if (len & 0x80) {
     const n = len & 0x7f;
     len = 0;
+
     for (let i = 0; i < n; i++) len = (len << 8) | b[at + 2 + i]!;
     start += n;
   }
+
   return { tag, start, len, end: start + len };
 };
 
@@ -608,19 +604,21 @@ const pkcs8ToPkcs1 = (pkcs8: Uint8Array): Uint8Array => {
   const alg = derTlv(pkcs8, version.end);
   const octet = derTlv(pkcs8, alg.end);
   expect(octet.tag).toBe(0x04);
+
   return pkcs8.slice(octet.start, octet.end);
 };
 
 const pem = (label: string, der: Uint8Array) => {
   const b64 = bytesToBase64(der);
+
   return `-----BEGIN ${label}-----\n${b64.match(/.{1,64}/g)!.join("\n")}\n-----END ${label}-----\n`;
 };
 
-const b64urlDecode = (s: string): Uint8Array =>
+const b64urlDecode = (s: string): Uint8Array<ArrayBuffer> =>
   base64ToBytes(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4));
 
 const rsaKeys = (async () => {
-  const pair = (await crypto.subtle.generateKey(
+  const pair = await crypto.subtle.generateKey(
     {
       name: "RSASSA-PKCS1-v1_5",
       modulusLength: 2048,
@@ -629,21 +627,26 @@ const rsaKeys = (async () => {
     },
     true,
     ["sign", "verify"],
-  )) as CryptoKeyPair;
-  const pkcs8 = new Uint8Array((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer);
+  );
+
+  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
+
   return { pair, pkcs8, pkcs1: pkcs8ToPkcs1(pkcs8) };
 })();
 
 const verifyJwt = async (jwt: string, publicKey: CryptoKey) => {
   const [h, p, s] = jwt.split(".");
+
   const ok = await crypto.subtle.verify(
     "RSASSA-PKCS1-v1_5",
     publicKey,
-    b64urlDecode(s!) as never,
+    b64urlDecode(s!),
     new TextEncoder().encode(`${h}.${p}`),
   );
+
   const header = JSON.parse(new TextDecoder().decode(b64urlDecode(h!)));
   const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(p!)));
+
   return { ok, header, payload, parts: [h!, p!, s!] };
 };
 
@@ -655,6 +658,7 @@ describe("pkcs1ToPkcs8", () => {
   });
   it("produces bytes WebCrypto imports as a signing key", async () => {
     const { pkcs1 } = await rsaKeys;
+
     const key = await crypto.subtle.importKey(
       "pkcs8",
       pkcs1ToPkcs8(pkcs1),
@@ -662,6 +666,7 @@ describe("pkcs1ToPkcs8", () => {
       false,
       ["sign"],
     );
+
     expect(key.type).toBe("private");
   });
   it("encodes short and long DER lengths", () => {
@@ -708,9 +713,9 @@ describe("appJwt", () => {
     // GitHub rejects an App JWT that expires more than 10 minutes in the future.
     expect(payload.exp - nowS).toBeLessThanOrEqual(600);
     expect(payload.exp - payload.iat).toBeLessThanOrEqual(600);
+
     for (const part of parts) expect(part).toMatch(/^[A-Za-z0-9_-]+$/);
   });
-
   it("signs with a PKCS#8 PEM key as well", async () => {
     const { pair, pkcs8 } = await rsaKeys;
     const jwt = await appJwt(config(pem("PRIVATE KEY", pkcs8)));
@@ -720,10 +725,10 @@ describe("appJwt", () => {
     expect(payload.iat).toBeLessThanOrEqual(nowS);
     expect(payload.exp).toBeGreaterThan(nowS);
   });
-
   it("does not verify against a different public key", async () => {
     const { pkcs8 } = await rsaKeys;
-    const other = (await crypto.subtle.generateKey(
+
+    const other = await crypto.subtle.generateKey(
       {
         name: "RSASSA-PKCS1-v1_5",
         modulusLength: 2048,
@@ -732,11 +737,11 @@ describe("appJwt", () => {
       },
       true,
       ["sign", "verify"],
-    )) as CryptoKeyPair;
+    );
+
     const jwt = await appJwt(config(pem("PRIVATE KEY", pkcs8)));
     expect((await verifyJwt(jwt, other.publicKey)).ok).toBe(false);
   });
-
   it("rejects a malformed private key", async () => {
     await expect(
       appJwt(config("-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----\n")),
@@ -747,42 +752,35 @@ describe("appJwt", () => {
 // ---------------------------------------------------------------------------------------------
 // lib/crypto.ts — 02 "Encryption"
 // ---------------------------------------------------------------------------------------------
-
 describe("crypto", () => {
   const master = bytesToBase64(crypto.getRandomValues(new Uint8Array(32)));
-
   it("round-trips a secret with seal and open", async () => {
     const key = await deriveKey(master, "user-1");
     const sealed = await seal(key, "openrouter.api_key", "sk-or-secret");
     expect(await open(key, "openrouter.api_key", sealed)).toBe("sk-or-secret");
   });
-
   it("round-trips the empty string and unicode", async () => {
     const key = await deriveKey(master, "user-1");
     expect(await open(key, "k", await seal(key, "k", ""))).toBe("");
     expect(await open(key, "k", await seal(key, "k", "pässwörd ✓ 鍵"))).toBe("pässwörd ✓ 鍵");
   });
-
   // 02: "Use the secret's key name as additional authenticated data, so a ciphertext cannot be moved to another key."
   it("fails to open under a different key name (AAD)", async () => {
     const key = await deriveKey(master, "user-1");
     const sealed = await seal(key, "anthropic.api_key", "sk-ant");
     await expect(open(key, "openai.api_key", sealed)).rejects.toThrow();
   });
-
   // 02: "salt = the user id"
   it("fails to open with a key derived from a different salt", async () => {
     const sealed = await seal(await deriveKey(master, "user-1"), "k", "v");
     await expect(open(await deriveKey(master, "user-2"), "k", sealed)).rejects.toThrow();
     await expect(open(await deriveKey(master, "system"), "k", sealed)).rejects.toThrow();
   });
-
   it("fails to open with a different master key", async () => {
     const sealed = await seal(await deriveKey(master, "user-1"), "k", "v");
     const other = bytesToBase64(crypto.getRandomValues(new Uint8Array(32)));
     await expect(open(await deriveKey(other, "user-1"), "k", sealed)).rejects.toThrow();
   });
-
   it("fails to open a tampered ciphertext", async () => {
     const key = await deriveKey(master, "user-1");
     const sealed = await seal(key, "k", "value");
@@ -790,7 +788,6 @@ describe("crypto", () => {
     ct[0] = ct[0]! ^ 1;
     await expect(open(key, "k", { ciphertext: ct.buffer, iv: sealed.iv })).rejects.toThrow();
   });
-
   it("uses a fresh random 12-byte IV for every seal", async () => {
     const key = await deriveKey(master, "user-1");
     const a = await seal(key, "k", "same");
@@ -800,7 +797,6 @@ describe("crypto", () => {
     expect(bytesToBase64(new Uint8Array(a.iv))).not.toBe(bytesToBase64(new Uint8Array(b.iv)));
     expect(bytesToBase64(new Uint8Array(a.ciphertext))).not.toBe(bytesToBase64(new Uint8Array(b.ciphertext)));
   });
-
   it("does not leave the plaintext in the ciphertext", async () => {
     const key = await deriveKey(master, "user-1");
     const sealed = await seal(key, "k", "plain-secret-value");
@@ -808,34 +804,35 @@ describe("crypto", () => {
     // AES-GCM: ciphertext = plaintext length + 16-byte tag.
     expect(sealed.ciphertext.byteLength).toBe("plain-secret-value".length + 16);
   });
-
   // 02: "Derive the AES-256-GCM key with HKDF-SHA256: salt = the user id, info = tempo-secrets-v1."
   it("derives exactly HKDF-SHA256(master, salt = user id, info = tempo-secrets-v1)", async () => {
     const enc = new TextEncoder();
     const ikm = await crypto.subtle.importKey("raw", base64ToBytes(master), "HKDF", false, ["deriveBits"]);
+
     const bits = await crypto.subtle.deriveBits(
       { name: "HKDF", hash: "SHA-256", salt: enc.encode("user-9"), info: enc.encode("tempo-secrets-v1") },
       ikm,
       256,
     );
+
     const reference = await crypto.subtle.importKey("raw", bits, "AES-GCM", false, ["encrypt"]);
     const iv = crypto.getRandomValues(new Uint8Array(12));
+
     const ciphertext = await crypto.subtle.encrypt(
       { name: "AES-GCM", iv, additionalData: enc.encode("x.key") },
       reference,
       enc.encode("hello"),
     );
+
     expect(await open(await deriveKey(master, "user-9"), "x.key", { ciphertext, iv: iv.buffer })).toBe(
       "hello",
     );
   });
-
   // 05: "TEMPO_ENCRYPTION_KEY | Worker secret | Deploy (32 random bytes, base64)"
   it("rejects a master key that is not 32 bytes", async () => {
     await expect(deriveKey(bytesToBase64(new Uint8Array(16)), "user-1")).rejects.toThrow(/32 bytes/);
     await expect(deriveKey(bytesToBase64(new Uint8Array(33)), "user-1")).rejects.toThrow(/32 bytes/);
   });
-
   it("accepts the deployment's TEMPO_ENCRYPTION_KEY binding", async () => {
     const key = await deriveKey(env.TEMPO_ENCRYPTION_KEY, "system");
     expect(await open(key, "github_app.private_key", await seal(key, "github_app.private_key", "pem"))).toBe(
@@ -896,7 +893,6 @@ describe("base64 helpers", () => {
 // ---------------------------------------------------------------------------------------------
 // do/workspace/rpc.ts isValidBranch — 02 errors: "BRANCH_INVALID | Not a valid git branch name"
 // ---------------------------------------------------------------------------------------------
-
 describe("isValidBranch", () => {
   it.each([
     "main",
@@ -955,7 +951,6 @@ describe("isValidBranch", () => {
 // ---------------------------------------------------------------------------------------------
 // server/handlers/credentials.ts parseCodexAuth — 02 setCodexAuth
 // ---------------------------------------------------------------------------------------------
-
 describe("parseCodexAuth", () => {
   // 02: "setCodexAuth | {authJson}: MUST parse and contain tokens.access_token, tokens.refresh_token, last_refresh | {} | VALIDATION_FAILED"
   const valid = {
@@ -963,12 +958,14 @@ describe("parseCodexAuth", () => {
     tokens: { id_token: "id", access_token: "at-SECRET", refresh_token: "rt-SECRET", account_id: "acc" },
     last_refresh: "2026-10-01T10:20:30.123456Z",
   };
-  const codeOf = (fn: () => unknown): string | undefined => {
+
+  const codeOf = (fn: () => ReturnType<typeof parseCodexAuth>): string | undefined => {
     try {
       fn();
     } catch (e) {
       return e instanceof TempoError ? e.code : `not a TempoError: ${String(e)}`;
     }
+
     return undefined;
   };
 
@@ -1013,11 +1010,13 @@ describe("parseCodexAuth", () => {
   // 05 Secrets: "MUST NOT ... put one in an error message"
   it("does not echo token values in the error", () => {
     const bad = JSON.stringify({ ...valid, last_refresh: "nope" });
+
     try {
       parseCodexAuth(bad);
       expect.unreachable();
     } catch (e) {
-      const err = e as TempoError;
+      if (!(e instanceof TempoError)) throw e;
+      const err = e;
       expect(`${err.message} ${err.detail ?? ""}`).not.toContain("SECRET");
     }
   });
@@ -1026,11 +1025,9 @@ describe("parseCodexAuth", () => {
 // ---------------------------------------------------------------------------------------------
 // do/workspace/runner.ts — 03 "Step runner"
 // ---------------------------------------------------------------------------------------------
-
 describe("backoffMs", () => {
   // 03: "next_run_at = now + min(1 s × 2^(attempt − 1), 60 s) with ±20% jitter"
   const base = (attempt: number) => Math.min(1000 * 2 ** (attempt - 1), 60_000);
-
   it.each([1, 2, 3, 4, 5, 6, 7, 8, 20])(
     "attempt %i with no jitter is min(1 s × 2^(attempt − 1), 60 s)",
     (attempt) => {
@@ -1057,12 +1054,14 @@ describe("backoffMs", () => {
   it("stays within ±20% over many samples and actually varies", () => {
     for (const attempt of [1, 3, 7]) {
       const values = new Set<number>();
+
       for (let i = 0; i < 200; i++) {
         const v = backoffMs(attempt);
         expect(v).toBeGreaterThanOrEqual(base(attempt) * 0.8);
         expect(v).toBeLessThanOrEqual(base(attempt) * 1.2);
         values.add(v);
       }
+
       expect(values.size).toBeGreaterThan(1);
     }
   });
@@ -1070,7 +1069,7 @@ describe("backoffMs", () => {
 
 describe("OP_STEPS", () => {
   // 03 "Ops and their steps", in order; `done` is the terminal marker.
-  const SPEC: Record<string, string[]> = {
+  const SPEC = {
     create: ["container.start", "tempod.connect", "repo.clone", "settings.read", "setup.run"],
     // "if fresh disk: repo.clone → repo.applyCheckpoint → home.restore → settings.read → setup.run; then sessions.markReload"
     wake: [
@@ -1110,13 +1109,15 @@ describe("OP_STEPS", () => {
     revert: ["git.checkpoint", "bundle.upload", "git.revert", "transcript.mark"],
     commit_push: ["git.commitAndPush"],
     housekeeping: ["events.prune", "r2.retention", "egress.trim"],
-  };
+  } satisfies Record<string, string[]>;
 
   it("has an entry for every op kind and no others", () => {
     expect(Object.keys(OP_STEPS).sort()).toEqual([...OP_KINDS].sort());
   });
   it.each(Object.keys(SPEC))("lists the steps of %s exactly and in order", (kind) => {
-    expect([...OP_STEPS[kind as keyof typeof OP_STEPS]]).toEqual(SPEC[kind]);
+    expect([...OP_STEPS[Schema.decodeUnknownSync(OpKind)(kind)]]).toEqual(
+      Object.entries(SPEC).find(([key]) => key === kind)?.[1],
+    );
   });
   it("never lists done as a step", () => {
     for (const steps of Object.values(OP_STEPS)) expect(steps).not.toContain("done");
@@ -1188,12 +1189,10 @@ describe("limitOf (03 Step limits)", () => {
 // ---------------------------------------------------------------------------------------------
 // http/preview.ts — 01 "Preview request path", 05 "Preview access"
 // ---------------------------------------------------------------------------------------------
-
 describe("parsePreviewHost", () => {
   // 01: "It matches the first label against ^(\d{4,5})-([0-9a-hjkmnp-tv-z]{26})$."
-  const penv = { PREVIEW_DOMAIN: "previews.test" } as never;
+  const penv = { PREVIEW_DOMAIN: "previews.test" };
   const ws = newId();
-
   it("parses port and workspace id", () => {
     expect(parsePreviewHost(`3000-${ws}.previews.test`, penv)).toEqual({ port: 3000, workspaceId: ws });
   });
@@ -1207,7 +1206,7 @@ describe("parsePreviewHost", () => {
     });
   });
   it("uses the real PREVIEW_DOMAIN binding", () => {
-    expect(parsePreviewHost(`8080-${ws}.previews.test`, env as never)).toMatchObject({ port: 8080 });
+    expect(parsePreviewHost(`8080-${ws}.previews.test`, env)).toMatchObject({ port: 8080 });
   });
   it.each([
     ["3-digit port", `808-${ws}`],
@@ -1242,6 +1241,7 @@ describe("stripInternalHeaders", () => {
         Accept: "*/*",
       }),
     );
+
     expect([...h.keys()].sort()).toEqual(["accept", "cookie"]);
   });
 });
@@ -1275,20 +1275,22 @@ describe("takePreviewCookie", () => {
 describe("preview cookie value (05, Cookie value)", () => {
   const key = "S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2V5S2U";
   const now = 1_800_000_000_000;
-
   it("is <expiresAt>.<base64url HMAC-SHA256 over <port>.<expiresAt>>, 24 hours ahead", async () => {
     const value = (await previewCookie(key, 3000, now))!;
     const [expiresAt, mac] = value.split(".");
     expect(Number(expiresAt)).toBe(now / 1000 + 86_400);
     const raw = Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
     const k = await crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+
     const sig = new Uint8Array(
       await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`3000.${expiresAt}`)),
     );
+
     const expected = btoa(String.fromCharCode(...sig))
       .replace(/=+$/, "")
       .replace(/\+/g, "-")
       .replace(/\//g, "_");
+
     expect(mac).toBe(expected);
     expect(await verifyPreviewCookie(key, 3000, value, now)).toBe(true);
   });
@@ -1303,6 +1305,7 @@ describe("preview cookie value (05, Cookie value)", () => {
   });
   it("fails for a value that is not <seconds>.<mac>", async () => {
     const [expiresAt, mac] = (await previewCookie(key, 3000, now))!.split(".");
+
     for (const bad of [
       "",
       mac!,
@@ -1321,7 +1324,7 @@ describe("preview cookie value (05, Cookie value)", () => {
 });
 
 describe("isPreviewHost", () => {
-  const penv = { PREVIEW_DOMAIN: "previews.test" } as never;
+  const penv = { PREVIEW_DOMAIN: "previews.test" };
   it("is true for a subdomain of PREVIEW_DOMAIN", () => {
     expect(isPreviewHost("3000-x-y.previews.test", penv)).toBe(true);
     expect(isPreviewHost("A.PREVIEWS.TEST", penv)).toBe(true);
@@ -1342,33 +1345,41 @@ describe("handlePreview without a match", () => {
     expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
   };
+
   it("returns the preview 404 page for a label that does not match", async () => {
     const url = new URL("https://not-a-preview.previews.test/");
-    await notFound(await handlePreview(new Request(url), env as never, url));
+    await notFound(await handlePreview(new Request(url), env, url));
   });
   it("returns the preview 404 page for a port below 1024", async () => {
     const url = new URL(`https://0080-${newId()}.previews.test/`);
-    await notFound(await handlePreview(new Request(url), env as never, url));
+    await notFound(await handlePreview(new Request(url), env, url));
   });
   it("returns the preview 404 page for a port above 65535", async () => {
     const url = new URL(`https://70000-${newId()}.previews.test/`);
-    await notFound(await handlePreview(new Request(url), env as never, url));
+    await notFound(await handlePreview(new Request(url), env, url));
   });
   it("answers 502 with the privacy headers when the WorkspaceDO throws, without logging the URL or cookie", async () => {
     const cookie = "1800000000.secretmacsecretmacsecretmacsecretmacsecret";
     const url = new URL(`https://5173-${newId()}.previews.test/private/path?q=hidden`);
+
     const throwing = {
       ...env,
       WORKSPACE: {
-        getByName: () => ({ fetch: () => Promise.reject(new Error(`boom ${url.href} ${cookie}`)) }),
+        getByName: () => ({
+          fetch: () => Promise.reject(new Error(`boom ${url.href} ${cookie}`)),
+          previewEnter: async () => null,
+        }),
       },
     };
+
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
     const res = await handlePreview(
       new Request(url, { headers: { Cookie: `__Host-tempo_preview=${cookie}` } }),
-      throwing as never,
+      throwing,
       url,
     );
+
     const logged = spy.mock.calls.map((c) => String(c[0])).join("\n");
     spy.mockRestore();
     expect(res.status).toBe(502);
@@ -1382,12 +1393,19 @@ describe("handlePreview without a match", () => {
   it("answers 502 without logging the code when previewEnter throws", async () => {
     const code = "c".repeat(32);
     const url = new URL(`https://5173-${newId()}.previews.test/__tempo/enter?code=${code}`);
+
     const throwing = {
       ...env,
-      WORKSPACE: { getByName: () => ({ previewEnter: () => Promise.reject(new Error(`boom ${code}`)) }) },
+      WORKSPACE: {
+        getByName: () => ({
+          previewEnter: () => Promise.reject(new Error(`boom ${code}`)),
+          fetch: async () => new Response(null, { status: 404 }),
+        }),
+      },
     };
+
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const res = await handlePreview(new Request(url), throwing as never, url);
+    const res = await handlePreview(new Request(url), throwing, url);
     const logged = spy.mock.calls.map((c) => String(c[0])).join("\n");
     spy.mockRestore();
     expect(res.status).toBe(502);
@@ -1399,7 +1417,6 @@ describe("handlePreview without a match", () => {
 // http/attachments.ts sanitizeName — the name lands in an R2 key and a container path
 // (02 R2 "attachments/<workspaceId>/<attachmentId>/<file name>"; 03 "/home/tempo/attachments/<turnId>/<name>")
 // ---------------------------------------------------------------------------------------------
-
 describe("sanitizeName", () => {
   it("keeps an ordinary name", () => {
     expect(sanitizeName("screenshot 2026-10-11.png")).toBe("screenshot 2026-10-11.png");
@@ -1429,7 +1446,6 @@ describe("sanitizeName", () => {
 // ---------------------------------------------------------------------------------------------
 // @tempo/protocol redact — 05 Secrets; reconnectDelay — 02 "Client reconnect"
 // ---------------------------------------------------------------------------------------------
-
 describe("redact", () => {
   // 05: "The log helper redacts any field whose name matches /token|key|secret|password|authorization|auth_json|cookie/i."
   it.each([
@@ -1462,6 +1478,7 @@ describe("redact", () => {
       rule: 3,
       workspaceId: "w",
     };
+
     expect(redact(entry)).toEqual(entry);
   });
   it("redacts the whole value of a matching field, even an object", () => {
@@ -1490,13 +1507,24 @@ describe("redact", () => {
     expect(input).toEqual({ token: "t", nested: { password: "p" } });
   });
   it("terminates on a cyclic object", () => {
-    const a: Record<string, unknown> = { name: "a" };
+    interface CyclicLog extends RedactableFields {
+      name: string;
+      self?: CyclicLog;
+    }
+
+    const a: CyclicLog = { name: "a" };
     a.self = a;
     expect(() => redact(a)).not.toThrow();
   });
   // Regression (fixed): past depth 8 redact returns the raw nested object, so a deeply nested secret field is not redacted.
   it("redacts a matching field at any depth", () => {
-    let v: Record<string, unknown> = { token: "deep-secret" };
+    interface NestedLog extends RedactableFields {
+      token?: string;
+      child?: NestedLog;
+    }
+
+    let v: NestedLog = { token: "deep-secret" };
+
     for (let i = 0; i < 12; i++) v = { child: v };
     expect(JSON.stringify(redact(v))).not.toContain("deep-secret");
   });
@@ -1541,6 +1569,7 @@ describe("home backup credential boundary", () => {
         ),
       ).toBe(true);
     }
+
     for (const path of [
       ".claude/projects/-workspace/session.jsonl",
       ".codex/sessions/session.jsonl",
@@ -1558,6 +1587,7 @@ describe("home backup credential boundary", () => {
 describe("Better Auth options (05, Secrets and Observability)", () => {
   it("never stores GitHub OAuth tokens on the account row", async () => {
     const { withoutOAuthTokens } = await import("../../src/auth/options.ts");
+
     const row = withoutOAuthTokens({
       id: "a1",
       providerId: "github",
@@ -1565,6 +1595,7 @@ describe("Better Auth options (05, Secrets and Observability)", () => {
       refreshToken: "ghr_secret",
       idToken: "id",
     });
+
     expect(row).toMatchObject({
       id: "a1",
       providerId: "github",
@@ -1573,7 +1604,6 @@ describe("Better Auth options (05, Secrets and Observability)", () => {
       idToken: null,
     });
   });
-
   it("sends Better Auth log lines through the redact helper", async () => {
     const { authLog } = await import("../../src/auth/options.ts");
     const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -1590,6 +1620,7 @@ describe("Better Auth options (05, Secrets and Observability)", () => {
 describe("egress rules 13 and 14 (01, Environments)", () => {
   const APP = "tempo.test";
   const injector = { name: "sign", hosts: ["*.amazonaws.com"], code: "x", sha256: "s" };
+
   const config: EgressConfig = {
     owner: "acme",
     repo: "app",
@@ -1604,6 +1635,7 @@ describe("egress rules 13 and 14 (01, Environments)", () => {
     injectors: [injector],
     mcp: [],
   };
+
   const d = (url: string, headers: Record<string, string> = {}) =>
     decide(new URL(url), new Headers(headers), APP, config);
 
@@ -1652,6 +1684,7 @@ describe("egress rules 13 and 14 (01, Environments)", () => {
       new Headers({ authorization: `Basic ${btoa("u:tempo-secret-K")}`, "x-k": "tempo-secret-K" }),
       { K: "a b/c" },
     );
+
     expect(url.pathname).toBe("/x/a%20b%2Fc");
     expect(url.searchParams.get("q")).toBe("a b/c");
     expect(atob(headers.get("authorization")!.replace("Basic ", ""))).toBe("u:a b/c");
@@ -1660,6 +1693,7 @@ describe("egress rules 13 and 14 (01, Environments)", () => {
   it("an injector subrequest may reach only its hosts and never runs rule 13 again", () => {
     const sub = (url: string, headers: Record<string, string> = {}) =>
       decideForInjector(new URL(url), new Headers(headers), APP, config, injector);
+
     expect(sub("https://s3.amazonaws.com/")).toEqual({ rule: 13, action: "forward" });
     expect(sub("https://evil.example/")).toMatchObject({ rule: 13, action: "block", status: 403 });
     expect(sub("https://tempo.test/")).toMatchObject({ rule: 0, action: "block" });

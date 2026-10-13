@@ -7,17 +7,21 @@ import { requireTempod } from "./container.ts";
 import type { WorkspaceCore } from "./core.ts";
 
 export const LOG_TAIL_BYTES = 1024 * 1024;
+
 export const SETUP_TIMEOUT_MS = 30 * 60_000;
+
 export const ARCHIVE_TIMEOUT_MS = 120_000;
+
 export const scriptLogPath = (runId: string) => `/home/tempo/.tempod/logs/${runId}.log`;
+
 export const scriptLogKey = (workspaceId: string, runId: string) => `logs/${workspaceId}/${runId}.log`;
 
 export const runToWire = (r: ScriptRunRow): ScriptRun => ({
   id: r.id,
-  kind: r.kind as ScriptKind,
+  kind: r.kind,
   scriptId: r.scriptId,
   command: r.command,
-  status: r.status as ScriptRun["status"],
+  status: r.status,
   exitCode: r.exitCode,
   signal: r.signal,
   startedAt: r.startedAt,
@@ -56,6 +60,7 @@ export const startScript = async (
       endedAt: null,
     })
     .run();
+
   try {
     await requireTempod(core).request("script.start", {
       runId,
@@ -73,26 +78,34 @@ export const startScript = async (
       .run();
     const run = runToWire(scriptRun(core, runId)!);
     core.broadcast({ type: "script.run", run });
+
     if (e instanceof TempoError && (e.code === "CONTAINER_NOT_READY" || e.code === "TEMPOD_UNREACHABLE"))
       throw e;
+
     return run;
   }
+
   const run = runToWire(scriptRun(core, runId)!);
   core.broadcast({ type: "script.run", run });
   core.touchActivity();
+
   return run;
 };
 
 export const appendLog = (core: WorkspaceCore, runId: string, data: string): void => {
   const run = scriptRun(core, runId);
+
   if (!run) return;
   let tail = run.logTail + data;
+
   if (tail.length > LOG_TAIL_BYTES / 4) {
     const bytes = new TextEncoder().encode(tail);
+
     if (bytes.length > LOG_TAIL_BYTES) {
       tail = new TextDecoder().decode(bytes.subarray(bytes.length - LOG_TAIL_BYTES)).replace(/^\uFFFD+/, "");
     }
   }
+
   core.db.update(scriptRuns).set({ logTail: tail }).where(eq(scriptRuns.id, runId)).run();
 };
 

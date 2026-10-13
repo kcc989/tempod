@@ -6,6 +6,7 @@ export const RunScript = Schema.Struct({
   cwd: Schema.String,
   default: Schema.Boolean,
 });
+
 export type RunScript = typeof RunScript.Type;
 
 const Int = Schema.Int;
@@ -17,9 +18,11 @@ export const CustomInstance = Schema.Struct({
 }).check(
   Schema.makeFilter((i) => i.memoryMib >= i.vcpu * 3072 || "at least 3 GiB of memory per vCPU is required"),
 );
+
 export type CustomInstance = typeof CustomInstance.Type;
 
 export const Instance = Schema.Union([InstanceName, CustomInstance]);
+
 export type Instance = typeof Instance.Type;
 
 export const HostPattern = Schema.String.check(
@@ -37,6 +40,7 @@ export const AgentModels = Schema.Struct({
   opencode: Schema.String,
   pi: Schema.String,
 }).annotate({ default: DEFAULT_AGENT_MODELS });
+
 export type AgentModels = typeof AgentModels.Type;
 
 export const DEFAULT_ROLES = {
@@ -45,12 +49,14 @@ export const DEFAULT_ROLES = {
   max_runs_per_change: 20,
   max_tokens_per_change: 0,
 };
+
 export const RolesSettings = Schema.Struct({
   enabled: Schema.Boolean,
   max_chain_depth: Int.check(Schema.isGreaterThanOrEqualTo(1)),
   max_runs_per_change: Int.check(Schema.isGreaterThanOrEqualTo(1)),
   max_tokens_per_change: Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
+
 export const Settings = Schema.Struct({
   roles: RolesSettings.pipe(Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_ROLES))),
   agent: Schema.Struct({
@@ -81,6 +87,7 @@ export const Settings = Schema.Struct({
   }),
   prompts: Schema.Struct({ general: Schema.String }),
 });
+
 export type Settings = typeof Settings.Type;
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -157,10 +164,13 @@ export const SettingsLayer = Schema.Struct({
   ),
   prompts: opt(Schema.Struct({ general: opt(Schema.String) })),
 });
+
 export type SettingsLayer = typeof SettingsLayer.Type;
 
 export const SETTINGS_SOURCES = ["tempo", ".tempo", "default"] as const;
+
 export const SettingsSource = Schema.Literals(SETTINGS_SOURCES);
+
 export type SettingsSource = typeof SettingsSource.Type;
 
 /** UI labels for each source, as 04 names them. */
@@ -177,9 +187,10 @@ export const SettingsReadResult = Schema.Struct({
   /** Dotted key path → where its effective value came from. Additive field. */
   sources: opt(Schema.Record(Schema.String, SettingsSource)),
 });
+
 export type SettingsReadResult = typeof SettingsReadResult.Type;
 
 export const instanceLabel = (instance: Instance): string =>
-  typeof instance === "string"
+  Schema.is(InstanceName)(instance)
     ? instance
     : `${instance.vcpu} vCPU, ${Math.round(instance.memoryMib / 1024)} GiB`;

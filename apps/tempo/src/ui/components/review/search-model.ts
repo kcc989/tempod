@@ -21,14 +21,18 @@ const MAX_TEXT = 300;
 /** Files in the order the server found them; lines ascending, one row per line. */
 export const groupMatches = (matches: ReadonlyArray<SearchMatch>): MatchGroup[] => {
   const groups = new Map<string, Map<number, string>>();
+
   for (const m of matches) {
     let lines = groups.get(m.path);
+
     if (!lines) {
       lines = new Map();
       groups.set(m.path, lines);
     }
+
     if (!lines.has(m.line)) lines.set(m.line, m.text.trim().slice(0, MAX_TEXT));
   }
+
   return [...groups].map(([path, lines]) => ({
     path,
     matches: [...lines].sort((a, b) => a[0] - b[0]).map(([line, text]) => ({ line, text })),

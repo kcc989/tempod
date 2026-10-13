@@ -1,10 +1,11 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { PrimaryActionKind } from "~/ui/lib/indicators";
 import { toast } from "sonner";
 import { invalidateCalls, useCallMutation } from "~/ui/hooks/useCall";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
-import { call } from "~/ui/lib/api";
+
 import { workspaceUrl } from "~/ui/lib/links";
 import { toastError } from "~/ui/lib/toast";
 import { CONFIRM_TEXT, confirm, setPhonePane, showRightTab } from "~/ui/state/workspace-ui";
@@ -31,6 +32,8 @@ export const copyText = async (text: string, done: string): Promise<void> => {
  * errors toast with the error-table message.
  */
 export function useWorkspaceActions(workspaceId: string) {
+  const call = useApiCall();
+
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isPhone = useIsPhone();
@@ -38,12 +41,14 @@ export function useWorkspaceActions(workspaceId: string) {
   const commit = useCallMutation("commitAndPush", {
     onSuccess: () => toast.success("Committed and pushed."),
   });
+
   const createPr = useCallMutation("createPullRequest", {
     onSuccess: (pr) =>
       toast.success(`Created PR #${pr.number}.`, {
         action: { label: "Open", onClick: () => openExternal(pr.url) },
       }),
   });
+
   const merge = useCallMutation("mergePullRequest", { onSuccess: () => toast.success("Merged.") });
   const wake = useCallMutation("wakeWorkspace");
   const sleep = useCallMutation("sleepWorkspace");
@@ -51,6 +56,7 @@ export function useWorkspaceActions(workspaceId: string) {
   const pin = useCallMutation("setPinned");
   const rename = useCallMutation("renameWorkspace");
   const renameBranch = useCallMutation("renameBranch");
+
   const archive = useCallMutation("archiveWorkspace", {
     invalidates: ["listWorkspaces"],
     onSuccess: () =>
@@ -62,7 +68,7 @@ export function useWorkspaceActions(workspaceId: string) {
           onClick: () => {
             call("restoreWorkspace", { workspaceId })
               .then(() => invalidateCalls(queryClient, "listWorkspaces"))
-              .catch((e: unknown) => toastError(e));
+              .catch((cause: unknown) => toastError(cause));
           },
         },
       }),
@@ -72,6 +78,7 @@ export function useWorkspaceActions(workspaceId: string) {
 
   const open = () => {
     if (isPhone) setPhonePane("chat");
+
     return navigate({ to: "/w/$workspaceId", params: { workspaceId } });
   };
 
@@ -104,19 +111,24 @@ export function useWorkspaceActions(workspaceId: string) {
         case "commitPush":
           requestCommit(workspaceId);
           await open();
+
           return;
         case "viewChecks":
           if (!isPhone) await open();
           viewChecks(checksUrl);
+
           return;
         case "createPr":
           createPr.mutate({ workspaceId, title: "", body: "", draft: false });
+
           return;
         case "merge":
           merge.mutate({ workspaceId, method: "squash" });
+
           return;
         case "archive":
           archive.mutate(input);
+
           return;
       }
     },

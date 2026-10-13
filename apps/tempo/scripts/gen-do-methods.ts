@@ -14,6 +14,7 @@ const lines = [
   "  protected abstract rpc<K extends WorkspaceFnName>(name: K, input: MethodInput<K>): Promise<Result<FnOutput<K>>>;",
   "",
 ];
+
 for (const name of WORKSPACE_FNS) {
   lines.push(
     `  ${name}(input: MethodInput<"${name}">): Promise<Result<FnOutput<"${name}">>> {`,
@@ -22,6 +23,9 @@ for (const name of WORKSPACE_FNS) {
     "",
   );
 }
+
 lines.push("}", "");
+
 writeFileSync(new URL("../src/do/workspace/methods.gen.ts", import.meta.url), lines.join("\n"));
+
 console.log(`wrote ${WORKSPACE_FNS.length} methods`);

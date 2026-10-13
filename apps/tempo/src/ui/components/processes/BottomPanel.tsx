@@ -24,6 +24,7 @@ export function BottomPanel({ workspaceId }: BottomPanelProps) {
   const isPhone = useIsPhone();
   const setupFailed = useWorkspaceSelector(workspaceId, (s) => s.workspace?.setupStatus === "failed");
   const [terminalOpened, setTerminalOpened] = useState(false);
+
   if (tab === "terminal" && !isPhone && !terminalOpened) setTerminalOpened(true);
 
   return (

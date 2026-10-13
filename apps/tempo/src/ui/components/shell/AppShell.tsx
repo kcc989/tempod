@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { sessionQueryOptions } from "~/ui/auth";
@@ -28,6 +29,7 @@ import {
 
 /** 04, Sidebar: 280 px by default, resizable from 220 to 400 px. */
 export const SIDEBAR_WIDTH = { default: 280, min: 220, max: 400 } as const;
+
 const SIDEBAR_KEY = "layout:sidebar-width";
 
 const clampWidth = (n: number) => Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, Math.round(n)));
@@ -37,7 +39,7 @@ const readSidebarWidth = (): number =>
     readJson<number>(
       SIDEBAR_KEY,
       SIDEBAR_WIDTH.default,
-      (u): u is number => typeof u === "number" && Number.isFinite(u),
+      (u): u is number => Schema.is(Schema.Number)(u) && Number.isFinite(u),
     ),
   );
 
@@ -69,6 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     () =>
       queryClient.getQueryCache().subscribe((event) => {
         if (event.type !== "updated" || event.action.type !== "error") return;
+
         if (errorCode(event.action.error) === "UNAUTHENTICATED") toastError(event.action.error);
       }),
     [queryClient],
@@ -111,11 +114,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function DesktopFrame({ children }: { children: ReactNode }) {
   const { sidebarOpen } = useLayout();
+
   // Read again each time the sidebar opens, so it comes back at the width it was closed at.
   const initialWidth = useMemo(
     () => (sidebarOpen ? readSidebarWidth() : SIDEBAR_WIDTH.default),
     [sidebarOpen],
   );
+
   const width = useRef(initialWidth);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -128,8 +133,10 @@ function DesktopFrame({ children }: { children: ReactNode }) {
   const onSidebarResize = (size: { inPixels: number }) => {
     if (size.inPixels <= 0) return;
     const next = clampWidth(size.inPixels);
+
     if (next === width.current) return;
     width.current = next;
+
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => writeJson(SIDEBAR_KEY, next), 250);
   };

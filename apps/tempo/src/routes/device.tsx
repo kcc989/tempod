@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -22,10 +23,11 @@ interface DeviceSearch {
 
 /** 07: where the owner approves a Tempo for Mac sign-in. */
 export const Route = createFileRoute("/device")({
-  validateSearch: (search: Record<string, unknown>): DeviceSearch =>
-    typeof search["user_code"] === "string" ? { user_code: search["user_code"] } : {},
+  validateSearch: (search: Schema.JsonObject): DeviceSearch =>
+    Schema.is(Schema.String)(search["user_code"]) ? { user_code: search["user_code"] } : {},
   beforeLoad: async ({ context, location }) => {
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
+
     if (!session) throw redirect({ to: "/login", search: { redirect: location.href } });
   },
   component: DevicePage,
@@ -33,6 +35,7 @@ export const Route = createFileRoute("/device")({
 
 function DevicePage() {
   const { user_code } = Route.useSearch();
+
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
       <div className="flex w-full max-w-sm flex-col gap-4 rounded-lg border p-6">
@@ -46,11 +49,13 @@ function DevicePage() {
 function EnterCode() {
   const navigate = useNavigate();
   const [code, setCode] = useState("");
+
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
+
         if (normalizeUserCode(code))
           void navigate({ to: "/device", search: { user_code: normalizeUserCode(code) } });
       }}
@@ -79,6 +84,7 @@ function Approve({ userCode }: { userCode: string }) {
     staleTime: Infinity,
     retry: false,
   });
+
   const [decided, setDecided] = useState<DeviceLookup | null>(null);
   const [busy, setBusy] = useState(false);
 

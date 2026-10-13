@@ -6,6 +6,7 @@ import { startThemeSync } from "~/ui/lib/theme";
 /** Providers every page needs: theme sync, tooltips and the toaster. */
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => startThemeSync(), []);
+
   return (
     <TooltipProvider>
       {children}

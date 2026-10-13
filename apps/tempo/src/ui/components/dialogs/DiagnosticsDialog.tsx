@@ -1,4 +1,5 @@
 import { LifecycleEvents } from "./LifecycleEvents";
+import { Schema } from "effect";
 import {
   ERROR_CODES,
   ERROR_MESSAGES,
@@ -59,11 +60,12 @@ const TONE_TEXT: Record<Tone, string> = {
   muted: "text-muted-foreground",
 };
 
-const isErrorCode = (c: string): c is ErrorCode => (ERROR_CODES as ReadonlyArray<string>).includes(c);
+const isErrorCode = (c: string): c is ErrorCode => ERROR_CODES.some((value) => value === c);
 
 /** 05, Diagnostics view: ops, container, logs, egress and sessions of one workspace. */
 export function DiagnosticsDialog() {
   const { open, args, onOpenChange } = useDialog("diagnostics");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[min(46rem,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)] sm:max-w-4xl">
@@ -83,12 +85,16 @@ function Body({ workspaceId }: { workspaceId: string }) {
   const [host, setHost] = useState("");
   const [status, setStatus] = useState<EgressStatusFilter>("all");
   const egressHost = useDebounced(host, EGRESS_HOST_DEBOUNCE_MS);
+
   const d = useCallQuery("getDiagnostics", diagnosticsInput(workspaceId, egressHost, status), {
     placeholderData: keepPreviousData,
   });
+
   if (d.isPending) return <SkeletonRows rows={8} />;
+
   if (d.isError) return <ErrorState error={d.error} onRetry={() => void d.refetch()} />;
   const data = d.data;
+
   return (
     <Tabs defaultValue="ops" className="min-h-0 gap-2">
       <div className="flex items-center gap-2">
@@ -140,6 +146,7 @@ function Body({ workspaceId }: { workspaceId: string }) {
 
 function ErrorLine({ code, detail }: { code: string | null; detail: string | null }) {
   if (!code && !detail) return null;
+
   return (
     <div className="grid gap-0.5 text-xs">
       {code && (
@@ -159,11 +166,13 @@ function ErrorLine({ code, detail }: { code: string | null; detail: string | nul
 
 function Ops({ ops }: { ops: Diagnostics["ops"] }) {
   if (ops.length === 0) return <EmptyState title="No ops yet." />;
+
   return (
     <ul className="flex flex-col divide-y rounded-md border">
       {ops.map((op) => {
         const timings = timingRows(op.timings);
         const total = timings.reduce((n, t) => n + t.ms, 0);
+
         return (
           <li key={op.id}>
             <Collapsible>
@@ -216,7 +225,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Container({ container: c }: { container: Diagnostics["container"] }) {
-  const instance = typeof c.instance === "string" ? c.instance : JSON.stringify(c.instance);
+  const instance = Schema.is(Schema.String)(c.instance) ? c.instance : JSON.stringify(c.instance);
+
   return (
     <div className="grid gap-3">
       <dl className="divide-y">
@@ -293,6 +303,7 @@ function Container({ container: c }: { container: Diagnostics["container"] }) {
 
 function Logs({ logs }: { logs: Diagnostics["logs"] }) {
   if (logs.length === 0) return <EmptyState title="No log events." />;
+
   return (
     <ul className="flex flex-col divide-y font-mono text-xs">
       {logs.map((l, i) => (
@@ -336,6 +347,7 @@ function Egress({
   filtered: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+
   // oxlint-disable-next-line react/incompatible-library
   const virtual = useVirtualizer({
     count: rows.length,
@@ -387,6 +399,7 @@ function Egress({
           >
             {virtual.getVirtualItems().map((v) => {
               const r = rows[v.index]!;
+
               return (
                 <div
                   key={v.key}
@@ -427,10 +440,12 @@ function Egress({
 
 function Sessions({ sessions }: { sessions: Diagnostics["sessions"] }) {
   if (sessions.length === 0) return <EmptyState title="No sessions." />;
+
   return (
     <ul className="flex flex-col divide-y rounded-md border">
       {sessions.map((s) => {
         const caps = capabilityList(s.capabilities);
+
         return (
           <li key={s.id} className="grid gap-1 px-2 py-1.5 text-sm">
             <div className="flex items-center gap-2">

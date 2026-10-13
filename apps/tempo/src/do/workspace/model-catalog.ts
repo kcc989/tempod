@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import {
   AGENT_IDS,
   DEFAULT_SETTINGS,
@@ -16,6 +17,7 @@ import { agentEnv } from "./queue.ts";
 import { TempodClient, openTempodSocket } from "./tempod-client.ts";
 
 const CACHE_MS = 15 * 60_000;
+
 const LIFETIME_MS = 10 * 60_000;
 
 export const discoverModels = async (
@@ -27,24 +29,30 @@ export const discoverModels = async (
   const credentials = core.credentials();
   const status = await credentials.status();
   const keys = new Set(status.map((entry) => entry.key));
+
   const providers: Record<AgentId, readonly string[]> = {
     claude: [SECRET_KEYS.claude, SECRET_KEYS.anthropic],
     codex: [SECRET_KEYS.codex, SECRET_KEYS.openai],
     opencode: [SECRET_KEYS.openrouter],
     pi: [SECRET_KEYS.openrouter],
   };
+
   const agents = AGENT_IDS.filter((agent) => providers[agent].some((key) => keys.has(key)));
+
   if (!agents.length) return [];
   const container = core.container;
+
   if (!container) throw new TempoError("CONTAINER_START_FAILED");
   const agentStatus = status.filter((entry) => Object.values(SECRET_KEYS).some((key) => key === entry.key));
   const signature = JSON.stringify([container.images["workspace"], agentStatus]);
   const cached = core.kv<{ signature: string; at: number; models: FnOutput<"listModels"> }>("catalogModels");
+
   if (cached?.signature === signature && Date.now() - cached.at < CACHE_MS) return cached.models;
 
   core.setKv("catalogToken", randomToken(32));
   await core.ctx.storage.setAlarm(Date.now() + LIFETIME_MS);
   let client: TempodClient | null = null;
+
   try {
     if (container.running) await container.destroy();
     container.start({
@@ -58,9 +66,11 @@ export const discoverModels = async (
       },
       labels: { purpose: "model-discovery" },
     });
+
     const outbound = core.ctx.exports.TempoOutbound({
       props: { workspaceId: core.workspaceId, userId, catalog: true },
     });
+
     await container.interceptAllOutboundHttp(outbound);
     await container.interceptOutboundHttps("*", outbound);
     await container.setInactivityTimeout(LIFETIME_MS);
@@ -88,9 +98,11 @@ export const discoverModels = async (
       env: {},
     });
     const models: Array<FnOutput<"listModels">[number]> = [];
+
     for (const agent of agents) {
       const sessionId = newId();
       const env = await agentEnv(core, agent);
+
       const session = await client.request("session.start", {
         sessionId,
         agent,
@@ -98,19 +110,24 @@ export const discoverModels = async (
         browser: "local",
         acpSessionId: null,
       });
+
       try {
         const option = modelOption(session.configOptions);
-        if (!option || typeof option.currentValue !== "string")
+
+        if (!option || !Schema.is(Schema.String)(option.currentValue))
           throw new TempoError("AGENT_START_FAILED", `Could not load models from ${agent}.`);
         const options = flattenConfigOptions(option);
+
         if (!options.length) throw new TempoError("AGENT_START_FAILED", `No models reported by ${agent}.`);
         models.push({ agent, currentValue: option.currentValue, options });
       } finally {
         await client.request("session.close", { sessionId });
       }
     }
+
     await client.drained();
     core.setKv("catalogModels", { signature, at: Date.now(), models });
+
     return models;
   } finally {
     client?.close();

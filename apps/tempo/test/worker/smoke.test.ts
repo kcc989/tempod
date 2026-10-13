@@ -6,6 +6,7 @@ describe("harness", () => {
     const rows = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='workspaces'",
     ).all();
+
     expect(rows.results).toHaveLength(1);
   });
   it("reaches a CredentialDO", async () => {

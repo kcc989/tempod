@@ -6,7 +6,7 @@ import { BINDINGS, type ActionId, type Binding } from "~/ui/lib/shortcuts";
  * nested view can override an outer one while it is mounted. A `fallback` registration runs only
  * when no other one exists (React mounts children before parents, so order alone is not enough).
  */
-export type ActionHandler = () => unknown;
+export type ActionHandler = () => void;
 
 interface Entry {
   readonly handler: ActionHandler;
@@ -15,11 +15,14 @@ interface Entry {
 }
 
 const registry = new Map<ActionId, Entry[]>();
+
 const listeners = new Set<() => void>();
+
 let version = 0;
 
 const emit = () => {
   version++;
+
   for (const l of listeners) l();
 };
 
@@ -32,9 +35,11 @@ export const registerAction = (
   const list = registry.get(id) ?? [];
   registry.set(id, [...list, entry]);
   emit();
+
   return () => {
     const cur = registry.get(id) ?? [];
     const next = cur.filter((e) => e !== entry);
+
     if (next.length === 0) registry.delete(id);
     else registry.set(id, next);
     emit();
@@ -43,19 +48,23 @@ export const registerAction = (
 
 const current = (id: ActionId): Entry | undefined => {
   const list = registry.get(id) ?? [];
+
   return list.findLast((e) => !e.fallback) ?? list[list.length - 1];
 };
 
 export const hasAction = (id: ActionId): boolean => {
   const e = current(id);
+
   return e !== undefined && e.enabled();
 };
 
 /** Runs the action; false when nothing handles it right now. */
 export const runAction = (id: ActionId): boolean => {
   const e = current(id);
+
   if (!e || !e.enabled()) return false;
   void e.handler();
+
   return true;
 };
 
@@ -73,6 +82,7 @@ export const availableActions = (): Binding[] =>
 
 export const subscribeActions = (listener: () => void): (() => void) => {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };

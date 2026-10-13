@@ -18,7 +18,9 @@ import {
 import { API_FUNCTIONS, WIRE_TYPES, wireType } from "../scripts/wire.ts";
 
 const fixtures = join(import.meta.dirname, "../fixtures");
+
 const schemaDir = join(import.meta.dirname, "../schema");
+
 const strict = { onExcessProperty: "error" } as const;
 
 const lines = (path: string): string[] =>
@@ -26,7 +28,7 @@ const lines = (path: string): string[] =>
     .split("\n")
     .filter((l) => l.length > 0);
 
-const decoder = (schema: Schema.Top) => Schema.decodeUnknownSync(schema as Schema.Codec<unknown, unknown>);
+const decoder = <S extends Schema.ConstraintDecoder<unknown>>(schema: S) => Schema.decodeUnknownSync(schema);
 
 describe("type fixtures (07, Testing)", () => {
   const files = readdirSync(join(fixtures, "types")).filter((f) => f.endsWith(".jsonl"));
@@ -42,11 +44,13 @@ describe("type fixtures (07, Testing)", () => {
     const decode = decoder(wireType(file.replace(/\.jsonl$/, "")));
     const values = lines(join(fixtures, "types", file));
     expect(values.length).toBeGreaterThan(0);
+
     for (const raw of values) expect(() => decode(JSON.parse(raw), strict)).not.toThrow();
   });
 
   it("covers every server function's input and output", () => {
     const names = new Set(files.map((f) => f.replace(/\.jsonl$/, "")));
+
     for (const f of API_FUNCTIONS) {
       expect(names.has(f.input.name), f.name).toBe(true);
       expect(names.has(f.output.name), f.name).toBe(true);
@@ -54,9 +58,10 @@ describe("type fixtures (07, Testing)", () => {
   });
 });
 
-const decodeRecord = (schema: Schema.Top, record: unknown): void => {
+const decodeRecord = (schema: Schema.ConstraintDecoder<unknown>, record: Schema.JsonObject): void => {
   const decode = decoder(schema);
-  for (const v of Object.values(record as Record<string, unknown>)) decode(v, strict);
+
+  for (const v of Object.values(record)) decode(v, strict);
 };
 
 describe("channel fixtures (07, Testing)", () => {
@@ -68,14 +73,17 @@ describe("channel fixtures (07, Testing)", () => {
     const decode = Schema.decodeUnknownSync(WorkspaceServerMessage);
     const decoded = decode(value);
     expect(decoded.type).toBe("hello");
+
     if (decoded.type !== "hello") throw new Error("expected hello");
     expect(decoded.workspace.browserActive).toBe(false);
     expect(decoded.workspace.settings.browser.run).toBe(false);
     expect(decoded.workspace.settings.agent.models).toEqual({ claude: "", codex: "", opencode: "", pi: "" });
+
     for (const invalid of [null, "yes"]) {
       expect(() => decode({ ...value, workspace: { ...value.workspace, browserActive: invalid } })).toThrow();
     }
   });
+
   const sessions = readdirSync(join(fixtures, "channel"))
     .filter((f) => f.endsWith(".jsonl"))
     .map((f) => f.replace(/\.jsonl$/, ""));
@@ -93,17 +101,23 @@ describe("channel fixtures (07, Testing)", () => {
     expect(expected.messages).toBe(messages.length);
     expect(name.startsWith(`${expected.channel}-`)).toBe(true);
     const decode = decoder(expected.channel === "hub" ? HubServerMessage : WorkspaceServerMessage);
+
     for (const raw of messages) expect(() => decode(JSON.parse(raw), strict)).not.toThrow();
+
     for (const e of expected.events) {
       expect(e.line).toBeGreaterThan(0);
       expect(e.line).toBeLessThanOrEqual(messages.length);
     }
+
     const state = expected.state;
+
     if (expected.channel === "hub") {
       expect(state.ready).toBe(true);
       decodeRecord(WorkspaceSummary, state.workspaces);
+
       return;
     }
+
     expect(state.ready).toBe(true);
     decoder(WorkspaceDetail)(state.workspace, strict);
     decodeRecord(Session, state.sessions);
@@ -111,8 +125,13 @@ describe("channel fixtures (07, Testing)", () => {
     decodeRecord(Item, state.items);
     decodeRecord(PermissionRequest, state.permissions);
     decodeRecord(ScriptRun, state.scriptRuns);
+
     if (state.changes !== null) decoder(ChangesSummary)(state.changes, strict);
-    const ordered = Object.values(state.order as Record<string, string[]>).flat();
+
+    const ordered = Object.values(
+      Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Array(Schema.String)))(state.order),
+    ).flat();
+
     expect(ordered.sort()).toEqual(Object.keys(state.items).sort());
   });
 });

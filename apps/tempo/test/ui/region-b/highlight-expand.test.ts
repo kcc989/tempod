@@ -14,6 +14,7 @@ import {
 } from "~/ui/components/chat/highlight";
 
 beforeEach(() => vi.stubEnv("SSR", false));
+
 afterEach(() => {
   resetExpand();
   vi.unstubAllEnvs();

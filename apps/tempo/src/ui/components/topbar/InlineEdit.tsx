@@ -31,6 +31,7 @@ export function InlineEdit({
       ref.current?.focus();
       ref.current?.select();
     }, 0);
+
     return () => clearTimeout(t);
   }, []);
 
@@ -38,6 +39,7 @@ export function InlineEdit({
     if (finished.current) return;
     finished.current = true;
     const next = save ? renameValue(ref.current?.value ?? "", value) : null;
+
     if (next !== null) onSave(next);
     onDone();
   };

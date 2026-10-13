@@ -10,7 +10,7 @@ import {
   type TempodEvent,
   type TempodEventEnvelope,
 } from "@tempo/protocol";
-import { Schema } from "effect";
+import { Schema, Option } from "effect";
 import { snapshots, type SnapshotRow } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
 import { closeBrowser } from "./browser.ts";
@@ -19,10 +19,15 @@ import { TempodClient, openTempodSocket, tempodFetch } from "./tempod-client.ts"
 import { CONTAINER_STATES } from "./transitions.ts";
 
 export const SNAPSHOT_MAX_AGE_MS = 29 * 24 * 60 * 60_000;
+
 const HEALTH_TIMEOUT_MS = 60_000;
+
 const HEALTH_POLL_MS = 250;
+
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16_000];
+
 const SAFETY_MARGIN_MS = 15 * 60_000;
+
 const MAX_INACTIVITY_MS = 21_600_000;
 
 const decodeHealth = Schema.decodeUnknownOption(HealthResponse);
@@ -38,14 +43,17 @@ export const containerRunning = (core: WorkspaceCore): boolean => core.container
 /** A snapshot is usable if it came from the current image and is younger than 29 days (01). */
 export const usableSnapshot = (core: WorkspaceCore): SnapshotRow | null => {
   const image = core.container?.images["workspace"] ?? null;
+
   if (!image) return null;
   const now = Date.now();
+
   const rows = core.db
     .select()
     .from(snapshots)
     .where(and(eq(snapshots.unusable, 0), eq(snapshots.imageRef, image)))
     .orderBy(desc(snapshots.createdAt))
     .all();
+
   return rows.find((s) => now - Math.max(s.createdAt, s.lastRestoredAt ?? 0) < SNAPSHOT_MAX_AGE_MS) ?? null;
 };
 
@@ -57,6 +65,7 @@ const instanceOf = (core: WorkspaceCore): Instance => core.settings().environmen
  */
 export const startContainer = async (core: WorkspaceCore, snapshot: SnapshotRow | null): Promise<void> => {
   const container = core.container;
+
   if (!container) throw new TempoError("CONTAINER_START_FAILED", undefined, "no container binding");
   const row = core.ws();
   const token = randomToken(32);
@@ -95,25 +104,34 @@ export const waitHealthy = async (
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
   const probeSignal = AbortSignal.any([signal, AbortSignal.timeout(HEALTH_TIMEOUT_MS)]);
   let last = "";
+
   while (Date.now() < deadline) {
     if (probeSignal.aborted) break;
+
     if (!containerRunning(core) && Date.now() > deadline - HEALTH_TIMEOUT_MS + 5000)
       last = "container is not running";
+
     try {
       const res = await tempodFetch(core, "/v1/health", { signal: probeSignal });
+
       if (res.status === 200) {
         const body = decodeHealth(await res.json());
-        if (body._tag === "Some") {
+
+        if (Option.isSome(body)) {
           core.tempodVersion = body.value.version;
+
           return { version: body.value.version, incarnation: body.value.incarnation };
         }
       }
+
       last = `health returned ${res.status}`;
     } catch (e) {
       last = errorText(e);
     }
+
     await new Promise((r) => setTimeout(r, HEALTH_POLL_MS));
   }
+
   throw new TempoError("CONTAINER_START_FAILED", undefined, `tempod never became healthy: ${last}`);
 };
 
@@ -122,6 +140,7 @@ export const destroyContainer = async (core: WorkspaceCore, reason: string): Pro
   core.tempod?.close(1000, reason);
   core.tempod = null;
   core.closeTerminals(1001, "container stopped");
+
   if (containerRunning(core)) await core.container!.destroy();
   core.updateWs({ tempodToken: null });
   core.liveSessions.clear();
@@ -158,17 +177,22 @@ export const connectTempod = (core: WorkspaceCore, handlers: ConnectHandlers): P
   core.tempodConnecting ??= openAndHello(core, handlers).finally(() => {
     core.tempodConnecting = null;
   });
+
   return core.tempodConnecting;
 };
 
 const openAndHello = async (core: WorkspaceCore, handlers: ConnectHandlers): Promise<TempodClient> => {
   const socket = await openTempodSocket(core);
+
   const client = new TempodClient(core, socket, handlers.onEvent, (c, code) => {
     if (core.tempod === c) core.tempod = null;
+
     if (!core.closingTempod && code !== 4001) handlers.onLost();
   });
+
   const project = await core.project();
   const row = core.ws();
+
   const hello: DoHello = {
     type: "hello",
     v: 1,
@@ -183,11 +207,13 @@ const openAndHello = async (core: WorkspaceCore, handlers: ConnectHandlers): Pro
     },
     env: await core.scriptEnv(),
   };
+
   client.sendHello(hello);
   core.tempod = client;
   core.reconnectAttempt = 0;
   // A turn deferred while tempod was away can start now (03, Queue runner).
   core.kickQueue();
+
   return client;
 };
 
@@ -198,6 +224,7 @@ const openAndHello = async (core: WorkspaceCore, handlers: ConnectHandlers): Pro
 export const tempodFor = async (core: WorkspaceCore, handlers: ConnectHandlers): Promise<TempodClient> => {
   if (!core.tempod?.open && containerRunning(core) && core.ws().tempodToken)
     await connectTempod(core, handlers);
+
   return requireTempod(core);
 };
 
@@ -212,17 +239,21 @@ export const scheduleReconnect = (
 ): void => {
   if (core.reconnectTimer) return;
   const attempt = core.reconnectAttempt;
+
   if (attempt >= RECONNECT_DELAYS.length) {
     core.reconnectAttempt = 0;
     void giveUp();
+
     return;
   }
+
   core.reconnectTimer = setTimeout(async () => {
     core.reconnectTimer = null;
     const state = core.wsOrNull()?.state;
-    if (!state || !(CONTAINER_STATES as ReadonlyArray<string>).includes(state) || !containerRunning(core))
-      return;
+
+    if (!state || !CONTAINER_STATES.includes(state) || !containerRunning(core)) return;
     core.reconnectAttempt = attempt + 1;
+
     try {
       await connectTempod(core, handlers);
       log("info", "tempod reconnected", { workspaceId: core.workspaceId, attempt: attempt + 1 });
@@ -239,5 +270,6 @@ export const scheduleReconnect = (
 
 export const requireTempod = (core: WorkspaceCore): TempodClient => {
   if (!core.tempod?.open || !containerRunning(core)) throw new TempoError("CONTAINER_NOT_READY");
+
   return core.tempod;
 };

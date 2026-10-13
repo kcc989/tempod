@@ -79,7 +79,9 @@ export const policyLabel = (p: EgressPolicy): string =>
   EGRESS_POLICY_OPTIONS.find((o) => o.value === p)?.label ?? p;
 
 const isEnvName = Schema.is(EnvName);
+
 const isEnvironmentName = Schema.is(EnvironmentName);
+
 const isInjectorName = Schema.is(InjectorName);
 
 export const formFromEnvironment = (env: Environment): EnvironmentForm => ({
@@ -110,6 +112,7 @@ export const emptySecretRow = (): SecretRow => ({
   value: "",
   isNew: true,
 });
+
 export const emptyInjectorRow = (): InjectorRow => ({ key: nextRowKey(), name: "", hosts: "", code: "" });
 
 /** Host patterns from text: split on newlines and commas, trimmed, lower case, no blanks. */
@@ -129,16 +132,19 @@ export const updateFromForm = (
   | { readonly ok: false; readonly errors: FormErrors } => {
   const errors: FormErrors = {};
   const name = form.name.trim();
+
   if (!isEnvironmentName(name)) errors.name = `Use 1 to ${ENVIRONMENT_LIMITS.nameMax} characters.`;
 
   const egressAllowlist = [...new Set(parseHosts(form.allowlist))];
   const bad = badHost(egressAllowlist);
+
   if (bad !== undefined) errors.allowlist = `Not a host pattern: ${bad}`;
   else if (egressAllowlist.length > ENVIRONMENT_LIMITS.allowlistMax)
     errors.allowlist = `Use at most ${ENVIRONMENT_LIMITS.allowlistMax} patterns.`;
 
   const secrets = form.secrets.map((r) => ({ name: r.name.trim(), hosts: parseHosts(r.hosts) }));
   const secretsProblem = secretsError(secrets);
+
   if (secretsProblem !== undefined) errors.secrets = secretsProblem;
 
   const injectors = form.injectors.map((r) => ({
@@ -146,13 +152,17 @@ export const updateFromForm = (
     hosts: parseHosts(r.hosts),
     code: r.code,
   }));
+
   const injectorsProblem = injectorsError(injectors);
+
   if (injectorsProblem !== undefined) errors.injectors = injectorsProblem;
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
+
   const values = form.secrets
     .filter((r) => r.value !== "")
     .map((r) => ({ name: r.name.trim(), value: r.value }));
+
   return {
     ok: true,
     update: { name, egressPolicy: form.egressPolicy, egressAllowlist, secrets, injectors },
@@ -163,33 +173,45 @@ export const updateFromForm = (
 const secretsError = (secrets: ReadonlyArray<SecretBinding>): string | undefined => {
   if (secrets.length > ENVIRONMENT_LIMITS.secretsMax)
     return `Use at most ${ENVIRONMENT_LIMITS.secretsMax} secrets.`;
+
   for (const s of secrets) {
     if (!isEnvName(s.name))
       return `${s.name || "A secret"}: use capital letters, digits and _, starting with a letter or _.`;
     const bad = badHost(s.hosts);
+
     if (bad !== undefined) return `${s.name}: not a host pattern: ${bad}`;
+
     if (s.hosts.length > ENVIRONMENT_LIMITS.secretHostsMax)
       return `${s.name}: use at most ${ENVIRONMENT_LIMITS.secretHostsMax} hosts.`;
   }
+
   const dup = duplicateNames(secrets)[0];
+
   return dup === undefined ? undefined : `Two secrets are named ${dup}.`;
 };
 
 const injectorsError = (injectors: ReadonlyArray<InjectorInput>): string | undefined => {
   if (injectors.length > ENVIRONMENT_LIMITS.injectorsMax)
     return `Use at most ${ENVIRONMENT_LIMITS.injectorsMax} injectors.`;
+
   for (const i of injectors) {
     if (!isInjectorName(i.name))
       return `${i.name || "An injector"}: use lower case letters, digits and -, starting with a letter, at most 32.`;
     const bad = badHost(i.hosts);
+
     if (bad !== undefined) return `${i.name}: not a host pattern: ${bad}`;
+
     if (i.hosts.length < 1 || i.hosts.length > ENVIRONMENT_LIMITS.injectorHostsMax)
       return `${i.name}: use 1 to ${ENVIRONMENT_LIMITS.injectorHostsMax} hosts.`;
+
     if (i.code.trim() === "") return `${i.name}: add the code.`;
+
     if (new TextEncoder().encode(i.code).length > ENVIRONMENT_LIMITS.injectorCodeMaxBytes)
       return `${i.name}: code is over 64 KiB.`;
   }
+
   const dup = duplicateNames(injectors)[0];
+
   return dup === undefined ? undefined : `Two injectors are named ${dup}.`;
 };
 
@@ -207,6 +229,7 @@ export const secretHint = (
   hostsText: string,
 ): { readonly tone: "warning" | "muted"; readonly text: string } => {
   const hosts = parseHosts(hostsText);
+
   return hosts.length === 0
     ? { tone: "warning", text: "Visible to the agent" }
     : {
@@ -226,10 +249,13 @@ export const deleteEnvironmentConfirm = (name: string): ConfirmOptions => ({
 export const uniqueEnvironmentName = (base: string, taken: ReadonlyArray<string>): string => {
   const used = new Set(taken);
   const root = base.trim().slice(0, ENVIRONMENT_LIMITS.nameMax) || "Environment";
+
   if (!used.has(root)) return root;
+
   for (let n = 2; ; n++) {
     const suffix = ` ${n}`;
     const name = `${root.slice(0, ENVIRONMENT_LIMITS.nameMax - suffix.length).trimEnd()}${suffix}`;
+
     if (!used.has(name)) return name;
   }
 };
@@ -249,6 +275,7 @@ export const effectiveEnvironment = (
 
 // Select values. Radix Select items cannot use the empty string.
 export const NONE = "__none__";
+
 export const PROJECT_DEFAULT = "__project__";
 
 export const projectDefaultLabel = (projectEnv: Environment | null): string =>
@@ -269,6 +296,7 @@ export const proposalSecrets = (
 ): ProposalSecretLine[] =>
   (proposal.secrets ?? []).map((s) => {
     const current = target?.secrets.find((x) => x.name === s.name);
+
     return { name: s.name, hosts: s.hosts, needsValue: !current?.set };
   });
 
@@ -299,24 +327,31 @@ export interface ApplyInput {
  */
 export const applyEnvironmentProposal = async (call: Caller, input: ApplyInput): Promise<Environment> => {
   let target = input.target;
+
   if (!target) {
     const name = uniqueEnvironmentName(
       input.project.name,
       input.environments.map((e) => e.name),
     );
+
     target = await call("createEnvironment", { name });
     await call("setProjectEnvironment", { projectId: input.project.id, environmentId: target.id });
   }
+
   const next = applyProposal(target, input.proposal);
   const updated = await call("updateEnvironment", { environmentId: target.id, ...next });
+
   for (const s of input.proposal.secrets ?? []) {
     const value = input.values[s.name];
+
     if (value) await call("setEnvironmentSecret", { environmentId: target.id, name: s.name, value });
   }
+
   await call("resolveEnvironmentProposal", {
     workspaceId: input.workspaceId,
     proposalId: input.proposalId,
     status: "applied",
   });
+
   return updated;
 };

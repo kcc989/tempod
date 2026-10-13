@@ -3,7 +3,6 @@ import { stepLabel } from "~/ui/lib/indicators";
 import { isKnownErrorCode } from "./transcript-model";
 
 /** Which workspace banners show (04, Empty, loading and error states). */
-
 export type WorkspaceBanner =
   | {
       readonly kind: "progress";
@@ -29,11 +28,14 @@ export const workspaceBanners = (
   ws: Pick<WorkspaceDetail, "state" | "op" | "errorCode" | "errorDetail" | "setupStatus" | "defaultAgent">,
 ): WorkspaceBanner[] => {
   const out: WorkspaceBanner[] = [];
+
   if (ws.state === "error") {
     const code: ErrorCode = ws.errorCode && isKnownErrorCode(ws.errorCode) ? ws.errorCode : "INTERNAL";
     out.push({ kind: "error", code, message: errorMessage(code, ws.defaultAgent), detail: ws.errorDetail });
   }
+
   const title = PROGRESS_TITLE[ws.state];
+
   if (title) {
     out.push({
       kind: "progress",
@@ -41,6 +43,7 @@ export const workspaceBanners = (
       setup: ws.state === "setting_up",
     });
   }
+
   if (
     ws.setupStatus === "failed" &&
     ws.state !== "error" &&
@@ -49,15 +52,19 @@ export const workspaceBanners = (
   ) {
     out.push({ kind: "setupFailed" });
   }
+
   return out;
 };
 
 /** Error codes the banners show, so toasts skip them (04, Toasts). */
 export const bannerCodes = (banners: ReadonlyArray<WorkspaceBanner>): ErrorCode[] => {
   const codes: ErrorCode[] = [];
+
   for (const b of banners) {
     if (b.kind === "error") codes.push(b.code);
+
     if (b.kind === "setupFailed") codes.push("SETUP_FAILED");
   }
+
   return codes;
 };

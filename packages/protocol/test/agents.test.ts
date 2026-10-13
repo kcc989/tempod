@@ -24,7 +24,7 @@ const base: CustomAgentDefinition = {
   },
 };
 
-const valid = (u: unknown): boolean => Schema.decodeUnknownExit(CustomAgentDefinition)(u)._tag === "Success";
+const valid = Schema.is(CustomAgentDefinition);
 
 describe("custom agent definition (01, Custom agents)", () => {
   it("accepts a full definition", () => {
@@ -78,6 +78,7 @@ describe("custom agent definition (01, Custom agents)", () => {
     for (const f of ["listCustomAgents", "getCustomAgent", "saveCustomAgent", "deleteCustomAgent"]) {
       expect(f in API).toBe(true);
     }
+
     for (const c of ["CUSTOM_AGENT_EXISTS", "CUSTOM_AGENT_LIMIT", "ARTIFACTS_ERROR"])
       expect(c in ERROR_MESSAGES).toBe(true);
     expect("profile" in TEMPOD_REQUESTS["session.start"].params.fields).toBe(true);

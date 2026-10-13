@@ -11,22 +11,29 @@ export const listProjectConversations = async (
   { projectId, cursor }: FnInput<"listProjectConversations">,
 ): Promise<FnOutput<"listProjectConversations">> => {
   await requireProject(env, user.id, projectId);
+
   const existing = await d1(env)
     .select({ id: workspaces.id })
     .from(workspaces)
     .where(and(eq(workspaces.projectId, projectId), eq(workspaces.userId, user.id)))
     .all();
+
   for (const w of existing) {
     if (!(await env.DATA.head(conversationKey(projectId, w.id))))
       await env.WORKSPACE.getByName(w.id).persistConversation();
   }
+
   const prefix = conversationPrefix(projectId);
-  const result = await env.DATA.list({
+
+  const options: R2ListOptions = {
     prefix,
     limit: 100,
     include: ["customMetadata"],
-    ...(cursor ? { cursor } : {}),
-  });
+  };
+
+  if (cursor) options.cursor = cursor;
+  const result = await env.DATA.list(options);
+
   return {
     conversations: result.objects.map((o) => ({
       conversationId: o.key.slice(prefix.length, -".json".length),
@@ -44,7 +51,9 @@ export const getProjectConversation = async (
   { projectId, conversationId }: FnInput<"getProjectConversation">,
 ): Promise<FnOutput<"getProjectConversation">> => {
   await requireProject(env, user.id, projectId);
+
   if (!/^[0-9a-hjkmnp-tv-z]{26}$/.test(conversationId)) throw new TempoError("NOT_FOUND");
+
   const live = await d1(env)
     .select({ id: workspaces.id })
     .from(workspaces)
@@ -56,11 +65,15 @@ export const getProjectConversation = async (
       ),
     )
     .get();
+
   if (live) await env.WORKSPACE.getByName(live.id).persistConversation();
   const obj = await env.DATA.get(conversationKey(projectId, conversationId));
+
   if (!obj) throw new TempoError("NOT_FOUND");
   const artifact = Schema.decodeUnknownSync(ConversationArtifact)(await obj.json());
+
   if (artifact.projectId !== projectId || artifact.conversationId !== conversationId)
     throw new TempoError("NOT_FOUND");
+
   return artifact;
 };

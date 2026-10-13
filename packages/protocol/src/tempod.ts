@@ -19,6 +19,7 @@ import { ArtifactKind } from "./artifacts.ts";
 /** tempod protocol (02): envelopes, requests and events between WorkspaceDO and tempod. */
 
 export const TEMPOD_PORT = 7070;
+
 export const MAX_MESSAGE_BYTES = 1024 * 1024;
 
 const Env = Schema.Record(Schema.String, Schema.String);
@@ -39,21 +40,26 @@ export const DoHello = Schema.Struct({
   workspace: HelloWorkspace,
   env: Env,
 });
+
 export type DoHello = typeof DoHello.Type;
 
 export const DoAck = Schema.Struct({ type: Schema.Literal("ack"), upTo: Schema.Number });
+
 export const DoReq = Schema.Struct({
   type: Schema.Literal("req"),
   id: Schema.String,
   op: Schema.String,
   params: Schema.Unknown,
 });
+
 export type DoReq = typeof DoReq.Type;
 
 export const DoToTempod = Schema.Union([DoHello, DoAck, DoReq]);
+
 export type DoToTempod = typeof DoToTempod.Type;
 
 export const ResError = Schema.Struct({ code: Schema.String, message: Schema.String });
+
 export const TempodRes = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("res"),
@@ -68,6 +74,7 @@ export const TempodRes = Schema.Union([
     error: ResError,
   }),
 ]);
+
 export type TempodRes = typeof TempodRes.Type;
 
 // Items as tempod makes them: the DO adds `rev`.
@@ -78,6 +85,7 @@ export const TempodItem = Schema.Struct({
   content: Schema.Record(Schema.String, Schema.Unknown),
   createdAt: Schema.Number,
 });
+
 export type TempodItem = typeof TempodItem.Type;
 
 const ev = <K extends string, F extends Schema.Struct.Fields>(kind: K, fields: F) =>
@@ -91,12 +99,14 @@ export const SessionPatch = Schema.Struct({
   usage: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
   title: Schema.optional(Schema.String),
 });
+
 export type SessionPatch = typeof SessionPatch.Type;
 
 export const ItemPatch = Schema.Struct({
   status: Schema.optional(ItemStatus),
   content: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 });
+
 export type ItemPatch = typeof ItemPatch.Type;
 
 export const ScriptStream = Schema.Literals(["stdout", "stderr"]);
@@ -180,7 +190,9 @@ export const TempodEvent = Schema.Union([
     stagedPath: Schema.String,
   }),
 ]);
+
 export type TempodEvent = typeof TempodEvent.Type;
+
 export type TempodEventOf<K extends TempodEvent["kind"]> = Extract<TempodEvent, { kind: K }>;
 
 export const TempodEventEnvelope = Schema.Struct({
@@ -189,9 +201,11 @@ export const TempodEventEnvelope = Schema.Struct({
   ts: Schema.Number,
   event: Schema.Unknown,
 });
+
 export type TempodEventEnvelope = typeof TempodEventEnvelope.Type;
 
 export const TempodToDo = Schema.Union([...TempodRes.members, TempodEventEnvelope]);
+
 export type TempodToDo = typeof TempodToDo.Type;
 
 // Requests: op → params, result, timeout (02, tempod protocol).
@@ -206,6 +220,7 @@ export const Source = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("branch") }),
   Schema.Struct({ kind: Schema.Literal("pr"), number: Schema.Number }),
 ]);
+
 export type Source = typeof Source.Type;
 
 export const CheckpointResult = Schema.Union([
@@ -219,10 +234,12 @@ export const CheckpointResult = Schema.Union([
   }),
   Schema.Struct({ unchanged: Schema.Literal(true) }),
 ]);
+
 export type CheckpointResult = typeof CheckpointResult.Type;
 
 /** 01 Browser Run: `"run"` drives a Browser Run session, `"local"` the container's Chromium. */
 export const BrowserMode = Schema.Literals(["local", "run"]);
+
 export type BrowserMode = typeof BrowserMode.Type;
 
 export const SessionStartResult = Schema.Struct({
@@ -238,6 +255,7 @@ export const SessionStartResult = Schema.Struct({
   reloaded: Schema.Boolean,
   handoff: Schema.Boolean,
 });
+
 export type SessionStartResult = typeof SessionStartResult.Type;
 
 const Empty = Schema.Struct({});
@@ -406,7 +424,9 @@ export const TEMPOD_REQUESTS = {
 } as const;
 
 export type TempodOp = keyof typeof TEMPOD_REQUESTS;
+
 export type TempodParams<O extends TempodOp> = (typeof TEMPOD_REQUESTS)[O]["params"]["Type"];
+
 export type TempodResult<O extends TempodOp> = (typeof TEMPOD_REQUESTS)[O]["result"]["Type"];
 
 export const HealthResponse = Schema.Struct({
@@ -414,11 +434,13 @@ export const HealthResponse = Schema.Struct({
   version: Schema.String,
   incarnation: Schema.String,
 });
+
 export type HealthResponse = typeof HealthResponse.Type;
 
 /** Handoff (01, Sessions). */
 export const HANDOFF_FIRST_LINE =
   "This conversation continues an earlier session that was lost. Here is the transcript so far, oldest first:";
+
 export const HANDOFF_MAX_CHARS = 24_000;
 
 /** Turn-summary rule (01, Send a prompt, block 1). */
@@ -437,6 +459,7 @@ export const PLAYWRIGHT_MCP_SERVER = {
 
 /** 01 Browser Run: Playwright MCP reaches the session through `TempoOutbound` rule 11. */
 export const BROWSER_RUN_HOST = "browser.tempo.internal";
+
 export const BROWSER_RUN_CDP_ENDPOINT = `wss://${BROWSER_RUN_HOST}/`;
 
 export const PLACEHOLDER = "tempo-placeholder";
@@ -447,5 +470,7 @@ export const TEMPO_MCP_SERVER = {
   command: "/usr/local/bin/tempod",
   args: ["mcp"],
 } as const;
+
 export const TEMPO_SESSION_ID_ENV = "TEMPO_SESSION_ID";
+
 export const TEMPO_MCP_SOCKET = "/home/tempo/.tempod/mcp.sock";

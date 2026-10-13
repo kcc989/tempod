@@ -40,7 +40,9 @@ import {
 import { installLocalStorage, removeLocalStorage } from "./storage-stub";
 
 const W = "w1";
+
 const keys = () => getWorkspaceUi(W).tabs.map((t) => t.key);
+
 const active = () => getWorkspaceUi(W).activeKey;
 
 let storage: Map<string, string>;

@@ -7,7 +7,7 @@ import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 
 /** 02: sessions.status drops 'broken' and review_comments.status drops 'resolved' (0004). */
 
-type Row = Record<string, any>;
+type Row = Record<string, SqlStorageValue>;
 
 const tablesOf = (sql: SqlStorage): string[] =>
   sql
@@ -45,6 +45,7 @@ describe("DO migration 0004_drop_unused_statuses", () => {
     await runInDurableObject(stub, async (_i: WorkspaceDO, state: DurableObjectState) => {
       const sql = state.storage.sql;
       sql.exec("DROP TABLE turns");
+
       for (const name of tablesOf(sql)) sql.exec(`DROP TABLE "${name}"`);
       const db = drizzle(state.storage);
       const before = WORKSPACE_MIGRATIONS.findIndex((m) => m.tag === "0004_drop_unused_statuses");
@@ -58,6 +59,7 @@ describe("DO migration 0004_drop_unused_statuses", () => {
           status,
           order,
         );
+
       session("s-broken", "broken", 1);
       session("s-idle", "idle", 2);
       sql.exec(
@@ -142,6 +144,7 @@ describe("DO migration 0004_drop_unused_statuses", () => {
 
       const schema = (name: string) =>
         sql.exec<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name = ?", name).one().sql;
+
       expect(schema("turns")).toMatch(/REFERENCES\s+"?sessions"?\s*\(id\)/);
       expect(() =>
         sql.exec(
@@ -165,9 +168,11 @@ describe("deployed workspace upgrade", () => {
       await runInDurableObject(stub, async (_i: WorkspaceDO, state: DurableObjectState) => {
         const sql = state.storage.sql;
         sql.exec("DROP TABLE turns");
+
         for (const name of tablesOf(sql)) sql.exec(`DROP TABLE "${name}"`);
         const db = drizzle(state.storage);
         const oldTags = ["0000_init", "0001_steering_pending", "0002_file_cache"];
+
         const previous =
           release === "file-cache"
             ? WORKSPACE_MIGRATIONS.filter((m) => oldTags.includes(m.tag))
@@ -176,6 +181,7 @@ describe("deployed workspace upgrade", () => {
               )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
                 .sort((a, b) => a.when - b.when);
+
         await runMigrations(db, previous);
         expect(
           sql

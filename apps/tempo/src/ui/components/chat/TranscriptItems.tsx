@@ -1,3 +1,4 @@
+import { Match, Schema } from "effect";
 import type { AgentId, Item, ItemOf, Turn } from "@tempo/protocol";
 import {
   AlertCircleIcon,
@@ -92,6 +93,7 @@ export const ItemView = memo(function ItemView({
       );
     case "tool_call": {
       const plan = planProposalText(item);
+
       if (plan !== null)
         return (
           <PlanProposal
@@ -100,8 +102,10 @@ export const ItemView = memo(function ItemView({
             permission={permission?.kind === "permission" ? permission : undefined}
           />
         );
+
       return <ToolCall ctx={ctx} item={item} />;
     }
+
     case "plan":
       return <Plan item={item} />;
     case "permission":
@@ -160,11 +164,14 @@ function UserMessage({
   const { text, mentions, attachments, reviewCommentIds } = item.content;
   const checkpointId = turn?.checkpointId ?? null;
   const canRevert = ctx.writable && ctx.canRevert && checkpointId !== null && turn !== undefined;
+
   const onRevert = async () => {
     if (!turn || checkpointId === null) return;
+
     if (!(await confirm(CONFIRM_TEXT.revert(turn.seq)))) return;
     revert.mutate({ workspaceId: ctx.workspaceId, checkpointId });
   };
+
   return (
     <div className="group/user flex flex-col items-end gap-1">
       <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2">
@@ -215,6 +222,7 @@ function UserMessage({
 
 function AgentMessage({ ctx, item }: { ctx: ItemContext; item: ItemOf<"agent_message"> }) {
   const streaming = item.status === "streaming";
+
   return (
     <div className="flex flex-col gap-2">
       {item.content.text !== "" && (
@@ -275,6 +283,7 @@ const STATUS_TEXT: Record<Item["status"], string> = {
 
 function StatusIcon({ status }: { status: Item["status"] }) {
   const label = STATUS_TEXT[status];
+
   switch (status) {
     case "in_progress":
     case "streaming":
@@ -301,6 +310,7 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
   const hasBody = content.length > 0 || rawInput !== undefined;
   const label = toolLabel(item);
   const edit = workType(item) === "edit" ? editCounts(item) : null;
+
   return (
     <div className="min-w-0">
       <div className="flex items-center">
@@ -369,6 +379,7 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
         <div className="flex min-w-0 flex-col gap-2 pt-1 pr-2 pb-2 pl-7.5">
           {content.map((c, i) => {
             const view = toolContentView(c);
+
             if (view.kind === "diff") {
               return (
                 <UnifiedDiff
@@ -380,6 +391,7 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
                 />
               );
             }
+
             if (view.kind === "terminal") {
               return (
                 <p key={i} className="rounded-md bg-muted/50 p-2 font-mono text-xs">
@@ -387,6 +399,7 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
                 </p>
               );
             }
+
             return (
               <BlockViewer
                 key={i}
@@ -409,9 +422,10 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
   );
 }
 
-const jsonText = (u: unknown): string => {
+const jsonText = <T,>(u: T): string => {
   try {
-    const s = typeof u === "string" ? u : JSON.stringify(u, null, 2);
+    const s = Schema.is(Schema.String)(u) ? u : (JSON.stringify(u, null, 2) ?? String(u));
+
     return s.length > 20_000 ? `${s.slice(0, 20_000)}…` : s;
   } catch {
     return String(u);
@@ -420,6 +434,7 @@ const jsonText = (u: unknown): string => {
 
 function Plan({ item }: { item: ItemOf<"plan"> }) {
   const { done, total } = planProgress(item.content.entries);
+
   return (
     <div className="rounded-md border px-2 py-1.5">
       <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -428,12 +443,16 @@ function Plan({ item }: { item: ItemOf<"plan"> }) {
       <ul className="flex flex-col gap-0.5">
         {item.content.entries.map((e, i) => (
           <li key={i} className="flex items-start gap-2 text-sm">
-            {e.status === "completed" ? (
+            {Match.value(e).pipe(
+              Match.when({ status: "completed" }, () => (
               <CheckCircle2Icon aria-label="Done" className="mt-0.5 size-3.5 shrink-0 text-success" />
-            ) : e.status === "in_progress" ? (
+              )),
+              Match.when({ status: "in_progress" }, () => (
               <Spinner aria-label="In progress" className="mt-0.5 text-primary" />
-            ) : (
+              )),
+              Match.orElse(() => (
               <CircleIcon aria-label="To do" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+              )),
             )}
             <span className={cn(e.status === "completed" && "text-muted-foreground line-through")}>
               {e.content}
@@ -453,9 +472,11 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
   const { options, requestId, chosenOptionId } = item.content;
   const allow = firstPermissionOption(options, "allow");
   const reject = firstPermissionOption(options, "reject");
+
   const choose = (optionId: string) => {
     if (!respond.isPending) respond.mutate({ workspaceId: ctx.workspaceId, requestId, optionId });
   };
+
   useShortcuts(
     {
       permissionAllow: (e) => {
@@ -473,6 +494,7 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
     if (pending && !isEditableTarget(document.activeElement)) ref.current?.focus({ preventScroll: true });
   }, [pending]);
   const chosen = options.find((o) => o.optionId === chosenOptionId);
+
   return (
     <div
       ref={ref}
@@ -520,6 +542,7 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
 function Notice({ item, ctx }: { item: ItemOf<"notice">; ctx: ItemContext }) {
   const revert = useCallMutation("revertToCheckpoint");
   const { level, text } = item.content;
+
   return (
     <p
       role={level === "error" ? "alert" : undefined}
@@ -552,6 +575,7 @@ function ErrorCard({ ctx, item, turn }: { ctx: ItemContext; item: ItemOf<"error"
   const [showDetail, setShowDetail] = useState(false);
   const { code, detail } = item.content;
   const prompt = turn?.prompt;
+
   return (
     <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-2">
       <div className="flex items-start gap-2">
@@ -610,6 +634,7 @@ function AttachmentThumb({
 }) {
   const [failed, setFailed] = useState(false);
   const src = failed ? undefined : thumbnailSrc(workspaceId, attachment);
+
   return src ? (
     <img
       src={src}
@@ -635,7 +660,9 @@ export function TurnFooter({ turn, worked = false }: { turn: Turn; worked?: bool
   const ms = worked ? null : turnDuration(turn);
   const tokens = turnTokens(turn);
   const outcome = turnOutcome(turn);
+
   if (ms === null && tokens === null && outcome === null) return null;
+
   return (
     <p className="text-xs text-muted-foreground">
       {[ms !== null ? formatDuration(ms) : null, tokens, outcome].filter(Boolean).join(" · ")}
@@ -649,8 +676,10 @@ function useElapsed(since: number | null, live: boolean): number {
   useEffect(() => {
     if (!live) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
+
     return () => clearInterval(t);
   }, [live]);
+
   return Math.max(1000, Math.floor((now - (since ?? now)) / 1000) * 1000);
 }
 
@@ -660,9 +689,11 @@ export function WorkRow({ ctx, turn, items }: { ctx: ItemContext; turn: Turn; it
   const running = turn.status === "running";
   const open = useExpanded(ctx.sessionId, id, running);
   const elapsed = useElapsed(turn.startedAt, running);
+
   const text = running
     ? [currentStep(items) ?? "Working", formatDuration(elapsed)].join(" · ")
     : workSummary(items, turnDuration(turn));
+
   return (
     <div>
       <button
@@ -692,6 +723,7 @@ export function WorkRow({ ctx, turn, items }: { ctx: ItemContext; turn: Turn; it
 /** The running turn: a spinner with the time so far. */
 export function WorkingRow({ turn }: { turn: Turn }) {
   const elapsed = useElapsed(turn.startedAt, true);
+
   return (
     <p className="flex items-center gap-2 text-xs text-muted-foreground">
       <Spinner aria-hidden className="text-primary" />

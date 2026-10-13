@@ -61,10 +61,12 @@ export function PrimaryActionButton({ workspaceId, className }: { workspaceId: s
 
   const onCommitOpenChange = (next: boolean) => {
     setCommitOpen(next);
+
     if (!next) clearCommitRequest(workspaceId);
   };
 
   const primary = view ? topPrimary(view) : null;
+
   if (!view || !primary) return null;
 
   const pending =
@@ -72,9 +74,11 @@ export function PrimaryActionButton({ workspaceId, className }: { workspaceId: s
     (primary.kind === "createPr" && actions.pending.createPr) ||
     (primary.kind === "merge" && actions.pending.merge) ||
     (primary.kind === "archive" && actions.pending.archive);
+
   const enabled = primaryEnabled(primary, view.w.state) && !pending;
   const Icon = ICONS[primary.kind];
   const shortcut = PRIMARY_SHORTCUT[primary.kind];
+
   const checksUrl =
     project && view.w.prNumber !== null
       ? githubChecksUrl(project.owner, project.name, view.w.prNumber)
@@ -84,18 +88,23 @@ export function PrimaryActionButton({ workspaceId, className }: { workspaceId: s
     switch (primary.kind) {
       case "commitPush":
         onCommitOpenChange(true);
+
         return;
       case "createPr":
         actions.createPr();
+
         return;
       case "viewChecks":
         actions.viewChecks(checksUrl);
+
         return;
       case "merge":
         actions.merge();
+
         return;
       case "archive":
         actions.archive();
+
         return;
     }
   };
@@ -152,10 +161,12 @@ const SUBMIT = { code: "Enter", mod: true } as const;
 function CommitForm({ placeholder, onSubmit }: { placeholder: string; onSubmit: (message: string) => void }) {
   const id = useId();
   const [message, setMessage] = useState("");
+
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     onSubmit(message.trim());
   };
+
   return (
     <form className="flex flex-col gap-2" onSubmit={submit}>
       <Label htmlFor={id}>Commit message</Label>
@@ -168,6 +179,7 @@ function CommitForm({ placeholder, onSubmit }: { placeholder: string; onSubmit: 
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing || e.key !== "Enter") return;
+
           if (
             matchesCombo(e, SUBMIT, isMacPlatform()) ||
             (!e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey)

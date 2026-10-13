@@ -44,7 +44,7 @@ tempo/
   CLAUDE.md                     symlink to AGENTS.md
 ```
 
-**Tooling:** Bun, Vite, TypeScript 7.0.2 (native compiler) in strict mode, Vitest with `@cloudflare/vitest-pool-workers` for DO tests, oxlint, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
+**Tooling:** Bun, Vite, TypeScript 7.0.2 (native compiler) in strict mode, Vitest with `@cloudflare/vitest-pool-workers` for DO tests, oxlint with the vendored anti-slop generic and Effect rules, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
 
 **Scripts** (root `package.json`): `dev`, `build`, `typecheck`, `lint`, `format`, `test`, `test:conformance`, `test:e2e`, `deploy`.
 

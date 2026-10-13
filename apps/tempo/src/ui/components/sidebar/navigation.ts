@@ -26,8 +26,10 @@ export function useSidebarOrder() {
   const projects = useProjects();
   const [sort] = useLocalStorage(SORT_KEY, DEFAULT_SORT, isSortMode);
   const [collapsed] = useLocalStorage(COLLAPSED_KEY, NO_COLLAPSED, isStringList);
+
   return useMemo(() => {
     const sections = sidebarSections(hub.workspaces, projects.data ?? [], sort);
+
     return { visible: visibleOrder(sections, collapsed), all: fullOrder(sections) };
   }, [hub.workspaces, projects.data, sort, collapsed]);
 }
@@ -40,11 +42,12 @@ export function useWorkspaceNavigation(): void {
   const order = useSidebarOrder();
   const navigate = useNavigate();
   const isPhone = useIsPhone();
-  const params = useParams({ strict: false }) as { workspaceId?: string };
+  const params = useParams({ strict: false });
   const current = params.workspaceId ?? null;
 
   const go = (workspaceId: string | null) => {
     if (!workspaceId) return;
+
     if (isPhone) setPhonePane("chat");
     void navigate({ to: "/w/$workspaceId", params: { workspaceId } });
   };

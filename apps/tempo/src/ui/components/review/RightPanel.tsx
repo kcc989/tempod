@@ -18,6 +18,7 @@ const isRightTab = (v: string): v is RightTab =>
 /** 04, Right and bottom panels: Changes, All files, Checks and Artifacts. */
 export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps) {
   const tab = useWorkspaceUiSelector(workspaceId, (s) => s.rightTab);
+
   if (variant === "phone") {
     return (
       <>
@@ -25,6 +26,7 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
       </>
     );
   }
+
   return (
     <>
       <Tabs

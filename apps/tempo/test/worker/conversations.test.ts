@@ -1,3 +1,4 @@
+import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { env, runInDurableObject } from "cloudflare:test";
 import { ConversationArtifact, newId, type ConversationArtifact as Artifact } from "@tempo/protocol";
 import { Schema } from "effect";
@@ -14,8 +15,9 @@ import { internals, seedProject, seedWorkspace } from "./fakes.ts";
 const seed = async () => {
   const project = await seedProject();
   const w = await seedWorkspace(project, { prompt: "Remember this conversation" });
-  await runInDurableObject(w.stub, async (i) => {
+  await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
     const { core, runner } = internals(i);
+
     for (const op of core.ctx.storage.sql.exec("SELECT id FROM ops WHERE kind = 'create'").toArray())
       runner.cancel(String(op["id"]));
     core.updateWs({ state: "sleeping" });
@@ -24,6 +26,7 @@ const seed = async () => {
   });
   const ctx = { env, user: { id: project.userId, name: "Owner", email: "owner@example.com", image: null } };
   const key = conversationKey(project.projectId, w.workspaceId);
+
   return { ...w, project, ctx, key };
 };
 
@@ -31,7 +34,7 @@ describe("project conversation artifacts", () => {
   it("stores complete, ordered transcripts without a container or connected UI", async () => {
     const w = await seed();
     const itemId = newId();
-    await runInDurableObject(w.stub, async (i) => {
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const { core } = internals(i);
       const s = core.ctx.storage.sql.exec("SELECT id FROM sessions").one();
       core.insertItem({
@@ -62,7 +65,7 @@ describe("project conversation artifacts", () => {
 
   it("retains dirty state on upload failure and retries through the durable alarm", async () => {
     const w = await seed();
-    await runInDurableObject(w.stub, async (i) => {
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const { core } = internals(i);
       const put = vi.spyOn(core.env.DATA, "put").mockRejectedValueOnce(new Error("R2 unavailable"));
       await expect(saveConversation(core)).rejects.toThrow("R2 unavailable");
@@ -70,23 +73,27 @@ describe("project conversation artifacts", () => {
       put.mockRestore();
       core.setKv("conversationDueAt", Date.now() - 1);
     });
-    await runInDurableObject(w.stub, (i) => i.alarm());
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => i.alarm());
     expect(await env.DATA.head(w.key)).not.toBeNull();
   });
 
   it("does not clear changes made during an upload or overwrite them with an older upload", async () => {
     const w = await seed();
-    await runInDurableObject(w.stub, async (i) => {
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const { core } = internals(i);
       const put = core.env.DATA.put.bind(core.env.DATA);
       let release!: () => void;
+
       const gate = new Promise<void>((r) => {
         release = r;
       });
+
       const spy = vi.spyOn(core.env.DATA, "put").mockImplementationOnce(async (...args) => {
         await gate;
+
         return put(...args);
       });
+
       const first = saveConversation(core);
       core.updateWs({ title: "New title" });
       markConversationDirty(core);
@@ -126,7 +133,7 @@ describe("project conversation artifacts", () => {
 
   it("keeps the final conversation readable after workspace deletion", async () => {
     const w = await seed();
-    await runInDurableObject(w.stub, (i) => {
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       const { core } = internals(i);
       core.updateWs({ state: "archived", title: "Final title", archivedAt: Date.now() });
     });
@@ -134,10 +141,12 @@ describe("project conversation artifacts", () => {
     expect(
       await env.DB.prepare("SELECT id FROM workspaces WHERE id = ?").bind(w.workspaceId).first(),
     ).toBeNull();
+
     const artifact = await getProjectConversation(w.ctx, {
       projectId: w.project.projectId,
       conversationId: w.workspaceId,
     });
+
     expect(artifact.title).toBe("Final title");
     expect(artifact.items[0]?.content).toMatchObject({ text: "Remember this conversation" });
     expect(
@@ -147,7 +156,7 @@ describe("project conversation artifacts", () => {
 
   it("does not delete a workspace if the final artifact upload fails", async () => {
     const w = await seed();
-    await runInDurableObject(w.stub, async (i) => {
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const { core } = internals(i);
       core.updateWs({ state: "archived" });
       const put = vi.spyOn(core.env.DATA, "put").mockRejectedValueOnce(new Error("unavailable"));
@@ -163,13 +172,13 @@ describe("project conversation artifacts", () => {
 
   it("keeps the project linked when an archived workspace cannot save its final transcript", async () => {
     const w = await seed();
-    await runInDurableObject(w.stub, (i) => internals(i).core.updateWs({ state: "archived" }));
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.updateWs({ state: "archived" }));
     await env.DB.prepare("UPDATE workspaces SET state = 'archived', archived_at = ? WHERE id = ?")
       .bind(Date.now(), w.workspaceId)
       .run();
-    const get = vi.spyOn(env.WORKSPACE, "getByName").mockReturnValueOnce({
-      deleteWorkspace: async () => ({ ok: false, error: { code: "INTERNAL", message: "Unavailable" } }),
-    } as unknown as ReturnType<typeof env.WORKSPACE.getByName>);
+
+    const get = vi.spyOn(env.DATA, "put").mockRejectedValueOnce(new Error("Unavailable"));
+
     try {
       await expect(unlinkProject(w.ctx, { projectId: w.project.projectId })).rejects.toMatchObject({
         code: "INTERNAL",
@@ -177,6 +186,7 @@ describe("project conversation artifacts", () => {
     } finally {
       get.mockRestore();
     }
+
     expect(
       await env.DB.prepare("SELECT id FROM projects WHERE id = ?").bind(w.project.projectId).first(),
     ).not.toBeNull();

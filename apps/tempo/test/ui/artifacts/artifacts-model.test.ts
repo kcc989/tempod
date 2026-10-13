@@ -20,6 +20,7 @@ import { agentMessage, turn, userMessage } from "../fixtures";
 /** 04 Artifacts tab, Artifact tab, file and diff images, plan proposals. */
 
 const A = "01jart00000000000000000001";
+
 const B = "01jart00000000000000000002";
 
 const artifact = (id: string, version: number, createdAt: number): Artifact => ({
@@ -82,53 +83,50 @@ describe("artifact tabs (workspace-ui)", () => {
   });
 });
 
-const planCall = (plan: unknown): Item =>
-  ({
-    id: "tc1",
-    sessionId: "s1",
-    turnId: "t1",
-    kind: "tool_call",
-    status: "pending",
-    content: { toolCallId: "call-1", title: "ExitPlanMode", locations: [], content: [], rawInput: { plan } },
-    rev: 1,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }) as Item;
+const planCall = (plan: import("@tempo/protocol").JsonData): Item => ({
+  id: "tc1",
+  sessionId: "s1",
+  turnId: "t1",
+  kind: "tool_call",
+  status: "pending",
+  content: { toolCallId: "call-1", title: "ExitPlanMode", locations: [], content: [], rawInput: { plan } },
+  rev: 1,
+  createdAt: 1100,
+  updatedAt: 1100,
+});
 
-const permissionFor = (toolCallId: string): Item =>
-  ({
-    id: "p1",
-    sessionId: "s1",
-    turnId: "t1",
-    kind: "permission",
-    status: "pending",
-    content: { requestId: "r1", toolCallId, title: "Approve plan?", options: [] },
-    rev: 1,
-    createdAt: 1200,
-    updatedAt: 1200,
-  }) as Item;
+const permissionFor = (toolCallId: string): Item => ({
+  id: "p1",
+  sessionId: "s1",
+  turnId: "t1",
+  kind: "permission",
+  status: "pending",
+  content: { requestId: "r1", toolCallId, title: "Approve plan?", options: [] },
+  rev: 1,
+  createdAt: 1200,
+  updatedAt: 1200,
+});
 
-const artifactItem = (): Item =>
-  ({
-    id: "a1",
-    sessionId: "s1",
-    turnId: "t1",
-    kind: "artifact",
-    status: "completed",
-    content: {
-      artifactId: A,
-      version: 1,
-      title: "Plan",
-      name: "plan.md",
-      path: "/workspace/plan.md",
-      mime: "text/markdown",
-      artifactKind: "markdown",
-      size: 1,
-    },
-    rev: 1,
-    createdAt: 1150,
-    updatedAt: 1150,
-  }) as Item;
+const artifactItem = (): Item => ({
+  id: "a1",
+  sessionId: "s1",
+  turnId: "t1",
+  kind: "artifact",
+  status: "completed",
+  content: {
+    artifactId: A,
+    version: 1,
+    title: "Plan",
+    name: "plan.md",
+    path: "/workspace/plan.md",
+    mime: "text/markdown",
+    artifactKind: "markdown",
+    size: 1,
+  },
+  rev: 1,
+  createdAt: 1150,
+  updatedAt: 1150,
+});
 
 describe("plan proposals and artifact items in the transcript (04)", () => {
   it("a tool call with a non-empty rawInput.plan is a plan proposal and stays outside the work row", () => {
@@ -148,17 +146,21 @@ describe("plan proposals and artifact items in the transcript (04)", () => {
       permissionFor("call-1"),
       agentMessage("m1", "Done", { createdAt: 1300 }),
     ];
+
     const map = Object.fromEntries(items.map((i) => [i.id, i]));
+
     const rows = buildTranscriptRows(
       items.map((i) => i.id),
       map,
       { t1: turn({ status: "completed", endedAt: 2000 }) },
     );
+
     const itemRows = rows.filter((r) => r.kind === "item");
     expect(itemRows.map((r) => (r.kind === "item" ? r.itemId : ""))).toEqual(["u1", "tc1", "a1", "m1"]);
     expect(itemRows.find((r) => r.kind === "item" && r.itemId === "tc1")).toMatchObject({
       permissionId: "p1",
     });
+
     const other = buildTranscriptRows(
       ["u1", "p1"],
       { u1: items[0]!, p1: permissionFor("call-2") },
@@ -166,6 +168,7 @@ describe("plan proposals and artifact items in the transcript (04)", () => {
         t1: turn({ status: "completed", endedAt: 2000 }),
       },
     );
+
     expect(other.some((r) => r.kind === "item" && r.itemId === "p1")).toBe(true);
   });
 });

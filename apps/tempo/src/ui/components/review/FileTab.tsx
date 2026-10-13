@@ -20,10 +20,13 @@ import { WakeButton } from "./parts";
 import { retryWhileWaking, useInvalidateOnChanges, useWorkspaceStateValue } from "./use-review";
 
 const READ_FILE = ["readFile"] as const;
+
 const LINE_HEIGHT = 20;
 
 type View = "source" | "preview";
+
 const isView = (u: unknown): u is View => u === "source" || u === "preview";
+
 /** 04 All files tab: the Markdown Source or Preview choice, kept per browser. */
 export const MARKDOWN_VIEW_KEY = "files:markdown-view";
 
@@ -33,11 +36,13 @@ export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
   const live = isLive(state);
   const available = live || state === "sleeping";
   useInvalidateOnChanges(workspaceId, READ_FILE);
+
   const file = useCallQuery(
     "readFile",
     { workspaceId, path: tab.path },
     { enabled: available, retry: false, staleTime: 5_000, refetchInterval: live ? retryWhileWaking : false },
   );
+
   const { refetch } = file;
   useEffect(() => {
     if (available) void refetch();
@@ -48,6 +53,7 @@ export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
   const svg = isSvgPath(tab.path);
   const markdown = isMarkdownPath(tab.path) && file.data?.encoding === "utf8";
   const view = svg ? svgView : markdownView;
+
   const toggle =
     file.data && (markdown || (svg && file.data.encoding === "utf8")) ? (
       <ToggleGroup
@@ -57,6 +63,7 @@ export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
         value={view}
         onValueChange={(v) => {
           if (!isView(v)) return;
+
           if (svg) setSvgView(v);
           else setMarkdownView(v);
         }}
@@ -71,8 +78,10 @@ export function FileTab({ workspaceId, tab, seq }: CenterTabProps<"file">) {
     ) : null;
 
   let body;
+
   if (file.data) {
     const image = imageDataUrl(tab.path, file.data);
+
     if (image && (!svg || file.data.encoding === "base64" || view === "preview"))
       body = (
         <div className="flex h-full items-center justify-center overflow-auto p-3">
@@ -168,6 +177,7 @@ export function CodeView({
       .catch(() => {
         // Plain text is fine.
       });
+
     return () => {
       cancelled = true;
     };
@@ -186,6 +196,7 @@ export function CodeView({
   const { scrollToIndex } = virtualizer;
   useEffect(() => {
     if (target === null) return;
+
     if (virtual) scrollToIndex(target - 1, { align: "center" });
     else scrollRef.current?.querySelector(`[data-line="${target}"]`)?.scrollIntoView({ block: "center" });
   }, [target, seq, virtual, scrollToIndex]);
@@ -195,6 +206,7 @@ export function CodeView({
   const row = (i: number, style?: CSSProperties) => {
     const n = i + 1;
     const toks = highlighted?.[i];
+
     return (
       <div
         key={i}

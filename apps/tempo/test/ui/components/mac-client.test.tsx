@@ -8,6 +8,7 @@ const show = (latestMacClient: string | null) => {
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     Response.json({ protocol: 1, serverVersion: "0.1.0", minMacClient: "0.1.0", latestMacClient }),
   );
+
   return render(
     createElement(QueryClientProvider, { client: new QueryClient() }, createElement(MacClientInfo)),
   );

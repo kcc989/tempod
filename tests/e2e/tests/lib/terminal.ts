@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { Socket } from "./api.ts";
 import { nonce, stripAnsi } from "./util.ts";
 
@@ -35,11 +36,13 @@ export class Terminal {
     const socket = await Socket.open(
       `/api/ws/terminal/${workspaceId}/${terminalId}?cols=${cols}&rows=${rows}`,
     );
+
     await socket.until(
       "terminal ready",
-      () => socket.messages.some((m) => (m.data as { type?: unknown } | null)?.type === "ready"),
+      () => socket.messages.some((m) => Schema.is(Schema.Struct({ type: Schema.Literal("ready") }))(m.data)),
       readyMs,
     );
+
     return new Terminal(workspaceId, terminalId, socket);
   }
 
@@ -78,11 +81,13 @@ export class Terminal {
         `printf '\\n@@${id}:%s:%s@@\\n' "$?" "$(printf %s "$__e2e_out" | base64 -w0)"\r`,
     );
     const marker = new RegExp(`@@${id}:(\\d+):([A-Za-z0-9+/=\\s]*)@@`);
+
     const match = await this.until(
       `result of: ${script.split("\n")[0]}`,
       () => marker.exec(this.screen),
       timeoutMs,
     );
+
     return {
       code: Number(match[1]),
       output: Buffer.from((match[2] ?? "").replace(/\s+/g, ""), "base64").toString("utf8"),
@@ -97,9 +102,12 @@ export class Terminal {
 /** Runs one script in a fresh terminal connection and closes it; throws on a non-zero exit. */
 export const sh = async (workspaceId: string, script: string, timeoutMs = 120_000): Promise<string> => {
   const term = await Terminal.open(workspaceId);
+
   try {
     const r = await term.run(script, timeoutMs);
+
     if (r.code !== 0) throw new Error(`script exited ${r.code}: ${script.split("\n")[0]}\n${r.output}`);
+
     return r.output;
   } finally {
     term.close();
@@ -129,5 +137,6 @@ export const stopContainerFromInside = async (workspaceId: string): Promise<numb
   const at = Date.now();
   term.type('p=$(pgrep -o -x tempod); if [ "$p" = 1 ]; then kill -TERM 1; else kill -KILL "$p"; fi\r');
   setTimeout(() => term.close(), 5_000);
+
   return at;
 };

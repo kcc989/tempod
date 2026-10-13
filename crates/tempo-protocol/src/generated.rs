@@ -920,27 +920,11 @@ pub struct ConfigSelectOption {
 }
 ///`ContentBlock`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-#[serde(transparent)]
-pub struct ContentBlock(pub ::serde_json::Map<::std::string::String, ::serde_json::Value>);
-impl ::std::ops::Deref for ContentBlock {
-    type Target = ::serde_json::Map<::std::string::String, ::serde_json::Value>;
-    fn deref(&self) -> &::serde_json::Map<::std::string::String, ::serde_json::Value> {
-        &self.0
-    }
-}
-impl ::std::convert::From<ContentBlock>
-    for ::serde_json::Map<::std::string::String, ::serde_json::Value>
-{
-    fn from(value: ContentBlock) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json::Value>>
-    for ContentBlock
-{
-    fn from(value: ::serde_json::Map<::std::string::String, ::serde_json::Value>) -> Self {
-        Self(value)
-    }
+pub struct ContentBlock {
+    #[serde(rename = "type")]
+    pub type_: ::std::string::String,
+    #[serde(flatten)]
+    pub extra: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
 }
 ///`ContinueAfterSetupFailureIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]

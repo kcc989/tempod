@@ -20,9 +20,9 @@ import {
   type McpServer,
   type NewSessionResponse,
   type RequestPermissionRequest,
-  type SessionNotification,
 } from "@agentclientprotocol/sdk";
-import { PLAYWRIGHT_MCP_SERVER, type AgentId } from "@tempo/protocol";
+import { AcpFields, AcpSessionNotification, PLAYWRIGHT_MCP_SERVER, type AgentId } from "@tempo/protocol";
+import { Option, Predicate, Schema } from "effect";
 import type { Subprocess } from "bun";
 
 /**
@@ -30,13 +30,14 @@ import type { Subprocess } from "bun";
  * adapter is driven the way tempod drives it (01, Agents and Sessions): ACP v1 over stdio,
  * `initialize` with tempod's client capabilities, `session/new` with the Playwright MCP server.
  */
-
 /** Prompts that need model credentials run only with CONFORMANCE_LIVE=1. */
 export const LIVE = process.env["CONFORMANCE_LIVE"] === "1";
 
 /** tempod's per-step limit for adapter requests (packages/tempod/src/acp/session.ts). */
 const STEP_MS = 90_000;
+
 const LIVE_TURN_MS = 5 * 60_000;
+
 /** tempod kills an adapter whose turn has not returned 10 s after session/cancel (01, Cancel). */
 const CANCEL_MS = 10_000;
 
@@ -71,9 +72,11 @@ export interface AgentSpec {
 }
 
 const home = (): string => process.env["HOME"] ?? homedir();
-const keep = (name: string, fallback: string): Record<string, string> => ({
-  [name]: process.env[name] ?? fallback,
-});
+
+const keep = (name: string, fallback: string) =>
+  ({
+    [name]: process.env[name] ?? fallback,
+  }) satisfies Record<string, string>;
 
 /** The agent table of 01. Paths follow HOME, which is /home/tempo inside the image. */
 export const AGENTS: Record<AgentId, AgentSpec> = {
@@ -126,23 +129,26 @@ export const withTimeout = <A>(p: Promise<A>, ms: number, what: string): Promise
         clearTimeout(timer);
         resolvePromise(v);
       },
-      (e: unknown) => {
+      (cause: unknown) => {
         clearTimeout(timer);
-        reject(e instanceof Error ? e : new Error(JSON.stringify(e)));
+        reject(cause instanceof Error ? cause : new Error(JSON.stringify(cause)));
       },
     );
   });
 
-const errorText = (e: unknown): string =>
-  e instanceof Error ? e.message : typeof e === "object" && e !== null ? JSON.stringify(e) : String(e);
+const errorText = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : Predicate.isObject(cause) ? JSON.stringify(cause) : String(cause);
 
 /** A git repo with one commit, standing in for /workspace. */
 export const makeRepo = (): string => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "tempo-conformance-")));
+
   const git = (...args: string[]) => {
     const r = Bun.spawnSync(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+
     if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${r.stderr.toString()}`);
   };
+
   git("init", "-q", "-b", "main");
   writeFileSync(join(dir, "README.md"), "# Conformance fixture\n");
   git("add", "README.md");
@@ -156,6 +162,7 @@ export const makeRepo = (): string => {
     "-m",
     "init",
   );
+
   return dir;
 };
 
@@ -164,32 +171,32 @@ const inside = (root: string, path: string): string | null => {
   if (!isAbsolute(path)) return null;
   const abs = resolve(path);
   const rel = relative(root, abs);
+
   return rel === "" || (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel)) ? abs : null;
 };
 
-const isObject = (u: unknown): u is Record<string, unknown> => typeof u === "object" && u !== null;
-
 /** One adapter process and its ACP connection, with every update and request it sent. */
 export class AgentProcess {
-  readonly updates: SessionNotification[] = [];
+  readonly updates: AcpSessionNotification[] = [];
   readonly permissionRequests: RequestPermissionRequest[] = [];
   readonly fileWrites: string[] = [];
   readonly stderr: string[] = [];
   readonly proc: Subprocess<"pipe", "pipe", "pipe">;
   readonly conn: ClientConnection;
   private readonly listeners = new Set<() => void>();
-
   private constructor(
     readonly spec: AgentSpec,
     readonly cwd: string,
   ) {
-    const env: Record<string, string | undefined> = { ...process.env, ...spec.env() };
+    const env = { ...process.env, ...spec.env() } satisfies Record<string, string | undefined>;
     this.proc = Bun.spawn(spec.command(cwd), { cwd, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
     void this.readStderr();
     const proc = this.proc;
+
     const writable = new WritableStream<Uint8Array>({
       write(chunk) {
         proc.stdin.write(chunk);
+
         return Promise.resolve(proc.stdin.flush()).then(() => undefined);
       },
       close() {
@@ -199,61 +206,70 @@ export class AgentProcess {
         void proc.stdin.end();
       },
     });
+
     const raw = ndJsonStream(writable, proc.stdout);
+
     // Like tempod, read session/update notifications raw, before the SDK parses them.
     const readable = raw.readable.pipeThrough(
       new TransformStream<AnyMessage, AnyMessage>({
         transform: (msg, controller) => {
-          const m = msg as { method?: unknown; id?: unknown; params?: unknown };
-          if (m.method === "session/update" && m.id === undefined) {
-            if (isObject(m.params)) this.updates.push(m.params as unknown as SessionNotification);
+          if ("method" in msg && msg.method === "session/update" && !("id" in msg)) {
+            const parsed = Schema.decodeUnknownOption(AcpSessionNotification)(msg.params);
+
+            if (Option.isSome(parsed)) this.updates.push(parsed.value);
             this.notify();
+
             return;
           }
+
           controller.enqueue(msg);
         },
       }),
     );
+
     this.conn = client({ name: "tempo-conformance" })
       .onRequest("session/request_permission", (ctx) => {
         this.permissionRequests.push(ctx.params);
         this.notify();
+
         const option =
           ctx.params.options.find((o) => o.kind === "allow_once") ??
           ctx.params.options.find((o) => o.kind.startsWith("allow"));
+
         return option
           ? { outcome: { outcome: "selected", optionId: option.optionId } }
           : { outcome: { outcome: "cancelled" } };
       })
       .onRequest("fs/read_text_file", (ctx) => {
         const path = inside(this.cwd, ctx.params.path);
+
         if (!path) throw RequestError.invalidParams(undefined, "path is outside the workspace");
+
         if (!existsSync(path)) throw RequestError.resourceNotFound(ctx.params.path);
+
         return { content: readFileSync(path, "utf8") };
       })
       .onRequest("fs/write_text_file", (ctx) => {
         const path = inside(this.cwd, ctx.params.path);
+
         if (!path) throw RequestError.invalidParams(undefined, "path is outside the workspace");
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, ctx.params.content);
         this.fileWrites.push(path);
+
         return {};
       })
       .connect({ readable, writable: raw.writable });
   }
-
   static start(spec: AgentSpec, cwd: string): AgentProcess {
     return new AgentProcess(spec, cwd);
   }
-
   get running(): boolean {
     return this.proc.exitCode === null && this.proc.signalCode === null;
   }
-
-  request<A>(method: string, params: unknown, ms = STEP_MS): Promise<A> {
+  request<A>(method: string, params: AcpFields, ms = STEP_MS): Promise<A> {
     return withTimeout(this.conn.agent.request<A>(method, params), ms, `${this.spec.id} ${method}`);
   }
-
   initialize(): Promise<InitializeResponse> {
     return this.request<InitializeResponse>("initialize", {
       protocolVersion: 1,
@@ -261,18 +277,15 @@ export class AgentProcess {
       clientInfo: { name: "tempo-conformance", version: "0.1.0" },
     });
   }
-
   newSession(): Promise<NewSessionResponse> {
     return this.request<NewSessionResponse>("session/new", {
       cwd: this.cwd,
       mcpServers: [playwrightServer()],
     });
   }
-
-  updatesFor(sessionId: string, since = 0): SessionNotification[] {
+  updatesFor(sessionId: string, since = 0): AcpSessionNotification[] {
     return this.updates.slice(since).filter((u) => u.sessionId === sessionId);
   }
-
   /** Resolves once `check` holds, re-checked after every update or request from the agent. */
   waitFor(label: string, check: () => boolean, ms: number): Promise<void> {
     return new Promise<void>((resolvePromise, reject) => {
@@ -280,49 +293,53 @@ export class AgentProcess {
         clearTimeout(timer);
         this.listeners.delete(onChange);
       };
+
       const onChange = () => {
         if (check()) {
           done();
           resolvePromise();
         }
       };
+
       const timer = setTimeout(() => {
         done();
         reject(new Error(`${this.spec.id}: timed out after ${ms} ms waiting for ${label}`));
       }, ms);
+
       this.listeners.add(onChange);
       onChange();
     });
   }
-
   async stop(): Promise<void> {
     this.conn.close();
+
     if (!this.running) return;
     this.proc.kill("SIGTERM");
+
     const exited = await Promise.race([
       this.proc.exited.then(() => true),
       Bun.sleep(5_000).then(() => false),
     ]);
+
     if (!exited) this.proc.kill("SIGKILL");
   }
-
   stderrTail(lines = 30): string {
     return this.stderr.slice(-lines).join("\n");
   }
-
   private notify(): void {
     for (const l of this.listeners) l();
   }
-
   private async readStderr(): Promise<void> {
     const decoder = new TextDecoder();
     let buf = "";
+
     try {
       for await (const chunk of this.proc.stderr) {
         buf += decoder.decode(chunk, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop() ?? "";
         this.stderr.push(...lines);
+
         if (this.stderr.length > 200) this.stderr.splice(0, this.stderr.length - 200);
       }
     } catch {
@@ -338,11 +355,14 @@ export const loadInNewProcess = async (
   sessionId: string,
 ): Promise<{ ok: boolean; error?: string; replayedUpdates: number }> => {
   const agent = AgentProcess.start(spec, cwd);
+
   try {
     const init = await agent.initialize();
+
     if (init.agentCapabilities?.loadSession !== true)
       return { ok: false, error: "not advertised", replayedUpdates: 0 };
     await agent.request("session/load", { sessionId, cwd, mcpServers: [playwrightServer()] });
+
     return { ok: true, replayedUpdates: agent.updatesFor(sessionId).length };
   } catch (e) {
     return { ok: false, error: errorText(e), replayedUpdates: agent.updatesFor(sessionId).length };
@@ -352,10 +372,33 @@ export const loadInNewProcess = async (
 };
 
 /** Prints what the agent reported, and writes it to CONFORMANCE_REPORT_DIR/<agent>.json if set. */
-const writeReport = (agent: AgentId, report: Record<string, unknown>): void => {
+interface ConformanceReport {
+  readonly agent: AgentId;
+  readonly bin: string | null;
+  readonly live: boolean;
+  stderrTail?: string;
+  agentInfo?: InitializeResponse["agentInfo"] | null;
+  agentCapabilities?: InitializeResponse["agentCapabilities"];
+  authMethods?: string[];
+  modes?: string[];
+  currentModeId?: string | null;
+  configOptions?: ReadonlyArray<{
+    readonly id: string;
+    readonly type: string;
+    readonly category: string | null;
+  }>;
+  setMode?: string;
+  loadBeforeAnyTurn?: unknown;
+  liveTurn?: unknown;
+  liveCancel?: string;
+  loadAfterTurn?: unknown;
+}
+
+const writeReport = (agent: AgentId, report: ConformanceReport): void => {
   const json = JSON.stringify(report, null, 2);
   console.log(`conformance report for ${agent}:\n${json}`);
   const dir = process.env["CONFORMANCE_REPORT_DIR"];
+
   if (dir) {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, `${agent}.json`), `${json}\n`);
@@ -372,27 +415,36 @@ export const conformanceSuite = (spec: AgentSpec): void => {
     let agent: AgentProcess | null = null;
     let init: InitializeResponse | null = null;
     let session: NewSessionResponse | null = null;
-    const report: Record<string, unknown> = { agent: spec.id, bin, live: LIVE };
+    const report: ConformanceReport = { agent: spec.id, bin, live: LIVE };
 
     const running = (): AgentProcess => {
       if (!agent) throw new Error("the adapter did not start");
+
       return agent;
     };
+
     const current = (): NewSessionResponse => {
       if (!session) throw new Error("session/new did not succeed");
+
       return session;
     };
+
     const modeOption = (s: NewSessionResponse) =>
       s.configOptions?.find((o) => o.category === "mode" && o.type === "select");
+
     const currentMode = (s: NewSessionResponse): string | null => {
       const option = modeOption(s);
-      return typeof option?.currentValue === "string"
+
+      return Schema.is(Schema.String)(option?.currentValue)
         ? option.currentValue
         : (s.modes?.currentModeId ?? null);
     };
+
     const modeTarget = (s: NewSessionResponse): string | null => spec.defaultMode ?? currentMode(s);
+
     const setMode = (a: AgentProcess, s: NewSessionResponse, target: string) => {
       const option = modeOption(s);
+
       return option
         ? a.request("session/set_config_option", {
             sessionId: s.sessionId,
@@ -406,46 +458,47 @@ export const conformanceSuite = (spec: AgentSpec): void => {
       repo = makeRepo();
       agent = AgentProcess.start(spec, repo);
     });
-
     afterAll(async () => {
       await agent?.stop();
       report["stderrTail"] = agent?.stderrTail(10) ?? "";
       writeReport(spec.id, report);
+
       if (repo) rmSync(repo, { recursive: true, force: true });
     });
-
     test(
       "initialize with protocolVersion 1 and tempod's client capabilities returns protocolVersion 1",
       async () => {
         const a = running();
-        init = await a.initialize().catch((e: unknown) => {
-          throw new Error(`initialize failed: ${errorText(e)}\nstderr:\n${a.stderrTail()}`);
+        init = await a.initialize().catch((cause: unknown) => {
+          throw new Error(`initialize failed: ${errorText(cause)}\nstderr:\n${a.stderrTail()}`);
         });
         expect(init.protocolVersion).toBe(1);
         const caps = init.agentCapabilities ?? {};
         report["agentInfo"] = init.agentInfo ?? null;
         report["agentCapabilities"] = caps;
         report["authMethods"] = (init.authMethods ?? []).map((m) => m.id);
-        expect(["boolean", "undefined"]).toContain(typeof caps.loadSession);
+        expect(Schema.is(Schema.UndefinedOr(Schema.Boolean))(caps.loadSession)).toBe(true);
+
         if (spec.loadSession === true) expect(caps.loadSession).toBe(true);
       },
       STEP_MS,
     );
-
     test(
       "session/new with the Playwright MCP server returns a session id, the modes of 01 and a model option",
       async () => {
         const a = running();
-        session = await a.newSession().catch((e: unknown) => {
-          throw new Error(`session/new failed: ${errorText(e)}\nstderr:\n${a.stderrTail()}`);
+        session = await a.newSession().catch((cause: unknown) => {
+          throw new Error(`session/new failed: ${errorText(cause)}\nstderr:\n${a.stderrTail()}`);
         });
-        expect(typeof session.sessionId).toBe("string");
+        expect(Schema.is(Schema.String)(session.sessionId)).toBe(true);
         expect(session.sessionId.length).toBeGreaterThan(0);
         const mode = modeOption(session);
+
         const modes =
           mode?.type === "select"
             ? mode.options.flatMap((o) => ("group" in o ? o.options.map((v) => v.value) : [o.value]))
             : (session.modes?.availableModes.map((m) => m.id) ?? []);
+
         const options = session.configOptions ?? [];
         report["modes"] = modes;
         report["currentModeId"] = currentMode(session);
@@ -454,44 +507,49 @@ export const conformanceSuite = (spec: AgentSpec): void => {
           type: o.type,
           category: o.category ?? null,
         }));
+
         for (const mode of spec.requiredModes) expect(modes).toContain(mode);
+
         if (spec.id === "codex")
           expect(session.modes?.currentModeId, "INITIAL_AGENT_MODE").toBe("agent-full-access");
         expect(options.some((o) => o.category === "model")).toBe(true);
       },
       STEP_MS,
     );
-
     test(
       "sets Tempo's default mode through the advertised ACP interface",
       async () => {
         const s = current();
         const target = modeTarget(s);
+
         if (target === null) {
           report["setMode"] = "the agent reports no modes";
           expect(spec.requiredModes).toHaveLength(0);
+
           return;
         }
+
         await setMode(running(), s, target);
         report["setMode"] = target;
       },
       STEP_MS,
     );
-
     test(
       "session/load in a new adapter process, when advertised (recorded)",
       async () => {
         const s = current();
+
         if (init?.agentCapabilities?.loadSession !== true) {
           report["loadBeforeAnyTurn"] = "not advertised";
+
           return;
         }
+
         // With no turn yet an agent may have nothing on disk to load; the live test asserts it.
         report["loadBeforeAnyTurn"] = await loadInNewProcess(spec, repo, s.sessionId);
       },
       2 * STEP_MS,
     );
-
     test(
       "session/cancel is accepted and the connection stays usable",
       async () => {
@@ -499,21 +557,23 @@ export const conformanceSuite = (spec: AgentSpec): void => {
         const s = current();
         await a.conn.agent.notify("session/cancel", { sessionId: s.sessionId });
         const target = modeTarget(s);
+
         if (target !== null) await setMode(a, s, target);
         else expect((await a.newSession()).sessionId.length).toBeGreaterThan(0);
         expect(a.running).toBe(true);
       },
       STEP_MS,
     );
-
     test.if(LIVE)(
       "live: a prompt that creates a file reports a tool_call and ends with end_turn",
       async () => {
         const a = running();
         const s = current();
         const model = process.env[`CONFORMANCE_MODEL_${spec.id.toUpperCase()}`];
+
         if (model) {
           const option = (s.configOptions ?? []).find((o) => o.category === "model");
+
           if (!option) throw new Error("no model option to set");
           await a.request("session/set_config_option", {
             sessionId: s.sessionId,
@@ -521,9 +581,11 @@ export const conformanceSuite = (spec: AgentSpec): void => {
             value: model,
           });
         }
+
         const word = token();
         const name = `conformance-${word}.txt`;
         const since = a.updates.length;
+
         const res = await a.request<{ stopReason: string }>(
           "session/prompt",
           {
@@ -537,6 +599,7 @@ export const conformanceSuite = (spec: AgentSpec): void => {
           },
           LIVE_TURN_MS,
         );
+
         const kinds = a.updatesFor(s.sessionId, since).map((u) => u.update.sessionUpdate);
         report["liveTurn"] = {
           stopReason: res.stopReason,
@@ -552,13 +615,13 @@ export const conformanceSuite = (spec: AgentSpec): void => {
       },
       LIVE_TURN_MS + 10_000,
     );
-
     test.if(LIVE)(
       "live: session/cancel during a turn ends it with stopReason cancelled within 10 s",
       async () => {
         const a = running();
         const s = current();
         const since = a.updates.length;
+
         const turn = a.request<{ stopReason: string }>(
           "session/prompt",
           {
@@ -567,6 +630,7 @@ export const conformanceSuite = (spec: AgentSpec): void => {
           },
           LIVE_TURN_MS,
         );
+
         await a.waitFor(
           "the first update of the turn",
           () => a.updatesFor(s.sessionId, since).length > 0,
@@ -579,18 +643,21 @@ export const conformanceSuite = (spec: AgentSpec): void => {
       },
       LIVE_TURN_MS + CANCEL_MS + 10_000,
     );
-
     test.if(LIVE)(
       "live: session/load in a new adapter process restores the session after a turn",
       async () => {
         const s = current();
+
         if (init?.agentCapabilities?.loadSession !== true) {
           report["loadAfterTurn"] = "not advertised";
           expect(spec.loadSession).not.toBe(true);
+
           return;
         }
+
         const outcome = await loadInNewProcess(spec, repo, s.sessionId);
         report["loadAfterTurn"] = outcome;
+
         if (spec.loadSession === true) expect(outcome.ok, outcome.error).toBe(true);
       },
       2 * STEP_MS,

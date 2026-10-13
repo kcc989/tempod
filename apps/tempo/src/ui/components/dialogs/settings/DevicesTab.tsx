@@ -29,11 +29,13 @@ export function DevicesTab() {
   const queryClient = useQueryClient();
   const session = useQuery(sessionQueryOptions);
   const currentId = session.data?.sessionId;
+
   const devices = useQuery({
     queryKey: [...DEVICES_KEY, currentId ?? null],
     queryFn: () => listDeviceSessions(currentId),
     enabled: !session.isPending,
   });
+
   const revoke = useMutation({
     mutationFn: (d: DeviceSession) => revokeDeviceSession(d.token),
     onSuccess: async (_, d) => {
@@ -44,6 +46,7 @@ export function DevicesTab() {
   });
 
   if (session.isPending || devices.isPending) return <SkeletonRows rows={3} />;
+
   if (devices.isError) return <ErrorState error={devices.error} onRetry={() => void devices.refetch()} />;
 
   return (
@@ -57,6 +60,7 @@ export function DevicesTab() {
         {devices.data.map((d) => {
           const label = sessionLabel(d.userAgent);
           const Icon = deviceIcon(label);
+
           return (
             <li key={d.id} className="flex items-center gap-3 px-3 py-2">
               <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />

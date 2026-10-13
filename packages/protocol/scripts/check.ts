@@ -16,7 +16,9 @@ const outputs = [
 
 const walk = (path: string): string[] => {
   if (!existsSync(path)) return [];
+
   if (!statSync(path).isDirectory()) return [path];
+
   return readdirSync(path).flatMap((f) => walk(join(path, f)));
 };
 
@@ -28,17 +30,22 @@ const snapshot = (): Map<string, string> =>
   );
 
 const before = snapshot();
+
 run(["bun", "packages/protocol/scripts/gen-schema.ts"]);
+
 run(["bun", "packages/protocol/scripts/gen-fixtures.ts"]);
+
 const after = snapshot();
 
 const changed = [...new Set([...before.keys(), ...after.keys()])]
   .filter((f) => before.get(f) !== after.get(f))
   .sort();
+
 if (changed.length > 0) {
   console.error(
     `protocol outputs are stale; run bun run protocol:gen and bun run protocol:fixtures:\n${changed.join("\n")}`,
   );
   process.exit(1);
 }
+
 console.log(`protocol outputs are up to date (${after.size} files)`);

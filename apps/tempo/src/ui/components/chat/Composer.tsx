@@ -1,4 +1,5 @@
-import { isErrorBody, TempoError, type ConfigOption, type FnInput, type Session } from "@tempo/protocol";
+import { Schema } from "effect";
+import { isErrorBody, TempoError, API, type ConfigOption, type Session } from "@tempo/protocol";
 import { useIsMutating } from "@tanstack/react-query";
 import { ArchiveRestoreIcon, ArrowUpIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -80,8 +81,11 @@ const dismissedProfileIssues = new Set<string>();
 export function Composer({ workspaceId, sessionId }: ComposerProps) {
   const state = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state);
   const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[sessionId]);
+
   if (state === "archived" || state === "archiving") return <RestoreBar workspaceId={workspaceId} />;
+
   if (!session) return null;
+
   if (session.status === "closed") {
     return (
       <p className="shrink-0 border-t px-3 py-2 text-center text-sm text-muted-foreground">
@@ -89,7 +93,9 @@ export function Composer({ workspaceId, sessionId }: ComposerProps) {
       </p>
     );
   }
+
   if (session.roleRunId) return <RoleComposer workspaceId={workspaceId} session={session} />;
+
   return <ComposerBody key={sessionId} workspaceId={workspaceId} session={session} />;
 }
 
@@ -97,9 +103,11 @@ function RoleComposer({ workspaceId, session }: { workspaceId: string; session: 
   const live = useWorkspaceSelector(workspaceId, (s) =>
     session.roleRunId ? s.roleRuns[session.roleRunId] : undefined,
   );
+
   const runs = useCallQuery("listRoleRuns", { workspaceId });
   const cancel = useCallMutation("cancelRoleRun", { invalidates: ["listRoleRuns"] });
   const run = live ?? runs.data?.find((r) => r.id === session.roleRunId);
+
   if (!run || run.status === "running" || run.status === "queued")
     return (
       <div className="flex items-center justify-between border-t p-3">
@@ -112,11 +120,13 @@ function RoleComposer({ workspaceId, session }: { workspaceId: string; session: 
         </Button>
       </div>
     );
+
   return <ComposerBody key={session.id} workspaceId={workspaceId} session={session} />;
 }
 
 function RestoreBar({ workspaceId }: { workspaceId: string }) {
   const restore = useCallMutation("restoreWorkspace");
+
   return (
     <div className="flex shrink-0 items-center justify-center border-t p-3">
       <Button onClick={() => restore.mutate({ workspaceId })} disabled={restore.isPending}>
@@ -136,18 +146,30 @@ const uploadAttachment = async (
 ): Promise<{ attachmentId: string; name: string; mime: string; size: number }> => {
   const form = new FormData();
   form.append("file", file, file.name);
+
   const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/attachments`, {
     method: "POST",
     body: form,
     credentials: "same-origin",
   });
+
   const body: unknown = await res.json().catch(() => null);
+
   if (!res.ok) throw isErrorBody(body) ? TempoError.fromBody(body) : new TempoError("INTERNAL");
-  return body as { attachmentId: string; name: string; mime: string; size: number };
+
+  return Schema.decodeUnknownSync(
+    Schema.Struct({
+      attachmentId: Schema.String,
+      name: Schema.String,
+      mime: Schema.String,
+      size: Schema.Number,
+    }),
+  )(body);
 };
 
 const triggerKeyOf = (text: string, caret: number): string | null => {
   const t = slashTrigger(text, caret) ?? mentionTrigger(text, caret);
+
   return t ? `${text[t.start] === "@" ? "mention" : "slash"}:${t.start}` : null;
 };
 
@@ -156,34 +178,45 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const store = useWorkspaceStore(workspaceId);
   const turns = useWorkspaceSelector(workspaceId, (s) => s.turns);
   const credentialInvalid = useWorkspaceSelector(workspaceId, (s) => s.credentialInvalid);
+
   const plan = useWorkspaceSelector(workspaceId, (s) => {
     const p = runningPlan(s, sessionId);
+
     return p ? `${p.done}/${p.total}` : null;
   });
+
   const workspaceBusy = useWorkspaceSelector(workspaceId, (s) => s.workspace?.runningTurnId ?? null) !== null;
   const sleeping = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state === "sleeping");
   const focusSeq = useWorkspaceUiSelector(workspaceId, (s) => s.composerFocusSeq);
-
   const { draft: savedDraft, update, clearSent } = useComposerDraft(workspaceId, sessionId);
   const { text: draft, mentions, reviewCommentIds, attachments } = savedDraft;
   const setDraft = (next: string | ((value: string) => string)) => update("text", next);
+
   const setMentions = (next: typeof mentions | ((value: typeof mentions) => typeof mentions)) =>
     update("mentions", next);
+
   const setReviewCommentIds = (
     next: typeof reviewCommentIds | ((value: typeof reviewCommentIds) => typeof reviewCommentIds),
   ) => update("reviewCommentIds", next);
+
   const setAttachments = (next: typeof attachments | ((value: typeof attachments) => typeof attachments)) =>
     update("attachments", next);
+
   const sending = useRef(false);
   const sentDraft = useRef(savedDraft);
+
   const sendPending =
     useIsMutating({
       mutationKey: ["call", "sendPrompt"],
       predicate: (mutation) => {
-        const input = mutation.state.variables as FnInput<"sendPrompt"> | undefined;
+        const input = Schema.is(API.sendPrompt.input)(mutation.state.variables)
+          ? mutation.state.variables
+          : undefined;
+
         return input?.workspaceId === workspaceId && input.sessionId === sessionId;
       },
     }) > 0;
+
   const [caret, setCaret] = useState(0);
   const [, rerender] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -207,7 +240,9 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       sending.current = false;
     },
   });
+
   const roles = useCallQuery("listRoles", { workspaceId });
+
   const requestRole = useCallMutation("requestRole", {
     invalidates: ["listRoleRuns", "listLifecycleEvents"],
     onSuccess: () => {
@@ -218,14 +253,15 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       sending.current = false;
     },
   });
+
   const cancel = useCallMutation("cancelTurn");
   const setMode = useCallMutation("setSessionMode");
   const setConfig = useCallMutation("setSessionConfig");
   const editQueued = useCallMutation("editQueuedTurn");
   const deleteQueued = useCallMutation("deleteQueuedTurn");
   const reorder = useCallMutation("reorderQueue");
-
   const running = runningTurnOf(turns, sessionId);
+
   const queued = useMemo(
     () =>
       Object.values(turns)
@@ -233,20 +269,22 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         .sort((a, b) => (a.queuePos ?? Infinity) - (b.queuePos ?? Infinity) || a.queuedAt - b.queuedAt),
     [turns, sessionId],
   );
+
   const pickers = configPickers(session);
   const planId = planModeId(session);
   const inPlan = isPlanMode(session);
   const usage = contextUsage(session.usage);
   const uploading = attachments.some((a) => a.status === "uploading");
   const ready = attachments.filter((a) => a.status === "ready" && a.attachmentId !== undefined);
+
   const sendable = canSend({
     text: draft,
     attachmentCount: ready.length,
     reviewCommentCount: reviewCommentIds.length,
     uploading,
   });
-  const pickersDisabled = running !== undefined || session.status === "starting";
 
+  const pickersDisabled = running !== undefined || session.status === "starting";
   // Logins (04: missing login banner; credential.invalid banner).
   const creds = useCredentialStatus().data;
   const providers = AGENT_PROVIDERS[session.agent];
@@ -259,9 +297,12 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   useEffect(() => {
     if (!invalid) {
       stampWhenInvalid.current = null;
+
       return;
     }
+
     if (stamp === null) return;
+
     if (stampWhenInvalid.current === null) stampWhenInvalid.current = stamp;
     else if (stamp !== stampWhenInvalid.current) store.clearCredentialInvalid(providers);
   }, [invalid, stamp, store, providers]);
@@ -270,36 +311,39 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const drain = useEffectEvent(() => {
     if (getWorkspaceUi(workspaceId).insertions.length === 0) return;
     const taken = takeInsertions(workspaceId, sessionId);
+
     if (taken.length === 0) return;
     const next = applyInsertions({ text: draft, mentions, reviewCommentIds }, taken);
+
     if (next.text !== draft) setDraft(next.text);
     setMentions(next.mentions);
     setReviewCommentIds(next.reviewCommentIds);
   });
+
   useEffect(() => {
     queueMicrotask(() => drain());
+
     return workspaceUiStore(workspaceId).subscribe(() => drain());
   }, [workspaceId]);
-
   useEffect(() => {
     if (focusSeq > (handledFocus.get(workspaceId) ?? 0)) {
       handledFocus.set(workspaceId, focusSeq);
       textRef.current?.focus();
     }
   }, [focusSeq, workspaceId]);
-
   useLayoutEffect(() => {
     const at = pendingCaret.current;
+
     if (at === null || !textRef.current) return;
     pendingCaret.current = null;
     textRef.current.setSelectionRange(at, at);
     setCaret(at);
   }, [draft]);
-
   // The @ file picker and the / command menu.
   const trigger = slashTrigger(draft, caret) ?? mentionTrigger(draft, caret);
   const triggerKind = trigger ? (draft[trigger.start] === "@" ? "mention" : "slash") : null;
   const triggerKey = triggerKeyOf(draft, caret);
+
   const files = useCallQuery(
     "listFiles",
     { workspaceId },
@@ -309,9 +353,12 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       retry: false,
     },
   );
+
   const query = trigger?.query ?? null;
+
   const rows: PickerRow[] = useMemo(() => {
     if (query === null) return [];
+
     if (triggerKind === "mention") {
       const roleRows: PickerRow[] = fuzzyFilter(
         query,
@@ -319,6 +366,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         (r) => r.name,
         20,
       ).map((r) => ({ kind: "role", key: `role:${r.name}`, name: r.name, description: r.description }));
+
       return [
         ...roleRows,
         ...fuzzyFilter(query, files.data?.paths ?? [], (p) => p, 30).map((path) => ({
@@ -328,12 +376,14 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         })),
       ];
     }
+
     return slashEntries(session.commands, planId !== null, query).map((entry) => ({
       kind: "command" as const,
       key: entry.key,
       entry,
     }));
   }, [query, triggerKind, files.data, roles.data, session.commands, planId]);
+
   const pickerStatus =
     triggerKind !== "mention"
       ? null
@@ -344,23 +394,29 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           : rows.length === 0
             ? "No matching files."
             : null;
+
   const pickerOpen =
     trigger !== null &&
     triggerKey !== dismissed &&
     (rows.length > 0 || (triggerKind === "mention" && pickerStatus !== null));
+
   const activeKey = trigger ? `${triggerKey}:${trigger.query}` : "";
   const activeIndex = active.key === activeKey ? Math.min(active.index, Math.max(0, rows.length - 1)) : 0;
 
   const togglePlan = () => {
     const target = togglePlanTarget(session, previousMode.current);
+
     if (!target) return;
+
     if (!inPlan) previousMode.current = session.modeId;
     setMode.mutate({ workspaceId, sessionId, modeId: target });
   };
 
   const pick = (index: number) => {
     const row = rows[index];
+
     if (!row || !trigger) return;
+
     if (row.kind === "role") {
       if (/^\s*\/role\b/.test(draft)) return;
       const next = replaceTrigger(draft, caret, trigger, "");
@@ -387,16 +443,22 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     if (!sendable || sending.current || sendPending || requestRole.isPending) return;
     sending.current = true;
     sentDraft.current = savedDraft;
+
     if (/^\s*\/role\b/.test(draft)) {
       const request = /^\s*\/role\s+([a-z][a-z0-9-]{1,31})(?:\s+([\s\S]*))?$/.exec(draft);
+
       if (!request || mentions.length || ready.length || reviewCommentIds.length) {
         sending.current = false;
         toast.error("Use /role <name> <text>, with one role per message.");
+
         return;
       }
+
       requestRole.mutate({ workspaceId, sessionId, role: request[1]!, text: request[2] });
+
       return;
     }
+
     send.mutate({
       workspaceId,
       sessionId,
@@ -414,22 +476,25 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
 
   useAction("stop", stop, { enabled: !!running });
   useAction("togglePlan", () => togglePlan(), { enabled: planId !== null && !pickersDisabled });
-
   useShortcuts(
     {
       send: () => {
         if (pickerOpen && rows.length > 0) {
           pick(activeIndex);
+
           return;
         }
+
         submit();
       },
       newLine: () => false,
       stop: () => {
         if (pickerOpen && triggerKey) {
           setDismissed(triggerKey);
+
           return;
         }
+
         if (!running) return false;
         stop();
       },
@@ -443,7 +508,9 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
 
   const addFiles = (list: ReadonlyArray<File>) => {
     const { ok, tooLarge } = splitBySize(list);
+
     if (tooLarge.length > 0) toast.error("Each file can be at most 10 MiB.");
+
     for (const file of ok) {
       const localId = crypto.randomUUID();
       const preview = isPreviewable(file.type) ? URL.createObjectURL(file) : undefined;
@@ -463,6 +530,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       uploadAttachment(workspaceId, file)
         .then((r) => {
           finishAttachmentUpload(localId);
+
           if (preview) rememberAttachment(r.attachmentId, preview);
           setAttachments((a) =>
             a.map((x) =>
@@ -470,10 +538,11 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
             ),
           );
         })
-        .catch((e: unknown) => {
+        .catch((cause: unknown) => {
           finishAttachmentUpload(localId);
+
           if (preview) URL.revokeObjectURL(preview);
-          toastError(e);
+          toastError(cause);
           setAttachments((a) => a.map((x) => (x.localId === localId ? { ...x, status: "failed" } : x)));
         });
     }
@@ -491,6 +560,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
 
   const onConfig = (option: ConfigOption, value: string | boolean) =>
     setConfig.mutate({ workspaceId, sessionId, configId: option.id, value });
+
   const refocus = () => textRef.current?.focus();
 
   const moveQueued = (turnId: string, toIndex: number) => {
@@ -499,11 +569,13 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   };
 
   const label = agentLabel(session.agent);
+
   const loginText = invalid
     ? `Your ${label} login stopped working. Add it again.`
     : missing
       ? `Add your ${label} login in Settings.`
       : null;
+
   const issuesText = profileIssuesText(session);
   const hasChips = mentions.length > 0 || reviewCommentIds.length > 0 || attachments.length > 0;
 
@@ -528,7 +600,8 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           setDragging(true);
         }}
         onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          if (!e.currentTarget.contains(e.relatedTarget instanceof Node ? e.relatedTarget : null))
+            setDragging(false);
         }}
         onDrop={(e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
@@ -555,6 +628,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   onDrop={() => {
                     const from = draggedTurn.current;
                     draggedTurn.current = null;
+
                     if (from && from !== t.id) moveQueued(from, i);
                   }}
                 />
@@ -642,11 +716,13 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   const at = e.target.selectionStart;
                   setDraft(text);
                   setCaret(at);
+
                   if (dismissed !== null && dismissed !== triggerKeyOf(text, at)) setDismissed(null);
                 }}
                 onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
                 onKeyDown={(e) => {
                   if (!pickerOpen || rows.length === 0) return;
+
                   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                     e.preventDefault();
                     const delta = e.key === "ArrowDown" ? 1 : -1;
@@ -658,7 +734,9 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                 }}
                 onPaste={(e) => {
                   const pasted = [...e.clipboardData.files];
+
                   if (pasted.length === 0) return;
+
                   if (!e.clipboardData.getData("text/plain")) e.preventDefault();
                   addFiles(pasted);
                 }}
@@ -722,7 +800,6 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                     e.target.value = "";
                   }}
                 />
-
                 {usage && <ContextRing usage={usage} />}
                 {running && (
                   <SimpleTooltip label="Stop (Esc)">

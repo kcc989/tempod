@@ -44,6 +44,7 @@ export function NotificationsTab() {
             disabled={permission === "unsupported"}
             onCheckedChange={(on) => {
               setPrefs((p) => ({ ...p, enabled: on }));
+
               if (on && permission === "default") void ask();
             }}
           />

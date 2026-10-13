@@ -22,6 +22,7 @@ import { useDialog } from "~/ui/hooks/useWorkspaceUi";
 /** 04, Add project: each GitHub App installation with its repos; Link calls linkProject. */
 export function AddProjectDialog() {
   const { open, onOpenChange } = useDialog("addProject");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -37,6 +38,7 @@ export function AddProjectDialog() {
 
 function InstallLink({ installUrl, label }: { installUrl: string | null; label: string }) {
   if (!installUrl) return null;
+
   return (
     <Button asChild size="sm" variant="outline">
       <a href={installUrl} target="_blank" rel="noopener noreferrer">
@@ -54,9 +56,11 @@ function Installations() {
   const installUrl = setup.data?.installUrl ?? null;
 
   if (installations.isPending) return <SkeletonRows rows={4} />;
+
   if (installations.isError) {
     return <ErrorState error={installations.error} onRetry={() => void installations.refetch()} />;
   }
+
   if (installations.data.length === 0) {
     return (
       <EmptyState
@@ -71,6 +75,7 @@ function Installations() {
       />
     );
   }
+
   return (
     <>
       <Input
@@ -112,12 +117,14 @@ function Repos({
 }) {
   const repos = useCallQuery("listInstallationRepos", { installationId }, { staleTime: 60_000 });
   const projects = useProjects();
+
   const link = useCallMutation("linkProject", {
     invalidates: ["listProjects"],
     onSuccess: (p) => {
       toast.success(`Linked ${p.owner}/${p.name}`);
     },
   });
+
   const q = search.trim().toLowerCase();
   const shown = (repos.data ?? []).filter((r) => !q || `${r.owner}/${r.name}`.toLowerCase().includes(q));
   const linked = new Set((projects.data ?? []).map((p) => p.repoId));
@@ -137,6 +144,7 @@ function Repos({
       <ul className="flex flex-col">
         {shown.map((r) => {
           const pending = link.isPending && link.variables?.repoId === r.repoId;
+
           return (
             <li
               key={r.repoId}

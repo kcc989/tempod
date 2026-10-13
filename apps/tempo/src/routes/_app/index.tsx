@@ -25,7 +25,9 @@ export const Route = createFileRoute("/_app/")({
 
 function HomePage() {
   const isPhone = useIsPhone();
+
   if (!isPhone) return <Home />;
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <Home compact />
@@ -47,6 +49,7 @@ function Home({ compact = false }: { compact?: boolean }) {
   const queries = [setup, installations, credentials, projects, all] as const;
 
   const failed = queries.find((q) => q.isError);
+
   if (failed) {
     return (
       <ErrorState
@@ -56,11 +59,13 @@ function Home({ compact = false }: { compact?: boolean }) {
       />
     );
   }
+
   if (queries.some((q) => q.isPending) || !hub.ready) {
     return compact ? null : <CenteredLoading label="Loading" />;
   }
 
   const listed = Object.values(hub.workspaces).filter(isListed);
+
   const steps = firstRunSteps({
     configured: setup.data?.configured ?? true,
     installationCount: installations.data?.length ?? 0,
@@ -76,6 +81,7 @@ function Home({ compact = false }: { compact?: boolean }) {
       </div>
     );
   }
+
   if (compact) return null;
 
   if ((projects.data ?? []).length === 0) {
@@ -90,6 +96,7 @@ function Home({ compact = false }: { compact?: boolean }) {
   }
 
   const empty = (projects.data ?? []).filter((p) => !listed.some((w) => w.projectId === p.id));
+
   if (empty.length === 0) {
     return (
       <EmptyState
@@ -103,6 +110,7 @@ function Home({ compact = false }: { compact?: boolean }) {
       />
     );
   }
+
   return (
     <div className="flex h-full flex-col items-center gap-4 overflow-y-auto p-6 sm:justify-center">
       {empty.map((p) => (
@@ -115,8 +123,14 @@ function Home({ compact = false }: { compact?: boolean }) {
 /** 04: a project with no workspaces shows `Start a workspace` with a prompt box that opens New workspace. */
 function StartWorkspace({ project }: { project: Project }) {
   const [prompt, setPrompt] = useState("");
+
   const start = () =>
-    openDialog({ kind: "newWorkspace", projectId: project.id, ...(prompt.trim() ? { prompt } : {}) });
+    openDialog(
+      prompt.trim()
+        ? { kind: "newWorkspace", projectId: project.id, prompt }
+        : { kind: "newWorkspace", projectId: project.id },
+    );
+
   return (
     <form
       className="flex w-full max-w-lg flex-col gap-2 rounded-lg border p-4"

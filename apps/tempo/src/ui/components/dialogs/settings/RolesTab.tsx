@@ -9,6 +9,7 @@ import { useOpenWorkspaceDetail } from "./useOpenWorkspace";
 
 const NEW_ROLE =
   "---\ndescription: Describe the job\naccess: read-only\nrequestable: true\n---\nDescribe what the agent should do.\n";
+
 export function RolesTab() {
   const workspace = useOpenWorkspaceDetail();
   const roles = useCallQuery("listRoles", workspace ? { workspaceId: workspace.id } : {});
@@ -17,6 +18,7 @@ export function RolesTab() {
   const [name, setName] = useState("");
   const [text, setText] = useState(NEW_ROLE);
   const [loaded, setLoaded] = useState(false);
+
   const save = useCallMutation("putUserRole", {
     invalidates: ["listRoles", "getRoleText"],
     onSuccess: (role) => {
@@ -24,6 +26,7 @@ export function RolesTab() {
       setAdding(false);
     },
   });
+
   const remove = useCallMutation("deleteUserRole", {
     invalidates: ["listRoles", "getRoleText"],
     onSuccess: () => {
@@ -31,7 +34,9 @@ export function RolesTab() {
       setAdding(false);
     },
   });
+
   const reload = useCallMutation("reloadRoles", { invalidates: ["listRoles"] });
+
   const source = useCallQuery(
     "getRoleText",
     {
@@ -41,17 +46,21 @@ export function RolesTab() {
     },
     { enabled: !!selected },
   );
+
   if (selected && source.data && !loaded) {
     setText(source.data.text);
     setLoaded(true);
   }
+
   const edit = adding || selected?.scope === "user";
+
   const choose = (role: RoleInfo) => {
     setSelected(role);
     setName(role.name);
     setAdding(false);
     setLoaded(false);
   };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -102,6 +111,7 @@ export function RolesTab() {
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
+
             if (edit) save.mutate({ name, text });
           }}
         >

@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+import type { AcpFields } from "@tempo/protocol";
 import {
   flattenConfigOptions,
   type AvailableCommand,
@@ -11,22 +13,20 @@ import { fuzzyFilter } from "~/ui/lib/fuzzy";
 import type { PendingInsertion } from "~/ui/state/workspace-ui";
 
 /** Pure helpers for the composer (04, Composer). */
-
 /** localStorage key (under the `tempo:` prefix) of one session's draft text. */
 export const draftKey = (workspaceId: string, sessionId: string): string =>
   `composer:draft:${workspaceId}:${sessionId}`;
 
-export const isDraft = (u: unknown): u is string => typeof u === "string";
+export const isDraft = (u: unknown): u is string => Schema.is(Schema.String)(u);
 
 /** 02: one file per upload, at most 10 MiB. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-export const splitBySize = <F extends { readonly size: number }>(
-  files: ReadonlyArray<F>,
-): { readonly ok: F[]; readonly tooLarge: F[] } => ({
-  ok: files.filter((f) => f.size <= MAX_ATTACHMENT_BYTES),
-  tooLarge: files.filter((f) => f.size > MAX_ATTACHMENT_BYTES),
-});
+export const splitBySize = <F extends { readonly size: number }>(files: ReadonlyArray<F>) =>
+  ({
+    ok: files.filter((f) => f.size <= MAX_ATTACHMENT_BYTES),
+    tooLarge: files.filter((f) => f.size > MAX_ATTACHMENT_BYTES),
+  }) satisfies { readonly ok: F[]; readonly tooLarge: F[] };
 
 export interface Trigger {
   /** Index of the `@` or `/`. */
@@ -38,7 +38,9 @@ export interface Trigger {
 export const mentionTrigger = (text: string, caret: number): Trigger | null => {
   const before = text.slice(0, caret);
   const m = /(^|\s)@([^\s@]*)$/.exec(before);
+
   if (!m) return null;
+
   return { start: before.length - m[2]!.length - 1, query: m[2]! };
 };
 
@@ -46,19 +48,19 @@ export const mentionTrigger = (text: string, caret: number): Trigger | null => {
 export const slashTrigger = (text: string, caret: number): Trigger | null => {
   const before = text.slice(0, caret);
   const m = /^\/([^\s/]*)$/.exec(before);
+
   return m ? { start: 0, query: m[1]! } : null;
 };
 
 /** Replaces the trigger text (`@query` or `/query`) with `insert`; returns the new text and caret. */
-export const replaceTrigger = (
-  text: string,
-  caret: number,
-  trigger: Trigger,
-  insert: string,
-): { readonly text: string; readonly caret: number } => {
+export const replaceTrigger = (text: string, caret: number, trigger: Trigger, insert: string) => {
   const after = text.slice(caret);
   const head = text.slice(0, trigger.start) + insert;
-  return { text: head + after, caret: head.length };
+
+  return { text: head + after, caret: head.length } satisfies {
+    readonly text: string;
+    readonly caret: number;
+  };
 };
 
 export interface SlashEntry {
@@ -85,6 +87,7 @@ export const slashEntries = (
       kind: "agent" as const,
     })),
   ];
+
   return fuzzyFilter(query, all, (e) => e.name, 50);
 };
 
@@ -102,6 +105,7 @@ export const applyInsertions = (
   let { text } = state;
   const mentions = [...state.mentions];
   const reviewCommentIds = [...state.reviewCommentIds];
+
   for (const { insertion } of insertions) {
     if (insertion.kind === "mention") {
       if (!mentions.some((m) => m.path === insertion.path)) mentions.push({ path: insertion.path });
@@ -112,6 +116,7 @@ export const applyInsertions = (
         text === "" ? insertion.text : /\s$/.test(text) ? text + insertion.text : `${text} ${insertion.text}`;
     }
   }
+
   return { text, mentions, reviewCommentIds };
 };
 
@@ -132,6 +137,7 @@ export const chipLabel = (text: string, max = 48): string => {
       .split("\n")
       .find((l) => l.trim() !== "")
       ?.trim() ?? "";
+
   return line.length > max ? `${line.slice(0, max - 1)}…` : line || "Empty message";
 };
 
@@ -142,10 +148,13 @@ export interface ContextUsage {
 }
 
 /** ACP usage_update: `used` tokens in context of `size`. */
-export const contextUsage = (usage: Readonly<Record<string, unknown>>): ContextUsage | null => {
+export const contextUsage = (usage: AcpFields): ContextUsage | null => {
   const used = usage["used"];
   const size = usage["size"];
-  if (typeof used !== "number" || typeof size !== "number" || !(size > 0) || used < 0) return null;
+
+  if (!Schema.is(Schema.Number)(used) || !Schema.is(Schema.Number)(size) || !(size > 0) || used < 0)
+    return null;
+
   return { used, size, ratio: Math.min(1, used / size) };
 };
 
@@ -164,15 +173,18 @@ export const configPickers = (session: Pick<Session, "configOptions" | "modes">)
   const mode = session.configOptions.find((o) => o.category === "mode");
   const modeOption = session.modes.length === 0 ? mode : undefined;
   const level = session.configOptions.find((o) => o.category === "thought_level" && o.type === "select");
+
   const others = session.configOptions.filter(
     (o) => o !== model && o !== mode && o !== level && (o.type === "select" || o.type === "boolean"),
   );
+
   return { model, modeOption, thoughtLevel: level, others };
 };
 
 /** The display name of an option's current value. */
 export const currentValueLabel = (option: ConfigOption): string => {
-  if (typeof option.currentValue === "boolean") return option.currentValue ? "On" : "Off";
+  if (Schema.is(Schema.Boolean)(option.currentValue)) return option.currentValue ? "On" : "Off";
+
   return (
     flattenConfigOptions(option).find((o) => o.value === option.currentValue)?.name ?? option.currentValue
   );
@@ -186,15 +198,18 @@ export const optionGroups = (
   readonly values: ReadonlyArray<{ value: string; name: string }>;
 }> => {
   const out: Array<{ name: string | null; values: Array<{ value: string; name: string }> }> = [];
+
   for (const o of option.options ?? []) {
     if ("group" in o)
       out.push({ name: o.name, values: o.options.map((v) => ({ value: v.value, name: v.name })) });
     else {
       const last = out[out.length - 1];
+
       if (last && last.name === null) last.values.push({ value: o.value, name: o.name });
       else out.push({ name: null, values: [{ value: o.value, name: o.name }] });
     }
   }
+
   return out;
 };
 
@@ -215,7 +230,9 @@ export const profileIssuesText = (
   session: Pick<Session, "agent" | "customAgent" | "profileIssues">,
 ): string | null => {
   const issues = session.profileIssues ?? [];
+
   if (!session.customAgent || issues.length === 0) return null;
+
   return `${agentLabel(session.agent)} ignored some settings of ${session.customAgent.name}: ${issues
     .map((i) => ISSUE_LABELS[i])
     .join(", ")}`;

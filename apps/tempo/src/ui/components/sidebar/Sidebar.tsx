@@ -58,13 +58,16 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
   const projects = useProjects();
   const [sort, setSort] = useLocalStorage(SORT_KEY, DEFAULT_SORT, isSortMode);
   const [collapsed, setCollapsed] = useLocalStorage(COLLAPSED_KEY, NO_COLLAPSED, isStringList);
+
   const sections = useMemo(
     () => sidebarSections(hub.workspaces, projects.data ?? [], sort),
     [hub.workspaces, projects.data, sort],
   );
+
   const byId = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
 
   let content;
+
   if (projects.isError) {
     content = <ErrorState error={projects.error} onRetry={() => void projects.refetch()} />;
   } else if (!hub.ready || projects.isPending) {
@@ -204,6 +207,7 @@ function Section({
   phone: boolean;
 }) {
   const projectId = section.projectId;
+
   return (
     <Collapsible open={open} onOpenChange={onToggle}>
       <div className="mb-1 flex h-8 items-center gap-0.5">

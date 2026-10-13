@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RolesTab } from "../../../src/ui/components/dialogs/settings/RolesTab";
 import { LifecycleEvents } from "../../../src/ui/components/dialogs/LifecycleEvents";
 import { call } from "../../../src/ui/lib/api";
+
 vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
+
 vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
+
 const base = {
   name: "reviewer",
   scope: "builtin",
@@ -17,13 +20,16 @@ const base = {
   on: [],
   limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
 };
+
 const show = (child: React.ReactNode) =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       {child}
     </QueryClientProvider>,
   );
+
 afterEach(() => vi.resetAllMocks());
+
 describe("role controls", () => {
   it("edits user files, keeps builtin files read-only and displays precedence", async () => {
     vi.mocked(call).mockImplementation(async (name) =>
@@ -58,6 +64,7 @@ describe("role controls", () => {
       seq: 1,
       event: { id: "event1", type: "agent.turn.ended", source: "agent", changeId: "change1" },
     };
+
     vi.mocked(call).mockImplementation(async (name) =>
       name === "listLifecycleEvents"
         ? { events: [event], nextBeforeSeq: null }

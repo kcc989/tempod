@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+import type { WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import {
   HANDOFF_FIRST_LINE,
@@ -27,24 +29,26 @@ import {
 
 const T = 30_000;
 
-type Stub = DurableObjectStub<WorkspaceDO>;
-type Row = Record<string, any>;
+type Stub = WorkspaceStub;
+
+type Row = Record<string, SqlStorageValue>;
 
 // ---------- helpers ----------
 
 const sql = async (stub: Stub, query: string, ...binds: unknown[]): Promise<Row[]> =>
-  runInDurableObject(
-    stub,
-    (_i: WorkspaceDO, state: DurableObjectState) =>
-      state.storage.sql.exec(query, ...binds).toArray() as Row[],
+  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) =>
+    state.storage.sql.exec(query, ...binds).toArray(),
   );
 
 const wsRow = async (stub: Stub): Promise<Row> =>
   (await sql(stub, "SELECT * FROM workspace WHERE id = 1"))[0]!;
+
 const turnRow = async (stub: Stub, id: string): Promise<Row | undefined> =>
   (await sql(stub, "SELECT * FROM turns WHERE id = ?", id))[0];
+
 const itemRow = async (stub: Stub, id: string): Promise<Row | undefined> =>
   (await sql(stub, "SELECT * FROM items WHERE id = ?", id))[0];
+
 const sessionRow = async (stub: Stub, id: string): Promise<Row | undefined> =>
   (await sql(stub, "SELECT * FROM sessions WHERE id = ?", id))[0];
 
@@ -52,10 +56,11 @@ const unwrap = <A>(
   res: { ok: true; value: A } | { ok: false; error: { code: string; message: string } },
 ): A => {
   if (!res.ok) throw new Error(`RPC failed: ${res.error.code} ${res.error.message}`);
+
   return res.value;
 };
 
-const detail = async (stub: Stub): Promise<any> => unwrap((await stub.getWorkspace({})) as never);
+const detail = async (stub: Stub): Promise<any> => unwrap(await stub.getWorkspace({}));
 
 /** Waits until the DO has applied (and stored the ack for) the event with this seq. */
 const applied = (stub: Stub, seq: number) =>
@@ -70,10 +75,12 @@ const driveUntil = async (
 ): Promise<void> => {
   for (let i = 0; i < max; i++) {
     const d = await stub.getWorkspace({});
+
     if (d.ok && (await done(d.value.state))) return;
     await runDurableObjectAlarm(stub);
     await settle(10);
   }
+
   const d = await stub.getWorkspace({});
   throw new Error(`workspace never reached the expected state (now ${d.ok ? d.value.state : d.error.code})`);
 };
@@ -101,14 +108,19 @@ interface SetupOpts {
 const readyWorkspace = async (opts: SetupOpts = {}): Promise<Ctx> => {
   const seeded = await seedProject();
   await seedCredentials(seeded.userId);
-  const { workspaceId, stub, tempod } = await seedWorkspace(seeded, {
-    ...(opts.prompt ? { prompt: opts.prompt } : {}),
-    ...(opts.agent ? { agent: opts.agent } : {}),
-  });
+
+  const options: Parameters<typeof seedWorkspace>[1] = {};
+
+  if (opts.prompt) options.prompt = opts.prompt;
+
+  if (opts.agent) options.agent = opts.agent;
+  const { workspaceId, stub, tempod } = await seedWorkspace(seeded, options);
+
   if (opts.effective)
     tempod.on("settings.read", () => ({ effective: opts.effective, warnings: [], errors: [], sources: {} }));
   opts.configure?.(tempod);
   await driveUntil(stub, (s) => s === "ready" || s === "working");
+
   return { seeded, workspaceId, stub, tempod };
 };
 
@@ -118,16 +130,25 @@ const runningTurn = async (opts: SetupOpts = {}): Promise<RunningCtx> => {
   await waitFor(() => ctx.tempod.requestsOf("session.prompt").length === 1, 5000, "first prompt");
   const p = ctx.tempod.requestsOf("session.prompt")[0];
   await waitFor(async () => (await turnRow(ctx.stub, p.turnId))?.status === "running", 5000, "turn running");
+
   return { ...ctx, sessionId: p.sessionId, turnId: p.turnId };
 };
 
 // The fake tempod's socket belongs to the DO's I/O context, so events are sent from inside the DO.
-const emit = (ctx: Ctx, event: TempodEvent): Promise<number> =>
+const emit = (ctx: Ctx, event: TempodEvent | import("@tempo/protocol").JsonData): Promise<number> =>
   runInDurableObject(ctx.stub, () => ctx.tempod.emit(event));
-const emitMany = (ctx: Ctx, events: TempodEvent[]): Promise<number[]> =>
-  runInDurableObject(ctx.stub, () => events.map((e) => ctx.tempod.emit(e)));
-const emitRaw = (ctx: Ctx, seq: number, event: TempodEvent): Promise<void> =>
-  runInDurableObject(ctx.stub, () => ctx.tempod.emitRaw(seq, event));
+
+const emitMany = (
+  ctx: Ctx,
+  events: (TempodEvent | import("@tempo/protocol").JsonData)[],
+): Promise<number[]> => runInDurableObject(ctx.stub, () => events.map((e) => ctx.tempod.emit(e)));
+
+const emitRaw = (
+  ctx: Ctx,
+  seq: number,
+  event: TempodEvent | import("@tempo/protocol").JsonData,
+): Promise<void> => runInDurableObject(ctx.stub, () => ctx.tempod.emitRaw(seq, event));
+
 const closeTempod = (ctx: Ctx): Promise<void> => runInDurableObject(ctx.stub, () => ctx.tempod.close(1011));
 
 /** Ends a running turn and waits until the DO has finished turn-end processing (the state is ready again). */
@@ -135,11 +156,12 @@ const endTurn = async (
   ctx: Ctx,
   sessionId: string,
   turnId: string,
-  fields: Record<string, unknown> = { stopReason: "end_turn" },
+  fields: import("@tempo/protocol").JsonDataFields = { stopReason: "end_turn" },
 ) => {
-  const seq = await emit(ctx, { kind: "turn.ended", sessionId, turnId, ...fields } as TempodEvent);
+  const seq = await emit(ctx, { kind: "turn.ended", sessionId, turnId, ...fields });
   await applied(ctx.stub, seq);
   await waitFor(async () => (await turnRow(ctx.stub, turnId))?.status !== "running", 5000, "turn ended");
+
   return seq;
 };
 
@@ -156,6 +178,7 @@ describe.concurrent("live steering", () => {
       reviewCommentIds: [],
       delivery: "steer",
     });
+
   const enable = (ctx: RunningCtx) =>
     sql(
       ctx.stub,
@@ -230,9 +253,11 @@ describe.concurrent("live steering", () => {
       expect(recovered.status).toBe("failed");
       expect(recovered.steering_pending).toBe(0);
       expect(recovered.error_detail).toContain("could not be confirmed");
+
       const notice = (
         await sql(ctx.stub, "SELECT * FROM items WHERE turn_id = ? AND kind = 'notice'", queued.id)
       )[0]!;
+
       expect(notice.content_json).toContain("could not be confirmed");
       expect((await detail(ctx.stub)).queue).toEqual([]);
     },
@@ -248,14 +273,15 @@ const prompt = async (
   extra: { mentions?: Array<{ path: string }>; reviewCommentIds?: string[] } = {},
 ): Promise<string> => {
   const turn = unwrap(
-    (await ctx.stub.sendPrompt({
+    await ctx.stub.sendPrompt({
       sessionId,
       text,
       mentions: extra.mentions ?? [],
       attachmentIds: [],
       reviewCommentIds: extra.reviewCommentIds ?? [],
-    })) as never,
-  ) as { id: string };
+    }),
+  );
+
   return turn.id;
 };
 
@@ -265,15 +291,20 @@ const promptFor = (tempod: FakeTempod, turnId: string) =>
 const waitPrompt = async (ctx: Ctx, turnId: string): Promise<any> => {
   await waitFor(() => promptFor(ctx.tempod, turnId) !== undefined, 5000, `session.prompt for ${turnId}`);
   await waitFor(async () => (await turnRow(ctx.stub, turnId))?.status === "running", 5000, "turn running");
+
   return promptFor(ctx.tempod, turnId);
 };
 
 const itemCreated = (
   sessionId: string,
   turnId: string | null,
-  item: { id: string; kind: string; status: string; content: Record<string, unknown> },
-): TempodEvent =>
-  ({ kind: "item.created", sessionId, turnId, item: { ...item, createdAt: Date.now() } }) as TempodEvent;
+  item: { id: string; kind: string; status: string; content: import("@tempo/protocol").JsonDataFields },
+): import("@tempo/protocol").JsonDataFields => ({
+  kind: "item.created",
+  sessionId,
+  turnId,
+  item: { ...item, createdAt: Date.now() },
+});
 
 const agentMessage = (sessionId: string, turnId: string, id: string, text: string, status = "streaming") =>
   itemCreated(sessionId, turnId, { id, kind: "agent_message", status, content: { text } });
@@ -299,13 +330,16 @@ const openUi = async (ctx: Ctx, sinceRev = 0): Promise<UiSocket> => {
       headers: { Upgrade: "websocket" },
     },
   );
+
   const ws = res.webSocket;
+
   if (!ws) throw new Error(`no websocket (status ${res.status})`);
   const messages: any[] = [];
   ws.addEventListener("message", (e: MessageEvent) => {
     messages.push(JSON.parse(String(e.data)));
   });
   ws.accept();
+
   return {
     ws,
     messages,
@@ -349,7 +383,7 @@ describe.concurrent("item events update items and items_rev", () => {
         kind: "agent_message",
         status: "streaming",
       });
-      expect(JSON.parse(it1.content_json)).toEqual({ text: "Hel" });
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(it1.content_json))).toEqual({ text: "Hel" });
       expect(Number((await wsRow(ctx.stub)).items_rev)).toBe(r0 + 1);
       expect(it1.rev).toBe(r0 + 1);
 
@@ -358,7 +392,9 @@ describe.concurrent("item events update items and items_rev", () => {
         await emit(ctx, { kind: "item.delta", sessionId: ctx.sessionId, itemId: id, append: { text: "lo" } }),
       );
       it1 = (await itemRow(ctx.stub, id))!;
-      expect(JSON.parse(it1.content_json)).toEqual({ text: "Hello" });
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(it1.content_json))).toEqual({
+        text: "Hello",
+      });
       expect(Number((await wsRow(ctx.stub)).items_rev)).toBe(r0 + 2);
       expect(it1.rev).toBe(r0 + 2);
 
@@ -373,7 +409,9 @@ describe.concurrent("item events update items and items_rev", () => {
       );
       it1 = (await itemRow(ctx.stub, id))!;
       expect(it1.status).toBe("completed");
-      expect(JSON.parse(it1.content_json)).toEqual({ text: "Hello" });
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(it1.content_json))).toEqual({
+        text: "Hello",
+      });
       expect(Number((await wsRow(ctx.stub)).items_rev)).toBe(r0 + 3);
       expect(it1.rev).toBe(r0 + 3);
     },
@@ -392,6 +430,7 @@ describe.concurrent("item events update items and items_rev", () => {
         await emit(ctx, toolCall(ctx.sessionId, ctx.turnId, id, "Read file", "pending")),
       );
       const before = Number((await wsRow(ctx.stub)).items_rev);
+
       const content = {
         toolCallId: `call-${id}`,
         title: "Read src/a.ts",
@@ -399,6 +438,7 @@ describe.concurrent("item events update items and items_rev", () => {
         locations: [{ path: "src/a.ts", line: 3 }],
         content: [{ type: "content", content: { type: "text", text: "ok" } }],
       };
+
       await applied(
         ctx.stub,
         await emit(ctx, {
@@ -410,7 +450,7 @@ describe.concurrent("item events update items and items_rev", () => {
       );
       const row = (await itemRow(ctx.stub, id))!;
       expect(row.status).toBe("failed");
-      expect(JSON.parse(row.content_json)).toEqual(content);
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(row.content_json))).toEqual(content);
       expect(row.rev).toBe(before + 1);
       expect(Number((await wsRow(ctx.stub)).items_rev)).toBe(before + 1);
     },
@@ -429,12 +469,14 @@ describe.concurrent("item events update items and items_rev", () => {
         itemId: newId(),
         append: { text: "x" },
       });
+
       const seq = await emit(ctx, {
         kind: "item.updated",
         sessionId: ctx.sessionId,
         itemId: newId(),
         patch: { status: "completed" },
       });
+
       await applied(ctx.stub, seq);
       expect(Number((await wsRow(ctx.stub)).items_rev)).toBe(before);
       // Later events still apply.
@@ -454,6 +496,7 @@ describe.concurrent("item events update items and items_rev", () => {
       const ctx = await runningTurn();
       const ui = await openUi(ctx);
       await backlogDone(ui);
+
       const seq = await emit(ctx, {
         kind: "session.updated",
         sessionId: ctx.sessionId,
@@ -463,13 +506,19 @@ describe.concurrent("item events update items and items_rev", () => {
           usage: { used: 1200, size: 200000 },
           title: "Fix login bug",
         },
-      } as TempodEvent);
+      });
+
       await applied(ctx.stub, seq);
       const s = (await sessionRow(ctx.stub, ctx.sessionId))!;
       expect(s.mode_id).toBe("plan");
       expect(s.title).toBe("Fix login bug");
-      expect(JSON.parse(s.commands_json)).toEqual([{ name: "review", description: "Review the diff" }]);
-      expect(JSON.parse(s.usage_json)).toEqual({ used: 1200, size: 200000 });
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(s.commands_json))).toEqual([
+        { name: "review", description: "Review the diff" },
+      ]);
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(s.usage_json))).toEqual({
+        used: 1200,
+        size: 200000,
+      });
       await waitFor(
         () => ofType(ui, "session").some((m) => m.session.title === "Fix login bug"),
         3000,
@@ -555,9 +604,11 @@ describe.concurrent("workspace channel", () => {
         3000,
         "upsert after update",
       );
+
       const updated = ofType(ui, "item.upsert").find(
         (m) => m.item.id === id && m.item.status === "completed",
       );
+
       expect(updated.item.content).toEqual({ text: "Sure, on it." });
       expect(updated.itemsRev).toBe(delta.itemsRev + 1);
       expect(updated.item.rev).toBe(delta.itemsRev + 1);
@@ -580,12 +631,14 @@ describe.concurrent("workspace channel", () => {
       );
       const sinceRev = Number((await itemRow(ctx.stub, a))!.rev);
       await emit(ctx, agentMessage(ctx.sessionId, ctx.turnId, b, "str"));
+
       const seq = await emit(ctx, {
         kind: "item.delta",
         sessionId: ctx.sessionId,
         itemId: b,
         append: { text: "eamed" },
       });
+
       await applied(ctx.stub, seq);
 
       const ui = await openUi(ctx, sinceRev);
@@ -614,6 +667,7 @@ describe.concurrent("workspace channel", () => {
       const ctx = await readyWorkspace();
       await runInDurableObject(ctx.stub, (instance: WorkspaceDO) => {
         const core = internals(instance).core;
+
         for (let i = 0; i < 1100; i++) {
           core.insertItem({
             sessionId: "s-bulk",
@@ -679,7 +733,9 @@ describe.concurrent("event delivery: dedupe, acks and incarnation", () => {
       expect(rows[0]!.incarnation).toBe(ctx.tempod.incarnation);
       expect(
         JSON.parse(
-          (await sql(ctx.stub, "SELECT payload_json FROM events WHERE seq = ?", s1))[0]!.payload_json,
+          Schema.decodeUnknownSync(Schema.String)(
+            (await sql(ctx.stub, "SELECT payload_json FROM events WHERE seq = ?", s1))[0]!.payload_json,
+          ),
         ).item.id,
       ).toBe(a);
     },
@@ -692,16 +748,19 @@ describe.concurrent("event delivery: dedupe, acks and incarnation", () => {
       // 02 tempod protocol: "The DO acks events in batches: at most every 250 ms or every 100 events."
       const ctx = await runningTurn();
       const acksBefore = ctx.tempod.acks.length;
+
       const seqs = await emitMany(
         ctx,
         Array.from({ length: 250 }, (_, i): TempodEvent => ({ kind: "log", level: "info", msg: `m${i}` })),
       );
+
       const last = seqs.at(-1)!;
       await applied(ctx.stub, last);
       await waitFor(() => ctx.tempod.acks.at(-1) === last, 3000, "final ack");
       const acks = ctx.tempod.acks.slice(acksBefore);
       expect(acks.length).toBeGreaterThan(0);
       expect(acks.length).toBeLessThan(25);
+
       for (let i = 1; i < acks.length; i++) expect(acks[i]!).toBeGreaterThanOrEqual(acks[i - 1]!);
       expect(Number((await wsRow(ctx.stub)).tempod_acked_seq)).toBe(last);
     },
@@ -717,6 +776,7 @@ describe.concurrent("event delivery: dedupe, acks and incarnation", () => {
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
       await waitReady(ctx);
       let last = 0;
+
       for (let i = 0; i < 4; i++) last = await emit(ctx, { kind: "log", level: "info", msg: `m${i}` });
       await applied(ctx.stub, last);
       const oldIncarnation = ctx.tempod.incarnation;
@@ -741,6 +801,7 @@ describe.concurrent("event delivery: dedupe, acks and incarnation", () => {
 
       // seq 2 of the new incarnation is applied even though it is below the old acked seq.
       const id = newId();
+
       const seq = await emit(
         ctx,
         itemCreated(ctx.sessionId, null, {
@@ -750,6 +811,7 @@ describe.concurrent("event delivery: dedupe, acks and incarnation", () => {
           content: { level: "info", text: "hi" },
         }),
       );
+
       expect(seq).toBeLessThan(last);
       await applied(ctx.stub, seq);
       await waitFor(async () => (await itemRow(ctx.stub, id)) !== undefined, 3000, "item applied");
@@ -812,6 +874,7 @@ const openItems = async (ctx: RunningCtx) => {
   await emit(ctx, toolCall(ctx.sessionId, ctx.turnId, ids.pending, "Edit file", "pending"));
   const seq = await emit(ctx, toolCall(ctx.sessionId, ctx.turnId, ids.done, "Read file", "completed"));
   await applied(ctx.stub, seq);
+
   return ids;
 };
 
@@ -856,10 +919,13 @@ describe.concurrent("turn.ended", () => {
         inputTokens: 1200,
         outputTokens: 300,
       });
+
       const wire = await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
         const core = internals(i).core;
+
         return core.turnToWire(core.turnRow(ctx.turnId));
       });
+
       expect(wire.usage).toEqual({ totalTokens: 1500, inputTokens: 1200, outputTokens: 300 });
     },
     T,
@@ -870,10 +936,13 @@ describe.concurrent("turn.ended", () => {
     async ({ expect }) => {
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
+
       const wire = await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
         const core = internals(i).core;
+
         return core.turnToWire(core.turnRow(ctx.turnId));
       });
+
       expect("usage" in wire).toBe(false);
       expect((await turnRow(ctx.stub, ctx.turnId))!.usage_json).toBeNull();
     },
@@ -890,6 +959,7 @@ describe.concurrent("turn.ended", () => {
       await endTurn(ctx, ctx.sessionId, ctx.turnId, { stopReason: "end_turn", interrupted: true });
       const turn = (await turnRow(ctx.stub, ctx.turnId))!;
       expect(turn.status).toBe("interrupted");
+
       for (const id of [ids.message, ids.thought, ids.running, ids.pending])
         expect((await itemRow(ctx.stub, id))!.status).toBe("cancelled");
       expect((await itemRow(ctx.stub, ids.done))!.status).toBe("completed");
@@ -908,6 +978,7 @@ describe.concurrent("turn.ended", () => {
       const turn = (await turnRow(ctx.stub, ctx.turnId))!;
       expect(turn.status).toBe("cancelled");
       expect(turn.stop_reason).toBe("cancelled");
+
       for (const id of [ids.message, ids.thought, ids.running, ids.pending])
         expect((await itemRow(ctx.stub, id))!.status).toBe("cancelled");
       expect((await itemRow(ctx.stub, ids.done))!.status).toBe("completed");
@@ -929,15 +1000,18 @@ describe.concurrent("turn.ended", () => {
       const turn = (await turnRow(ctx.stub, ctx.turnId))!;
       expect(turn.status).toBe("failed");
       expect(turn.error_code).toEqual(expect.any(String));
+
       for (const id of [ids.message, ids.thought, ids.running, ids.pending])
         expect((await itemRow(ctx.stub, id))!.status).toBe("cancelled");
+
       const errors = await sql(
         ctx.stub,
         "SELECT * FROM items WHERE turn_id = ? AND kind = 'error'",
         ctx.turnId,
       );
+
       expect(errors).toHaveLength(1);
-      const content = JSON.parse(errors[0]!.content_json);
+      const content = JSON.parse(Schema.decodeUnknownSync(Schema.String)(errors[0]!.content_json));
       expect(content.code).toBe(turn.error_code);
       expect(String(content.detail)).toContain("adapter blew up");
       await waitFor(async () => (await wsRow(ctx.stub)).attention === "error", 3000, "attention error");
@@ -995,15 +1069,18 @@ describe.concurrent("turn.ended", () => {
     async ({ expect }) => {
       // 03 turn.ended applies to the running turn; a stray end (unknown or already-ended turn) changes nothing.
       const ctx = await runningTurn();
+
       const seq = await emit(ctx, {
         kind: "turn.ended",
         sessionId: ctx.sessionId,
         turnId: newId(),
         stopReason: "end_turn",
       });
+
       await applied(ctx.stub, seq);
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("running");
       await endTurn(ctx, ctx.sessionId, ctx.turnId, { stopReason: "end_turn" });
+
       const again = await emit(ctx, {
         kind: "turn.ended",
         sessionId: ctx.sessionId,
@@ -1011,6 +1088,7 @@ describe.concurrent("turn.ended", () => {
         stopReason: null,
         error: { code: "INTERNAL", message: "late" },
       });
+
       await applied(ctx.stub, again);
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("completed");
     },
@@ -1041,6 +1119,7 @@ describe.concurrent("after a turn ends", () => {
         { path: "src/a.ts", status: "modified", additions: 3, deletions: 1 },
         { path: "src/b.ts", status: "added", additions: 10, deletions: 0 },
       ];
+
       const ctx = await runningTurn({
         configure: (t) =>
           t.on("git.changes", () => ({
@@ -1051,6 +1130,7 @@ describe.concurrent("after a turn ends", () => {
             dirty: true,
           })),
       });
+
       const ui = await openUi(ctx);
       await backlogDone(ui);
       const before = await wsRow(ctx.stub);
@@ -1080,8 +1160,12 @@ describe.concurrent("after a turn ends", () => {
       );
       const after = await wsRow(ctx.stub);
       const turn = (await turnRow(ctx.stub, ctx.turnId))!;
-      expect(after.last_activity_at).toBeGreaterThan(before.last_activity_at);
-      expect(after.last_activity_at).toBeGreaterThanOrEqual(turn.ended_at);
+      expect(after.last_activity_at).toBeGreaterThan(
+        Schema.decodeUnknownSync(Schema.Number)(before.last_activity_at),
+      );
+      expect(after.last_activity_at).toBeGreaterThanOrEqual(
+        Schema.decodeUnknownSync(Schema.Number)(turn.ended_at),
+      );
       expect(after.attention).toBe("unread");
       await waitFor(
         async () => (await d1Workspace(ctx.workspaceId))?.attention === "unread",
@@ -1091,7 +1175,7 @@ describe.concurrent("after a turn ends", () => {
       expect((await d1Workspace(ctx.workspaceId))!.last_activity_at).toBe(after.last_activity_at);
 
       // markViewed after the turn ended clears unread (03 Viewed).
-      unwrap((await ctx.stub.markViewed({})) as never);
+      unwrap(await ctx.stub.markViewed({}));
       expect((await wsRow(ctx.stub)).attention).toBe("none");
       ui.close();
     },
@@ -1213,6 +1297,7 @@ describe.concurrent("after a turn ends", () => {
       const ctx = await runningTurn({
         configure: (t) => t.fail("git.checkpoint", "INTERNAL", "git exploded"),
       });
+
       const turn2 = await prompt(ctx, ctx.sessionId, "Next one");
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("completed");
@@ -1244,7 +1329,9 @@ describe.concurrent("after a turn ends", () => {
       // 03 Start the turn step 3: turn running, session running, state working, started_at = now, queue_pos = null.
       const started = (await turnRow(ctx.stub, turn2))!;
       expect(started.queue_pos).toBeNull();
-      expect(started.started_at).toBeGreaterThanOrEqual((await turnRow(ctx.stub, ctx.turnId))!.ended_at);
+      expect(started.started_at).toBeGreaterThanOrEqual(
+        Schema.decodeUnknownSync(Schema.Number)((await turnRow(ctx.stub, ctx.turnId))!.ended_at),
+      );
       expect((await sessionRow(ctx.stub, ctx.sessionId))!.status).toBe("running");
       expect((await turnRow(ctx.stub, turn3))!.status).toBe("queued");
 
@@ -1274,10 +1361,12 @@ describe.concurrent("permission.requested", () => {
       await backlogDone(ui);
       const itemId = newId();
       const requestId = `req-${newId()}`;
+
       const options = [
         { optionId: "allow", name: "Allow", kind: "allow_once" },
         { optionId: "deny", name: "Deny", kind: "reject_once" },
       ];
+
       await emit(
         ctx,
         itemCreated(ctx.sessionId, ctx.turnId, {
@@ -1287,6 +1376,7 @@ describe.concurrent("permission.requested", () => {
           content: { requestId, toolCallId: "call-1", title: "Run rm -rf build", options },
         }),
       );
+
       const seq = await emit(ctx, {
         kind: "permission.requested",
         requestId,
@@ -1296,6 +1386,7 @@ describe.concurrent("permission.requested", () => {
         title: "Run rm -rf build",
         options,
       });
+
       await applied(ctx.stub, seq);
 
       const rows = await sql(ctx.stub, "SELECT * FROM permissions WHERE request_id = ?", requestId);
@@ -1306,7 +1397,7 @@ describe.concurrent("permission.requested", () => {
         item_id: itemId,
         status: "pending",
       });
-      expect(JSON.parse(rows[0]!.options_json)).toEqual(options);
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(rows[0]!.options_json))).toEqual(options);
       expect((await itemRow(ctx.stub, itemId))!.kind).toBe("permission");
 
       await waitFor(() => ofType(ui, "permission").length === 1, 3000, "permission message");
@@ -1326,7 +1417,7 @@ describe.concurrent("permission.requested", () => {
       );
 
       // Answering it clears needs_input.
-      unwrap((await ctx.stub.respondPermission({ requestId, optionId: "allow" })) as never);
+      unwrap(await ctx.stub.respondPermission({ requestId, optionId: "allow" }));
       expect(ctx.tempod.requestsOf("permission.respond")).toEqual([{ requestId, optionId: "allow" }]);
       expect((await wsRow(ctx.stub)).attention).not.toBe("needs_input");
       ui.close();
@@ -1433,7 +1524,7 @@ describe.concurrent("permission.requested", () => {
           signal: null,
           stderrTail: "boom",
           reason: "crashed",
-        } as TempodEvent),
+        }),
       );
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("failed");
       expect(
@@ -1461,6 +1552,7 @@ describe.concurrent("agent.exited", () => {
       await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
         expect(internals(i).core.liveSessions.has(ctx.sessionId)).toBe(true);
       });
+
       const seq = await emit(ctx, {
         kind: "agent.exited",
         sessionId: ctx.sessionId,
@@ -1468,6 +1560,7 @@ describe.concurrent("agent.exited", () => {
         signal: null,
         stderrTail: "Error: segfault in adapter\n    at main (adapter.js:1)",
       });
+
       await applied(ctx.stub, seq);
       await waitFor(
         async () => (await turnRow(ctx.stub, ctx.turnId))?.status === "failed",
@@ -1475,20 +1568,30 @@ describe.concurrent("agent.exited", () => {
         "turn failed",
       );
       expect((await turnRow(ctx.stub, ctx.turnId))!.error_code).toBe("AGENT_CRASHED");
+
       const errors = await sql(
         ctx.stub,
         "SELECT content_json FROM items WHERE turn_id = ? AND kind = 'error'",
         ctx.turnId,
       );
+
       expect(errors).toHaveLength(1);
-      expect(JSON.parse(errors[0]!.content_json).code).toBe("AGENT_CRASHED");
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(errors[0]!.content_json)).code).toBe(
+        "AGENT_CRASHED",
+      );
+
       const notices = await sql(
         ctx.stub,
         "SELECT * FROM items WHERE session_id = ? AND kind = 'notice'",
         ctx.sessionId,
       );
+
       expect(
-        notices.some((n) => JSON.parse(n.content_json).text.includes("Error: segfault in adapter")),
+        notices.some((n) =>
+          JSON.parse(Schema.decodeUnknownSync(Schema.String)(n.content_json)).text.includes(
+            "Error: segfault in adapter",
+          ),
+        ),
       ).toBe(true);
       await runInDurableObject(ctx.stub, (i: WorkspaceDO) => {
         expect(internals(i).core.liveSessions.has(ctx.sessionId)).toBe(false);
@@ -1512,6 +1615,7 @@ describe.concurrent("agent.exited", () => {
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
       await waitReady(ctx);
+
       const seq = await emit(ctx, {
         kind: "agent.exited",
         sessionId: ctx.sessionId,
@@ -1519,6 +1623,7 @@ describe.concurrent("agent.exited", () => {
         signal: "SIGKILL",
         stderrTail: "",
       });
+
       await applied(ctx.stub, seq);
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("completed");
       expect((await wsRow(ctx.stub)).state).toBe("ready");
@@ -1534,6 +1639,7 @@ describe.concurrent("agent.exited", () => {
     async ({ expect }) => {
       // 03 Failure handling: the turn fails only when its own adapter exits.
       const ctx = await runningTurn();
+
       const seq = await emit(ctx, {
         kind: "agent.exited",
         sessionId: newId(),
@@ -1541,6 +1647,7 @@ describe.concurrent("agent.exited", () => {
         signal: null,
         stderrTail: "x",
       });
+
       await applied(ctx.stub, seq);
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("running");
     },
@@ -1555,15 +1662,18 @@ describe.concurrent("script.output", () => {
   const setupRunning = async (opts: { prompt?: string } = {}) => {
     const seeded = await seedProject();
     await seedCredentials(seeded.userId);
+
     const { workspaceId, stub, tempod } = await seedWorkspace(
       seeded,
       opts.prompt ? { prompt: opts.prompt } : {},
     );
+
     tempod.on("settings.read", () => ({ effective: SETUP, warnings: [], errors: [], sources: {} }));
     const ctx: Ctx = { seeded, workspaceId, stub, tempod };
     await driveUntil(stub, () => tempod.requestsOf("script.start").length === 1);
     const runId: string = tempod.requestsOf("script.start")[0].runId;
     await waitFor(async () => (await wsRow(stub)).setup_status === "running", 3000, "setup running");
+
     return { ...ctx, runId };
   };
 
@@ -1576,12 +1686,14 @@ describe.concurrent("script.output", () => {
       const ui = await openUi(ctx);
       await backlogDone(ui);
       await emit(ctx, { kind: "script.output", runId: ctx.runId, stream: "stdout", data: "installing\n" });
+
       const seq = await emit(ctx, {
         kind: "script.output",
         runId: ctx.runId,
         stream: "stderr",
         data: "warn: peer dep\n",
       });
+
       await applied(ctx.stub, seq);
       const run = (await sql(ctx.stub, "SELECT * FROM script_runs WHERE id = ?", ctx.runId))[0]!;
       expect(run.log_tail).toBe("installing\nwarn: peer dep\n");
@@ -1606,9 +1718,11 @@ describe.concurrent("script.output", () => {
       await emit(ctx, { kind: "script.output", runId: ctx.runId, stream: "stdout", data: chunk("c") });
       const seq = await emit(ctx, { kind: "script.output", runId: ctx.runId, stream: "stdout", data: "END" });
       await applied(ctx.stub, seq);
-      const tail: string = (
-        await sql(ctx.stub, "SELECT log_tail FROM script_runs WHERE id = ?", ctx.runId)
-      )[0]!.log_tail;
+
+      const tail = Schema.decodeUnknownSync(Schema.String)(
+        (await sql(ctx.stub, "SELECT log_tail FROM script_runs WHERE id = ?", ctx.runId))[0]!.log_tail,
+      );
+
       expect(new TextEncoder().encode(tail).length).toBe(1024 * 1024);
       expect(tail.endsWith(chunk("c") + "END")).toBe(true);
       expect(tail.startsWith("a")).toBe(true);
@@ -1625,13 +1739,16 @@ describe.concurrent("script.output", () => {
       // 01 Scripts, Output: "The WorkspaceDO keeps the last 1 MiB of each run in SQLite."
       const ctx = await setupRunning();
       const chunk = "é".repeat(300 * 1024); // 600 KiB of UTF-8 per message
+
       for (let i = 0; i < 4; i++)
         await emit(ctx, { kind: "script.output", runId: ctx.runId, stream: "stdout", data: chunk });
       const seq = await emit(ctx, { kind: "script.output", runId: ctx.runId, stream: "stdout", data: "END" });
       await applied(ctx.stub, seq);
-      const tail: string = (
-        await sql(ctx.stub, "SELECT log_tail FROM script_runs WHERE id = ?", ctx.runId)
-      )[0]!.log_tail;
+
+      const tail = Schema.decodeUnknownSync(Schema.String)(
+        (await sql(ctx.stub, "SELECT log_tail FROM script_runs WHERE id = ?", ctx.runId))[0]!.log_tail,
+      );
+
       expect(tail.endsWith("END")).toBe(true);
       expect(new TextEncoder().encode(tail).length).toBeLessThanOrEqual(1024 * 1024);
     },
@@ -1645,12 +1762,14 @@ describe.concurrent("script.output", () => {
       const ctx = await setupRunning();
       const unknown = newId();
       await emit(ctx, { kind: "script.output", runId: unknown, stream: "stdout", data: "ghost" });
+
       const seq = await emit(ctx, {
         kind: "script.output",
         runId: ctx.runId,
         stream: "stdout",
         data: "real",
       });
+
       await applied(ctx.stub, seq);
       expect(await sql(ctx.stub, "SELECT id FROM script_runs WHERE id = ?", unknown)).toHaveLength(0);
       expect(
@@ -1666,8 +1785,15 @@ describe.concurrent("script.output", () => {
       // 01 Setup script: "Prompts sent before setup ends wait in the queue. On exit code 0, the queue continues."
       // 03 Queue runner: state ready, setup_status none/succeeded/skipped, no running turn.
       const ctx = await setupRunning({ prompt: "First prompt" });
-      const sessionId = (await sql(ctx.stub, "SELECT id FROM sessions"))[0]!.id as string;
-      const first = (await sql(ctx.stub, "SELECT id FROM turns WHERE seq = 1"))[0]!.id as string;
+
+      const sessionId = Schema.decodeUnknownSync(Schema.String)(
+        (await sql(ctx.stub, "SELECT id FROM sessions"))[0]!.id,
+      );
+
+      const first = Schema.decodeUnknownSync(Schema.String)(
+        (await sql(ctx.stub, "SELECT id FROM turns WHERE seq = 1"))[0]!.id,
+      );
+
       const second = await prompt(ctx, sessionId, "Second prompt");
       await settle();
       expect((await wsRow(ctx.stub)).state).toBe("setting_up");
@@ -1700,7 +1826,11 @@ describe.concurrent("script.output", () => {
       // Rerun setup or Continue anyway". 03 Queue runner: "continueAfterSetupFailure sets it from failed to skipped."
       // 03 Attention: "error: ... setup_status is failed".
       const ctx = await setupRunning({ prompt: "Do it" });
-      const first = (await sql(ctx.stub, "SELECT id FROM turns WHERE seq = 1"))[0]!.id as string;
+
+      const first = Schema.decodeUnknownSync(Schema.String)(
+        (await sql(ctx.stub, "SELECT id FROM turns WHERE seq = 1"))[0]!.id,
+      );
+
       const seq = await emit(ctx, {
         kind: "script.exited",
         runId: ctx.runId,
@@ -1708,6 +1838,7 @@ describe.concurrent("script.output", () => {
         signal: null,
         timedOut: false,
       });
+
       await applied(ctx.stub, seq);
       await driveUntil(ctx.stub, (s) => s === "ready");
       await settle();
@@ -1719,7 +1850,7 @@ describe.concurrent("script.output", () => {
       expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(0);
       expect((await turnRow(ctx.stub, first))!.status).toBe("queued");
 
-      unwrap((await ctx.stub.continueAfterSetupFailure({})) as never);
+      unwrap(await ctx.stub.continueAfterSetupFailure({}));
       expect((await wsRow(ctx.stub)).setup_status).toBe("skipped");
       await waitPrompt(ctx, first);
       expect((await wsRow(ctx.stub)).state).toBe("working");
@@ -1775,6 +1906,7 @@ describe.concurrent("settings.changed", () => {
         "hunter2",
       );
       const envSets = ctx.tempod.requestsOf("env.set").length;
+
       const effective = {
         ...DEFAULT_EFFECTIVE,
         environment_variables: { API_URL: "http://localhost:4000" },
@@ -1783,15 +1915,19 @@ describe.concurrent("settings.changed", () => {
           run: { web: { command: "bun dev", cwd: "", default: true } },
         },
       };
+
       const seq = await emit(ctx, {
         kind: "settings.changed",
         effective,
         warnings: ["unknown key foo"],
         errors: ["bad instance"],
         sources: { "scripts.run": ".tempo" },
-      } as TempodEvent);
+      });
+
       await applied(ctx.stub, seq);
-      expect(JSON.parse((await wsRow(ctx.stub)).settings_json)).toEqual(effective);
+      expect(
+        JSON.parse(Schema.decodeUnknownSync(Schema.String)((await wsRow(ctx.stub)).settings_json)),
+      ).toEqual(effective);
       const d = await detail(ctx.stub);
       expect(d.settings).toEqual(effective);
       expect(d.settingsWarnings).toEqual(["unknown key foo"]);
@@ -1806,6 +1942,7 @@ describe.concurrent("settings.changed", () => {
         TEMPO_WORKSPACE_PATH: "/workspace",
         TEMPO_PORT: "3000",
       });
+
       // The secret never lands in the events table (02 Rules; AGENTS.md rule 9).
       for (const e of await sql(ctx.stub, "SELECT payload_json FROM events"))
         expect(e.payload_json).not.toContain("hunter2");
@@ -1828,7 +1965,7 @@ describe.concurrent("settings.changed", () => {
         },
         warnings: [],
         errors: [],
-      } as TempodEvent);
+      });
       const seq = await emit(ctx, { kind: "ports.changed", ports: [3000] });
       await applied(ctx.stub, seq);
       expect((await wsRow(ctx.stub)).settings_json).toBe(before);
@@ -1863,6 +2000,7 @@ describe.concurrent("credential.changed", () => {
       expect(stored).toMatchObject({ content, lastRefresh });
 
       const events = await sql(ctx.stub, "SELECT kind, payload_json FROM events");
+
       for (const e of events) {
         expect(e.payload_json).not.toContain(access);
         expect(e.payload_json).not.toContain(refresh);
@@ -1880,6 +2018,7 @@ describe.concurrent("credential.changed", () => {
         }),
       );
       expect((await env.CREDENTIALS.getByName(ctx.seeded.userId).getCodexAuth())?.content).toBe(content);
+
       for (const e of await sql(ctx.stub, "SELECT payload_json FROM events"))
         expect(e.payload_json).not.toContain("at-old-");
     },
@@ -1895,11 +2034,13 @@ describe.concurrent("git.changed", () => {
       const ctx = await readyWorkspace();
       const ui = await openUi(ctx);
       await backlogDone(ui);
+
       const files = [
         { path: "README.md", status: "modified", additions: 2, deletions: 2 },
         { path: "src/new.ts", status: "added", additions: 40, deletions: 0 },
         { path: "src/old.ts", status: "deleted", additions: 0, deletions: 7 },
       ];
+
       await applied(ctx.stub, await emit(ctx, { kind: "git.changed", files, additions: 42, deletions: 9 }));
       await waitFor(() => ofType(ui, "changes").length === 1, 3000, "changes message");
       expect(ofType(ui, "changes")[0]).toEqual({ type: "changes", files, additions: 42, deletions: 9 });
@@ -1928,17 +2069,21 @@ describe.concurrent("tempod.stopping", () => {
       await waitFor(() => ctx.tempod.requestsOf("shutdown").length === 1, 5000, "shutdown");
       expect((await turnRow(ctx.stub, ctx.turnId))!.status).toBe("interrupted");
       const ops = ctx.tempod.requests.map((r) => r.op);
+
       const sigterm = ctx.tempod.requests.findIndex(
         (r) => r.op === "git.checkpoint" && r.params.reason === "sigterm",
       );
+
       expect(sigterm).toBeGreaterThanOrEqual(0);
       expect(sigterm).toBeLessThan(ops.lastIndexOf("shutdown"));
       expect(ctx.tempod.requestsOf("shutdown")[0]).toEqual({ reason: "sigterm" });
+
       const notices = await sql(
         ctx.stub,
         "SELECT content_json FROM items WHERE kind = 'notice' AND turn_id = ?",
         ctx.turnId,
       );
+
       expect(notices.length).toBeGreaterThan(0);
     },
     T,
@@ -1954,10 +2099,13 @@ describe.concurrent("outbox.overflow", () => {
       const ctx = await runningTurn();
       const seq = await emit(ctx, { kind: "outbox.overflow", dropped: 42 });
       await applied(ctx.stub, seq);
-      const notices = (await sql(ctx.stub, "SELECT * FROM items WHERE kind = 'notice'")).map((n): Row => ({
+
+      const notices = (await sql(ctx.stub, "SELECT * FROM items WHERE kind = 'notice'")).map((n) => ({
         ...n,
-        content: JSON.parse(n.content_json),
+        session_id: n.session_id,
+        content: JSON.parse(Schema.decodeUnknownSync(Schema.String)(n.content_json)),
       }));
+
       expect(notices).toHaveLength(1);
       expect(notices[0]!.content.level).toBe("warning");
       expect(notices[0]!.content.text.toLowerCase()).toContain("lost");
@@ -1992,7 +2140,7 @@ describe.concurrent("prompt content blocks", () => {
       await endTurn(ctx, ctx.sessionId, t2);
       await waitReady(ctx);
 
-      const session = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+      const session = unwrap(await ctx.stub.createSession({ agent: "claude" }));
       await waitFor(() => ctx.tempod.requestsOf("session.start").length === 2, 3000, "second session.start");
       await waitFor(
         async () => (await sessionRow(ctx.stub, session.id))?.status === "idle",
@@ -2040,9 +2188,12 @@ describe.concurrent("prompt content blocks", () => {
     );
     const start = ctx.tempod.handlers.get("session.start")!;
     ctx.tempod.on("session.start", async (params, op) => ({
-      ...((await start(params, op)) as object),
+      ...Schema.decodeUnknownSync(
+        Schema.StructWithRest(Schema.Struct({}), [Schema.Record(Schema.String, Schema.Json)]),
+      )(await start(params, op)),
       handoff: true,
     }));
+
     return ctx;
   };
 
@@ -2069,14 +2220,17 @@ describe.concurrent("prompt content blocks", () => {
           await emit(c, toolCall(c.sessionId, c.turnId, newId(), "Read src/auth.ts", "completed")),
         );
       });
+
       const t2 = await prompt(ctx, ctx.sessionId, "Continue please");
       const p2 = await waitPrompt(ctx, t2);
+
       const expected = [
         HANDOFF_FIRST_LINE,
         "User: Fix the login bug",
         "Agent: Looking at auth.ts",
         "Tool: Read src/auth.ts",
       ].join("\n");
+
       expect(p2.content).toEqual([
         { type: "text", text: expected },
         { type: "text", text: "Continue please" },
@@ -2084,7 +2238,9 @@ describe.concurrent("prompt content blocks", () => {
       expect((await sessionRow(ctx.stub, ctx.sessionId))!.handoff_pending).toBe(0);
       const handoffs = await sql(ctx.stub, "SELECT * FROM items WHERE kind = 'handoff'");
       expect(handoffs).toHaveLength(1);
-      expect(JSON.parse(handoffs[0]!.content_json)).toEqual({ text: expected });
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(handoffs[0]!.content_json))).toEqual({
+        text: expected,
+      });
 
       await endTurn(ctx, ctx.sessionId, t2);
       const t3 = await prompt(ctx, ctx.sessionId, "And then");
@@ -2098,14 +2254,18 @@ describe.concurrent("prompt content blocks", () => {
     async ({ expect }) => {
       // 01 Handoff text: "Cut from the oldest end so the block is at most 24,000 characters."
       const texts: string[] = [];
+
       const ctx = await handoffCase(async (c) => {
         for (let i = 0; i < 40; i++) texts.push(`m${String(i).padStart(2, "0")} ${"x".repeat(1000)}`);
+
         const seqs = await emitMany(
           c,
           texts.map((text) => agentMessage(c.sessionId, c.turnId, newId(), text, "completed")),
         );
+
         await applied(c.stub, seqs.at(-1)!);
       });
+
       const t2 = await prompt(ctx, ctx.sessionId, "Go on");
       const block: string = (await waitPrompt(ctx, t2)).content[0].text;
       expect(HANDOFF_MAX_CHARS).toBe(24_000);
@@ -2156,20 +2316,24 @@ describe.concurrent("prompt content blocks", () => {
       const ctx = await runningTurn();
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
       await waitReady(ctx);
+
       const c1 = unwrap(
-        (await ctx.stub.addReviewComment({
+        await ctx.stub.addReviewComment({
           path: "src/auth.ts",
           lineStart: 12,
           body: "Rename this",
-        })) as never,
-      ) as { id: string };
+        }),
+      );
+
       const c2 = unwrap(
-        (await ctx.stub.addReviewComment({ path: "README.md", lineStart: 3, body: "Typo here" })) as never,
-      ) as { id: string };
+        await ctx.stub.addReviewComment({ path: "README.md", lineStart: 3, body: "Typo here" }),
+      );
+
       const t2 = await prompt(ctx, ctx.sessionId, "Please address these", {
         mentions: [{ path: "src/app.ts" }, { path: "docs/guide.md" }],
         reviewCommentIds: [c1.id, c2.id],
       });
+
       const p2 = await waitPrompt(ctx, t2);
       expect(p2.content).toEqual([
         { type: "text", text: "Review comments:\nsrc/auth.ts:12: Rename this\nREADME.md:3: Typo here" },
@@ -2177,10 +2341,12 @@ describe.concurrent("prompt content blocks", () => {
         { type: "resource_link", uri: "file:///workspace/src/app.ts", name: "app.ts" },
         { type: "resource_link", uri: "file:///workspace/docs/guide.md", name: "guide.md" },
       ]);
+
       const comments = await sql(
         ctx.stub,
         "SELECT id, status, sent_turn_id FROM review_comments ORDER BY id",
       );
+
       expect(comments).toEqual([
         { id: c1.id, status: "sent", sent_turn_id: t2 },
         { id: c2.id, status: "sent", sent_turn_id: t2 },
@@ -2199,12 +2365,15 @@ describe.concurrent("prompt content blocks", () => {
         configure: (t) => {
           const start = t.handlers.get("session.start")!;
           t.on("session.start", async (params, op) => ({
-            ...((await start(params, op)) as object),
+            ...Schema.decodeUnknownSync(
+              Schema.StructWithRest(Schema.Struct({}), [Schema.Record(Schema.String, Schema.Json)]),
+            )(await start(params, op)),
             handoff: true,
           }));
         },
       });
-      const session = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+
+      const session = unwrap(await ctx.stub.createSession({ agent: "claude" }));
       await waitFor(
         async () => (await sessionRow(ctx.stub, session.id))?.handoff_pending === 1,
         3000,
@@ -2217,13 +2386,14 @@ describe.concurrent("prompt content blocks", () => {
       );
       const note = revertNote(2);
       await sql(ctx.stub, "UPDATE sessions SET pending_note = ? WHERE id = ?", note, session.id);
-      const c = unwrap(
-        (await ctx.stub.addReviewComment({ path: "a.ts", lineStart: 1, body: "why" })) as never,
-      ) as { id: string };
+
+      const c = unwrap(await ctx.stub.addReviewComment({ path: "a.ts", lineStart: 1, body: "why" }));
+
       const turn = await prompt(ctx, session.id, "Do it", {
         mentions: [{ path: "b.ts" }],
         reviewCommentIds: [c.id],
       });
+
       const p = await waitPrompt(ctx, turn);
       expect(p.content).toEqual([
         { type: "text", text: TURN_SUMMARY_RULE },
@@ -2249,12 +2419,15 @@ describe.concurrent("prompt content blocks", () => {
         const start = t.handlers.get("session.start")!;
         let starts = 0;
         t.on("session.start", async (params, op) => ({
-          ...((await start(params, op)) as object),
+          ...Schema.decodeUnknownSync(
+            Schema.StructWithRest(Schema.Struct({}), [Schema.Record(Schema.String, Schema.Json)]),
+          )(await start(params, op)),
           handoff: ++starts === 1,
         }));
       },
     });
-    const session = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+
+    const session = unwrap(await ctx.stub.createSession({ agent: "claude" }));
     await waitFor(
       async () => (await sessionRow(ctx.stub, session.id))?.handoff_pending === 1,
       3000,
@@ -2267,6 +2440,7 @@ describe.concurrent("prompt content blocks", () => {
     );
     const note = revertNote(2);
     await sql(ctx.stub, "UPDATE sessions SET pending_note = ? WHERE id = ?", note, session.id);
+
     return { ctx, sessionId: session.id, note };
   };
 
@@ -2354,7 +2528,7 @@ describe.concurrent("queue runner scheduling", () => {
     async ({ expect }) => {
       // 01 Sessions: "Only one turn runs per workspace at a time, across all its sessions. Other prompts wait in the queue."
       const ctx = await runningTurn();
-      const b = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+      const b = unwrap(await ctx.stub.createSession({ agent: "claude" }));
       await waitFor(
         async () => (await sessionRow(ctx.stub, b.id))?.status === "idle",
         3000,
@@ -2384,11 +2558,13 @@ describe.concurrent("queue runner scheduling", () => {
         await sql(ctx.stub, "SELECT id FROM ops WHERE kind = 'housekeeping' AND status = 'pending'"),
       ).toHaveLength(1);
       const turn2 = await prompt(ctx, ctx.sessionId, "Blocked for now");
+
       const opId = await runInDurableObject(
         ctx.stub,
         (i: WorkspaceDO) =>
           internals(i).runner.insert("commit_push", { message: "x" }, Date.now() + 60 * 60_000).id,
       );
+
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
       await waitFor(() => ctx.tempod.requestsOf("git.checkpoint").length === 1, 3000, "turn end processed");
       await settle();
@@ -2411,19 +2587,27 @@ describe.concurrent("queue runner scheduling", () => {
         prompt: "Will not start",
         configure: (t) => t.fail("session.start", "AGENT_START_FAILED", "adapter missing"),
       });
+
       const first = (await sql(ctx.stub, "SELECT id, session_id FROM turns WHERE seq = 1"))[0]!;
       await waitFor(
-        async () => (await turnRow(ctx.stub, first.id))?.status === "failed",
+        async () =>
+          (await turnRow(ctx.stub, Schema.decodeUnknownSync(Schema.String)(first.id)))?.status === "failed",
         5000,
         "turn failed",
       );
-      expect((await turnRow(ctx.stub, first.id))!.error_code).toBe("AGENT_START_FAILED");
+      expect((await turnRow(ctx.stub, Schema.decodeUnknownSync(Schema.String)(first.id)))!.error_code).toBe(
+        "AGENT_START_FAILED",
+      );
+
       const errors = await sql(
         ctx.stub,
         "SELECT content_json FROM items WHERE turn_id = ? AND kind = 'error'",
         first.id,
       );
-      expect(errors.map((e) => JSON.parse(e.content_json).code)).toEqual(["AGENT_START_FAILED"]);
+
+      expect(
+        errors.map((e) => JSON.parse(Schema.decodeUnknownSync(Schema.String)(e.content_json)).code),
+      ).toEqual(["AGENT_START_FAILED"]);
       expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(0);
       expect((await wsRow(ctx.stub)).state).toBe("ready");
       // 03 Attention: "Recompute it after every change"; the newest turn ended failed.
@@ -2435,7 +2619,7 @@ describe.concurrent("queue runner scheduling", () => {
       );
 
       ctx.tempod.failures.delete("session.start");
-      const t2 = await prompt(ctx, first.session_id, "Now start");
+      const t2 = await prompt(ctx, Schema.decodeUnknownSync(Schema.String)(first.session_id), "Now start");
       await waitPrompt(ctx, t2);
     },
     T,
@@ -2449,20 +2633,29 @@ describe.concurrent("queue runner scheduling", () => {
       const ctx = await readyWorkspace({ prompt: "Start OpenCode", agent: "opencode" });
       const first = (await sql(ctx.stub, "SELECT id, session_id FROM turns WHERE seq = 1"))[0]!;
       await waitFor(
-        async () => (await turnRow(ctx.stub, first.id))?.status === "failed",
+        async () =>
+          (await turnRow(ctx.stub, Schema.decodeUnknownSync(Schema.String)(first.id)))?.status === "failed",
         5000,
         "turn failed",
       );
-      expect((await turnRow(ctx.stub, first.id))!.error_code).toBe("MODEL_REQUIRED");
+      expect((await turnRow(ctx.stub, Schema.decodeUnknownSync(Schema.String)(first.id)))!.error_code).toBe(
+        "MODEL_REQUIRED",
+      );
+
       const errors = await sql(
         ctx.stub,
         "SELECT content_json FROM items WHERE turn_id = ? AND kind = 'error'",
         first.id,
       );
-      expect(errors.map((e) => JSON.parse(e.content_json).code)).toEqual(["MODEL_REQUIRED"]);
+
+      expect(
+        errors.map((e) => JSON.parse(Schema.decodeUnknownSync(Schema.String)(e.content_json)).code),
+      ).toEqual(["MODEL_REQUIRED"]);
       expect(ctx.tempod.requestsOf("session.start")).toHaveLength(0);
       expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(0);
-      expect((await sessionRow(ctx.stub, first.session_id))!.status).toBe("idle");
+      expect(
+        (await sessionRow(ctx.stub, Schema.decodeUnknownSync(Schema.String)(first.session_id)))!.status,
+      ).toBe("idle");
       await waitFor(async () => (await wsRow(ctx.stub)).state === "ready", 3000, "state ready");
 
       const effective = {
@@ -2472,8 +2665,15 @@ describe.concurrent("queue runner scheduling", () => {
           models: { ...DEFAULT_EFFECTIVE.agent.models, opencode: "openrouter/oc" },
         },
       };
+
       await sql(ctx.stub, "UPDATE workspace SET settings_json = ? WHERE id = 1", JSON.stringify(effective));
-      const t2 = await prompt(ctx, first.session_id, "Now with a model");
+
+      const t2 = await prompt(
+        ctx,
+        Schema.decodeUnknownSync(Schema.String)(first.session_id),
+        "Now with a model",
+      );
+
       await waitPrompt(ctx, t2);
       expect(ctx.tempod.requestsOf("session.start")[0]).toMatchObject({
         agent: "opencode",
@@ -2488,18 +2688,23 @@ describe.concurrent("queue runner scheduling", () => {
     async ({ expect }) => {
       // 01 Start a session 2: "model is agent.models.<agent> from the effective settings, or absent when empty."
       const models = { claude: "", codex: "gpt-5-codex", opencode: "", pi: "openrouter/pi" };
+
       const ctx = await readyWorkspace({
         prompt: "Start Pi",
         agent: "pi",
         effective: { ...DEFAULT_EFFECTIVE, agent: { default: "codex", models } },
       });
+
       await waitFor(() => ctx.tempod.requestsOf("session.start").length === 1, 5000, "pi session.start");
       expect(ctx.tempod.requestsOf("session.start")[0]).toMatchObject({
         agent: "pi",
         model: "openrouter/pi",
       });
 
-      const claude = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+      const claude = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(
+        unwrap(await ctx.stub.createSession({ agent: "claude" })),
+      );
+
       await waitFor(() => ctx.tempod.requestsOf("session.start").length === 2, 5000, "claude session.start");
       const start = ctx.tempod.requestsOf("session.start")[1];
       expect(start).toMatchObject({ sessionId: claude.id, agent: "claude" });
@@ -2513,9 +2718,11 @@ describe.concurrent("queue runner scheduling", () => {
     async ({ expect }) => {
       // 02 createSession takes model?; agent.models.<agent> is the agent's default model (01, Project settings file).
       const ctx = await readyWorkspace();
-      const s = unwrap(
-        (await ctx.stub.createSession({ agent: "opencode", model: "openrouter/own" })) as never,
-      ) as { id: string };
+
+      const s = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(
+        unwrap(await ctx.stub.createSession({ agent: "opencode", model: "openrouter/own" })),
+      );
+
       await waitFor(() => ctx.tempod.requestsOf("session.start").length === 1, 5000, "session.start");
       expect(ctx.tempod.requestsOf("session.start")[0]).toMatchObject({
         sessionId: s.id,
@@ -2530,20 +2737,26 @@ describe.concurrent("queue runner scheduling", () => {
     "createSession for Pi with no model ends the start with a MODEL_REQUIRED notice and sends nothing",
     async ({ expect }) => {
       const ctx = await readyWorkspace();
-      const s = unwrap((await ctx.stub.createSession({ agent: "pi" })) as never) as { id: string };
+
+      const s = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(
+        unwrap(await ctx.stub.createSession({ agent: "pi" })),
+      );
+
       await waitFor(
         async () => (await sessionRow(ctx.stub, s.id))?.status === "idle",
         5000,
         "session start ended",
       );
+
       const notices = await sql(
         ctx.stub,
         "SELECT content_json FROM items WHERE session_id = ? AND kind = 'notice'",
         s.id,
       );
-      expect(notices.map((n) => JSON.parse(n.content_json).text)).toEqual([
-        "Set a default model for this agent in Settings → Project.",
-      ]);
+
+      expect(
+        notices.map((n) => JSON.parse(Schema.decodeUnknownSync(Schema.String)(n.content_json)).text),
+      ).toEqual(["Set a default model for this agent in Settings → Project."]);
       expect(ctx.tempod.requestsOf("session.start")).toHaveLength(0);
     },
     T,
@@ -2555,7 +2768,7 @@ describe.concurrent("queue runner scheduling", () => {
       // 03 Queue runner: "It runs after any change to state, turns, sessions or setup_status"; tempod coming back is
       // what the deferred turn waited for. 03 Failure handling: the socket closes, the DO reconnects.
       const ctx = await readyWorkspace();
-      const session = unwrap((await ctx.stub.createSession({ agent: "claude" })) as never) as { id: string };
+      const session = unwrap(await ctx.stub.createSession({ agent: "claude" }));
       await waitFor(
         async () => (await sessionRow(ctx.stub, session.id))?.status === "idle",
         3000,

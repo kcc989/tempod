@@ -87,13 +87,16 @@ export const loadConfig = (
   overrides: ConfigOverrides = {},
 ): Config => {
   const token = env["TEMPOD_TOKEN"];
+
   if (!token) throw new ConfigError("TEMPOD_TOKEN is missing");
   const port = Number(env["TEMPOD_PORT"] ?? "7070");
+
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new ConfigError("TEMPOD_PORT is not a port");
   const workspace = env["TEMPOD_WORKSPACE"] || "/workspace";
   const home = env["TEMPOD_HOME"] || "/home/tempo";
   const caWaitMs = Number(env["TEMPOD_CA_WAIT_MS"] ?? "10000");
   const stateDir = join(home, ".tempod");
+
   return {
     token,
     port,

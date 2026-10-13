@@ -1,4 +1,6 @@
-import type { Environment } from "@tempo/protocol";
+import { Schema } from "effect";
+import { useApiCall } from "~/ui/hooks/useCall";
+import { EgressPolicy, type Environment } from "@tempo/protocol";
 import { useQueryClient } from "@tanstack/react-query";
 import { NetworkIcon, PlusIcon, XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -10,7 +12,7 @@ import { Input } from "~/ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
 import { Textarea } from "~/ui/components/ui/textarea";
 import { invalidateCalls, useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
-import { call } from "~/ui/lib/api";
+
 import { errorCode, errorDetail, errorText, toastError } from "~/ui/lib/toast";
 import { cn } from "~/ui/lib/utils";
 import { confirm } from "~/ui/state/workspace-ui";
@@ -31,9 +33,11 @@ import {
 import { Field, SubmitKbd } from "../parts";
 
 const INLINE_CODES = new Set(["VALIDATION_FAILED", "ENVIRONMENT_EXISTS"]);
-const problemText = (e: unknown): string => {
-  const detail = errorDetail(e);
-  return detail ? `${errorText(e)} ${detail}` : errorText(e);
+
+const problemText = (cause: unknown): string => {
+  const detail = errorDetail(cause);
+
+  return detail ? `${errorText(cause)} ${detail}` : errorText(cause);
 };
 
 /** Settings → Environments (04): named environments with egress rules, secrets and injectors. */
@@ -42,6 +46,7 @@ export function EnvironmentsTab() {
   const [selected, setSelected] = useState<string | null>(null);
 
   if (envs.isPending) return <SkeletonRows rows={6} />;
+
   if (envs.isError) return <ErrorState error={envs.error} onRetry={() => void envs.refetch()} />;
   const list = envs.data;
   const current = list.find((e) => e.id === selected) ?? list[0];
@@ -90,6 +95,7 @@ function NewEnvironment({ onCreated }: { onCreated: (env: Environment) => void }
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   const create = useCallMutation("createEnvironment", {
     toast: false,
     invalidates: ["listEnvironments"],
@@ -102,6 +108,7 @@ function NewEnvironment({ onCreated }: { onCreated: (env: Environment) => void }
     },
     onError: (e) => (INLINE_CODES.has(errorCode(e) ?? "") ? setError(problemText(e)) : toastError(e)),
   });
+
   if (!open) {
     return (
       <Button type="button" size="sm" variant="outline" className="w-fit" onClick={() => setOpen(true)}>
@@ -110,6 +117,7 @@ function NewEnvironment({ onCreated }: { onCreated: (env: Environment) => void }
       </Button>
     );
   }
+
   return (
     <form
       className="grid gap-1.5"
@@ -117,6 +125,7 @@ function NewEnvironment({ onCreated }: { onCreated: (env: Environment) => void }
       onSubmit={(e) => {
         e.preventDefault();
         const n = name.trim();
+
         if (n === "") return setError("Enter a name.");
         create.mutate({ name: n });
       }}
@@ -155,6 +164,8 @@ function NewEnvironment({ onCreated }: { onCreated: (env: Environment) => void }
 }
 
 function EnvironmentEditor({ env }: { env: Environment }) {
+  const call = useApiCall();
+
   const queryClient = useQueryClient();
   const [initial] = useState(() => formFromEnvironment(env));
   const [form, setForm] = useState<EnvironmentForm>(initial);
@@ -173,19 +184,25 @@ function EnvironmentEditor({ env }: { env: Environment }) {
 
   const submit = async () => {
     const parsed = updateFromForm(form);
+
     if (!parsed.ok) {
       setErrors(parsed.errors);
       setProblem("Check the highlighted fields.");
+
       return;
     }
+
     setErrors({});
     setProblem(null);
     setSaving(true);
+
     try {
       await call("updateEnvironment", { environmentId: env.id, ...parsed.update });
+
       for (const v of parsed.values) {
         await call("setEnvironmentSecret", { environmentId: env.id, name: v.name, value: v.value });
       }
+
       setForm((f) => ({ ...f, secrets: f.secrets.map((r) => ({ ...r, value: "" })) }));
       toast.success("Environment saved");
     } catch (e) {
@@ -221,7 +238,9 @@ function EnvironmentEditor({ env }: { env: Environment }) {
       <Field label="Egress policy" htmlFor="env-policy">
         <Select
           value={form.egressPolicy}
-          onValueChange={(v) => patch({ egressPolicy: v as EnvironmentForm["egressPolicy"] })}
+          onValueChange={(v) => {
+            if (Schema.is(EgressPolicy)(v)) patch({ egressPolicy: v });
+          }}
         >
           <SelectTrigger id="env-policy" className="w-56">
             <SelectValue />
@@ -315,6 +334,7 @@ function SecretsEditor({
 }) {
   const patch = (key: number, p: Partial<SecretRow>) =>
     onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
+
   return (
     <section aria-labelledby="env-secrets" className="grid gap-2 border-t pt-3">
       <h3 id="env-secrets" className="text-sm font-semibold">
@@ -328,6 +348,7 @@ function SecretsEditor({
         {rows.map((r, i) => {
           const label = r.name.trim() || `Secret ${i + 1}`;
           const hint = secretHint(r.name, r.hosts);
+
           return (
             <li key={r.key} className="grid gap-1.5 rounded-md border p-2">
               <div className="grid gap-1.5 sm:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
@@ -412,6 +433,7 @@ function InjectorsEditor({
 }) {
   const patch = (key: number, p: Partial<InjectorRow>) =>
     onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
+
   return (
     <section aria-labelledby="env-injectors" className="grid gap-2 border-t pt-3">
       <h3 id="env-injectors" className="text-sm font-semibold">
@@ -425,6 +447,7 @@ function InjectorsEditor({
       <ul className="grid gap-3">
         {rows.map((r, i) => {
           const label = r.name.trim() || `Injector ${i + 1}`;
+
           return (
             <li key={r.key} className="grid gap-1.5 rounded-md border p-2">
               <div className="grid gap-1.5 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">

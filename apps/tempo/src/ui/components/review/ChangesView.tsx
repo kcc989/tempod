@@ -36,6 +36,7 @@ const rowKey = (r: ChangeRow) => r.key;
 
 const activeDiffPath = (s: WorkspaceUiState): string | null => {
   const t = s.tabs.find((x) => x.key === s.activeKey);
+
   return t?.tab.kind === "diff" ? t.tab.path : null;
 };
 
@@ -51,10 +52,12 @@ export function ChangesView({
   const changes = useChanges(workspaceId);
   const [grouped, setGrouped] = useLocalStorage(GROUP_BY_FOLDER_KEY, false, isBoolean);
   const [collapsed, setCollapsed] = useRememberedSet(`changes:${workspaceId}`);
+
   const rows = useMemo(
     () => changeRows(changes.files, { grouped, collapsed }),
     [changes.files, grouped, collapsed],
   );
+
   const sum = totals(changes.files);
   const openPath = useWorkspaceUiSelector(workspaceId, activeDiffPath);
 
@@ -62,10 +65,13 @@ export function ChangesView({
     (dir: string, open?: boolean) => {
       setCollapsed((cur) => {
         const isOpen = !cur.has(dir);
+
         if (open !== undefined && open === isOpen) return cur;
         const next = new Set(cur);
+
         if (isOpen) next.add(dir);
         else next.delete(dir);
+
         return next;
       });
     },
@@ -75,17 +81,22 @@ export function ChangesView({
   const activate = (row: ChangeRow) => {
     if (row.kind === "folder") {
       toggleDir(row.dir);
+
       return;
     }
+
     openDiff(workspaceId, row.file.path);
+
     if (phone) setPhonePane("chat");
   };
 
   const onItemKey = (e: KeyboardEvent<HTMLDivElement>, row: ChangeRow) => {
     if (row.kind !== "folder") return false;
+
     if (e.key === "ArrowRight") toggleDir(row.dir, true);
     else if (e.key === "ArrowLeft") toggleDir(row.dir, false);
     else return false;
+
     return true;
   };
 
@@ -103,6 +114,7 @@ export function ChangesView({
           variant="outline"
           onClick={() => {
             openGuide(workspaceId);
+
             if (phone) setPhonePane("chat");
           }}
         >
@@ -174,6 +186,7 @@ export function ChangesView({
 function ChangeRowView({ row, current }: { row: ChangeRow; current: boolean }) {
   if (row.kind === "folder") {
     const Chevron = row.collapsed ? ChevronRightIcon : ChevronDownIcon;
+
     return (
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         <Chevron aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
@@ -185,8 +198,10 @@ function ChangeRowView({ row, current }: { row: ChangeRow; current: boolean }) {
       </span>
     );
   }
+
   const { file } = row;
   const title = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path;
+
   return (
     <span className={cn("flex min-w-0 flex-1 items-center gap-2", row.depth === 1 && "pl-5")}>
       <StatusLetter status={file.status} />
@@ -249,17 +264,21 @@ function CommitFooter({ workspaceId }: { workspaceId: string }) {
   const live = useLive(workspaceId);
   const detailTitle = useWorkspaceSelector(workspaceId, (s) => s.workspace?.title);
   const summaryTitle = useHubWorkspace(workspaceId)?.title;
+
   const commit = useCallMutation("commitAndPush", {
     onSuccess: () => {
       toast.success("Committed and pushed.");
       setMessage("");
     },
   });
+
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
+
     if (!live || commit.isPending) return;
     commit.mutate({ workspaceId, message: message.trim() });
   };
+
   return (
     <form onSubmit={submit} className="flex shrink-0 flex-col gap-1.5 border-t p-2">
       <Label htmlFor={id} className="sr-only">

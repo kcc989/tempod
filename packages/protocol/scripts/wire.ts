@@ -152,7 +152,7 @@ export const SHARED = {
   Environment: P.Environment,
   EnvironmentProposal: P.EnvironmentProposal,
   PendingEnvironmentProposal: P.PendingEnvironmentProposal,
-} as const satisfies Record<string, Schema.Top>;
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 export const WORKSPACE_CHANNEL = {
   WsHello: P.WsHello,
@@ -173,24 +173,24 @@ export const WORKSPACE_CHANNEL = {
   WsPong: P.WsPong,
   WorkspaceServerMessage: P.WorkspaceServerMessage,
   ClientPing: P.ClientPing,
-} as const satisfies Record<string, Schema.Top>;
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 export const HUB_CHANNEL = {
   HubHello: P.HubHello,
   HubWorkspace: P.HubWorkspace,
   HubWorkspaceRemoved: P.HubWorkspaceRemoved,
   HubServerMessage: P.HubServerMessage,
-} as const satisfies Record<string, Schema.Top>;
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 export const TERMINAL_CHANNEL = {
   TerminalResize: P.TerminalResize,
   TerminalReady: P.TerminalReady,
-} as const satisfies Record<string, Schema.Top>;
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 const pascal = (s: string): string => s[0]!.toUpperCase() + s.slice(1);
 
 const isEmptyStruct = (ast: SchemaAST.AST): boolean =>
-  ast._tag === "Objects" && ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0;
+  SchemaAST.isObjects(ast) && ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0;
 
 /** How an API function's input or output maps to a wire type. */
 export type TypeRef =
@@ -205,11 +205,13 @@ export interface ApiFunction {
 }
 
 const byAst = new Map<SchemaAST.AST, string>();
-const wire: Array<readonly [string, Schema.Top]> = [];
 
-const register = (name: string, schema: Schema.Top): void => {
+const wire: Array<readonly [string, Schema.Top & Schema.ConstraintDecoder<unknown>]> = [];
+
+const register = (name: string, schema: Schema.Top & Schema.ConstraintDecoder<unknown>): void => {
   if (wire.some(([n]) => n === name)) throw new Error(`duplicate wire type name ${name}`);
   wire.push([name, schema]);
+
   if (!byAst.has(schema.ast)) byAst.set(schema.ast, name);
 };
 
@@ -217,29 +219,43 @@ for (const group of [SHARED, WORKSPACE_CHANNEL, HUB_CHANNEL, TERMINAL_CHANNEL]) 
   for (const [name, schema] of Object.entries(group)) register(name, schema);
 }
 
-const resolve = (fn: string, suffix: "In" | "Out", schema: Schema.Top): TypeRef => {
+const resolve = (
+  fn: string,
+  suffix: "In" | "Out",
+  schema: Schema.Top & Schema.ConstraintDecoder<unknown>,
+): TypeRef => {
   const named = byAst.get(schema.ast);
+
   if (named) return { kind: "named", name: named };
+
   if (isEmptyStruct(schema.ast)) {
     if (!byAst.has(schema.ast)) register("Empty", schema);
+
     return { kind: "named", name: "Empty" };
   }
+
   const ast = schema.ast;
-  if (ast._tag === "Arrays" && ast.elements.length === 0 && ast.rest.length === 1) {
+
+  if (SchemaAST.isArrays(ast) && ast.elements.length === 0 && ast.rest.length === 1) {
     const item = ast.rest[0]!;
     const itemName = byAst.get(item);
+
     if (itemName) return { kind: "array", name: itemName };
     const name = `${pascal(fn)}Item`;
     register(name, Schema.make(item));
+
     return { kind: "array", name };
   }
+
   const name = `${pascal(fn)}${suffix}`;
   register(name, schema);
+
   return { kind: "named", name };
 };
 
 export const API_FUNCTIONS: ReadonlyArray<ApiFunction> = P.FN_NAMES.map((name) => {
   const f = P.API[name];
+
   return {
     name,
     method: f.method,
@@ -249,11 +265,14 @@ export const API_FUNCTIONS: ReadonlyArray<ApiFunction> = P.FN_NAMES.map((name) =
 });
 
 /** Every wire type in a stable order: shared types, channels, then API inputs and outputs. */
-export const WIRE_TYPES: ReadonlyArray<readonly [string, Schema.Top]> = wire;
+export const WIRE_TYPES: ReadonlyArray<readonly [string, Schema.Top & Schema.ConstraintDecoder<unknown>]> =
+  wire;
 
-export const wireType = (name: string): Schema.Top => {
+export const wireType = (name: string): Schema.Top & Schema.ConstraintDecoder<unknown> => {
   const found = wire.find(([n]) => n === name);
+
   if (!found) throw new Error(`unknown wire type ${name}`);
+
   return found[1];
 };
 

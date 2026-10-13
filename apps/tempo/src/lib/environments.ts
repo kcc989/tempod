@@ -24,6 +24,7 @@ export const parseEnvironment = (row: EnvironmentRow): EnvironmentConfig => ({
 export const environmentToWire = (row: EnvironmentRow, setNames: ReadonlyArray<string>): Environment => {
   const c = parseEnvironment(row);
   const set = new Set(setNames);
+
   return {
     id: c.id,
     name: c.name,
@@ -38,10 +39,12 @@ export const environmentToWire = (row: EnvironmentRow, setNames: ReadonlyArray<s
 
 export const sha256Hex = async (text: string): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
 export const environmentSecretKey = (environmentId: string, name: string): string =>
   `environment.${environmentId}.secret.${name}`;
+
 export const environmentSecretPrefix = (environmentId: string): string =>
   `environment.${environmentId}.secret.`;

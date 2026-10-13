@@ -1,12 +1,20 @@
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+call.mockImplementation(async () => []);
+
 import { DEFAULT_SETTINGS, type AgentModelOptions, type SettingsLayer } from "@tempo/protocol";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { call } from "~/ui/lib/api";
+
 import { ProjectModels } from "~/ui/components/dialogs/settings/ProjectModels";
 import { formFromLayer, layerFromForm } from "~/ui/components/dialogs/settings-model";
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn(async () => []) }));
+
 const credentials = {
   claude: { set: true, updatedAt: null },
   codex: { set: true, updatedAt: null, lastRefresh: null },
@@ -14,21 +22,26 @@ const credentials = {
   openai: { set: false, updatedAt: null },
   openrouter: { set: false, updatedAt: null },
 };
+
 const models: AgentModelOptions[] = [
   { agent: "claude", currentValue: "claude-one", options: [{ value: "claude-one", name: "Claude One" }] },
   { agent: "codex", currentValue: "codex-one", options: [{ value: "codex-one", name: "Codex One" }] },
   { agent: "pi", currentValue: "pi-one", options: [{ value: "pi-one", name: "Pi One" }] },
 ];
+
 function show(layer: SettingsLayer = {}, disconnected = false, discoveryError = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(
     ["call", "getCredentialStatus", {}],
     disconnected ? { ...credentials, claude: { set: false }, codex: { set: false } } : credentials,
   );
+
   if (!discoveryError) client.setQueryData(["call", "listModels", {}], models);
+
   function Form() {
     const [initial] = useState(() => formFromLayer(layer, DEFAULT_SETTINGS));
     const [form, setForm] = useState(initial);
+
     return (
       <>
         <ProjectModels
@@ -42,17 +55,22 @@ function show(layer: SettingsLayer = {}, disconnected = false, discoveryError = 
       </>
     );
   }
+
   return render(
     <QueryClientProvider client={client}>
       <Form />
     </QueryClientProvider>,
+    { wrapper: environment.Provider },
   );
 }
+
 const layer = () => JSON.parse(screen.getByLabelText("Layer").textContent!);
+
 async function choose(name: string, option: string) {
   fireEvent.keyDown(screen.getByRole("combobox", { name }), { key: "ArrowDown" });
   fireEvent.click(await screen.findByRole("option", { name: option }));
 }
+
 describe("project model defaults", () => {
   it("uses reported models without creating overrides on open and filters disconnected agents", async () => {
     show({ agent: { models: { pi: "saved-hidden" } } });

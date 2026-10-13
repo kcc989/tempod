@@ -31,7 +31,8 @@ export class WorkspaceStore {
     factory?: (url: string) => SocketLike,
   ) {
     this.snapshot = { ...emptyWorkspaceState, status: "connecting" };
-    this.socket = new ReconnectingSocket({
+
+    const options: import("~/ui/lib/socket").ReconnectingSocketOptions = {
       url: () =>
         wsUrl(`/api/ws/workspace/${encodeURIComponent(workspaceId)}?sinceRev=${this.snapshot.itemsRev}`),
       onMessage: (raw) => this.receive(raw),
@@ -39,8 +40,9 @@ export class WorkspaceStore {
         connectionMonitor.report(this.key, status);
         this.setSnapshot({ ...this.snapshot, status });
       },
-      ...(factory ? { factory } : {}),
-    });
+    };
+
+    this.socket = new ReconnectingSocket(factory ? { ...options, factory } : options);
   }
 
   private get key(): string {
@@ -68,6 +70,7 @@ export class WorkspaceStore {
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
+
     return () => {
       this.listeners.delete(listener);
     };
@@ -75,6 +78,7 @@ export class WorkspaceStore {
 
   onEvent(listener: (e: WorkspaceEvent) => void): () => void {
     this.eventListeners.add(listener);
+
     return () => {
       this.eventListeners.delete(listener);
     };
@@ -84,24 +88,30 @@ export class WorkspaceStore {
   receive(raw: string): void {
     if (isUnknownVersionHello(raw)) return this.socket.rejectVersion();
     const msg = parseWorkspaceMessage(raw);
+
     if (!msg) return;
     const { state, events } = applyWorkspaceMessage(this.snapshot, msg);
+
     if (state !== this.snapshot) this.setSnapshot({ ...state, status: this.snapshot.status });
+
     for (const e of events) for (const l of this.eventListeners) l(e);
   }
 
   seedScriptOutput(runId: string, logTail: string): void {
     const next = seedScriptOutput(this.snapshot, runId, logTail);
+
     if (next !== this.snapshot) this.setSnapshot({ ...next, status: this.snapshot.status });
   }
 
   clearCredentialInvalid(providers: ReadonlyArray<CredentialProvider>): void {
     const next = clearCredentialInvalid(this.snapshot, providers);
+
     if (next !== this.snapshot) this.setSnapshot({ ...next, status: this.snapshot.status });
   }
 
   private setSnapshot(next: WorkspaceSnapshot): void {
     this.snapshot = next;
+
     for (const l of this.listeners) l();
   }
 }
@@ -117,21 +127,25 @@ const RELEASE_MS = 5_000;
 /** Returns the workspace's store, creating it (not yet connected) if needed. Safe during render. */
 export const getWorkspaceStore = (workspaceId: string): WorkspaceStore => {
   let entry = stores.get(workspaceId);
+
   if (!entry) {
     entry = { store: new WorkspaceStore(workspaceId), refs: 0, timer: null };
     stores.set(workspaceId, entry);
   }
+
   return entry.store;
 };
 
 /** Called from an effect: keeps the store connected while a view uses it. */
 export const retainWorkspaceStore = (store: WorkspaceStore): void => {
   let entry = stores.get(store.workspaceId);
+
   if (!entry || entry.store !== store) {
     entry?.store.stop();
     entry = { store, refs: 0, timer: null };
     stores.set(store.workspaceId, entry);
   }
+
   if (entry.timer !== null) clearTimeout(entry.timer);
   entry.timer = null;
   entry.refs++;
@@ -140,8 +154,10 @@ export const retainWorkspaceStore = (store: WorkspaceStore): void => {
 
 export const releaseWorkspaceStore = (store: WorkspaceStore): void => {
   const entry = stores.get(store.workspaceId);
+
   if (!entry || entry.store !== store) return;
   entry.refs = Math.max(0, entry.refs - 1);
+
   if (entry.refs > 0) return;
   entry.timer = setTimeout(() => {
     if (entry.refs > 0) return;

@@ -44,10 +44,15 @@ const fn = <I extends Schema.Top, O extends Schema.Top>(method: "GET" | "POST", 
 });
 
 const Empty = Schema.Struct({});
+
 const W = { workspaceId: Schema.String };
+
 const S = Schema.String;
+
 const N = Schema.Number;
+
 const B = Schema.Boolean;
+
 const opt = Schema.optional;
 
 export const NewSource = Schema.Union([
@@ -55,9 +60,11 @@ export const NewSource = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("branch"), branch: S }),
   Schema.Struct({ kind: Schema.Literal("pr"), number: N }),
 ]);
+
 export type NewSource = typeof NewSource.Type;
 
 export const ScriptRunWithLog = Schema.Struct({ ...ScriptRun.fields, logTail: S });
+
 export type ScriptRunWithLog = typeof ScriptRunWithLog.Type;
 
 const NonEmpty = S.check(Schema.isMinLength(1));
@@ -352,15 +359,22 @@ export const API = {
 } as const;
 
 export type Api = typeof API;
+
 export type FnName = keyof Api;
+
 export type FnInput<K extends FnName> = Api[K]["input"]["Type"];
+
 export type FnOutput<K extends FnName> = Api[K]["output"]["Type"];
+
+// SAFETY: API is a closed literal with exactly the registered FnName keys.
 export const FN_NAMES = Object.keys(API) as ReadonlyArray<FnName>;
 
 /** Functions whose input carries a workspaceId: the Worker checks ownership, then calls the WorkspaceDO. */
+// SAFETY: the filter keeps exactly the registered functions whose input schema declares workspaceId.
 export const WORKSPACE_FNS = FN_NAMES.filter((n) => "workspaceId" in API[n].input.fields) as ReadonlyArray<
   Extract<FnName, { [K in FnName]: "workspaceId" extends keyof FnInput<K> ? K : never }[FnName]>
 >;
+
 export type WorkspaceFnName = (typeof WORKSPACE_FNS)[number];
 
 /** Native client meta (07). */
@@ -371,6 +385,7 @@ export const ApiMeta = Schema.Struct({
   latestMacClient: Schema.NullOr(S),
   latestMacClientSha256: Schema.optional(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 });
+
 export type ApiMeta = typeof ApiMeta.Type;
 
 /** `GET /api/setup/status`, no auth: whether the GitHub App exists, and its install page. */
@@ -378,4 +393,5 @@ export const AppSetupStatus = Schema.Struct({
   configured: Schema.Boolean,
   installUrl: Schema.NullOr(S),
 });
+
 export type AppSetupStatus = typeof AppSetupStatus.Type;

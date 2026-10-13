@@ -93,9 +93,12 @@ export type Animal = (typeof ANIMALS)[number];
 
 export const pickSlug = (used: Iterable<string>): string => {
   const taken = new Set(used);
+
   for (const animal of ANIMALS) if (!taken.has(animal)) return animal;
+
   for (let n = 2; ; n++) {
     const slug = `${ANIMALS[0]}-${n}`;
+
     if (!taken.has(slug)) return slug;
   }
 };

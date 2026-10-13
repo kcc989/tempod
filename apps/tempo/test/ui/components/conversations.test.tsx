@@ -1,9 +1,11 @@
+import { createUiEnvironment } from "../environment";
+import type { ConversationArtifact } from "@tempo/protocol";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ProjectConversations } from "../../../src/ui/components/history/ProjectConversations";
 
-const artifact = {
+const artifact: ConversationArtifact = {
   version: 1,
   conversationId: "deleted-workspace",
   projectId: "p1",
@@ -27,16 +29,27 @@ const artifact = {
   })),
 };
 
-vi.mock("~/ui/hooks/useCall", () => ({
-  useCallQuery: (name: string) => ({
-    isPending: false,
-    isError: false,
-    data: name === "listProjectConversations" ? { conversations: [artifact], cursor: null } : artifact,
-  }),
-}));
+const environment = createUiEnvironment();
+
+environment.request.mockImplementation(async (name) =>
+  name === "listProjectConversations"
+    ? {
+        conversations: [
+          {
+            conversationId: artifact.conversationId,
+            projectId: artifact.projectId,
+            title: artifact.title,
+            branch: artifact.branch,
+            updatedAt: artifact.updatedAt,
+          },
+        ],
+        cursor: null,
+      }
+    : artifact,
+);
 
 describe("saved project conversations", () => {
-  it("opens retained transcripts and pages through their messages without live workspace actions", () => {
+  it("opens retained transcripts and pages through their messages without live workspace actions", async () => {
     const { container } = render(
       createElement(ProjectConversations, {
         project: {
@@ -50,9 +63,11 @@ describe("saved project conversations", () => {
           sortOrder: 0,
         },
       }),
+      { wrapper: environment.Provider },
     );
-    fireEvent.click(screen.getByRole("button", { name: /Saved discussion/ }));
-    expect(screen.getByRole("list", { name: "Saved transcript" }).children).toHaveLength(100);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Saved discussion/ }));
+    expect((await screen.findByRole("list", { name: "Saved transcript" })).children).toHaveLength(100);
     expect(container.querySelector("img, script")).toBeNull();
     expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next messages" }));

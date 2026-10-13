@@ -1,26 +1,32 @@
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TempoError } from "@tempo/protocol";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CodexDeviceLogin } from "../../../src/ui/components/dialogs/settings/LoginsTab";
-import { call } from "../../../src/ui/lib/api";
-
-vi.mock("../../../src/ui/lib/api", () => ({ call: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const setup = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
   const view = render(
     createElement(
       QueryClientProvider,
       { client: queryClient },
       createElement(CodexDeviceLogin, { replacing: false }),
     ),
+    { wrapper: environment.Provider },
   );
+
   const login = {
     loginId: "login-1",
     verificationUrl: "https://auth.openai.com/codex/device",
@@ -28,6 +34,7 @@ const setup = () => {
     intervalMs: 1000,
     expiresAt: Date.now() + 900_000,
   };
+
   return { ...view, login, invalidate };
 };
 

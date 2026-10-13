@@ -129,10 +129,10 @@ describe("workspace power and archive", () => {
   });
 
   it("archives only from ready, working, sleeping or error", () => {
-    expect(["ready", "working", "sleeping", "error"].every((s) => canArchive(s as never))).toBe(true);
+    expect((["ready", "working", "sleeping", "error"] as const).every((s) => canArchive(s))).toBe(true);
     expect(
-      ["creating", "starting", "setting_up", "stopping", "archiving", "archived"].some((s) =>
-        canArchive(s as never),
+      (["creating", "starting", "setting_up", "stopping", "archiving", "archived"] as const).some((s) =>
+        canArchive(s),
       ),
     ).toBe(false);
   });
@@ -163,8 +163,10 @@ describe("links and inputs", () => {
       className: "text-success",
       ariaLabel: "Pull request #12, open. Opens on GitHub",
     });
+
     const tone = (prState: "open" | "draft" | "merged" | "closed" | null) =>
       prLink({ owner: "acme", name: "app" }, { prNumber: 3, prState })?.className;
+
     expect(tone("draft")).toBe("text-muted-foreground");
     expect(tone("merged")).toBe("text-merged");
     expect(tone("closed")).toBe("text-destructive");

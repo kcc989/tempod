@@ -13,11 +13,12 @@ export interface UseActionOptions {
  * Registers a handler for an app action (⌥N, ⌥T, …) while mounted. The global key listener and
  * the command palette run it. The most recently mounted non-fallback handler wins.
  */
-export function useAction(id: ActionId, handler: () => unknown, options: UseActionOptions = {}): void {
+export function useAction(id: ActionId, handler: () => void, options: UseActionOptions = {}): void {
   const { enabled = true, fallback = false } = options;
   const run = useEffectEvent(handler);
   useEffect(() => {
     if (!enabled) return;
+
     return registerAction(id, () => run(), { fallback });
   }, [id, enabled, fallback]);
 }
@@ -25,5 +26,6 @@ export function useAction(id: ActionId, handler: () => unknown, options: UseActi
 /** Global actions with an enabled handler, for the command palette. */
 export function useAvailableActions(): Binding[] {
   useSyncExternalStore(subscribeActions, actionsVersion, actionsVersion);
+
   return availableActions();
 }

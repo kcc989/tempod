@@ -4,7 +4,9 @@ import { connectionMonitor } from "~/ui/stores/connection";
 /** 04: a thin bar at the top while a live socket has been down for over 2 s. */
 export function ReconnectingBar() {
   const { reconnecting } = useStore(connectionMonitor);
+
   if (!reconnecting) return null;
+
   return (
     <div
       role="status"

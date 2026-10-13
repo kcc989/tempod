@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { RadioIcon, RotateCwIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CenterTabProps } from "~/ui/components/chat/tab-kinds";
@@ -6,7 +7,7 @@ import { BROWSER_SESSION_ENDED } from "~/ui/components/topbar/open-preview";
 import { Button } from "~/ui/components/ui/button";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
-import { call } from "~/ui/lib/api";
+import { useApiCall } from "~/ui/hooks/useCall";
 import { errorText } from "~/ui/lib/toast";
 import { PREVIEW_SANDBOX } from "./browser-model";
 
@@ -25,6 +26,7 @@ type View =
   | { readonly kind: "failed"; readonly message: string };
 
 function LiveView({ workspaceId }: { workspaceId: string }) {
+  const call = useApiCall();
   const active = useWorkspaceSelector(workspaceId, (s) => s.workspace?.browserActive ?? null);
   const [view, setView] = useState<View>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -37,14 +39,15 @@ function LiveView({ workspaceId }: { workspaceId: string }) {
       ({ url }) => {
         if (live) setView(url === null ? { kind: "ended" } : { kind: "ready", url });
       },
-      (e: unknown) => {
-        if (live) setView({ kind: "failed", message: errorText(e) });
+      (cause: unknown) => {
+        if (live) setView({ kind: "failed", message: errorText(cause) });
       },
     );
+
     return () => {
       live = false;
     };
-  }, [workspaceId, attempt]);
+  }, [workspaceId, attempt, call]);
 
   const reload = () => {
     setView({ kind: "loading" });
@@ -60,20 +63,23 @@ function LiveView({ workspaceId }: { workspaceId: string }) {
           </Button>
         </SimpleTooltip>
       </div>
-      {view.kind === "ready" ? (
-        <iframe
-          title="Live View"
-          src={view.url}
-          sandbox={PREVIEW_SANDBOX}
-          referrerPolicy="no-referrer"
-          className="min-h-0 w-full flex-1 border-0 bg-background"
-        />
-      ) : view.kind === "ended" ? (
-        <EmptyState className="min-h-0 flex-1" icon={RadioIcon} title={BROWSER_SESSION_ENDED} />
-      ) : view.kind === "failed" ? (
-        <EmptyState className="min-h-0 flex-1" icon={RadioIcon} title={view.message} />
-      ) : (
-        <div aria-busy="true" className="min-h-0 flex-1 bg-background" />
+      {Match.value(view).pipe(
+        Match.when({ kind: "ready" }, (view) => (
+          <iframe
+            title="Live View"
+            src={view.url}
+            sandbox={PREVIEW_SANDBOX}
+            referrerPolicy="no-referrer"
+            className="min-h-0 w-full flex-1 border-0 bg-background"
+          />
+        )),
+        Match.when({ kind: "ended" }, () => (
+          <EmptyState className="min-h-0 flex-1" icon={RadioIcon} title={BROWSER_SESSION_ENDED} />
+        )),
+        Match.when({ kind: "failed" }, (view) => (
+          <EmptyState className="min-h-0 flex-1" icon={RadioIcon} title={view.message} />
+        )),
+        Match.orElse(() => <div aria-busy="true" className="min-h-0 flex-1 bg-background" />),
       )}
     </div>
   );

@@ -18,5 +18,6 @@ export const ARTIFACT_ICONS: Readonly<Record<ArtifactKind, LucideIcon>> = {
 
 export function ArtifactIcon({ kind, className }: { kind: ArtifactKind; className?: string }) {
   const Icon = ARTIFACT_ICONS[kind];
+
   return <Icon aria-hidden className={className} />;
 }

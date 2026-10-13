@@ -60,8 +60,10 @@ describe("hub events to notifications", () => {
     const hub = new HubStore();
     const seen: NotifyEvent[] = [];
     hub.onNotify((e) => seen.push(e));
+
     const hello = (ws: ReturnType<typeof summary>[]) =>
       JSON.stringify({ type: "hello", v: 1, workspaces: ws });
+
     const update = (w: ReturnType<typeof summary>) => JSON.stringify({ type: "workspace", summary: w });
     hub.receive(hello([summary({ id: "a", state: "working" }), summary({ id: "b" }), summary({ id: "c" })]));
     hub.receive(update(summary({ id: "a", state: "ready", rev: 2 })));

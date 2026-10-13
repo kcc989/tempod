@@ -17,6 +17,7 @@ import { findEnvironment, PROJECT_DEFAULT, projectDefaultLabel } from "./environ
 /** 04, Environment… dialog: the workspace's environment override, saved at once. */
 export function WorkspaceEnvironmentDialog() {
   const { open, args, onOpenChange } = useDialog("environment");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -37,11 +38,13 @@ function Body({ workspaceId }: { workspaceId: string }) {
   const workspace = useWorkspaceSelector(workspaceId, (s) => s.workspace);
   const project = useProject(workspace?.projectId);
   const envs = useCallQuery("listEnvironments", {});
+
   const set = useCallMutation("setWorkspaceEnvironment", {
     onSuccess: () => toast.success("Environment changed"),
   });
 
   if (envs.isPending || !workspace) return <SkeletonRows rows={2} />;
+
   if (envs.isError) return <ErrorState error={envs.error} onRetry={() => void envs.refetch()} />;
   const projectEnv = findEnvironment(envs.data, project?.environmentId);
   const override = findEnvironment(envs.data, workspace.environmentId);

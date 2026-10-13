@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 import { newId, type TempodEvent } from "@tempo/protocol";
@@ -7,6 +8,7 @@ import { applyTempodEvent } from "../../src/do/workspace/events.ts";
 import {
   DEFAULT_EFFECTIVE,
   FakeTempod,
+  FakeContainer,
   installFakes,
   internals,
   seedProject,
@@ -27,24 +29,30 @@ class Socket extends EventTarget {
     );
   }
 }
+
 type Stub = DurableObjectStub<WorkspaceDO>;
+
 const transport = (stub: Stub, handler?: EventHandler) =>
   runInDurableObject(stub, (instance: WorkspaceDO) => {
     const { core, runner } = internals(instance);
     const socket = new Socket();
+
     const client = new TempodClient(
       core,
-      socket as unknown as WebSocket,
+      socket,
       handler ?? ((event) => applyTempodEvent({ core, runner }, event)),
       () => {},
     );
+
     return { socket, client };
   });
+
 const isolated = async () => {
   const w = await seedWorkspace(await seedProject());
   await waitFor(async () => {
     await runDurableObjectAlarm(w.stub);
     const detail = await w.stub.getWorkspace({});
+
     return detail.ok && detail.value.state === "ready";
   });
   await runInDurableObject(w.stub, async (instance: WorkspaceDO, state: DurableObjectState) => {
@@ -59,8 +67,10 @@ const isolated = async () => {
     state.storage.sql.exec("UPDATE workspace SET state = 'sleeping', tempod_acked_seq = 0");
     state.storage.deleteAlarm();
   });
+
   return w;
 };
+
 const notice = (id: string): TempodEvent => ({
   kind: "item.created",
   sessionId: newId(),
@@ -77,24 +87,30 @@ const notice = (id: string): TempodEvent => ({
 describe("daemon transport recovery", () => {
   it("rolls back a failed local event and blocks later events until replay", async () => {
     const { stub } = await isolated();
+
     const id = newId(),
       laterId = newId();
+
     const first = notice(id),
       later = notice(laterId);
+
     const failing = await runInDurableObject(stub, (instance: WorkspaceDO) => {
       const { core, runner } = internals(instance);
       const socket = new Socket();
+
       const client = new TempodClient(
         core,
-        socket as unknown as WebSocket,
+        socket,
         (event) => {
           applyTempodEvent({ core, runner }, event);
           throw new Error("injected event failure");
         },
         () => {},
       );
+
       return { socket, client };
     });
+
     await runInDurableObject(stub, () => {
       failing.socket.receive(1, first);
       failing.socket.receive(2, later);
@@ -122,16 +138,19 @@ describe("daemon transport recovery", () => {
 
   it("retries rejected credential offers without storing their secrets or acknowledging later events", async () => {
     const { stub } = await isolated();
+
     const offer = vi
       .fn()
       .mockRejectedValueOnce(new Error("credential service unavailable"))
       .mockResolvedValue(undefined);
+
     const event: TempodEvent = {
       kind: "credential.changed",
       provider: "codex",
       content: "private-test-credential",
       lastRefresh: Date.now(),
     };
+
     const failing = await transport(stub, () => offer());
     await runInDurableObject(stub, () => {
       failing.socket.receive(1, event);
@@ -198,13 +217,23 @@ describe("daemon transport recovery", () => {
     await runInDurableObject(stub, async (instance: WorkspaceDO) => {
       const { core } = internals(instance);
       core.updateWs({ tempodToken: "health-test-token" });
+
       const fetch = vi.fn(
-        (_input: unknown, init: RequestInit) =>
+        (_input: RequestInfo | URL, init: RequestInit) =>
           new Promise<Response>((_resolve, reject) => {
             init.signal!.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
           }),
       );
-      core.container = { running: true, getTcpPort: () => ({ fetch }) } as unknown as Container;
+
+      const container = new FakeContainer(new FakeTempod(), () => "health-test-token");
+      container.running = true;
+      vi.spyOn(container, "getTcpPort").mockReturnValue({
+        fetch,
+        connect: () => {
+          throw new Error("unused");
+        },
+      });
+      core.container = container;
       const { waitHealthy } = await import("../../src/do/workspace/container.ts");
       const controller = new AbortController();
       const probe = waitHealthy(core, controller.signal);
@@ -224,6 +253,7 @@ describe("daemon transport recovery", () => {
       warnings: [],
       errors: [],
     }));
+
     for (let i = 0; i < 5; i++) await runDurableObjectAlarm(stub);
     await waitFor(() => tempod.requestsOf("script.start").length === 1);
     const runId = tempod.requestsOf("script.start")[0]!.runId;
@@ -246,7 +276,10 @@ describe("daemon transport recovery", () => {
     ).rejects.toThrow("core recovery test restart");
     stub = env.WORKSPACE.get(stub.id);
     const replacement = new FakeTempod();
-    replacement.resume(tempod.incarnation, beforeRow.tempod_acked_seq);
+    replacement.resume(
+      tempod.incarnation,
+      Schema.decodeUnknownSync(Schema.Number)(beforeRow.tempod_acked_seq),
+    );
     const { container } = await installFakes(stub, replacement);
     container.running = true;
     await runDurableObjectAlarm(stub);
@@ -261,6 +294,7 @@ describe("daemon transport recovery", () => {
       async () =>
         (await sqlRows(stub, "SELECT setup_status FROM workspace"))[0]?.setup_status === "succeeded",
     );
+
     for (let i = 0; i < 3; i++) await runDurableObjectAlarm(stub);
     expect((await sqlRows(stub, "SELECT state FROM workspace"))[0]?.state).toBe("ready");
   }, 20_000);

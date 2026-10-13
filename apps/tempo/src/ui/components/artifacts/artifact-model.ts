@@ -12,11 +12,13 @@ export interface ArtifactGroup {
 /** One group per artifact, newest version first, groups by their newest version's time. */
 export const artifactGroups = (list: ReadonlyArray<Artifact>): ArtifactGroup[] => {
   const byId = new Map<string, Artifact[]>();
+
   for (const a of list) {
     const versions = byId.get(a.id) ?? [];
     versions.push(a);
     byId.set(a.id, versions);
   }
+
   return [...byId.entries()]
     .map(([id, versions]) => ({ id, versions: versions.sort((a, b) => b.version - a.version) }))
     .sort((a, b) => b.versions[0]!.createdAt - a.versions[0]!.createdAt || (a.id < b.id ? 1 : -1));
@@ -40,7 +42,7 @@ export const workspaceRelative = (path: string): string | null =>
     ? path.slice("/workspace/".length)
     : null;
 
-const IMAGE_MIMES: Readonly<Record<string, string>> = {
+const IMAGE_MIMES = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -52,13 +54,18 @@ const IMAGE_MIMES: Readonly<Record<string, string>> = {
 const extOf = (path: string): string => {
   const name = path.slice(path.lastIndexOf("/") + 1);
   const dot = name.lastIndexOf(".");
+
   return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
 };
 
 /** 04 file tabs: the raster image types shown as images; SVG is separate. */
-export const rasterMimeOf = (path: string): string | null => IMAGE_MIMES[extOf(path)] ?? null;
+export const rasterMimeOf = (path: string): string | null =>
+  Object.entries(IMAGE_MIMES).find(([extension]) => extension === extOf(path))?.[1] ?? null;
+
 export const isSvgPath = (path: string): boolean => extOf(path) === "svg";
+
 export const isImagePath = (path: string): boolean => rasterMimeOf(path) !== null || isSvgPath(path);
+
 export const isMarkdownPath = (path: string): boolean => ["md", "markdown"].includes(extOf(path));
 
 export const base64DataUrl = (mime: string, base64: string): string => `data:${mime};base64,${base64}`;
@@ -73,5 +80,6 @@ export const imageDataUrl = (
   if (isSvgPath(path))
     return file.encoding === "utf8" ? svgDataUrl(file.content) : base64DataUrl("image/svg+xml", file.content);
   const mime = rasterMimeOf(path);
+
   return mime && file.encoding === "base64" ? base64DataUrl(mime, file.content) : null;
 };

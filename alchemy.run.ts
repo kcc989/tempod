@@ -17,29 +17,37 @@ import * as Redacted from "effect/Redacted";
 
 const required = (name: string): string => {
   const value = process.env[name];
+
   if (!value) throw new Error(`${name} must be set`);
+
   return value;
 };
 
 const APP_HOST = required("APP_HOST");
+
 const PREVIEW_DOMAIN = required("PREVIEW_DOMAIN");
+
 const TEMPO_OWNER_GITHUB_ID = required("TEMPO_OWNER_GITHUB_ID");
+
 if (PREVIEW_DOMAIN === APP_HOST || APP_HOST.endsWith(`.${PREVIEW_DOMAIN}`)) {
   throw new Error("PREVIEW_DOMAIN must not be APP_HOST or a parent of it (05, Preview access)");
 }
 
 // Alchemy reads plain .sql files; drizzle-kit 0.31 also writes meta/, which Alchemy rejects.
 const MIGRATIONS = "apps/tempo/src/db/migrations";
+
 const migrationsDir = (() => {
   const flat = ".alchemy/d1-migrations";
   fs.rmSync(flat, { recursive: true, force: true });
   fs.mkdirSync(flat, { recursive: true });
+
   for (const file of fs
     .readdirSync(MIGRATIONS)
     .filter((f) => f.endsWith(".sql"))
     .sort()) {
     fs.copyFileSync(path.join(MIGRATIONS, file), path.join(flat, file));
   }
+
   return flat;
 })();
 
@@ -57,13 +65,12 @@ export default Alchemy.Stack(
     const db = yield* Cloudflare.D1.Database("DB", { name: "tempo", migrations: migrationsDir }).pipe(
       RemovalPolicy.retain(),
     );
-    const data = yield* Cloudflare.R2.Bucket("DATA", { name: "tempo-data" }).pipe(RemovalPolicy.retain());
 
+    const data = yield* Cloudflare.R2.Bucket("DATA", { name: "tempo-data" }).pipe(RemovalPolicy.retain());
     // Minted on the first deploy, then reused from state.
     const encryptionKey = yield* Alchemy.Random("TempoEncryptionKey", { bytes: 32 });
     const authSecret = yield* Alchemy.Random("BetterAuthSecret", { bytes: 32 });
     const setupToken = yield* Alchemy.Random("TempoSetupToken", { bytes: 16 });
-
     yield* Command.Exec("WranglerDeploy", {
       command: "bun scripts/deploy-worker.ts",
       memo: false,

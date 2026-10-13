@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+import { InstanceName } from "@tempo/protocol";
 import { PlusIcon, XIcon } from "lucide-react";
 import { Badge } from "~/ui/components/ui/badge";
 import { Button } from "~/ui/components/ui/button";
@@ -54,6 +56,7 @@ export function FieldRow({
   locked?: { readonly by: string; readonly text: string } | undefined;
 }) {
   const id = fieldId(def);
+
   if (locked) {
     return (
       <div role="group" aria-labelledby={`${id}-label`} className="grid gap-3 py-6">
@@ -72,6 +75,7 @@ export function FieldRow({
       </div>
     );
   }
+
   const isRecord = def.kind === "run" || def.kind === "env";
   const setValue = (value: EditValue) => onChange({ set: true, value });
   const savedOverride = getAt(ctx.layer, def.path) !== undefined;
@@ -126,6 +130,7 @@ export function FieldRow({
 
 function EffectiveEntries({ def, ctx }: { def: FieldDef; ctx: EffectiveContext }) {
   const entries = effectiveEntries(def, ctx);
+
   if (entries.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -133,6 +138,7 @@ function EffectiveEntries({ def, ctx }: { def: FieldDef; ctx: EffectiveContext }
       </p>
     );
   }
+
   return (
     <div className="grid gap-1">
       <p className="text-xs text-muted-foreground">
@@ -167,9 +173,11 @@ function Editor({
   invalid: boolean;
 }) {
   const label = def.label;
+
   switch (value.kind) {
     case "text": {
       const set = (text: string) => onChange({ kind: "text", text });
+
       if (def.kind === "select") {
         return (
           <Select value={value.text} onValueChange={set}>
@@ -186,6 +194,7 @@ function Editor({
           </Select>
         );
       }
+
       if (def.kind === "multiline" || def.kind === "hosts") {
         return (
           <Textarea
@@ -200,6 +209,7 @@ function Editor({
           />
         );
       }
+
       return (
         <Input
           id={id}
@@ -215,6 +225,7 @@ function Editor({
         />
       );
     }
+
     case "bool":
       return (
         <div className="flex items-center gap-2">
@@ -272,11 +283,14 @@ function InstanceEditor({
       />
     </div>
   );
+
   return (
     <div className="grid gap-2">
       <Select
         value={value.preset}
-        onValueChange={(v) => onChange({ ...value, preset: v as InstanceEdit["preset"] })}
+        onValueChange={(v) => {
+          if (v === "custom" || Schema.is(InstanceName)(v)) onChange({ ...value, preset: v });
+        }}
       >
         <SelectTrigger id={id} aria-label="Instance size" className="w-56">
           <SelectValue />
@@ -314,6 +328,7 @@ function RunRowsEditor({
     onChange(
       rows.map((r) => (r.key === key ? { ...r, ...p } : p.isDefault ? { ...r, isDefault: false } : r)),
     );
+
   return (
     <div className="grid gap-2">
       {rows.length === 0 && <p className="text-xs text-muted-foreground">No run scripts set in Tempo.</p>}
@@ -391,6 +406,7 @@ function EnvRowsEditor({
 }) {
   const patch = (key: number, p: Partial<EnvRow>) =>
     onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
+
   return (
     <div id={id} className="grid gap-2">
       <p className="text-xs text-muted-foreground">Stored as plain text. Put keys and tokens in Secrets.</p>

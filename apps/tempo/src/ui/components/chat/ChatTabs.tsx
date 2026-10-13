@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import { ChevronDownIcon, HistoryIcon, PlusIcon, ShieldQuestionIcon, XIcon } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CENTER_TAB_KINDS, CenterTabPart } from "~/ui/components/chat/tab-kinds";
@@ -23,7 +24,7 @@ import { useAction } from "~/ui/hooks/useActions";
 import { useCallMutation } from "~/ui/hooks/useCall";
 import { useWorkspaceSelector, useWorkspaceStore } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUi } from "~/ui/hooks/useWorkspaceUi";
-import { call } from "~/ui/lib/api";
+
 import { agentLabel } from "~/ui/lib/agents";
 import { formatBinding } from "~/ui/lib/shortcuts";
 import { errorCode, toastError } from "~/ui/lib/toast";
@@ -61,6 +62,8 @@ const CANCEL_WAIT_MS = 30_000;
 
 /** The center tab host: chat, file, diff and browser tabs (04, Center: chat tabs and composer). */
 export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
+  const call = useApiCall();
+
   const store = useWorkspaceStore(workspaceId);
   const ready = useWorkspaceSelector(workspaceId, (s) => s.ready);
   const sessions = useWorkspaceSelector(workspaceId, (s) => s.sessions);
@@ -72,7 +75,6 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const activateWhenShown = useRef<string | null>(null);
   const baseId = useId();
   const archived = state === "archived" || state === "archiving";
-
   const openIds = useMemo(() => openSessionIds(sessions), [sessions]);
   const tabIds = chatTabIds(openIds, viewingClosed, sessions).join("\n");
   useEffect(() => {
@@ -80,6 +82,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     const ids = tabIds === "" ? [] : tabIds.split("\n");
     syncChatTabs(workspaceId, ids);
     const pending = activateWhenShown.current;
+
     if (pending && ids.includes(pending)) {
       activateWhenShown.current = null;
       activateTab(workspaceId, `chat:${pending}`);
@@ -91,34 +94,44 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const closeChat = async (sessionId: string) => {
     const key = `chat:${sessionId}`;
     const session = store.getSnapshot().sessions[sessionId];
+
     if (!session || session.status === "closed") {
       setViewingClosed((v) => v.filter((id) => id !== sessionId));
       closeTab(workspaceId, key);
+
       return;
     }
+
     const running = runningTurnOf(store.getSnapshot().turns, sessionId);
+
     if (running) {
       if (!(await confirm(CONFIRM_TEXT.closeRunningChat()))) return;
+
       try {
         await call("cancelTurn", { workspaceId, turnId: running.id });
       } catch (e) {
         if (errorCode(e) !== "TURN_NOT_ACTIVE") {
           toastError(e);
+
           return;
         }
       }
+
       await waitUntil(
         store.subscribe,
         () => store.getSnapshot().turns[running.id]?.status !== "running",
         CANCEL_WAIT_MS,
       );
     }
+
     try {
       await call("closeSession", { workspaceId, sessionId });
     } catch (e) {
       toastError(e);
+
       return;
     }
+
     closeTab(workspaceId, key);
   };
 
@@ -135,6 +148,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const rename = (sessionId: string, title: string) => {
     setRenaming(null);
     const cur = store.getSnapshot().sessions[sessionId]?.title ?? "";
+
     if (title.trim() !== cur.trim()) renameSession.mutate({ workspaceId, sessionId, title: title.trim() });
   };
 
@@ -145,6 +159,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     () => {
       const s = getWorkspaceUi(workspaceId);
       const t = s.tabs.find((x) => x.key === s.activeKey);
+
       if (t) close(t);
     },
     { enabled: active !== undefined },
@@ -156,7 +171,6 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     },
     { enabled: active?.tab.kind === "chat" },
   );
-
   const closed = useMemo(() => closedSessions(sessions), [sessions]);
 
   const newChatMenu = (
@@ -185,6 +199,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
       )}
     </>
   );
+
   const closedMenu =
     closed.length > 0 ? (
       <DropdownMenu>
@@ -289,12 +304,16 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     if (e.key === "F2" && t.tab.kind === "chat" && sessions[t.tab.sessionId]?.status !== "closed") {
       e.preventDefault();
       setRenaming(t.tab.sessionId);
+
       return;
     }
+
     const next = nextTabIndex(e.key, index, ui.tabs.length);
+
     if (next === null) return;
     e.preventDefault();
     const target = ui.tabs[next];
+
     if (!target) return;
     activateTab(workspaceId, target.key);
     document.getElementById(`${baseId}-tab-${next}`)?.focus();
@@ -313,6 +332,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
             const sessionId = t.tab.kind === "chat" ? t.tab.sessionId : null;
             const isClosed = sessionId !== null && sessions[sessionId]?.status === "closed";
             const canRename = sessionId !== null && !isClosed && !archived;
+
             return (
               <ContextMenu key={t.key}>
                 <ContextMenuTrigger asChild>
@@ -405,28 +425,37 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
 /** The kind icon, or for a chat: a spinner while its turn runs, a question mark while it waits for you. */
 function TabIcon({ workspaceId, tab }: { workspaceId: string; tab: OpenTab }) {
   const sessionId = tab.tab.kind === "chat" ? tab.tab.sessionId : null;
+
   const status = useWorkspaceSelector(workspaceId, (s) => {
     if (sessionId === null) return null;
+
     if (Object.values(s.permissions).some((p) => p.sessionId === sessionId)) return "needs_input";
+
     if (Object.values(s.turns).some((t) => t.sessionId === sessionId && t.status === "running"))
       return "running";
+
     return s.sessions[sessionId]?.status === "starting" ? "running" : null;
   });
+
   if (status === "needs_input")
     return <ShieldQuestionIcon aria-label="Waiting for you" className="size-3.5 shrink-0 text-warning" />;
+
   if (status === "running") return <Spinner aria-label="Working" className="text-primary" />;
   const Icon = CENTER_TAB_KINDS[tab.tab.kind].icon;
+
   return <Icon aria-hidden className="size-3.5 shrink-0" />;
 }
 
 function RenameInput({ initial, onDone }: { initial: string; onDone: (title: string | null) => void }) {
   const [value, setValue] = useState(initial);
   const done = useRef(false);
+
   const finish = (title: string | null) => {
     if (done.current) return;
     done.current = true;
     onDone(title);
   };
+
   return (
     <input
       autoFocus

@@ -22,19 +22,23 @@ function HistoryPage() {
   const list = useCallQuery("listWorkspaces", { includeArchived: true });
   const hub = useHub();
   const projects = useProjects();
+
   const archived = useMemo(
     () =>
       (list.data ?? [])
         .map((w) => {
           const live = hub.workspaces[w.id];
+
           return live && live.rev > w.rev ? live : w;
         })
         .filter((w) => w.state === "archived")
         .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
     [list.data, hub.workspaces],
   );
+
   const projectName = (id: string) => {
     const p = projects.data?.find((x) => x.id === id);
+
     return p ? `${p.owner}/${p.name}` : "";
   };
 
@@ -95,17 +99,22 @@ function HistoryPage() {
 
 function HistoryRow({ workspace: w, project }: { workspace: WorkspaceSummary; project: string }) {
   const navigate = useNavigate();
+
   const restore = useCallMutation("restoreWorkspace", {
     invalidates: ["listWorkspaces"],
     onSuccess: () => navigate({ to: "/w/$workspaceId", params: { workspaceId: w.id } }),
   });
+
   const remove = useCallMutation("deleteWorkspace", {
     invalidates: ["listWorkspaces", "listProjectConversations"],
   });
+
   const onDelete = async () => {
     if (await confirm(CONFIRM_TEXT.deleteWorkspace(w.slug))) remove.mutate({ workspaceId: w.id });
   };
+
   const busy = restore.isPending || remove.isPending;
+
   return (
     <li className="flex items-center gap-3 px-3 py-2">
       <div className="flex min-w-0 flex-1 flex-col">

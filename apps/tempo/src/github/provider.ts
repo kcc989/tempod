@@ -1,6 +1,7 @@
+import { Schema, SchemaGetter } from "effect";
 import { TempoError, type PrState, type ChecksState, type MergeMethod } from "@tempo/protocol";
 import { githubFetch, githubPaginate } from "./client.ts";
-import type { GhPull } from "./api.ts";
+import { GhPull } from "./api.ts";
 
 /**
  * The repo provider (00, Git and repos). GitHub is the only provider in version 1. Every call
@@ -43,16 +44,25 @@ export const checksStateOf = (
   runs: ReadonlyArray<{ status: string; conclusion: string | null }>,
 ): ChecksState | null => {
   if (runs.length === 0) return null;
+
   if (runs.some((x) => x.status === "queued" || x.status === "in_progress")) return "pending";
+
   if (runs.some((x) => ["failure", "cancelled", "timed_out", "action_required"].includes(x.conclusion ?? "")))
     return "failure";
+
   return "success";
 };
 
 export const github: GitProvider = {
   async listBranches(token, repo, query) {
-    const all = await githubPaginate<{ name: string }>({ path: `${r(repo)}/branches`, token }, 2000);
+    const all = await githubPaginate(
+      { path: `${r(repo)}/branches`, token },
+      2000,
+      Schema.Array(Schema.Struct({ name: Schema.String })),
+    );
+
     const q = query?.toLowerCase() ?? "";
+
     return all
       .filter((b) => b.name.toLowerCase().includes(q))
       .slice(0, 100)
@@ -60,68 +70,96 @@ export const github: GitProvider = {
   },
   async branchExists(token, repo, branch) {
     try {
-      await githubFetch({ path: `${r(repo)}/branches/${encodeURIComponent(branch)}`, token });
+      await githubFetch(
+        { path: `${r(repo)}/branches/${encodeURIComponent(branch)}`, token },
+        Schema.Struct({ name: Schema.String }),
+      );
+
       return true;
     } catch (e) {
-      if (e instanceof TempoError && "status" in e && (e as { status: number }).status === 404) return false;
+      if (e instanceof TempoError && "status" in e && Schema.is(Schema.Number)(e.status) && e.status === 404)
+        return false;
       throw e;
     }
   },
   async listOpenPullRequests(token, repo) {
-    const pulls = await githubPaginate<GhPull>(
+    const pulls = await githubPaginate(
       { path: `${r(repo)}/pulls`, token, query: { state: "open" } },
       300,
+      Schema.Array(GhPull),
     );
+
     return pulls.map((p) => ({ number: p.number, title: p.title, headBranch: p.head.ref }));
   },
   getPullRequest(token, repo, number) {
-    return githubFetch<GhPull>({
-      path: `${r(repo)}/pulls/${number}`,
-      token,
-      mapError: (s) => (s === 404 ? "NOT_FOUND" : undefined),
-    });
+    return githubFetch(
+      {
+        path: `${r(repo)}/pulls/${number}`,
+        token,
+        mapError: (s) => (s === 404 ? "NOT_FOUND" : undefined),
+      },
+      GhPull,
+    );
   },
   async createPullRequest(token, repo, input) {
-    const pr = await githubFetch<GhPull>({
-      method: "POST",
-      path: `${r(repo)}/pulls`,
-      token,
-      body: input,
-      mapError: (status, body) =>
-        status === 422 && JSON.stringify(body).toLowerCase().includes("already exists")
-          ? "PR_EXISTS"
-          : undefined,
-    });
+    const pr = await githubFetch(
+      {
+        method: "POST",
+        path: `${r(repo)}/pulls`,
+        token,
+        body: input,
+        mapError: (status, body) =>
+          status === 422 && JSON.stringify(body).toLowerCase().includes("already exists")
+            ? "PR_EXISTS"
+            : undefined,
+      },
+      GhPull,
+    );
+
     return { number: pr.number, url: pr.html_url, state: prStateOf(pr) };
   },
   async mergePullRequest(token, repo, number, method) {
-    await githubFetch({
-      method: "PUT",
-      path: `${r(repo)}/pulls/${number}/merge`,
-      token,
-      body: { merge_method: method },
-      mapError: (status) => (status === 405 || status === 409 ? "PR_NOT_MERGEABLE" : undefined),
-    });
+    await githubFetch(
+      {
+        method: "PUT",
+        path: `${r(repo)}/pulls/${number}/merge`,
+        token,
+        body: { merge_method: method },
+        mapError: (status) => (status === 405 || status === 409 ? "PR_NOT_MERGEABLE" : undefined),
+      },
+      Schema.Struct({}),
+    );
   },
   async listCheckRuns(token, repo, sha) {
-    const runs = await githubPaginate<{
-      name: string;
-      status: string;
-      conclusion: string | null;
-      html_url: string;
-    }>(
+    const CheckRun = Schema.Struct({
+      name: Schema.String,
+      status: Schema.String,
+      conclusion: Schema.NullOr(Schema.String),
+      html_url: Schema.String,
+    });
+
+    const runs = await githubPaginate(
       { path: `${r(repo)}/commits/${sha}/check-runs`, token },
       500,
-      (page) => (page as { check_runs: never[] }).check_runs,
+      Schema.Struct({ check_runs: Schema.Array(CheckRun) }).pipe(
+        Schema.decodeTo(Schema.Array(CheckRun), {
+          decode: SchemaGetter.transform((page) => page.check_runs),
+          encode: SchemaGetter.transform((check_runs) => ({ check_runs })),
+        }),
+      ),
     );
+
     return runs.map((c) => ({ name: c.name, status: c.status, conclusion: c.conclusion, url: c.html_url }));
   },
   async deleteBranch(token, repo, branch) {
-    await githubFetch({
-      method: "DELETE",
-      path: `${r(repo)}/git/refs/heads/${branch.split("/").map(encodeURIComponent).join("/")}`,
-      token,
-      mapError: (s) => (s === 422 || s === 404 ? "NOT_FOUND" : undefined),
-    });
+    await githubFetch(
+      {
+        method: "DELETE",
+        path: `${r(repo)}/git/refs/heads/${branch.split("/").map(encodeURIComponent).join("/")}`,
+        token,
+        mapError: (s) => (s === 422 || s === 404 ? "NOT_FOUND" : undefined),
+      },
+      Schema.Undefined,
+    );
   },
 };

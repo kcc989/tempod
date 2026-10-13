@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import type { PendingEnvironmentProposal } from "@tempo/protocol";
 import { useQueryClient } from "@tanstack/react-query";
 import { NetworkIcon, TriangleAlertIcon } from "lucide-react";
@@ -25,7 +26,7 @@ import { Input } from "~/ui/components/ui/input";
 import { invalidateCalls, useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
-import { call } from "~/ui/lib/api";
+
 import { toastError } from "~/ui/lib/toast";
 
 /** 04, Pending environment proposals: a banner above the composer with Review. */
@@ -33,7 +34,9 @@ export function EnvironmentProposalBanner({ workspaceId }: { workspaceId: string
   const proposals = useWorkspaceSelector(workspaceId, (s) => s.workspace?.environmentProposals);
   const [open, setOpen] = useState(false);
   const oldest = proposals?.[0];
+
   if (!oldest) return null;
+
   return (
     <>
       <div role="status" className="flex items-center gap-2 border-t bg-primary/5 px-3 py-1.5 text-sm">
@@ -74,12 +77,15 @@ function ProposalReview({
   pending: PendingEnvironmentProposal;
   onDone: () => void;
 }) {
+  const call = useApiCall();
+
   const queryClient = useQueryClient();
   const workspace = useWorkspaceSelector(workspaceId, (s) => s.workspace);
   const project = useProject(workspace?.projectId);
   const envs = useCallQuery("listEnvironments", {});
   const [values, setValues] = useState<Record<string, string>>({});
   const [applying, setApplying] = useState(false);
+
   const dismiss = useCallMutation("resolveEnvironmentProposal", {
     onSuccess: () => {
       toast.success("Suggestion dismissed");
@@ -88,6 +94,7 @@ function ProposalReview({
   });
 
   if (envs.isPending) return <SkeletonRows rows={4} />;
+
   if (envs.isError) return <ErrorState error={envs.error} onRetry={() => void envs.refetch()} />;
 
   const p = pending.proposal;
@@ -100,6 +107,7 @@ function ProposalReview({
   const apply = async () => {
     if (!project) return;
     setApplying(true);
+
     try {
       await applyEnvironmentProposal(call, {
         workspaceId,

@@ -31,6 +31,7 @@ export function ScriptOutput({
 
   useLayoutEffect(() => {
     const el = ref.current;
+
     if (el && follow.current) el.scrollTop = el.scrollHeight;
   }, [text]);
 

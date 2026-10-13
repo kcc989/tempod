@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { randomBase64Url } from "../lib/crypto.ts";
@@ -18,7 +19,7 @@ const toConfig = (list: Migrations) => ({
   migrations: Object.fromEntries(
     list.map((m, idx) => [
       `m${idx.toString().padStart(4, "0")}`,
-      m.statements.map((st) => (typeof st === "string" ? st : st())).join("\n--> statement-breakpoint\n"),
+      m.statements.map((st) => (Predicate.isFunction(st) ? st() : st)).join("\n--> statement-breakpoint\n"),
     ]),
   ),
 });

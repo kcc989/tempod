@@ -21,9 +21,11 @@ interface EnvRow {
   readonly name: string;
   readonly value: string;
 }
+
 interface HeaderRow extends EnvRow {
   readonly secret: boolean;
 }
+
 export interface McpForm {
   readonly id?: string;
   readonly name: string;
@@ -70,12 +72,14 @@ const formOf = (s: McpServer): McpForm => ({
 
 /** Only the fields valid for the transport. An empty secret value is left out so the stored one is kept. */
 export const inputOf = (f: McpForm): McpServerInput => {
-  const base = {
-    ...(f.id ? { id: f.id } : {}),
+  let base: Pick<McpServerInput, "id" | "name" | "enabled" | "transport"> = {
     name: f.name.trim(),
     enabled: f.enabled,
     transport: f.transport,
   };
+
+  if (f.id) base = { ...base, id: f.id };
+
   if (f.transport === "stdio")
     return {
       ...base,
@@ -83,6 +87,7 @@ export const inputOf = (f: McpForm): McpServerInput => {
       args: f.args.split("\n").filter((a) => a.trim() !== ""),
       env: f.env.filter((e) => e.name || e.value).map((e) => ({ name: e.name.trim(), value: e.value })),
     };
+
   return {
     ...base,
     url: f.url.trim(),
@@ -100,12 +105,14 @@ export const inputOf = (f: McpForm): McpServerInput => {
 export function McpServersTab() {
   const servers = useCallQuery("listMcpServers", {});
   const [editing, setEditing] = useState<McpServer | "new" | null>(null);
+
   const remove = useCallMutation("deleteMcpServer", {
     invalidates: ["listMcpServers"],
     onSuccess: () => toast.success("MCP server deleted"),
   });
 
   if (servers.isPending) return <SkeletonRows rows={3} />;
+
   if (servers.isError) return <ErrorState error={servers.error} onRetry={() => void servers.refetch()} />;
 
   return (
@@ -141,7 +148,9 @@ export function McpServersTab() {
                   confirmLabel: "Delete",
                   destructive: true,
                 });
+
                 if (!ok) return;
+
                 if (editing !== "new" && editing?.id === s.id) setEditing(null);
                 remove.mutate({ id: s.id });
               }}
@@ -167,6 +176,7 @@ function ServerRow({
 }) {
   const toggle = useCallMutation("saveMcpServer", { invalidates: ["listMcpServers"] });
   const target = s.transport === "stdio" ? [s.command, ...s.args].join(" ") : (s.url ?? "");
+
   return (
     <li aria-label={s.name} className="flex items-center gap-3 px-3 py-2">
       <div className="min-w-0 flex-1">
@@ -207,6 +217,7 @@ function ServerForm({ server, onDone }: { server: McpServer | undefined; onDone:
   const [form, setForm] = useState<McpForm>(() => (server ? formOf(server) : EMPTY_FORM));
   const [error, setError] = useState<string | null>(null);
   const stored = storedSecrets(server);
+
   const save = useCallMutation("saveMcpServer", {
     toast: false,
     invalidates: ["listMcpServers"],
@@ -221,6 +232,7 @@ function ServerForm({ server, onDone }: { server: McpServer | undefined; onDone:
       } else toastError(e);
     },
   });
+
   const set = (p: Partial<McpForm>) => setForm((f) => ({ ...f, ...p }));
   const formId = server ? `mcp-${server.id}` : "mcp-new";
 
@@ -234,6 +246,7 @@ function ServerForm({ server, onDone }: { server: McpServer | undefined; onDone:
         const input = inputOf(form);
         const problem = mcpInputProblem(input, stored);
         setError(problem);
+
         if (!problem) save.mutate(input);
       }}
     >
@@ -253,6 +266,7 @@ function ServerForm({ server, onDone }: { server: McpServer | undefined; onDone:
             value={form.transport}
             onValueChange={(v) => {
               const transport = TRANSPORTS.find((t) => t === v);
+
               if (transport) set({ transport });
             }}
           >
@@ -319,7 +333,9 @@ function ServerForm({ server, onDone }: { server: McpServer | undefined; onDone:
               {form.headers.map((h, i) => {
                 const patch = (p: Partial<HeaderRow>) =>
                   set({ headers: form.headers.map((x) => (x.key === h.key ? { ...x, ...p } : x)) });
+
                 const keeps = h.secret && stored.has(h.name.trim().toLowerCase());
+
                 return (
                   <div
                     key={h.key}
@@ -418,6 +434,7 @@ function PairRows({
 }) {
   const patch = (key: number, p: Partial<EnvRow>) =>
     onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
+
   return (
     <div className="grid gap-2">
       {rows.map((r, i) => (

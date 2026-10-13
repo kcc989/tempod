@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { env, runInDurableObject } from "cloudflare:test";
 import { newId } from "@tempo/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,27 +8,33 @@ import { runFn } from "../../src/server/run.ts";
 import type { CredentialDO } from "../../src/do/credential.ts";
 
 const device = { device_auth_id: "private-device-id", user_code: "ABCD-EFGH", interval: "5" };
+
 const approved = {
   authorization_code: "private-code",
   code_verifier: "private-verifier",
   code_challenge: "challenge",
 };
+
 const tokens = {
   id_token: `header.${btoa(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "account-1" } }))}.signature`,
   access_token: "private-access",
   refresh_token: "private-refresh",
 };
+
 const setup = () => {
   const userId = newId();
   const c: HandlerCtx = { env, user: { id: userId, name: "Owner", email: "owner@example.com", image: null } };
   const stub: DurableObjectStub<CredentialDO> = env.CREDENTIALS.getByName(userId);
   const fetch = vi.spyOn(globalThis, "fetch");
-  const reply = (status: number, body: unknown) =>
+
+  const reply = (status: number, body: import("@tempo/protocol").JsonData) =>
     fetch.mockImplementationOnce(async () => Response.json(body, { status }));
+
   const allowNextPoll = () =>
-    runInDurableObject(stub, (instance: unknown, _state: DurableObjectState) => {
-      (instance as { codexLogin: { nextPollAt: number } }).codexLogin.nextPollAt = 0;
+    runInDurableObject<CredentialDO, void>(stub, (instance: CredentialDO, _state: DurableObjectState) => {
+      instance["codexLogin"]!.nextPollAt = 0;
     });
+
   return { c, stub, fetch, reply, allowNextPoll };
 };
 
@@ -47,7 +54,7 @@ describe("Codex device login", () => {
     expect(JSON.stringify(login)).not.toContain(device.device_auth_id);
     expect(await startCodexLogin(h.c)).toEqual(login);
     expect(h.fetch).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(h.fetch.mock.calls[0]![1]!.body as string)).toEqual({
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(h.fetch.mock.calls[0]![1]!.body))).toEqual({
       client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
     });
     h.reply(403, {});
@@ -60,7 +67,11 @@ describe("Codex device login", () => {
     expect(await pollCodexLogin(h.c, { loginId: login.loginId })).toEqual({ status: "connected" });
     expect(await pollCodexLogin(h.c, { loginId: login.loginId })).toEqual({ status: "connected" });
     expect(h.fetch).toHaveBeenCalledTimes(4);
-    const exchange = new URLSearchParams(h.fetch.mock.calls[3]![1]!.body as string);
+
+    const exchange = new URLSearchParams(
+      Schema.decodeUnknownSync(Schema.String)(h.fetch.mock.calls[3]![1]!.body),
+    );
+
     expect(exchange.get("code_verifier")).toBe(approved.code_verifier);
     expect(exchange.get("redirect_uri")).toBe("https://auth.openai.com/deviceauth/callback");
     const auth = await h.stub.getCodexAuth();
@@ -69,10 +80,14 @@ describe("Codex device login", () => {
       tokens: { ...tokens, account_id: "account-1" },
     });
     expect(auth!.version).toBe(1);
+
     const raw = await runInDurableObject(h.stub, (_i, state) =>
       state.storage.sql.exec("SELECT ciphertext, meta_json FROM secrets WHERE key = 'codex.auth_json'").one(),
     );
-    expect(new TextDecoder().decode(raw.ciphertext as ArrayBuffer)).not.toContain(tokens.access_token);
+
+    expect(
+      new TextDecoder().decode(Schema.decodeUnknownSync(Schema.instanceOf(ArrayBuffer))(raw.ciphertext)),
+    ).not.toContain(tokens.access_token);
     expect(JSON.parse(String(raw.meta_json)).lastRefresh).toBe(auth!.lastRefresh);
     expect(JSON.stringify(await h.stub.status())).not.toContain("private-");
   });
@@ -88,16 +103,20 @@ describe("Codex device login", () => {
       await new Promise<void>((resolve) => {
         finish = resolve;
       });
+
       return Response.json(tokens);
     });
-    await runInDurableObject(h.stub, async (i: unknown, _state: DurableObjectState) => {
-      const instance = i as CredentialDO;
-      const poll = instance.pollCodexLogin(login.loginId);
-      await vi.waitFor(() => expect(finish).toBeDefined());
-      await instance.cancelCodexLogin(login.loginId);
-      finish();
-      expect(await poll).toEqual({ ok: true, value: { status: "expired" } });
-    });
+    await runInDurableObject<CredentialDO, void>(
+      h.stub,
+      async (i: CredentialDO, _state: DurableObjectState) => {
+        const instance = i;
+        const poll = instance.pollCodexLogin(login.loginId);
+        await vi.waitFor(() => expect(finish).toBeDefined());
+        await instance.cancelCodexLogin(login.loginId);
+        finish();
+        expect(await poll).toEqual({ ok: true, value: { status: "expired" } });
+      },
+    );
     expect(await h.stub.getCodexAuth()).toBeNull();
   });
 
@@ -105,9 +124,12 @@ describe("Codex device login", () => {
     const h = setup();
     h.reply(200, device);
     const login = await startCodexLogin(h.c);
-    await runInDurableObject(h.stub, (instance: unknown, _state: DurableObjectState) => {
-      (instance as { codexLogin: { public: { expiresAt: number } } }).codexLogin.public.expiresAt = 0;
-    });
+    await runInDurableObject<CredentialDO, void>(
+      h.stub,
+      (instance: CredentialDO, _state: DurableObjectState) => {
+        instance["codexLogin"]!.public = { ...instance["codexLogin"]!.public, expiresAt: 0 };
+      },
+    );
     expect(await pollCodexLogin(h.c, { loginId: login.loginId })).toEqual({ status: "expired" });
     h.reply(200, device);
     const next = await startCodexLogin(h.c);
@@ -162,6 +184,7 @@ describe("Codex device login", () => {
 
   it("requires Tempo authentication for each public login function", async () => {
     const h = setup();
+
     for (const name of ["startCodexLogin", "pollCodexLogin", "cancelCodexLogin"] as const) {
       const result = await runFn(
         name,
@@ -170,8 +193,10 @@ describe("Codex device login", () => {
         { loginId: "id" },
         { allowCookie: false, allowBearer: true },
       );
+
       expect(result).toMatchObject({ ok: false, error: { code: "UNAUTHENTICATED" } });
     }
+
     expect(h.fetch).not.toHaveBeenCalled();
   });
 });

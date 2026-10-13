@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import { isErrorBody, TempoError, type Artifact } from "@tempo/protocol";
 import { ChevronDownIcon, DownloadIcon, ExternalLinkIcon, FileIcon, RotateCwIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,7 +17,7 @@ import {
 } from "~/ui/components/ui/dropdown-menu";
 import { LoadingText } from "~/ui/components/ui/spinner";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
-import { call } from "~/ui/lib/api";
+
 import { formatDateTime } from "~/ui/lib/format";
 import { errorText } from "~/ui/lib/toast";
 import { cn } from "~/ui/lib/utils";
@@ -29,35 +30,44 @@ const LOST_TEXT = "This artifact was lost before it was saved.";
 /** The versions of one artifact, newest first, or undefined while the list loads. */
 const useVersions = (workspaceId: string, artifactId: string) => {
   const { artifacts, error, refetch } = useArtifacts(workspaceId);
+
   const versions = artifacts
     ? (artifactGroups(artifacts).find((g) => g.id === artifactId)?.versions ?? [])
     : undefined;
+
   return { versions, error, refetch };
 };
 
 export function ArtifactTitle({ workspaceId, tab }: CenterTabProps<"artifact">) {
   const { versions } = useVersions(workspaceId, tab.artifactId);
+
   return <>{versions?.[0]?.title ?? "Artifact"}</>;
 }
 
 /** 04 Artifact tab: one tab per artifact, with a version menu, Download and Reload. */
 export function ArtifactTab({ workspaceId, tab, seq }: CenterTabProps<"artifact">) {
   const { versions, error, refetch } = useVersions(workspaceId, tab.artifactId);
+
   const [picked, setPicked] = useState<{ seq: number; version: number | null }>({
     seq,
     version: tab.version,
   });
+
   const [nonce, setNonce] = useState(0);
   // Opening the tab again (a card click) shows the version it asks for.
   const chosen = picked.seq === seq ? picked.version : tab.version;
 
   if (!versions) {
     if (error) return <ErrorState error={error} onRetry={refetch} className="h-full" />;
+
     return <SkeletonRows />;
   }
+
   const current = versions.find((v) => v.version === chosen) ?? versions[0];
+
   if (!current) return <EmptyState className="h-full" icon={FileIcon} title="Not found." />;
   const fileLink = workspaceRelative(current.path);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b px-3 text-xs">
@@ -141,12 +151,17 @@ export function ArtifactView({
   version: number;
 }) {
   const { versions, error, refetch } = useVersions(workspaceId, artifactId);
+
   if (!versions) {
     if (error) return <ErrorState error={error} onRetry={refetch} className="h-full" />;
+
     return <SkeletonRows />;
   }
+
   const artifact = versions.find((v) => v.version === version);
+
   if (!artifact) return <EmptyState className="h-full" icon={FileIcon} title="Not found." />;
+
   return <ArtifactBody workspaceId={workspaceId} artifact={artifact} />;
 }
 
@@ -157,7 +172,9 @@ function ArtifactBody({ workspaceId, artifact }: { workspaceId: string; artifact
         <LoadingText label="Saving…" />
       </div>
     );
+
   if (artifact.status === "lost") return <EmptyState className="h-full" icon={FileIcon} title={LOST_TEXT} />;
+
   switch (artifact.kind) {
     case "image":
       return <ImageBody workspaceId={workspaceId} artifact={artifact} />;
@@ -173,6 +190,7 @@ function ArtifactBody({ workspaceId, artifact }: { workspaceId: string; artifact
 /** Fit to the tab; a click zooms to 100 %. SVG only through `<img>` (05). */
 function ImageBody({ workspaceId, artifact }: { workspaceId: string; artifact: Artifact }) {
   const [zoomed, setZoomed] = useState(false);
+
   return (
     <div className={cn("h-full overflow-auto p-3", !zoomed && "flex items-center justify-center")}>
       <button
@@ -193,10 +211,12 @@ function ImageBody({ workspaceId, artifact }: { workspaceId: string; artifact: A
 
 const fetchText = async (url: string): Promise<string> => {
   const res = await fetch(url, { credentials: "same-origin" });
+
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null);
     throw isErrorBody(body) ? TempoError.fromBody(body) : new TempoError("INTERNAL");
   }
+
   return res.text();
 };
 
@@ -207,36 +227,45 @@ function TextBody({ workspaceId, artifact }: { workspaceId: string; artifact: Ar
     let live = true;
     fetchText(artifactSrc(workspaceId, artifact.id, artifact.version)).then(
       (text) => live && setState({ text }),
-      (error: unknown) => live && setState({ error }),
+      (cause: unknown) => live && setState({ error: cause }),
     );
+
     return () => {
       live = false;
     };
   }, [workspaceId, artifact.id, artifact.version]);
+
   if (!state) return <SkeletonRows />;
+
   if ("error" in state) return <ErrorState error={state.error} className="h-full" />;
+
   if (artifact.kind === "markdown")
     return (
       <div className="h-full overflow-auto px-4 py-3">
         <MessageMarkdown workspaceId={workspaceId} text={state.text} streaming={false} />
       </div>
     );
+
   return <CodeView path={artifact.name} content={state.text} line={null} seq={0} />;
 }
 
 /** PDF and HTML load only from the artifact host, through a one-time entry link (05). */
 function FramedBody({ workspaceId, artifact }: { workspaceId: string; artifact: Artifact }) {
+  const call = useApiCall();
+
   const [src, setSrc] = useState<{ url: string } | { error: string } | null>(null);
   useEffect(() => {
     let live = true;
     call("openArtifact", { workspaceId, artifactId: artifact.id, version: artifact.version }).then(
       (r) => live && setSrc({ url: r.url }),
-      (e: unknown) => live && setSrc({ error: errorText(e) }),
+      (cause: unknown) => live && setSrc({ error: errorText(cause) }),
     );
+
     return () => {
       live = false;
     };
-  }, [workspaceId, artifact.id, artifact.version]);
+  }, [workspaceId, artifact.id, artifact.version, call]);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-8 shrink-0 items-center justify-end border-b px-2">
@@ -244,7 +273,7 @@ function FramedBody({ workspaceId, artifact }: { workspaceId: string; artifact: 
           size="sm"
           variant="ghost"
           className="h-6 text-xs"
-          onClick={() => void openArtifactInBrowser(workspaceId, artifact.id, artifact.version)}
+          onClick={() => void openArtifactInBrowser(workspaceId, artifact.id, artifact.version, call)}
         >
           <ExternalLinkIcon />
           Open in new tab

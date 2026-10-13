@@ -1,16 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { createElement } from "react";
-import { describe, expect, it, vi } from "vitest";
-import { ARTIFACT_CSP, Comparison, GuideVisual } from "../../../src/ui/components/review/GuideVisual";
-import { useCallQuery } from "../../../src/ui/hooks/useCall";
-import { openDiff } from "../../../src/ui/state/workspace-ui";
+import { createUiEnvironment } from "../environment";
 
-vi.mock("~/ui/state/workspace-ui", () => ({ openDiff: vi.fn(), openFile: vi.fn() }));
-vi.mock("~/ui/hooks/useCall", () => ({ useCallQuery: vi.fn() }));
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createElement } from "react";
+import { beforeEach, describe, expect, it } from "vitest";
+import { ARTIFACT_CSP, Comparison, GuideVisual } from "../../../src/ui/components/review/GuideVisual";
+
+import { getWorkspaceUi, resetUiState } from "../../../src/ui/state/workspace-ui";
+
+beforeEach(resetUiState);
 
 describe("guide visuals", () => {
   it("switches the before/after comparison without leaving the chapter", () => {
-    render(createElement(Comparison, { workspaceId: "w1", before: "Database read", after: "Cache read" }));
+    render(createElement(Comparison, { workspaceId: "w1", before: "Database read", after: "Cache read" }), {
+      wrapper: environment.Provider,
+    });
     expect(screen.getByText("Database read")).toBeTruthy();
     expect(screen.getByText("Cache read")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "After" }));
@@ -35,31 +42,36 @@ describe("guide visuals", () => {
           edges: [{ from: "cache", to: "db", label: "miss" }],
         },
       }),
+      { wrapper: environment.Provider },
     );
     fireEvent.click(screen.getByRole("button", { name: "Database" }));
     expect(screen.getByText("Fetch on a miss.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Open diff: src/db.ts" }));
-    expect(openDiff).toHaveBeenCalledWith("w1", "src/db.ts");
+    expect(getWorkspaceUi("w1").tabs.map((entry) => entry.tab)).toEqual([
+      { kind: "diff", path: "src/db.ts" },
+    ]);
   });
-  it("loads HTML only after opening and isolates executable content", () => {
-    vi.mocked(useCallQuery).mockReturnValue({
-      data: { content: "<script>window.test=1</script><button>Try it</button>", encoding: "utf8", size: 72 },
-      isError: false,
-    } as ReturnType<typeof useCallQuery>);
+  it("loads HTML only after opening and isolates executable content", async () => {
+    call.mockResolvedValue({
+      content: "<script>window.test=1</script><button>Try it</button>",
+      encoding: "utf8",
+      size: 72,
+    });
+
     const { container } = render(
       createElement(GuideVisual, {
         workspaceId: "w1",
         live: true,
         visual: { kind: "html", title: "Try the change", path: ".tempo/artifacts/demo.html" },
       }),
+      { wrapper: environment.Provider },
     );
+
     expect(container.querySelector("iframe")).toBeNull();
-    expect(useCallQuery).toHaveBeenLastCalledWith(
-      "readFile",
-      { workspaceId: "w1", path: ".tempo/artifacts/demo.html" },
-      { enabled: false, retry: false },
-    );
+    expect(call).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Open artifact" }));
+    await waitFor(() => expect(container.querySelector("iframe")).not.toBeNull());
+    expect(call).toHaveBeenCalledWith("readFile", { workspaceId: "w1", path: ".tempo/artifacts/demo.html" });
     const frame = container.querySelector("iframe")!;
     expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
     expect(frame.getAttribute("referrerpolicy")).toBe("no-referrer");
@@ -69,21 +81,20 @@ describe("guide visuals", () => {
     );
     expect(container.querySelector("script")).toBeNull();
   });
-  it("uses inline image data and refuses SVG artifacts", () => {
-    vi.mocked(useCallQuery).mockReturnValue({
-      data: { content: "aW1hZ2U=", encoding: "base64", size: 5 },
-      isError: false,
-    } as ReturnType<typeof useCallQuery>);
+  it("uses inline image data and refuses SVG artifacts", async () => {
+    call.mockResolvedValue({ content: "aW1hZ2U=", encoding: "base64", size: 5 });
+
     const props = {
       workspaceId: "w1",
       live: true,
       visual: { kind: "image" as const, title: "Screenshot", path: "demo.png" },
     };
-    const view = render(createElement(GuideVisual, props));
+
+    const view = render(createElement(GuideVisual, props), { wrapper: environment.Provider });
     fireEvent.click(screen.getByRole("button", { name: "Open artifact" }));
-    expect(screen.getByRole("img").getAttribute("src")).toBe("data:image/png;base64,aW1hZ2U=");
+    expect((await screen.findByRole("img")).getAttribute("src")).toBe("data:image/png;base64,aW1hZ2U=");
     view.rerender(createElement(GuideVisual, { ...props, visual: { ...props.visual, path: "demo.svg" } }));
     expect(screen.queryByRole("img")).toBeNull();
-    expect(screen.getByRole("alert").textContent).toContain("unsupported");
+    expect((await screen.findByRole("alert")).textContent).toContain("unsupported");
   });
 });

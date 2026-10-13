@@ -27,9 +27,11 @@ describe("Checks tab", () => {
   it("maps check runs as 03 Status polling does", () => {
     expect(runOutcome(run("a", "queued", null))).toBe("pending");
     expect(runOutcome(run("a", "in_progress", null))).toBe("pending");
+
     for (const c of ["failure", "cancelled", "timed_out", "action_required"]) {
       expect(runOutcome(run("a", "completed", c))).toBe("failure");
     }
+
     expect(runOutcome(run("a", "completed", "success"))).toBe("success");
     expect(runOutcome(run("a", "completed", "skipped"))).toBe("neutral");
   });
@@ -47,6 +49,7 @@ describe("Checks tab", () => {
       run("docs", "completed", "skipped"),
       run("e2e", "completed", "success"),
     ]);
+
     expect(sorted.map((r) => r.name)).toEqual(["test", "build", "e2e", "lint", "docs"]);
   });
 
@@ -132,6 +135,7 @@ describe("⌘⇧F results", () => {
       { path: "b.ts", line: 2, text: "b2" },
       { path: "b.ts", line: 2, text: "b2 again" },
     ]);
+
     expect(groups).toEqual([
       {
         path: "b.ts",

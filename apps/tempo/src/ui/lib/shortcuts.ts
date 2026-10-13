@@ -1,3 +1,5 @@
+import { Match } from "effect";
+import { Schema, Option } from "effect";
 /**
  * The keyboard shortcut table from 04 (Keyboard shortcuts). Settings → Shortcuts, the command
  * palette and every key handler read it. Keys match on KeyboardEvent.code; ⌘ is Meta on macOS and
@@ -119,7 +121,7 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
   {
     action: "Switch to workspace 1 to 9",
     bindings: digits.map((n) =>
-      b(`workspace${n}` as ActionId, `Switch to workspace ${n}`, { code: `Digit${n}`, alt: true }),
+      b(`workspace${n}`, `Switch to workspace ${n}`, { code: `Digit${n}`, alt: true }),
     ),
     display: { mac: "⌥1 to ⌥9", other: "Alt+1 to Alt+9" },
     mac: "⌘1 to ⌘9",
@@ -259,9 +261,17 @@ const BY_ID = new Map(BINDINGS.map((x) => [x.id, x]));
 export const bindingFor = (id: ActionId): Binding => BY_ID.get(id)!;
 
 export const isMacPlatform = (): boolean => {
-  const nav = globalThis.navigator as (Navigator & { userAgentData?: { platform?: string } }) | undefined;
+  const nav = globalThis.navigator;
+
   if (!nav) return false;
-  const platform = nav.userAgentData?.platform ?? nav.platform ?? "";
+
+  const userAgent = Schema.decodeUnknownOption(
+    Schema.Struct({ userAgentData: Schema.Struct({ platform: Schema.String }) }),
+  )(nav);
+
+  const platform =
+    (Option.isSome(userAgent) ? userAgent.value.userAgentData.platform : undefined) ?? nav.platform ?? "";
+
   return /mac|iphone|ipad|ipod/i.test(platform) || /Mac OS X/.test(nav.userAgent ?? "");
 };
 
@@ -276,8 +286,11 @@ export interface KeyEventLike {
 /** Exact match: every modifier the combo does not name must be up. */
 export const matchesCombo = (e: KeyEventLike, k: KeyCombo, mac: boolean): boolean => {
   if (e.code !== k.code) return false;
+
   if (e.altKey !== Boolean(k.alt) || e.shiftKey !== Boolean(k.shift)) return false;
+
   if (mac) return e.metaKey === Boolean(k.mod) && e.ctrlKey === Boolean(k.ctrl);
+
   return e.metaKey === false && e.ctrlKey === Boolean(k.mod || k.ctrl);
 };
 
@@ -288,7 +301,7 @@ export const matches = (e: KeyEventLike, id: ActionId, mac: boolean = isMacPlatf
 export const matchGlobal = (e: KeyEventLike, mac: boolean): Binding | undefined =>
   BINDINGS.find((x) => x.scope === "global" && matchesCombo(e, x.key, mac));
 
-const CODE_LABELS: Record<string, string> = {
+const CODE_LABELS = {
   BracketRight: "]",
   BracketLeft: "[",
   ArrowDown: "↓",
@@ -299,20 +312,32 @@ const CODE_LABELS: Record<string, string> = {
   Slash: "/",
   Comma: ",",
   Backspace: "⌫",
-};
+} satisfies Record<string, string>;
 
 const codeLabel = (code: string): string =>
-  CODE_LABELS[code] ??
+  Object.entries(CODE_LABELS).find(([key]) => key === code)?.[1] ??
   (code.startsWith("Key") ? code.slice(3) : code.startsWith("Digit") ? code.slice(5) : code);
 
 export const formatCombo = (k: KeyCombo, mac: boolean): string => {
   const key = codeLabel(k.code);
+
   if (mac) return `${k.ctrl ? "⌃" : ""}${k.mod ? "⌘" : ""}${k.alt ? "⌥" : ""}${k.shift ? "⇧" : ""}${key}`;
   const parts: string[] = [];
+
   if (k.ctrl || k.mod) parts.push("Ctrl");
+
   if (k.alt) parts.push("Alt");
+
   if (k.shift) parts.push("Shift");
-  parts.push(key === "⌫" ? "Backspace" : key === "↓" ? "Down" : key === "↑" ? "Up" : key);
+  parts.push(
+    Match.value(key).pipe(
+      Match.when("⌫", () => "Backspace"),
+      Match.when("↓", () => "Down"),
+      Match.when("↑", () => "Up"),
+      Match.orElse((value) => value),
+    ),
+  );
+
   return parts.join("+");
 };
 
@@ -327,10 +352,14 @@ export const formatBinding = (id: ActionId, mac: boolean = isMacPlatform()): str
   formatCombo(bindingFor(id).key, mac);
 
 export const isEditableTarget = (target: EventTarget | null): boolean => {
-  const el = target as HTMLElement | null;
-  if (!el || typeof el.tagName !== "string") return false;
-  const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable === true;
+  const parsed = Schema.decodeUnknownOption(
+    Schema.Struct({ tagName: Schema.String, isContentEditable: Schema.optional(Schema.Boolean) }),
+  )(target);
+
+  if (Option.isNone(parsed)) return false;
+  const { tagName: tag, isContentEditable } = parsed.value;
+
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || isContentEditable === true;
 };
 
 /** True when the combo has no ⌘, ⌥ or ⌃. Such keys never fire from a text field unless allowed. */
@@ -348,8 +377,11 @@ export const matchAction = (
 ): ActionId | undefined => {
   for (const id of ids) {
     const key = bindingFor(id).key;
+
     if (opts.editable && !opts.allowPlainInEditable && isPlainCombo(key)) continue;
+
     if (matchesCombo(e, key, mac)) return id;
   }
+
   return undefined;
 };

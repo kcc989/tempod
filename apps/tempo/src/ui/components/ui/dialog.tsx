@@ -61,7 +61,9 @@ function DialogContent({
         )}
         onKeyDown={(e) => {
           onKeyDown?.(e);
+
           if (e.defaultPrevented || e.nativeEvent.isComposing || !onSubmitShortcut) return;
+
           if (matchesCombo(e, { code: "Enter", mod: true }, isMacPlatform())) {
             e.preventDefault();
             onSubmitShortcut();

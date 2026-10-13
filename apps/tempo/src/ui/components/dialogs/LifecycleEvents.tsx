@@ -3,16 +3,20 @@ import { useCallQuery } from "~/ui/hooks/useCall";
 import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
 import { ErrorState, SkeletonRows } from "~/ui/components/shell/States";
+
 export function LifecycleEvents({ workspaceId }: { workspaceId: string }) {
   const [changeId, setChangeId] = useState("");
   const [eventId, setEventId] = useState("");
+
   const events = useCallQuery("listLifecycleEvents", {
     workspaceId,
     limit: 500,
     ...(changeId.trim() ? { changeId: changeId.trim() } : {}),
   });
+
   const trace = useCallQuery("getTrace", { workspaceId, eventId }, { enabled: !!eventId });
   const roles = useCallQuery("listRoles", { workspaceId });
+
   return (
     <div className="min-h-0 space-y-2 overflow-auto">
       <div className="flex gap-2">

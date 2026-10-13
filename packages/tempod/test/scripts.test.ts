@@ -7,6 +7,7 @@ import { cleanupDirs, DoClient, isAlive, sleep, startTempod, testConfig, type Ha
 afterAll(cleanupDirs);
 
 let h: Harness | null = null;
+
 afterEach(async () => {
   await h?.close();
   h = null;
@@ -19,8 +20,13 @@ const setup = async (limits: Record<string, number> = {}) => {
   const c = new DoClient(h.base);
   await c.hello({ env: { TEMPO_WORKSPACE_ID: "01ws", TEMPO_PORT: "3000", PROJECT_VAR: "from-project" } });
   await c.waitEvent("incarnation.changed");
-  const start = (runId: string, command: string, extra: Record<string, unknown> = {}) =>
-    c.ok<{ pid: number }>("script.start", {
+
+  const start = (
+    runId: string,
+    command: string,
+    extra: Partial<import("@tempo/protocol").TempodParams<"script.start">> = {},
+  ) =>
+    c.ok("script.start", {
       runId,
       kind: "run",
       scriptId: "dev",
@@ -29,14 +35,17 @@ const setup = async (limits: Record<string, number> = {}) => {
       timeoutMs: null,
       ...extra,
     });
+
   const exited = (runId: string, timeoutMs = 10_000) =>
     c.waitEvent("script.exited", (e) => e.runId === runId, timeoutMs);
+
   const output = (runId: string, stream?: "stdout" | "stderr") =>
     c
       .of("script.output")
       .filter((e) => e.runId === runId && (!stream || e.stream === stream))
       .map((e) => e.data)
       .join("");
+
   return { c, h: h!, start, exited, output };
 };
 
@@ -47,10 +56,12 @@ describe("scripts", () => {
     "bash -lc with the hello env and cwd /workspace; exit code; stdout and stderr apart",
     async () => {
       const { start, exited, output, h } = await setup();
+
       const r = await start(
         "01run1",
         'shopt -q login_shell && echo login; echo "id=$TEMPO_WORKSPACE_ID var=$PROJECT_VAR"; pwd; echo oops >&2; exit 7',
       );
+
       expect(r.pid).toBeGreaterThan(0);
       const ev = await exited("01run1");
       expect(ev).toMatchObject({ exitCode: 7, signal: null, timedOut: false });
@@ -64,6 +75,7 @@ describe("scripts", () => {
     "children never see TEMPOD_* vars",
     async () => {
       process.env["TEMPOD_TOKEN"] = "must-not-leak";
+
       try {
         const { start, exited, output } = await setup();
         await start("01env", 'echo "token=${TEMPOD_TOKEN:-none} port=${TEMPOD_PORT:-none}"');
@@ -87,6 +99,7 @@ describe("scripts", () => {
       await exited("01merge");
       const events = c.of("script.output").filter((e) => e.runId === "01merge");
       expect(events.length).toBeLessThanOrEqual(6);
+
       for (const e of events) expect(e.data.length).toBeLessThanOrEqual(128 * 1024);
       const expected = Array.from({ length: 200 }, (_, i) => `line${i + 1}\n`).join("") + "x".repeat(300_000);
       expect(output("01merge")).toBe(expected);
@@ -112,9 +125,9 @@ describe("scripts", () => {
     async () => {
       const { start, exited, output, h } = await setup();
       await start("01logfail", "sleep 0.3; for i in $(seq 1 3); do echo after$i; done");
-      const run = (h.app.scripts as unknown as { runs: Map<string, { logFd: number | null }> }).runs.get(
-        "01logfail",
-      )!;
+
+      const run = h.app.scripts["runs"].get("01logfail")!;
+
       closeSync(run.logFd!);
       const ev = await exited("01logfail");
       expect(ev.exitCode).toBe(0);
@@ -130,12 +143,14 @@ describe("scripts", () => {
       const { c, start, exited, h } = await setup();
       const pidFile = join(h.config.workspace, "bg.pid");
       await start("01stop", `sleep 1000 & echo $! > ${pidFile}; wait`);
+
       for (let i = 0; i < 50 && !existsSync(pidFile); i++) await sleep(20);
       const bg = Number(readFileSync(pidFile, "utf8"));
       expect(alive(bg)).toBe(true);
       await c.ok("script.stop", { runId: "01stop" });
       const ev = await exited("01stop");
       expect(ev.signal).toBe("SIGTERM");
+
       for (let i = 0; i < 20 && alive(bg); i++) await sleep(20);
       expect(alive(bg)).toBe(false);
 
@@ -146,7 +161,7 @@ describe("scripts", () => {
       const hard = await exited("01stubborn");
       expect(hard.signal).toBe("SIGKILL");
       expect(Date.now() - t0).toBeGreaterThanOrEqual(250);
-      expect(await c.ok<unknown>("script.stop", { runId: "01gone" })).toEqual({});
+      expect(await c.ok("script.stop", { runId: "01gone" })).toEqual({});
     },
     T,
   );
@@ -171,6 +186,7 @@ describe("scripts", () => {
       await start("01cwd", "pwd", { cwd: "web" });
       await exited("01cwd");
       expect(output("01cwd")).toBe(`${join(h.config.workspace, "web")}\n`);
+
       const missing = await c.req("script.start", {
         runId: "01x",
         kind: "run",
@@ -179,7 +195,9 @@ describe("scripts", () => {
         cwd: "nope",
         timeoutMs: null,
       });
+
       expect(missing).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+
       const outside = await c.req("script.start", {
         runId: "01y",
         kind: "run",
@@ -188,7 +206,9 @@ describe("scripts", () => {
         cwd: "../..",
         timeoutMs: null,
       });
+
       expect(outside).toMatchObject({ ok: false, error: { code: "PATH_OUTSIDE_WORKSPACE" } });
+
       const badId = await c.req("script.start", {
         runId: "../x",
         kind: "run",
@@ -197,6 +217,7 @@ describe("scripts", () => {
         cwd: "",
         timeoutMs: null,
       });
+
       expect(badId).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
       const a = await start("01same", "sleep 0.5");
       const b = await start("01same", "sleep 0.5");

@@ -25,7 +25,9 @@ const ALLOWED: ReadonlyArray<readonly [WorkspaceState | "*", WorkspaceState]> = 
 
 export const canTransition = (from: WorkspaceState, to: WorkspaceState): boolean => {
   if (from === to) return true;
+
   if (to === "error") return from !== "archived";
+
   return ALLOWED.some(([f, t]) => f === from && t === to);
 };
 

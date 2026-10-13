@@ -1,3 +1,4 @@
+import { Schema, Option } from "effect";
 import { TempoError } from "@tempo/protocol";
 import git from "isomorphic-git";
 import http from "isomorphic-git/http/web";
@@ -14,19 +15,25 @@ export interface AgentRepoStore {
 }
 
 const TOKEN_TTL_S = 300;
+
 const PUSH_ATTEMPTS = 3;
+
 const BRANCH = "main";
+
 const DIR = "/repo";
+
 const AUTHOR = { name: "Tempo", email: "tempo@localhost" };
 
-const codeOf = (e: unknown): string | undefined =>
-  typeof e === "object" && e !== null && typeof (e as { code?: unknown }).code === "string"
-    ? (e as { code: string }).code
-    : undefined;
+const codeOf = (cause: unknown): string | undefined => {
+  const parsed = Schema.decodeUnknownOption(Schema.Struct({ code: Schema.String }))(cause);
 
-const artifactsError = (step: string, e: unknown): TempoError => {
-  log("warn", "artifacts call failed", { step, code: codeOf(e) ?? "unknown" });
-  return new TempoError("ARTIFACTS_ERROR", undefined, `${step}: ${codeOf(e) ?? "failed"}`);
+  return Option.isSome(parsed) ? parsed.value.code : undefined;
+};
+
+const artifactsError = (step: string, cause: unknown): TempoError => {
+  log("warn", "artifacts call failed", { step, code: codeOf(cause) ?? "unknown" });
+
+  return new TempoError("ARTIFACTS_ERROR", undefined, `${step}: ${codeOf(cause) ?? "failed"}`);
 };
 
 const release = (repo: ArtifactsRepo): void => {
@@ -44,11 +51,13 @@ const ensureRepo = async (ns: Artifacts, name: string): Promise<ArtifactsRepo> =
   } catch (e) {
     if (codeOf(e) !== "NOT_FOUND") throw artifactsError("get", e);
   }
+
   try {
     await ns.create(name, { setDefaultBranch: BRANCH, description: "Tempo custom agents" });
   } catch (e) {
     if (codeOf(e) !== "ALREADY_EXISTS") throw artifactsError("create", e);
   }
+
   try {
     return await ns.get(name);
   } catch (e) {
@@ -69,6 +78,7 @@ const commitOnce = async (
   await git.init({ fs, dir: DIR, defaultBranch: BRANCH });
   await git.addRemote({ fs, dir: DIR, remote: "origin", url: remote });
   let hasMain = true;
+
   try {
     await git.fetch({
       fs,
@@ -87,20 +97,26 @@ const commitOnce = async (
     if (codeOf(e) !== "NotFoundError" && codeOf(e) !== "MissingRefError") throw e;
     hasMain = false;
   }
+
   const full = `${DIR}/${path}`;
+
   if (content === null) {
     if (!hasMain) throw new TempoError("NOT_FOUND", undefined, "agent file not in repo");
     await fs.promises.unlink(full).catch(() => undefined);
     await git.remove({ fs, dir: DIR, filepath: path });
   } else {
     const segments = path.split("/").slice(0, -1);
+
     for (let i = 1; i <= segments.length; i++) {
       await fs.promises.mkdir(`${DIR}/${segments.slice(0, i).join("/")}`).catch(() => undefined);
     }
+
     await fs.promises.writeFile(full, content);
     await git.add({ fs, dir: DIR, filepath: path });
   }
+
   const sha = await git.commit({ fs, dir: DIR, message, author: AUTHOR, committer: AUTHOR });
+
   const res = await git.push({
     fs,
     http,
@@ -110,20 +126,25 @@ const commitOnce = async (
     remoteRef: BRANCH,
     headers,
   });
+
   if (!res.ok) throw Object.assign(new Error("push rejected"), { code: "PushRejectedError" });
+
   return sha;
 };
 
 export const artifactsStore = (env: Env): AgentRepoStore => ({
   async read(repoName, ref, path) {
     let repo: ArtifactsRepo;
+
     try {
       repo = await env.AGENTS.get(repoName);
     } catch (e) {
       throw artifactsError("get", e);
     }
+
     try {
       const blob = await repo.readFile({ ref, path });
+
       return blob === null ? null : await blob.text();
     } catch (e) {
       throw artifactsError("read", e);
@@ -135,15 +156,18 @@ export const artifactsStore = (env: Env): AgentRepoStore => ({
   async write(repoName, path, content, message) {
     const repo = await ensureRepo(env.AGENTS, repoName);
     let tokenId: string | undefined;
+
     try {
       const { remote } = await repo.info();
       const token = await repo.createToken("write", TOKEN_TTL_S);
       tokenId = token.id;
+
       for (let attempt = 1; ; attempt++) {
         try {
           return await commitOnce(remote, token.plaintext, path, content, message);
         } catch (e) {
           if (e instanceof TempoError) throw e;
+
           // A rejected (non-fast-forward) push fetches main again (02, at most 3 times).
           if (codeOf(e) !== "PushRejectedError" || attempt >= PUSH_ATTEMPTS) throw artifactsError("push", e);
         }

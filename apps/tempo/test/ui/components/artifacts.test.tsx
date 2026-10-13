@@ -1,52 +1,53 @@
+import { detail, session } from "../fixtures";
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+const renderMermaid = vi.fn<(code: string, dark: boolean) => Promise<string>>();
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Artifact, ItemOf } from "@tempo/protocol";
 import { createElement, type ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ArtifactCard } from "../../../src/ui/components/artifacts/ArtifactCard";
 import { ArtifactsView } from "../../../src/ui/components/artifacts/ArtifactsView";
 import { MessageMarkdown } from "../../../src/ui/components/chat/Markdown";
-import { renderMermaid } from "../../../src/ui/components/chat/mermaid";
+import { DiagramRendererContext } from "../../../src/ui/components/chat/mermaid";
 import { FileTab } from "../../../src/ui/components/review/FileTab";
-import { call } from "../../../src/ui/lib/api";
-import { openArtifactTab } from "../../../src/ui/state/workspace-ui";
+
+import { getWorkspaceUi, resetUiState } from "../../../src/ui/state/workspace-ui";
 
 /** 04: artifact cards, the Artifacts tab, Mermaid diagrams and file tab previews. */
 
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
-vi.mock("~/ui/hooks/useWorkspace", () => ({
-  useWorkspaceSelector: (_id: string, select: (state: unknown) => unknown) =>
-    select({
-      workspace: { state: "ready" },
-      changesSeq: 0,
-      items: {},
-      sessions: { s1: { title: "Fix login", agent: "claude" } },
-    }),
-}));
-vi.mock("~/ui/hooks/useWorkspaceUi", () => ({
-  useWorkspaceUiSelector: (_id: string, select: (state: unknown) => unknown) =>
-    select({ tabs: [], activeKey: null }),
-}));
-vi.mock("~/ui/components/review/highlight", () => ({
-  highlightFile: async () => null,
-  splitLines: (text: string) => text.split("\n"),
-}));
-vi.mock("~/ui/components/chat/mermaid", () => ({ renderMermaid: vi.fn() }));
-vi.mock("~/ui/state/workspace-ui", async (orig) => ({
-  ...(await orig<typeof import("../../../src/ui/state/workspace-ui")>()),
-  openArtifactTab: vi.fn(),
-}));
+beforeEach(() => {
+  resetUiState();
+  environment.setState({ workspace: detail(), sessions: { s1: session({ title: "Fix login" }) } });
+});
 
-afterEach(() => vi.clearAllMocks());
+afterEach(resetUiState);
 
 const A = "01jart00000000000000000001";
 
 const show = (child: ReactNode) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(createElement(QueryClientProvider, { client }, child));
+
+  return render(
+    createElement(
+      DiagramRendererContext.Provider,
+      { value: renderMermaid },
+      createElement(QueryClientProvider, { client }, child),
+    ),
+    { wrapper: environment.Provider },
+  );
 };
 
-const item = (status: "pending" | "completed" | "failed", over: object = {}): ItemOf<"artifact"> => ({
+const item = (
+  status: "pending" | "completed" | "failed",
+  over: Partial<ItemOf<"artifact">["content"]> = {},
+): ItemOf<"artifact"> => ({
   id: "i1",
   sessionId: "s1",
   turnId: "t1",
@@ -83,8 +84,9 @@ describe("artifact card", () => {
     expect(card.getAttribute("role")).toBe("button");
     fireEvent.click(card);
     fireEvent.keyDown(card, { key: "Enter" });
-    expect(openArtifactTab).toHaveBeenCalledTimes(2);
-    expect(openArtifactTab).toHaveBeenCalledWith("w1", A, 2);
+    expect(getWorkspaceUi("w1").tabs.map((entry) => entry.tab)).toEqual([
+      { kind: "artifact", artifactId: A, version: 2 },
+    ]);
   });
 
   it("pending shows Saving; failed shows the lost text; neither opens", () => {
@@ -97,7 +99,7 @@ describe("artifact card", () => {
     expect(screen.getByText("This artifact was lost before it was saved.")).toBeDefined();
     expect(screen.queryByText("v1")).toBeNull();
     fireEvent.click(screen.getByRole("group", { name: "Artifact: Login screen" }));
-    expect(openArtifactTab).not.toHaveBeenCalled();
+    expect(getWorkspaceUi("w1").tabs).toEqual([]);
   });
 });
 
@@ -135,7 +137,9 @@ describe("Artifacts tab", () => {
     expect(screen.getByText("v2")).toBeDefined();
     expect(screen.getByText("Fix login")).toBeDefined();
     fireEvent.click(screen.getByText("Plan"));
-    expect(openArtifactTab).toHaveBeenCalledWith("w1", A, null);
+    expect(getWorkspaceUi("w1").tabs.map((entry) => entry.tab)).toEqual([
+      { kind: "artifact", artifactId: A, version: null },
+    ]);
     expect(screen.getByRole("button", { name: "Versions of Plan" })).toBeDefined();
   });
 });

@@ -12,5 +12,6 @@ export function useProjects() {
 
 export function useProject(projectId: string | null | undefined): Project | undefined {
   const { data } = useProjects();
+
   return projectId ? data?.find((p) => p.id === projectId) : undefined;
 }

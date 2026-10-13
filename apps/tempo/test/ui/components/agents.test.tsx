@@ -1,15 +1,19 @@
+import { createUiEnvironment, requestInput } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CustomAgent } from "@tempo/protocol";
+import type { CustomAgent, CustomAgentSummary } from "@tempo/protocol";
 import { SettingsPage } from "../../../src/ui/components/settings/SettingsPage";
-import { call } from "../../../src/ui/lib/api";
+
 import { openDialog, resetUiState } from "../../../src/ui/state/workspace-ui";
 
 /** Settings → Agents (04, Settings; 01, Custom agents). */
-
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
-vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
 
 const reviewer: CustomAgent = {
   id: "01ca",
@@ -25,24 +29,30 @@ const reviewer: CustomAgent = {
   updatedAt: 1,
 };
 
-const show = (agents: unknown[] = []) => {
-  vi.mocked(call).mockImplementation(async (name: string, input: unknown) => {
+const show = (agents: CustomAgentSummary[] = []) => {
+  vi.mocked(call).mockImplementation(async (name, input) => {
     if (name === "saveCustomAgent")
-      return { ...reviewer, ...(input as { definition: object }).definition, id: "01new" };
+      return { ...reviewer, ...requestInput("saveCustomAgent", input).definition, id: "01new" };
+
     if (name === "getCustomAgent") return reviewer;
+
     if (name === "deleteCustomAgent") return {};
+
     return [];
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(["call", "listProjects", {}], []);
   client.setQueryData(["call", "listCustomAgents", {}], agents);
   openDialog({ kind: "settings", tab: "agents" });
+
   return render(
     <QueryClientProvider client={client}>
       <SettingsPage />
     </QueryClientProvider>,
+    { wrapper: environment.Provider },
   );
 };
+
 afterEach(resetUiState);
 
 describe("Settings → Agents", () => {
@@ -96,7 +106,9 @@ describe("Settings → Agents", () => {
   it("loads an agent, notes what its base agent ignores, and deletes after confirming", async () => {
     show([{ id: "01ca", name: "Reviewer", description: "Reviews code", baseAgent: "codex", updatedAt: 1 }]);
     fireEvent.click(screen.getByRole("button", { name: /Reviewer/ }));
-    await waitFor(() => expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Reviewer"));
+    await waitFor(() =>
+      expect(elementOf(screen.getByLabelText("Name"), HTMLInputElement).value).toBe("Reviewer"),
+    );
     expect(screen.getByText("Tool limits are not supported.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     const { dialogStore, resolveConfirm } = await import("../../../src/ui/state/workspace-ui");

@@ -142,6 +142,7 @@ export function AttachmentChip({ a, onRemove }: { a: PendingAttachment; onRemove
     ) : (
       <PaperclipIcon className="size-3 shrink-0 text-muted-foreground" />
     );
+
   return (
     <Chip
       icon={icon}
@@ -174,6 +175,7 @@ export function QueuedChip({
   onDrop: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+
   if (turn.steeringPending) {
     return (
       <span role="status" className="rounded-md border bg-muted/50 px-1.5 py-1 text-xs">
@@ -181,10 +183,12 @@ export function QueuedChip({
       </span>
     );
   }
+
   const save = () => {
     if (editing !== null && editing.trim() !== "" && editing !== turn.prompt.text) onSave(editing);
     setEditing(null);
   };
+
   if (editing !== null) {
     return (
       <input
@@ -206,6 +210,7 @@ export function QueuedChip({
       />
     );
   }
+
   return (
     <span
       draggable
@@ -259,6 +264,7 @@ export function ContextRing({ usage }: { usage: ContextUsage }) {
   const c = 2 * Math.PI * r;
   const pct = Math.round(usage.ratio * 100);
   const label = `${formatTokens(usage.used)} of ${formatTokens(usage.size)} tokens of context used (${pct}%)`;
+
   return (
     <SimpleTooltip label={label}>
       <span
@@ -294,6 +300,7 @@ export function ContextRing({ usage }: { usage: ContextUsage }) {
 
 function SelectOptionItems({ option, onPick }: { option: ConfigOption; onPick: (value: string) => void }) {
   const groups = optionGroups(option);
+
   return (
     <DropdownMenuRadioGroup value={String(option.currentValue)} onValueChange={onPick}>
       {groups.map((g, i) => (
@@ -414,10 +421,12 @@ export function ModePicker({
   onClosed: () => void;
 }) {
   if (session.modes.length === 0 && !modeOption) return null;
+
   const current =
     session.modes.length > 0
       ? (session.modes.find((m) => m.id === session.modeId)?.name ?? session.modeId ?? "Mode")
       : currentValueLabel(modeOption!);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className={pickerTrigger} disabled={disabled} aria-label={`Mode: ${current}`}>
@@ -466,6 +475,7 @@ export function OptionsMenu({
   onClosed: () => void;
 }) {
   if (options.length === 0) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className={pickerTrigger} disabled={disabled} aria-label="Agent options">

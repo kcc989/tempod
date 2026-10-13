@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
@@ -9,13 +10,17 @@ import { cleanupDirs, DoClient, startTempod, tmpDir, type Harness } from "./help
 afterAll(cleanupDirs);
 
 let h: Harness | null = null;
+
 afterEach(async () => {
   await h?.close();
   h = null;
 });
 
-const viaSocket = (path: string) => (p: string, init?: RequestInit) =>
-  fetch(`http://tempod${p}`, { ...init, unix: path } as RequestInit);
+const viaSocket = (path: string) => (p: string, init?: RequestInit) => {
+  const options = { ...init, unix: path };
+
+  return fetch(`http://tempod${p}`, options);
+};
 
 const boot = async () => {
   h = startTempod();
@@ -24,19 +29,39 @@ const boot = async () => {
   await client.waitFor(() => existsSync(h!.app.config.mcpSocket), 5000, "mcp socket");
   const call = viaSocket(h.app.config.mcpSocket);
   let id = 0;
-  const publish = async (args: Record<string, unknown>, sessionId = "01session") =>
-    (
-      (await handleMcpMessage(
-        {
-          jsonrpc: "2.0",
-          id: ++id,
-          method: "tools/call",
-          params: { name: "publish_artifact", arguments: args },
-        },
-        call,
-        sessionId,
-      )) as { result: { content: Array<{ type?: string; text: string }>; isError?: boolean } }
+
+  const publish = async (args: Schema.JsonObject, sessionId = "01session") =>
+    Schema.decodeUnknownSync(
+      Schema.Struct({
+        result: Schema.Struct({
+          content: Schema.Array(Schema.Struct({ type: Schema.optional(Schema.String), text: Schema.String })),
+          isError: Schema.optional(Schema.Boolean),
+        }),
+      }),
+    )(
+      Schema.decodeUnknownSync(
+        Schema.Struct({
+          result: Schema.Struct({
+            content: Schema.Array(
+              Schema.Struct({ type: Schema.optional(Schema.String), text: Schema.String }),
+            ),
+            isError: Schema.optional(Schema.Boolean),
+          }),
+        }),
+      )(
+        await handleMcpMessage(
+          {
+            jsonrpc: "2.0",
+            id: ++id,
+            method: "tools/call",
+            params: { name: "publish_artifact", arguments: args },
+          },
+          call,
+          sessionId,
+        ),
+      ),
     ).result;
+
   return { client, publish, ws: h.config.workspace, dir: h.config.artifactsDir, config: h.config };
 };
 
@@ -105,11 +130,13 @@ describe("publish_artifact (01, Artifacts)", () => {
     writeFileSync(outside, "x");
     symlinkSync(outside, join(ws, "link.md"));
     mkdirSync(join(ws, "folder.md"));
-    const refused = async (args: Record<string, unknown>, text: string) => {
+
+    const refused = async (args: Schema.JsonObject, text: string) => {
       const r = await publish(args);
       expect(r.isError).toBe(true);
       expect(r.content[0]!.text).toBe(text);
     };
+
     await refused({ path: outside, title: "x" }, ARTIFACT_MESSAGES.path);
     await refused({ path: join(ws, "link.md"), title: "x" }, ARTIFACT_MESSAGES.path);
     await refused({ path: join(ws, "folder.md"), title: "x" }, ARTIFACT_MESSAGES.path);

@@ -24,30 +24,36 @@ const tool = (
     rawInput?: unknown;
     status?: Item["status"];
     locations?: string[];
-    content?: object[];
+    content?: Tool["content"]["content"];
   } = {},
-): Tool =>
-  ({
+): Tool => {
+  let content: Tool["content"] = {
+    toolCallId: id,
+    title: over.title ?? id,
+    toolKind,
+    locations: (over.locations ?? []).map((path) => ({ path })),
+    content: over.content ?? [],
+  };
+
+  if (over.rawInput !== undefined) content = { ...content, rawInput: over.rawInput };
+
+  return {
     id,
     sessionId: "s1",
     turnId: "t1",
     kind: "tool_call",
     status: over.status ?? "completed",
-    content: {
-      toolCallId: id,
-      title: over.title ?? id,
-      toolKind,
-      locations: (over.locations ?? []).map((path) => ({ path })),
-      content: over.content ?? [],
-      ...(over.rawInput === undefined ? {} : { rawInput: over.rawInput }),
-    },
+    content,
     rev: 1,
     createdAt: 1000,
     updatedAt: 1000,
-  }) as Tool;
+  };
+};
 
-const thought = (id: string): Item =>
-  ({ ...agentMessage(id, "hmm", { status: "completed" }), kind: "agent_thought" }) as Item;
+const thought = (id: string): Item => ({
+  ...agentMessage(id, "hmm", { status: "completed" }),
+  kind: "agent_thought",
+});
 
 const map = (...xs: Item[]): Record<string, Item> => Object.fromEntries(xs.map((x) => [x.id, x]));
 
@@ -119,6 +125,7 @@ describe("edit rows (04, Edit rows)", () => {
     const edit = tool("e", "edit", {
       content: [{ type: "diff", path: "/workspace/src/a.ts", oldText: "a\nb\nc\n", newText: "a\nB\nc\nd\n" }],
     });
+
     expect(editCounts(edit)).toEqual({ path: "/workspace/src/a.ts", added: 2, removed: 1 });
     expect(editCounts(tool("e", "edit", { locations: ["/workspace/x"] }))).toEqual({
       path: "/workspace/x",
@@ -143,6 +150,7 @@ describe("work row summary (04, Work row)", () => {
       tool("o1", "switch_mode"),
       thought("th"),
     ];
+
     expect(workSummary(items, 48_000)).toBe(
       "Explored 3 files · 1 search · ran 2 commands · fetched 1 page · ran 1 agent · used 1 tool · 48 s",
     );
@@ -171,14 +179,16 @@ describe("work rows in the transcript", () => {
     tool("x1", "execute", { title: "bun lint" }),
     agentMessage("m1", "Farstep makes videos.", { createdAt: 2000, status: "completed" }),
   );
+
   const order = ["u1", "m0", "r1", "e1", "f1", "x1", "m1"];
+
   for (const [id, at] of [
     ["r1", 120],
     ["e1", 130],
     ["f1", 140],
     ["x1", 150],
   ] as const)
-    (ended[id] as { createdAt: number }).createdAt = at;
+    ended[id] = { ...ended[id]!, createdAt: at };
   const turns = { t1: turn({ id: "t1", status: "completed", startedAt: 100, endedAt: 2100 }) };
 
   it("folds work into one row; edits, failures and the answer stay outside", () => {

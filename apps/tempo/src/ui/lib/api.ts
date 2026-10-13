@@ -1,15 +1,18 @@
-import { TempoError, unwrap, type FnInput, type FnName, type FnOutput, type Result } from "@tempo/protocol";
-import * as fns from "../../server/fns.ts";
+import type { FnInput, FnName } from "@tempo/protocol";
+import { createApiClient, type ApiTransport } from "./api-client";
+
+export { createApiClient, type ApiTransport } from "./api-client";
+
+export { TempoError } from "@tempo/protocol";
 
 type ServerFn<K extends FnName> = (opts: { data: FnInput<K> }) => Promise<string>;
 
-/**
- * Calls one server function and unwraps its Result. Throws TempoError with the code and message
- * from the error table (02, Error codes).
- */
-export const call = async <K extends FnName>(name: K, input: FnInput<K>): Promise<FnOutput<K>> => {
-  const fn = (fns as unknown as Record<FnName, ServerFn<K>>)[name];
-  return unwrap(JSON.parse(await fn({ data: input })) as Result<FnOutput<K>>);
+const serverTransport: ApiTransport = async (name, input) => {
+  const fns = await import("../../server/fns.ts");
+  // SAFETY: generated fns exports one function per API key; createApiClient couples the key and input.
+  const fn = fns[name] as ServerFn<typeof name>;
+
+  return fn({ data: input });
 };
 
-export { TempoError };
+export const call = createApiClient(serverTransport);

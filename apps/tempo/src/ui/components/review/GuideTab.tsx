@@ -28,40 +28,52 @@ const READS = ["readFile", "getFileDiff"] as const;
 export function GuideTab({ workspaceId }: CenterTabProps<"guide">) {
   const live = useLive(workspaceId);
   useInvalidateOnChanges(workspaceId, READS);
+
   const file = useCallQuery(
     "readFile",
     { workspaceId, path: PR_GUIDE_PATH },
     { enabled: live, retry: false },
   );
+
   const sessionId = useWorkspaceUiSelector(workspaceId, targetChatSession);
   const session = useWorkspaceSelector(workspaceId, (s) => (sessionId ? s.sessions[sessionId] : undefined));
+
   const ended = useWorkspaceSelector(
     workspaceId,
     (s) => Object.values(s.turns).filter((t) => t.status !== "running" && t.status !== "queued").length,
   );
+
   const generate = useCallMutation("sendPrompt");
+
   const requestedTurn = useWorkspaceSelector(workspaceId, (s) =>
     generate.data ? s.turns[generate.data.id] : undefined,
   );
+
   const generating =
     generate.isPending ||
     (requestedTurn ?? generate.data)?.status === "queued" ||
     (requestedTurn ?? generate.data)?.status === "running";
+
   const { refetch } = file;
   useEffect(() => {
     if (live && ended > 0) void refetch();
   }, [ended, live, refetch]);
+
   const result = useMemo(() => {
     if (!file.data) return null;
+
     try {
       if (file.data.encoding !== "utf8") return { error: true as const };
+
       return { guide: parsePrGuide(file.data.content) };
     } catch {
       return { error: true as const };
     }
   }, [file.data]);
+
   const guide = result && "guide" in result ? result.guide : undefined;
   const canGenerate = live && session !== undefined && session.status !== "closed" && !generating;
+
   const create = () => {
     if (!canGenerate || !sessionId) return;
     generate.mutate({
@@ -75,6 +87,7 @@ export function GuideTab({ workspaceId }: CenterTabProps<"guide">) {
   };
 
   let body;
+
   if (!live && !guide) {
     body = (
       <EmptyState
@@ -114,6 +127,7 @@ export function GuideTab({ workspaceId }: CenterTabProps<"guide">) {
   } else {
     body = <SkeletonRows />;
   }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b p-2">
@@ -174,15 +188,18 @@ function CreateGuidedPr({
   const workspace = useHubWorkspace(workspaceId);
   const detail = useWorkspaceSelector(workspaceId, (s) => s.workspace);
   const seq = useWorkspaceSelector(workspaceId, (s) => s.changesSeq);
+
   const dirty = useCallQuery(
     "getChanges",
     { workspaceId, scope: "uncommitted" },
     { enabled: live, retry: false },
   );
+
   const { refetch } = dirty;
   useEffect(() => {
     if (live && seq > 0) void refetch();
   }, [seq, live, refetch]);
+
   const create = useCallMutation("createPullRequest", {
     onSuccess: (pr) => {
       toast.success(`Created guided PR #${pr.number}.`, {
@@ -190,7 +207,9 @@ function CreateGuidedPr({
       });
     },
   });
+
   if (workspace?.prState === "open" || workspace?.prState === "draft") return null;
+
   const ready =
     live &&
     detail?.pushed &&
@@ -198,6 +217,7 @@ function CreateGuidedPr({
     !dirty.isFetching &&
     !dirty.isError &&
     dirty.data?.files.length === 0;
+
   return (
     <Button
       size="sm"
@@ -223,16 +243,20 @@ function CreateGuidedPr({
 
 function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide: PrGuide; live: boolean }) {
   const [selectedId, setSelectedId] = useState(guide.chapters[0]!.id);
+
   const index = Math.max(
     0,
     guide.chapters.findIndex((c) => c.id === selectedId),
   );
+
   const chapter = guide.chapters[index]!;
+
   const changes = useCallQuery(
     "getChanges",
     { workspaceId, scope: "branch" },
     { enabled: live, retry: false },
   );
+
   const changesSeq = useWorkspaceSelector(workspaceId, (s) => s.changesSeq);
   const { refetch } = changes;
   useEffect(() => {
@@ -243,17 +267,22 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
   const hashes = useRef(new Map<string, string>());
   const scrollRoot = useRef<HTMLDivElement>(null);
   const register = useCallback(() => {}, []);
+
   const onHash = useCallback((path: string, hash: string | null) => {
     if (hash) hashes.current.set(path, hash);
     else hashes.current.delete(path);
   }, []);
+
   const toggleViewed = (path: string) => {
     const hash = hashes.current.get(path);
+
     if (hash) setMarks((m) => withViewed(m, path, hash, m[path] !== hash));
   };
+
   const files = changes.data?.files ?? [];
   const covered = new Set(guide.chapters.flatMap((c) => c.files));
   const remaining = files.filter((f) => !covered.has(f.path));
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-auto md:flex-row md:overflow-hidden">
       <nav
@@ -270,6 +299,7 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
             aria-current={c.id === chapter.id ? "step" : undefined}
             onClick={() => {
               setSelectedId(c.id);
+
               if (scrollRoot.current) scrollRoot.current.scrollTop = 0;
             }}
           >
@@ -333,6 +363,7 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
           ) : (
             chapter.files.map((path) => {
               const file = files.find((f) => f.path === path);
+
               return file ? (
                 <DiffFile
                   key={path}
@@ -371,6 +402,7 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
             disabled={index === 0}
             onClick={() => {
               setSelectedId(guide.chapters[index - 1]!.id);
+
               if (scrollRoot.current) scrollRoot.current.scrollTop = 0;
             }}
           >
@@ -383,6 +415,7 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
             disabled={index === guide.chapters.length - 1}
             onClick={() => {
               setSelectedId(guide.chapters[index + 1]!.id);
+
               if (scrollRoot.current) scrollRoot.current.scrollTop = 0;
             }}
           >

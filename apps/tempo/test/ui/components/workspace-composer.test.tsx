@@ -13,8 +13,11 @@ const state = vi.hoisted(() => ({
   modelsLoading: false,
   summary: { id: "w1", title: "lisbon" },
 }));
+
 vi.mock("~/ui/lib/api", () => ({ call: state.call }));
+
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => state.navigate }));
+
 vi.mock("~/ui/hooks/useProjects", () => ({
   useProjects: () => ({
     isPending: false,
@@ -22,6 +25,7 @@ vi.mock("~/ui/hooks/useProjects", () => ({
     data: [{ id: "p1", name: "tempo", owner: "acme", defaultBranch: "main", settings: {} }],
   }),
 }));
+
 vi.mock("~/ui/hooks/useCredentialStatus", () => ({
   useCredentialStatus: () => ({
     isSuccess: true,
@@ -34,20 +38,28 @@ vi.mock("~/ui/hooks/useCredentialStatus", () => ({
     },
   }),
 }));
+
 vi.mock("~/ui/hooks/useWorkspace", () => ({ useWorkspaceSelector: () => DEFAULT_SETTINGS }));
+
 vi.mock("~/ui/hooks/useMediaQuery", () => ({ useIsPhone: () => false }));
+
 vi.mock("~/ui/hooks/useWorkspaceUi", () => ({
   useDialog: () => ({ open: true, args: {}, onOpenChange: vi.fn() }),
 }));
+
 vi.mock("~/ui/state/workspace-ui", () => ({
   closeDialog: state.close,
   openDialog: vi.fn(),
   setPhonePane: vi.fn(),
 }));
+
 vi.mock("~/ui/stores/hub-store", () => ({ getHubStore: () => ({ merge: vi.fn() }) }));
+
 vi.mock("~/ui/hooks/useCustomAgents", () => ({ useCustomAgents: () => ({ data: [] }) }));
+
 vi.mock("~/ui/hooks/useCall", async (importOriginal) => {
   const actual = await importOriginal<typeof import("~/ui/hooks/useCall")>();
+
   return {
     ...actual,
     useCallQuery: (name: string) => ({
@@ -72,6 +84,7 @@ vi.mock("~/ui/hooks/useCall", async (importOriginal) => {
     }),
   };
 });
+
 vi.mock("~/ui/stores/workspace-store", () => ({
   knownModels: () => [
     { agent: "claude", value: "test-opus", name: "Test Opus" },
@@ -88,6 +101,7 @@ function show() {
     ),
   );
 }
+
 beforeEach(() => {
   state.modelsLoading = false;
   state.call.mockReset();
@@ -194,8 +208,10 @@ describe("new chat composer", () => {
         createElement(NewChatComposer, { workspaceId: "w1", open: true, onCreated, onOpenChange }),
       ),
     );
+
     return { onCreated, onOpenChange };
   }
+
   it("opens an empty chat without sending a blank message", async () => {
     state.call.mockResolvedValue({ id: "s1", agent: "claude" });
     const { onCreated, onOpenChange } = chat();
@@ -213,7 +229,9 @@ describe("new chat composer", () => {
     let sends = 0;
     state.call.mockImplementation(async (name: string) => {
       if (name === "createSession") return { id: "s1", agent: "claude" };
+
       if (sends++ === 0) throw new Error("Send failed");
+
       return {};
     });
     const { onCreated } = chat();

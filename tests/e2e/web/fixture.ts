@@ -1,6 +1,8 @@
 import { test as base, expect, type Page, type WebSocketRoute } from "@playwright/test";
 import {
   API,
+  FN_NAMES,
+  type FnOutput,
   DEFAULT_SETTINGS,
   TempoError,
   type FnName,
@@ -64,7 +66,7 @@ export class WebFixture {
   ];
   comments: ReviewComment[] = [];
   runs: ScriptRun[] = [];
-  calls: { name: FnName; input: Record<string, unknown> }[] = [];
+  calls: { name: FnName; input: Schema.JsonObject }[] = [];
   failures = new Map<FnName, TempoError>();
   hold = new Map<FnName, Promise<void>>();
   workspaceSockets: WebSocketRoute[] = [];
@@ -89,15 +91,23 @@ export class WebFixture {
       }),
     );
     await page.route("**/__fixture/*", async (route) => {
-      const name = new URL(route.request().url()).pathname.split("/").at(-1) as FnName;
-      const input = route.request().postDataJSON() as Record<string, unknown>;
-      Schema.decodeUnknownSync(API[name].input as Schema.Codec<unknown>)(input);
+      const name = Schema.decodeUnknownSync(Schema.Literals(FN_NAMES))(
+        new URL(route.request().url()).pathname.split("/").at(-1),
+      );
+
+      const input = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json))(
+        route.request().postDataJSON(),
+      );
+
+      Schema.decodeUnknownSync(API[name].input)(input);
       this.calls.push({ name, input });
       await this.hold.get(name);
       const failure = this.failures.get(name);
+
       if (failure) return route.fulfill({ json: { ok: false, error: failure.toBody() } });
       const value = this.respond(name, input);
-      Schema.decodeUnknownSync(API[name].output as Schema.Codec<unknown>)(value);
+      Schema.decodeUnknownSync(API[name].output)(value);
+
       return route.fulfill({ json: { ok: true, value } });
     });
     await page.route("**/api/workspaces/*/attachments", async (route) =>
@@ -107,6 +117,7 @@ export class WebFixture {
     );
     await page.routeWebSocket("**/api/ws/**", (socket) => {
       const path = new URL(socket.url()).pathname;
+
       if (path === "/api/ws/hub") {
         this.hubSockets.push(socket);
         socket.send(
@@ -136,8 +147,10 @@ export class WebFixture {
           } satisfies WorkspaceServerMessage),
         );
       }
+
       socket.onMessage((data) => {
-        if (typeof data === "string" && JSON.parse(data).type === "ping") socket.send('{"type":"pong"}');
+        if (Schema.is(Schema.String)(data) && JSON.parse(data).type === "ping")
+          socket.send('{"type":"pong"}');
       });
     });
   }
@@ -149,6 +162,7 @@ export class WebFixture {
   updateWorkspace(patch: Partial<WorkspaceDetail>) {
     this.workspace = { ...this.workspace, ...patch, rev: this.workspace.rev + 1 };
     this.emit({ type: "workspace", workspace: this.workspace });
+
     for (const socket of this.hubSockets)
       socket.send(JSON.stringify({ type: "workspace", summary: this.workspace } satisfies HubServerMessage));
   }
@@ -159,7 +173,7 @@ export class WebFixture {
     this.emit({ type: "session", session: updated });
   }
 
-  private respond(name: FnName, input: Record<string, unknown>): unknown {
+  private respond(name: FnName, input: Schema.JsonObject): FnOutput<FnName> {
     switch (name) {
       case "listProjects":
         return [this.project];
@@ -213,18 +227,22 @@ export class WebFixture {
           id: `comment-${this.comments.length + 1}`,
           path: String(input.path),
           body: String(input.body),
-          lineStart: (input.lineStart as number) ?? null,
-          lineEnd: (input.lineEnd as number) ?? null,
-          side: (input.side as ReviewComment["side"]) ?? null,
+          lineStart: Schema.decodeUnknownSync(Schema.NullishOr(Schema.Number))(input.lineStart) ?? null,
+          lineEnd: Schema.decodeUnknownSync(Schema.NullishOr(Schema.Number))(input.lineEnd) ?? null,
+          side: Schema.decodeUnknownSync(API.addReviewComment.input)(input).side ?? null,
           status: "draft",
           sentTurnId: null,
           createdAt: 1000,
         };
+
         this.comments.push(comment);
+
         return comment;
       }
+
       case "deleteReviewComment":
         this.comments = this.comments.filter((c) => c.id !== input.commentId);
+
         return {};
       case "listScriptRuns":
         return this.runs.map((r) => ({ ...r, logTail: "" }));
@@ -257,33 +275,43 @@ export class WebFixture {
         return {};
       case "setSessionMode":
         this.updateSession(String(input.sessionId), { modeId: String(input.modeId) });
+
         return {};
       case "closeSession":
         this.updateSession(String(input.sessionId), { status: "closed" });
+
         return {};
       case "renameSession":
         this.updateSession(String(input.sessionId), { title: String(input.title) });
+
         return {};
       case "renameWorkspace":
         this.updateWorkspace({ title: String(input.title) });
+
         return {};
       case "setBaseBranch":
         this.updateWorkspace({ baseBranch: String(input.baseBranch) });
+
         return {};
       case "setPinned":
         this.updateWorkspace({ pinned: Boolean(input.pinned) });
+
         return {};
       case "sleepWorkspace":
         this.updateWorkspace({ state: "sleeping" });
+
         return {};
       case "wakeWorkspace":
         this.updateWorkspace({ state: "ready" });
+
         return {};
       case "archiveWorkspace":
         this.updateWorkspace({ state: "archived", archivedAt: 2000 });
+
         return {};
       case "restoreWorkspace":
         this.updateWorkspace({ state: "ready", archivedAt: null });
+
         return {};
       case "commitAndPush":
         this.updateWorkspace({
@@ -291,15 +319,19 @@ export class WebFixture {
           hasUnpushedCommits: false,
           changes: { files: [], additions: 0, deletions: 0 },
         });
+
         return { commitSha: "pushed" };
       case "createPullRequest":
         this.updateWorkspace({ prNumber: 42, prState: "open", checksState: "pending" });
+
         return { number: 42, url: "https://github.com/kcc989/keeled/pull/42" };
       case "mergePullRequest":
         this.updateWorkspace({ prState: "merged" });
+
         return {};
       case "sendPrompt": {
-        const args = input as FnInput<"sendPrompt">;
+        const args = Schema.decodeUnknownSync(API.sendPrompt.input)(input);
+
         const next = turn({
           id: `t${++this.seq}`,
           sessionId: args.sessionId,
@@ -313,23 +345,30 @@ export class WebFixture {
             reviewCommentIds: args.reviewCommentIds ?? [],
           },
         });
+
         this.turns.push(next);
         this.emit({ type: "turn", turn: next });
         this.updateWorkspace({ runningTurnId: this.workspace.runningTurnId ?? next.id, state: "working" });
+
         return next;
       }
+
       case "editQueuedTurn": {
         const updated = {
           ...this.turns.find((t) => t.id === input.turnId)!,
           prompt: { ...this.turns.find((t) => t.id === input.turnId)!.prompt, text: String(input.text) },
         };
+
         this.turns = this.turns.map((t) => (t.id === updated.id ? updated : t));
         this.emit({ type: "turn", turn: updated });
+
         return updated;
       }
+
       case "deleteQueuedTurn":
         this.turns = this.turns.filter((t) => t.id !== input.turnId);
         this.emit({ type: "turn.deleted", turnId: String(input.turnId) });
+
         return {};
       case "cancelTurn": {
         const ended = {
@@ -337,15 +376,19 @@ export class WebFixture {
           status: "cancelled" as const,
           endedAt: 3000,
         };
+
         this.turns = this.turns.map((t) => (t.id === ended.id ? ended : t));
         this.emit({ type: "turn", turn: ended });
         this.updateWorkspace({ runningTurnId: null, state: "ready" });
+
         return {};
       }
+
       case "respondPermission": {
         const item = this.items.find(
           (i) => i.kind === "permission" && i.content.requestId === input.requestId,
         );
+
         if (item?.kind === "permission")
           this.emit({
             type: "item.upsert",
@@ -357,8 +400,10 @@ export class WebFixture {
             },
             itemsRev: 4,
           });
+
         return {};
       }
+
       case "runScript": {
         const run: ScriptRun = {
           id: "run-1",
@@ -371,25 +416,33 @@ export class WebFixture {
           startedAt: 1000,
           endedAt: null,
         };
+
         this.runs = [run];
         this.emit({ type: "script.run", run });
         this.emit({ type: "script.output", runId: run.id, stream: "stdout", data: "Ready on port 3000\n" });
+
         return run;
       }
+
       case "stopScript": {
         const run = { ...this.runs[0]!, status: "exited" as const, exitCode: 0, endedAt: 2000 };
         this.runs = [run];
         this.emit({ type: "script.run", run });
+
         return {};
       }
+
       default:
         this.unexpected.push(name);
+
         return {};
     }
   }
 
   inputs<K extends FnName>(name: K): FnInput<K>[] {
-    return this.calls.filter((c) => c.name === name).map((c) => c.input as FnInput<K>);
+    return this.calls
+      .filter((c) => c.name === name)
+      .map((c) => Schema.decodeUnknownSync(API[name].input)(c.input));
   }
 }
 
@@ -402,4 +455,5 @@ export const test = base.extend<{ fixture: WebFixture }>({
     expect(fixture.unexpected, "unhandled fixture calls").toEqual([]);
   },
 });
+
 export { expect };

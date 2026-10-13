@@ -13,10 +13,11 @@ const lines = [
   "",
   "// The Result envelope travels as JSON text: wire types hold `unknown` fields (ACP pass-through)",
   "// that TanStack's serializability check rejects.",
-  "const run = async <K extends FnName>(name: K, data: unknown): Promise<string> =>",
+  "const run = async <K extends FnName>(name: K, data: FnInput<K>): Promise<string> =>",
   "  JSON.stringify(await runFn(name, env, getRequest().headers, data, { allowCookie: true, allowBearer: false }));",
   "",
 ];
+
 for (const name of FN_NAMES) {
   const method = API[name].method;
   lines.push(
@@ -26,5 +27,7 @@ for (const name of FN_NAMES) {
     "",
   );
 }
+
 writeFileSync(new URL("../src/server/fns.ts", import.meta.url), lines.join("\n"));
+
 console.log(`wrote ${FN_NAMES.length} server functions`);

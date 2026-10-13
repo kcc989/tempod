@@ -1,3 +1,5 @@
+import { Option, Schema } from "effect";
+import { CodexAuthFile } from "@tempo/protocol";
 import type { ApiKeyProvider, CredentialProvider, CredentialStatus } from "@tempo/protocol";
 import { formatRelative } from "~/ui/lib/format";
 
@@ -28,9 +30,13 @@ export const isApiKeyProvider = (p: CredentialProvider): p is ApiKeyProvider =>
 /** setClaudeToken: no spaces, 20 to 4096 characters (02). */
 export const checkClaudeToken = (token: string): string | null => {
   const t = token.trim();
+
   if (t === "") return "Paste the token first.";
+
   if (/\s/.test(t)) return "A token has no spaces. Paste it again.";
+
   if (t.length < 20 || t.length > 4096) return "That does not look like a token from claude setup-token.";
+
   return null;
 };
 
@@ -38,30 +44,32 @@ export const checkClaudeToken = (token: string): string | null => {
 export const checkCodexAuth = (text: string): string | null => {
   if (text.trim() === "") return "Upload or paste auth.json first.";
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     return "That is not JSON. Use the auth.json that codex login writes.";
   }
-  const o = parsed as {
-    tokens?: { access_token?: unknown; refresh_token?: unknown };
-    last_refresh?: unknown;
-  };
-  if (
-    typeof o?.tokens?.access_token !== "string" ||
-    typeof o.tokens.refresh_token !== "string" ||
-    typeof o.last_refresh !== "string" ||
-    Number.isNaN(Date.parse(o.last_refresh))
-  ) {
+
+  const decoded = Schema.decodeUnknownOption(CodexAuthFile)(parsed);
+
+  if (Option.isNone(decoded)) {
     return "That auth.json has no tokens. Run codex login and try again.";
   }
+
+  if (Number.isNaN(Date.parse(decoded.value.last_refresh)))
+    return "That auth.json has no tokens. Run codex login and try again.";
+
   return null;
 };
 
 export const checkApiKey = (key: string): string | null => {
   const k = key.trim();
+
   if (k === "") return "Paste the key first.";
+
   if (/\s/.test(k)) return "A key has no spaces. Paste it again.";
+
   return null;
 };
 
@@ -80,6 +88,8 @@ export const loginState = (
   now: number = Date.now(),
 ): LoginState => {
   const s = status?.[provider];
+
   if (!s?.set) return { set: false, updated: null };
+
   return { set: true, updated: s.updatedAt ? `Updated ${formatRelative(s.updatedAt, now)}` : null };
 };

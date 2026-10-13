@@ -1,4 +1,5 @@
-import type { Environment, EnvironmentProposal, FnInput, FnName } from "@tempo/protocol";
+import { createApiClient } from "../../../src/ui/lib/api-client";
+import type { Environment, EnvironmentProposal, FnName } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import {
   applyEnvironmentProposal,
@@ -16,7 +17,6 @@ import {
   secretHint,
   uniqueEnvironmentName,
   updateFromForm,
-  type Caller,
 } from "~/ui/components/dialogs/environments-model";
 
 const env = (over: Partial<Environment> = {}): Environment => ({
@@ -61,11 +61,13 @@ describe("environment form", () => {
 
   it("sends only filled value fields", () => {
     const form = formFromEnvironment(env());
+
     const secrets = [
       { ...form.secrets[0]!, value: "sk_live" },
       form.secrets[1]!,
       { ...emptySecretRow(), name: "NEW_ONE", hosts: "A.example.com, b.example.com", value: "v" },
     ];
+
     const r = updateFromForm({ ...form, secrets });
     expect(r.ok && r.values).toEqual([
       { name: "STRIPE_KEY", value: "sk_live" },
@@ -79,6 +81,7 @@ describe("environment form", () => {
 
   it("rejects bad names, host patterns and duplicates", () => {
     const form = formFromEnvironment(env());
+
     const bad = updateFromForm({
       ...form,
       name: "  ",
@@ -86,21 +89,27 @@ describe("environment form", () => {
       secrets: [...form.secrets, { ...emptySecretRow(), name: "STRIPE_KEY" }],
       injectors: [{ ...emptyInjectorRow(), name: "Bad Name", hosts: "x.com", code: "x" }],
     });
+
     expect(bad.ok).toBe(false);
+
     if (bad.ok) return;
     expect(bad.errors.name).toBeDefined();
     expect(bad.errors.allowlist).toBe("Not a host pattern: http://nope");
     expect(bad.errors.secrets).toBe("Two secrets are named STRIPE_KEY.");
     expect(bad.errors.injectors).toMatch(/^Bad Name:/);
+
     const noHosts = updateFromForm({
       ...form,
       injectors: [{ ...emptyInjectorRow(), name: "sign", hosts: "", code: "x" }],
     });
+
     expect(!noHosts.ok && noHosts.errors.injectors).toBe("sign: use 1 to 20 hosts.");
+
     const noCode = updateFromForm({
       ...form,
       injectors: [{ ...emptyInjectorRow(), name: "sign", hosts: "x.com", code: "  " }],
     });
+
     expect(!noCode.ok && noCode.errors.injectors).toBe("sign: add the code.");
   });
 
@@ -179,12 +188,33 @@ describe("proposals", () => {
   const fake = () => {
     const calls: Array<[FnName, unknown]> = [];
     const created = env({ id: "new", name: "web 2", egressAllowlist: [], secrets: [], injectors: [] });
-    const caller = (async (name: FnName, input: FnInput<FnName>) => {
+
+    const caller = createApiClient(async (name, input) => {
       calls.push([name, input]);
-      if (name === "createEnvironment") return created;
-      if (name === "updateEnvironment") return created;
-      return {};
-    }) as Caller;
+
+      if (name === "createEnvironment") return JSON.stringify({ ok: true, value: created });
+
+      if (name === "updateEnvironment") return JSON.stringify({ ok: true, value: created });
+
+      if (name === "setProjectEnvironment")
+        return JSON.stringify({
+          ok: true,
+          value: {
+            id: "p1",
+            installationId: 1,
+            repoId: 1,
+            owner: "acme",
+            name: "web",
+            defaultBranch: "main",
+            settings: {},
+            sortOrder: 0,
+            environmentId: created.id,
+          },
+        });
+
+      return JSON.stringify({ ok: true, value: {} });
+    });
+
     return { calls, caller };
   };
 
@@ -238,11 +268,15 @@ describe("proposals", () => {
 
   it("stops before resolving when a step fails", async () => {
     const calls: FnName[] = [];
-    const caller = (async (name: FnName) => {
+
+    const caller = createApiClient(async (name) => {
       calls.push(name);
+
       if (name === "updateEnvironment") throw new Error("VALIDATION_FAILED");
-      return {};
-    }) as Caller;
+
+      return JSON.stringify({ ok: true, value: {} });
+    });
+
     await expect(
       applyEnvironmentProposal(caller, {
         workspaceId: "w1",

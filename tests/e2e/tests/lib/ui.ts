@@ -18,6 +18,7 @@ export const openWorkspace = async (
 ): Promise<void> => {
   await page.goto("/");
   await expect(page.getByText("This Tempo belongs to someone else.")).toHaveCount(0);
+
   if (opts.phone) await page.getByText("Workspaces", { exact: true }).first().click();
   await page.getByText(title, { exact: true }).first().click();
 };

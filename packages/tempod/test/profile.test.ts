@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentProfile, SessionStartResult } from "@tempo/protocol";
+import type { AgentProfile } from "@tempo/protocol";
 import { offeredOption, prepareProfile, profileDir, sessionProfile } from "../src/acp/profile.ts";
 import { applyProfile, expandRefs, toolAllowed } from "../../../container/pi/tempo-profile.ts";
 import {
@@ -113,11 +113,13 @@ describe("prepareProfile", () => {
 
   test("opencode: OPENCODE_CONFIG_CONTENT with instructions and permission; deny after allow", () => {
     const dir = join(tmpDir("profile-"), "s1");
+
     const env = prepareProfile(
       "opencode",
       profile({ toolsAllow: ["read", "edit"], toolsDeny: ["edit"] }),
       dir,
     );
+
     const config = JSON.parse(env["OPENCODE_CONFIG_CONTENT"]!);
     expect(config).toEqual({
       instructions: [join(dir, "prompt.md")],
@@ -181,6 +183,7 @@ describe("offeredOption", () => {
       options: [{ group: "g", name: "G", options: [{ value: "high", name: "High" }] }],
     },
   ];
+
   test("finds the option by category and checks grouped values", () => {
     expect(offeredOption(options, "thought_level", "high")?.id).toBe("effort");
     expect(offeredOption(options, "thought_level", "max")).toBeUndefined();
@@ -191,8 +194,13 @@ describe("offeredOption", () => {
 
 describe("Tempo pi extension (container/pi/tempo-profile.ts)", () => {
   test("registers servers with refs expanded, skips SSE and missing names, and guards tools", () => {
-    const registered: Array<[string, Record<string, unknown>]> = [];
-    let guard: ((e: { toolName: string }) => unknown) | undefined;
+    const registered: Array<[string, import("../../../container/pi/tempo-profile.ts").PiMcpServerConfig]> =
+      [];
+
+    let guard:
+      | ((e: { toolName: string }) => import("../../../container/pi/tempo-profile.ts").PiToolDecision)
+      | undefined;
+
     const warnings: string[] = [];
     applyProfile(
       { registerMcpServer: (n, c) => registered.push([n, c]), on: (_e, h) => (guard = h) },
@@ -249,6 +257,7 @@ describe("session.start with a profile (fake agent)", () => {
     await c.hello();
     await c.waitEvent("incarnation.changed");
     const state = tmpDir("fake-agent-");
+
     const calls = () => {
       try {
         return readFileSync(join(state, "calls.log"), "utf8");
@@ -256,17 +265,20 @@ describe("session.start with a profile (fake agent)", () => {
         return "";
       }
     };
+
     const params = () =>
       calls()
         .split("\n")
         .filter((l) => / params /.test(l))
         .map((l) => JSON.parse(l.slice(l.indexOf("params ") + 7)));
+
     return { c, config, state, calls, params };
   };
 
   test("claude: _meta and MCP servers reach session/new; model then reasoning level; issues reported", async () => {
     const { c, state, calls, params } = await setup();
-    const r = await c.ok<SessionStartResult>(
+
+    const r = await c.ok(
       "session.start",
       {
         sessionId: "s1",
@@ -278,6 +290,7 @@ describe("session.start with a profile (fake agent)", () => {
       },
       20_000,
     );
+
     expect(r.profileIssues).toEqual([]);
     const [p] = params();
     expect(p._meta).toEqual({
@@ -292,7 +305,8 @@ describe("session.start with a profile (fake agent)", () => {
 
   test("a level the agent does not offer, or no level option, is an issue; no profile means no issues", async () => {
     const { c, state } = await setup();
-    const bad = await c.ok<SessionStartResult>(
+
+    const bad = await c.ok(
       "session.start",
       {
         sessionId: "s2",
@@ -304,12 +318,15 @@ describe("session.start with a profile (fake agent)", () => {
       },
       20_000,
     );
+
     expect([...(bad.profileIssues ?? [])].sort()).toEqual(["model", "thoughtLevel", "tools"]);
-    const plain = await c.ok<SessionStartResult>(
+
+    const plain = await c.ok(
       "session.start",
       { sessionId: "s3", agent: "claude", env: { FAKE_STATE_DIR: state }, browser: "local" },
       20_000,
     );
+
     expect(plain.profileIssues).toEqual([]);
   }, 30_000);
 

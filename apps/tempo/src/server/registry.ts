@@ -17,7 +17,7 @@ import type { Handler } from "./run.ts";
 
 type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
 
-const own: { [K in NonWorkspace]: Handler<K> } = {
+const own = {
   putUserRole: roles.putUserRole,
   deleteUserRole: roles.deleteUserRole,
   listInstallationRepos: projects.listInstallationReposFn,
@@ -58,13 +58,18 @@ const own: { [K in NonWorkspace]: Handler<K> } = {
   getCustomAgent: agents.getCustomAgent,
   saveCustomAgent: agents.saveCustomAgent,
   deleteCustomAgent: agents.deleteCustomAgent,
-};
+} satisfies { [K in NonWorkspace]: Handler<K> };
 
 /** One handler per function in the API contract (07, One handler per function). */
+const workspaceHandlers = Object.fromEntries(WORKSPACE_FNS.map((name) => [name, viaWorkspace(name)]));
+
+// SAFETY: WORKSPACE_FNS is exhaustive; viaWorkspace builds the handler for each selected key.
+const workspace = workspaceHandlers as { [K in WorkspaceFnName]: Handler<K> };
+
 export const HANDLERS = {
   ...own,
-  ...Object.fromEntries(WORKSPACE_FNS.map((n) => [n, viaWorkspace(n)])),
+  ...workspace,
   createSession,
   listRoles: roles.listRoles,
   getRoleText: roles.getRoleText,
-} as { [K in FnName]: Handler<K> };
+} satisfies { [K in FnName]: Handler<K> };

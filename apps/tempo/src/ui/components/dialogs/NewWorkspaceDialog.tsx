@@ -64,6 +64,7 @@ import { Field } from "./parts";
 /** 04, New workspace (⌥N). Args: the project and a prompt to start with. */
 export function NewWorkspaceDialog() {
   const { open, args, onOpenChange } = useDialog("newWorkspace");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {args && <NewWorkspaceBody args={args} />}
@@ -73,6 +74,7 @@ export function NewWorkspaceDialog() {
 
 function NewWorkspaceBody({ args }: { args: DialogOf<"newWorkspace"> }) {
   const projects = useProjects();
+
   if (projects.isPending || projects.isError || projects.data.length === 0) {
     return (
       <DialogContent>
@@ -96,6 +98,7 @@ function NewWorkspaceBody({ args }: { args: DialogOf<"newWorkspace"> }) {
       </DialogContent>
     );
   }
+
   return <NewWorkspaceForm args={args} projects={projects.data} />;
 }
 
@@ -109,9 +112,11 @@ function NewWorkspaceForm({
   const navigate = useNavigate();
   const isPhone = useIsPhone();
   const credentials = useCredentialStatus();
+
   const [projectId, setProjectId] = useState(
     args.projectId && projects.some((p) => p.id === args.projectId) ? args.projectId : projects[0]!.id,
   );
+
   const [source, setSource] = useState<SourceDraft>(emptySource);
   const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
   const [pickedModel, setPickedModel] = useState<string | null>(null);
@@ -125,10 +130,13 @@ function NewWorkspaceForm({
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
   const available = agentsWithLogin(credentials.data);
   const choices = modelChoices(available, models.data ?? []);
+
   const selected =
     choices.find((choice) => choice.key === pickedModel) ?? initialModel(choices, models.data ?? [], project);
+
   const custom = customAgentsWithLogin(customAgents.data, available);
   const pickedCustom = customAgentOf(pickedModel, custom);
+
   const input = pickedCustom
     ? createInput(project, source, pickedCustom.baseAgent, prompt, undefined, pickedCustom.id)
     : models.isSuccess && selected
@@ -142,13 +150,18 @@ function NewWorkspaceForm({
     onSuccess: (summary) => {
       getHubStore().merge(summary);
       setTried(false);
+
       if (keepOpen) {
         setPrompt("");
+
         if (source.tab !== "new") setSource((s) => ({ ...s, branch: null, prNumber: null }));
         toast.success(`Created ${summary.title}`);
+
         return;
       }
+
       closeDialog("newWorkspace");
+
       if (isPhone) setPhonePane("chat");
       void navigate({ to: "/w/$workspaceId", params: { workspaceId: summary.id } });
     },
@@ -156,10 +169,13 @@ function NewWorkspaceForm({
 
   const submit = () => {
     setTried(true);
+
     if (!input) {
       setOptionsOpen(true);
+
       return;
     }
+
     if (creating.current) return;
     creating.current = true;
     create.mutate(input, {
@@ -289,7 +305,6 @@ function NewWorkspaceForm({
             </PopoverContent>
           </Popover>
         </div>
-
         <Textarea
           id="nw-prompt"
           aria-label="Prompt"
@@ -385,9 +400,12 @@ function PullRequestPicker({
 }) {
   const prs = useCallQuery("listOpenPullRequests", { projectId }, { staleTime: 30_000 });
   const [search, setSearch] = useState("");
+
   if (prs.isPending) return <SkeletonRows rows={3} />;
+
   if (prs.isError) return <ErrorState error={prs.error} onRetry={() => void prs.refetch()} />;
   const shown = filterPullRequests(prs.data, search);
+
   return (
     <div className="grid gap-1.5">
       <Command

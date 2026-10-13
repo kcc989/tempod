@@ -1,4 +1,4 @@
-import type { ErrorCode } from "@tempo/protocol";
+import { ERROR_CODES, type ErrorCode } from "@tempo/protocol";
 import { useEffect } from "react";
 import { showBanner } from "~/ui/lib/toast";
 
@@ -7,6 +7,7 @@ export function useBanner(codes: ReadonlyArray<ErrorCode>, shown: boolean): void
   const key = codes.join(",");
   useEffect(() => {
     if (!shown || key === "") return;
-    return showBanner(key.split(",") as ErrorCode[]);
+
+    return showBanner(ERROR_CODES.filter((code) => key.split(",").includes(code)));
   }, [key, shown]);
 }

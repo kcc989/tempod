@@ -16,6 +16,7 @@ import { resolveConfirm, type ConfirmRequest } from "~/ui/state/workspace-ui";
 /** Renders confirm() requests (04, Confirmations). With typeToConfirm, the text must match first. */
 export function Confirm() {
   const req = useConfirmRequest();
+
   return (
     <AlertDialog open={req !== null} onOpenChange={(open) => !open && req && resolveConfirm(req.id, false)}>
       {req && <ConfirmBody key={req.id} req={req} />}
@@ -26,6 +27,7 @@ export function Confirm() {
 function ConfirmBody({ req }: { req: ConfirmRequest }) {
   const [typed, setTyped] = useState("");
   const blocked = req.typeToConfirm !== undefined && typed !== req.typeToConfirm;
+
   return (
     <AlertDialogContent>
       <AlertDialogHeader>

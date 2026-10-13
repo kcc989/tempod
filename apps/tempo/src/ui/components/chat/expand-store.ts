@@ -21,6 +21,7 @@ export const isExpanded = (
   open = false,
 ): boolean => {
   const e = s[sessionId] ?? empty;
+
   return e.overrides[itemId] ?? (e.all || open);
 };
 
@@ -31,6 +32,7 @@ export const toggleExpandAll = (sessionId: string): void =>
 export const toggleExpanded = (sessionId: string, itemId: string, open = false): void =>
   store.set((s) => {
     const e = s[sessionId] ?? empty;
+
     return {
       ...s,
       [sessionId]: {

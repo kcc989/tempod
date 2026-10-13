@@ -1,3 +1,4 @@
+import { Match, Schema } from "effect";
 import { asc, eq } from "drizzle-orm";
 import {
   ENVIRONMENT_LIMITS,
@@ -5,7 +6,6 @@ import {
   TempoError,
   newId,
   toTurnUsage,
-  type AgentId,
   type ErrorCode,
   type TempodEvent,
   type TempodEventOf,
@@ -28,11 +28,12 @@ export interface EventRuntime {
 }
 
 const toCode = (code: string | undefined, fallback: ErrorCode): ErrorCode =>
-  code && (ERROR_CODES as ReadonlyArray<string>).includes(code) ? (code as ErrorCode) : fallback;
+  Schema.is(Schema.Literals(ERROR_CODES))(code) ? code : fallback;
 
 /** Applies one tempod event (02, Events; 03, While it runs). Events arrive in seq order. */
 export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<void> | void => {
   const { core } = rt;
+
   switch (event.kind) {
     case "item.created":
       core.insertItem({
@@ -44,36 +45,55 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
         content: event.item.content,
         createdAt: event.item.createdAt,
       });
+
       return;
     case "item.delta":
       core.appendItemText(event.itemId, event.append.text);
+
       return;
-    case "item.updated":
-      core.updateItem(event.itemId, {
-        ...(event.patch.status ? { status: event.patch.status } : {}),
-        ...(event.patch.content ? { content: event.patch.content } : {}),
-      });
-      return;
-    case "session.updated": {
-      const p = event.patch;
-      core.updateSession(event.sessionId, {
-        ...(p.modeId !== undefined ? { modeId: p.modeId } : {}),
-        ...(p.modes ? { modesJson: json.modes.write(p.modes) } : {}),
-        ...(p.configOptions ? { configOptionsJson: json.configOptions.write(p.configOptions) } : {}),
-        ...(p.commands ? { commandsJson: json.commands.write(p.commands) } : {}),
-        ...(p.usage ? { usageJson: json.usage.write(p.usage) } : {}),
-        ...(p.title ? { title: p.title } : {}),
-      });
+    case "item.updated": {
+      const patch: Parameters<WorkspaceCore["updateItem"]>[1] = {};
+
+      if (event.patch.status) patch.status = event.patch.status;
+
+      if (event.patch.content) patch.content = event.patch.content;
+      core.updateItem(event.itemId, patch);
+
       return;
     }
+
+    case "session.updated": {
+      const p = event.patch;
+      const patch: Parameters<WorkspaceCore["updateSession"]>[1] = {};
+
+      if (p.modeId !== undefined) patch.modeId = p.modeId;
+
+      if (p.modes) patch.modesJson = json.modes.write(p.modes);
+
+      if (p.configOptions) patch.configOptionsJson = json.configOptions.write(p.configOptions);
+
+      if (p.commands) patch.commandsJson = json.commands.write(p.commands);
+
+      if (p.usage) patch.usageJson = json.usage.write(p.usage);
+
+      if (p.title) patch.title = p.title;
+      core.updateSession(event.sessionId, patch);
+
+      return;
+    }
+
     case "turn.started": {
       const turn = core.db.select().from(turns).where(eq(turns.id, event.turnId)).get();
+
       if (!turn || turn.sessionId !== event.sessionId || turn.status !== "queued") return;
       core.updateTurn(turn.id, { status: "running", startedAt: Date.now(), queuePos: null });
       core.updateSession(turn.sessionId, { status: "running" });
+
       if (core.state === "ready") core.setState("working");
+
       return;
     }
+
     case "turn.ended":
       return onTurnEnded(rt, event);
     case "permission.requested": {
@@ -104,15 +124,19 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
         },
       });
       core.recomputeAttention();
+
       return;
     }
+
     case "agent.exited": {
       core.liveSessions.delete(event.sessionId);
+
       // Planned exits: the session reloads on its next prompt; after a cancel timeout, turn.ended (cancelled) follows.
       if (event.reason === "evicted" || event.reason === "cancelled") return;
       const tail = event.stderrTail.trim().split("\n").slice(-20).join("\n");
       core.notice("error", `The agent stopped unexpectedly.${tail ? `\n${tail}` : ""}`, event.sessionId);
       const running = core.runningTurn();
+
       if (running && running.sessionId === event.sessionId) {
         if (
           finishTurn(core, running.id, "failed", {
@@ -124,29 +148,37 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
           void afterTurnEnded(core, running.id);
         }
       }
+
       return;
     }
+
     case "script.output":
       appendLog(core, event.runId, event.data);
       core.broadcast({ type: "script.output", runId: event.runId, stream: event.stream, data: event.data });
+
       return;
     case "script.exited":
       return onScriptExited(rt, event);
     case "git.changed":
       storeChanges(core, summarize(event.files));
       core.files.requestSync(event.files.flatMap((f) => (f.oldPath ? [f.path, f.oldPath] : [f.path])));
+
       return;
     case "ports.changed": {
       const now = Date.now();
       const next = new Set(event.ports.filter((p) => p >= 1024 && p <= 65535 && p !== 7070));
       const current = core.db.select().from(ports).all();
+
       for (const p of current)
         if (!next.has(p.port)) core.db.delete(ports).where(eq(ports.port, p.port)).run();
+
       for (const p of next)
         core.db.insert(ports).values({ port: p, firstSeenAt: now }).onConflictDoNothing().run();
       core.broadcastDetailSoon();
+
       return;
     }
+
     case "settings.changed":
       core.updateWs({ settingsJson: json.settings.write(event.effective) });
       core.setKv("settingsIssues", {
@@ -156,13 +188,16 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
       });
       core.broadcastDetailSoon();
       core.ctx.waitUntil(sendEnv(core));
+
       return;
     case "credential.changed": {
       if (core.runningTurn() || core.turnEndInProgress || core.queueBusy) {
         if (!core.pendingCodexAuth || core.pendingCodexAuth.lastRefresh < event.lastRefresh)
           core.pendingCodexAuth = { content: event.content, lastRefresh: event.lastRefresh };
+
         return;
       }
+
       return core
         .credentials()
         .offerCodexAuth(event.content, event.lastRefresh, core.workspaceId)
@@ -174,32 +209,44 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
           });
         });
     }
+
     case "credential.invalid":
       core.broadcast({ type: "credential.invalid", provider: event.provider });
+
       return;
     case "incarnation.changed":
       core.liveSessions.clear();
+
       return;
     case "outbox.overflow":
       core.notice("warning", "Some live events were lost; the transcript may have gaps.");
+
       return;
     case "tempod.stopping":
       core.ctx.waitUntil(onSigterm(core));
+
       return;
     case "environment.proposed":
       storeProposal(core, event.proposal);
+
       return;
     case "artifact.published":
       onArtifactPublished(core, event);
+
       return;
     case "log":
       log(
-        event.level === "error" ? "error" : event.level === "warn" ? "warn" : "info",
+        Match.value(event).pipe(
+          Match.when({ level: "error" }, () => "error" as const),
+          Match.when({ level: "warn" }, () => "warn" as const),
+          Match.orElse(() => "info" as const),
+        ),
         `tempod: ${event.msg}`,
         {
           workspaceId: core.workspaceId,
         },
       );
+
       return;
   }
 };
@@ -207,15 +254,17 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
 const onTurnEnded = (rt: EventRuntime, event: TempodEventOf<"turn.ended">): void => {
   const { core } = rt;
   const turn = core.db.select().from(turns).where(eq(turns.id, event.turnId)).get();
+
   if (!turn || turn.status !== "running") return;
   const session = core.sessionRow(turn.sessionId);
   let status: "completed" | "cancelled" | "failed" | "interrupted";
   let errorCode: ErrorCode | null = null;
+
   if (event.interrupted) status = "interrupted";
   else if (event.error) {
     status = "failed";
     const msg = event.error.message ?? "";
-    const credential = (session.agent as AgentId) === "codex" && /401|refresh_token/.test(msg);
+    const credential = session.agent === "codex" && /401|refresh_token/.test(msg);
     errorCode = credential ? "CREDENTIAL_INVALID" : toCode(event.error.code, "AGENT_CRASHED");
   } else if (event.stopReason === "cancelled") status = "cancelled";
   else status = "completed";
@@ -225,20 +274,25 @@ const onTurnEnded = (rt: EventRuntime, event: TempodEventOf<"turn.ended">): void
     errorDetail: event.error?.message ?? null,
     usage: toTurnUsage(event.usage),
   });
+
   if (status === "interrupted") {
     core.notice("warning", "The turn was interrupted.", turn.sessionId, turn.id);
+
     if (core.tempodStopping) {
       core.recomputeAttention(false);
       core.publish();
+
       return;
     }
   }
+
   void afterTurnEnded(core, turn.id);
 };
 
 const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">): void => {
   const { core, runner } = rt;
   const run = scriptRun(core, event.runId);
+
   if (!run || run.status !== "running") return;
   const status = event.timedOut ? "timed_out" : event.signal ? "killed" : "exited";
   core.db
@@ -249,13 +303,16 @@ const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">)
   core.broadcast({ type: "script.run", run: runToWire(scriptRun(core, run.id)!) });
   core.ctx.waitUntil(uploadLog(core, run.id));
   const ok = status === "exited" && event.exitCode === 0;
+
   if (run.kind === "setup") {
     core.updateWs({ setupStatus: ok ? "succeeded" : "failed" });
     core.recomputeAttention(false);
     core.publish();
+
     if (ok && core.settings().scripts.auto_run_after_setup) {
       const id = defaultRunScriptId(core.settings());
       const def = id ? core.settings().scripts.run[id] : undefined;
+
       if (id && def) {
         core.ctx.waitUntil(
           startScript(core, {
@@ -270,15 +327,20 @@ const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">)
         );
       }
     }
+
     const op = runner.waitingOn("setup.run");
+
     if (op) core.ctx.waitUntil(runner.completeWaiting(op.id, "setup.run", "next"));
     core.kickQueue();
+
     return;
   }
+
   if (run.kind === "archive") {
     if (!ok)
       core.notice("warning", `The archive script failed (exit ${event.exitCode ?? event.signal ?? "?"}).`);
     const op = runner.waitingOn("script.archive");
+
     if (op) core.ctx.waitUntil(runner.completeWaiting(op.id, "script.archive", "next"));
   }
 };
@@ -286,9 +348,11 @@ const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">)
 /** SIGTERM (03, Failure handling): checkpoint, upload, back up, upload artifacts, then shutdown. */
 const onSigterm = async (core: WorkspaceCore): Promise<void> => {
   core.tempodStopping = true;
+
   try {
     await core.files.sync();
     const { bundle } = await takeCheckpoint(core, "sigterm", null);
+
     if (bundle) await uploadBundleWithRetry(core, bundle);
     await backupHome(core).catch((e) => log("warn", "sigterm home backup failed", { error: errorText(e) }));
     await uploadAllArtifacts(core).catch((e) =>
@@ -307,11 +371,13 @@ export const sendEnv = async (core: WorkspaceCore): Promise<void> => {
   } catch (e) {
     log("warn", "env.set failed", { workspaceId: core.workspaceId, error: errorText(e) });
   }
+
   await sendEnvironment(core);
 };
 
 export const sendEnvironment = async (core: WorkspaceCore): Promise<void> => {
   if (!core.tempod?.open) return;
+
   try {
     await core.tempod.request("environment.set", { summary: await core.environmentSummary() });
   } catch (e) {
@@ -329,7 +395,9 @@ const storeProposal = (core: WorkspaceCore, proposal: TempodEventOf<"environment
     .where(eq(environmentProposals.status, "pending"))
     .orderBy(asc(environmentProposals.createdAt), asc(environmentProposals.id))
     .all();
+
   const over = pending.length - ENVIRONMENT_LIMITS.pendingProposalsMax + 1;
+
   for (const p of pending.slice(0, Math.max(0, over)))
     core.db.delete(environmentProposals).where(eq(environmentProposals.id, p.id)).run();
   core.db

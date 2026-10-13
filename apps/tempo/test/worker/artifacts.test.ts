@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { newId, type TempodEventOf } from "@tempo/protocol";
@@ -18,15 +20,20 @@ import {
 /** Artifacts in the WorkspaceDO and the Worker: 01 (Artifacts), 02 (artifact route, listArtifacts,
  * openArtifact, readFileAt), 03 (artifacts.upload, artifacts.resume), 05 (Artifact access). */
 
-type Res = { readonly ok: boolean };
-const ok = (r: Res): any => {
+type Res<T = import("@tempo/protocol").JsonData> = import("@tempo/protocol").Result<T>;
+
+const ok = <T>(r: Res<T>): T => {
   if (!r.ok) throw new Error(`expected ok, got ${JSON.stringify(r)}`);
-  return (r as unknown as { value: unknown }).value;
+
+  return r.value;
 };
-const codeOf = (r: Res): string => (r.ok ? "OK" : (r as unknown as { error: { code: string } }).error.code);
+
+const codeOf = <T>(r: Res<T>): string => (r.ok ? "OK" : r.error.code);
 
 const APP_ORIGIN = "https://tempo.test";
+
 const PAGE = "This preview opens only from Tempo.";
+
 const COOKIE =
   /^__Host-tempo_artifact=(\d+\.[A-Za-z0-9_-]{43}); Path=\/; Secure; HttpOnly; SameSite=None; Partitioned; Max-Age=86400$/;
 
@@ -38,6 +45,7 @@ const signIn = async (userId: string): Promise<string> => {
   )
     .bind(newId(), now + 86_400_000, token, now, now, userId)
     .run();
+
   return token;
 };
 
@@ -52,14 +60,18 @@ const readyWs = async () => {
   const w = await seedWorkspace(seeded);
   w.tempod.on("artifact.release", () => ({}));
   const deadline = Date.now() + 20_000;
+
   while (!["ready", "working"].includes(ok(await w.stub.getWorkspace({})).state)) {
     if (Date.now() > deadline) throw new Error("timed out driving to ready");
     await runDurableObjectAlarm(w.stub);
     await new Promise((r) => setTimeout(r, 25));
   }
+
   const sessionId = String((await sqlRows(w.stub, "SELECT id FROM sessions"))[0]!["id"]);
+
   return { ...w, seeded, sessionId };
 };
+
 type Ws = Awaited<ReturnType<typeof readyWs>>;
 
 /** Publishes one version. With `stored`, the R2 object is already there, so the upload needs no Files. */
@@ -79,6 +91,7 @@ const publish = async (
   const artifactId = opts.artifactId ?? newId();
   const version = opts.version ?? 1;
   const name = opts.name ?? "plan.md";
+
   const event: TempodEventOf<"artifact.published"> = {
     kind: "artifact.published",
     sessionId: w.sessionId,
@@ -95,17 +108,21 @@ const publish = async (
     sha256: await sha256(body),
     stagedPath: `/home/tempo/.tempod/artifacts/${artifactId}/${version}`,
   };
+
   if (opts.stored !== false)
     await env.DATA.put(`artifacts/${w.workspaceId}/${artifactId}/${version}/${name}`, body, {
       customMetadata: { sha256: event.sha256 },
     });
   await waitApplied(w.stub, await emitEvent(w.stub, w.tempod, event));
+
   return event;
 };
 
 const artifactRows = (w: Ws) => sqlRows(w.stub, "SELECT * FROM artifacts ORDER BY created_at, version");
+
 const itemOf = async (w: Ws, id: string) =>
   (await sqlRows(w.stub, "SELECT * FROM items WHERE id = ?", id))[0]!;
+
 const ready = (w: Ws, id: string, version = 1) =>
   waitFor(
     async () =>
@@ -197,6 +214,7 @@ describe("upload retries and the artifacts.upload step (01, 03)", { timeout: 60_
     const releases = w.tempod.requestsOf("artifact.release").length;
     ok(await w.stub.sleepWorkspace({}));
     const deadline = Date.now() + 20_000;
+
     while (ok(await w.stub.getWorkspace({})).state !== "sleeping") {
       if (Date.now() > deadline) throw new Error("timed out driving to sleeping");
       await runInDurableObject(w.stub, (_i: WorkspaceDO, s: DurableObjectState) => {
@@ -205,6 +223,7 @@ describe("upload retries and the artifacts.upload step (01, 03)", { timeout: 60_
       await runDurableObjectAlarm(w.stub);
       await new Promise((r) => setTimeout(r, 25));
     }
+
     expect((await artifactRows(w))[0]!["status"]).toBe("ready");
     const ops = w.tempod.requests.map((r) => r.op);
     expect(ops.lastIndexOf("artifact.release")).toBeLessThan(ops.indexOf("shutdown"));
@@ -261,8 +280,10 @@ describe("artifact host (05, Artifact access)", { timeout: 60_000 }, () => {
   const send = (url: string, init: RequestInit = {}) => {
     const request = new Request(url, init);
     const u = new URL(request.url);
+
     return handleArtifactHost(request, env, u, parseArtifactHost(u.hostname, env)!);
   };
+
   const is404 = async (res: Response, label = "") => {
     expect(res.status, label).toBe(404);
     expect(await res.text(), label).toContain(PAGE);
@@ -297,6 +318,7 @@ describe("artifact host (05, Artifact access)", { timeout: 60_000 }, () => {
     const res = await send(`${host}/1/app%20page.html`, {
       headers: { Cookie: `__Host-tempo_artifact=${cookie}` },
     });
+
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(body);
     expect(res.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
@@ -336,6 +358,7 @@ describe("artifact route (02)", { timeout: 60_000 }, () => {
     const html = await publish(w, { name: "app.html", kind: "html", mime: "text/html", body: "<p>hi</p>" });
     await ready(w, md.artifactId);
     await ready(w, html.artifactId);
+
     const read = (
       id: string,
       version = 1,
@@ -343,6 +366,7 @@ describe("artifact route (02)", { timeout: 60_000 }, () => {
       headers: HeadersInit = { Authorization: `Bearer ${token}` },
     ) => {
       const url = new URL(`${APP_ORIGIN}/api/workspaces/${w.workspaceId}/artifacts/${id}/${version}${query}`);
+
       return handleArtifactRead(new Request(url, { headers }), env, url, w.workspaceId, id, version);
     };
 
@@ -373,6 +397,8 @@ describe("artifact route (02)", { timeout: 60_000 }, () => {
     });
     const notReady = await read(md.artifactId);
     expect(notReady.status).toBe(409);
-    expect(((await notReady.json()) as { code: string }).code).toBe("ARTIFACT_NOT_READY");
+    expect(Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }))(await notReady.json()).code).toBe(
+      "ARTIFACT_NOT_READY",
+    );
   });
 });

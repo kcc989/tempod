@@ -42,31 +42,38 @@ export class Lifecycle {
     this.loading = (async () => {
       const base = await baseRoles(this.core.env, this.core.ws().userId);
       let cached = this.core.kv<Array<{ name: string; text: string }>>("repoRoles") ?? [];
+
       if (repo) {
         const tempod = requireTempod(this.core);
         const { paths } = await tempod.request("fs.list", {});
         const next: typeof cached = [];
+
         for (const path of paths.filter((p) => /^\.tempo\/roles\/[^/]+\.md$/.test(p))) {
           let read: { content: string; encoding: string };
+
           try {
             read = await tempod.request("fs.read", { path, maxBytes: 65536 });
           } catch {
             read = { content: "", encoding: "utf8" };
           }
+
           next.push({
             name: path.slice(".tempo/roles/".length, -3),
             text: read.encoding === "utf8" ? read.content : "",
           });
         }
+
         cached = next;
         this.core.setKv("repoRoles", cached);
       }
+
       this.roles = withPrecedence([
         ...base,
         ...(await Promise.all(cached.map((r) => parseRole(r.name, "repo", r.text)))),
       ]);
       this.loaded = true;
     })();
+
     try {
       await this.loading;
     } finally {
@@ -75,23 +82,29 @@ export class Lifecycle {
   }
   async list(): Promise<FnOutput<"listRoles">> {
     if (!this.loaded) await this.load();
+
     return this.roles.map((r) => r.info);
   }
   async text(name: string, scope: ParsedRole["info"]["scope"]): Promise<{ text: string }> {
     if (!this.loaded) await this.load();
     const r = this.roles.find((r) => r.info.name === name && r.info.scope === scope);
+
     if (!r) throw new TempoError("NOT_FOUND");
+
     return { text: r.text };
   }
   append(input: Omit<LifecycleEvent, "id" | "occurredAt" | "workspaceId">): LifecycleRow | null {
     const event = { ...input, id: newId(), occurredAt: Date.now(), workspaceId: this.core.workspaceId };
     let valid: LifecycleEvent;
+
     try {
       valid = Schema.decodeUnknownSync(LifecycleEvent, { onExcessProperty: "error" })(event);
     } catch {
       throw new TempoError("EVENT_INVALID");
     }
+
     const { payload, ...fields } = valid;
+
     return (
       this.core.db
         .insert(lifecycleEvents)
@@ -103,6 +116,7 @@ export class Lifecycle {
   }
   event(row: LifecycleRow): LifecycleEvent {
     const { seq: _seq, payloadJson, dispatchedAt: _at, ...fields } = row;
+
     return Schema.decodeUnknownSync(LifecycleEvent)({
       ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null)),
       workspaceId: this.core.workspaceId,
@@ -117,6 +131,7 @@ export class Lifecycle {
   }
   runWire(row: RoleRunRow): RoleRun {
     const { resultJson, ...rest } = row;
+
     return Schema.decodeUnknownSync(RoleRun)({
       ...rest,
       result: resultJson ? JSON.parse(resultJson) : null,
@@ -135,11 +150,13 @@ export class Lifecycle {
   }
   listEvents(input: Omit<FnInput<"listLifecycleEvents">, "workspaceId">): FnOutput<"listLifecycleEvents"> {
     const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 500)));
+
     if (
       !Number.isFinite(limit) ||
       (input.beforeSeq !== undefined && (!Number.isInteger(input.beforeSeq) || input.beforeSeq < 1))
     )
       throw new TempoError("VALIDATION_FAILED");
+
     const rows = this.core.db
       .select()
       .from(lifecycleEvents)
@@ -152,7 +169,9 @@ export class Lifecycle {
       .orderBy(desc(lifecycleEvents.seq))
       .limit(limit + 1)
       .all();
+
     const page = rows.slice(0, limit);
+
     return {
       events: page.map((r) => this.logEvent(r)),
       nextBeforeSeq: rows.length > limit ? page.at(-1)!.seq : null,
@@ -160,14 +179,17 @@ export class Lifecycle {
   }
   trace(id: string): FnOutput<"getTrace"> {
     let row = this.row(id);
+
     if (!row) throw new TempoError("NOT_FOUND");
     const chain: FnOutput<"getTrace">["chain"][number][] = [];
     const seen = new Set<string>();
+
     while (row && !seen.has(row.id)) {
       seen.add(row.id);
       chain.unshift(this.logEvent(row));
       row = row.causationId ? this.row(row.causationId) : null;
     }
+
     return {
       chain,
       children: this.core.db
@@ -199,6 +221,7 @@ export class Lifecycle {
       dedupeKey: `change:${changeId}:created`,
       payload: { origin: "prompt" },
     });
+
     return changeId;
   }
   recordCause(input: Omit<LifecycleEvent, "id" | "occurredAt" | "workspaceId">): void {
@@ -206,14 +229,17 @@ export class Lifecycle {
       this.core.db.select().from(lifecycleEvents).where(eq(lifecycleEvents.dedupeKey, input.dedupeKey)).get()
     )
       return;
+
     const probe = {
       ...input,
       id: newId(),
       occurredAt: Date.now(),
       workspaceId: this.core.workspaceId,
     } as LifecycleEvent;
+
     let changeId = input.changeId;
     let causationId: string | undefined;
+
     if (
       !changeId &&
       this.core.settings().roles.enabled &&
@@ -222,6 +248,7 @@ export class Lifecycle {
       )
     ) {
       changeId = newId();
+
       const origin = this.append({
         type: "tempo.change.created",
         source: "tempo",
@@ -229,8 +256,10 @@ export class Lifecycle {
         dedupeKey: `change:${changeId}:created`,
         payload: { origin: "event" },
       });
+
       causationId = origin!.id;
     }
+
     this.append({ ...input, changeId, ...(causationId ? { causationId } : {}) });
   }
   newestOpenChange(): string | undefined {
@@ -251,15 +280,21 @@ export class Lifecycle {
   }
   async request(roleName: string, text?: string, sessionId?: string): Promise<FnOutput<"requestRole">> {
     if (["archived", "archiving"].includes(this.core.state)) throw new TempoError("WORKSPACE_ARCHIVED");
+
     if (new TextEncoder().encode(text ?? "").length > 65536) throw new TempoError("VALIDATION_FAILED");
     await this.load();
     const role = this.roles.find((r) => r.info.name === roleName && !r.info.shadowedBy && !r.info.error);
+
     if (!role) throw new TempoError("ROLE_NOT_FOUND");
+
     if (!role.file?.requestable) throw new TempoError("ROLE_NOT_REQUESTABLE");
+
     if (!this.core.settings().roles.enabled) throw new TempoError("ROLE_LIMIT", undefined, "roles.enabled");
+
     if (text) text = (await lifecycleRedactor(this.core))(text);
     const agent = sessionId ? (this.core.sessionRow(sessionId).agent as AgentId) : undefined;
     const changeId = newId();
+
     const run = this.core.ctx.storage.transactionSync(() => {
       const cause = this.append({
         type: "tempo.change.created",
@@ -269,13 +304,17 @@ export class Lifecycle {
         dedupeKey: `change:${changeId}:created`,
         payload: { origin: "request", role: roleName, ...(text ? { text } : {}) },
       })!;
+
       return this.runs.insert(role, this.event(cause));
     });
+
     this.kick();
+
     return { changeId, roleRunId: run.id };
   }
   kick(): void {
     this.dirty = true;
+
     if (this.dispatching || !this.core.wsOrNull()) return;
     this.dispatching = this.dispatch()
       .catch((e) => {
@@ -286,6 +325,7 @@ export class Lifecycle {
       })
       .finally(() => {
         this.dispatching = null;
+
         if (this.dirty) this.kick();
       });
     this.core.ctx.waitUntil(this.dispatching);
@@ -297,9 +337,11 @@ export class Lifecycle {
   private async dispatch(): Promise<void> {
     if (!this.loaded) await this.load();
     this.retryAt = null;
+
     do {
       this.dirty = false;
       let row: LifecycleRow | undefined;
+
       while (
         (row = this.core.db
           .select()
@@ -318,52 +360,64 @@ export class Lifecycle {
             for (const role of this.roles) {
               if (!role.file || role.info.error || role.info.shadowedBy) continue;
               const trigger = role.file.on.find((t) => matchTrigger(t, event));
+
               if (trigger) this.runs.insert(role, event, trigger);
             }
           }
+
           this.core.db
             .update(lifecycleEvents)
             .set({ dispatchedAt: Date.now() })
             .where(eq(lifecycleEvents.seq, row!.seq))
             .run();
+
           if (event.changeId) this.checkEnd(event.changeId);
         });
       }
+
       await this.runs.recover();
       await this.runs.admit();
     } while (this.dirty);
   }
   checkEnd(changeId: string): void {
     if (this.core.turnEndInProgress) return;
+
     const pendingEvent = this.core.db
       .select()
       .from(lifecycleEvents)
       .where(and(eq(lifecycleEvents.changeId, changeId), isNull(lifecycleEvents.dispatchedAt)))
       .get();
+
     const pendingTurn = this.core.db
       .select()
       .from(turns)
       .where(and(eq(turns.changeId, changeId), inArray(turns.status, ["queued", "running"])))
       .get();
+
     const pendingRun = this.core.db
       .select()
       .from(roleRuns)
       .where(and(eq(roleRuns.changeId, changeId), inArray(roleRuns.status, ["queued", "running"])))
       .get();
+
     if (pendingEvent || pendingTurn || pendingRun) return;
+
     const last = this.core.db
       .select()
       .from(lifecycleEvents)
       .where(eq(lifecycleEvents.changeId, changeId))
       .orderBy(desc(lifecycleEvents.seq))
       .get();
+
     if (!last || last.type === "tempo.change.ended") return;
+
     const run = this.core.db
       .select()
       .from(roleRuns)
       .where(eq(roleRuns.changeId, changeId))
       .orderBy(desc(roleRuns.createdAt), desc(roleRuns.id))
       .get();
+
     this.append({
       type: "tempo.change.ended",
       source: "tempo",

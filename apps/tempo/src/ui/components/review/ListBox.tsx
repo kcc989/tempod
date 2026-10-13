@@ -92,11 +92,15 @@ export function ListBox<T>({
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.altKey || e.metaKey || e.ctrlKey || items.length === 0) return;
     const item = items[index];
+
     if (item !== undefined && onItemKey?.(e, item, index, move)) {
       e.preventDefault();
+
       return;
     }
+
     const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight ?? rowHeight * 10) / rowHeight) - 1);
+
     switch (e.key) {
       case "ArrowDown":
         move(index + 1);
@@ -122,11 +126,13 @@ export function ListBox<T>({
       default:
         return;
     }
+
     e.preventDefault();
   };
 
   const row = (item: T, i: number, style?: CSSProperties) => {
     const isActive = i === index;
+
     return (
       <div
         key={keys[i]}
@@ -164,7 +170,9 @@ export function ListBox<T>({
         <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((v) => {
             const item = items[v.index];
+
             if (item === undefined) return null;
+
             return row(item, v.index, {
               position: "absolute",
               top: 0,

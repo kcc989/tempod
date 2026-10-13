@@ -20,6 +20,7 @@ export const agentMenu = (
 ): AgentMenuEntry[] =>
   AGENT_IDS.filter((agent) => status !== undefined && hasLogin(agent, status)).map((agent) => {
     const hint = settings && needsModel(agent, settings) ? NO_MODEL_HINT : null;
+
     return { agent, label: agentLabel(agent), enabled: hint === null, hint };
   });
 
@@ -93,9 +94,12 @@ export const waitUntil = (
   new Promise((resolve) => {
     if (done()) {
       resolve(true);
+
       return;
     }
+
     let finished = false;
+
     const finish = (ok: boolean) => {
       if (finished) return;
       finished = true;
@@ -103,7 +107,9 @@ export const waitUntil = (
       unsubscribe();
       resolve(ok);
     };
+
     const timer = setTimeout(() => finish(false), timeoutMs);
+
     const unsubscribe = subscribe(() => {
       if (done()) finish(true);
     });
@@ -112,6 +118,7 @@ export const waitUntil = (
 /** Roving focus in the tab strip: the next index for an arrow, Home or End key. */
 export const nextTabIndex = (key: string, index: number, count: number): number | null => {
   if (count === 0) return null;
+
   switch (key) {
     case "ArrowRight":
       return (index + 1) % count;

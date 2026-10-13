@@ -12,16 +12,24 @@ import { modalOpen } from "~/ui/lib/modal";
 export function useGlobalShortcuts(): void {
   useEffect(() => {
     const mac = isMacPlatform();
+
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing) return;
       const binding = matchGlobal(e, mac);
+
       if (!binding) return;
+
       if (isPlainCombo(binding.key) && isEditableTarget(e.target)) return;
+
       if (binding.id !== "palette" && modalOpen()) return;
+
       if (settingsStore.getSnapshot() && binding.id !== "settings" && binding.id !== "palette") return;
+
       if (runAction(binding.id)) e.preventDefault();
     };
+
     window.addEventListener("keydown", onKey);
+
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 }

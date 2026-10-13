@@ -5,6 +5,7 @@ import { CommandDialog, CommandInput } from "../../../src/ui/components/ui/comma
 
 function SearchDialog() {
   const [open, setOpen] = useState(true);
+
   return createElement(
     CommandDialog,
     { open, onOpenChange: setOpen, title: "Search files" },

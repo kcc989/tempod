@@ -7,6 +7,8 @@ import {
   type OpProgress,
   toErrorBody,
 } from "@tempo/protocol";
+import { Schema } from "effect";
+import type { PendingBundle } from "./durability.ts";
 import { ops, type OpRow } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
@@ -64,7 +66,7 @@ interface StepLimit {
 }
 
 /** 03, Step limits. */
-export const STEP_LIMITS: Record<string, StepLimit> = {
+export const STEP_LIMITS = {
   // 60 s to healthy, plus room for one snapshot fallback within the same attempt.
   "container.start": {
     timeoutMs: 150_000,
@@ -110,14 +112,16 @@ export const STEP_LIMITS: Record<string, StepLimit> = {
     maxAttempts: 3,
     onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true },
   },
-};
+} satisfies Record<string, StepLimit>;
 
 const DEFAULT_LIMIT: StepLimit = {
   timeoutMs: 30_000,
   maxAttempts: 3,
   onPermanent: { kind: "fail", code: "INTERNAL" },
 };
-export const limitOf = (step: string): StepLimit => STEP_LIMITS[step] ?? DEFAULT_LIMIT;
+
+export const limitOf = (step: string): StepLimit =>
+  Object.entries(STEP_LIMITS).find(([key]) => key === step)?.[1] ?? DEFAULT_LIMIT;
 
 /** Errors that no retry can fix. */
 const PERMANENT_CODES: ReadonlySet<ErrorCode> = new Set([
@@ -134,15 +138,56 @@ export interface OpState {
   timings: Record<string, number>;
   skipped?: string[];
   waiting?: { step: string; deadline: number; runId?: string };
-  [key: string]: unknown;
+  freshDisk?: boolean;
+  setupRunId?: string;
+  archiveRunId?: string;
+  checkpointId?: string | null;
+  checkpointRequestId?: string;
+  pendingBundle?: PendingBundle | null;
+  headSha?: string;
+  result?: OpResult;
 }
+
+export interface OpInput {
+  readonly checkpointId?: string;
+  readonly message?: string;
+}
+
+export interface OpResult {
+  readonly commitSha?: string;
+}
+
+export const OpStateSchema = Schema.Struct({
+  timings: Schema.Record(Schema.String, Schema.Number),
+  skipped: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
+  waiting: Schema.optional(
+    Schema.Struct({ step: Schema.String, deadline: Schema.Number, runId: Schema.optional(Schema.String) }),
+  ),
+  freshDisk: Schema.optional(Schema.Boolean),
+  setupRunId: Schema.optional(Schema.String),
+  archiveRunId: Schema.optional(Schema.String),
+  checkpointId: Schema.optional(Schema.NullOr(Schema.String)),
+  checkpointRequestId: Schema.optional(Schema.String),
+  pendingBundle: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({ checkpointId: Schema.String, bundlePath: Schema.String, bundleBytes: Schema.Number }),
+    ),
+  ),
+  headSha: Schema.optional(Schema.String),
+  result: Schema.optional(Schema.Struct({ commitSha: Schema.optional(Schema.String) })),
+});
+
+const OpInputSchema = Schema.Struct({
+  checkpointId: Schema.optional(Schema.String),
+  message: Schema.optional(Schema.String),
+});
 
 export type StepOutcome = "next" | "wait" | "cancel" | "done";
 
 export interface StepCtx {
   readonly core: WorkspaceCore;
   readonly op: OpRow;
-  readonly input: Record<string, unknown>;
+  readonly input: OpInput;
   readonly state: OpState;
   readonly signal: AbortSignal;
   readonly attempt: number;
@@ -161,6 +206,7 @@ export interface OpHooks {
 }
 
 const jitter = (ms: number) => Math.round(ms * (0.8 + Math.random() * 0.4));
+
 export const backoffMs = (attempt: number) => jitter(Math.min(1000 * 2 ** (attempt - 1), 60_000));
 
 /**
@@ -182,6 +228,7 @@ export class OpRunner {
   /** DO constructor rule: running ops go back to pending and their step runs again. */
   recover(): void {
     const now = Date.now();
+
     for (const op of this.core.db.select().from(ops).where(eq(ops.status, "running")).all()) {
       const state = this.stateOf(op);
       delete state.waiting;
@@ -193,8 +240,9 @@ export class OpRunner {
     }
   }
 
-  insert(kind: OpKind, input: Record<string, unknown> = {}, at = Date.now()): OpRow {
+  insert(kind: OpKind, input: OpInput = {}, at = Date.now()): OpRow {
     const now = Date.now();
+
     const row: OpRow = {
       id: newId(),
       kind,
@@ -209,9 +257,11 @@ export class OpRunner {
       createdAt: now,
       updatedAt: now,
     };
+
     this.core.db.insert(ops).values(row).run();
     this.core.scheduleAlarm();
     this.core.broadcastDetailSoon();
+
     return row;
   }
 
@@ -234,9 +284,9 @@ export class OpRunner {
       .from(ops)
       .where(inArray(ops.status, ["pending", "running"]))
       .all();
+
     return rows.some(
-      (r) =>
-        (!exceptHousekeeping || r.kind !== "housekeeping") && (!kinds || kinds.includes(r.kind as OpKind)),
+      (r) => (!exceptHousekeeping || r.kind !== "housekeeping") && (!kinds || kinds.includes(r.kind)),
     );
   }
 
@@ -253,22 +303,28 @@ export class OpRunner {
   /** The time the next op step is due, or null. */
   nextDueAt(): number | null {
     const running = this.core.db.select().from(ops).where(eq(ops.status, "running")).get();
+
     if (running) {
       const st = this.stateOf(running);
+
       return st.waiting ? st.waiting.deadline : running.nextRunAt;
     }
+
     const pending = this.core.db
       .select()
       .from(ops)
       .where(and(eq(ops.status, "pending"), ne(ops.kind, "housekeeping")))
       .orderBy(asc(ops.createdAt))
       .get();
+
     if (pending) return pending.nextRunAt;
+
     const hk = this.core.db
       .select()
       .from(ops)
       .where(and(eq(ops.status, "pending"), eq(ops.kind, "housekeeping")))
       .get();
+
     return hk?.nextRunAt ?? null;
   }
 
@@ -277,9 +333,11 @@ export class OpRunner {
     if (this.busy) return;
     this.busy = true;
     const started = Date.now();
+
     try {
       while (Date.now() - started < budgetMs) {
         const op = this.pickDue();
+
         if (!op) break;
         await this.runStep(op);
       }
@@ -292,60 +350,73 @@ export class OpRunner {
   private pickDue(): OpRow | null {
     const now = Date.now();
     const running = this.core.db.select().from(ops).where(eq(ops.status, "running")).get();
+
     if (running) {
       const st = this.stateOf(running);
+
       if (st.waiting) {
         if (st.waiting.deadline <= now) {
           void this.timeoutWaiting(running);
         }
+
         return null;
       }
+
       return running.nextRunAt <= now ? running : null;
     }
+
     const nonHk = this.core.db
       .select()
       .from(ops)
       .where(and(eq(ops.status, "pending"), ne(ops.kind, "housekeeping")))
       .orderBy(asc(ops.createdAt))
       .all();
+
     const due = nonHk.find((o) => o.nextRunAt <= now) ?? null;
+
     if (nonHk.length > 0) return due && due.id === nonHk[0]!.id ? due : null;
+
     const hk = this.core.db
       .select()
       .from(ops)
       .where(and(eq(ops.status, "pending"), eq(ops.kind, "housekeeping")))
       .get();
+
     return hk && hk.nextRunAt <= now ? hk : null;
   }
 
   stateOf(op: OpRow): OpState {
-    return parseJson<OpState>(op.stateJson, { timings: {} });
+    return parseJson(OpStateSchema)(op.stateJson, { timings: {} });
   }
 
   private save(op: OpRow, patch: Partial<OpRow>, state?: OpState): void {
-    this.core.db
-      .update(ops)
-      .set({ ...patch, ...(state ? { stateJson: JSON.stringify(state) } : {}), updatedAt: Date.now() })
-      .where(eq(ops.id, op.id))
-      .run();
+    const changes = { ...patch };
+
+    if (state) changes.stateJson = JSON.stringify(state);
+    changes.updatedAt = Date.now();
+    this.core.db.update(ops).set(changes).where(eq(ops.id, op.id)).run();
   }
 
   private async runStep(op: OpRow): Promise<void> {
     const step = op.step;
     const fn = this.steps[step];
     const configured = limitOf(step);
+
     const limit: StepLimit =
       op.kind === "revert" && step === "git.checkpoint"
         ? { ...configured, onPermanent: { kind: "fail", code: "INTERNAL" } }
         : configured;
+
     const state = this.stateOf(op);
-    const input = parseJson<Record<string, unknown>>(op.inputJson, {});
+    const input = parseJson(OpInputSchema)(op.inputJson, {});
     this.save(op, { status: "running" });
     const ctl = new AbortController();
+
     const timer = setTimeout(
       () => ctl.abort(new TempoError("TEMPOD_TIMEOUT", undefined, `${step} timed out`)),
       limit.timeoutMs,
     );
+
     const t0 = Date.now();
     log("info", "op step", {
       workspaceId: this.core.wsOrNull()?.workspaceId,
@@ -353,14 +424,17 @@ export class OpRunner {
       step,
       attempt: op.attempt,
     });
+
     try {
       if (!fn) throw new TempoError("INTERNAL", undefined, `unknown step ${step}`);
+
       const outcome = await Promise.race([
         fn({ core: this.core, op, input, state, signal: ctl.signal, attempt: op.attempt }),
         new Promise<never>((_, reject) =>
           ctl.signal.addEventListener("abort", () => reject(ctl.signal.reason)),
         ),
       ]);
+
       state.timings[step] = (state.timings[step] ?? 0) + (Date.now() - t0);
       await this.applyOutcome(op, outcome, state, limit);
     } catch (e) {
@@ -379,6 +453,7 @@ export class OpRunner {
     limit: StepLimit,
   ): Promise<void> {
     const now = Date.now();
+
     if (outcome === "wait") {
       state.waiting = {
         ...state.waiting,
@@ -386,25 +461,34 @@ export class OpRunner {
         deadline: state.waiting?.deadline ?? now + limit.timeoutMs,
       };
       this.save(op, {}, state);
+
       return;
     }
+
     if (outcome === "cancel") {
       this.save(op, { status: "cancelled" }, state);
-      await this.hooks[op.kind as OpKind].onCancelled?.(this.core, op);
+      await this.hooks[op.kind].onCancelled?.(this.core, op);
       this.core.kickQueue();
+
       return;
     }
-    const steps = OP_STEPS[op.kind as OpKind];
+
+    const steps = OP_STEPS[op.kind];
     const idx = steps.indexOf(op.step);
     const next = outcome === "done" ? undefined : steps[idx + 1];
+
     if (next) {
       this.save(op, { step: next, attempt: 0, nextRunAt: now, status: "running" }, state);
+
       return;
     }
+
     this.core.ctx.storage.transactionSync(() => {
       this.save(op, { status: "done" }, state);
+
       if (op.kind === "commit_push") {
         const result = state["result"] as { commitSha?: string } | undefined;
+
         if (result?.commitSha)
           this.core.lifecycle.recordCause({
             type: "tempo.branch.pushed",
@@ -416,18 +500,20 @@ export class OpRunner {
       }
     });
     this.core.lifecycle.kick();
+
     try {
-      await this.hooks[op.kind as OpKind].onDone(this.core, { ...op, status: "done" }, state);
+      await this.hooks[op.kind].onDone(this.core, { ...op, status: "done" }, state);
     } catch (e) {
       log("error", "op onDone failed", { opId: op.id, error: errorText(e) });
     }
+
     this.resolveWaiters(op.id, { ok: true, value: state["result"] ?? {} });
     this.core.kickQueue();
   }
 
-  private async handleError(op: OpRow, e: unknown, state: OpState, limit: StepLimit): Promise<void> {
-    const body = toErrorBody(e);
-    const detail = body.detail ?? (e instanceof Error ? e.message : String(e));
+  private async handleError(op: OpRow, cause: unknown, state: OpState, limit: StepLimit): Promise<void> {
+    const body = toErrorBody(cause);
+    const detail = body.detail ?? (cause instanceof Error ? cause.message : String(cause));
     const attempt = op.attempt + 1;
     const permanent = attempt >= limit.maxAttempts || PERMANENT_CODES.has(body.code);
     log(permanent ? "warn" : "info", "op step failed", {
@@ -438,6 +524,7 @@ export class OpRunner {
       code: body.code,
       error: detail.slice(0, 500),
     });
+
     if (!permanent) {
       this.save(
         op,
@@ -449,18 +536,23 @@ export class OpRunner {
         },
         state,
       );
+
       return;
     }
+
     if (limit.onPermanent.kind === "skip") {
       state.skipped = [...(state.skipped ?? []), op.step];
       delete state.waiting;
       await this.afterSkip(op, body.code, detail);
       this.onSkip(op.step, state);
       await this.applyOutcome({ ...op, attempt }, "next", state, limit);
+
       return;
     }
+
     const code =
       limit.onPermanent.passthrough && body.code !== "INTERNAL" ? body.code : limit.onPermanent.code;
+
     await this.fail(op, code, detail, state);
   }
 
@@ -472,8 +564,10 @@ export class OpRunner {
       step: op.step,
       code,
     });
+
     if (op.step === "script.archive")
       this.core.notice("warning", `The archive script failed: ${detail.slice(0, 300)}`);
+
     if (op.step === "settings.read") {
       const issues = this.core.settingsIssues();
       this.core.setKv("settingsIssues", {
@@ -485,11 +579,13 @@ export class OpRunner {
 
   async fail(op: OpRow, code: ErrorCode, detail: string | null, state?: OpState): Promise<void> {
     this.save(op, { status: "failed", errorCode: code, errorDetail: detail?.slice(0, 2000) ?? null }, state);
+
     try {
-      await this.hooks[op.kind as OpKind].onFailed(this.core, op, { code, detail });
+      await this.hooks[op.kind].onFailed(this.core, op, { code, detail });
     } catch (e) {
       log("error", "op onFailed failed", { opId: op.id, error: errorText(e) });
     }
+
     this.resolveWaiters(op.id, { ok: false, error: { code, detail } });
     this.core.kickQueue();
   }
@@ -520,10 +616,12 @@ export class OpRunner {
     error?: { code: ErrorCode; detail: string },
   ): Promise<void> {
     const op = this.core.db.select().from(ops).where(eq(ops.id, opId)).get();
+
     if (!op || op.status !== "running" || op.step !== step) return;
     const state = this.stateOf(op);
     delete state.waiting;
     this.addWaitTime(op, state, step);
+
     if (outcome === "next") await this.applyOutcome(op, "next", state, limitOf(step));
     else
       await this.handleError(
@@ -538,6 +636,7 @@ export class OpRunner {
   /** Ends a pending or running op without its hooks: its work is superseded (for example by a wake). */
   cancel(opId: string): void {
     const op = this.core.db.select().from(ops).where(eq(ops.id, opId)).get();
+
     if (!op || (op.status !== "pending" && op.status !== "running")) return;
     const state = this.stateOf(op);
     delete state.waiting;
@@ -555,10 +654,11 @@ export class OpRunner {
       .from(ops)
       .where(and(eq(ops.status, "running"), eq(ops.step, step)))
       .get();
+
     return op ?? null;
   }
 
-  wait(opId: string): Promise<unknown> {
+  wait(opId: string): Promise<OpResult> {
     return new Promise((resolve, reject) => {
       const list = this.core.opWaiters.get(opId) ?? [];
       list.push({ resolve, reject });
@@ -568,11 +668,13 @@ export class OpRunner {
 
   private resolveWaiters(
     opId: string,
-    result: { ok: true; value: unknown } | { ok: false; error: { code: ErrorCode; detail: string | null } },
+    result: { ok: true; value: OpResult } | { ok: false; error: { code: ErrorCode; detail: string | null } },
   ): void {
     const list = this.core.opWaiters.get(opId);
+
     if (!list) return;
     this.core.opWaiters.delete(opId);
+
     for (const w of list) {
       if (result.ok) w.resolve(result.value);
       else w.reject(new TempoError(result.error.code, undefined, result.error.detail ?? undefined));
@@ -581,13 +683,15 @@ export class OpRunner {
 
   progress(): OpProgress | null {
     const op = this.active();
+
     if (!op || op.kind === "housekeeping") return null;
     const state = this.stateOf(op);
-    const steps = OP_STEPS[op.kind as OpKind];
+    const steps = OP_STEPS[op.kind];
     const idx = steps.indexOf(op.step);
+
     return {
-      kind: op.kind as OpKind,
-      status: op.status as OpProgress["status"],
+      kind: op.kind,
+      status: op.status,
       step: op.step,
       steps: steps.map((name, i) => ({
         name,
@@ -614,6 +718,7 @@ export class OpRunner {
   /** Marks a step as skipped (for fresh-disk-only steps on the snapshot path). */
   static skip(state: OpState, step: string): StepOutcome {
     state.skipped = [...(state.skipped ?? []), step];
+
     return "next";
   }
 }

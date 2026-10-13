@@ -64,6 +64,7 @@ describe("guided PR documents", () => {
     ).toThrow("Chapter ids");
     const invalid = structuredClone(guide);
     const flow = invalid.chapters[0]!.visuals[0]!;
+
     if (flow.kind !== "flow" || !flow.nodes || !flow.edges) throw new Error("Expected flow");
     flow.edges[0]!.to = "missing";
     expect(() => parsePrGuide(JSON.stringify(invalid))).toThrow("existing nodes");

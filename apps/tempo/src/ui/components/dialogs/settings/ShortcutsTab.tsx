@@ -3,6 +3,7 @@ import { formatRow, isMacPlatform, SHORTCUT_ROWS } from "~/ui/lib/shortcuts";
 /** Settings → Shortcuts (04): the shortcut table, read-only. */
 export function ShortcutsTab() {
   const mac = isMacPlatform();
+
   return (
     <table className="w-full text-sm">
       <caption className="sr-only">Keyboard shortcuts</caption>

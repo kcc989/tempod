@@ -1,3 +1,4 @@
+import { useApiCall } from "~/ui/hooks/useCall";
 import { AlertCircleIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -6,7 +7,7 @@ import { Spinner } from "~/ui/components/ui/spinner";
 import { useBanner } from "~/ui/hooks/useBanner";
 import { useCallMutation } from "~/ui/hooks/useCall";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
-import { call } from "~/ui/lib/api";
+
 import { toastError } from "~/ui/lib/toast";
 import { showBottomTab } from "~/ui/state/workspace-ui";
 import { bannerCodes, workspaceBanners, type WorkspaceBanner } from "./banners-model";
@@ -33,6 +34,7 @@ export function WorkspaceBanners({ workspaceId }: WorkspaceBannersProps) {
   }, [state, workspaceId]);
 
   if (banners.length === 0) return null;
+
   return (
     <div className="flex shrink-0 flex-col">
       {banners.map((b) => (
@@ -93,8 +95,11 @@ function ErrorBanner({
   message: string;
   detail: string | null;
 }) {
+  const call = useApiCall();
+
   const [open, setOpen] = useState(false);
   const wake = useCallMutation("wakeWorkspace");
+
   const archive = useCallMutation("archiveWorkspace", {
     onSuccess: () => {
       toast("Archived.", {
@@ -102,12 +107,13 @@ function ErrorBanner({
         action: {
           label: "Undo",
           onClick: () => {
-            call("restoreWorkspace", { workspaceId }).catch((e: unknown) => toastError(e));
+            call("restoreWorkspace", { workspaceId }).catch((cause: unknown) => toastError(cause));
           },
         },
       });
     },
   });
+
   return (
     <div role="alert" className="border-b border-destructive/30 bg-destructive/10 px-3 py-1.5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -145,6 +151,7 @@ function ErrorBanner({
 function SetupFailedBanner({ workspaceId }: { workspaceId: string }) {
   const rerun = useCallMutation("rerunSetup", { onSuccess: () => showBottomTab(workspaceId, "setup") });
   const skip = useCallMutation("continueAfterSetupFailure");
+
   return (
     <div
       role="alert"

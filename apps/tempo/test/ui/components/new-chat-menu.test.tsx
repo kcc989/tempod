@@ -1,3 +1,9 @@
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DEFAULT_SETTINGS, type CredentialStatus, type Settings } from "@tempo/protocol";
@@ -5,17 +11,12 @@ import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NewChatComposer } from "../../../src/ui/components/chat/NewChatComposer";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
-import { call } from "../../../src/ui/lib/api";
+
 import { emptyWorkspaceState } from "../../../src/ui/stores/workspace-state";
 import { detail } from "../fixtures";
 
-const fixture = vi.hoisted(() => ({ state: null as unknown }));
-vi.mock("~/ui/hooks/useWorkspace", () => ({
-  useWorkspaceSelector: (_: string, select: (state: unknown) => unknown) => select(fixture.state),
-}));
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
-
 const on = { set: true, updatedAt: 1 };
+
 const credentials: CredentialStatus = {
   claude: on,
   codex: { ...on, lastRefresh: 1 },
@@ -30,9 +31,10 @@ const withModels = (models: Partial<Settings["agent"]["models"]>): Settings => (
 });
 
 const show = (settings: Settings, status: CredentialStatus | Promise<CredentialStatus> = credentials) => {
-  fixture.state = { ...emptyWorkspaceState, ready: true, workspace: detail({ settings }) };
+  environment.setState({ ...emptyWorkspaceState, ready: true, workspace: detail({ settings }) });
   vi.mocked(call).mockImplementation(async (name) => {
-    if (name === "getCredentialStatus") return status as never;
+    if (name === "getCredentialStatus") return status;
+
     if (name === "listModels")
       return [
         { agent: "claude", currentValue: "sonnet", options: [{ value: "sonnet", name: "Sonnet" }] },
@@ -42,12 +44,13 @@ const show = (settings: Settings, status: CredentialStatus | Promise<CredentialS
           options: [{ value: "codex-test", name: "Codex test" }],
         },
         { agent: "pi", currentValue: "pi-test", options: [{ value: "pi-test", name: "Pi test" }] },
-      ] as never;
+      ];
+
     if (name === "listCustomAgents")
       return [
         { id: "a1", name: "Reviewer", description: "", baseAgent: "codex", updatedAt: 1 },
         { id: "a2", name: "Router tester", description: "", baseAgent: "pi", updatedAt: 1 },
-      ] as never;
+      ];
     throw new Error(`unexpected ${name}`);
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -66,6 +69,7 @@ const show = (settings: Settings, status: CredentialStatus | Promise<CredentialS
         }),
       ),
     ),
+    { wrapper: environment.Provider },
   );
 };
 

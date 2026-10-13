@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { and, asc, count, eq, isNull, ne } from "drizzle-orm";
 import {
   CUSTOM_AGENT_LIMIT,
@@ -5,7 +6,7 @@ import {
   customAgentPath,
   customAgentRepo,
   newId,
-  type AgentId,
+  AgentId,
   type CustomAgent,
   type CustomAgentDefinition,
   type FnInput,
@@ -26,13 +27,17 @@ const activeRow = async (env: Env, userId: string, id: string): Promise<CustomAg
     .from(customAgents)
     .where(and(eq(customAgents.id, id), eq(customAgents.userId, userId), isNull(customAgents.deletedAt)))
     .get();
+
   if (!row) throw new TempoError("NOT_FOUND", undefined, "custom agent not found");
+
   return row;
 };
 
 const readDefinition = async (env: Env, row: CustomAgentRow): Promise<CustomAgentDefinition> => {
   const text = await agentStore.forEnv(env).read(row.repo, row.commitSha, row.path);
+
   if (text === null) throw new TempoError("ARTIFACTS_ERROR", undefined, "agent file missing at its commit");
+
   return parseAgentFile(text);
 };
 
@@ -43,8 +48,8 @@ const toWire = (row: CustomAgentRow, def: CustomAgentDefinition): CustomAgent =>
   updatedAt: row.updatedAt,
 });
 
-const isNameTaken = (e: unknown): boolean =>
-  /UNIQUE constraint failed: custom_agents\.(user_id|name)/.test(String(e));
+const isNameTaken = (cause: unknown): boolean =>
+  /UNIQUE constraint failed: custom_agents\.(user_id|name)/.test(String(cause));
 
 /** The custom agent a session starts from, read at its current commit. */
 export const resolveCustomAgent = async (
@@ -57,9 +62,11 @@ export const resolveCustomAgent = async (
   definition: CustomAgentDefinition;
 }> => {
   const row = await activeRow(env, userId, customAgentId);
+
   if (agent !== undefined && agent !== row.baseAgent) {
     throw new TempoError("VALIDATION_FAILED", undefined, "agent must equal the custom agent's base agent");
   }
+
   return {
     customAgent: { id: row.id, name: row.name, commitSha: row.commitSha },
     definition: await readDefinition(env, row),
@@ -73,11 +80,12 @@ export const listCustomAgents = async ({ env, user }: HandlerCtx): Promise<FnOut
     .where(and(eq(customAgents.userId, user.id), isNull(customAgents.deletedAt)))
     .orderBy(asc(customAgents.name))
     .all();
+
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     description: r.description,
-    baseAgent: r.baseAgent as AgentId,
+    baseAgent: Schema.decodeUnknownSync(AgentId)(r.baseAgent),
     updatedAt: r.updatedAt,
   }));
 };
@@ -87,6 +95,7 @@ export const getCustomAgent = async (
   { customAgentId }: FnInput<"getCustomAgent">,
 ): Promise<FnOutput<"getCustomAgent">> => {
   const row = await activeRow(env, user.id, customAgentId);
+
   return toWire(row, await readDefinition(env, row));
 };
 
@@ -97,6 +106,7 @@ export const saveCustomAgent = async (
   const db = d1(env);
   const existing = customAgentId ? await activeRow(env, user.id, customAgentId) : null;
   const id = existing?.id ?? newId();
+
   const clash = await db
     .select({ id: customAgents.id })
     .from(customAgents)
@@ -109,23 +119,29 @@ export const saveCustomAgent = async (
       ),
     )
     .get();
+
   if (clash) throw new TempoError("CUSTOM_AGENT_EXISTS");
+
   if (!existing) {
     const n = await db
       .select({ n: count() })
       .from(customAgents)
       .where(and(eq(customAgents.userId, user.id), isNull(customAgents.deletedAt)))
       .get();
+
     if ((n?.n ?? 0) >= CUSTOM_AGENT_LIMIT) throw new TempoError("CUSTOM_AGENT_LIMIT");
   }
 
   const repo = customAgentRepo(user.id);
   const path = customAgentPath(id);
+
   // The row changes only after the push succeeds, so commit_sha always names a real commit (02).
   const commitSha = await agentStore
     .forEnv(env)
     .write(repo, path, stringifyAgentFile(definition), `Save agent ${id}`);
+
   const now = Date.now();
+
   const fields = {
     name: definition.name,
     description: definition.description,
@@ -133,6 +149,7 @@ export const saveCustomAgent = async (
     commitSha,
     updatedAt: now,
   };
+
   try {
     if (existing) {
       await db.update(customAgents).set(fields).where(eq(customAgents.id, id)).run();
@@ -146,6 +163,7 @@ export const saveCustomAgent = async (
     if (isNameTaken(e)) throw new TempoError("CUSTOM_AGENT_EXISTS");
     throw e;
   }
+
   return { ...definition, id, commitSha, updatedAt: now };
 };
 
@@ -161,5 +179,6 @@ export const deleteCustomAgent = async (
     .set({ deletedAt: now, updatedAt: now })
     .where(eq(customAgents.id, row.id))
     .run();
+
   return {};
 };

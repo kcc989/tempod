@@ -13,9 +13,11 @@ export interface BrowserOutboundProps {
 export class BrowserOutbound extends WorkerEntrypoint<Env, BrowserOutboundProps> {
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
     if (url.hostname !== "localhost" || url.port === "") return new Response("Not found", { status: 404 });
     const headers = stripInternalHeaders(new Headers(request.headers));
     headers.set(BROWSER_APP_HEADER, url.port);
+
     return this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).fetch(new Request(request, { headers }));
   }
 }

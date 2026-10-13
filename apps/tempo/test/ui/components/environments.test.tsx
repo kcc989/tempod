@@ -1,3 +1,10 @@
+import { createUiEnvironment, requestInput } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { TempoError, type Environment, type Project } from "@tempo/protocol";
@@ -8,17 +15,9 @@ import { Confirm } from "../../../src/ui/components/dialogs/Confirm";
 import { EnvironmentsTab } from "../../../src/ui/components/dialogs/settings/EnvironmentsTab";
 import { ProjectTab } from "../../../src/ui/components/dialogs/settings/ProjectTab";
 import { WorkspaceEnvironmentDialog } from "../../../src/ui/components/dialogs/WorkspaceEnvironmentDialog";
-import { call } from "../../../src/ui/lib/api";
+
 import { openDialog, resetUiState } from "../../../src/ui/state/workspace-ui";
 import { detail } from "../fixtures";
-
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
-const fixture = vi.hoisted(() => ({ state: null as unknown }));
-vi.mock("~/ui/hooks/useWorkspace", () => ({
-  useWorkspaceSelector: (_: string, select: (state: unknown) => unknown) => select(fixture.state),
-}));
 
 const staging: Environment = {
   id: "e1",
@@ -33,6 +32,7 @@ const staging: Environment = {
   createdAt: 1,
   updatedAt: 2,
 };
+
 const project = (over: Partial<Project> = {}): Project => ({
   id: "p1",
   installationId: 1,
@@ -47,17 +47,20 @@ const project = (over: Partial<Project> = {}): Project => ({
 });
 
 let envs: Environment[];
+
 let projects: Project[];
 
 const show = (ui: ReactNode) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+
   return render(
     <QueryClientProvider client={client}>
       {ui}
       <Confirm />
     </QueryClientProvider>,
+    { wrapper: environment.Provider },
   );
 };
 
@@ -70,9 +73,10 @@ const pick = async (trigger: HTMLElement, option: string) => {
 beforeEach(() => {
   envs = [staging];
   projects = [project()];
-  fixture.state = { workspace: detail() };
+  environment.setState({ workspace: detail() });
   vi.mocked(call).mockImplementation(async (name, input) => {
-    if (name === "listEnvironments") return envs as never;
+    if (name === "listEnvironments") return envs;
+
     if (name === "getCredentialStatus")
       return {
         claude: { set: false, updatedAt: null },
@@ -80,18 +84,26 @@ beforeEach(() => {
         anthropic: { set: false, updatedAt: null },
         openai: { set: false, updatedAt: null },
         openrouter: { set: false, updatedAt: null },
-      } as never;
-    if (name === "listModels") return [] as never;
-    if (name === "listProjects") return projects as never;
-    if (name === "listProjectSecretNames") return { names: [] } as never;
+      };
+
+    if (name === "listModels") return [];
+
+    if (name === "listProjects") return projects;
+
+    if (name === "listProjectSecretNames") return { names: [] };
+
     if (name === "createEnvironment")
-      return { ...staging, id: "e2", name: (input as { name: string }).name, secrets: [] } as never;
-    if (name === "updateEnvironment") return staging as never;
+      return { ...staging, id: "e2", name: requestInput("createEnvironment", input).name, secrets: [] };
+
+    if (name === "updateEnvironment") return staging;
+
     if (name === "setProjectEnvironment")
-      return project({ environmentId: (input as { environmentId: string | null }).environmentId }) as never;
-    return {} as never;
+      return project({ environmentId: requestInput("setProjectEnvironment", input).environmentId });
+
+    return {};
   });
 });
+
 afterEach(resetUiState);
 
 describe("Settings → Environments", () => {
@@ -104,7 +116,7 @@ describe("Settings → Environments", () => {
     expect(screen.getByText("Visible to the agent")).toBeTruthy();
     expect(screen.getByText("Set")).toBeTruthy();
     expect(screen.getByText("Not set")).toBeTruthy();
-    expect((screen.getByLabelText("STRIPE_KEY value") as HTMLInputElement).value).toBe("");
+    expect(elementOf(screen.getByLabelText("STRIPE_KEY value"), HTMLInputElement).value).toBe("");
   });
 
   it("creates an environment from a name", async () => {
@@ -119,7 +131,8 @@ describe("Settings → Environments", () => {
 
   it("shows a taken name inline", async () => {
     vi.mocked(call).mockImplementation(async (name) => {
-      if (name === "listEnvironments") return envs as never;
+      if (name === "listEnvironments") return envs;
+
       if (name === "getCredentialStatus")
         return {
           claude: { set: false, updatedAt: null },
@@ -127,8 +140,9 @@ describe("Settings → Environments", () => {
           anthropic: { set: false, updatedAt: null },
           openai: { set: false, updatedAt: null },
           openrouter: { set: false, updatedAt: null },
-        } as never;
-      if (name === "listModels") return [] as never;
+        };
+
+      if (name === "listModels") return [];
       throw new TempoError("ENVIRONMENT_EXISTS");
     });
     show(<EnvironmentsTab />);
@@ -289,7 +303,7 @@ describe("environment proposals", () => {
 
   it("reviews and applies the oldest proposal by creating an environment", async () => {
     envs = [];
-    fixture.state = { workspace: detail({ environmentProposals: [pending] }) };
+    environment.setState({ workspace: detail({ environmentProposals: [pending] }) });
     show(<EnvironmentProposalBanner workspaceId="w1" />);
     expect(screen.getByText("The agent suggests environment changes")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
@@ -330,7 +344,7 @@ describe("environment proposals", () => {
 
   it("applies to the effective environment and dismisses", async () => {
     projects = [project({ environmentId: "e1" })];
-    fixture.state = { workspace: detail({ environmentProposals: [pending] }) };
+    environment.setState({ workspace: detail({ environmentProposals: [pending] }) });
     show(<EnvironmentProposalBanner workspaceId="w1" />);
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     const dialog = await screen.findByRole("dialog");

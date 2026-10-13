@@ -1,39 +1,48 @@
+import { createUiEnvironment } from "../environment";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+call.mockImplementation(async (name) =>
+  name === "getCredentialStatus"
+    ? {
+        claude: { set: false, updatedAt: null },
+        codex: { set: false, updatedAt: null, lastRefresh: null },
+        anthropic: { set: false, updatedAt: null },
+        openai: { set: false, updatedAt: null },
+        openrouter: { set: false, updatedAt: null },
+      }
+    : name === "listModels" || name === "listEnvironments"
+      ? []
+      : { names: [] },
+);
+
+import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { SettingsPage } from "../../../src/ui/components/settings/SettingsPage";
-import { call } from "../../../src/ui/lib/api";
+
 import { dialogStore, openDialog, resetUiState, settingsStore } from "../../../src/ui/state/workspace-ui";
 
-vi.mock("~/ui/lib/api", () => ({
-  call: vi.fn(async (name) =>
-    name === "getCredentialStatus"
-      ? {
-          claude: { set: false, updatedAt: null },
-          codex: { set: false, updatedAt: null, lastRefresh: null },
-          anthropic: { set: false, updatedAt: null },
-          openai: { set: false, updatedAt: null },
-          openrouter: { set: false, updatedAt: null },
-        }
-      : name === "listModels" || name === "listEnvironments"
-        ? []
-        : { names: [] },
-  ),
-}));
-vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
 const projects = [
   { id: "p1", owner: "tempo", name: "first", settings: {}, sortOrder: 0 },
   { id: "p2", owner: "tempo", name: "second", settings: {}, sortOrder: 1 },
 ];
+
 const show = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(["call", "listProjects", {}], projects);
+
   return render(
     <QueryClientProvider client={client}>
       <SettingsPage />
     </QueryClientProvider>,
+    { wrapper: environment.Provider },
   );
 };
+
 afterEach(resetUiState);
 
 describe("settings page", () => {
@@ -52,9 +61,11 @@ describe("settings page", () => {
     openDialog({ kind: "settings" });
     show();
     const nav = screen.getByRole("navigation", { name: "Settings" });
+
     const labels = within(nav)
       .getAllByRole("button")
       .map((b) => b.textContent);
+
     expect(labels.slice(0, 9)).toEqual([
       "General",
       "Logins",
@@ -118,6 +129,7 @@ describe("settings page", () => {
     ]);
     expect(screen.getByRole("heading", { name: "Agents" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Default model" })).toBeTruthy();
+
     for (const agent of ["Claude", "Codex", "OpenCode", "Pi"])
       expect(screen.queryByRole("group", { name: `${agent} default model` })).toBeNull();
     expect(screen.getByRole("group", { name: "Browser Run" })).toBeTruthy();
@@ -141,7 +153,7 @@ describe("settings page", () => {
     fireEvent.click(within(nav).getByRole("button", { name: "Scripts" }));
     expect(screen.queryByRole("textbox", { name: "Branch prefix" })).toBeNull();
     fireEvent.click(within(nav).getByRole("button", { name: "Git" }));
-    const input = screen.getByRole("textbox", { name: "Branch prefix" }) as HTMLInputElement;
+    const input = elementOf(screen.getByRole("textbox", { name: "Branch prefix" }), HTMLInputElement);
     expect(input.value).toBe("custom/");
     fireEvent.keyDown(input, { code: "Enter", metaKey: true });
     await waitFor(() =>

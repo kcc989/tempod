@@ -28,7 +28,9 @@ export const requireEnvironment = async (c: HandlerCtx, environmentId: string): 
     .from(environments)
     .where(and(eq(environments.id, environmentId), eq(environments.userId, c.user.id)))
     .get();
+
   if (!row) throw new TempoError("NOT_FOUND", undefined, "environment not found");
+
   return row;
 };
 
@@ -47,6 +49,7 @@ const assertNameFree = async (c: HandlerCtx, name: string, exceptId?: string) =>
       ),
     )
     .get();
+
   if (clash) throw new TempoError("ENVIRONMENT_EXISTS");
 };
 
@@ -57,6 +60,7 @@ export const refreshAllWorkspaces = async (c: HandlerCtx): Promise<void> => {
     .from(workspaces)
     .where(and(eq(workspaces.userId, c.user.id), isNull(workspaces.archivedAt)))
     .all();
+
   waitUntil(
     Promise.all(
       ids.map((w) =>
@@ -75,6 +79,7 @@ export const listEnvironments = async (c: HandlerCtx): Promise<FnOutput<"listEnv
     .where(eq(environments.userId, c.user.id))
     .orderBy(asc(environments.name))
     .all();
+
   return Promise.all(rows.map((r) => toWire(c, r)));
 };
 
@@ -84,6 +89,7 @@ export const createEnvironment = async (
 ): Promise<FnOutput<"createEnvironment">> => {
   await assertNameFree(c, name);
   const now = Date.now();
+
   const row: EnvironmentRow = {
     id: newId(),
     userId: c.user.id,
@@ -95,7 +101,9 @@ export const createEnvironment = async (
     createdAt: now,
     updatedAt: now,
   };
+
   await d1(c.env).insert(environments).values(row).run();
+
   return environmentToWire(row, []);
 };
 
@@ -107,14 +115,20 @@ export const updateEnvironment = async (
 ): Promise<FnOutput<"updateEnvironment">> => {
   const row = await requireEnvironment(c, input.environmentId);
   const current = parseEnvironment(row);
+
   if (input.name !== undefined) await assertNameFree(c, input.name, row.id);
+
   if (input.secrets) {
     const dup = duplicateNames(input.secrets);
+
     if (dup.length) throw invalid(`duplicate secret names: ${dup.join(", ")}`);
   }
+
   let injectors: Injector[] | undefined;
+
   if (input.injectors) {
     const dup = duplicateNames(input.injectors);
+
     if (dup.length) throw invalid(`duplicate injector names: ${dup.join(", ")}`);
     injectors = await Promise.all(
       input.injectors.map(async (i) => ({
@@ -125,7 +139,9 @@ export const updateEnvironment = async (
       })),
     );
   }
+
   const now = Date.now();
+
   const next: EnvironmentRow = {
     ...row,
     name: input.name ?? row.name,
@@ -137,6 +153,7 @@ export const updateEnvironment = async (
     injectorsJson: injectors ? json.environmentInjectors.write(injectors) : row.injectorsJson,
     updatedAt: now,
   };
+
   await d1(c.env)
     .update(environments)
     .set({
@@ -149,12 +166,16 @@ export const updateEnvironment = async (
     })
     .where(eq(environments.id, row.id))
     .run();
+
   if (input.secrets) {
     const kept = new Set(input.secrets.map((s) => s.name));
+
     for (const s of current.secrets)
       if (!kept.has(s.name)) await creds(c).deleteSecret(environmentSecretKey(row.id, s.name));
   }
+
   await refreshAllWorkspaces(c);
+
   return toWire(c, next);
 };
 
@@ -172,6 +193,7 @@ export const deleteEnvironment = async (
   await db.delete(environments).where(eq(environments.id, row.id)).run();
   await creds(c).deleteEnvironmentSecrets(row.id);
   await refreshAllWorkspaces(c);
+
   return {};
 };
 
@@ -181,6 +203,7 @@ export const setEnvironmentSecret = async (
 ): Promise<FnOutput<"setEnvironmentSecret">> => {
   const row = await requireEnvironment(c, environmentId);
   const current = parseEnvironment(row);
+
   if (!current.secrets.some((s) => s.name === name)) {
     if (current.secrets.length >= ENVIRONMENT_LIMITS.secretsMax) throw invalid("too many secrets");
     await d1(c.env)
@@ -192,8 +215,10 @@ export const setEnvironmentSecret = async (
       .where(eq(environments.id, row.id))
       .run();
   }
+
   await creds(c).putSecret(environmentSecretKey(row.id, name), value);
   await refreshAllWorkspaces(c);
+
   return {};
 };
 
@@ -213,6 +238,7 @@ export const deleteEnvironmentSecret = async (
     .run();
   await creds(c).deleteSecret(environmentSecretKey(row.id, name));
   await refreshAllWorkspaces(c);
+
   return {};
 };
 
@@ -221,6 +247,7 @@ export const setProjectEnvironment = async (
   { projectId, environmentId }: FnInput<"setProjectEnvironment">,
 ): Promise<FnOutput<"setProjectEnvironment">> => {
   const row = await requireProject(c.env, c.user.id, projectId);
+
   if (environmentId !== null) await requireEnvironment(c, environmentId);
   const now = Date.now();
   await d1(c.env)
@@ -229,5 +256,6 @@ export const setProjectEnvironment = async (
     .where(eq(projects.id, projectId))
     .run();
   await refreshAllWorkspaces(c);
+
   return projectToWire({ ...row, environmentId, updatedAt: now });
 };

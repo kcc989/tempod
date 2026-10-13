@@ -40,6 +40,7 @@ export function RunTab({ workspaceId }: { workspaceId: string }) {
   const entries = runScriptEntries(workspace.settings);
   const scriptId = selectedRunScriptId(workspace.settings, picked);
   const script = entries.find((e) => e.id === scriptId);
+
   if (!script) {
     return (
       <EmptyState

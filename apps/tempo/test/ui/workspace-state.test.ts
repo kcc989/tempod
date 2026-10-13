@@ -1,4 +1,6 @@
-import type { Item, WorkspaceServerMessage } from "@tempo/protocol";
+import { Item as ItemSchema } from "@tempo/protocol";
+import { Schema } from "effect";
+import type { WorkspaceServerMessage } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import {
   applyWorkspaceMessage,
@@ -71,8 +73,8 @@ describe("workspace channel state", () => {
     s = apply(s, { type: "item.upsert", item: agentMessage("a", "Hel", { rev: 1 }), itemsRev: 1 });
     s = apply(s, { type: "item.delta", itemId: "a", append: { text: "lo" }, itemsRev: 1 });
     s = apply(s, { type: "item.delta", itemId: "a", append: { text: "!" }, itemsRev: 2 });
-    const item = s.items["a"] as Extract<Item, { kind: "agent_message" }>;
-    expect(item.content.text).toBe("Hello!");
+    const item = s.items["a"];
+    expect(item?.kind === "agent_message" ? item.content.text : undefined).toBe("Hello!");
     expect(s.itemsRev).toBe(2);
   });
 
@@ -81,8 +83,8 @@ describe("workspace channel state", () => {
     s = apply(s, { type: "item.upsert", item: agentMessage("a", "new", { rev: 5 }), itemsRev: 5 });
     s = apply(s, { type: "item.upsert", item: agentMessage("a", "old", { rev: 4 }), itemsRev: 4 });
     s = apply(s, { type: "item.delta", itemId: "a", append: { text: "x" }, itemsRev: 3 });
-    const item = s.items["a"] as Extract<Item, { kind: "agent_message" }>;
-    expect(item.content.text).toBe("new");
+    const item = s.items["a"];
+    expect(item?.kind === "agent_message" ? item.content.text : undefined).toBe("new");
   });
 
   it("applies backlog items even when their rev is lower, by per-item rev", () => {
@@ -94,7 +96,7 @@ describe("workspace channel state", () => {
       itemsRev: 9,
       done: true,
     });
-    expect((s.items["a"] as Extract<Item, { kind: "agent_message" }>).content.text).toBe("v2");
+    expect(s.items["a"]?.kind === "agent_message" ? s.items["a"].content.text : undefined).toBe("v2");
     expect(s.items["u"]).toBeDefined();
   });
 
@@ -112,10 +114,12 @@ describe("workspace channel state", () => {
     const s = live();
     const r1 = applyWorkspaceMessage(s, { type: "turn", turn: turn({ status: "completed", endedAt: 5000 }) });
     expect(r1.events).toEqual([{ kind: "turnEnded", turn: expect.objectContaining({ id: "t1" }) }]);
+
     const r2 = applyWorkspaceMessage(r1.state, {
       type: "turn",
       turn: turn({ status: "completed", endedAt: 5000 }),
     });
+
     expect(r2.events).toEqual([]);
   });
 
@@ -131,7 +135,8 @@ describe("workspace channel state", () => {
       request: { requestId: "r1", sessionId: "s1", turnId: "t1", itemId: "p1", title: "Run ls", options: [] },
     });
     expect(Object.keys(s.permissions)).toEqual(["r1"]);
-    const answered = {
+
+    const answered = Schema.decodeUnknownSync(ItemSchema)({
       id: "p1",
       sessionId: "s1",
       turnId: "t1",
@@ -141,7 +146,8 @@ describe("workspace channel state", () => {
       rev: 4,
       createdAt: 1,
       updatedAt: 2,
-    } as Item;
+    });
+
     s = apply(s, { type: "item.upsert", item: answered, itemsRev: 4 });
     expect(s.permissions).toEqual({});
   });
@@ -184,6 +190,7 @@ describe("workspace channel state", () => {
       code: "SETUP_FAILED",
       message: "Setup failed.",
     });
+
     expect(r.events).toEqual([{ kind: "error", code: "SETUP_FAILED", message: "Setup failed." }]);
   });
 });
@@ -219,7 +226,8 @@ describe("selectors", () => {
 
   it("reports the running plan progress", () => {
     let s = live();
-    const plan = {
+
+    const plan = Schema.decodeUnknownSync(ItemSchema)({
       id: "p",
       sessionId: "s1",
       turnId: "t1",
@@ -236,7 +244,8 @@ describe("selectors", () => {
       rev: 1,
       createdAt: 1,
       updatedAt: 1,
-    } as Item;
+    });
+
     s = apply(s, { type: "item.upsert", item: plan, itemsRev: 1 });
     expect(runningPlan(s, "s1")).toEqual({ done: 2, total: 4 });
   });

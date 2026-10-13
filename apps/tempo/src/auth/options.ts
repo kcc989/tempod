@@ -1,3 +1,4 @@
+import { redactPayload } from "@tempo/protocol";
 import type { BetterAuthOptions } from "better-auth/minimal";
 import { bearer } from "better-auth/plugins/bearer";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
@@ -13,6 +14,7 @@ export interface AuthEnv {
 }
 
 export const MAC_CLIENT_ID = "tempo-mac";
+
 export const SESSION_SECONDS = 60 * 60 * 24 * 30;
 
 /** 05, Secrets: no secret in D1. Sign-in needs only the GitHub profile, so the OAuth tokens are never stored. */
@@ -34,7 +36,7 @@ export const authLog = (
   log(
     level,
     `auth: ${message}`,
-    args.length ? { args: args.map((a) => (a instanceof Error ? errorText(a) : a)) } : {},
+    args.length ? { args: args.map((a) => redactPayload(a instanceof Error ? errorText(a) : a)) } : {},
   );
 
 export const authOptions = (env: AuthEnv) =>
@@ -63,10 +65,13 @@ export const authOptions = (env: AuthEnv) =>
         if (source.method !== "oauth" || source.oauth?.providerId !== "github") {
           return { error: "forbidden", errorDescription: ERROR_MESSAGES.FORBIDDEN };
         }
+
         const githubId = source.oauth.profile?.id;
+
         if (githubId === undefined || String(githubId) !== env.ownerGithubId) {
           return { error: "forbidden", errorDescription: ERROR_MESSAGES.FORBIDDEN };
         }
+
         return undefined;
       },
     },

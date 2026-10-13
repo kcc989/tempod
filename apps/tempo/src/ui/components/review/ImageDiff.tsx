@@ -25,16 +25,19 @@ export function ImageDiff({
 }) {
   const hasBefore = status !== "A" && beforeSha !== null;
   const hasAfter = status !== "D";
+
   const before = useCallQuery(
     "readFileAt",
     { workspaceId, path: oldPath, sha: beforeSha ?? "" },
     { enabled: live && hasBefore, retry: false, staleTime: 30_000 },
   );
+
   const after = useCallQuery(
     "readFile",
     { workspaceId, path },
     { enabled: live && hasAfter, retry: false, staleTime: 5_000 },
   );
+
   return (
     <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2">
       {status !== "A" && <Side label="Before" path={oldPath} query={before} />}
@@ -56,6 +59,7 @@ function Side({
   };
 }) {
   const src = query.data ? imageDataUrl(path, query.data) : null;
+
   return (
     <figure className="flex min-w-0 flex-col gap-1">
       <figcaption className="text-xs text-muted-foreground">{label}</figcaption>

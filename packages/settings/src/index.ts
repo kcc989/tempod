@@ -5,9 +5,10 @@ import {
   SettingsLayer,
   type AgentId,
   type SettingsReadResult,
+  type FnInput,
   type SettingsSource,
 } from "@tempo/protocol";
-import { Schema } from "effect";
+import { Exit, Option, Predicate, Schema } from "effect";
 import { parse as parseYaml } from "yaml";
 
 /** Settings files, as read from the workspace branch (01, Project settings file). */
@@ -19,11 +20,20 @@ export const SETTINGS_PATHS = {
   tempoYaml: ".tempo/settings.yaml",
 } as const;
 
-type Obj = Record<string, unknown>;
-const isObj = (u: unknown): u is Obj => typeof u === "object" && u !== null && !Array.isArray(u);
+type SettingsRaw = Schema.Json | undefined | SettingsObject;
+
+interface SettingsObject {
+  [key: string]: SettingsRaw;
+}
+
+interface AllowedKeys {
+  readonly [key: string]: true | AllowedKeys;
+}
+
+const isObj = (value: SettingsRaw): value is SettingsObject => Predicate.isObject(value);
 
 /** Known keys of a Tempo layer. `*` means any key; a nested object describes its children. */
-const KNOWN: Obj = {
+const KNOWN = {
   roles: { enabled: true, max_chain_depth: true, max_runs_per_change: true, max_tokens_per_change: true },
   agent: { default: true, models: { claude: true, codex: true, opencode: true, pi: true } },
   browser: { run: true },
@@ -43,13 +53,15 @@ const KNOWN: Obj = {
   environment_variables: { "*": true },
   git: { branch_prefix: true, delete_branch_on_archive: true, archive_on_merge: true },
   prompts: { general: true },
-};
+} satisfies AllowedKeys;
 
-const unknownKeys = (value: unknown, shape: unknown, path: string, out: string[]): void => {
-  if (!isObj(value) || !isObj(shape)) return;
+const unknownKeys = (value: SettingsRaw, policy: AllowedKeys, path: string, out: string[]): void => {
+  if (!isObj(value)) return;
+
   for (const [k, v] of Object.entries(value)) {
-    const child = k in shape ? shape[k] : shape["*"];
+    const child = k in policy ? policy[k] : policy["*"];
     const p = path ? `${path}.${k}` : k;
+
     if (child === undefined) out.push(p);
     else if (child !== true) unknownKeys(v, child, p, out);
   }
@@ -63,25 +75,29 @@ interface LayerResult {
   readonly errors: string[];
 }
 
-const validate = (file: string, raw: unknown, warnings: string[]): LayerResult => {
+const validate = (file: string, raw: SettingsRaw, warnings: string[]): LayerResult => {
   const unknown: string[] = [];
   unknownKeys(raw, KNOWN, "", unknown);
+
   for (const key of unknown) warnings.push(`${file}: unknown key "${key}" was ignored`);
   const exit = decodeLayer(raw);
-  if (exit._tag === "Failure") {
+
+  if (Exit.isFailure(exit)) {
     return { layer: null, warnings, errors: [`${file}: ${describeCause(exit.cause)}; the file was ignored`] };
   }
+
   return { layer: exit.value, warnings, errors: [] };
 };
 
 const describeCause = (cause: unknown): string => {
-  const text = String((cause as { toString?: () => string })?.toString?.() ?? cause);
+  const text = String(cause);
+
   return text.split("\n").slice(0, 6).join(" ").replace(/\s+/g, " ").trim() || "invalid settings";
 };
 
-const parseYamlSafe = (file: string, text: string): { value: unknown } | { error: string } => {
+const parseYamlSafe = (file: string, text: string): { value: Schema.Json } | { error: string } => {
   try {
-    return { value: parseYaml(text) ?? {} };
+    return { value: Schema.decodeUnknownSync(Schema.Json)(parseYaml(text) ?? {}) };
   } catch (e) {
     return {
       error: `${file}: ${e instanceof Error ? e.message.split("\n")[0] : "parse error"}; the file was ignored`,
@@ -92,7 +108,9 @@ const parseYamlSafe = (file: string, text: string): { value: unknown } | { error
 export const readTempoYaml = (text: string): LayerResult => {
   const file = SETTINGS_PATHS.tempoYaml;
   const parsed = parseYamlSafe(file, text);
+
   if ("error" in parsed) return { layer: null, warnings: [], errors: [parsed.error] };
+
   return validate(file, parsed.value, []);
 };
 
@@ -104,47 +122,75 @@ const setSource = (sources: Sources, path: string, source: SettingsSource) => {
 
 /** Applies `layer` over `base`, recording where each leaf came from. */
 const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sources: Sources): Settings => {
-  const next = structuredClone(base) as {
-    -readonly [K in keyof Settings]: { -readonly [P in keyof Settings[K]]: Settings[K][P] };
+  const cloned = structuredClone(base);
+
+  const next = {
+    agent: { ...cloned.agent },
+    browser: { ...cloned.browser },
+    scripts: { ...cloned.scripts },
+    environment: { ...cloned.environment },
+    environment_variables: { ...cloned.environment_variables },
+    git: { ...cloned.git },
+    prompts: { ...cloned.prompts },
   };
-  const leaf = <S extends keyof Settings>(section: S, key: keyof Settings[S] & string, value: unknown) => {
+
+  const leaf = <S extends keyof Settings, K extends keyof Settings[S] & string>(
+    section: S,
+    key: K,
+    value: Settings[S][K] | undefined,
+  ) => {
     if (value === undefined) return;
-    (next[section] as Record<string, unknown>)[key] = value;
+    // SAFETY: section and key are correlated with value by the Settings[S][K] contract.
+    const target = next[section];
+    // SAFETY: next owns cloned sections; this view only removes readonly from the selected field.
+    (target as { -readonly [P in keyof Settings[S]]: Settings[S][P] })[key] = value;
     setSource(sources, `${section}.${key}`, source);
   };
+
   if (layer.agent) {
     leaf("agent", "default", layer.agent.default);
     const models = layer.agent.models;
+
     if (models) {
       const nextModels: Record<AgentId, string> = { ...next.agent.models };
+
       for (const agent of AGENT_IDS) {
         const model = models[agent];
+
         if (model === undefined) continue;
         nextModels[agent] = model;
         setSource(sources, `agent.models.${agent}`, source);
       }
+
       next.agent.models = nextModels;
     }
   }
+
   if (layer.roles)
     for (const key of ["enabled", "max_chain_depth", "max_runs_per_change", "max_tokens_per_change"] as const)
       leaf("roles", key, layer.roles[key]);
+
   if (layer.browser) leaf("browser", "run", layer.browser.run);
+
   if (layer.scripts) {
     const s = layer.scripts;
     leaf("scripts", "setup", s.setup);
     leaf("scripts", "archive", s.archive);
     leaf("scripts", "run_mode", s.run_mode);
     leaf("scripts", "auto_run_after_setup", s.auto_run_after_setup);
+
     if (s.run) {
       const run = { ...next.scripts.run };
+
       for (const [id, def] of Object.entries(s.run)) {
         run[id] = { command: def.command, cwd: def.cwd ?? "", default: def.default ?? false };
         setSource(sources, `scripts.run.${id}`, source);
       }
+
       next.scripts.run = run;
     }
   }
+
   if (layer.environment) {
     const e = layer.environment;
     leaf("environment", "instance", e.instance);
@@ -152,20 +198,26 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
     leaf("environment", "egress_policy", e.egress_policy);
     leaf("environment", "egress_allowlist", e.egress_allowlist);
   }
+
   if (layer.environment_variables) {
     const vars = { ...next.environment_variables };
+
     for (const [k, v] of Object.entries(layer.environment_variables)) {
       vars[k] = v;
       setSource(sources, `environment_variables.${k}`, source);
     }
+
     next.environment_variables = vars;
   }
+
   if (layer.git) {
     leaf("git", "branch_prefix", layer.git.branch_prefix);
     leaf("git", "delete_branch_on_archive", layer.git.delete_branch_on_archive);
     leaf("git", "archive_on_merge", layer.git.archive_on_merge);
   }
+
   if (layer.prompts) leaf("prompts", "general", layer.prompts.general);
+
   return next;
 };
 
@@ -174,9 +226,11 @@ const decodeSettings = Schema.decodeUnknownExit(Settings);
 /** Repo files are writable by the agent, so they never set egress (05, Egress control). */
 const withoutEgress = (source: SettingsSource, layer: SettingsLayer, warnings: string[]): SettingsLayer => {
   const e = layer.environment;
+
   if (!e || (e.egress_policy === undefined && e.egress_allowlist === undefined)) return layer;
   warnings.push(`${source}: egress settings in repo files are ignored; set them in Tempo`);
   const { egress_policy: _p, egress_allowlist: _a, ...rest } = e;
+
   return { ...layer, environment: rest };
 };
 
@@ -187,25 +241,34 @@ export const resolveSettings = (overrides: SettingsLayer, files: SettingsFiles):
   const warnings: string[] = [];
   const errors: string[] = [];
   const layers: Array<[SettingsSource, SettingsLayer]> = [];
+
   const add = (source: SettingsSource, text: string | null | undefined, read: (t: string) => LayerResult) => {
     if (text === null || text === undefined) return;
     const r = read(text);
     warnings.push(...r.warnings);
     errors.push(...r.errors);
+
     if (r.layer) layers.push([source, withoutEgress(source, r.layer, warnings)]);
   };
+
   add(".tempo", files.tempoYaml, readTempoYaml);
   const sources: Sources = {};
   let effective: Settings = DEFAULT_SETTINGS;
+
   for (const [source, layer] of layers) effective = apply(effective, layer, source, sources);
   const withOverrides = apply(effective, overrides, "tempo", sources);
   const final = decodeSettings(withOverrides);
-  if (final._tag === "Failure") {
+
+  if (Exit.isFailure(final)) {
     errors.push(`Project overrides: ${describeCause(final.cause)}; they were ignored`);
+
     for (const key of Object.keys(sources)) if (sources[key] === "tempo") delete sources[key];
+
     return { effective, warnings, errors, sources };
   }
+
   if (final.value.browser.run && !browserRunOn(final.value)) warnings.push(BROWSER_RUN_ALLOWLIST_WARNING);
+
   return { effective: final.value, warnings, errors, sources };
 };
 
@@ -217,21 +280,30 @@ export const browserRunOn = (settings: Settings): boolean =>
 
 /** Validates UI overrides on their own (updateProjectSettings). */
 export const validateOverrides = (
-  raw: unknown,
+  raw: SettingsRaw | FnInput<"updateProjectSettings">["settings"],
 ): { ok: true; value: SettingsLayer } | { ok: false; error: string } => {
   const unknown: string[] = [];
-  unknownKeys(raw, KNOWN, "", unknown);
+  const json = Schema.decodeUnknownOption(Schema.Json)(raw);
+
+  if (Option.isSome(json)) unknownKeys(json.value, KNOWN, "", unknown);
+
   if (unknown.length) return { ok: false, error: `Unknown keys: ${unknown.join(", ")}` };
   const exit = decodeLayer(raw);
-  if (exit._tag === "Failure") return { ok: false, error: describeCause(exit.cause) };
+
+  if (Exit.isFailure(exit)) return { ok: false, error: describeCause(exit.cause) };
   const merged = decodeSettings(apply(DEFAULT_SETTINGS, exit.value, "tempo", {}));
-  if (merged._tag === "Failure") return { ok: false, error: describeCause(merged.cause) };
+
+  if (Exit.isFailure(merged)) return { ok: false, error: describeCause(merged.cause) };
+
   return { ok: true, value: exit.value };
 };
 
 export const defaultRunScriptId = (settings: Settings): string | null => {
   const entries = Object.entries(settings.scripts.run);
+
   return entries.find(([, s]) => s.default)?.[0] ?? null;
 };
+
 export * from "./agent-file.ts";
+
 export { parseRoleFile, parseRoleResult, ROLE_DEFAULTS } from "./roles.ts";

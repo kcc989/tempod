@@ -6,12 +6,16 @@ import { appOrigin, errorOf, errorResponse, getOwnedWorkspace } from "./common.t
 import { previewNotFound } from "./preview.ts";
 
 export const ARTIFACT_COOKIE = "__Host-tempo_artifact";
+
 export const ARTIFACT_ROUTE =
   /^\/api\/workspaces\/([0-9a-hjkmnp-tv-z]{26})\/artifacts\/([0-9a-hjkmnp-tv-z]{26})\/(\d{1,9})$/;
 
 const ROUTE_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
 const ENTER_PATH = "/__tempo/enter";
+
 const CODE = /^[a-z0-9]{32}$/;
+
 const PRIVACY_HEADERS = { "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } as const;
 
 const disposition = (kind: "inline" | "attachment", name?: string): string =>
@@ -31,17 +35,23 @@ export const handleArtifactRead = async (
 ): Promise<Response> => {
   try {
     const origin = request.headers.get("Origin");
+
     if (origin !== null && origin !== appOrigin(env)) return errorOf("FORBIDDEN");
     const bearer = request.headers.get("Authorization")?.toLowerCase().startsWith("bearer ") ?? false;
     const user = await requireOwner(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
+
     if (!(await getOwnedWorkspace(env, user.id, workspaceId))) return errorOf("NOT_FOUND");
     const a = await env.WORKSPACE.getByName(workspaceId).getArtifact(artifactId, version);
+
     if (!a || a.status === "lost") return errorOf("NOT_FOUND");
+
     if (a.status === "uploading") return errorOf("ARTIFACT_NOT_READY");
     const object = await env.DATA.get(`artifacts/${workspaceId}/${a.id}/${a.version}/${a.name}`);
+
     if (!object) return errorOf("NOT_FOUND");
     const download = url.searchParams.get("download") === "1";
     const renders = a.kind === "image" || a.kind === "markdown" || a.kind === "text";
+
     return new Response(object.body, {
       headers: {
         "Content-Type": renders ? a.mime : "application/octet-stream",
@@ -64,18 +74,23 @@ export const parseArtifactHost = (
 ): { artifactId: string; workspaceId: string } | null => {
   const suffix = `.${env.PREVIEW_DOMAIN.toLowerCase()}`;
   const lower = host.toLowerCase();
+
   if (!lower.endsWith(suffix)) return null;
   const m = ARTIFACT_HOST_LABEL.exec(lower.slice(0, -suffix.length));
+
   return m ? { artifactId: m[1]!, workspaceId: m[2]! } : null;
 };
 
 const takeCookie = (header: string | null): string | null => {
   let value: string | null = null;
+
   for (const part of (header ?? "").split(";")) {
     const pair = part.trim();
     const eq = pair.indexOf("=");
+
     if (eq >= 0 && pair.slice(0, eq).trim() === ARTIFACT_COOKIE) value = pair.slice(eq + 1).trim();
   }
+
   return value;
 };
 
@@ -90,13 +105,17 @@ export const handleArtifactHost = async (
   parsed: { artifactId: string; workspaceId: string },
 ): Promise<Response> => {
   const stub = env.WORKSPACE.getByName(parsed.workspaceId);
+
   try {
     if (url.pathname.startsWith("/__tempo/")) {
       if (url.pathname !== ENTER_PATH || request.method !== "GET") return previewNotFound();
       const code = url.searchParams.get("code") ?? "";
+
       if (!CODE.test(code)) return previewNotFound();
       const entered = await stub.artifactEnter(parsed.artifactId, code);
+
       if (!entered) return previewNotFound();
+
       return new Response(null, {
         status: 303,
         headers: {
@@ -107,8 +126,11 @@ export const handleArtifactHost = async (
         },
       });
     }
+
     const cookie = takeCookie(request.headers.get("Cookie"));
+
     if (!cookie) return previewNotFound();
+
     return await stub.artifactFetch(
       new Request(url.toString(), { method: request.method }),
       parsed.artifactId,
@@ -120,6 +142,7 @@ export const handleArtifactHost = async (
       artifactId: parsed.artifactId,
       error: e instanceof Error ? e.name : "unknown",
     });
+
     return new Response("Something went wrong.", { status: 502, headers: PRIVACY_HEADERS });
   }
 };
