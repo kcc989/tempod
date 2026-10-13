@@ -116,6 +116,7 @@ pub struct WorkspaceView {
     /// Opened explicitly this app session, so it stays open while the workspace is quiet.
     pub right_opened: bool,
     _detail_changed: Subscription,
+    pub chat_inset: f32,
     _store_changed: Subscription,
 }
 
@@ -236,6 +237,7 @@ impl WorkspaceView {
             tools,
             _tool_events: tool_events,
             _detail_changed: detail_changed,
+            chat_inset: 16.,
             processes,
             review,
             review_comments: vec![],
@@ -2956,7 +2958,14 @@ impl Render for WorkspaceView {
             let has_queue = !queued.is_empty();
             v_flex()
                 .size_full()
-                .child(div().flex_1().min_h_0().child(chat.transcript.clone()))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        // The list and message row contribute 16 pt more than the composer.
+                        .px(gpui_kit::px((self.chat_inset - 16.).max(0.)))
+                        .child(chat.transcript.clone()),
+                )
                 .children(has_queue.then(|| {
                     v_flex()
                         .id("queued-messages")
@@ -3079,7 +3088,11 @@ impl Render for WorkspaceView {
                                 .text_color(color(Token::Primary, cx))
                                 .child(label)
                         }))
-                        .child(chat.composer.clone())
+                        .child(
+                            div()
+                                .px(gpui_kit::px(self.chat_inset))
+                                .child(chat.composer.clone()),
+                        )
                         .into_any_element()
                 })
                 .into_any_element()

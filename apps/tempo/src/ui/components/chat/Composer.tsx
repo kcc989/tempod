@@ -618,7 +618,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         />
       )}
       <div
-        className="relative px-3 pt-2 pb-3"
+        className="relative px-[var(--chat-gutter,12px)] pt-2 pb-3"
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
@@ -635,7 +635,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           addFiles([...e.dataTransfer.files]);
         }}
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+        <div className="flex w-full min-w-0 flex-col gap-2">
           {(plan !== null || inPlan || queued.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5" aria-label="Queued messages">
               {plan !== null && <PlanPill progress={plan} />}

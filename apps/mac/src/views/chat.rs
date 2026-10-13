@@ -501,10 +501,10 @@ impl Render for TranscriptView {
                 .and_then(|v| v.read(cx).rows.get(ix).cloned());
             // GPUI lays out list rows during prepaint, where an outer `image_cache` element is not
             // on the stack; wrapping each row puts the cache in scope for its images.
-            div().w_full().flex().justify_center().child(
+            div().w_full().flex().justify_start().child(
                 image_cache(images.clone())
                     .w_full()
-                    .max_w(gpui_kit::px(768.))
+                    .min_w_0()
                     .children(row.map(|row| {
                         if row.native.is_some() {
                             render_native_row(row, ix, view.clone(), cx)
@@ -555,6 +555,8 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         .py_2()
         .child(
             TextView::markdown(id, text)
+                .w_full()
+                .min_w_0()
                 .style(TextViewStyle {
                     heading_font_size: Some(std::sync::Arc::new(|level, _| {
                         px(match level {

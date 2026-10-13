@@ -1,7 +1,7 @@
 import { Match } from "effect";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeftIcon } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
@@ -116,7 +116,11 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
           onLayoutChanged={horizontal.onLayoutChanged}
         >
           <ResizablePanel id="center" minSize={320}>
-            <section aria-label="Chat" className="flex h-full min-h-0 flex-col">
+            <section
+              aria-label="Chat"
+              className="flex h-full min-h-0 flex-col"
+              style={{ "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 4vw, 48px)" } as CSSProperties}
+            >
               <WorkspaceBanners workspaceId={workspaceId} />
               <div className="min-h-0 flex-1">
                 <ChatTabs workspaceId={workspaceId} variant="desktop" />

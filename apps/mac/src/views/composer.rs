@@ -766,8 +766,6 @@ impl Render for Composer {
                 cx.listener(|_, _: &TogglePlanMode, _, cx| cx.emit(ComposerEvent::TogglePlanMode)),
             )
             .w_full()
-            .max_w(px(792.))
-            .mx_auto()
             .mb_4()
             .flex_shrink_0()
             .p_3()

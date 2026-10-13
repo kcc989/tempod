@@ -396,7 +396,12 @@ impl MainWindow {
         cx.notify();
     }
 
-    fn render_center(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_center(
+        &mut self,
+        window: &mut Window,
+        chat_inset: f32,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if let Some(app) = crate::app::AppState::try_global(cx) {
             let cached: Vec<_> = app
                 .read(cx)
@@ -418,6 +423,12 @@ impl MainWindow {
                     if let Some(action) = self.pending_action.take() {
                         Self::apply(&view, action.as_ref(), window, cx);
                     }
+                    view.update(cx, |view, cx| {
+                        if view.chat_inset != chat_inset {
+                            view.chat_inset = chat_inset;
+                            cx.notify();
+                        }
+                    });
                     return div().size_full().child(view).into_any_element();
                 }
                 let store = app
@@ -429,6 +440,7 @@ impl MainWindow {
                 if let (Some(store), Some(client)) = (store, app.read(cx).client()) {
                     let view = cx
                         .new(|cx| super::workspace::WorkspaceView::new(store, client, window, cx));
+                    view.update(cx, |view, _| view.chat_inset = chat_inset);
                     let reveal =
                         cx.subscribe(&view, |this, _, _: &super::workspace::RevealRight, cx| {
                             this.panes.right = true;
@@ -645,7 +657,12 @@ impl Render for MainWindow {
                 .active(self.active.clone())
                 .into_any_element()
         };
-        let center = self.render_center(window, cx);
+        let chat_inset = if show_right {
+            16.
+        } else {
+            (width * 0.04).clamp(16., 48.)
+        };
+        let center = self.render_center(window, chat_inset, cx);
         let right = self.render_right(cx);
         let reconnecting = crate::app::AppState::try_global(cx).is_some_and(|app| {
             let app = app.read(cx);
