@@ -324,7 +324,7 @@ If the `archive` op is still running, `restoreWorkspace` queues the `restore` op
 2. If the branch was deleted on GitHub, the next wake recreates it from the newest checkpoint and sets `pushed = 0`.
 3. Clear `archived_at`. State `sleeping`. The container starts on the next wake trigger.
 
-**Delete** (`deleteWorkspace`, archived only): delete the R2 keys (02, R2 layout), the D1 row, and every row in the DO (`ctx.storage.deleteAll()`).
+**Delete** (`deleteWorkspace`, archived only): save a final project conversation artifact to R2 first; if it fails, stop without deleting workspace data. Delete the workspace R2 keys (02, R2 layout), the D1 row, and every row in the DO (`ctx.storage.deleteAll()`). Keep the project conversation artifact indefinitely for history.
 
 Then call `UserHubDO.remove(workspaceId)`, so every open sidebar drops the workspace.
 

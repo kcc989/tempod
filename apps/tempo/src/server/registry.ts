@@ -1,4 +1,5 @@
 import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protocol";
+import * as conversations from "./handlers/conversations.ts";
 import * as agents from "./handlers/agents.ts";
 import * as credentials from "./handlers/credentials.ts";
 import * as environments from "./handlers/environments.ts";
@@ -20,6 +21,8 @@ const own: { [K in NonWorkspace]: Handler<K> } = {
   listInstallations: projects.listInstallations,
   linkProject: projects.linkProject,
   listProjects: projects.listProjects,
+  listProjectConversations: conversations.listProjectConversations,
+  getProjectConversation: conversations.getProjectConversation,
   updateProjectSettings: projects.updateProjectSettings,
   unlinkProject: projects.unlinkProject,
   listBranches: projects.listBranches,

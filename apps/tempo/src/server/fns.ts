@@ -72,6 +72,14 @@ export const deleteEnvironmentSecret = createServerFn({ method: "POST" })
   .validator((data: FnInput<"deleteEnvironmentSecret">) => data)
   .handler(({ data }) => run("deleteEnvironmentSecret", data));
 
+export const listProjectConversations = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listProjectConversations">) => data)
+  .handler(({ data }) => run("listProjectConversations", data));
+
+export const getProjectConversation = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getProjectConversation">) => data)
+  .handler(({ data }) => run("getProjectConversation", data));
+
 export const createWorkspace = createServerFn({ method: "POST" })
   .validator((data: FnInput<"createWorkspace">) => data)
   .handler(({ data }) => run("createWorkspace", data));
