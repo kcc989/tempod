@@ -15,9 +15,9 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
-    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
-    TestSupportExt as _, Window, div,
+    AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Task, TestSupportExt as _, Window, div,
 };
 use std::collections::{HashMap, HashSet};
 use tempo_client::Client;
@@ -61,6 +61,23 @@ struct BranchPicker {
     _query_changed: Subscription,
 }
 
+// Non-interactive geometry for the picker opened from More actions.
+#[derive(gpui_kit::IntoElement)]
+struct BranchPickerAnchor;
+impl gpui_kit::component::Selectable for BranchPickerAnchor {
+    fn is_selected(&self) -> bool {
+        false
+    }
+    fn selected(self, _: bool) -> Self {
+        self
+    }
+}
+impl gpui_kit::RenderOnce for BranchPickerAnchor {
+    fn render(self, _: &mut Window, _: &mut gpui_kit::App) -> impl IntoElement {
+        div().w(gpui_kit::px(1.)).h(gpui_kit::px(24.))
+    }
+}
+
 /// Error toasts with the same code replace each other, as the web's `error:<code>` toast id.
 struct ErrorToast;
 
@@ -97,6 +114,7 @@ pub struct WorkspaceView {
     queue_editor: Option<QueueEditor>,
     queue_pending: bool,
     branch_editor: Option<Entity<InputState>>,
+    branch_subscription: Option<Subscription>,
     branch_pending: bool,
     operation: Option<String>,
     operation_session: Option<String>,
@@ -115,8 +133,9 @@ pub struct WorkspaceView {
     detail: chat_model::TranscriptDetail,
     /// Opened explicitly this app session, so it stays open while the workspace is quiet.
     pub right_opened: bool,
-    _detail_changed: Subscription,
     pub chat_inset: f32,
+    pub show_window_controls: bool,
+    _detail_changed: Subscription,
     _store_changed: Subscription,
 }
 
@@ -236,8 +255,9 @@ impl WorkspaceView {
             right_opened: false,
             tools,
             _tool_events: tool_events,
-            _detail_changed: detail_changed,
             chat_inset: 16.,
+            show_window_controls: false,
+            _detail_changed: detail_changed,
             processes,
             review,
             review_comments: vec![],
@@ -266,6 +286,7 @@ impl WorkspaceView {
             queue_editor: None,
             queue_pending: false,
             branch_editor: None,
+            branch_subscription: None,
             branch_pending: false,
             operation: None,
             operation_session: None,
@@ -289,6 +310,9 @@ impl WorkspaceView {
     }
 
     fn edit_branch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.branch_pending || self.branch_editor.is_some() {
+            return;
+        }
         let Some(workspace) = self.store.read(cx).state.workspace.as_ref() else {
             return;
         };
@@ -302,8 +326,16 @@ impl WorkspaceView {
         }
         let branch = workspace.branch.clone();
         let input = cx.new(|cx| InputState::new(window, cx).default_value(branch));
+        self.branch_subscription =
+            Some(
+                cx.subscribe_in(&input, window, |this, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                        this.save_branch(cx);
+                    }
+                }),
+            );
+        self.branch_editor = Some(input.clone());
         input.update(cx, |input, cx| input.focus(window, cx));
-        self.branch_editor = Some(input);
         cx.notify();
     }
 
@@ -315,6 +347,19 @@ impl WorkspaceView {
             return;
         };
         let branch = input.read(cx).value().trim().to_string();
+        if self
+            .store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.branch == branch)
+        {
+            self.branch_editor = None;
+            self.branch_subscription = None;
+            cx.notify();
+            return;
+        }
         let Ok(branch) = branch.try_into() else {
             self.toast(
                 "BRANCH_INVALID".into(),
@@ -1025,6 +1070,16 @@ impl WorkspaceView {
         };
         let branch = w.branch.clone();
         let base_branch = self.base_branch_picker(&w, cx);
+        let base_label = format!("Base branch: {}", w.base_branch);
+        let base_locked = w.pr_number.is_some()
+            || matches!(
+                w.state,
+                p::WorkspaceState::Archived | p::WorkspaceState::Archiving
+            );
+        let guide_disabled = matches!(
+            w.state,
+            p::WorkspaceState::Archived | p::WorkspaceState::Archiving
+        ) || self.active.is_none();
         let pr_link = crate::app::AppState::try_global(cx).and_then(|app| {
             let hub = app.read(cx).hub.read(cx);
             let project = hub.projects.iter().find(|p| p.id == w.project_id)?;
@@ -1062,49 +1117,55 @@ impl WorkspaceView {
             p::WorkspaceState::Archiving => "Archiving".into(),
             p::WorkspaceState::Archived => "Archived".into(),
         };
-        h_flex()
+        let bar = h_flex()
+            .group("workspace-branch")
+            .flex_wrap()
             .bg(color(Token::Panel, cx))
             .gap_2()
             .p_2()
             .border_b_1()
             .border_color(color(Token::Border, cx))
-            .child(
-                Button::new("workspace-title")
-                    .ghost()
-                    .small()
-                    .label(w.title)
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.operation("Rename", window, cx)),
-                    ),
+            .children(
+                (w.title != w.slug && w.branch.rsplit('/').next() != Some(w.title.as_str())).then(
+                    || {
+                        Button::new("workspace-title")
+                            .ghost()
+                            .small()
+                            .label(w.title)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.operation("Rename", window, cx)
+                            }))
+                    },
+                ),
             )
-            .child(
-                Button::new("copy-branch")
-                    .ghost()
-                    .small()
-                    .text_color(color(Token::MutedForeground, cx))
-                    .label(branch.clone())
-                    .on_click(move |_, _, cx| {
-                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()))
-                    }),
-            )
-            .child(
-                Button::new("rename-branch")
-                    .ghost()
-                    .small()
-                    .label("Rename branch")
-                    .disabled(
-                        self.branch_pending
-                            || w.pushed
-                            || !matches!(
-                                w.state,
-                                p::WorkspaceState::Ready
-                                    | p::WorkspaceState::Working
-                                    | p::WorkspaceState::Sleeping
-                            ),
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| this.edit_branch(window, cx))),
-            )
-            .child(base_branch)
+            .child(if let Some(input) = &self.branch_editor {
+                div().id("branch-editor").w(gpui_kit::px(220.))
+                    .capture_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
+                        if event.keystroke.key == "escape" && !this.branch_pending {
+                            this.branch_editor = None;
+                            this.branch_subscription = None;
+                            cx.stop_propagation(); cx.notify();
+                        }
+                    }))
+                    .child(Input::new(input).aria_label("Branch name").disabled(self.branch_pending))
+                    .into_any_element()
+            } else {
+                Button::new("branch-name").ghost().small()
+                    .label(w.branch.clone())
+                    .accessibility_label("Rename branch")
+                    .tooltip("Double-click to rename branch")
+                    .disabled(self.branch_pending || w.pushed || !matches!(w.state, p::WorkspaceState::Ready | p::WorkspaceState::Working | p::WorkspaceState::Sleeping))
+                    .on_click(cx.listener(|this, event, window, cx| {
+                        if matches!(event, gpui_kit::ClickEvent::Keyboard(_)) || matches!(event, gpui_kit::ClickEvent::Mouse(mouse) if mouse.up.click_count == 2) {
+                            this.edit_branch(window, cx);
+                        }
+                    }))
+                    .into_any_element()
+            })
+            .child(Button::new("copy-branch").ghost().small().icon(gpui_kit::assets::IconName::Copy)
+                .opacity(0.).group_hover("workspace-branch", |style| style.opacity(1.)).focus_visible(|style| style.opacity(1.))
+                .accessibility_label("Copy branch name").tooltip("Copy branch name")
+                .on_click(move |_, _, cx| cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()))))
             .children(pr_link.map(|link| {
                 let url = link.url;
                 Button::new("pr-link")
@@ -1185,7 +1246,9 @@ impl WorkspaceView {
             }))
             .child(
                 Button::new("overflow")
-                    .label("⋯")
+                    .icon(gpui_kit::assets::IconName::Ellipsis)
+                    .accessibility_label("More actions")
+                    .tooltip("More actions")
                     .dropdown_menu(move |menu, _, _| {
                         let weak_wake = weak.clone();
                         let wake_id = id.clone();
@@ -1212,9 +1275,18 @@ impl WorkspaceView {
                                 },
                             ),
                         );
+                        let base_weak = weak.clone();
+                        menu = menu.item(PopupMenuItem::new(base_label.clone()).disabled(base_locked).on_click(move |_, window, cx| {
+                            let _ = base_weak.update(cx, |_, cx| {
+                                cx.defer_in(window, |this, window, cx| this.open_branch_picker(window, cx));
+                            });
+                        }));
                         for label in [
+                            "Create or update guide",
+                            "Open guide",
                             "Open on GitHub",
                             "Copy workspace link",
+                            "Rename workspace",
                             "Rename chat",
                             "Reset preview access",
                             "Environment…",
@@ -1222,9 +1294,20 @@ impl WorkspaceView {
                             "Archive",
                         ] {
                             let weak = weak.clone();
-                            menu = menu.item(PopupMenuItem::new(label).on_click(
+                            menu = menu.item(PopupMenuItem::new(label)
+                                .disabled(label == "Create or update guide" && guide_disabled)
+                                .on_click(
                                 move |_, window, cx| {
                                     let _ = weak.update(cx, |this, cx| match label {
+                                        "Create or update guide" => {
+                                            if let Some(id) = this.active.clone() {
+                                                this.send(&id, include_str!("../../../../packages/protocol/pr-guide-prompt.txt"), window, cx);
+                                            }
+                                        }
+                                        "Open guide" => {
+                                            cx.open_url(&format!("{}/w/{}?guide=true", this.client.server().origin(), this.store.read(cx).workspace_id));
+                                        }
+                                        "Rename workspace" => this.operation("Rename", window, cx),
                                         "Open on GitHub" => {
                                             if let Some(w) = &this.store.read(cx).state.workspace {
                                                 let app = crate::app::AppState::global(cx);
@@ -1269,6 +1352,7 @@ impl WorkspaceView {
                         menu
                     }),
             )
+            .child(base_branch)
             .child(
                 Button::new("toggle-right-side")
                     .icon(gpui_kit::assets::IconName::PanelRight)
@@ -1278,7 +1362,17 @@ impl WorkspaceView {
                         window.dispatch_action(Box::new(ToggleRightSide), cx)
                     }),
             )
-            .into_any_element()
+            .into_any_element();
+        if self.show_window_controls {
+            gpui_kit::component::TitleBar::new()
+                .h(gpui_kit::px(40.))
+                .border_b_0()
+                .bg(color(Token::Panel, cx))
+                .child(div().w_full().child(bar))
+                .into_any_element()
+        } else {
+            bar
+        }
     }
 
     /// `→ <base branch>` (04, Top bar): a searchable `listBranches` picker until a PR exists.
@@ -1294,29 +1388,15 @@ impl WorkspaceView {
                 p::WorkspaceState::Archived | p::WorkspaceState::Archiving
             );
         if locked {
-            return div()
-                .id("base-branch")
-                .role(Role::Label)
-                .aria_label(format!("Base branch {base}"))
-                .px_2()
-                .text_color(color(Token::MutedForeground, cx))
-                .child(format!("→ {base}"))
-                .into_any_element();
+            return div().into_any_element();
         }
         let weak = cx.weak_entity();
-        Popover::new("base-branch-picker")
+        let popover = Popover::new("base-branch-picker")
+            .trigger(BranchPickerAnchor)
+            .anchor(gpui_kit::Anchor::TopRight)
             .open(self.branch_picker.is_some())
-            .trigger(
-                Button::new("base-branch")
-                    .ghost()
-                    .small()
-                    .label(format!("→ {base}"))
-                    .accessibility_label(format!("Base branch {base}. Change base branch")),
-            )
-            .on_open_change(cx.listener(|this, open: &bool, window, cx| {
-                if *open {
-                    this.open_branch_picker(window, cx);
-                } else {
+            .on_open_change(cx.listener(|this, open: &bool, _, cx| {
+                if !*open {
                     this.branch_picker = None;
                     cx.notify();
                 }
@@ -1399,8 +1479,14 @@ impl WorkspaceView {
                     .child(Input::new(&picker.query))
                     .child(list)
                     .into_any_element()
-            })
-            .into_any_element()
+            });
+        if let Some(picker) = &self.branch_picker {
+            popover
+                .track_focus(&picker.query.read(cx).focus_handle(cx))
+                .into_any_element()
+        } else {
+            popover.into_any_element()
+        }
     }
 
     fn open_branch_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2920,8 +3006,12 @@ impl Render for WorkspaceView {
             .disabled(archived)
             .on_click(cx.listener(|this, _, window, cx| this.open_new_chat(window, cx)));
         let weak = cx.weak_entity();
+        let has_closed = !closed.is_empty();
         let closed_menu = Button::new("closed-chat-menu")
-            .label("Closed chats")
+            .ghost()
+            .small()
+            .label(format!("Closed chats ({})", closed.len()))
+            .tooltip("Closed chats in this workspace")
             .disabled(closed.is_empty())
             .dropdown_menu(move |menu, _, _| {
                 closed.iter().fold(menu, |menu, (id, title)| {
@@ -3158,28 +3248,6 @@ impl Render for WorkspaceView {
                 this.review.update(cx, |r, cx| r.request_commit(window, cx))
             }))
             .child(self.top_bar(cx))
-            .children(self.branch_editor.as_ref().map(|input| {
-                h_flex()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .child(Input::new(input).disabled(self.branch_pending))
-                    .child(
-                        Button::new("save-branch")
-                            .label("Save branch")
-                            .disabled(self.branch_pending)
-                            .on_click(cx.listener(|this, _, _, cx| this.save_branch(cx))),
-                    )
-                    .child(
-                        Button::new("cancel-branch")
-                            .label("Cancel")
-                            .disabled(self.branch_pending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.branch_editor = None;
-                                cx.notify();
-                            })),
-                    )
-            }))
             .on_action(
                 cx.listener(|this, _: &CreatePr, window, cx| {
                     this.operation("Create PR", window, cx)
@@ -3223,8 +3291,18 @@ impl Render for WorkspaceView {
             )
             .child(
                 h_flex()
+                    .bg(color(Token::Panel, cx))
+                    .pl_3()
+                    .pr_2()
+                    .border_b_1()
+                    .border_color(color(Token::Border, cx))
                     .child(
                         TabBar::new("chat-tabs")
+                            .underline()
+                            .menu(true)
+                            .max_width(gpui_kit::px(220.))
+                            .flex_1()
+                            .min_w_0()
                             .selected_index(selected)
                             .on_click(cx.listener(move |this, ix: &usize, window, cx| {
                                 if let Some(id) = ids.get(*ix) {
@@ -3264,34 +3342,7 @@ impl Render for WorkspaceView {
                             )),
                     )
                     .child(new_chat)
-                    .child(closed_menu)
-                    .child(
-                        Button::new("create-pr-guide")
-                            .label("Create or update guide")
-                            .disabled(archived || self.active.is_none())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if let Some(id) = this.active.clone() {
-                                    this.send(
-                                        &id,
-                                        include_str!(
-                                            "../../../../packages/protocol/pr-guide-prompt.txt"
-                                        ),
-                                        window,
-                                        cx,
-                                    );
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new("open-pr-guide")
-                            .label("Open guide")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let id = &this.store.read(cx).workspace_id;
-                                let url =
-                                    format!("{}/w/{id}?guide=true", this.client.server().origin());
-                                cx.open_url(&url);
-                            })),
-                    ),
+                    .children(has_closed.then_some(closed_menu)),
             )
             .child(div().flex_1().min_h_0().child(content))
             .into_any_element()

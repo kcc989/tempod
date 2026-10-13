@@ -215,15 +215,15 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const closedMenu =
     closed.length > 0 ? (
       <DropdownMenu>
-        <SimpleTooltip label="Closed chats">
+        <SimpleTooltip label="Closed chats in this workspace">
           <DropdownMenuTrigger asChild>
-            <Button size="icon-sm" variant="ghost" aria-label="Closed chats">
+            <Button size="icon-sm" variant="ghost" aria-label="Closed chats in this workspace">
               <HistoryIcon />
             </Button>
           </DropdownMenuTrigger>
         </SimpleTooltip>
         <DropdownMenuContent align="end" className="max-h-80 min-w-52">
-          <DropdownMenuLabel>Closed chats</DropdownMenuLabel>
+          <DropdownMenuLabel>Closed chats in this workspace ({closed.length})</DropdownMenuLabel>
           {closed.map((s) => (
             <DropdownMenuItem key={s.id} onSelect={() => openClosed(s.id)}>
               <span className="min-w-0 flex-1 truncate">{sessionTitle(s)}</span>
@@ -337,7 +337,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         <div
           role="tablist"
           aria-label="Center tabs"
-          className="flex h-full min-w-0 items-center gap-0.5 overflow-x-auto px-1"
+          className="flex h-full min-w-0 items-center gap-0.5 overflow-x-auto pr-1 pl-3"
         >
           {ui.tabs.map((t, i) => {
             const selected = t.key === ui.activeKey;
@@ -352,7 +352,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
                     className={cn(
                       "group/tab flex h-7 shrink-0 items-center rounded-md",
                       selected
-                        ? "bg-accent text-accent-foreground"
+                        ? "border-b-2 border-primary bg-accent font-medium text-accent-foreground"
                         : "text-muted-foreground hover:bg-accent/50",
                     )}
                   >

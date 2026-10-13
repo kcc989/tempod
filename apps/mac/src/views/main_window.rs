@@ -1,6 +1,5 @@
 //! The main window (04, Layout; 07, Window layout): `Root` (from `gpui_kit::open_window`) with a
-//! `TitleBar`, then `Resizable` panes: sidebar | center | right side, the right side split into
-//! one full-height tool area with review, process and document tabs.
+//! `Resizable` panes: sidebar | chat | full-height tool area, with native window controls above the sidebar.
 use super::chat::{TranscriptRow, TranscriptView};
 use super::composer::Composer;
 use super::sidebar::{self, SidebarSection, WorkspaceSidebar};
@@ -400,6 +399,7 @@ impl MainWindow {
         &mut self,
         window: &mut Window,
         chat_inset: f32,
+        show_window_controls: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if let Some(app) = crate::app::AppState::try_global(cx) {
@@ -424,8 +424,11 @@ impl MainWindow {
                         Self::apply(&view, action.as_ref(), window, cx);
                     }
                     view.update(cx, |view, cx| {
-                        if view.chat_inset != chat_inset {
+                        if view.chat_inset != chat_inset
+                            || view.show_window_controls != show_window_controls
+                        {
                             view.chat_inset = chat_inset;
+                            view.show_window_controls = show_window_controls;
                             cx.notify();
                         }
                     });
@@ -440,7 +443,10 @@ impl MainWindow {
                 if let (Some(store), Some(client)) = (store, app.read(cx).client()) {
                     let view = cx
                         .new(|cx| super::workspace::WorkspaceView::new(store, client, window, cx));
-                    view.update(cx, |view, _| view.chat_inset = chat_inset);
+                    view.update(cx, |view, _| {
+                        view.chat_inset = chat_inset;
+                        view.show_window_controls = show_window_controls;
+                    });
                     let reveal =
                         cx.subscribe(&view, |this, _, _: &super::workspace::RevealRight, cx| {
                             this.panes.right = true;
@@ -599,7 +605,7 @@ impl Render for MainWindow {
                 .size_full()
                 .bg(color(Token::Background, cx))
                 .text_color(color(Token::Foreground, cx))
-                .child(TitleBar::new().child(crate::APP_NAME))
+                .children((!window.is_fullscreen()).then(|| TitleBar::new()))
                 .child(div().flex_1().child(sign_in.clone()))
                 .into_any_element();
         }
@@ -614,7 +620,7 @@ impl Render for MainWindow {
                 .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                     super::palette::open(this.focus.clone(), window, cx)
                 }))
-                .child(TitleBar::new().child(crate::APP_NAME))
+                .children((!window.is_fullscreen()).then(|| TitleBar::new()))
                 .child(div().flex_1().min_h_0().child(settings))
                 .into_any_element();
         }
@@ -628,6 +634,7 @@ impl Render for MainWindow {
             .update_state(|s| s.panels = panels);
         let width = f32::from(window.viewport_size().width);
         self.narrow = width < RIGHT_COLLAPSE_WIDTH;
+        let sidebar_max = sidebar::MAX_WIDTH.min((width * 0.25).max(sidebar::MIN_WIDTH));
         let pane_sizes = cx.global::<crate::storage::Local>().state().panes;
         let show_right = right_side_visible(width, self.panes.right, self.panes.right_when_narrow)
             && self.right_visible(cx);
@@ -662,7 +669,12 @@ impl Render for MainWindow {
         } else {
             (width * 0.04).clamp(16., 48.)
         };
-        let center = self.render_center(window, chat_inset, cx);
+        let center = self.render_center(
+            window,
+            chat_inset,
+            !self.panes.sidebar && !window.is_fullscreen(),
+            cx,
+        );
         let right = self.render_right(cx);
         let reconnecting = crate::app::AppState::try_global(cx).is_some_and(|app| {
             let app = app.read(cx);
@@ -792,7 +804,6 @@ impl Render for MainWindow {
                 }
             }))
             .on_action(|_: &Zoom, window, _| window.zoom_window())
-            .child(TitleBar::new().child(div().text_sm().child(crate::APP_NAME)))
             .children(reconnecting.then(|| {
                 div()
                     .id("reconnecting-bar")
@@ -855,14 +866,28 @@ impl Render for MainWindow {
                         })
                         .child(
                             resizable_panel()
-                                .size(px(pane_sizes.sidebar.unwrap_or(sidebar::DEFAULT_WIDTH)))
-                                .size_range(px(sidebar::MIN_WIDTH)..px(sidebar::MAX_WIDTH))
+                                .flex_none()
+                                .size(px(pane_sizes
+                                    .sidebar
+                                    .unwrap_or(sidebar::DEFAULT_WIDTH)
+                                    .clamp(sidebar::MIN_WIDTH, sidebar_max)))
+                                .size_range(px(sidebar::MIN_WIDTH)..px(sidebar_max))
                                 .visible(self.panes.sidebar)
-                                .child(sidebar),
+                                .child(
+                                    v_flex()
+                                        .size_full()
+                                        .children((!window.is_fullscreen()).then(|| {
+                                            TitleBar::new()
+                                                .border_b_0()
+                                                .bg(color(Token::Sidebar, cx))
+                                        }))
+                                        .child(div().flex_1().min_h_0().child(sidebar)),
+                                ),
                         )
                         .child(resizable_panel().child(center))
                         .child(
                             resizable_panel()
+                                .flex_none()
                                 .size(px(pane_sizes
                                     .right
                                     .unwrap_or((width - 280.) / 2.)

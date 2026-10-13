@@ -1,6 +1,7 @@
 import { useApiCall } from "~/ui/hooks/useCall";
 import {
   ArchiveIcon,
+  BookOpenIcon,
   EllipsisIcon,
   ExternalLinkIcon,
   LaptopIcon,
@@ -8,9 +9,11 @@ import {
   MoonIcon,
   NetworkIcon,
   PowerIcon,
+  PencilIcon,
   RotateCwIcon,
   StethoscopeIcon,
 } from "lucide-react";
+import { useRef, useState } from "react";
 import { Button } from "~/ui/components/ui/button";
 import {
   DropdownMenu,
@@ -24,7 +27,8 @@ import {
 import { useProject } from "~/ui/hooks/useProjects";
 import { macWorkspaceUrl } from "~/ui/lib/links";
 import { formatBinding } from "~/ui/lib/shortcuts";
-import { openDialog } from "~/ui/state/workspace-ui";
+import { openDialog, openGuide, setPhonePane } from "~/ui/state/workspace-ui";
+import { BaseBranchMenu } from "./BaseBranchPicker";
 import { openLiveViewTab, openPreviewTab } from "./open-preview";
 import { LiveDot } from "./PortLinks";
 import { canArchive, githubUrlFor, powerAction, type WorkspaceView } from "./topbar-logic";
@@ -38,27 +42,69 @@ export function OverflowMenu({
   view,
   actions,
   phone = false,
+  onRename,
 }: {
   view: WorkspaceView;
   actions: WorkspaceActions;
   phone?: boolean;
+  onRename?: () => void;
 }) {
   const call = useApiCall();
 
   const { w, d } = view;
+  const renameChosen = useRef(false);
+  const [open, setOpen] = useState(false);
   const project = useProject(w.projectId);
   const power = powerAction(w.state);
   const ports = phone ? (d?.ports ?? []) : [];
   const live = phone && (d?.browserActive ?? false);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label="More actions">
           <EllipsisIcon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent
+        align="end"
+        className="w-60"
+        onCloseAutoFocus={(event) => {
+          if (renameChosen.current) {
+            event.preventDefault();
+            renameChosen.current = false;
+          }
+        }}
+      >
+        <BaseBranchMenu
+          workspaceId={w.id}
+          projectId={w.projectId}
+          branch={w.branch}
+          baseBranch={w.baseBranch}
+          locked={w.prNumber !== null || w.state === "archived" || w.state === "archiving"}
+          onDone={() => setOpen(false)}
+        />
+        <DropdownMenuItem
+          onSelect={() => {
+            openGuide(w.id);
+            if (phone) setPhonePane("chat");
+          }}
+        >
+          <BookOpenIcon />
+          Open guide
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {onRename && (
+          <DropdownMenuItem
+            onSelect={() => {
+              renameChosen.current = true;
+              onRename();
+            }}
+          >
+            <PencilIcon />
+            Rename workspace
+          </DropdownMenuItem>
+        )}
         {(ports.length > 0 || live) && (
           <>
             <DropdownMenuLabel>Previews</DropdownMenuLabel>

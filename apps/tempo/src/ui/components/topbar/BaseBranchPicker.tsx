@@ -12,10 +12,54 @@ import {
 } from "~/ui/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Skeleton } from "~/ui/components/ui/skeleton";
+import {
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "~/ui/components/ui/dropdown-menu";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { baseBranchOptions } from "./topbar-logic";
 
 const DEBOUNCE_MS = 200;
+
+export function BaseBranchMenu({
+  workspaceId,
+  projectId,
+  branch,
+  baseBranch,
+  locked,
+  onDone,
+}: {
+  workspaceId: string;
+  projectId: string;
+  branch: string;
+  baseBranch: string;
+  locked: boolean;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <DropdownMenuSub open={open} onOpenChange={setOpen}>
+      <DropdownMenuSubTrigger disabled={locked}>
+        Base branch
+        <span className="ml-auto max-w-28 truncate font-mono text-xs text-muted-foreground">
+          {baseBranch}
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-72 p-0">
+        {open && (
+          <BranchList
+            workspaceId={workspaceId}
+            projectId={projectId}
+            branch={branch}
+            baseBranch={baseBranch}
+            onDone={onDone}
+          />
+        )}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
 
 /**
  * `→ <base branch>`. Until a PR exists it opens a searchable branch list (listBranches) and calls

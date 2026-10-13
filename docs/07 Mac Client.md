@@ -33,6 +33,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Sidebar, hover card, right-click menu, History | Same |  |
 | Saved conversations | Default browser | Opens the owner’s Tempo `/history` to read project-scoped saved conversations; browser sign-in may be required |
 | New workspace dialog | Same | Enter in the focused prompt creates; ⇧Enter adds a line. Blank creation works while model discovery loads. Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
+| Top bar branch editing | Same | Double-click the branch name to edit inline; Enter or blur saves and Escape cancels. Copy uses a separate icon. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model, reasoning level and mode pickers | Same |  |
@@ -156,8 +157,8 @@ Add project includes the focused `Search repos` input and local owner/name filte
 
 | Region (04) | GPUI Kit components |
 | --- | --- |
-| Window frame | `Root`, `TitleBar` with the native traffic lights; the native window name is `Tempo` |
-| Panes | `Resizable` for sidebar, center and right side; sizes saved in `state.json` |
+| Window frame | `Root`; no separate full-width Tempo title row. In windowed mode the native traffic lights and drag region sit above the sidebar; with the sidebar hidden, they share the workspace header. Fullscreen adds no frame row. The native window name remains `Tempo`. |
+| Panes | `Resizable` for sidebar, center and right side; sizes saved in `state.json`. Sidebar and right pane retain their width when a sibling closes or the window grows; the center takes the remaining width. |
 | Sidebar | `Sidebar`; rows are custom; `HoverCard`; `Menu` for the right-click menu; `Badge` for the PR; `Spinner` |
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |
 | Center chat tabs and right tool tabs | `Tabs` |
@@ -183,6 +184,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 - Read every color through `cx.theme()`. Map the tokens of 04 (`--primary`, `--destructive`, `--warning`, `--muted-foreground`) to `ThemeColor` fields once, in `src/views/tokens.rs`. No color values in views.
 - Every custom control sets an element id, an `a11y_role()` and an `.aria_label(...)`, so AccessKit can expose it.
 - Settings uses left-aligned navigation with a `Search settings` filter and a `Search workspaces` button with a `⌘K` hint for the command palette. Section icons match 04. It uses a bounded form column, grouped login cards and content-sized action buttons. Chat uses the available pane width and a compact composer toolbar.
+- The chat bar starts 12 pt from the sidebar divider, aligned with the branch header. New chat uses a plus icon with an accessible label and shortcut tooltip. It hides an empty Closed chats menu. Guide actions and the base branch picker live in More actions. Branch copy appears on header hover or keyboard focus without moving other controls. The composer shows `⌘L to focus` at the upper right, with reserved text space. Transcript rows can shrink within the available pane width.
 - Base branch options align left, truncate long names and mark the current branch with a check icon at the right.
 - The transcript and composer share a fluid width and balanced margins. With the right side closed, the composer margin is 4% of window width, clamped from 16 to 48 pt; with it open, the margin is 16 pt. Message text and composer text share a leading edge. Neither has a fixed maximum width. Their width follows pane resizing and right-side visibility.
 - Minimum window size: 900 × 600 pt. Below 1,100 pt wide, the right side collapses behind its toggle.

@@ -12,7 +12,6 @@ import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { pillText } from "~/ui/lib/indicators";
 import { cn } from "~/ui/lib/utils";
 import { toggleRight } from "~/ui/state/workspace-ui";
-import { BaseBranchPicker } from "./BaseBranchPicker";
 import { requestCommit } from "./commit-request";
 import { EditableBranch } from "./EditableBranch";
 import { InlineEdit } from "./InlineEdit";
@@ -29,7 +28,7 @@ export interface TopBarProps {
 }
 
 /**
- * 04, Top bar. Left: title (click to edit), branch with copy, `→ <base>`, the PR link. Middle: preview
+ * 04, Top bar. Left: title, branch with copy on hover or focus, and the PR link. Middle: preview
  * ports, then `Live` during a Browser Run session. Right: container pill, the primary git action, the
  * overflow menu and the right-side toggle.
  */
@@ -76,31 +75,30 @@ function pillFor({ w, d }: WorkspaceView) {
 
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
-
+  const [renamingTitle, setRenamingTitle] = useState(false);
   return (
-    <header className="flex h-10 shrink-0 items-center gap-3 border-b bg-card px-2">
-      <div className="flex min-w-0 shrink items-center gap-1.5">
-        <EditableTitle title={w.title} onSave={actions.rename} />
-        <span className="flex min-w-0 items-center gap-0.5 font-mono text-xs text-muted-foreground">
+    <header className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-card px-2 py-1">
+      <div className="flex min-w-0 shrink flex-wrap items-center gap-1.5">
+        <EditableTitle
+          title={w.title}
+          onSave={actions.rename}
+          show={w.title !== w.slug && w.branch.split("/").at(-1) !== w.title}
+          editing={renamingTitle}
+          onEditingChange={setRenamingTitle}
+        />
+        <span className="group/branch flex min-w-0 items-center gap-0.5 font-mono text-xs text-muted-foreground">
           <GitBranchIcon aria-hidden className="size-3 shrink-0" />
           <EditableBranch view={view} onSave={actions.renameBranch} />
           <Button
             variant="ghost"
             size="icon-sm"
             aria-label="Copy branch name"
-            className="size-5"
+            className="size-5 opacity-0 group-hover/branch:opacity-100 group-focus-within/branch:opacity-100 focus-visible:opacity-100"
             onClick={() => void actions.copyBranch(w.branch)}
           >
             <CopyIcon className="size-3" />
           </Button>
         </span>
-        <BaseBranchPicker
-          workspaceId={w.id}
-          projectId={w.projectId}
-          branch={w.branch}
-          baseBranch={w.baseBranch}
-          locked={w.prNumber !== null || w.state === "archived" || w.state === "archiving"}
-        />
         <PrLinkAnchor workspace={w} />
       </div>
       <PortLinks
@@ -112,7 +110,7 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <ContainerPill pill={pillFor(view)} onWake={w.state === "sleeping" ? actions.wake : undefined} />
         <PrimaryActionButton workspaceId={w.id} />
-        <OverflowMenu view={view} actions={actions} />
+        <OverflowMenu view={view} actions={actions} onRename={() => setRenamingTitle(true)} />
         <SimpleTooltip label="Toggle right side (⌘⌥B)">
           <Button size="icon-sm" variant="ghost" aria-label="Toggle right side" onClick={toggleRight}>
             <PanelRightIcon />
@@ -151,10 +149,11 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
     <header className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3">
       <StatusIcon workspace={w} op={d?.op ?? null} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <EditableTitle title={w.title} onSave={actions.rename} />
+        {w.title !== w.slug && w.branch.split("/").at(-1) !== w.title && (
+          <EditableTitle title={w.title} onSave={actions.rename} />
+        )}
         <div className="flex min-w-0 items-center font-mono text-xs text-muted-foreground">
           <EditableBranch view={view} onSave={actions.renameBranch} />
-          <span className="truncate"> → {w.baseBranch}</span>
         </div>
       </div>
       <ContainerPill
@@ -167,9 +166,22 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
   );
 }
 
-function EditableTitle({ title, onSave }: { title: string; onSave: (title: string) => void }) {
-  const [editing, setEditing] = useState(false);
-
+function EditableTitle({
+  title,
+  onSave,
+  show = true,
+  editing: controlledEditing,
+  onEditingChange,
+}: {
+  title: string;
+  onSave: (title: string) => void;
+  show?: boolean;
+  editing?: boolean;
+  onEditingChange?: (editing: boolean) => void;
+}) {
+  const [localEditing, setLocalEditing] = useState(false);
+  const editing = controlledEditing ?? localEditing;
+  const setEditing = onEditingChange ?? setLocalEditing;
   if (editing) {
     return (
       <InlineEdit
@@ -181,7 +193,7 @@ function EditableTitle({ title, onSave }: { title: string; onSave: (title: strin
       />
     );
   }
-
+  if (!show) return null;
   return (
     <h1 className="flex min-w-0">
       <button
