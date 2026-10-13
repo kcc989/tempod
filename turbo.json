@@ -10,7 +10,7 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^transit"],
       "outputs": [],
       "env": ["TEMPO_IMAGE_TEST"]
     },
@@ -29,7 +29,7 @@
       "cache": false
     },
     "@tempo/tempod#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^transit"],
       "outputs": [],
       "env": ["TEMPO_IMAGE_TEST"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/container/pi/**"]
@@ -44,6 +44,78 @@
         "package.json",
         "bun.lock",
         "patches/**"
+      ]
+    },
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "@tempo/app#test:worker": {
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "!src/ui/**",
+        "!src/routes/**",
+        "!src/routeTree.gen.ts",
+        "test/worker/**",
+        "test/wrangler.test.jsonc",
+        "vitest.worker.config.ts",
+        "wrangler.jsonc",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts"
+      ]
+    },
+    "@tempo/app#test:ui": {
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "test/ui/**",
+        "!test/ui/components/**",
+        "vitest.ui.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts"
+      ]
+    },
+    "@tempo/app#test:components": {
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "test/ui/**",
+        "!test/ui/**/*.test.ts",
+        "vitest.components.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts"
+      ]
+    },
+    "@tempo/app#build:web-fixture": {
+      "dependsOn": ["^transit"],
+      "outputs": ["test/web/dist/**"],
+      "inputs": [
+        "src/**",
+        "test/web/**",
+        "!test/web/dist/**",
+        "vite.web-test.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts"
+      ]
+    },
+    "@tempo/app#build:browser-fixture": {
+      "dependsOn": ["^transit"],
+      "outputs": ["test/browser/dist/**"],
+      "inputs": [
+        "src/**",
+        "test/browser/**",
+        "!test/browser/dist/**",
+        "test/browser/vite.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts"
       ]
     }
   },

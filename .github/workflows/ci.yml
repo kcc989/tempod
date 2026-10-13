@@ -16,15 +16,23 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Start total CI budget
         run: echo "CI_STARTED_AT=$(date +%s%3N)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
+      - name: Classify changes
+        id: changes
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: bun scripts/ci-changes.ts
       - name: Restore task cache
+        if: steps.changes.outputs.docs_only != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -33,17 +41,24 @@ jobs:
           restore-keys: |
             ci-v1-${{ runner.os }}-bun-1.4.2-${{ hashFiles('bun.lock') }}-
       - run: bun install --frozen-lockfile
+        if: steps.changes.outputs.docs_only != 'true'
       - name: Restore Chromium
+        if: steps.changes.outputs.docs_only != 'true'
         id: chromium
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: chromium-${{ runner.os }}-${{ hashFiles('tests/e2e/package.json') }}
       - name: Install browser engine
-        if: steps.chromium.outputs.cache-hit != 'true'
+        if: steps.changes.outputs.docs_only != 'true' && steps.chromium.outputs.cache-hit != 'true'
         run: ./tests/e2e/node_modules/.bin/playwright install chromium
       - name: Checks within the total runtime budget
-        run: bun run ci
+        run: |
+          if [ "${{ steps.changes.outputs.docs_only }}" = "true" ]; then
+            bun run ci --docs-only
+          else
+            bun run ci
+          fi
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

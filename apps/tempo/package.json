@@ -8,11 +8,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --checkers 2 -p tsconfig.json",
-    "test": "vitest run",
     "cf-typegen": "wrangler types --include-env=false ./worker-runtime.d.ts",
     "db:generate": "drizzle-kit generate",
     "auth:generate": "auth generate --config scripts/auth.cli.ts --output src/db/auth-schema.ts -y",
-    "dev:web-test": "vite --config vite.web-test.config.ts"
+    "dev:web-test": "vite --config vite.web-test.config.ts",
+    "test:all": "vitest run",
+    "test:worker": "vitest run --config vitest.worker.config.ts",
+    "test:ui": "vitest run --config vitest.ui.config.ts",
+    "test:components": "vitest run --config vitest.components.config.ts",
+    "build:web-fixture": "vite build --config vite.web-test.config.ts",
+    "build:browser-fixture": "vite build --config test/browser/vite.config.ts"
   },
   "dependencies": {
     "@cloudflare/sandbox": "1.0.0",

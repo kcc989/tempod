@@ -14,10 +14,21 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      grepInvert: /phone layout/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "phone-chromium",
+      grep: /phone layout/,
+      use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
+    },
+  ],
   webServer: {
     command:
-      "bun run --cwd ../../apps/tempo vite build --config test/browser/vite.config.ts && bun run --cwd ../../apps/tempo vite preview --config test/browser/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort",
+      "bun run --cwd ../.. turbo run build:browser-fixture --filter=@tempo/app && bun run --cwd ../../apps/tempo vite preview --config test/browser/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false,
   },

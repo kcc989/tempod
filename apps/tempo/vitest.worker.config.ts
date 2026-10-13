@@ -42,7 +42,8 @@ export default defineConfig({
     },
     maxWorkers: 2,
     maxConcurrency: 4,
-    silent: "passed-only",
+    // Native workerd logging avoids console RPCs crossing Durable Object I/O contexts at teardown.
+    disableConsoleIntercept: true,
     include: ["test/worker/**/*.test.ts"],
     setupFiles: ["./test/worker/setup.ts"],
   },

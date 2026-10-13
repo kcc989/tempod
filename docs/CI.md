@@ -1,32 +1,51 @@
 # CI runtime and test value
 
-PRs have a **five-minute total runner budget**, not five minutes per parallel job.
-The single `check` job runs all local checks, builds, and browser regressions.
-Typecheck and builds overlap with tests on that one runner. Once the builds pass,
-the two browser suites run concurrently on their separate fixture servers while
-unit and integration tests finish. The timing summary
+PRs target **under five total runner minutes**, not five minutes per parallel job.
+The single `check` job runs all local checks, builds, and browser regressions for
+code changes. Documentation-only changes keep the same required `check` job but
+run lint and formatting without installing the workspace dependencies or Chromium.
+Typecheck and builds overlap with tests on that one runner. Once the builds and
+non-Worker suites pass, the two browser suites run concurrently on their separate
+fixture servers while Worker tests finish. The timing summary
 shows individual durations and the total elapsed time, so overlapping stages
 should not be added together.
-`bun run ci` reports stage durations to the Actions summary and fails after 270
-seconds including checkout, dependency setup and Chromium installation. The job
-has a five-minute timeout, reserving the last 30 seconds for cache saves and
-cleanup. Do not raise the limits to accommodate regressions. Cancel superseded
-runs instead of paying for outdated commits.
+`bun run ci` reports stage durations to the Actions summary and gives check
+commands 300 seconds after dependency/browser setup. Total elapsed time still
+includes setup and is reported separately; cleanup is included in the job's
+actual duration. The job has a six-minute hard timeout to allow setup and cache
+cleanup. Normal runs should stay under five total runner minutes. Do not raise
+the deadlines to accommodate regressions. Cancel superseded runs instead of
+paying for outdated commits.
 
 Chromium and deterministic Turbo task results are restored between runs. The
 multi-gigabyte Bun dependency cache is not archived: saving it exceeded the
 cleanup budget. Dependency installation still uses the frozen lockfile. Turbo hashes package
 sources, transitive dependencies, root TypeScript configuration, Bun configuration
 and dependency patches. Image tests have a separate `TEMPO_IMAGE_TEST` hash. Live
-agent/deployment tasks are never cached. Builds used by CI still execute, and
-browser fixtures build before previewing to avoid development-server transform
-costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
+agent/deployment tasks are never cached. The app and daemon builds still execute.
+Browser fixture builds have separate cached outputs (`test/web/dist` and
+`test/browser/dist`); both browser suites still execute against restored or freshly
+built artifacts before previewing to avoid development-server transform costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
 to avoid loading the same dependency module graph into every workerd isolate.
-Worker, UI model and component projects share one Vitest invocation. UI and
-component files use isolated VM threads to avoid repeated process startup; each
-project is limited to two workers. Worker event cases use four-way concurrency
-with distinct users, projects and Durable Objects, and test-context assertions.
-Cases sharing DOM state, global mocks or cleanup lists remain sequential. TypeScript
+Worker, UI model and component suites have separate Turbo tasks and cache entries.
+`bun run test` starts the Worker task immediately and runs all other test tasks
+one at a time alongside it (at most two active test tasks); `bun run --cwd apps/tempo test:all` runs the aggregate
+Vitest configuration directly. A UI source change reuses the Worker test result.
+Worker inputs exclude UI/routes but include Worker fixtures, runtime configuration
+and server sources. UI/component inputs conservatively include all app sources
+because UI API modules import server functions; their test/helper inputs are scoped
+separately. All three tasks and fixture builds hash transitive workspace source
+dependencies through `transit`, in addition to lockfiles and root configuration.
+Widen inputs if a new import crosses these boundaries.
+
+UI and component files use isolated VM threads to avoid repeated process startup;
+each suite is limited to two workers. Worker event, RPC and operation cases use
+four-way concurrency with distinct users, projects and Durable Objects, and
+test-context assertions. Held daemon fakes register cleanup on their own test
+context. The SVG data URL encoder lives in a small shared helper so loading Mermaid does
+not pull in the protocol/Effect schema graph; Mermaid cases retain fresh module
+fixtures and their original deadlines. Groups using shared GitHub spies or a global clock remain sequential
+and form barriers between concurrent groups. DOM cases remain sequential. TypeScript
 7.0.2 provides the native checker; use two checkers per project and at most two
 concurrent typecheck tasks. The root deployment/tooling typecheck is also cached
 with its own source/configuration inputs. Update those inputs if root scripts
@@ -34,9 +53,12 @@ start importing files outside that scope. A cache miss must also fit the budget.
 
 PR #34's cold run spent 199.8 seconds on unit/integration tests, 39.5 seconds on
 typecheck and 31.4 seconds on the app build. Waiting for the test stage before
-starting browsers left only 8.6 seconds before the 270-second deadline. Browser
-checks now start after the build sequence completes instead of waiting for the
-independent unit/integration suite; all checks and the same deadline remain.
+starting browsers left only 8.6 seconds before the former 270-second deadline. Browser
+checks overlap the independent Worker suite. The follow-up cold run showed
+heavy contention when browsers also overlapped component/UI tests (over 100
+seconds per browser stage). They now wait for those suites and builds; all
+checks remain. Turbo emits full test logs on failure,
+rather than streaming routine native Worker logs to Actions.
 
 ## Test audit
 
@@ -45,27 +67,45 @@ not a quality target.
 
 | Suite | What it proves | Where it runs |
 | --- | --- | --- |
-| Protocol fixtures and schemas | Wire decoding, validation and shared-client compatibility | Every PR |
-| Settings and cities | Settings layering, invalid input and collision-free slugs | Every PR |
-| Daemon Bun tests | Real filesystem, git, subprocess, WebSocket, ACP mapping, bounds, credentials and shutdown behavior with fake agent processes | Every PR and image checks |
-| Worker unit tests | Egress/security decisions, crypto, transitions, limits and parsers | Every PR in workerd |
-| Worker integration tests | Durable Object/D1/R2 behavior, RPC failures, idempotency, migrations, recovery and event ordering | Every PR in workerd, with storage isolation |
-| UI model tests | Stores, parsing, drafts, shortcuts and view-state decisions | Every PR in Node |
-| Component tests | DOM interaction, rendered states and accessibility contracts | Every PR in happy-dom |
-| Web client browser tests | Shell integration, RPC contracts, keyboard, persistence, mobile navigation and rendering | Every PR in desktop and phone Chromium |
-| Dark appearance browser test | Actual theme application, persistence and system media changes | Every PR; replaces duplicating every functional scenario in dark mode |
-| Workspace browser regressions | Streaming reloads, hidden-panel shortcuts, draft mentions, phone overflow, transcript scroll, closed chats and blocked storage | Every PR, independent browser contexts |
-| Deployment script tests | Preflight outcomes and isolation of the pinned Alchemy patch | Every PR |
+| Protocol fixtures and schemas | Wire decoding, validation and shared-client compatibility | Every code PR |
+| Settings and cities | Settings layering, invalid input and collision-free slugs | Every code PR |
+| Daemon Bun tests | Real filesystem, git, subprocess, WebSocket, ACP mapping, bounds, credentials and shutdown behavior with fake agent processes | Every code PR and image checks |
+| Worker unit tests | Egress/security decisions, crypto, transitions, limits and parsers | Every code PR in workerd |
+| Worker integration tests | Durable Object/D1/R2 behavior, RPC failures, idempotency, migrations, recovery and event ordering | Every code PR in workerd, with storage isolation |
+| UI model tests | Stores, parsing, drafts, shortcuts and view-state decisions | Every code PR in Node |
+| Component tests | DOM interaction, rendered states and accessibility contracts | Every code PR in happy-dom |
+| Web client browser tests | Shell integration, RPC contracts, keyboard, persistence, mobile navigation and rendering | Every code PR; desktop contracts plus focused phone interactions |
+| Dark appearance browser test | Actual theme application, persistence and system media changes | Every code PR; replaces duplicating every functional scenario in dark mode |
+| Workspace browser regressions | Streaming reloads, hidden-panel shortcuts, draft mentions, phone overflow, transcript scroll, closed chats and blocked storage | Every code PR, independent browser contexts |
+| Deployment script tests | Preflight outcomes and isolation of the pinned Alchemy patch | Every code PR |
 | Image tests | Image tools, uid, tini and orphan reaping | Relevant main pushes and manual image workflow |
 | Hosted acceptance and adapter conformance | Real deployment/login and installed agent behavior | Explicit acceptance commands, outside the local PR suite |
 
 The port-scanner integration test now requires a scan and the listener's port;
 it previously passed when the scanner returned nothing. The idle-sleep test now asserts daemon shutdown and container destruction with an
 open UI socket. All app Vitest projects require assertions. Browser fixtures fail on unexpected calls and runtime errors.
+Eight repeated phone scenarios now execute only on desktop. Four phone web cases
+cover the tab picker/draft persistence, upload chips, project creation and touch
+navigation/settings. A separate iPhone touch regression covers the composer,
+permission approval, review and narrow-screen overflow. All general RPC, failure,
+announcement, git-lifecycle, sleep and theme cases remain covered on desktop.
 The complete dark functional matrix added no theme-specific assertion; a focused
 theme test now provides that coverage. Hosted and conformance tests no longer
 start in local CI merely to skip for missing deployments or binaries. Their
 explicit commands and acceptance gates remain available.
+
+## Documentation-only changes
+
+The change classifier compares the PR base SHA (or the previous push SHA) with
+HEAD. Only root README/AGENTS/CLAUDE Markdown, documentation Markdown/images and
+spike Markdown qualify. Unknown or unavailable bases, empty diffs, code/config
+changes and renames from code to docs run the full suite. Both rename paths are
+checked, and missing shallow-history bases are fetched with bounded,
+noninteractive Git operations. Manual dispatch runs the full suite.
+
+The lightweight path runs the existing pinned oxlint/Oxfmt binaries through
+`bunx`, without `node_modules`, and publishes its mode/timings. Workflow-level path
+ignores are not used, so a required check never stays pending on a docs-only PR.
 
 ## Rules for future changes
 

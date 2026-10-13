@@ -1,5 +1,5 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type TestContext } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
 import { github } from "../../src/github/provider.ts";
 import { previewCookie } from "../../src/do/workspace/preview.ts";
@@ -135,14 +135,12 @@ interface Ws {
   readonly seeded: Seeded;
 }
 
-const holds: FakeTempod[] = [];
-afterEach(() => {
-  for (const t of holds.splice(0)) t.healthy = true;
-});
-/** Keeps the next container start waiting for health, so the workspace stays `starting`. */
-const hold = (tempod: FakeTempod) => {
+/** Releases only this test's fake when the case finishes, including on failure. */
+const hold = (tempod: FakeTempod, onTestFinished: TestContext["onTestFinished"]) => {
   tempod.healthy = false;
-  holds.push(tempod);
+  onTestFinished(() => {
+    tempod.healthy = true;
+  });
 };
 
 let counter = 0;
@@ -197,6 +195,7 @@ const insertD1Workspace = async (
  * `container.start`, so the state stays `starting` and queued turns stay queued.
  */
 const seedHeld = async (
+  onTestFinished: TestContext["onTestFinished"],
   opts: { prompt?: string; agent?: AgentId; model?: string; credentials?: boolean } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
@@ -208,7 +207,7 @@ const seedHeld = async (
   await insertD1Workspace(seeded, { id: workspaceId, slug, branch });
   const stub = env.WORKSPACE.getByName(workspaceId);
   const tempod = new FakeTempod();
-  hold(tempod);
+  hold(tempod, onTestFinished);
   const { container } = await installFakes(stub, tempod);
   const summary = ok(await stub.init(initInput({ workspaceId, seeded, slug, branch }, opts)));
   return { workspaceId, stub, tempod, container, seeded, slug, branch, summary };
@@ -263,13 +262,13 @@ const endTurn = async (w: Ws, sessionId: string, turnId: string, stopReason = "e
 
 /** sleepWorkspace on a ready workspace, then the sleep op until `sleeping`. */
 const putToSleep = async (w: Ws) => {
-  expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("OK");
+  if (codeOf(await w.stub.sleepWorkspace({})) !== "OK") throw new Error("Fixture could not sleep");
   await driveToState(w.stub, "sleeping");
 };
 
 /** archiveWorkspace, then the archive op until `archived`, and the D1 row caught up. */
 const archiveIt = async (w: Ws) => {
-  expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
+  if (codeOf(await w.stub.archiveWorkspace({})) !== "OK") throw new Error("Fixture could not archive");
   await driveToState(w.stub, "archived");
   await waitFor(async () => (await d1Row(w.workspaceId))?.["archived_at"] != null, 5000, "D1 archived_at");
 };
@@ -313,10 +312,13 @@ const forceError = (w: Ws) =>
 
 // =====================================================================================
 
-describe("init", { timeout: 30_000 }, () => {
-  it("writes the workspace row, the first session, turn and user_message item, inserts the create op and sets state starting", async () => {
+describe.concurrent("init", { timeout: 30_000 }, () => {
+  it("writes the workspace row, the first session, turn and user_message item, inserts the create op and sets state starting", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const text = "Move invoice generation into a background job, add retries and cover the job with tests";
-    const w = await seedHeld({ prompt: text, agent: "codex" });
+    const w = await seedHeld(onTestFinished, { prompt: text, agent: "codex" });
     // 03 createWorkspace 5: "Call WorkspaceDO.init(...) and return its WorkspaceSummary."
     expect(Object.keys(w.summary).sort()).toEqual(
       [
@@ -397,8 +399,11 @@ describe("init", { timeout: 30_000 }, () => {
     await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) !== null, 5000, "hub summary");
   });
 
-  it("creates an idle first chat with the selected model and no turn or item without a prompt", async () => {
-    const w = await seedHeld({ agent: "codex", model: "reported-model" });
+  it("creates an idle first chat with the selected model and no turn or item without a prompt", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { agent: "codex", model: "reported-model" });
     const d = await detail(w.stub);
     expect(d.title).toBe(w.slug);
     expect(d.state).toBe("starting");
@@ -411,15 +416,21 @@ describe("init", { timeout: 30_000 }, () => {
     expect(await opsOf(w.stub, "create")).toHaveLength(1);
   });
 
-  it("keeps whole short prompts as the title and makes a fresh preview key per workspace", async () => {
-    const a = await seedHeld({ prompt: "Fix the login bug" });
-    const b = await seedHeld({ prompt: "Fix the login bug" });
+  it("keeps whole short prompts as the title and makes a fresh preview key per workspace", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const a = await seedHeld(onTestFinished, { prompt: "Fix the login bug" });
+    const b = await seedHeld(onTestFinished, { prompt: "Fix the login bug" });
     expect((await detail(a.stub)).title).toBe("Fix the login bug");
     expect((await wsRow(a.stub))["preview_key"]).not.toBe((await wsRow(b.stub))["preview_key"]);
   });
 
-  it("is idempotent: a second init returns the existing summary and adds nothing", async () => {
-    const w = await seedHeld({ prompt: "First prompt" });
+  it("is idempotent: a second init returns the existing summary and adds nothing", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First prompt" });
     const before = await wsRow(w.stub);
     const again = ok(
       await w.stub.init(
@@ -438,8 +449,8 @@ describe("init", { timeout: 30_000 }, () => {
   });
 });
 
-describe("getWorkspace", { timeout: 30_000 }, () => {
-  it("returns every WorkspaceDetail field for a ready workspace", async () => {
+describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
+  it("returns every WorkspaceDetail field for a ready workspace", async ({ expect }) => {
     const w = await readyWs();
     const d = await detail(w.stub);
     // 02 Shared types: WorkspaceDetail = WorkspaceSummary plus errorCode, errorDetail, setupStatus, pushed,
@@ -500,7 +511,7 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     expect(d.rev).toBe((await wsRow(w.stub))["summary_rev"]);
   });
 
-  it("lists ports with their preview URLs", async () => {
+  it("lists ports with their preview URLs", async ({ expect }) => {
     const w = await readyWs();
     await emit(w, { kind: "ports.changed", ports: [5173, 3000] });
     await waitFor(async () => (await detail(w.stub)).ports.length === 2, 5000, "ports");
@@ -513,8 +524,8 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     expect(d).not.toHaveProperty("previewToken");
   });
 
-  it("shows the create op's progress while it runs", async () => {
-    const w = await seedHeld();
+  it("shows the create op's progress while it runs", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     await waitFor(async () => (await detail(w.stub)).op?.status === "running", 5000, "create op running");
     const d = await detail(w.stub);
     // 02 OpProgress: kind, status, step, steps: [{name, status, ms}]; 03 create steps
@@ -530,14 +541,14 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     expect(d.op!.steps.slice(1).every((s: { status: string }) => s.status === "pending")).toBe(true);
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().getWorkspace({}))).toBe("NOT_FOUND");
   });
 });
 
-describe("renameWorkspace", { timeout: 30_000 }, () => {
-  it("stores the title and publishes it to the D1 row", async () => {
-    const w = await seedHeld();
+describe.concurrent("renameWorkspace", { timeout: 30_000 }, () => {
+  it("stores the title and publishes it to the D1 row", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     const rev = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.renameWorkspace({ title: "Billing refactor" }))).toBe("OK");
     const d = await detail(w.stub);
@@ -550,14 +561,17 @@ describe("renameWorkspace", { timeout: 30_000 }, () => {
     );
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().renameWorkspace({ title: "x" }))).toBe("NOT_FOUND");
   });
 });
 
-describe("renameBranch", { timeout: 30_000 }, () => {
-  it("rejects names that are not valid git branch names with BRANCH_INVALID", async () => {
-    const w = await seedHeld();
+describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
+  it("rejects names that are not valid git branch names with BRANCH_INVALID", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     // 02 Error codes: BRANCH_INVALID = "Not a valid git branch name"
     for (const bad of [
       "",
@@ -588,23 +602,29 @@ describe("renameBranch", { timeout: 30_000 }, () => {
   // Regression (fixed): isValidBranch (src/do/workspace/rpc.ts:57-58) accepts names git refuses as branch names:
   // a first component that starts with ".", a component that ends in ".lock", a leading "-", and
   // "HEAD". renameBranch returns OK and stores them; git.renameBranch / repo.clone then fail.
-  it("rejects other names git refuses as branch names with BRANCH_INVALID", async () => {
-    const w = await seedHeld();
+  it("rejects other names git refuses as branch names with BRANCH_INVALID", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     for (const bad of [".hidden", "a.lock/b", "-oops", "HEAD"]) {
       expect(codeOf(await w.stub.renameBranch({ branch: bad })), JSON.stringify(bad)).toBe("BRANCH_INVALID");
     }
   });
 
-  it("returns BRANCH_ALREADY_PUSHED once the branch is on origin", async () => {
-    const w = await seedHeld();
+  it("returns BRANCH_ALREADY_PUSHED once the branch is on origin", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     await exec(w.stub, "UPDATE workspace SET pushed = 1");
     // 02 Error codes: BRANCH_ALREADY_PUSHED = "Rename after push"
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/new-name" }))).toBe("BRANCH_ALREADY_PUSHED");
     expect((await detail(w.stub)).branch).toBe(w.branch);
   });
 
-  it("returns BRANCH_IN_USE when another live workspace of the project has the branch, and allows archived or other-project ones", async () => {
-    const w = await seedHeld();
+  it("returns BRANCH_IN_USE when another live workspace of the project has the branch, and allows archived or other-project ones", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     // 02 Error codes: BRANCH_IN_USE = "Another live workspace has the branch"
     await insertD1Workspace(w.seeded, { slug: `taken-${++counter}`, branch: "feature/taken" });
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/taken" }))).toBe("BRANCH_IN_USE");
@@ -624,14 +644,19 @@ describe("renameBranch", { timeout: 30_000 }, () => {
     );
   });
 
-  it("stores the branch without a tempod request while the container is not up", async () => {
-    const w = await seedHeld();
+  it("stores the branch without a tempod request while the container is not up", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/offline" }))).toBe("OK");
     expect((await detail(w.stub)).branch).toBe("feature/offline");
     expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
   });
 
-  it("sends git.renameBranch {from, to} when connected, then stores and publishes the new branch", async () => {
+  it("sends git.renameBranch {from, to} when connected, then stores and publishes the new branch", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const from = (await detail(w.stub)).branch;
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/renamed" }))).toBe("OK");
@@ -651,7 +676,7 @@ describe("renameBranch", { timeout: 30_000 }, () => {
     );
   });
 
-  it("keeps the old branch when tempod fails the rename", async () => {
+  it("keeps the old branch when tempod fails the rename", async ({ expect }) => {
     const w = await readyWs();
     const before = (await detail(w.stub)).branch;
     w.tempod.fail("git.renameBranch", "INTERNAL", "git branch -m failed");
@@ -660,9 +685,12 @@ describe("renameBranch", { timeout: 30_000 }, () => {
   });
 });
 
-describe("setPinned and markViewed", { timeout: 30_000 }, () => {
-  it("setPinned writes pinned through the DO and raises summary_rev in D1", async () => {
-    const w = await seedHeld();
+describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
+  it("setPinned writes pinned through the DO and raises summary_rev in D1", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     const rev0 = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.setPinned({ pinned: true }))).toBe("OK");
     const d1 = await detail(w.stub);
@@ -691,7 +719,7 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     );
   });
 
-  it("publishes the summary to the hub even when the D1 write fails", async () => {
+  it("publishes the summary to the hub even when the D1 write fails", async ({ expect }) => {
     const w = await readyWs();
     const brokenD1 = {
       prepare: () => {
@@ -726,8 +754,8 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     );
   });
 
-  it("a stale summary write changes nothing in D1", async () => {
-    const w = await seedHeld();
+  it("a stale summary write changes nothing in D1", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     const rev = (await detail(w.stub)).rev;
     await waitFor(async () => (await d1Row(w.workspaceId))?.["summary_rev"] === rev, 5000, "D1 caught up");
     await env.DB.prepare("UPDATE workspaces SET summary_rev = 1000000, title = 'newer write' WHERE id = ?")
@@ -745,7 +773,9 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     });
   });
 
-  it("markViewed sets last_viewed_at and clears unread attention, raising summary_rev", async () => {
+  it("markViewed sets last_viewed_at and clears unread attention, raising summary_rev", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Write a README" });
     const { sessionId, turnId } = w.first!;
     await endTurn(w, sessionId, turnId);
@@ -769,21 +799,21 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     );
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().setPinned({ pinned: true }))).toBe("NOT_FOUND");
     expect(codeOf(await uninitialised().markViewed({}))).toBe("NOT_FOUND");
   });
 });
 
-describe("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
-  it("returns WORKSPACE_BUSY while the workspace is not ready", async () => {
-    const w = await seedHeld();
+describe.concurrent("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
+  it("returns WORKSPACE_BUSY while the workspace is not ready", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     // 03 Transitions: only `ready` goes to `stopping` via sleepWorkspace; 02: WORKSPACE_BUSY
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("WORKSPACE_BUSY");
     expect(await opsOf(w.stub, "sleep")).toHaveLength(0);
   });
 
-  it("runs the sleep op from ready to sleeping, then a second call is a no-op", async () => {
+  it("runs the sleep op from ready to sleeping, then a second call is a no-op", async ({ expect }) => {
     const w = await readyWs();
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "sleep")).toHaveLength(1);
@@ -801,10 +831,13 @@ describe("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
     expect(await opsOf(w.stub, "sleep")).toHaveLength(1);
   });
 
-  it("wakeWorkspace on a sleeping workspace inserts a wake op and moves to starting", async () => {
+  it("wakeWorkspace on a sleeping workspace inserts a wake op and moves to starting", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
     // 03 Transitions: sleeping → starting (wake)
     expect(await stateOf(w.stub)).toBe("starting");
@@ -814,8 +847,8 @@ describe("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
   });
 });
 
-describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60_000 }, () => {
-  it("archives a sleeping workspace without starting its container", async () => {
+describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60_000 }, () => {
+  it("archives a sleeping workspace without starting its container", async ({ expect }) => {
     const w = await readyWs();
     await putToSleep(w);
     const starts = w.container.starts.length;
@@ -827,7 +860,9 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect((await d1Row(w.workspaceId))!["state"]).toBe("archived");
   });
 
-  it("restoreWorkspace during archiving queues the restore op, which runs after the archive", async () => {
+  it("restoreWorkspace during archiving queues the restore op, which runs after the archive", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     expect(await stateOf(w.stub)).toBe("archiving");
@@ -848,15 +883,17 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     );
   });
 
-  it("returns WORKSPACE_BUSY when the state cannot go to archiving", async () => {
-    const w = await seedHeld();
+  it("returns WORKSPACE_BUSY when the state cannot go to archiving", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     // 03 Transitions: only ready, working, sleeping and error go to archiving
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("WORKSPACE_BUSY");
     expect(await stateOf(w.stub)).toBe("starting");
     expect(await opsOf(w.stub, "archive")).toHaveLength(0);
   });
 
-  it("archives a working workspace: cancels the running turn, deletes queued turns, cancels permissions, saves and frees the container", async () => {
+  it("archives a working workspace: cancels the running turn, deletes queued turns, cancels permissions, saves and frees the container", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Start the work" });
     const { sessionId, turnId } = w.first!;
     const queued = ok(await prompt(w, sessionId, "Then do more"));
@@ -903,7 +940,9 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(d.attention).not.toBe("needs_input");
   });
 
-  it("refuses work on an archived workspace with WORKSPACE_ARCHIVED, and a second archive is a no-op", async () => {
+  it("refuses work on an archived workspace with WORKSPACE_ARCHIVED, and a second archive is a no-op", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     await archiveIt(w);
@@ -919,7 +958,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(await stateOf(w.stub)).toBe("archived");
   });
 
-  it("restores an archived workspace to sleeping and clears archived_at", async () => {
+  it("restores an archived workspace to sleeping and clears archived_at", async ({ expect }) => {
     const w = await readyWs();
     await archiveIt(w);
     expect(codeOf(await w.stub.restoreWorkspace({}))).toBe("OK");
@@ -936,7 +975,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     );
   });
 
-  it("restore returns BRANCH_IN_USE when another live workspace took the branch", async () => {
+  it("restore returns BRANCH_IN_USE when another live workspace took the branch", async ({ expect }) => {
     const w = await readyWs();
     await archiveIt(w);
     const branch = (await detail(w.stub)).branch;
@@ -947,7 +986,9 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(await opsOf(w.stub, "restore")).toHaveLength(0);
   });
 
-  it("restore gives the workspace a new slug when only the slug is taken, and keeps the branch", async () => {
+  it("restore gives the workspace a new slug when only the slug is taken, and keeps the branch", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     await archiveIt(w);
     const before = await detail(w.stub);
@@ -962,15 +1003,17 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     await waitFor(async () => (await d1Row(w.workspaceId))?.["slug"] === after.slug, 5000, "D1 slug");
   });
 
-  it("deleteWorkspace returns WORKSPACE_NOT_ARCHIVED unless archived", async () => {
-    const w = await seedHeld();
+  it("deleteWorkspace returns WORKSPACE_NOT_ARCHIVED unless archived", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     // 02 Workspaces: deleteWorkspace (archived only) → WORKSPACE_NOT_ARCHIVED
     expect(codeOf(await w.stub.deleteWorkspace({}))).toBe("WORKSPACE_NOT_ARCHIVED");
     expect(await d1Row(w.workspaceId)).not.toBeNull();
     expect((await detail(w.stub)).state).toBe("starting");
   });
 
-  it("deleteWorkspace deletes the R2 keys, the D1 row, the DO rows and the hub summary", async () => {
+  it("deleteWorkspace deletes the R2 keys, the D1 row, the DO rows and the hub summary", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     await archiveIt(w);
     const id = w.workspaceId;
@@ -1001,9 +1044,12 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
   });
 });
 
-describe("rotatePreviewKey", { timeout: 30_000 }, () => {
-  it("makes a new preview key and leaves the preview URLs as they are", async () => {
-    const w = await seedHeld();
+describe.concurrent("rotatePreviewKey", { timeout: 30_000 }, () => {
+  it("makes a new preview key and leaves the preview URLs as they are", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     await exec(w.stub, "INSERT INTO ports (port, first_seen_at) VALUES (3000, 0)");
     const before = (await wsRow(w.stub))["preview_key"];
     expect(ok(await w.stub.rotatePreviewKey({}))).toEqual({});
@@ -1016,7 +1062,7 @@ describe("rotatePreviewKey", { timeout: 30_000 }, () => {
   });
 });
 
-describe("open previews", { timeout: 30_000 }, () => {
+describe.concurrent("open previews", { timeout: 30_000 }, () => {
   /** A preview cookie from openPreview and previewEnter, as the Worker gets one (05, Preview access). */
   const cookieFor = async (w: Ws): Promise<string> => {
     await exec(w.stub, "INSERT OR IGNORE INTO ports (port, first_seen_at) VALUES (3000, 0)");
@@ -1031,7 +1077,9 @@ describe("open previews", { timeout: 30_000 }, () => {
       },
     });
 
-  it("closes preview WebSockets that are already open when the key is reset, and the old cookie stops working", async () => {
+  it("closes preview WebSockets that are already open when the key is reset, and the old cookie stops working", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const cookie = await cookieFor(w);
     const res = await previewFetch(w, cookie, { upgrade: true });
@@ -1050,7 +1098,7 @@ describe("open previews", { timeout: 30_000 }, () => {
     expect((await previewFetch(w, cookie)).status).toBe(404);
   });
 
-  it("leaves open preview WebSockets alone until the key is reset", async () => {
+  it("leaves open preview WebSockets alone until the key is reset", async ({ expect }) => {
     const w = await readyWs();
     const cookie = await cookieFor(w);
     const socket = (await previewFetch(w, cookie, { upgrade: true })).webSocket!;
@@ -1068,9 +1116,12 @@ describe("open previews", { timeout: 30_000 }, () => {
   });
 });
 
-describe("createSession, renameSession and closeSession", { timeout: 30_000 }, () => {
-  it("returns CREDENTIAL_MISSING when the agent has no login, and creates nothing", async () => {
-    const w = await seedHeld({ credentials: false });
+describe.concurrent("createSession, renameSession and closeSession", { timeout: 30_000 }, () => {
+  it("returns CREDENTIAL_MISSING when the agent has no login, and creates nothing", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { credentials: false });
     // 02 Sessions and turns: createSession → CREDENTIAL_MISSING
     expect(codeOf(await w.stub.createSession({ agent: "claude" }))).toBe("CREDENTIAL_MISSING");
     await env.CREDENTIALS.getByName(w.seeded.userId).putSecret("openrouter.api_key", "sk-or-test");
@@ -1080,7 +1131,9 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     expect(s).toMatchObject({ agent: "opencode", status: "starting" });
   });
 
-  it("inserts the session as starting, then starts it in tempod and marks it idle when the workspace is ready", async () => {
+  it("inserts the session as starting, then starts it in tempod and marks it idle when the workspace is ready", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = ok(await w.stub.createSession({ agent: "claude", model: "claude-opus-4" }));
     // 01 Start a session 1: "inserts the session row with status starting"
@@ -1110,10 +1163,10 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     });
   });
 
-  it("is a wake trigger on a sleeping workspace", async () => {
+  it("is a wake trigger on a sleeping workspace", async ({ expect, onTestFinished }) => {
     const w = await readyWs();
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     const s = ok(await w.stub.createSession({ agent: "claude" }));
     expect(s.status).toBe("starting");
     // 03 Wake triggers: createSession
@@ -1121,23 +1174,26 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     expect(await stateOf(w.stub)).toBe("starting");
   });
 
-  it("renameSession stores the title; unknown sessions are NOT_FOUND", async () => {
-    const w = await seedHeld({ prompt: "Hi" });
+  it("renameSession stores the title; unknown sessions are NOT_FOUND", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Hi" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     expect(codeOf(await w.stub.renameSession({ sessionId, title: "Billing" }))).toBe("OK");
     expect((await sessionOf(w.stub, sessionId))!["title"]).toBe("Billing");
     expect(codeOf(await w.stub.renameSession({ sessionId: newId(), title: "x" }))).toBe("NOT_FOUND");
   });
 
-  it("closeSession returns SESSION_BUSY while the session has a running turn", async () => {
+  it("closeSession returns SESSION_BUSY while the session has a running turn", async ({ expect }) => {
     const w = await readyWs({ prompt: "Busy work" });
     // 02 Sessions and turns: closeSession → SESSION_BUSY
     expect(codeOf(await w.stub.closeSession({ sessionId: w.first!.sessionId }))).toBe("SESSION_BUSY");
     expect((await sessionOf(w.stub, w.first!.sessionId))!["status"]).toBe("running");
   });
 
-  it("closeSession cancels the session's queued turns and closes it; prompts to it are then refused", async () => {
-    const w = await seedHeld({ prompt: "Queued work" });
+  it("closeSession cancels the session's queued turns and closes it; prompts to it are then refused", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Queued work" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
     expect(codeOf(await w.stub.closeSession({ sessionId }))).toBe("OK");
@@ -1154,7 +1210,7 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     expect(codeOf(await w.stub.closeSession({ sessionId: newId() }))).toBe("NOT_FOUND");
   });
 
-  it("closeSession sends session.close for a live session", async () => {
+  it("closeSession sends session.close for a live session", async ({ expect }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     expect(codeOf(await w.stub.closeSession({ sessionId: s.id }))).toBe("OK");
@@ -1164,9 +1220,12 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
   });
 });
 
-describe("sendPrompt", { timeout: 30_000 }, () => {
-  it("queues a turn with the next seq and queue_pos, writes its user_message item and marks review comments sent", async () => {
-    const w = await seedHeld({ prompt: "First" });
+describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
+  it("queues a turn with the next seq and queue_pos, writes its user_message item and marks review comments sent", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const first = (await one(w.stub, "SELECT id FROM turns"))!["id"];
     const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 4, body: "Use a const" }));
@@ -1218,8 +1277,11 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     });
   });
 
-  it("returns VALIDATION_FAILED for review comment ids that do not exist or were already sent, and queues nothing", async () => {
-    const w = await seedHeld({ prompt: "First" });
+  it("returns VALIDATION_FAILED for review comment ids that do not exist or were already sent, and queues nothing", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 1, body: "Rename" }));
     ok(await prompt(w, sessionId, "Uses c1", { reviewCommentIds: [c1.id] }));
@@ -1238,8 +1300,8 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect(await count()).toBe(before + 1);
   });
 
-  it("broadcasts turn and item.upsert to the workspace channel", async () => {
-    const w = await seedHeld({ prompt: "First" });
+  it("broadcasts turn and item.upsert to the workspace channel", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const { socket, messages } = await openUi(w);
     const t = ok(await prompt(w, sessionId, "Broadcast me"));
@@ -1262,8 +1324,11 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     socket.close();
   });
 
-  it("accepts a prompt with only an attachment and returns VALIDATION_FAILED for an unknown attachment", async () => {
-    const w = await seedHeld({ prompt: "First" });
+  it("accepts a prompt with only an attachment and returns VALIDATION_FAILED for an unknown attachment", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const attId = newId();
     await w.stub.registerAttachment({
@@ -1302,10 +1367,13 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect((await one(w.stub, "SELECT turn_id FROM attachments WHERE id = ?", attId))!["turn_id"]).toBe(t.id);
   });
 
-  it("inserts a wake op when the workspace is in error, and wakeWorkspace retries from error", async () => {
+  it("inserts a wake op when the workspace is in error, and wakeWorkspace retries from error", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     await forceError(w);
     // 03 Attention 2: "error: state is error ..."
     expect(await detail(w.stub)).toMatchObject({
@@ -1321,8 +1389,11 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
   });
 
-  it("returns VALIDATION_FAILED for an empty message or a closed session, and NOT_FOUND for an unknown session", async () => {
-    const w = await seedHeld({ prompt: "First" });
+  it("returns VALIDATION_FAILED for an empty message or a closed session, and NOT_FOUND for an unknown session", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     expect(codeOf(await prompt(w, sessionId, "   "))).toBe("VALIDATION_FAILED");
     expect(codeOf(await prompt(w, newId(), "hi"))).toBe("NOT_FOUND");
@@ -1331,15 +1402,18 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
   });
 
-  it("returns CREDENTIAL_MISSING when the session's agent has no login", async () => {
-    const w = await seedHeld({ prompt: "First", credentials: false });
+  it("returns CREDENTIAL_MISSING when the session's agent has no login", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First", credentials: false });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     // 03 sendPrompt 1: "the agent's credential is set (else CREDENTIAL_MISSING)"
     expect(codeOf(await prompt(w, sessionId, "Second"))).toBe("CREDENTIAL_MISSING");
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
   });
 
-  it("starts the turn at once when the workspace is ready and idle", async () => {
+  it("starts the turn at once when the workspace is ready and idle", async ({ expect }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     const t = ok(await prompt(w, s.id, "Add a health check"));
@@ -1359,12 +1433,15 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect(d.runningTurnId).toBe(t.id);
   });
 
-  it("inserts a wake op when sleeping, and the turn runs after the wake", async () => {
+  it("inserts a wake op when sleeping, and the turn runs after the wake", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     const acpId = (await sessionOf(w.stub, s.id))!["acp_session_id"];
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     const t = ok(await prompt(w, s.id, "Wake up and work"));
     // 03 sendPrompt 5: "If the state is sleeping or error, insert a wake op."
     expect(t.status).toBe("queued");
@@ -1384,9 +1461,12 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
   });
 });
 
-describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 }, () => {
-  it("editQueuedTurn updates the turn's prompt text and its user_message item", async () => {
-    const w = await seedHeld({ prompt: "Original" });
+describe.concurrent("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 }, () => {
+  it("editQueuedTurn updates the turn's prompt text and its user_message item", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Original" });
     const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
     const before = (await one(w.stub, "SELECT * FROM items WHERE turn_id = ?", turnId))!;
     const t = ok(await w.stub.editQueuedTurn({ turnId, text: "Edited text" }));
@@ -1397,7 +1477,9 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
     expect(item["rev"]).toBe((await wsRow(w.stub))["items_rev"]);
   });
 
-  it("returns TURN_NOT_QUEUED for a running or ended turn and NOT_FOUND for an unknown one", async () => {
+  it("returns TURN_NOT_QUEUED for a running or ended turn and NOT_FOUND for an unknown one", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Running" });
     const { turnId } = w.first!;
     // 02 Error codes: TURN_NOT_QUEUED = "Edit or delete on a turn that already started"
@@ -1410,8 +1492,11 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
     expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: newId() }))).toBe("NOT_FOUND");
   });
 
-  it("deleteQueuedTurn removes the turn and its items and broadcasts turn.deleted", async () => {
-    const w = await seedHeld({ prompt: "Keep me" });
+  it("deleteQueuedTurn removes the turn and its items and broadcasts turn.deleted", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Keep me" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const keep = (await one(w.stub, "SELECT id FROM turns"))!["id"];
     const t2 = ok(await prompt(w, sessionId, "Delete me"));
@@ -1429,8 +1514,11 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
     socket.close();
   });
 
-  it("deleteQueuedTurn raises items_rev with the deleted items; a refused delete leaves it alone", async () => {
-    const w = await seedHeld({ prompt: "Keep me" });
+  it("deleteQueuedTurn raises items_rev with the deleted items; a refused delete leaves it alone", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Keep me" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const t2 = ok(await prompt(w, sessionId, "Delete me"));
     const before = (await wsRow(w.stub))["items_rev"];
@@ -1441,8 +1529,8 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
     expect((await wsRow(w.stub))["items_rev"]).toBe(before + 1);
   });
 
-  it("reorderQueue sets the order of the queued turns", async () => {
-    const w = await seedHeld({ prompt: "One" });
+  it("reorderQueue sets the order of the queued turns", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "One" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const t1 = (await one(w.stub, "SELECT id FROM turns"))!["id"];
     const t2 = ok(await prompt(w, sessionId, "Two")).id;
@@ -1453,8 +1541,11 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
     expect(pos.map((r) => r["id"])).toEqual([t3, t1, t2]);
   });
 
-  it("reorderQueue returns VALIDATION_FAILED unless turnIds are exactly the queued turns", async () => {
-    const w = await seedHeld({ prompt: "One" });
+  it("reorderQueue returns VALIDATION_FAILED unless turnIds are exactly the queued turns", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "One" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     const t1 = (await one(w.stub, "SELECT id FROM turns"))!["id"];
     const t2 = ok(await prompt(w, sessionId, "Two")).id;
@@ -1470,9 +1561,9 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
   });
 });
 
-describe("cancelTurn", { timeout: 30_000 }, () => {
-  it("cancels a queued turn", async () => {
-    const w = await seedHeld({ prompt: "Never mind" });
+describe.concurrent("cancelTurn", { timeout: 30_000 }, () => {
+  it("cancels a queued turn", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Never mind" });
     const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
     expect(codeOf(await w.stub.cancelTurn({ turnId }))).toBe("OK");
     const t = (await turnOf(w.stub, turnId))!;
@@ -1485,7 +1576,9 @@ describe("cancelTurn", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.cancelTurn({ turnId: newId() }))).toBe("NOT_FOUND");
   });
 
-  it("sends session.cancel for a running turn, which ends cancelled when tempod reports it", async () => {
+  it("sends session.cancel for a running turn, which ends cancelled when tempod reports it", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Long task" });
     const { sessionId, turnId } = w.first!;
     expect(codeOf(await w.stub.cancelTurn({ turnId }))).toBe("OK");
@@ -1497,7 +1590,7 @@ describe("cancelTurn", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.cancelTurn({ turnId }))).toBe("TURN_NOT_ACTIVE");
   });
 
-  it("returns TURN_NOT_ACTIVE for a completed turn", async () => {
+  it("returns TURN_NOT_ACTIVE for a completed turn", async ({ expect }) => {
     const w = await readyWs({ prompt: "Quick" });
     await endTurn(w, w.first!.sessionId, w.first!.turnId);
     expect((await turnOf(w.stub, w.first!.turnId))!["status"]).toBe("completed");
@@ -1506,8 +1599,8 @@ describe("cancelTurn", { timeout: 30_000 }, () => {
   });
 });
 
-describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
-  it("return SESSION_BUSY while the session runs a turn", async () => {
+describe.concurrent("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
+  it("return SESSION_BUSY while the session runs a turn", async ({ expect }) => {
     const w = await readyWs({ prompt: "Busy" });
     const { sessionId } = w.first!;
     expect(codeOf(await w.stub.setSessionMode({ sessionId, modeId: "plan" }))).toBe("SESSION_BUSY");
@@ -1518,8 +1611,11 @@ describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
     expect(w.tempod.requestsOf("session.setConfig")).toHaveLength(0);
   });
 
-  it("store the choice without a tempod request when the session has no live process", async () => {
-    const w = await seedHeld({ prompt: "Queued" });
+  it("store the choice without a tempod request when the session has no live process", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Queued" });
     const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
     expect(codeOf(await w.stub.setSessionMode({ sessionId, modeId: "plan" }))).toBe("OK");
     expect(codeOf(await w.stub.setSessionConfig({ sessionId, configId: "effort", value: "high" }))).toBe(
@@ -1534,7 +1630,9 @@ describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.setSessionMode({ sessionId: newId(), modeId: "plan" }))).toBe("NOT_FOUND");
   });
 
-  it("send session.setMode and session.setConfig to tempod for a live session and store the result", async () => {
+  it("send session.setMode and session.setConfig to tempod for a live session and store the result", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     expect(codeOf(await w.stub.setSessionMode({ sessionId: s.id, modeId: "plan" }))).toBe("OK");
@@ -1550,7 +1648,7 @@ describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
     expect(JSON.parse((await sessionOf(w.stub, s.id))!["config_json"])).toMatchObject({ thinking: true });
   });
 
-  it("keep the old mode when tempod fails session.setMode", async () => {
+  it("keep the old mode when tempod fails session.setMode", async ({ expect }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     const before = (await sessionOf(w.stub, s.id))!["mode_id"];
@@ -1560,15 +1658,15 @@ describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
   });
 });
 
-describe("respondPermission", { timeout: 30_000 }, () => {
-  it("returns NOT_FOUND for an unknown request", async () => {
-    const w = await seedHeld();
+describe.concurrent("respondPermission", { timeout: 30_000 }, () => {
+  it("returns NOT_FOUND for an unknown request", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     expect(codeOf(await w.stub.respondPermission({ requestId: "nope", optionId: "allow" }))).toBe(
       "NOT_FOUND",
     );
   });
 
-  it("sends permission.respond, records the answer and clears needs_input", async () => {
+  it("sends permission.respond, records the answer and clears needs_input", async ({ expect }) => {
     const w = await readyWs({ prompt: "Install deps" });
     const { sessionId, turnId } = w.first!;
     const options = [
@@ -1620,9 +1718,9 @@ describe("respondPermission", { timeout: 30_000 }, () => {
   });
 });
 
-describe("review comments", { timeout: 30_000 }, () => {
-  it("adds, lists and deletes review comments", async () => {
-    const w = await seedHeld();
+describe.concurrent("review comments", { timeout: 30_000 }, () => {
+  it("adds, lists and deletes review comments", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     expect(ok(await w.stub.listReviewComments({}))).toEqual([]);
     const c1 = ok(
       await w.stub.addReviewComment({
@@ -1655,7 +1753,7 @@ describe("review comments", { timeout: 30_000 }, () => {
   });
 });
 
-describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
+describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
   const checkpointResult = (p: { checkpointId: string }) => ({
     commit: "1".repeat(40),
     tree: "2".repeat(40),
@@ -1665,13 +1763,18 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     bundleBytes: 10,
   });
 
-  it("returns CHECKPOINT_NOT_FOUND for an unknown checkpoint and an empty list at first", async () => {
-    const w = await seedHeld();
+  it("returns CHECKPOINT_NOT_FOUND for an unknown checkpoint and an empty list at first", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     expect(ok(await w.stub.listCheckpoints({}))).toEqual([]);
     expect(codeOf(await w.stub.revertToCheckpoint({ checkpointId: newId() }))).toBe("CHECKPOINT_NOT_FOUND");
   });
 
-  it("returns WORKSPACE_BUSY while a turn is queued, and reverts once the queue is empty", async () => {
+  it("returns WORKSPACE_BUSY while a turn is queued, and reverts once the queue is empty", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     const id = newId();
@@ -1698,7 +1801,9 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     expect(w.tempod.requestsOf("git.revert")).toEqual([{ checkpointId: id }]);
   });
 
-  it("lists turn checkpoints, refuses to revert while a turn runs, then reverts and marks the transcript", async () => {
+  it("lists turn checkpoints, refuses to revert while a turn runs, then reverts and marks the transcript", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Turn one" });
     w.tempod.on("git.checkpoint", (p) =>
       p.reason === "turn_end" ? checkpointResult(p) : { unchanged: true },
@@ -1751,8 +1856,8 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
   });
 });
 
-describe("commitAndPush", { timeout: 30_000 }, () => {
-  it("commits and pushes, then sets pushed and last_pushed_sha", async () => {
+describe.concurrent("commitAndPush", { timeout: 30_000 }, () => {
+  it("commits and pushes, then sets pushed and last_pushed_sha", async ({ expect }) => {
     const w = await readyWs();
     const branch = (await detail(w.stub)).branch;
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Add README" }));
@@ -1771,7 +1876,7 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/late" }))).toBe("BRANCH_ALREADY_PUSHED");
   });
 
-  it("passes PUSH_REJECTED through and leaves pushed and the state alone", async () => {
+  it("passes PUSH_REJECTED through and leaves pushed and the state alone", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Try" }));
@@ -1784,7 +1889,7 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
     expect((await opsOf(w.stub, "commit_push"))[0]!.status).toBe("failed");
   });
 
-  it("passes NOTHING_TO_COMMIT through", async () => {
+  it("passes NOTHING_TO_COMMIT through", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.fail("git.commitAndPush", "NOTHING_TO_COMMIT", "clean");
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Nothing" }));
@@ -1793,8 +1898,10 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
   });
 });
 
-describe("commitAndPush behind other ops", { timeout: 30_000 }, () => {
-  it("waits as pending behind an op instead of returning WORKSPACE_BUSY, then runs in creation order", async () => {
+describe.concurrent("commitAndPush behind other ops", { timeout: 30_000 }, () => {
+  it("waits as pending behind an op instead of returning WORKSPACE_BUSY, then runs in creation order", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
@@ -1808,7 +1915,7 @@ describe("commitAndPush behind other ops", { timeout: 30_000 }, () => {
     expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);
   });
 
-  it("returns its own op's error code once the queued op runs", async () => {
+  it("returns its own op's error code once the queued op runs", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
     await runInDurableObject(w.stub, (i: WorkspaceDO) => {
@@ -1821,8 +1928,8 @@ describe("commitAndPush behind other ops", { timeout: 30_000 }, () => {
   });
 });
 
-describe("files and changes", { timeout: 30_000 }, () => {
-  it("pass through to tempod when the container is ready", async () => {
+describe.concurrent("files and changes", { timeout: 30_000 }, () => {
+  it("pass through to tempod when the container is ready", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.on("fs.search", () => ({ matches: [{ path: "src/a.ts", line: 3, text: "const foo = 1" }] }));
     w.tempod.on("git.fileDiff", () => ({ diff: "@@ -1 +1 @@\n-a\n+b\n" }));
@@ -1855,7 +1962,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(w.tempod.requestsOf("fs.search")).toEqual([{ query: "foo", regex: false, maxResults: 500 }]);
   });
 
-  it("pass tempod's error codes through", async () => {
+  it("pass tempod's error codes through", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.fail("fs.read", "FILE_TOO_LARGE", "2 MiB");
     expect(codeOf(await w.stub.readFile({ path: "big.bin" }))).toBe("FILE_TOO_LARGE");
@@ -1865,7 +1972,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.getFileDiff({ scope: "branch", path: "missing.ts" }))).toBe("NOT_FOUND");
   });
 
-  it("syncs files before sleep and serves them without waking or contacting tempod", async () => {
+  it("syncs files before sleep and serves them without waking or contacting tempod", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.on("fs.list", () => ({ paths: ["README.md", "src/a.ts", "bin.dat"] }));
     w.tempod.on("fs.read", ({ path }) =>
@@ -1889,7 +1996,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await stateOf(w.stub)).toBe("sleeping");
   });
 
-  it("does not wake on a cache miss and rejects paths outside the workspace", async () => {
+  it("does not wake on a cache miss and rejects paths outside the workspace", async ({ expect }) => {
     const w = await readyWs();
     await putToSleep(w);
     expect(codeOf(await w.stub.readFile({ path: "uncached.ts" }))).toBe("CONTAINER_NOT_READY");
@@ -1901,7 +2008,9 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await stateOf(w.stub)).toBe("sleeping");
   });
 
-  it("refreshes changed files, removes deleted files and drops unreadable cached contents", async () => {
+  it("refreshes changed files, removes deleted files and drops unreadable cached contents", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const sync = () => runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
     await sync();
@@ -1938,7 +2047,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.readFile({ path: "src/renamed.ts" }))).toBe("CONTAINER_NOT_READY");
   });
 
-  it("keeps the previous snapshot and completes sleep when syncing fails", async () => {
+  it("keeps the previous snapshot and completes sleep when syncing fails", async ({ expect }) => {
     const w = await readyWs();
     await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
     w.tempod.fail("fs.list", "INTERNAL");
@@ -1948,7 +2057,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await stateOf(w.stub)).toBe("sleeping");
   });
 
-  it("bounds cache storage and excludes files absent from the non-ignored tree", async () => {
+  it("bounds cache storage and excludes files absent from the non-ignored tree", async ({ expect }) => {
     const w = await readyWs();
     await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const core = internals(i).core;
@@ -1965,7 +2074,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await one(w.stub, "SELECT path FROM file_cache WHERE path = '.env'")).toBeUndefined();
   });
 
-  it("validates file_cache.response_json on read and write (02, Conventions)", async () => {
+  it("validates file_cache.response_json on read and write (02, Conventions)", async ({ expect }) => {
     const w = await readyWs();
     await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const { files } = internals(i).core;
@@ -1982,8 +2091,8 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await stateOf(w.stub)).toBe("sleeping");
   });
 
-  it("return CONTAINER_NOT_READY while the workspace starts", async () => {
-    const w = await seedHeld();
+  it("return CONTAINER_NOT_READY while the workspace starts", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     expect(codeOf(await w.stub.getChanges({ scope: "branch" }))).toBe("CONTAINER_NOT_READY");
     expect(codeOf(await w.stub.listFiles({}))).toBe("CONTAINER_NOT_READY");
     expect(codeOf(await w.stub.readFile({ path: "README.md" }))).toBe("CONTAINER_NOT_READY");
@@ -1991,14 +2100,17 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(w.tempod.requests).toHaveLength(0);
   });
 
-  it("return CONTAINER_NOT_READY and start a wake when sleeping (runScript too)", async () => {
+  it("return CONTAINER_NOT_READY and start a wake when sleeping (runScript too)", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     await useSettings(
       w,
       settingsWith({ scripts: { run: { dev: { command: "npm run dev", cwd: "", default: true } } } }),
     );
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     // 03 Wake triggers: "Read calls that need the container (getChanges, getFileDiff, listFiles, readFile,
     // searchFiles) return CONTAINER_NOT_READY and also start a wake. The one exception is sleeping ..."
     // getChanges starts the wake, so listFiles and readFile run in starting. runScript is a wake trigger.
@@ -2013,29 +2125,31 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
   });
 
-  it("each read call alone starts a wake from sleeping", async () => {
+  it("each read call alone starts a wake from sleeping", async ({ expect, onTestFinished }) => {
     const w = await readyWs();
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     expect(codeOf(await w.stub.searchFiles({ query: "x" }))).toBe("CONTAINER_NOT_READY");
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("starting");
   });
 });
 
-describe("scripts", { timeout: 30_000 }, () => {
+describe.concurrent("scripts", { timeout: 30_000 }, () => {
   const runScripts = {
     dev: { command: "npm run dev", cwd: "web", default: true },
     test: { command: "npm test", cwd: "", default: false },
   };
 
-  it("runScript returns NOT_FOUND for an unknown script", async () => {
+  it("runScript returns NOT_FOUND for an unknown script", async ({ expect }) => {
     const w = await readyWs();
     expect(codeOf(await w.stub.runScript({ scriptId: "dev" }))).toBe("NOT_FOUND");
     expect(w.tempod.requestsOf("script.start")).toHaveLength(0);
   });
 
-  it("runScript starts the run script and listScriptRuns shows it with its log tail and exit", async () => {
+  it("runScript starts the run script and listScriptRuns shows it with its log tail and exit", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     await useSettings(w, settingsWith({ scripts: { run: runScripts } }));
     expect(ok(await w.stub.listScriptRuns({}))).toEqual([]);
@@ -2069,7 +2183,7 @@ describe("scripts", { timeout: 30_000 }, () => {
     });
   });
 
-  it("with run_mode nonconcurrent, runScript stops the running run scripts first", async () => {
+  it("with run_mode nonconcurrent, runScript stops the running run scripts first", async ({ expect }) => {
     const w = await readyWs();
     await useSettings(w, settingsWith({ scripts: { run: runScripts, run_mode: "nonconcurrent" } }));
     const dev = ok(await w.stub.runScript({ scriptId: "dev" }));
@@ -2082,7 +2196,7 @@ describe("scripts", { timeout: 30_000 }, () => {
     expect(order).toEqual([`script.start:${dev.id}`, `script.stop:${dev.id}`, `script.start:${test.id}`]);
   });
 
-  it("records failed_to_start when tempod refuses the start", async () => {
+  it("records failed_to_start when tempod refuses the start", async ({ expect }) => {
     const w = await readyWs();
     await useSettings(w, settingsWith({ scripts: { run: runScripts } }));
     w.tempod.fail("script.start", "INTERNAL", "spawn failed");
@@ -2092,7 +2206,9 @@ describe("scripts", { timeout: 30_000 }, () => {
     expect(ok(await w.stub.listScriptRuns({}))[0]).toMatchObject({ id: run.id, status: "failed_to_start" });
   });
 
-  it("continueAfterSetupFailure moves setup_status from failed to skipped and lets the queue run", async () => {
+  it("continueAfterSetupFailure moves setup_status from failed to skipped and lets the queue run", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     await useSettings(w, settingsWith({ scripts: { setup: "exit 1" } }));
@@ -2121,8 +2237,11 @@ describe("scripts", { timeout: 30_000 }, () => {
     await waitFor(async () => (await d1Row(w.workspaceId))?.["attention"] !== "error", 5000, "D1 attention");
   });
 
-  it("continueAfterSetupFailure changes nothing when setup did not fail", async () => {
-    const w = await seedHeld();
+  it("continueAfterSetupFailure changes nothing when setup did not fail", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     const rev = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.continueAfterSetupFailure({}))).toBe("OK");
     const d = await detail(w.stub);
@@ -2131,8 +2250,10 @@ describe("scripts", { timeout: 30_000 }, () => {
   });
 });
 
-describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 }, () => {
-  it("getEgressConfig returns {owner, repo, policy, allowlist, mcp} from the project and the effective settings", async () => {
+describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout: 30_000 }, () => {
+  it("getEgressConfig returns {owner, repo, policy, allowlist, mcp} from the project and the effective settings", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist, mcp}
     expect(await w.stub.getEgressConfig()).toEqual({
@@ -2163,7 +2284,7 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
     });
   });
 
-  it("getEgressConfig fails for a workspace that was never created", async () => {
+  it("getEgressConfig fails for a workspace that was never created", async ({ expect }) => {
     let error: unknown = null;
     try {
       await uninitialised().getEgressConfig();
@@ -2173,8 +2294,8 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
     expect(String(error)).toMatch(/not found/i);
   });
 
-  it("logEgress keeps only the newest 10,000 rows on every insert", async () => {
-    const w = await seedHeld();
+  it("logEgress keeps only the newest 10,000 rows on every insert", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     await exec(
       w.stub,
       "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 10000) INSERT INTO egress_log (ts, method, host, path, status, ms, rule) SELECT i, 'GET', 'example.com', '/' || i, 200, 1, 9 FROM n",
@@ -2193,8 +2314,11 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
     });
   });
 
-  it("logEgress appends rows that Diagnostics shows newest first; an unknown workspace ignores it", async () => {
-    const w = await seedHeld();
+  it("logEgress appends rows that Diagnostics shows newest first; an unknown workspace ignores it", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     const a = {
       ts: 1000,
       method: "GET",
@@ -2218,8 +2342,8 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
   });
 });
 
-describe("getDiagnostics", { timeout: 30_000 }, () => {
-  it("returns {ops, container, logs, egress, sessions} as in 05 Observability", async () => {
+describe.concurrent("getDiagnostics", { timeout: 30_000 }, () => {
+  it("returns {ops, container, logs, egress, sessions} as in 05 Observability", async ({ expect }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     await emit(w, { kind: "log", level: "warn", msg: "disk almost full", data: { pct: 91 } });
@@ -2276,14 +2400,17 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
     ]);
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().getDiagnostics({}))).toBe("NOT_FOUND");
   });
 });
 
-describe("first prompt while setup is pending", () => {
-  it("preserves a manual override made before the pending rename runs", async () => {
-    const w = await seedHeld();
+describe.concurrent("first prompt while setup is pending", () => {
+  it("preserves a manual override made before the pending rename runs", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     const session = ok(await w.stub.createSession({ agent: "claude" }));
     expect(
       codeOf(
@@ -2307,7 +2434,9 @@ describe("first prompt while setup is pending", () => {
 });
 
 describe("PR title contract", () => {
-  it("persists closed and merged titles in refresh and detail even when status does not change", async () => {
+  it("persists closed and merged titles in refresh and detail even when status does not change", async ({
+    expect,
+  }) => {
     const o = await seedProject();
     const { stub } = await seedWorkspace(o);
     await runInDurableObject(stub, (instance: WorkspaceDO) => {
@@ -2354,7 +2483,7 @@ describe("PR title contract", () => {
 });
 
 describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, () => {
-  it("init stores the PR number, state and title, and status polling starts", async () => {
+  it("init stores the PR number, state and title, and status polling starts", async ({ expect }) => {
     const seeded = await seedProject();
     await seedCredentials(seeded.userId);
     const workspaceId = newId();
@@ -2405,16 +2534,16 @@ describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, ()
     }
   });
 
-  it("a workspace from a branch or a new branch has no PR", async () => {
-    const w = await seedHeld();
+  it("a workspace from a branch or a new branch has no PR", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     expect(await detail(w.stub)).toMatchObject({ prNumber: null, prState: null, prTitle: null });
   });
 });
 
 describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30_000 }, () => {
   /** A workspace in `error` with no create or wake op left, as after a step failed for good. */
-  const errored = async () => {
-    const w = await seedHeld({ prompt: "First" });
+  const errored = async (onTestFinished: TestContext["onTestFinished"]) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
     await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       const { core, runner } = internals(i);
       for (const kind of ["create", "wake"] as const) {
@@ -2494,8 +2623,8 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
   ];
 
   for (const [name, expected, trigger] of triggers) {
-    it(`${name} restarts it`, async () => {
-      const w = await errored();
+    it(`${name} restarts it`, async ({ expect, onTestFinished }) => {
+      const w = await errored(onTestFinished);
       expect(await trigger(w)).toBe(expected);
       await restarted(w);
     });
@@ -2507,8 +2636,8 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
     ["readFile", (w) => w.stub.readFile({ path: "README.md" })],
   ];
   for (const [name, read] of cachedReads) {
-    it(`${name} restarts it instead of answering from the file cache`, async () => {
-      const w = await errored();
+    it(`${name} restarts it instead of answering from the file cache`, async ({ expect, onTestFinished }) => {
+      const w = await errored(onTestFinished);
       await runInDurableObject(w.stub, (i: WorkspaceDO) => {
         const { files } = internals(i).core;
         files.rememberList(["README.md"]);
@@ -2521,7 +2650,7 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
   }
 });
 
-describe("getDiagnostics egress filters (02, 05 Observability)", { timeout: 30_000 }, () => {
+describe.concurrent("getDiagnostics egress filters (02, 05 Observability)", { timeout: 30_000 }, () => {
   const seedEgress = async (w: Ws) =>
     runInDurableObject(w.stub, (_i: WorkspaceDO, state: DurableObjectState) => {
       const add = (host: string, status: number, rule: number) =>
@@ -2548,8 +2677,11 @@ describe("getDiagnostics egress filters (02, 05 Observability)", { timeout: 30_0
       rule: number;
     }>;
 
-  it("filters every stored row on the server and returns the newest 500 matches", async () => {
-    const w = await seedHeld();
+  it("filters every stored row on the server and returns the newest 500 matches", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     await seedEgress(w);
     const all = await egressOf(w, {});
     expect(all).toHaveLength(500);
@@ -2565,8 +2697,11 @@ describe("getDiagnostics egress filters (02, 05 Observability)", { timeout: 30_0
     expect(await egressOf(w, { egressHost: "%" })).toEqual([]);
   });
 
-  it("blocked means rule 0, 7 or 10; 2xx to 5xx match the status class", async () => {
-    const w = await seedHeld();
+  it("blocked means rule 0, 7 or 10; 2xx to 5xx match the status class", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     await seedEgress(w);
     const blocked = await egressOf(w, { egressStatus: "blocked" });
     expect(blocked.map((r) => r.rule)).toEqual([10, 7, 0]);

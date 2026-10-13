@@ -27,6 +27,7 @@ it("loads diagrams in the browser with strict security and theme settings", asyn
   vi.stubEnv("SSR", false);
   const { renderMermaid } = await import("~/ui/components/chat/mermaid");
   await expect(renderMermaid("graph TD; A-->B", true)).resolves.toMatch(/^data:image\/svg\+xml/);
+  expect(api.load).toHaveBeenCalledOnce();
   expect(api.initialize).toHaveBeenCalledWith({
     startOnLoad: false,
     securityLevel: "strict",
