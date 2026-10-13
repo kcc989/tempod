@@ -50,7 +50,7 @@ export function NewChatComposer({
 
       if (model) input = { ...input, model };
 
-      if (customAgentId) input = { ...input, customAgentId };
+      if (customAgentId) input = { ...input, agentId: customAgentId };
       const session = created ?? (await create.mutateAsync(input));
 
       setCreated(session);

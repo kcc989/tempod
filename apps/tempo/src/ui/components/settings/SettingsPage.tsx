@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SECTIONS, sectionPage } from "~/ui/components/dialogs/settings-model";
-import { AgentsTab } from "~/ui/components/dialogs/settings/AgentsTab";
+import { LibraryTab as AgentsTab } from "~/ui/components/dialogs/settings/LibraryTab";
 import { AppearanceTab } from "~/ui/components/dialogs/settings/AppearanceTab";
 import { DevicesTab } from "~/ui/components/dialogs/settings/DevicesTab";
 import { EnvironmentsTab } from "~/ui/components/dialogs/settings/EnvironmentsTab";

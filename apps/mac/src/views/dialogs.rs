@@ -24,11 +24,12 @@ pub struct Dialogs {
     branch: Entity<InputState>,
     prompt: Entity<TextareaState>,
     agent: Option<p::AgentId>,
+    library_default_agent: p::AgentId,
     models: Vec<p::AgentModelOptions>,
     model: Option<String>,
     /// A custom agent picked in the model menu; its base agent is `agent` (04, New workspace).
     custom_agent: Option<String>,
-    custom_agents: Vec<p::CustomAgentSummary>,
+    custom_agents: Vec<p::AgentSummary>,
     models_loading: bool,
     workspace_options: bool,
     branches: Vec<p::ListBranchesItem>,
@@ -81,6 +82,7 @@ impl Dialogs {
                 TextareaState::new(window, cx).placeholder("What do you want to work on?")
             }),
             agent: None,
+            library_default_agent: p::AgentId::Claude,
             models: vec![],
             model: None,
             custom_agent: None,
@@ -181,6 +183,7 @@ impl Dialogs {
         self.client = Some(client);
         self.workspace_id = Some(workspace_id);
         self.agent = Some(agent);
+        self.library_default_agent = agent;
         self.chat_created = Some(Box::new(on_created));
         self.modal_window = Some(window.window_handle());
         let form = cx.entity();
@@ -233,7 +236,8 @@ impl Dialogs {
                             .call::<api::CreateSession>(p::CreateSessionIn {
                                 workspace_id: workspace_id.clone(),
                                 agent,
-                                custom_agent_id,
+                                agent_id: custom_agent_id,
+                                custom_agent_id: None,
                                 model,
                                 mode_id: None,
                             })
@@ -281,7 +285,7 @@ impl Dialogs {
         let Some(client) = &self.client else {
             return;
         };
-        let agents = client.call::<api::ListCustomAgents>(p::Empty {});
+        let agents = client.call::<api::ListAgents>(p::Empty {});
         cx.spawn(async move |this, cx| {
             let result = agents.await;
             let _ = this.update(cx, |this, cx| {
@@ -511,7 +515,8 @@ impl Dialogs {
             } else {
                 self.model.clone()
             },
-            custom_agent_id: self.custom_agent.clone(),
+            agent_id: self.custom_agent.clone(),
+            custom_agent_id: None,
             prompt,
         });
         self.pending = true;
@@ -679,19 +684,37 @@ impl Render for Dialogs {
                 })
             })
             .collect();
-        // Custom agents whose base agent has a login (it reports models), after the models.
+        let project_default = if self.kind == Some("New chat") {
+            self.library_default_agent
+        } else {
+            self.projects
+                .iter()
+                .find(|p| Some(&p.id) == self.project.as_ref())
+                .and_then(|p| p.settings.agent.as_ref())
+                .and_then(|a| a.default)
+                .unwrap_or(p::AgentId::Claude)
+        };
+        let base = |agent: p::AgentBase| match agent {
+            p::AgentBase::Auto => project_default,
+            p::AgentBase::Claude => p::AgentId::Claude,
+            p::AgentBase::Codex => p::AgentId::Codex,
+            p::AgentBase::Opencode => p::AgentId::Opencode,
+            p::AgentBase::Pi => p::AgentId::Pi,
+        };
         let custom: Vec<(p::AgentId, String, String)> = self
             .custom_agents
             .iter()
-            .filter(|a| !self.models_loading && self.models.iter().any(|m| m.agent == a.base_agent))
+            .filter(|a| {
+                !self.models_loading && self.models.iter().any(|m| m.agent == base(a.base_agent))
+            })
             .map(|a| {
                 (
-                    a.base_agent,
+                    base(a.base_agent),
                     a.id.clone(),
                     format!(
                         "{} · {}",
                         a.name.as_str(),
-                        super::chat_model::agent_label(a.base_agent)
+                        super::chat_model::agent_label(base(a.base_agent))
                     ),
                 )
             })

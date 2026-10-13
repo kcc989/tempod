@@ -10,6 +10,8 @@ export * from "./settings.ts";
 
 export * from "./agents.ts";
 
+export * from "./agent-library.ts";
+
 export * from "./types.ts";
 
 export * from "./channels.ts";

@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentSummary",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "baseAgent": {
+      "$ref": "AgentBase.json"
+    },
+    "access": {
+      "$ref": "AgentAccess.json"
+    },
+    "outputKind": {
+      "$ref": "OutputKind.json"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 1
+        }
+      ]
+    },
+    "sha": {
+      "type": "string"
+    },
+    "starter": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "handle",
+    "name",
+    "description",
+    "baseAgent",
+    "access",
+    "outputKind",
+    "version",
+    "sha",
+    "starter",
+    "updatedAt"
+  ],
+  "additionalProperties": true
+}

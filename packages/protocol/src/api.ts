@@ -12,6 +12,7 @@ import {
 import { McpServer, McpServerInput } from "./mcp.ts";
 import { Artifact } from "./artifacts.ts";
 import { CustomAgent, CustomAgentDefinition, CustomAgentSummary } from "./agents.ts";
+import { Agent, AgentDefinition, AgentSummary, AgentAttachment, AttachmentOptions } from "./agent-library.ts";
 import { EnvName } from "./settings.ts";
 import {
   AgentModelOptions,
@@ -70,6 +71,17 @@ export type ScriptRunWithLog = typeof ScriptRunWithLog.Type;
 const NonEmpty = S.check(Schema.isMinLength(1));
 
 export const API = {
+  listAgents: fn("GET", Empty, Schema.Array(AgentSummary)),
+  getAgent: fn("GET", Schema.Struct({ agentId: S }), Agent),
+  saveAgent: fn("POST", Schema.Struct({ agentId: opt(S), definition: AgentDefinition }), Agent),
+  deleteAgent: fn("POST", Schema.Struct({ agentId: S }), Empty),
+  listProjectAgents: fn("GET", Schema.Struct({ projectId: S }), Schema.Array(AgentAttachment)),
+  putProjectAgent: fn(
+    "POST",
+    Schema.Struct({ projectId: S, agentId: S, ...AttachmentOptions.fields }),
+    AgentAttachment,
+  ),
+  deleteProjectAgent: fn("POST", Schema.Struct({ projectId: S, agentId: S }), Empty),
   listRoles: fn("GET", Schema.Struct({ workspaceId: opt(S) }), Schema.Array(RoleInfo)),
   getRoleText: fn(
     "GET",
@@ -169,6 +181,7 @@ export const API = {
       agent: opt(AgentId),
       model: opt(S),
       customAgentId: opt(S),
+      agentId: opt(S),
       prompt: opt(Schema.Struct({ text: NonEmpty })),
     }),
     WorkspaceSummary,
@@ -206,7 +219,14 @@ export const API = {
   // Sessions and turns
   createSession: fn(
     "POST",
-    Schema.Struct({ ...W, agent: AgentId, customAgentId: opt(S), model: opt(S), modeId: opt(S) }),
+    Schema.Struct({
+      ...W,
+      agent: AgentId,
+      customAgentId: opt(S),
+      agentId: opt(S),
+      model: opt(S),
+      modeId: opt(S),
+    }),
     Session,
   ),
   closeSession: fn("POST", Schema.Struct({ ...W, sessionId: S }), Empty),

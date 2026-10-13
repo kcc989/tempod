@@ -28,6 +28,7 @@
         "@tanstack/react-router-ssr-query": "1.167.3",
         "@tanstack/react-start": "1.168.61",
         "@tanstack/react-virtual": "3.14.15",
+        "@tempo/agents-starter": "workspace:*",
         "@tempo/cities": "workspace:*",
         "@tempo/protocol": "workspace:*",
         "@tempo/settings": "workspace:*",
@@ -69,6 +70,14 @@
         "vite": "8.3.4",
         "vitest": "4.1.11",
         "wrangler": "4.149.0",
+      },
+    },
+    "packages/agents-starter": {
+      "name": "@tempo/agents-starter",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tempo/protocol": "workspace:*",
+        "effect": "4.0.3",
       },
     },
     "packages/cities": {
@@ -902,6 +911,8 @@
     "@tanstack/virtual-core": ["@tanstack/virtual-core@3.19.0", "", {}, "sha512-6k6+BXoM01iJTfqH5hvih0Kj49x130wRzty1muE1hBJJm5/P8h3aEYEtQPa4iYE239nF4i6UL/KIIuQI3zG4sw=="],
 
     "@tanstack/virtual-file-routes": ["@tanstack/virtual-file-routes@1.162.0", "", {}, "sha512-uhOeFyxLcU41HzvrxsGpiWdcMbScY1EDgbZ5K7DVRMYInbLYWAC0EA/kx9wXAoSM8q82bUG2hRl8+EAjE6XAbA=="],
+
+    "@tempo/agents-starter": ["@tempo/agents-starter@workspace:packages/agents-starter"],
 
     "@tempo/app": ["@tempo/app@workspace:apps/tempo"],
 

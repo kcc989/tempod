@@ -1,4 +1,5 @@
 //! Views (07, Window layout and components). Regions follow 04.
+pub mod agent_attachments;
 pub mod agents_model;
 pub mod agents_settings;
 pub mod artifacts_model;

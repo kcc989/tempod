@@ -350,10 +350,10 @@ pub fn edit_counts(tool: &ToolCallItemContent) -> EditCounts {
         removed: 0,
     };
     for block in &tool.content {
-        if block.0.get("type").and_then(|t| t.as_str()) != Some("diff") {
+        if block.type_ != "diff" {
             continue;
         }
-        let text = |key| block.0.get(key).and_then(|v| v.as_str()).unwrap_or("");
+        let text = |key| block.extra.get(key).and_then(|v| v.as_str()).unwrap_or("");
         if counts.path.is_empty() {
             counts.path = text("path").into();
         }

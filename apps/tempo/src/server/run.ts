@@ -27,11 +27,17 @@ export const decodeInput = <K extends FnName>(
 ): FnInput<K> => {
   // SAFETY: name selects the matching input codec and FnInput<K> from the same API registry.
   const schema = API[name].input;
-  const exit = Schema.decodeUnknownExit(schema)(raw ?? {});
+  const agentWrite = name === "saveAgent";
+  const attachmentWrite = name === "putProjectAgent";
+
+  const exit = Schema.decodeUnknownExit(
+    schema,
+    agentWrite || attachmentWrite ? { onExcessProperty: "error" } : {},
+  )(raw ?? {});
 
   if (Exit.isFailure(exit)) {
     throw new TempoError(
-      "VALIDATION_FAILED",
+      agentWrite ? "AGENT_INVALID" : attachmentWrite ? "ATTACHMENT_INVALID" : "VALIDATION_FAILED",
       undefined,
       String(exit.cause).split("\n").slice(0, 8).join(" ").slice(0, 800),
     );

@@ -1,4 +1,4 @@
-//! Settings → Agents (04; 07 "Same"): the user's custom agents and an editor (01, Custom agents).
+//! Settings → Agents (04; 07 "Same"): the user's agents and an editor (01, Custom agents).
 use super::agents_model::{self, AgentForm, ServerForm};
 use super::chat_model::{AGENTS, agent_label};
 use super::tokens::{Token, color};
@@ -33,10 +33,14 @@ enum Selected {
 
 pub struct AgentsSettings {
     client: Option<tempo_client::Client>,
-    agents: Vec<p::CustomAgentSummary>,
+    agents: Vec<p::AgentSummary>,
     selected: Selected,
     loaded: Option<String>,
     name: Entity<InputState>,
+    handle: Entity<InputState>,
+    access: p::AgentAccess,
+    output_kind: p::OutputKind,
+    project_default: bool,
     description: Entity<InputState>,
     model: Entity<InputState>,
     level: Entity<InputState>,
@@ -63,6 +67,10 @@ impl AgentsSettings {
             selected: Selected::None,
             loaded: None,
             name: input("Name", window, cx),
+            handle: input("Handle", window, cx),
+            access: p::AgentAccess::ReadOnly,
+            output_kind: p::OutputKind::Note,
+            project_default: true,
             description: input("Description", window, cx),
             model: input("Agent default", window, cx),
             level: input("Agent default", window, cx),
@@ -82,7 +90,7 @@ impl AgentsSettings {
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let Some(client) = &self.client else { return };
-        let request = client.call::<api::ListCustomAgents>(p::Empty {});
+        let request = client.call::<api::ListAgents>(p::Empty {});
         cx.spawn(async move |this, cx| {
             let result = request.await;
             let _ = this.update(cx, |this, cx| {
@@ -184,6 +192,10 @@ impl AgentsSettings {
     fn select_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.selected = Selected::New;
         self.loaded = None;
+        self.handle.update(cx, |i, cx| i.set_value("", window, cx));
+        self.access = p::AgentAccess::ReadOnly;
+        self.output_kind = p::OutputKind::Note;
+        self.project_default = true;
         self.fill(&AgentForm::default(), window, cx);
         cx.notify();
     }
@@ -191,8 +203,8 @@ impl AgentsSettings {
     fn select(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
         let Some(client) = &self.client else { return };
         self.selected = Selected::Agent(id.clone());
-        let request = client.call::<api::GetCustomAgent>(p::GetCustomAgentIn {
-            custom_agent_id: id.clone(),
+        let request = client.call::<api::GetAgent>(p::GetAgentIn {
+            agent_id: id.clone(),
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = request.await;
@@ -202,7 +214,13 @@ impl AgentsSettings {
                 }
                 match result {
                     Ok(agent) => {
-                        this.fill(&agents_model::form_from_agent(&agent), window, cx);
+                        this.handle.update(cx, |i, cx| {
+                            i.set_value(agent.handle.to_string(), window, cx)
+                        });
+                        this.access = agent.access;
+                        this.output_kind = agent.output_kind;
+                        this.project_default = agent.base_agent == p::AgentBase::Auto;
+                        this.fill(&agents_model::form_from_library_agent(&agent), window, cx);
                         this.loaded = Some(agent.name.to_string());
                     }
                     Err(e) => this.error = Some(e.to_string()),
@@ -230,7 +248,13 @@ impl AgentsSettings {
         let Some(client) = self.client.clone() else {
             return;
         };
-        let definition = match agents_model::validate(&self.form(cx)) {
+        let definition = match agents_model::validate_library(
+            &self.form(cx),
+            self.handle.read(cx).value().as_str(),
+            self.access,
+            self.output_kind,
+            self.project_default,
+        ) {
             Ok(d) => d,
             Err(errors) => {
                 self.errors = errors;
@@ -240,12 +264,12 @@ impl AgentsSettings {
         };
         self.errors.clear();
         self.pending = true;
-        let custom_agent_id = match &self.selected {
+        let agent_id = match &self.selected {
             Selected::Agent(id) => Some(id.clone()),
             _ => None,
         };
-        let request = client.call::<api::SaveCustomAgent>(p::SaveCustomAgentIn {
-            custom_agent_id,
+        let request = client.call::<api::SaveAgent>(p::SaveAgentIn {
+            agent_id,
             definition,
         });
         cx.spawn_in(window, async move |this, cx| {
@@ -294,9 +318,7 @@ impl AgentsSettings {
             return;
         };
         self.pending = true;
-        let request = client.call::<api::DeleteCustomAgent>(p::DeleteCustomAgentIn {
-            custom_agent_id: id,
-        });
+        let request = client.call::<api::DeleteAgent>(p::DeleteAgentIn { agent_id: id });
         cx.spawn_in(window, async move |this, cx| {
             let result = request.await;
             let _ = this.update(cx, |this, cx| {
@@ -421,21 +443,104 @@ impl AgentsSettings {
             .rounded_md()
             .border_color(color(Token::Border, cx))
             .child(self.field("Name", "name", None, Input::new(&self.name), cx))
-            .child(self.field(
-                "Base agent",
-                "baseAgent",
-                agents_model::unsupported_note(self.base_agent),
-                h_flex().gap_1().children(AGENTS.map(|agent| {
-                    Button::new(SharedString::from(format!("base-{agent}")))
-                        .label(agent_label(agent))
-                        .selected(self.base_agent == agent)
+            .child(self.field("Handle", "handle", None, Input::new(&self.handle), cx))
+            .child(h_flex().gap_1().children(
+                [p::AgentAccess::ReadOnly, p::AgentAccess::Write].map(|value| {
+                    Button::new(SharedString::from(format!("access-{value}")))
+                        .label(value.to_string())
+                        .selected(self.access == value)
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.base_agent = agent;
+                            this.access = value;
                             cx.notify();
                         }))
-                })),
-                cx,
+                }),
             ))
+            .child(
+                h_flex().gap_1().children(
+                    [
+                        p::OutputKind::Plan,
+                        p::OutputKind::Review,
+                        p::OutputKind::Note,
+                    ]
+                    .map(|value| {
+                        Button::new(SharedString::from(format!("output-{value}")))
+                            .label(value.to_string())
+                            .selected(self.output_kind == value)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.output_kind = value;
+                                cx.notify();
+                            }))
+                    }),
+                ),
+            )
+            .child(
+                div().text_sm().child("Definition JSON").child(
+                    agents_model::validate_library(
+                        &self.form(cx),
+                        self.handle.read(cx).value().as_str(),
+                        self.access,
+                        self.output_kind,
+                        self.project_default,
+                    )
+                    .ok()
+                    .and_then(|d| serde_json::to_string_pretty(&d).ok())
+                    .unwrap_or_else(|| "Complete the fields to preview the definition.".into()),
+                ),
+            )
+            .children(is_existing.then(|| {
+                Button::new("duplicate-agent")
+                    .label("Duplicate")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        let name = this.name.read(cx).value().to_string();
+                        let handle = this.handle.read(cx).value().to_string();
+                        this.name.update(cx, |i, cx| {
+                            i.set_value(
+                                format!("{} copy", name.chars().take(55).collect::<String>()),
+                                window,
+                                cx,
+                            )
+                        });
+                        this.handle.update(cx, |i, cx| {
+                            i.set_value(
+                                format!("{}-copy", handle.chars().take(27).collect::<String>()),
+                                window,
+                                cx,
+                            )
+                        });
+                        this.selected = Selected::New;
+                        this.loaded = None;
+                        cx.notify();
+                    }))
+            }))
+            .child(
+                self.field(
+                    "Base agent",
+                    "baseAgent",
+                    agents_model::unsupported_note(self.base_agent),
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            Button::new("project-default")
+                                .label("Project default")
+                                .selected(self.project_default)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.project_default = true;
+                                    cx.notify();
+                                })),
+                        )
+                        .children(AGENTS.map(|agent| {
+                            Button::new(SharedString::from(format!("base-{agent}")))
+                                .label(agent_label(agent))
+                                .selected(!self.project_default && self.base_agent == agent)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.project_default = false;
+                                    this.base_agent = agent;
+                                    cx.notify();
+                                }))
+                        })),
+                    cx,
+                ),
+            )
             .child(self.field(
                 "Description",
                 "description",
@@ -550,7 +655,7 @@ impl Render for AgentsSettings {
                 .label(format!(
                     "{} · {}",
                     a.name.as_str(),
-                    agent_label(a.base_agent)
+                    a.base_agent.to_string().as_str()
                 ))
                 .on_click(
                     cx.listener(move |this, _, window, cx| this.select(id.clone(), window, cx)),
@@ -562,7 +667,7 @@ impl Render for AgentsSettings {
                 h_flex()
                     .justify_between()
                     .child(div().text_sm().text_color(muted).child(
-                        "A custom agent starts a chat with its own prompt, tools, MCP servers, model and reasoning level.",
+                        "An agent starts a chat with its own prompt, tools, MCP servers, model and reasoning level.",
                     ))
                     .child(
                         Button::new("new-agent")
@@ -571,7 +676,7 @@ impl Render for AgentsSettings {
                     ),
             )
             .children(self.error.clone().map(|e| div().text_sm().text_color(color(Token::Destructive, cx)).child(e)))
-            .children((self.agents.is_empty() && self.selected != Selected::New).then(|| div().text_color(muted).child("No custom agents yet.")))
+            .children((self.agents.is_empty() && self.selected != Selected::New).then(|| div().text_color(muted).child("No agents yet.")))
             .child(v_flex().children(list))
             .children((self.selected != Selected::None).then(|| self.editor(cx)))
     }

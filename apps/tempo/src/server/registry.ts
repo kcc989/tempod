@@ -1,6 +1,7 @@
 import * as roles from "./handlers/roles.ts";
 import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protocol";
 import * as conversations from "./handlers/conversations.ts";
+import * as library from "./handlers/agent-library.ts";
 import * as agents from "./handlers/agents.ts";
 import * as credentials from "./handlers/credentials.ts";
 import * as environments from "./handlers/environments.ts";
@@ -18,6 +19,13 @@ import type { Handler } from "./run.ts";
 type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
 
 const own = {
+  listAgents: library.listAgents,
+  getAgent: library.getAgent,
+  saveAgent: library.saveAgent,
+  deleteAgent: library.deleteAgent,
+  listProjectAgents: library.listProjectAgents,
+  putProjectAgent: library.putProjectAgent,
+  deleteProjectAgent: library.deleteProjectAgent,
   putUserRole: roles.putUserRole,
   deleteUserRole: roles.deleteUserRole,
   listInstallationRepos: projects.listInstallationReposFn,

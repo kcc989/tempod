@@ -208,7 +208,7 @@ Build on the current role run engine. Rename it and remove what A9 and A10 remov
 
 ## Results: `report_result`
 
-Add the tool `report_result` to the `tempo` MCP server. `tempod mcp` lists it only when `TEMPO_RUN_ID` is set, with the input schema of `TEMPO_RUN_OUTPUT_KIND`. Carry calls to the WorkspaceDO the same way `publish_artifact` carries them.
+Add the tool `report_result` to the `tempo` MCP server. `tempod mcp` lists it only when `TEMPO_RUN_ID` is set, with the input schema of `TEMPO_RUN_OUTPUT_KIND`. Carry calls through request/response frames on the existing daemon socket. Tool arguments do not enter the raw event log; the WorkspaceDO validates and redacts reports before storing them. This transport correction was owner-approved on 2026-10-13.
 
 | Output kind | Input (Effect Schema in `packages/protocol`) |
 | --- | --- |
@@ -267,6 +267,8 @@ Change tab 08 as follows.
 
 `run.decided` holds no question text and no state. The trace UI joins the attachment for the question. `agentId` may be null only on rows migrated from roles.
 
+Owner-approved Send to chat correlation (2026-10-13): queue the sent turn in the run's existing change, including auto-send, so all subsequent runs share the attachment's `max_runs` budget.
+
 ## WorkspaceDO SQLite (migration `0010_agents`)
 
 Rebuild `role_runs` as `runs` and copy the rows.
@@ -318,7 +320,11 @@ A one-time, idempotent step in the Worker. It runs for a user on the first `list
 1. For each active `custom_agents` row, read its file at `commit_sha` and write an `agents` row. Take the handle from the name: lowercase, runs of other characters become `-`, cut to 32 characters, and add `-2`, `-3` and so on for a repeat.
 2. For each `user_roles` row that parses, write an `agents` row: the role body becomes `prompt`, `agent` becomes `baseAgent` (`other` becomes `auto`), and `access` and `model` copy. Use `review` as the output kind when the role name is `reviewer` or `ci`, else `note`. A row that does not parse is skipped and logged by name only.
 3. Copy the starters (A3), skipping a handle that already exists.
+
+Owner-approved migration clarification (2026-10-13): prefix invalid derived handles with `agent-` (or use `agent` as the fallback), suffix duplicate names, and preserve all imported definitions even when migration takes the library above 50. New creates remain blocked until fewer than 50 active agents exist. `AgentAttachment` names the project-wiring schema because `Attachment` already names uploaded chat files.
 4. Write the `agent_migrations` row in the same D1 batch as the last insert.
+
+Owner-approved long-prompt policy (2026-10-13): truncate the copied prompt to 32,000 characters and, when needed, further to fit the 64 KiB definition limit. Preserve the full original in read-only legacy storage and log only the affected name.
 
 Tempo creates no attachments in the migration. Old role triggers do not carry over.
 
@@ -336,7 +342,7 @@ The tab 02 rules apply. The `/api/v1` routes for native clients mirror them (tab
 | `getAgent` | `{agentId}` | `Agent` | `NOT_FOUND` |
 | `saveAgent` | `{agentId?, definition}` | `Agent` | `AGENT_INVALID`, `AGENT_LIMIT`, `AGENT_NAME_TAKEN` |
 | `deleteAgent` | `{agentId}` | `{}` | `NOT_FOUND` |
-| `listProjectAgents` | `{projectId}` | `Attachment[]` | `NOT_FOUND` |
+| `listProjectAgents` | `{projectId}` | `AgentAttachment[]` | `NOT_FOUND` |
 | `putProjectAgent` | `{projectId, agentId, enabled, hooks, autoSend, maxRuns, timeout}` | `Attachment` | `ATTACHMENT_INVALID`, `NOT_FOUND` |
 | `deleteProjectAgent` | `{projectId, agentId}` | `{}` | `NOT_FOUND` |
 | `requestAgent` | `{workspaceId, agentId, text?, sessionId?}` | `{changeId, runId}` | `NOT_FOUND`, `RUN_LIMIT`, `WORKSPACE_ARCHIVED` |

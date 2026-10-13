@@ -213,6 +213,48 @@ fn vars_text(m: &Map<String, Value>) -> String {
         .join("\n")
 }
 
+pub fn form_from_library_agent(a: &p::Agent) -> AgentForm {
+    AgentForm {
+        name: a.name.to_string(),
+        description: a.description.to_string(),
+        base_agent: match a.base_agent {
+            p::AgentBase::Claude | p::AgentBase::Auto => AgentId::Claude,
+            p::AgentBase::Codex => AgentId::Codex,
+            p::AgentBase::Opencode => AgentId::Opencode,
+            p::AgentBase::Pi => AgentId::Pi,
+        },
+        model: a.model.clone(),
+        thought_level: a.thought_level.clone(),
+        system_prompt: a.prompt.to_string(),
+        allow: a.tools.allow.join(", "),
+        deny: a.tools.deny.join(", "),
+        playwright: a.mcp.playwright,
+        servers: a
+            .mcp
+            .servers
+            .iter()
+            .map(|s| match s {
+                p::McpServerDef::StdioServer(s) => ServerForm {
+                    name: s.name.clone(),
+                    kind: "stdio".into(),
+                    command: s.command.to_string(),
+                    args: s.args.join("\n"),
+                    url: String::new(),
+                    vars: vars_text(&s.env),
+                },
+                p::McpServerDef::RemoteServer(s) => ServerForm {
+                    name: s.name.clone(),
+                    kind: s.type_.to_string(),
+                    command: String::new(),
+                    args: String::new(),
+                    url: s.url.clone(),
+                    vars: vars_text(&s.headers),
+                },
+            })
+            .collect(),
+    }
+}
+
 pub fn form_from_agent(a: &p::CustomAgent) -> AgentForm {
     AgentForm {
         name: a.name.to_string(),
@@ -248,6 +290,114 @@ pub fn form_from_agent(a: &p::CustomAgent) -> AgentForm {
             })
             .collect(),
     }
+}
+
+pub fn validate_library(
+    form: &AgentForm,
+    handle: &str,
+    access: p::AgentAccess,
+    output_kind: p::OutputKind,
+    project_default: bool,
+) -> Result<p::AgentDefinition, BTreeMap<String, String>> {
+    let mut errors = BTreeMap::new();
+    let name = form.name.trim();
+    let valid_handle = (2..=32).contains(&handle.len())
+        && handle
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_lowercase)
+        && handle
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+    if !valid_handle {
+        errors.insert(
+            "handle".into(),
+            "Use 2 to 32 lowercase letters, digits and hyphens, starting with a letter.".into(),
+        );
+    }
+    if name.is_empty() {
+        errors.insert("name".into(), "Enter a name.".into());
+    } else if name.chars().count() > 60 {
+        errors.insert("name".into(), "At most 60 characters.".into());
+    }
+    if form.description.chars().count() > 500 {
+        errors.insert("description".into(), "At most 500 characters.".into());
+    }
+    if form.system_prompt.chars().count() > 32_000 {
+        errors.insert("systemPrompt".into(), "At most 32,000 characters.".into());
+    }
+    let allow = split_tags(&form.allow);
+    let deny = split_tags(&form.deny);
+    if let Some(e) = tool_error(&allow) {
+        errors.insert("allow".into(), e);
+    }
+    if let Some(e) = tool_error(&deny) {
+        errors.insert("deny".into(), e);
+    }
+    if form.servers.len() > 10 {
+        errors.insert("servers".into(), "At most 10 MCP servers.".into());
+    }
+    let mut seen: Vec<&str> = vec![];
+    let mut servers = vec![];
+    for (i, s) in form.servers.iter().enumerate() {
+        let at = |f: &str| format!("server.{i}.{f}");
+        let s_name = s.name.trim();
+        if !is_server_name(s_name) {
+            errors.insert(at("name"), "Use 1 to 32 of a-z, 0-9, - and _.".into());
+        } else if s_name == "playwright" {
+            errors.insert(
+                at("name"),
+                "playwright is reserved. Use the Playwright switch.".into(),
+            );
+        } else if seen.contains(&s_name) {
+            errors.insert(at("name"), "Each server needs its own name.".into());
+        }
+        seen.push(s_name);
+        let vars = parse_vars(&s.vars).unwrap_or_else(|e| {
+            errors.insert(at("vars"), e);
+            Map::new()
+        });
+        if s.kind == "stdio" {
+            if s.command.trim().is_empty() {
+                errors.insert(at("command"), "Enter the command.".into());
+            }
+            let args: Vec<&str> = s
+                .args
+                .lines()
+                .map(str::trim)
+                .filter(|a| !a.is_empty())
+                .collect();
+            servers.push(json!({"name": s_name, "type": "stdio", "command": s.command.trim(), "args": args, "env": vars}));
+        } else {
+            let url = s.url.trim();
+            if !url.starts_with("https://") || url.len() <= 8 || url.contains(char::is_whitespace) {
+                errors.insert(at("url"), "Enter an https:// URL.".into());
+            }
+            servers.push(json!({"name": s_name, "type": s.kind, "url": url, "headers": vars}));
+        }
+    }
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+    let definition = json!({
+        "name": name,
+        "description": form.description,
+        "baseAgent": if project_default { "auto".to_string() } else { form.base_agent.to_string() },
+        "handle": handle, "access": access, "outputKind": output_kind,
+        "model": form.model.trim(),
+        "thoughtLevel": form.thought_level.trim(),
+        "prompt": form.system_prompt,
+        "tools": {"allow": allow, "deny": deny},
+        "mcp": {"playwright": form.playwright, "servers": servers},
+    });
+    if definition.to_string().len() > 65536 {
+        return Err(BTreeMap::from([(
+            "form".into(),
+            "Definition exceeds 64 KiB.".into(),
+        )]));
+    }
+    serde_json::from_value(definition)
+        .map_err(|e| BTreeMap::from([("form".to_string(), format!("Check the fields: {e}"))]))
 }
 
 /// A New chat entry for a custom agent (04, Tabs).
@@ -428,5 +578,56 @@ mod tests {
         );
         assert_eq!(unsupported_note(AgentId::Claude), None);
         assert_eq!(split_tags("a, b\nc  a"), vec!["a", "b", "c"]);
+    }
+    #[test]
+    fn library_validation_keeps_auto_access_and_result_kind() {
+        let form = AgentForm {
+            name: "Planner".into(),
+            system_prompt: "Plan the change".into(),
+            ..Default::default()
+        };
+        let definition = validate_library(
+            &form,
+            "planner",
+            p::AgentAccess::ReadOnly,
+            p::OutputKind::Plan,
+            true,
+        )
+        .unwrap();
+        let json = serde_json::to_value(definition).unwrap();
+        assert_eq!(json["handle"], "planner");
+        assert_eq!(json["baseAgent"], "auto");
+        assert_eq!(json["outputKind"], "plan");
+        assert_eq!(json["prompt"], "Plan the change");
+    }
+    #[test]
+    fn library_validation_rejects_invalid_handles_and_oversized_utf8() {
+        let mut form = AgentForm {
+            name: "Agent".into(),
+            ..Default::default()
+        };
+        assert!(
+            validate_library(
+                &form,
+                "123",
+                p::AgentAccess::Write,
+                p::OutputKind::Note,
+                false
+            )
+            .unwrap_err()
+            .contains_key("handle")
+        );
+        form.system_prompt = "😀".repeat(20000);
+        assert!(
+            validate_library(
+                &form,
+                "agent",
+                p::AgentAccess::Write,
+                p::OutputKind::Note,
+                false
+            )
+            .unwrap_err()
+            .contains_key("form")
+        );
     }
 }

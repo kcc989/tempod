@@ -78,7 +78,7 @@ pub struct WorkspaceView {
     viewing_closed: Vec<String>,
     chats: HashMap<String, Chat>,
     credentials: Option<p::CredentialStatus>,
-    custom_agents: Vec<p::CustomAgentSummary>,
+    custom_agents: Vec<p::AgentSummary>,
     custom_agents_rev: u64,
     credentials_rev: u64,
     credential_generation: u64,
@@ -315,7 +315,7 @@ impl WorkspaceView {
     }
 
     fn load_custom_agents(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let request = self.client.call::<api::ListCustomAgents>(p::Empty {});
+        let request = self.client.call::<api::ListAgents>(p::Empty {});
         cx.spawn_in(window, async move |this, cx| {
             if let Ok(agents) = request.await {
                 let _ = this.update_in(cx, |this, _window, cx| {
@@ -2623,7 +2623,7 @@ impl WorkspaceView {
             .state
             .workspace
             .as_ref()
-            .map(|w| w.default_agent)
+            .map(|w| w.settings.agent.default)
             .unwrap_or(p::AgentId::Claude);
         let client = self.client.clone();
         let weak = cx.weak_entity();

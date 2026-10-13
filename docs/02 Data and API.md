@@ -753,8 +753,8 @@ The tab 02 rules apply. The `/api/v1` routes for native clients mirror them (tab
 | `getAgent` | `{agentId}` | `Agent` | `NOT_FOUND` |
 | `saveAgent` | `{agentId?, definition}` | `Agent` | `AGENT_INVALID`, `AGENT_LIMIT`, `AGENT_NAME_TAKEN` |
 | `deleteAgent` | `{agentId}` | `{}` | `NOT_FOUND` |
-| `listProjectAgents` | `{projectId}` | `Attachment[]` | `NOT_FOUND` |
-| `putProjectAgent` | `{projectId, agentId, enabled, hooks, autoSend, maxRuns, timeout}` | `Attachment` | `ATTACHMENT_INVALID`, `NOT_FOUND` |
+| `listProjectAgents` | `{projectId}` | `AgentAttachment[]` | `NOT_FOUND` |
+| `putProjectAgent` | `{projectId, agentId, enabled, hooks, autoSend, maxRuns, timeout}` | `AgentAttachment` | `ATTACHMENT_INVALID`, `NOT_FOUND` |
 | `deleteProjectAgent` | `{projectId, agentId}` | `{}` | `NOT_FOUND` |
 | `requestAgent` | `{workspaceId, agentId, text?, sessionId?}` | `{changeId, runId}` | `NOT_FOUND`, `RUN_LIMIT`, `WORKSPACE_ARCHIVED` |
 | `cancelRun` | `{workspaceId, runId}` | `{}` | `NOT_FOUND` |

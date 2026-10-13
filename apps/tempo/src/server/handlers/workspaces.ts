@@ -1,3 +1,4 @@
+import { activeAgent, agentToWire, migrateAgents, toLibraryProfile } from "../../agents/library.ts";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { pickSlug } from "@tempo/cities";
 import {
@@ -54,12 +55,18 @@ const isUniqueViolation = (cause: unknown, column: "branch" | "slug") => {
 /** 03, Create a workspace: checks and the D1 insert here; everything after in WorkspaceDO.init. */
 export const createWorkspace = async (
   { env, user }: HandlerCtx,
-  { projectId, source, agent, model, customAgentId, prompt }: FnInput<"createWorkspace">,
+  { projectId, source, agent, model, customAgentId, agentId, prompt }: FnInput<"createWorkspace">,
 ): Promise<FnOutput<"createWorkspace">> => {
   const p = await requireProject(env, user.id, projectId);
-  const custom = customAgentId ? await resolveProfile(env, user.id, customAgentId, agent) : undefined;
   const project = projectToWire(p);
   const defaults = resolveSettings(project.settings, {}).effective;
+
+  const custom = agentId
+    ? await resolveLibraryProfile(env, user.id, agentId, defaults.agent.default, agent)
+    : customAgentId
+      ? await resolveProfile(env, user.id, customAgentId, agent)
+      : undefined;
+
   const token = await projectToken(env, p);
   const repo = repoOf(p);
   let branch: string;
@@ -179,15 +186,50 @@ const resolveProfile = async (
   };
 };
 
+const resolveLibraryProfile = async (
+  env: HandlerCtx["env"],
+  userId: string,
+  agentId: string,
+  defaultAgent: AgentId,
+  requested?: AgentId,
+): Promise<{ agent: AgentId; custom: SessionAgentProfile }> => {
+  await migrateAgents(env, userId);
+  const agent = agentToWire(await activeAgent(env, userId, agentId));
+  const base = agent.baseAgent === "auto" ? defaultAgent : agent.baseAgent;
+
+  if (requested !== undefined && requested !== base) throw new TempoError("VALIDATION_FAILED");
+
+  return {
+    agent: base,
+    custom: {
+      customAgent: { id: agent.id, name: agent.name, commitSha: agent.sha },
+      profile: toLibraryProfile(agent),
+      model: agent.model,
+    },
+  };
+};
+
 /** createSession resolves a custom agent here: the WorkspaceDO never reads D1 or Artifacts for it. */
 export const createSession: Handler<"createSession"> = async ({ env, user }, input) => {
-  const { workspaceId, customAgentId, ...rest } = input;
+  const { workspaceId, customAgentId, agentId, ...rest } = input;
 
-  if (!(await getOwnedWorkspace(env, user.id, workspaceId))) throw new TempoError("NOT_FOUND");
+  const workspace = await getOwnedWorkspace(env, user.id, workspaceId);
 
-  const custom = customAgentId
-    ? (await resolveProfile(env, user.id, customAgentId, rest.agent)).custom
-    : undefined;
+  if (!workspace) throw new TempoError("NOT_FOUND");
+
+  const custom = agentId
+    ? (
+        await resolveLibraryProfile(
+          env,
+          user.id,
+          agentId,
+          unwrap(await env.WORKSPACE.getByName(workspaceId).getWorkspace({})).settings.agent.default,
+          rest.agent,
+        )
+      ).custom
+    : customAgentId
+      ? (await resolveProfile(env, user.id, customAgentId, rest.agent)).custom
+      : undefined;
 
   return unwrap(
     await env.WORKSPACE.getByName(workspaceId).createSession(custom ? { ...rest, custom } : rest),
