@@ -185,7 +185,11 @@ The Tempo Spec (tabs 00 to 06) is the source of truth. Read the tab for the area
 All local PR checks, builds and browser regressions share one five-minute total
 runner budget. `bun run ci` measures each stage and enforces 270 seconds including
 setup, reserving 30 seconds for cleanup. See `docs/CI.md` for the test audit, suite
-boundaries and rules. Hosted acceptance and installed-agent conformance remain
+boundaries and rules. Worker, UI and component tests and browser fixture builds
+have separate cache entries that include transitive workspace sources. Browser
+tests still execute for code changes. Documentation-only changes retain the
+required check with lint/format only; unavailable change bases run the full suite.
+Hosted acceptance and installed-agent conformance remain
 explicit gates; skipped tests do not satisfy them.
 
 ## Definition of done

@@ -22,13 +22,13 @@ export default defineConfig({
     },
     {
       name: "phone-chromium",
-      grepInvert: /desktop review|desktop shortcuts/,
+      grep: /@mobile/,
       use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
     },
   ],
   webServer: {
     command:
-      "bun run --cwd ../../apps/tempo vite build --config vite.web-test.config.ts && bun run --cwd ../../apps/tempo vite preview --config vite.web-test.config.ts --host 127.0.0.1 --port 4179 --strictPort",
+      "bun run --cwd ../.. turbo run build:web-fixture --filter=@tempo/app && bun run --cwd ../../apps/tempo vite preview --config vite.web-test.config.ts --host 127.0.0.1 --port 4179 --strictPort",
     url: "http://127.0.0.1:4179",
     reuseExistingServer: false,
   },

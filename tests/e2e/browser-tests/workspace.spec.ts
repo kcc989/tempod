@@ -91,23 +91,26 @@ test("draft mentions survive switching chats and a page reload", async ({ page }
 test("phone layout reads, replies, approves, and reviews a unified diff without horizontal overflow", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   const app = await browserFixture(page);
   await page.goto("/w/w1");
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Message", exact: true }).fill("Phone reply");
-  await page.getByRole("button", { name: "Queue", exact: true }).click();
+  await page.getByRole("button", { name: "Queue", exact: true }).tap();
+  await expect
+    .poll(() => app.requests.find((request) => request.name === "sendPrompt")?.input)
+    .toMatchObject({ text: "Phone reply", delivery: "queue" });
   app.permission();
-  await page.getByRole("button", { name: /Allow once/ }).click();
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
-  await page.getByRole("option").filter({ hasText: "main.ts" }).click();
+  await page.getByRole("button", { name: /Allow once/ }).tap();
+  await expect(page.getByText("Chose: Allow once")).toBeVisible();
+  await page.getByRole("button", { name: "Changes", exact: true }).tap();
+  await page.getByRole("option").filter({ hasText: "main.ts" }).tap();
   await expect(page.getByRole("radiogroup", { name: "Diff view" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Split", exact: true })).toBeDisabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole("button", { name: "Comment on file", exact: true }).click();
+  await page.getByRole("button", { name: "Comment on file", exact: true }).tap();
   await page.getByRole("textbox", { name: "Whole file" }).fill("Review from phone");
-  await page.getByRole("button", { name: "Add comment", exact: true }).click();
-  await page.getByRole("button", { name: "Send 1 comment to Claude", exact: true }).click();
+  await page.getByRole("button", { name: "Add comment", exact: true }).tap();
+  await page.getByRole("button", { name: "Send 1 comment to Claude", exact: true }).tap();
   await expect(page.getByText("1 review comment", { exact: true })).toBeVisible();
 });
 

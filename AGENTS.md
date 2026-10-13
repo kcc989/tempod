@@ -58,4 +58,7 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 - Prefer the lowest test layer that proves the behavior. Browser tests are for real interaction, layout, accessibility, persistence and reconnect behavior; pure logic belongs in unit tests. Keep failure, security, idempotency, and migration coverage.
 - Wait for observable state instead of sleeping. Use a short local timeout when testing deadlines, and restore it afterwards. Never add retries to hide flakes.
 - Keep live deployment/agent suites explicit (`test:e2e`, `test:conformance`) and uncached. Image/tool/PID checks belong in `test:tempod:container`. A skip is never proof that those gates passed.
+- Concurrent Worker cases must use test-context assertions and cleanup, with a distinct user/project/DO per fixture. Keep global clock/GitHub mock groups sequential; keep shared DOM cases sequential.
+- Keep Worker, UI and component caches separate. Include transitive workspace sources and shared helpers/configuration in their inputs; widen them when imports cross boundaries. Cache fixture builds, but execute the browser tests.
+- Documentation-only classification must fail closed for unavailable bases, code/config changes and both sides of renames. Keep the required `check` job; do not use workflow path ignores that leave it pending.
 - Preserve cache correctness: shared root configuration is a global input; include runtime-changing environment variables in task hashes. Do not cache deployment or live external checks.

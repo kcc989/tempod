@@ -1,5 +1,7 @@
 import { appendFileSync } from "node:fs";
 
+const docsOnly = process.argv.includes("--docs-only");
+const { devDependencies } = await Bun.file(new URL("../package.json", import.meta.url)).json();
 const started = Number(process.env["CI_STARTED_AT"] ?? Date.now());
 const budgetMs = 270_000;
 const timings: { name: string; seconds: number }[] = [];
@@ -7,8 +9,18 @@ type Check = [string, string[]];
 const checks = {
   versions: ["Container versions", ["bun", "run", "check:versions"]],
   typecheck: ["Typecheck", ["bun", "run", "typecheck"]],
-  lint: ["Lint", ["bun", "run", "lint"]],
-  format: ["Format", ["bun", "run", "format:check"]],
+  lint: [
+    "Lint",
+    docsOnly
+      ? ["bunx", "--package", `oxlint@${devDependencies.oxlint}`, "oxlint", "--deny-warnings", "."]
+      : ["bun", "run", "lint"],
+  ],
+  format: [
+    "Format",
+    docsOnly
+      ? ["bunx", "--package", `oxfmt@${devDependencies.oxfmt}`, "oxfmt", "--check", "."]
+      : ["bun", "run", "format:check"],
+  ],
   tests: ["Unit and integration tests", ["bun", "run", "test"]],
   daemon: ["Daemon build", ["bun", "run", "build:tempod"]],
   app: ["App build", ["bun", "run", "--cwd", "apps/tempo", "build"]],
@@ -41,17 +53,20 @@ const runSequence = async (sequence: Check[]): Promise<void> => {
     if (!(await runCheck(check))) break;
   }
 };
-await runSequence([checks.versions, checks.lint, checks.format]);
-if (exitCode === 0) {
+await runSequence(docsOnly ? [checks.lint, checks.format] : [checks.versions, checks.lint, checks.format]);
+if (!docsOnly && exitCode === 0) {
   await Promise.all([runSequence([checks.typecheck, checks.daemon, checks.app]), runCheck(checks.tests)]);
 }
-if (exitCode === 0) {
+if (!docsOnly && exitCode === 0) {
   await Promise.all([runCheck(checks.web), runCheck(checks.browser)]);
 }
 
 const total = (Date.now() - started) / 1000;
 const summary = [
   "## CI runtime",
+  docsOnly
+    ? "Documentation-only change: lint and formatting; application tests and builds are not required."
+    : "Complete suite.",
   "",
   "| Check | Seconds |",
   "| --- | ---: |",

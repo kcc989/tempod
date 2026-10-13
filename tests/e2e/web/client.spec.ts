@@ -17,27 +17,28 @@ test.beforeEach(async ({ page, fixture }) => {
   });
 });
 
-test("renders live workspace state and keeps chat drafts across tabs and reloads", async ({
-  page,
-  fixture,
-}) => {
-  await expect(page.getByRole("heading", { name: "Build keeled" })).toBeVisible();
-  await expect(
-    page.getByLabel("Transcript", { exact: true }).getByText("Ready to review keeled."),
-  ).toBeVisible();
-  const message = page.getByRole("textbox", { name: "Message", exact: true });
-  await message.fill("Draft for Claude");
-  if (test.info().project.name.startsWith("phone")) {
-    await page.getByRole("button", { name: "Switch tab" }).click();
-    await page.getByRole("menuitem", { name: "Second chat" }).click();
-  } else await page.getByRole("tab", { name: "Second chat", exact: true }).click();
-  await expect(message).toHaveValue("");
-  await message.fill("Other draft");
-  await page.reload();
-  await expect(message).toHaveValue("Draft for Claude");
-  fixture.updateWorkspace({ title: "Keeled ready" });
-  await expect(page.getByRole("heading", { name: "Keeled ready" })).toBeVisible();
-});
+test(
+  "renders live workspace state and keeps chat drafts across tabs and reloads",
+  { tag: "@mobile" },
+  async ({ page, fixture }) => {
+    await expect(page.getByRole("heading", { name: "Build keeled" })).toBeVisible();
+    await expect(
+      page.getByLabel("Transcript", { exact: true }).getByText("Ready to review keeled."),
+    ).toBeVisible();
+    const message = page.getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("Draft for Claude");
+    if (test.info().project.name.startsWith("phone")) {
+      await page.getByRole("button", { name: "Switch tab" }).click();
+      await page.getByRole("menuitem", { name: "Second chat" }).click();
+    } else await page.getByRole("tab", { name: "Second chat", exact: true }).click();
+    await expect(message).toHaveValue("");
+    await message.fill("Other draft");
+    await page.reload();
+    await expect(message).toHaveValue("Draft for Claude");
+    fixture.updateWorkspace({ title: "Keeled ready" });
+    await expect(page.getByRole("heading", { name: "Keeled ready" })).toBeVisible();
+  },
+);
 
 test("sends, queues, edits queued prompts and stops through the real composer", async ({ page, fixture }) => {
   const message = page.getByRole("textbox", { name: "Message", exact: true });
@@ -114,42 +115,46 @@ test("a pending send survives tab switches and restores its draft after failure"
   expect(fixture.inputs("sendPrompt")).toHaveLength(1);
 });
 
-test("mentions, slash plan mode and file uploads reach the prompt contract", async ({ page, fixture }) => {
-  const message = page.getByRole("textbox", { name: "Message", exact: true });
-  await message.fill("@README");
-  await expect(page.getByRole("option", { name: "README.md", exact: true })).toBeVisible();
-  await message.press("Enter");
-  await expect(page.getByRole("button", { name: "Remove README.md" })).toBeVisible();
-  await message.fill("/plan");
-  await message.press("Enter");
-  await expect.poll(() => fixture.inputs("setSessionMode").at(-1)?.modeId).toBe("plan");
-  await page
-    .locator('input[type="file"]')
-    .setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("notes") });
-  await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
-  if (test.info().project.name.startsWith("phone")) {
-    await page.getByRole("button", { name: "Switch tab" }).click();
-    await page.getByRole("menuitem", { name: "Second chat" }).click();
-    await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeHidden();
-    await page.getByRole("button", { name: "Switch tab" }).click();
-    await page.getByRole("menuitem", { name: "Claude chat" }).click();
-  } else {
-    await page.getByRole("tab", { name: "Second chat", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeHidden();
-    await page.getByRole("tab", { name: "Claude chat", exact: true }).click();
-  }
-  await expect(page.getByRole("button", { name: "Remove README.md" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
-  await message.fill("Review this");
-  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
-  await message.press("Enter");
-  await expect.poll(() => fixture.inputs("sendPrompt").length).toBe(1);
-  expect(fixture.inputs("sendPrompt")[0]).toMatchObject({
-    text: "Review this",
-    mentions: [{ path: "README.md" }],
-    attachmentIds: ["attachment-1"],
-  });
-});
+test(
+  "mentions, slash plan mode and file uploads reach the prompt contract",
+  { tag: "@mobile" },
+  async ({ page, fixture }) => {
+    const message = page.getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("@README");
+    await expect(page.getByRole("option", { name: "README.md", exact: true })).toBeVisible();
+    await message.press("Enter");
+    await expect(page.getByRole("button", { name: "Remove README.md" })).toBeVisible();
+    await message.fill("/plan");
+    await message.press("Enter");
+    await expect.poll(() => fixture.inputs("setSessionMode").at(-1)?.modeId).toBe("plan");
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("notes") });
+    await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
+    if (test.info().project.name.startsWith("phone")) {
+      await page.getByRole("button", { name: "Switch tab" }).click();
+      await page.getByRole("menuitem", { name: "Second chat" }).click();
+      await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeHidden();
+      await page.getByRole("button", { name: "Switch tab" }).click();
+      await page.getByRole("menuitem", { name: "Claude chat" }).click();
+    } else {
+      await page.getByRole("tab", { name: "Second chat", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeHidden();
+      await page.getByRole("tab", { name: "Claude chat", exact: true }).click();
+    }
+    await expect(page.getByRole("button", { name: "Remove README.md" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
+    await message.fill("Review this");
+    await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+    await message.press("Enter");
+    await expect.poll(() => fixture.inputs("sendPrompt").length).toBe(1);
+    expect(fixture.inputs("sendPrompt")[0]).toMatchObject({
+      text: "Review this",
+      mentions: [{ path: "README.md" }],
+      attachmentIds: ["attachment-1"],
+    });
+  },
+);
 
 test("announces completed live messages once and leaves the historical backlog quiet", async ({
   page,
@@ -181,36 +186,37 @@ test("announces completed live messages once and leaves the historical backlog q
   await expect(announcement).toHaveText("Live response");
 });
 
-test("new workspace uses the selected project, discovered model and text prompt", async ({
-  page,
-  fixture,
-}) => {
-  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
-  if (test.info().project.name.startsWith("phone")) {
-    await page
-      .getByRole("navigation", { name: "Sections" })
-      .getByRole("button", { name: "Workspaces" })
-      .click();
-    await page.getByRole("button", { name: "New workspace in kcc989/keeled" }).click();
-  } else await page.keyboard.press("Alt+n");
-  const dialog = page.getByRole("dialog", { name: "New workspace" });
-  await expect(dialog).toBeVisible();
-  const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
-  await expect(prompt).toBeFocused();
-  await prompt.fill("Update keeled documentation");
-  await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
-  await page.getByRole("option", { name: "Fixture Sonnet · Claude", exact: true }).click();
-  await dialog.getByRole("button", { name: /^Create/ }).click();
-  await expect.poll(() => fixture.inputs("createWorkspace").length).toBe(1);
-  expect(fixture.inputs("createWorkspace")[0]).toMatchObject({
-    projectId: "p1",
-    agent: "claude",
-    model: "fixture-sonnet",
-    source: { kind: "new", baseBranch: "main" },
-    prompt: { text: "Update keeled documentation" },
-  });
-  await expect(dialog).toBeHidden();
-});
+test(
+  "new workspace uses the selected project, discovered model and text prompt",
+  { tag: "@mobile" },
+  async ({ page, fixture }) => {
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+    if (test.info().project.name.startsWith("phone")) {
+      await page
+        .getByRole("navigation", { name: "Sections" })
+        .getByRole("button", { name: "Workspaces" })
+        .click();
+      await page.getByRole("button", { name: "New workspace in kcc989/keeled" }).click();
+    } else await page.keyboard.press("Alt+n");
+    const dialog = page.getByRole("dialog", { name: "New workspace" });
+    await expect(dialog).toBeVisible();
+    const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
+    await expect(prompt).toBeFocused();
+    await prompt.fill("Update keeled documentation");
+    await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
+    await page.getByRole("option", { name: "Fixture Sonnet · Claude", exact: true }).click();
+    await dialog.getByRole("button", { name: /^Create/ }).click();
+    await expect.poll(() => fixture.inputs("createWorkspace").length).toBe(1);
+    expect(fixture.inputs("createWorkspace")[0]).toMatchObject({
+      projectId: "p1",
+      agent: "claude",
+      model: "fixture-sonnet",
+      source: { kind: "new", baseBranch: "main" },
+      prompt: { text: "Update keeled documentation" },
+    });
+    await expect(dialog).toBeHidden();
+  },
+);
 
 test("git primary action advances from commit through PR, merge and archive", async ({ page, fixture }) => {
   if (test.info().project.name.startsWith("phone")) {
@@ -322,24 +328,36 @@ test("desktop shortcuts, settings, live scripts and terminal", async ({ page, fi
   await expect(page.locator(".xterm-screen")).toBeVisible();
 });
 
-test("phone navigation opens unified diffs and returns to the composer", async ({ page }) => {
-  test.skip(!test.info().project.name.startsWith("phone"), "phone navigation");
-  await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "Changes" }).click();
-  await expect(page.getByRole("button", { name: "Commit and push" })).toBeVisible();
-  await page.getByRole("option", { name: /README.md/ }).click();
-  await expect(page.getByText("new README", { exact: false })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Terminal", exact: true })).toBeHidden();
-  await page.getByRole("button", { name: "Switch tab" }).click();
-  await page.getByRole("menuitem", { name: "Claude chat", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "Sections" })
-    .getByRole("button", { name: "Workspaces" })
-    .click();
-  await expect(page.getByRole("link", { name: /Build keeled/ })).toBeVisible();
-  await page.getByRole("link", { name: /Build keeled/ }).click();
-  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
-});
+test(
+  "phone navigation opens unified diffs and returns to the composer",
+  { tag: "@mobile" },
+  async ({ page }) => {
+    test.skip(!test.info().project.name.startsWith("phone"), "phone navigation");
+    await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "Changes" }).tap();
+    await expect(page.getByRole("button", { name: "Commit and push" })).toBeVisible();
+    await page.getByRole("option", { name: /README.md/ }).tap();
+    await expect(page.getByText("new README", { exact: false })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Terminal", exact: true })).toBeHidden();
+    await page.getByRole("button", { name: "Switch tab" }).tap();
+    await page.getByRole("menuitem", { name: "Claude chat", exact: true }).tap();
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+    await page
+      .getByRole("navigation", { name: "Sections" })
+      .getByRole("button", { name: "Workspaces" })
+      .tap();
+    await expect(page.getByRole("link", { name: /Build keeled/ })).toBeVisible();
+    await page.getByRole("button", { name: "Settings", exact: true }).tap();
+    await expect(page.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Appearance", exact: true }).tap();
+    await page.getByRole("radio", { name: "Dark", exact: true }).tap();
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("button", { name: "Back", exact: true }).tap();
+    await expect(page.getByRole("link", { name: /Build keeled/ })).toBeVisible();
+    await page.getByRole("link", { name: /Build keeled/ }).tap();
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+  },
+);
 
 test("theme follows the selected appearance and persists across reloads", async ({ page }) => {
   const root = page.locator("html");
