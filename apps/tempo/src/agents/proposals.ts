@@ -206,6 +206,8 @@ const apply = async (core: WorkspaceCore, id: string, proposal: AgentProposal): 
   }
 };
 
+export const proposalNotifications = { changed: agentsChanged };
+
 const resolutions = new WeakMap<WorkspaceCore, Map<string, Promise<void>>>();
 
 export const resolveAgentProposal = async (
@@ -225,7 +227,11 @@ export const resolveAgentProposal = async (
     if (!row) throw new TempoError("NOT_FOUND");
     const status = accept ? "applied" : "rejected";
 
-    if (row.status === status) return;
+    if (row.status === status) {
+      if (accept) await proposalNotifications.changed(core.env, core.ws().userId);
+
+      return;
+    }
 
     if (row.status !== "pending") throw new TempoError("NOT_FOUND");
 
@@ -233,7 +239,7 @@ export const resolveAgentProposal = async (
     core.db.update(agentProposals).set({ status }).where(eq(agentProposals.id, id)).run();
     core.broadcastDetailSoon();
 
-    if (accept) await agentsChanged(core.env, core.ws().userId);
+    if (accept) await proposalNotifications.changed(core.env, core.ws().userId);
   })();
 
   locks.set(id, work);

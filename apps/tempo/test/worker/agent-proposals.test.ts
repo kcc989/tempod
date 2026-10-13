@@ -1,6 +1,7 @@
+import { proposalNotifications } from "../../src/agents/proposals.ts";
 import { Schema } from "effect";
 import { env, runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentLibraryToolResult, newId, unwrap, type ToolReq, type ToolRes } from "@tempo/protocol";
 import { seedReadyWorkspace } from "./ready-fixture.ts";
 import { internals, seedProject, sqlRows } from "./fakes.ts";
@@ -49,6 +50,8 @@ const rows = (w: Fixture) =>
     .bind(w.seeded.userId)
     .all();
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("agent proposals", () => {
   it("lists only the owner's library, stores a redacted card without writes, and applies atomically once across receipt recovery", async () => {
     const w = await setup();
@@ -83,7 +86,32 @@ describe("agent proposals", () => {
     expect(
       await sqlRows(w.stub, "SELECT * FROM events WHERE kind IN ('propose_agent_change','list_agents')"),
     ).toEqual([]);
+
+    const notification = vi
+      .spyOn(proposalNotifications, "changed")
+      .mockRejectedValueOnce(new Error("Temporary notification failure"));
+
+    expect(await w.stub.resolveAgentProposal({ proposalId: id, apply: true })).toMatchObject({
+      ok: false,
+      error: { code: "INTERNAL" },
+    });
+    notification.mockRestore();
     unwrap(await w.stub.resolveAgentProposal({ proposalId: id, apply: true }));
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      const core = internals(i).core;
+      core.lifecycle.recordCause({
+        type: "tempo.branch.pushed",
+        source: "tempo",
+        dedupeKey: "proposal:notification:retry",
+        payload: { branch: w.branch, commitSha: "a".repeat(40) },
+      });
+      await core.lifecycle.drain();
+    });
+    expect(
+      unwrap(await w.stub.listLifecycleEvents({})).events.some(
+        (e) => e.event.type === "run.decided" && e.event.payload.handle === definition.handle,
+      ),
+    ).toBe(true);
     const applied = await rows(w);
     expect(applied.results[0]?.version).toBe(1);
     expect(applied.results[0]?.user_id).toBe(w.seeded.userId);
