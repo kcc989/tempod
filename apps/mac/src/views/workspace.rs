@@ -2510,7 +2510,8 @@ impl WorkspaceView {
             super::agents_model::menu_entries(&self.custom_agents, self.credentials.as_ref());
         let weak = cx.weak_entity();
         let menu = PopupMenu::build(window, cx, move |menu, _, _| {
-            let menu = chat_model::AGENTS.iter().fold(menu, |menu, agent| {
+            let agents = chat_model::new_chat_agents(credentials.as_ref());
+            let menu = agents.iter().fold(menu, |menu, agent| {
                 let agent = *agent;
                 let hint =
                     chat_model::new_chat_hint(agent, credentials.as_ref(), settings.as_ref());
@@ -2527,7 +2528,7 @@ impl WorkspaceView {
                     }),
                 )
             });
-            let menu = if custom.is_empty() {
+            let menu = if agents.is_empty() || custom.is_empty() {
                 menu
             } else {
                 menu.separator()
@@ -2545,7 +2546,12 @@ impl WorkspaceView {
                         }),
                 )
             });
-            menu.separator().item(
+            let menu = if agents.is_empty() && custom.is_empty() {
+                menu
+            } else {
+                menu.separator()
+            };
+            menu.item(
                 PopupMenuItem::new("Manage agents…")
                     .on_click(|_, _, cx| super::settings::open_agents(cx)),
             )

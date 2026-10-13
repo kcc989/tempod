@@ -35,7 +35,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model, reasoning level and mode pickers | Same |  |
-| Custom agents in New chat and New workspace, the profile-issues notice | Same | `Manage agents…` opens the Settings window on Agents |
+| Custom agents in New chat and New workspace, the profile-issues notice | Same | New chat hides agents and custom agents without a confirmed base-agent login, including while credential status loads or is unavailable. `Manage agents…` stays available and opens the Settings window on Agents |
 | Attachments, @-mentions, `/` commands | Same | Also accepts files dragged from Finder |
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |

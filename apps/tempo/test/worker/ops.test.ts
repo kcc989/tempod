@@ -2177,10 +2177,10 @@ describe("container stops during a create or wake op", { timeout: 60_000 }, () =
       await (i as unknown as { heartbeat(): Promise<void> }).heartbeat();
     });
     expect((await opOf(w.stub, "create"))!["status"]).toBe("cancelled");
-    expect(await stateOf(w.stub)).toBe("starting");
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
     w.tempod.failures.delete("settings.read");
     await driveToState(w.stub, "ready");
+    expect(w.states).toEqual(["starting", "setting_up", "starting", "setting_up", "ready"]);
     expect(w.container.starts).toHaveLength(2);
   });
 });

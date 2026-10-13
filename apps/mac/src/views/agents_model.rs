@@ -265,19 +265,12 @@ pub fn menu_entries(
 ) -> Vec<CustomAgentEntry> {
     agents
         .iter()
-        .map(|a| {
-            let enabled = credentials.is_some_and(|c| has_login(a.base_agent, c));
-            let suffix = match credentials {
-                None => "Loading logins…",
-                Some(_) if !enabled => "Add login in Settings",
-                Some(_) => agent_label(a.base_agent),
-            };
-            CustomAgentEntry {
-                id: a.id.clone(),
-                agent: a.base_agent,
-                label: format!("{} · {suffix}", a.name.as_str()),
-                enabled,
-            }
+        .filter(|a| credentials.is_some_and(|c| has_login(a.base_agent, c)))
+        .map(|a| CustomAgentEntry {
+            id: a.id.clone(),
+            agent: a.base_agent,
+            label: format!("{} · {}", a.name.as_str(), agent_label(a.base_agent)),
+            enabled: true,
         })
         .collect()
 }
@@ -396,10 +389,7 @@ mod tests {
             "openai": {"set": false, "updatedAt": null}
         }))
         .unwrap();
-        assert_eq!(
-            menu_entries(&agents, None)[0].label,
-            "Reviewer · Loading logins…"
-        );
+        assert!(menu_entries(&agents, None).is_empty());
         let mut codex = no_login.clone();
         codex.codex.set = true;
         assert_eq!(
@@ -407,9 +397,7 @@ mod tests {
             "Reviewer · Codex"
         );
         assert!(menu_entries(&agents, Some(&codex))[0].enabled);
-        let off = &menu_entries(&agents, Some(&no_login))[0];
-        assert!(!off.enabled);
-        assert_eq!(off.label, "Reviewer · Add login in Settings");
+        assert!(menu_entries(&agents, Some(&no_login)).is_empty());
 
         let session: p::Session = serde_json::from_value(json!({
             "id": "s", "agent": "codex", "title": "", "status": "idle", "modeId": null, "modes": [],
