@@ -78,6 +78,9 @@ impl TranscriptRow {
 
 #[derive(Clone, Debug)]
 pub enum TranscriptEvent {
+    RequestAgent {
+        agent_id: String,
+    },
     CancelRun {
         run_id: String,
     },
@@ -1199,6 +1202,20 @@ fn render_native_row(
                         cx,
                     ))
                     .child(c.text.clone())
+                    .children(c.agent_id.clone().map(|agent_id| {
+                        let view = view.clone();
+                        Button::new(SharedString::from(format!("run-anyway-{agent_id}")))
+                            .ghost()
+                            .label("Run anyway")
+                            .disabled(view.upgrade().is_none_or(|v| v.read(cx).read_only))
+                            .on_click(move |_, _, cx| {
+                                let _ = view.update(cx, |_, cx| {
+                                    cx.emit(TranscriptEvent::RequestAgent {
+                                        agent_id: agent_id.clone(),
+                                    })
+                                });
+                            })
+                    }))
                     .children(c.checkpoint_id.clone().map(|checkpoint| {
                         let view = view.clone();
                         Button::new(SharedString::from(format!("role-revert-{checkpoint}")))

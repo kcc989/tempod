@@ -38,3 +38,5 @@ M3 validation: `bun run ci` passed in 92.0 seconds with cache reuse (Worker 89.7
 The run PR rebases onto workspace tools (#44) and deterministic reconnect coverage (#45). Both clients place Activity and hidden run transcripts in the tool area beside the chat. Hosted cold checks hit the 300-second deadline; catalog loading now batches reads, reuses loaded agent rows and leaves one-time imports to the specified library access paths. A regression verifies that workspace startup does not import a library.
 
 The complete post-optimization forced-task benchmark passed in 90.4 seconds: Worker 88.2 s, other tests 46.1 s, typecheck 11.5 s, app build 13.1 s and all 28 browsers 37.8 s. No CI limits or concurrency changed.
+
+M3 merged as [#46](https://github.com/kcc989/tempod/pull/46) at [893f3a2](https://github.com/kcc989/tempod/commit/893f3a2). Hosted [checks](https://github.com/kcc989/tempod/actions/runs/38474358376) passed in 295.9 seconds including setup (309 seconds including cleanup): Worker 234.7 s, other tests 67.5 s, browsers 100.6 s, typecheck 18.8 s and app build 45.5 s.

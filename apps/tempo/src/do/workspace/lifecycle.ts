@@ -1,3 +1,4 @@
+import { decisionState, decideHooks, type HookDecision, type MatchedHook } from "../../agents/decisions.ts";
 import { lifecycleRedactor } from "../../roles/secrets.ts";
 import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { Schema } from "effect";
@@ -352,14 +353,111 @@ export class Lifecycle {
           .get())
       ) {
         const event = this.event(row);
-        this.core.ctx.storage.transactionSync(() => {
-          if (event.changeId) {
-            for (const attachment of this.attachments) {
-              const match = this.matches(attachment, event).find((m) => m.hook.when === null);
+
+        const matches: MatchedHook[] = event.changeId
+          ? this.attachments.flatMap((attachment) => {
               const agent = this.agents.find((a) => a.id === attachment.agentId);
 
-              if (match && agent) this.runs.insert(agent, attachment, event, match.hook);
+              return agent
+                ? this.matches(attachment, event).map((m) => ({
+                    agent,
+                    attachment,
+                    hook: m.hook,
+                    index: m.index,
+                  }))
+                : [];
+            })
+          : [];
+
+        let decisions: HookDecision[] = matches.map((match) => ({ match, outcome: "run" }));
+
+        if (matches.some((m) => m.hook.when !== null)) {
+          try {
+            const redact = await lifecycleRedactor(this.core);
+            const state = await decisionState(this.core, event, redact);
+            decisions = await decideHooks(this.core.env, state, matches, redact);
+          } catch {
+            decisions = matches.map((match) => ({
+              match,
+              outcome: match.hook.when === null ? "run" : "error",
+            }));
+          }
+        }
+
+        this.core.ctx.storage.transactionSync(() => {
+          const admitted = new Set<string>();
+
+          for (const decision of decisions) {
+            const { match, outcome, p } = decision;
+            this.append({
+              type: "run.decided",
+              source: "tempo",
+              changeId: event.changeId,
+              causationId: event.id,
+              dedupeKey: `decide:${event.id}:${match.attachment.id}:${match.index}`,
+              payload: {
+                attachmentId: match.attachment.id,
+                agentId: match.agent.id,
+                handle: match.agent.handle,
+                hookIndex: match.index,
+                hookEvent: match.hook.event,
+                outcome,
+                p,
+                threshold: match.hook.threshold,
+              },
+            });
+
+            if (outcome === "run" && !admitted.has(match.attachment.id)) {
+              admitted.add(match.attachment.id);
+              this.runs.insert(match.agent, match.attachment, event, match.hook, p ?? null);
             }
+          }
+
+          const origin = event.changeId ? this.origin(event.changeId) : null;
+          const sessionId = origin?.sessionId ?? null;
+
+          if (sessionId) {
+            const warned = new Set<string>();
+
+            for (const decision of decisions.filter(
+              (d) =>
+                d.outcome === "error" &&
+                !decisions.some(
+                  (other) => other.match.attachment.id === d.match.attachment.id && other.outcome === "run",
+                ),
+            )) {
+              if (warned.has(decision.match.attachment.id)) continue;
+              warned.add(decision.match.attachment.id);
+              this.core.insertItem({
+                sessionId,
+                turnId: null,
+                kind: "notice",
+                status: "completed",
+                content: {
+                  level: "warning",
+                  text: `${decision.match.agent.name} was not checked because the decision model did not answer.`,
+                  agentId: decision.match.agent.id,
+                  eventId: event.id,
+                },
+              });
+            }
+
+            const skipped = decisions.filter((d) => d.outcome === "skip");
+
+            if (skipped.length)
+              this.core.insertItem({
+                sessionId,
+                turnId: null,
+                kind: "notice",
+                status: "completed",
+                content: {
+                  level: "info",
+                  text: skipped
+                    .map((d) => `@${d.match.agent.handle} ${Math.round((d.p ?? 0) * 100)}%`)
+                    .join(" · "),
+                  eventId: event.id,
+                },
+              });
           }
 
           this.core.db

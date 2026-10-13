@@ -245,6 +245,8 @@ export const PermissionContent = Schema.Struct({
 });
 
 export const NoticeContent = Schema.Struct({
+  agentId: Schema.optionalKey(Schema.String),
+  eventId: Schema.optionalKey(Schema.String),
   level: NoticeLevel,
   text: Schema.String,
   checkpointId: Schema.optional(Schema.String),

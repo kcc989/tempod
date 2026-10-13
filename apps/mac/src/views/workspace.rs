@@ -1623,6 +1623,15 @@ impl WorkspaceView {
                         }
                     }
                 }
+                TranscriptEvent::RequestAgent { agent_id } => this.mutate::<api::RequestAgent>(
+                    p::RequestAgentIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        agent_id: agent_id.clone(),
+                        session_id: Some(session.clone()),
+                        text: None,
+                    },
+                    cx,
+                ),
                 TranscriptEvent::CancelRun { run_id } => this.mutate::<api::CancelRun>(
                     p::CancelRunIn {
                         workspace_id: this.store.read(cx).workspace_id.clone(),

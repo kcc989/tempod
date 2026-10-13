@@ -80,6 +80,7 @@
       "bucket_name": "tempo-data"
     }
   ],
+  "ai": {"binding":"AI"},
   "browser": {
     "binding": "BROWSER"
   },
