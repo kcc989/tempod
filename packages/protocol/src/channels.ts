@@ -1,3 +1,4 @@
+import { RoleRun } from "./lifecycle.ts";
 import { Schema } from "effect";
 import { CredentialProvider } from "./enums.ts";
 import {
@@ -44,6 +45,7 @@ export const WsItemDelta = msg("item.delta", {
 });
 export const WsWorkspace = msg("workspace", { workspace: WorkspaceDetail });
 export const WsSession = msg("session", { session: Session });
+export const WsRoleRun = msg("roleRun", { run: RoleRun });
 export const WsTurn = msg("turn", { turn: Turn });
 /** Additive: a queued turn was deleted. */
 export const WsTurnDeleted = msg("turn.deleted", { turnId: Schema.String });
@@ -71,6 +73,7 @@ export const WorkspaceServerMessage = Schema.Union([
   WsWorkspace,
   WsSession,
   WsTurn,
+  WsRoleRun,
   WsTurnDeleted,
   WsPermission,
   WsScriptOutput,

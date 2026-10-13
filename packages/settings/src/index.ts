@@ -24,6 +24,7 @@ const isObj = (u: unknown): u is Obj => typeof u === "object" && u !== null && !
 
 /** Known keys of a Tempo layer. `*` means any key; a nested object describes its children. */
 const KNOWN: Obj = {
+  roles: { enabled: true, max_chain_depth: true, max_runs_per_change: true, max_tokens_per_change: true },
   agent: { default: true, models: { claude: true, codex: true, opencode: true, pi: true } },
   browser: { run: true },
   scripts: {
@@ -125,6 +126,9 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
       next.agent.models = nextModels;
     }
   }
+  if (layer.roles)
+    for (const key of ["enabled", "max_chain_depth", "max_runs_per_change", "max_tokens_per_change"] as const)
+      leaf("roles", key, layer.roles[key]);
   if (layer.browser) leaf("browser", "run", layer.browser.run);
   if (layer.scripts) {
     const s = layer.scripts;
@@ -230,3 +234,4 @@ export const defaultRunScriptId = (settings: Settings): string | null => {
   return entries.find(([, s]) => s.default)?.[0] ?? null;
 };
 export * from "./agent-file.ts";
+export { parseRoleFile, parseRoleResult, ROLE_DEFAULTS } from "./roles.ts";

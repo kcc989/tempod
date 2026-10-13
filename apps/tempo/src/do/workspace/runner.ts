@@ -401,7 +401,21 @@ export class OpRunner {
       this.save(op, { step: next, attempt: 0, nextRunAt: now, status: "running" }, state);
       return;
     }
-    this.save(op, { status: "done" }, state);
+    this.core.ctx.storage.transactionSync(() => {
+      this.save(op, { status: "done" }, state);
+      if (op.kind === "commit_push") {
+        const result = state["result"] as { commitSha?: string } | undefined;
+        if (result?.commitSha)
+          this.core.lifecycle.recordCause({
+            type: "tempo.branch.pushed",
+            source: "tempo",
+            changeId: this.core.lifecycle.newestOpenChange(),
+            dedupeKey: `op:${op.id}:tempo.branch.pushed`,
+            payload: { branch: this.core.ws().branch, commitSha: result.commitSha },
+          });
+      }
+    });
+    this.core.lifecycle.kick();
     try {
       await this.hooks[op.kind as OpKind].onDone(this.core, { ...op, status: "done" }, state);
     } catch (e) {

@@ -1,3 +1,4 @@
+import { Lifecycle } from "./lifecycle.ts";
 import { and, asc, desc, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
@@ -92,12 +93,17 @@ const withUsage = (text: string | null): { usage?: TurnUsage } => {
 export class WorkspaceCore {
   readonly files = new WorkspaceFiles(this);
   readonly db: DB;
+  readonly lifecycle: Lifecycle;
   tempod: TempodClient | null = null;
   conversationUpload: Promise<void> | null = null;
+  pendingCodexAuth: { content: string; lastRefresh: number } | null = null;
+  pendingCodexPush: { content: string; version: number } | null = null;
+  credentialsBusy = false;
   /** The connect in flight, shared by every caller (container.ts, connectTempod). */
   tempodConnecting: Promise<TempodClient> | null = null;
   /** Sessions with a live adapter process in the current container. */
   readonly liveSessions = new Set<string>();
+  readonly sessionClosures = new Map<string, Promise<void>>();
   ghToken: { token: string; expiresAt: number } | null = null;
   lastPreviewAt = 0;
   lastHomeBackupAt = 0;
@@ -117,6 +123,7 @@ export class WorkspaceCore {
   queueWork: Promise<void> | null = null;
   /** Aborts the turn start in flight before its prompt is sent (archive, 03 turns.cancel). */
   turnStartAbort: AbortController | null = null;
+  startingTurnId: string | null = null;
   tempodStopping = false;
   turnEndInProgress = false;
   reconnectAttempt = 0;
@@ -179,6 +186,7 @@ export class WorkspaceCore {
   ) {
     this.db = drizzle(ctx.storage, { schema: workspaceSchema });
     this.container = ctx.container;
+    this.lifecycle = new Lifecycle(this);
     this.browser = env.BROWSER;
   }
 
@@ -535,6 +543,7 @@ export class WorkspaceCore {
   sessionToWire(r: SessionRow): Session {
     return {
       id: r.id,
+      ...(r.roleRunId ? { roleRunId: r.roleRunId } : {}),
       agent: r.agent as AgentId,
       title: r.title,
       status: r.status as Session["status"],
@@ -856,6 +865,7 @@ export class WorkspaceCore {
 
   /** 03, Activity. Open UI sockets do not count. */
   isActive(terminalsOpen: number): boolean {
+    if (this.lifecycle.runs.hasActive()) return true;
     if (this.runningTurn() || this.queuedTurns().length > 0) return true;
     if (
       this.db

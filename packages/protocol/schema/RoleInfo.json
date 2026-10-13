@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RoleInfo",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "RoleScope.json"
+    },
+    "sha": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "agent": {
+      "$ref": "RoleAgent.json"
+    },
+    "access": {
+      "$ref": "RoleAccess.json"
+    },
+    "requestable": {
+      "type": "boolean"
+    },
+    "on": {
+      "type": "array",
+      "items": {
+        "$ref": "RoleTrigger.json"
+      }
+    },
+    "limits": {
+      "$ref": "RoleLimits.json"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "shadowedBy": {
+      "anyOf": [
+        {
+          "$ref": "RoleScope.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["name", "scope", "sha", "description", "agent", "access", "requestable", "on", "limits"],
+  "additionalProperties": true
+}

@@ -1,3 +1,4 @@
+import { syncIdleCredentials } from "./credential-sync.ts";
 import { Files } from "@cloudflare/sandbox";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
@@ -140,6 +141,8 @@ export const ensureSessionLive = async (
   session: SessionRow,
   signal?: AbortSignal,
 ): Promise<void> => {
+  await core.sessionClosures.get(session.id);
+  if (signal?.aborted) return;
   if (core.liveSessions.has(session.id)) return;
   const tempod = requireTempod(core);
   const agent = session.agent as AgentId;
@@ -258,6 +261,10 @@ export const buildContent = async (
     blocks.push(text(session.pendingNote));
     patch.pendingNote = null;
   }
+  if (session.roleRunId && turn.origin !== "user") {
+    blocks.push(...(await core.lifecycle.runs.content(turn)));
+    return { blocks, patch, handoff };
+  }
   if (prompt.reviewCommentIds.length > 0) {
     const comments = core.db
       .select()
@@ -375,6 +382,7 @@ const whileQueueBusy = async <T>(core: WorkspaceCore, work: () => Promise<T>): P
     core.queueBusy = false;
     core.queueWork = null;
     core.turnStartAbort = null;
+    core.startingTurnId = null;
     release();
   }
 };
@@ -455,7 +463,7 @@ export const runQueue = async (
   opsBusy: () => boolean,
   beforeStart: () => Promise<void> = async () => {},
 ): Promise<void> => {
-  if (core.queueBusy) return;
+  if (core.queueBusy || core.credentialsBusy) return;
   const row = core.wsOrNull();
   if (!row) return;
   if (core.runningTurn()) return;
@@ -474,7 +482,9 @@ export const runQueue = async (
   const abort = new AbortController();
   try {
     await whileQueueBusy(core, async () => {
+      await syncIdleCredentials(core, true);
       core.turnStartAbort = abort;
+      core.startingTurnId = next.id;
       await beforeStart();
       return startTurn(core, next, abort.signal);
     });
@@ -502,6 +512,8 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
   let sentAt = 0;
   try {
     await ensureSessionLive(core, session, signal);
+    if (signal.aborted) return;
+    if (!(await core.lifecycle.runs.beforeTurn(turn))) return;
     const fresh = core.sessionRow(session.id);
     content = await buildContent(core, fresh, turn);
     // The workspace left ready while the agent started (an archive): the turn stays queued and is not sent.
@@ -515,6 +527,12 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
       turnId: turn.id,
       content: content.blocks,
     });
+    if (signal.aborted) {
+      await requireTempod(core)
+        .request("session.cancel", { sessionId: session.id, turnId: turn.id })
+        .catch(() => undefined);
+      return;
+    }
     commitContent(core, session.id, turn.id, content, sentAt);
     if (core.turnRow(turn.id).status !== "queued") return;
     if (!turnAllowed(core)) {
@@ -532,12 +550,12 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
     core.updateWs({ lastActivityAt: now });
     core.publish();
   } catch (e) {
-    if (content && core.turnRow(turn.id).startedAt !== null) {
-      commitContent(core, session.id, turn.id, content, sentAt);
-      return;
-    }
     if (signal.aborted) {
       log("info", "turn start aborted", { workspaceId: core.workspaceId });
+      return;
+    }
+    if (content && core.turnRow(turn.id).startedAt !== null) {
+      commitContent(core, session.id, turn.id, content, sentAt);
       return;
     }
     const err = e instanceof TempoError ? e : new TempoError("AGENT_START_FAILED", undefined, errorText(e));
@@ -565,8 +583,22 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
       errorCode: code,
       errorDetail: err.detail ?? err.message,
     });
+    if (session.roleRunId && turn.origin !== "user")
+      core.lifecycle.runs.fail(
+        core.lifecycle.runs.row(session.roleRunId),
+        err.code === "ROLE_ACCESS_VIOLATION" ? "ROLE_ACCESS_VIOLATION" : "ROLE_TURN_FAILED",
+        err.code === "ROLE_ACCESS_VIOLATION"
+          ? "Protected login or config files could not be checked."
+          : undefined,
+      );
     core.recomputeAttention();
+    core.lifecycle.kick();
     core.kickQueue();
+  } finally {
+    if (signal.aborted && session.roleRunId && turn.origin !== "user") {
+      const run = core.lifecycle.runs.row(session.roleRunId);
+      if (run.status !== "running") core.lifecycle.runs.close(run);
+    }
   }
 };
 
@@ -628,8 +660,18 @@ export const afterTurnEnded = async (core: WorkspaceCore, turnId: string): Promi
   } catch (e) {
     log("warn", "turn checkpoint failed", { workspaceId: core.workspaceId, error: errorText(e) });
   } finally {
-    core.turnEndInProgress = false;
+    try {
+      await core.lifecycle.runs.turnEnded(turnId);
+    } finally {
+      core.turnEndInProgress = false;
+    }
   }
+  await syncIdleCredentials(core).catch((e) =>
+    log("warn", "idle credential sync failed", { error: errorText(e) }),
+  );
+  const endedChange = core.turnRow(turnId).changeId;
+  if (endedChange) core.lifecycle.checkEnd(endedChange);
+  core.lifecycle.kick();
   core.updateWs({ lastActivityAt: Date.now() });
   core.recomputeAttention(false);
   core.publish();

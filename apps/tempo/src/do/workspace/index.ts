@@ -1,4 +1,4 @@
-import { eq, lte } from "drizzle-orm";
+import { eq, lte, isNull } from "drizzle-orm";
 import {
   TempoError,
   capture,
@@ -12,7 +12,16 @@ import {
   newId,
 } from "@tempo/protocol";
 import { resolveSettings } from "@tempo/settings";
-import { attachments, egressLog, ops, sessions, turns, workspace } from "../../db/workspace-do.ts";
+import {
+  lifecycleEvents,
+  roleRuns,
+  attachments,
+  egressLog,
+  ops,
+  sessions,
+  turns,
+  workspace,
+} from "../../db/workspace-do.ts";
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import { json } from "../../db/json.ts";
 import type { Env } from "../../env.ts";
@@ -134,6 +143,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
           core.kv<number>("conversationDueAt") === undefined
         )
           markConversationDirty(core);
+        await core.lifecycle.load();
+        core.lifecycle.kick();
         recoverSteering(core);
         this.runner.recover();
         await this.armAlarm();
@@ -256,6 +267,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
                 endedAt: null,
               })
               .run();
+            core.lifecycle.createPromptChange(turnId, sessionId, input.agent);
             first.turn = { sessionId, turnId };
           }
         }
@@ -264,6 +276,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
         rememberFirstPrompt(core, input.prompt.text);
         await applyPromptBranch(core, () => this.resendHello());
       }
+      await core.lifecycle.load();
+      core.lifecycle.kick();
       const firstTurn = first.turn;
       if (input.prompt && firstTurn) {
         core.insertItem({
@@ -295,6 +309,16 @@ export class WorkspaceDO extends WorkspaceRpcBase {
         this.modelDiscovery = null;
       });
       return this.modelDiscovery;
+    });
+  }
+
+  async rolesChanged(): Promise<Result<{}>> {
+    return capture(async () => {
+      if (this.core.wsOrNull()) {
+        await this.core.lifecycle.load();
+        this.core.lifecycle.kick();
+      }
+      return {};
     });
   }
 
@@ -362,6 +386,16 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   }
 
   async pushCodexAuth(content: string, version: number): Promise<void> {
+    if (
+      this.core.runningTurn() ||
+      this.core.turnEndInProgress ||
+      this.core.queueBusy ||
+      this.core.credentialsBusy
+    ) {
+      if (!this.core.pendingCodexPush || this.core.pendingCodexPush.version < version)
+        this.core.pendingCodexPush = { content, version };
+      return;
+    }
     if (!this.core.tempod?.open) return;
     await this.core.tempod.request("credential.put", { provider: "codex", content, version });
   }
@@ -506,6 +540,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       }
       return;
     }
+    await core.lifecycle.runs.timeouts();
+    core.lifecycle.kick();
     await this.runner.runDue();
     const now = Date.now();
     if (this.containerExpected() && now - this.lastHeartbeat >= HEARTBEAT_MS - 500) {
@@ -551,6 +587,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const candidates: number[] = [];
     const conversationDue = core.kv<number>("conversationDueAt");
     if (conversationDue !== undefined) candidates.push(conversationDue);
+    if (core.lifecycle.retryAt !== null) candidates.push(core.lifecycle.retryAt);
+    const roleDeadline = core.lifecycle.runs.nextDeadline();
+    if (roleDeadline !== null) candidates.push(roleDeadline);
+    if (core.db.select().from(lifecycleEvents).where(isNull(lifecycleEvents.dispatchedAt)).get())
+      candidates.push(Date.now() + 1000);
     const due = this.runner.nextDueAt();
     if (due !== null) candidates.push(due);
     if (this.containerExpected()) candidates.push(this.lastHeartbeat + HEARTBEAT_MS);
@@ -587,6 +628,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     queueMicrotask(() => {
       this.queueScheduled = false;
       if (!this.core.wsOrNull()) return;
+      this.core.lifecycle.kick();
       void runQueue(
         this.core,
         () => this.runner.hasPendingOrRunning(),
@@ -658,10 +700,14 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       finishTurn(core, running.id, "interrupted", { stopReason: null });
       core.notice("warning", text, running.sessionId, running.id);
     } else core.notice("warning", text);
+    for (const run of core.db.select().from(roleRuns).where(eq(roleRuns.status, "running")).all())
+      core.lifecycle.runs.fail(run, "ROLE_TURN_FAILED");
     closeOpenRuns(core);
     core.closeTerminals(1001, "container stopped");
     core.tempod?.close(1000, "container stopped");
     core.tempod = null;
+    core.pendingCodexAuth = null;
+    core.pendingCodexPush = null;
     core.tempodStopping = false;
     core.liveSessions.clear();
     core.updateWs({ tempodToken: null });

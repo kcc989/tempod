@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleLogEvent",
+  "type": "object",
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "event": {
+      "$ref": "LifecycleEvent.json"
+    }
+  },
+  "required": ["seq", "event"],
+  "additionalProperties": true
+}

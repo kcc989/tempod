@@ -85,6 +85,9 @@ pub enum TranscriptEvent {
     Retry {
         turn_id: String,
     },
+    RevertCheckpoint {
+        checkpoint_id: String,
+    },
     Revert {
         turn_id: String,
     },
@@ -994,6 +997,22 @@ fn render_native_row(
                         cx,
                     ))
                     .child(c.text.clone())
+                    .children(c.checkpoint_id.clone().map(|checkpoint| {
+                        let view = view.clone();
+                        Button::new(SharedString::from(format!("role-revert-{checkpoint}")))
+                            .ghost()
+                            .label("Revert")
+                            .disabled(!revertable)
+                            .on_click(move |_, _, cx| {
+                                let _ = view.update(cx, |this, cx| {
+                                    if this.can_revert && !this.read_only {
+                                        cx.emit(TranscriptEvent::RevertCheckpoint {
+                                            checkpoint_id: checkpoint.clone(),
+                                        });
+                                    }
+                                });
+                            })
+                    }))
                     .into_any_element(),
                 ItemContent::RevertMarker(c) => div()
                     .px_4()

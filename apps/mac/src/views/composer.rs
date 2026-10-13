@@ -96,6 +96,8 @@ pub struct Composer {
     files_loaded: Option<std::time::Instant>,
     file_menu: Entity<ListState<FilePicker>>,
     _file_events: Subscription,
+    pub role_running: bool,
+    roles: Vec<String>,
     pub read_only: bool,
     pub sending: bool,
     pub working: bool,
@@ -203,6 +205,8 @@ impl Composer {
             files_loaded: None,
             file_menu,
             _file_events: file_events,
+            role_running: false,
+            roles: vec![],
             read_only: false,
             sending: false,
             working: false,
@@ -381,6 +385,14 @@ impl Composer {
             cx.emit(ComposerEvent::Change(String::new()));
         }
     }
+    pub fn set_roles(&mut self, roles: Vec<p::RoleInfo>, cx: &mut Context<Self>) {
+        self.roles = roles
+            .into_iter()
+            .filter(|r| r.requestable && r.error.is_none() && r.shadowed_by.is_none())
+            .map(|r| format!("@{}", r.name))
+            .collect();
+        cx.notify();
+    }
     pub fn set_files(&mut self, result: Result<Vec<String>, String>, cx: &mut Context<Self>) {
         self.files_loading = false;
         match result {
@@ -406,7 +418,12 @@ impl Composer {
         let input = self.input.read(cx);
         composer_model::mention_query(input.value().as_ref(), input.cursor())
             .map(|(_, query)| {
-                composer_model::file_matches(self.files.as_deref().unwrap_or_default(), query)
+                let mut matches = composer_model::file_matches(&self.roles, query);
+                matches.extend(composer_model::file_matches(
+                    self.files.as_deref().unwrap_or_default(),
+                    query,
+                ));
+                matches
             })
             .unwrap_or_default()
     }
@@ -437,6 +454,25 @@ impl Composer {
         let Some((start, _)) = composer_model::mention_query(&text, caret) else {
             return;
         };
+        if self.roles.contains(&path) {
+            if text.trim_start().starts_with("/role ") {
+                return;
+            }
+            self.set_text(
+                &format!(
+                    "/role {} {}{}",
+                    path.trim_start_matches('@'),
+                    &text[..start],
+                    &text[caret..]
+                ),
+                window,
+                cx,
+            );
+            self.command_dismissed = true;
+            cx.emit(ComposerEvent::Change(self.text(cx)));
+            cx.notify();
+            return;
+        }
         self.add_mention(&path, cx);
         let prefix = &text[..start];
         let line = prefix.chars().filter(|c| *c == '\n').count() as u32;
@@ -781,6 +817,29 @@ impl Render for Composer {
                             }))
                     }))
             }))
+            .children(
+                self.text(cx)
+                    .trim_start()
+                    .strip_prefix("/role ")
+                    .and_then(|rest| rest.split_whitespace().next())
+                    .map(|name| {
+                        Button::new("role-chip")
+                            .ghost()
+                            .label(format!("@{name}"))
+                            .tooltip("Remove role")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                let text = this.text(cx);
+                                let rest =
+                                    text.trim_start().strip_prefix("/role ").unwrap_or_default();
+                                let request = rest
+                                    .split_once(char::is_whitespace)
+                                    .map(|(_, text)| text)
+                                    .unwrap_or_default();
+                                this.set_text(request, window, cx);
+                                cx.emit(ComposerEvent::Change(this.text(cx)));
+                            }))
+                    }),
+            )
             .child(field)
             .child(
                 h_flex()
@@ -928,7 +987,11 @@ impl Render for Composer {
                     )
                     .children(self.working.then(|| {
                         Button::new("stop-turn")
-                            .label("Stop")
+                            .label(if self.role_running {
+                                "Cancel run"
+                            } else {
+                                "Stop"
+                            })
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Stop)))
                     }))
                     .children((self.working && self.steering).then(|| {
@@ -1248,5 +1311,35 @@ mod attachment_tests {
         .unwrap();
         cx.run_until_parked();
         assert_eq!(*sends.borrow(), vec![String::new(), String::new()]);
+    }
+    #[gpui_kit::test]
+    fn role_picker_inserts_one_request_and_no_file_mention(cx: &mut TestAppContext) {
+        let (window, composer) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            gpui_kit::open_window(Default::default(), cx, |window, cx| {
+                cx.new(|cx| Composer::new(window, cx))
+            })
+            .unwrap()
+        });
+        cx.update_window(window, |_, window, cx| {
+            composer.update(cx, |c, cx| {
+                let role: p::RoleInfo = serde_json::from_str(
+                    include_str!("../../../../packages/protocol/fixtures/types/RoleInfo.jsonl")
+                        .trim(),
+                )
+                .unwrap();
+                c.set_roles(vec![role], cx);
+                c.set_files(Ok(vec!["reviewer.md".into()]), cx);
+                c.set_text("@rev focus on auth", window, cx);
+                c.input.update(cx, |i, cx| {
+                    i.set_cursor_position(gpui_kit::base::input::Position::new(0, 4), window, cx)
+                });
+                assert_eq!(c.file_rows(cx)[0], "@reviewer");
+                c.pick_file(0, window, cx);
+                assert_eq!(c.text(cx), "/role reviewer  focus on auth");
+                assert!(c.prompt(&c.text(cx)).mentions.is_empty());
+            })
+        })
+        .unwrap();
     }
 }

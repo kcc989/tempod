@@ -1,0 +1,1 @@
+{"description":"Review the change","agent":"other","model":"default","access":"read-only","inputs":["diff"],"requestable":true,"on":[],"limits":{"rounds":1,"continues":2,"timeout":"20m","tokens":0}}

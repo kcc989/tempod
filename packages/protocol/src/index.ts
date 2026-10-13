@@ -13,3 +13,4 @@ export * from "./redact.ts";
 export * from "./environments.ts";
 export * from "./artifacts.ts";
 export * from "./pr-guide.ts";
+export * from "./lifecycle.ts";

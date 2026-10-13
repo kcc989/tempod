@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleChangeEndedPayload",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["done", "failed", "cancelled"]
+    }
+  },
+  "required": ["status"],
+  "additionalProperties": true
+}

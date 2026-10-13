@@ -1,3 +1,4 @@
+import { toTurnUsage, type AgentId } from "@tempo/protocol";
 import {
   ERROR_CODES,
   TEMPOD_REQUESTS,
@@ -12,9 +13,9 @@ import {
   type TempodParams,
   type TempodResult,
 } from "@tempo/protocol";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Schema } from "effect";
-import { events } from "../../db/workspace-do.ts";
+import { events, turns, lifecycleEvents } from "../../db/workspace-do.ts";
 import { log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
 
@@ -222,12 +223,48 @@ export class TempodClient {
         const result = this.onEvent(event, envelope);
         if (result !== undefined) throw new Error("Local tempod events must apply synchronously");
       }
+      if (event.kind === "turn.ended") {
+        const turn = this.core.db.select().from(turns).where(eq(turns.id, event.turnId)).get();
+        if (turn && !["queued", "running"].includes(turn.status)) {
+          const session = this.core.sessionRow(turn.sessionId);
+          const roleRunId = turn.origin !== "user" ? session.roleRunId : null;
+          const cause = roleRunId
+            ? this.core.db
+                .select()
+                .from(lifecycleEvents)
+                .where(
+                  and(eq(lifecycleEvents.roleRunId, roleRunId), eq(lifecycleEvents.type, "role.run.started")),
+                )
+                .get()
+            : turn.changeId
+              ? this.core.lifecycle.origin(turn.changeId)
+              : null;
+          this.core.lifecycle.append({
+            type: "agent.turn.ended",
+            source: "agent",
+            ...(turn.changeId ? { changeId: turn.changeId } : {}),
+            turnId: turn.id,
+            sessionId: turn.sessionId,
+            agent: session.agent as AgentId,
+            ...(roleRunId ? { roleRunId } : {}),
+            ...(cause ? { causationId: cause.id } : {}),
+            dedupeKey: `tempod:${incarnation}:${envelope.seq}`,
+            payload: {
+              status: turn.status as "completed" | "cancelled" | "failed" | "interrupted",
+              stopReason: turn.stopReason,
+              ...(turn.errorCode ? { errorCode: turn.errorCode } : {}),
+              ...(toTurnUsage(event.usage) ? { usage: toTurnUsage(event.usage)! } : {}),
+            },
+          });
+        }
+      }
       if (event.kind === "incarnation.changed") {
         this.core.updateWs({ tempodIncarnation: event.incarnation, tempodAckedSeq: envelope.seq });
       } else if (envelope.seq > this.core.ws().tempodAckedSeq) {
         this.core.updateWs({ tempodAckedSeq: envelope.seq });
       }
     });
+    this.core.lifecycle.kick();
     this.queueAck(isIncarnation);
   }
 

@@ -10,6 +10,40 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     input: MethodInput<K>,
   ): Promise<Result<FnOutput<K>>>;
 
+  listRoles(input: MethodInput<"listRoles">): Promise<Result<FnOutput<"listRoles">>> {
+    return this.rpc("listRoles", input);
+  }
+
+  getRoleText(input: MethodInput<"getRoleText">): Promise<Result<FnOutput<"getRoleText">>> {
+    return this.rpc("getRoleText", input);
+  }
+
+  reloadRoles(input: MethodInput<"reloadRoles">): Promise<Result<FnOutput<"reloadRoles">>> {
+    return this.rpc("reloadRoles", input);
+  }
+
+  requestRole(input: MethodInput<"requestRole">): Promise<Result<FnOutput<"requestRole">>> {
+    return this.rpc("requestRole", input);
+  }
+
+  cancelRoleRun(input: MethodInput<"cancelRoleRun">): Promise<Result<FnOutput<"cancelRoleRun">>> {
+    return this.rpc("cancelRoleRun", input);
+  }
+
+  listRoleRuns(input: MethodInput<"listRoleRuns">): Promise<Result<FnOutput<"listRoleRuns">>> {
+    return this.rpc("listRoleRuns", input);
+  }
+
+  listLifecycleEvents(
+    input: MethodInput<"listLifecycleEvents">,
+  ): Promise<Result<FnOutput<"listLifecycleEvents">>> {
+    return this.rpc("listLifecycleEvents", input);
+  }
+
+  getTrace(input: MethodInput<"getTrace">): Promise<Result<FnOutput<"getTrace">>> {
+    return this.rpc("getTrace", input);
+  }
+
   getWorkspace(input: MethodInput<"getWorkspace">): Promise<Result<FnOutput<"getWorkspace">>> {
     return this.rpc("getWorkspace", input);
   }

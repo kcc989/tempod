@@ -249,6 +249,8 @@ export const makeSteps = (handlers: ConnectHandlers): Record<string, StepFn> => 
         errors: res.errors,
         sources: res.sources ?? {},
       });
+      await core.lifecycle.load(true);
+      core.lifecycle.kick();
       await sendEnv(core);
       core.broadcastDetailSoon();
       return "next";

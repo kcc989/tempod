@@ -12,6 +12,46 @@ const run = async <K extends FnName>(name: K, data: unknown): Promise<string> =>
     await runFn(name, env, getRequest().headers, data, { allowCookie: true, allowBearer: false }),
   );
 
+export const listRoles = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listRoles">) => data)
+  .handler(({ data }) => run("listRoles", data));
+
+export const getRoleText = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getRoleText">) => data)
+  .handler(({ data }) => run("getRoleText", data));
+
+export const putUserRole = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"putUserRole">) => data)
+  .handler(({ data }) => run("putUserRole", data));
+
+export const deleteUserRole = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteUserRole">) => data)
+  .handler(({ data }) => run("deleteUserRole", data));
+
+export const reloadRoles = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"reloadRoles">) => data)
+  .handler(({ data }) => run("reloadRoles", data));
+
+export const requestRole = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"requestRole">) => data)
+  .handler(({ data }) => run("requestRole", data));
+
+export const cancelRoleRun = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"cancelRoleRun">) => data)
+  .handler(({ data }) => run("cancelRoleRun", data));
+
+export const listRoleRuns = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listRoleRuns">) => data)
+  .handler(({ data }) => run("listRoleRuns", data));
+
+export const listLifecycleEvents = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listLifecycleEvents">) => data)
+  .handler(({ data }) => run("listLifecycleEvents", data));
+
+export const getTrace = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getTrace">) => data)
+  .handler(({ data }) => run("getTrace", data));
+
 export const listInstallationRepos = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listInstallationRepos">) => data)
   .handler(({ data }) => run("listInstallationRepos", data));

@@ -4,6 +4,64 @@ import * as w from "./world.ts";
 
 const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 
+const ROLE_FILE = {
+  description: "Review the change",
+  agent: "other",
+  model: "default",
+  access: "read-only",
+  inputs: ["diff"],
+  requestable: true,
+  on: [],
+  limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
+} as const;
+const ROLE_INFO = {
+  name: "reviewer",
+  scope: "builtin",
+  sha: "a".repeat(64),
+  description: ROLE_FILE.description,
+  agent: ROLE_FILE.agent,
+  access: ROLE_FILE.access,
+  requestable: true,
+  on: [],
+  limits: ROLE_FILE.limits,
+} as const;
+const ROLE_RUN = {
+  id: uid(920),
+  changeId: uid(921),
+  parentRunId: null,
+  depth: 1,
+  roleName: "reviewer",
+  scope: "builtin",
+  roleSha: "a".repeat(64),
+  triggerEventId: uid(922),
+  sessionId: S1,
+  agent: "codex",
+  access: "read-only",
+  status: "running",
+  round: 1,
+  continuesUsed: 0,
+  tokens: 0,
+  pinCheckpointId: null,
+  result: null,
+  errorCode: null,
+  errorDetail: null,
+  deadlineAt: at(40),
+  createdAt: at(1),
+  startedAt: at(2),
+  endedAt: null,
+} as const;
+const LIFE_EVENT = {
+  id: uid(922),
+  occurredAt: at(1),
+  workspaceId: W1,
+  type: "tempo.change.created",
+  source: "tempo",
+  changeId: uid(921),
+  dedupeKey: `change:${uid(921)}:created`,
+  payload: { origin: "request", role: "reviewer", text: "Review auth" },
+} as const;
+const LIFE_LOG = { seq: 1, event: LIFE_EVENT };
+
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 const ENV_ID = uid(901);
 const INJECTOR_CODE = "export default { async fetch(request, env) { return fetch(request); } };\n";
@@ -51,6 +109,96 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       items: [],
     },
   ],
+  RoleName: ["reviewer"],
+  RoleFinding: [{ path: "src/auth.ts", line: 1, text: "Check auth", blocking: true }],
+  RoleResult: [{ status: "pass", summary: "No blocking findings." }],
+  RoleLimits: [ROLE_FILE.limits],
+  RoleTrigger: [
+    { event: "role.run.completed", role: "coder", status: "done" },
+    { event: "agent.turn.ended", session: "user", status: "completed" },
+  ],
+  RoleFile: [ROLE_FILE],
+  RoleInfo: [ROLE_INFO],
+  RoleRun: [ROLE_RUN],
+  LifecycleEvent: [
+    LIFE_EVENT,
+    {
+      ...LIFE_EVENT,
+      type: "agent.turn.ended",
+      source: "agent",
+      payload: {
+        status: "completed",
+        stopReason: "end_turn",
+        usage: { totalTokens: 8, inputTokens: 5, outputTokens: 3 },
+      },
+    },
+    {
+      ...LIFE_EVENT,
+      type: "role.run.started",
+      source: "role",
+      payload: {
+        role: "reviewer",
+        scope: "builtin",
+        roleSha: "a".repeat(64),
+        round: 1,
+        agent: "codex",
+        access: "read-only",
+      },
+    },
+    {
+      ...LIFE_EVENT,
+      type: "role.run.completed",
+      source: "role",
+      payload: { role: "reviewer", round: 1, result: { status: "pass", summary: "No blocking findings." } },
+    },
+    {
+      ...LIFE_EVENT,
+      type: "role.run.failed",
+      source: "role",
+      payload: { role: "reviewer", round: 1, errorCode: "ROLE_LIMIT", detail: "limits.rounds" },
+    },
+    { ...LIFE_EVENT, type: "tempo.change.ended", payload: { status: "done" } },
+    {
+      ...LIFE_EVENT,
+      type: "tempo.branch.pushed",
+      payload: { branch: "tempo/test", commitSha: "a".repeat(40) },
+    },
+    { ...LIFE_EVENT, type: "tempo.check.passed", payload: { prNumber: 25 } },
+    { ...LIFE_EVENT, type: "tempo.check.failed", payload: { prNumber: 25 } },
+  ],
+  LifecycleChangeCreatedPayload: [LIFE_EVENT.payload],
+  LifecycleTurnEndedPayload: [
+    {
+      status: "completed",
+      stopReason: "end_turn",
+      usage: { totalTokens: 8, inputTokens: 5, outputTokens: 3 },
+    },
+  ],
+  LifecycleRunStartedPayload: [
+    {
+      role: "reviewer",
+      scope: "builtin",
+      roleSha: "a".repeat(64),
+      round: 1,
+      agent: "codex",
+      access: "read-only",
+    },
+  ],
+  LifecycleRunCompletedPayload: [
+    { role: "reviewer", round: 1, result: { status: "pass", summary: "No blocking findings." } },
+  ],
+  LifecycleRunFailedPayload: [
+    { role: "reviewer", round: 1, errorCode: "ROLE_LIMIT", detail: "limits.rounds" },
+  ],
+  LifecycleChangeEndedPayload: [{ status: "done" }],
+  LifecycleBranchPushedPayload: [{ branch: "tempo/test", commitSha: "a".repeat(40) }],
+  LifecycleCheckPayload: [{ prNumber: 25 }],
+  LifecycleLogEvent: [LIFE_LOG],
+  LifecyclePage: [{ events: [LIFE_LOG], nextBeforeSeq: null }],
+  LifecycleTrace: [{ chain: [LIFE_LOG], children: [], runs: [ROLE_RUN] }],
+  RolesSettings: [DEFAULT_SETTINGS.roles],
+  TurnUsage: [{ totalTokens: 0, inputTokens: 0, outputTokens: 0 }],
+
   AgentModelOptions: [
     {
       agent: "claude",
@@ -358,6 +506,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
 };
 
 export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+  WsRoleRun: [{ type: "roleRun", run: ROLE_RUN }],
   WsHello: [
     {
       type: "hello",
@@ -416,6 +565,16 @@ const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
 export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> } = {
+  listRoles: [{}, { workspaceId: W1 }],
+  getRoleText: [{ name: "reviewer", scope: "builtin" }],
+  putUserRole: [{ name: "reviewer", text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],
+  deleteUserRole: [{ name: "reviewer" }],
+  reloadRoles: [{ workspaceId: W1 }],
+  requestRole: [{ workspaceId: W1, role: "reviewer", text: "Review auth", sessionId: S1 }],
+  cancelRoleRun: [{ workspaceId: W1, roleRunId: uid(920) }],
+  listRoleRuns: [{ workspaceId: W1 }],
+  listLifecycleEvents: [{ workspaceId: W1, limit: 500 }],
+  getTrace: [{ workspaceId: W1, eventId: uid(922) }],
   listInstallationRepos: [{ installationId: 51234567 }],
   listInstallations: [{}],
   linkProject: [{ installationId: 51234567, repoId: 812345678 }],
@@ -607,6 +766,9 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       cursor: null,
     },
   ],
+  GetRoleTextOut: [{ text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],
+  RequestRoleOut: [{ changeId: uid(921), roleRunId: uid(920) }],
+
   Empty: [{}],
   StartCodexLoginOut: [
     {

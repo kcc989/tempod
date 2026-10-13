@@ -325,7 +325,7 @@ export class AgentSession {
   }
 
   private readTextFile(params: ReadTextFileRequest): { content: string } {
-    const path = insideRoots([this.deps.workspace, this.deps.attachments], params.path);
+    const path = insideRoots([this.deps.workspace, this.deps.attachments, "/home/tempo/roles"], params.path);
     if (!path) throw RequestError.invalidParams(undefined, "path is outside the allowed folders");
     let text: string;
     try {
@@ -343,7 +343,7 @@ export class AgentSession {
   }
 
   private writeTextFile(params: WriteTextFileRequest): Record<string, never> {
-    const path = insideRoots([this.deps.workspace, this.deps.attachments], params.path);
+    const path = insideRoots([this.deps.workspace, this.deps.attachments, "/home/tempo/roles"], params.path);
     if (!path) throw RequestError.invalidParams(undefined, "path is outside the allowed folders");
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, params.content);

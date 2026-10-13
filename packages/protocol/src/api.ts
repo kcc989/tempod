@@ -1,3 +1,4 @@
+import { RoleInfo, RoleName, RoleScope, RoleRun, LifecyclePage, LifecycleTrace } from "./lifecycle.ts";
 import { Schema } from "effect";
 import { AgentId, ApiKeyProvider, DiffScope, EgressStatusFilter, MergeMethod, ReviewSide } from "./enums.ts";
 import { EgressPolicy } from "./enums.ts";
@@ -62,6 +63,28 @@ export type ScriptRunWithLog = typeof ScriptRunWithLog.Type;
 const NonEmpty = S.check(Schema.isMinLength(1));
 
 export const API = {
+  listRoles: fn("GET", Schema.Struct({ workspaceId: opt(S) }), Schema.Array(RoleInfo)),
+  getRoleText: fn(
+    "GET",
+    Schema.Struct({ name: RoleName, scope: RoleScope, workspaceId: opt(S) }),
+    Schema.Struct({ text: S }),
+  ),
+  putUserRole: fn("POST", Schema.Struct({ name: S, text: S }), RoleInfo),
+  deleteUserRole: fn("POST", Schema.Struct({ name: RoleName }), Empty),
+  reloadRoles: fn("POST", Schema.Struct(W), Schema.Array(RoleInfo)),
+  requestRole: fn(
+    "POST",
+    Schema.Struct({ ...W, role: RoleName, text: opt(S), sessionId: opt(S) }),
+    Schema.Struct({ changeId: S, roleRunId: S }),
+  ),
+  cancelRoleRun: fn("POST", Schema.Struct({ ...W, roleRunId: S }), Empty),
+  listRoleRuns: fn("GET", Schema.Struct({ ...W, changeId: opt(S) }), Schema.Array(RoleRun)),
+  listLifecycleEvents: fn(
+    "GET",
+    Schema.Struct({ ...W, changeId: opt(S), beforeSeq: opt(N), limit: opt(N) }),
+    LifecyclePage,
+  ),
+  getTrace: fn("GET", Schema.Struct({ ...W, eventId: S }), LifecycleTrace),
   // Projects and GitHub
   listInstallationRepos: fn(
     "GET",

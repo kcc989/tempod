@@ -158,6 +158,11 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
       core.ctx.waitUntil(sendEnv(core));
       return;
     case "credential.changed": {
+      if (core.runningTurn() || core.turnEndInProgress || core.queueBusy) {
+        if (!core.pendingCodexAuth || core.pendingCodexAuth.lastRefresh < event.lastRefresh)
+          core.pendingCodexAuth = { content: event.content, lastRefresh: event.lastRefresh };
+        return;
+      }
       return core
         .credentials()
         .offerCodexAuth(event.content, event.lastRefresh, core.workspaceId)

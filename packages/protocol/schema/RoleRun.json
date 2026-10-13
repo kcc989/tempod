@@ -1,0 +1,238 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RoleRun",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "changeId": {
+      "type": "string"
+    },
+    "parentRunId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "roleName": {
+      "$ref": "RoleName.json"
+    },
+    "scope": {
+      "$ref": "RoleScope.json"
+    },
+    "roleSha": {
+      "type": "string"
+    },
+    "triggerEventId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agent": {
+      "anyOf": [
+        {
+          "$ref": "AgentId.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "access": {
+      "$ref": "RoleAccess.json"
+    },
+    "status": {
+      "$ref": "RoleRunStatus.json"
+    },
+    "round": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "continuesUsed": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "tokens": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "pinCheckpointId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "result": {
+      "anyOf": [
+        {
+          "$ref": "RoleResult.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorCode": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorDetail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deadlineAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "startedAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endedAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "trigger": {
+      "anyOf": [
+        {
+          "$ref": "RoleTrigger.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "changeId",
+    "parentRunId",
+    "depth",
+    "roleName",
+    "scope",
+    "roleSha",
+    "triggerEventId",
+    "sessionId",
+    "agent",
+    "access",
+    "status",
+    "round",
+    "continuesUsed",
+    "tokens",
+    "pinCheckpointId",
+    "result",
+    "errorCode",
+    "errorDetail",
+    "deadlineAt",
+    "createdAt",
+    "startedAt",
+    "endedAt"
+  ],
+  "additionalProperties": true
+}

@@ -4,6 +4,175 @@
   "description": "Server functions at POST /api/v1/rpc/<name>: the HTTP method of the web wrapper, the input and the output.",
   "type": "object",
   "properties": {
+    "listRoles": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRolesIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RoleInfo.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getRoleText": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetRoleTextIn.json"
+        },
+        "output": {
+          "$ref": "GetRoleTextOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "putUserRole": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "PutUserRoleIn.json"
+        },
+        "output": {
+          "$ref": "RoleInfo.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteUserRole": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteUserRoleIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "reloadRoles": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ReloadRolesIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RoleInfo.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "requestRole": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RequestRoleIn.json"
+        },
+        "output": {
+          "$ref": "RequestRoleOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelRoleRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelRoleRunIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listRoleRuns": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRoleRunsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RoleRun.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listLifecycleEvents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListLifecycleEventsIn.json"
+        },
+        "output": {
+          "$ref": "LifecyclePage.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getTrace": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetTraceIn.json"
+        },
+        "output": {
+          "$ref": "LifecycleTrace.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listInstallationRepos": {
       "type": "object",
       "properties": {
@@ -1497,6 +1666,16 @@
     }
   },
   "required": [
+    "listRoles",
+    "getRoleText",
+    "putUserRole",
+    "deleteUserRole",
+    "reloadRoles",
+    "requestRole",
+    "cancelRoleRun",
+    "listRoleRuns",
+    "listLifecycleEvents",
+    "getTrace",
     "listInstallationRepos",
     "listInstallations",
     "linkProject",

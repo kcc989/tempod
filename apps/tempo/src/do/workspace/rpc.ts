@@ -246,6 +246,26 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
   };
 
   return {
+    listRoles: () => core.lifecycle.list(),
+    getRoleText: ({ name, scope }) => core.lifecycle.text(name, scope),
+    reloadRoles: async () => {
+      rt.requireReady();
+      await core.lifecycle.load(true);
+      core.lifecycle.kick();
+      return core.lifecycle.list();
+    },
+    requestRole: async ({ role, text, sessionId }) => {
+      notArchived(core);
+      rt.ensureAwake();
+      return core.lifecycle.request(role, text, sessionId);
+    },
+    cancelRoleRun: async ({ roleRunId }) => {
+      await core.lifecycle.runs.cancel(roleRunId);
+      return {};
+    },
+    listRoleRuns: async ({ changeId }) => core.lifecycle.listRuns(changeId),
+    listLifecycleEvents: async (input) => core.lifecycle.listEvents(input),
+    getTrace: async ({ eventId }) => core.lifecycle.trace(eventId),
     getWorkspace: async () => core.detail(),
 
     renameWorkspace: async ({ title }) => {
@@ -536,6 +556,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     closeSession: async ({ sessionId }) => {
       const s = core.sessionRow(sessionId);
       if (s.status === "closed") return {};
+      if (s.roleRunId && ["queued", "running"].includes(core.lifecycle.runs.row(s.roleRunId).status))
+        await core.lifecycle.runs.cancel(s.roleRunId);
       sessionBusy(core, sessionId);
       dropQueuedTurnsOf(core, sessionId);
       if (core.liveSessions.has(sessionId)) {
@@ -561,7 +583,14 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       delivery,
     }): Promise<Turn> => {
       notArchived(core);
+      if (/^\s*\/role(?:\s|$)/.test(text))
+        throw new TempoError("VALIDATION_FAILED", undefined, "Use requestRole for /role requests.");
       const session = core.sessionRow(sessionId);
+      if (
+        session.roleRunId &&
+        ["queued", "running"].includes(core.lifecycle.runs.row(session.roleRunId).status)
+      )
+        throw new TempoError("SESSION_BUSY");
       if (session.status === "closed")
         throw new TempoError("VALIDATION_FAILED", undefined, "the chat is closed");
       if (!text.trim() && attachmentIds.length === 0 && reviewCommentIds.length === 0) {
@@ -615,6 +644,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             endedAt: null,
           })
           .run();
+        core.lifecycle.createPromptChange(turnId, sessionId, session.agent as AgentId);
         if (reviewCommentIds.length) {
           core.db
             .update(reviewComments)
@@ -630,6 +660,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             .run();
       });
       if (firstPrompt) rememberFirstPrompt(core, text);
+      core.lifecycle.kick();
       const turn = core.turnToWire(core.turnRow(turnId));
       core.broadcast({ type: "turn", turn });
       core.insertItem({

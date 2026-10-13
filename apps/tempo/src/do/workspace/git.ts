@@ -57,7 +57,20 @@ export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<
   const titleChanged = core.kv<string>("prTitle") !== pr.title;
   core.setKv("prTitle", pr.title);
   if (prState !== row.prState || checksState !== row.checksState || titleChanged) {
-    core.updateWs({ prState, checksState });
+    core.ctx.storage.transactionSync(() => {
+      core.updateWs({ prState, checksState });
+      if (checksState !== row.checksState && (checksState === "success" || checksState === "failure")) {
+        const type = checksState === "success" ? "tempo.check.passed" : "tempo.check.failed";
+        core.lifecycle.append({
+          type,
+          source: "tempo",
+          changeId: core.lifecycle.newestOpenChange(),
+          dedupeKey: `checks:${row.prNumber}:${pr.head.sha}:${type}`,
+          payload: { prNumber: row.prNumber! },
+        });
+      }
+    });
+    core.lifecycle.kick();
     core.publish();
   }
   return { prNumber: row.prNumber, prState, checksState, prTitle: pr.title };

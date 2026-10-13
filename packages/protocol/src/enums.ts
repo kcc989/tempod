@@ -94,7 +94,14 @@ export const ITEM_STATUSES = [
 export const ItemStatus = Schema.Literals(ITEM_STATUSES);
 export type ItemStatus = typeof ItemStatus.Type;
 
-export const CHECKPOINT_REASONS = ["turn_end", "pre_revert", "pre_sleep", "pre_archive", "sigterm"] as const;
+export const CHECKPOINT_REASONS = [
+  "role_pin",
+  "turn_end",
+  "pre_revert",
+  "pre_sleep",
+  "pre_archive",
+  "sigterm",
+] as const;
 export const CheckpointReason = Schema.Literals(CHECKPOINT_REASONS);
 export type CheckpointReason = typeof CheckpointReason.Type;
 

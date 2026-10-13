@@ -35,6 +35,7 @@ export const openUiChannel = (core: WorkspaceCore, request: Request): Response =
       .map((t) => core.turnToWire(t)),
     itemsRev: row.itemsRev,
   });
+  for (const run of core.lifecycle.listRuns()) core.sendTo(server, { type: "roleRun", run });
   let after = sinceRev;
   for (;;) {
     const page = core.itemsSince(after, PAGE);

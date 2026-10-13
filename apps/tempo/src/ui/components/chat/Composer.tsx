@@ -89,7 +89,30 @@ export function Composer({ workspaceId, sessionId }: ComposerProps) {
       </p>
     );
   }
+  if (session.roleRunId) return <RoleComposer workspaceId={workspaceId} session={session} />;
   return <ComposerBody key={sessionId} workspaceId={workspaceId} session={session} />;
+}
+
+function RoleComposer({ workspaceId, session }: { workspaceId: string; session: Session }) {
+  const live = useWorkspaceSelector(workspaceId, (s) =>
+    session.roleRunId ? s.roleRuns[session.roleRunId] : undefined,
+  );
+  const runs = useCallQuery("listRoleRuns", { workspaceId });
+  const cancel = useCallMutation("cancelRoleRun", { invalidates: ["listRoleRuns"] });
+  const run = live ?? runs.data?.find((r) => r.id === session.roleRunId);
+  if (!run || run.status === "running" || run.status === "queued")
+    return (
+      <div className="flex items-center justify-between border-t p-3">
+        <span>{run ? `${run.roleName} · ${run.status}` : "Loading role run…"}</span>
+        <Button
+          disabled={!run || cancel.isPending}
+          onClick={() => cancel.mutate({ workspaceId, roleRunId: session.roleRunId! })}
+        >
+          Cancel run
+        </Button>
+      </div>
+    );
+  return <ComposerBody key={session.id} workspaceId={workspaceId} session={session} />;
 }
 
 function RestoreBar({ workspaceId }: { workspaceId: string }) {
@@ -176,6 +199,17 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
 
   const send = useCallMutation("sendPrompt", {
     invalidates: ["listReviewComments"],
+    onSuccess: () => {
+      clearSent(sentDraft.current);
+      sending.current = false;
+    },
+    onError: () => {
+      sending.current = false;
+    },
+  });
+  const roles = useCallQuery("listRoles", { workspaceId });
+  const requestRole = useCallMutation("requestRole", {
+    invalidates: ["listRoleRuns", "listLifecycleEvents"],
     onSuccess: () => {
       clearSent(sentDraft.current);
       sending.current = false;
@@ -279,18 +313,27 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const rows: PickerRow[] = useMemo(() => {
     if (query === null) return [];
     if (triggerKind === "mention") {
-      return fuzzyFilter(query, files.data?.paths ?? [], (p) => p, 30).map((path) => ({
-        kind: "file" as const,
-        key: path,
-        path,
-      }));
+      const roleRows: PickerRow[] = fuzzyFilter(
+        query,
+        roles.data?.filter((r) => r.requestable && !r.error && !r.shadowedBy) ?? [],
+        (r) => r.name,
+        20,
+      ).map((r) => ({ kind: "role", key: `role:${r.name}`, name: r.name, description: r.description }));
+      return [
+        ...roleRows,
+        ...fuzzyFilter(query, files.data?.paths ?? [], (p) => p, 30).map((path) => ({
+          kind: "file" as const,
+          key: path,
+          path,
+        })),
+      ];
     }
     return slashEntries(session.commands, planId !== null, query).map((entry) => ({
       kind: "command" as const,
       key: entry.key,
       entry,
     }));
-  }, [query, triggerKind, files.data, session.commands, planId]);
+  }, [query, triggerKind, files.data, roles.data, session.commands, planId]);
   const pickerStatus =
     triggerKind !== "mention"
       ? null
@@ -318,7 +361,12 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const pick = (index: number) => {
     const row = rows[index];
     if (!row || !trigger) return;
-    if (row.kind === "file") {
+    if (row.kind === "role") {
+      if (/^\s*\/role\b/.test(draft)) return;
+      const next = replaceTrigger(draft, caret, trigger, "");
+      setDraft(`/role ${row.name} ${next.text}`);
+      pendingCaret.current = `/role ${row.name} `.length + next.caret;
+    } else if (row.kind === "file") {
       const next = replaceTrigger(draft, caret, trigger, "");
       setDraft(next.text);
       pendingCaret.current = next.caret;
@@ -336,9 +384,19 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   };
 
   const submit = (delivery: "queue" | "steer" = "queue") => {
-    if (!sendable || sending.current || sendPending) return;
+    if (!sendable || sending.current || sendPending || requestRole.isPending) return;
     sending.current = true;
     sentDraft.current = savedDraft;
+    if (/^\s*\/role\b/.test(draft)) {
+      const request = /^\s*\/role\s+([a-z][a-z0-9-]{1,31})(?:\s+([\s\S]*))?$/.exec(draft);
+      if (!request || mentions.length || ready.length || reviewCommentIds.length) {
+        sending.current = false;
+        toast.error("Use /role <name> <text>, with one role per message.");
+        return;
+      }
+      requestRole.mutate({ workspaceId, sessionId, role: request[1]!, text: request[2] });
+      return;
+    }
     send.mutate({
       workspaceId,
       sessionId,
@@ -549,6 +607,17 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                     triggerKind === "mention" && files.isError ? () => void files.refetch() : undefined
                   }
                 />
+              )}
+              {/^\s*\/role\s+([a-z][a-z0-9-]{1,31})/.exec(draft)?.[1] && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label="Remove role"
+                  onClick={() => setDraft(draft.replace(/^\s*\/role\s+[a-z][a-z0-9-]{1,31}\s*/, ""))}
+                >
+                  @{/^\s*\/role\s+([a-z][a-z0-9-]{1,31})/.exec(draft)?.[1]}
+                </Button>
               )}
               <Textarea
                 ref={textRef}

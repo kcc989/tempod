@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeleteUserRoleIn",
+  "type": "object",
+  "properties": {
+    "name": {
+      "$ref": "RoleName.json"
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": true
+}

@@ -39,7 +39,20 @@ export const AgentModels = Schema.Struct({
 }).annotate({ default: DEFAULT_AGENT_MODELS });
 export type AgentModels = typeof AgentModels.Type;
 
+export const DEFAULT_ROLES = {
+  enabled: true,
+  max_chain_depth: 10,
+  max_runs_per_change: 20,
+  max_tokens_per_change: 0,
+};
+export const RolesSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  max_chain_depth: Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  max_runs_per_change: Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  max_tokens_per_change: Int.check(Schema.isGreaterThanOrEqualTo(0)),
+});
 export const Settings = Schema.Struct({
+  roles: RolesSettings.pipe(Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_ROLES))),
   agent: Schema.Struct({
     default: AgentId,
     models: AgentModels.pipe(Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_AGENT_MODELS))),
@@ -71,6 +84,7 @@ export const Settings = Schema.Struct({
 export type Settings = typeof Settings.Type;
 
 export const DEFAULT_SETTINGS: Settings = {
+  roles: DEFAULT_ROLES,
   agent: { default: "claude", models: DEFAULT_AGENT_MODELS },
   browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
@@ -89,6 +103,14 @@ const opt = Schema.optional;
 
 /** One settings layer: every key optional. Used for files and for the project's UI overrides. */
 export const SettingsLayer = Schema.Struct({
+  roles: opt(
+    Schema.Struct({
+      enabled: opt(Schema.Boolean),
+      max_chain_depth: opt(Int.check(Schema.isGreaterThanOrEqualTo(1))),
+      max_runs_per_change: opt(Int.check(Schema.isGreaterThanOrEqualTo(1))),
+      max_tokens_per_change: opt(Int.check(Schema.isGreaterThanOrEqualTo(0))),
+    }),
+  ),
   agent: opt(
     Schema.Struct({
       default: opt(AgentId),

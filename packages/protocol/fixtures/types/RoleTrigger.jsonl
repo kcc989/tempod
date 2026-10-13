@@ -1,0 +1,2 @@
+{"event":"role.run.completed","role":"coder","status":"done"}
+{"event":"agent.turn.ended","session":"user","status":"completed"}
