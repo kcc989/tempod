@@ -14,7 +14,7 @@ import {
   type Harness,
 } from "./helpers.ts";
 
-/** 01, Custom agents: how tempod applies a profile per base agent. */
+/** 01, Agent profiles: how tempod applies a profile per base agent. */
 
 afterAll(cleanupDirs);
 
