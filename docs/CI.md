@@ -64,8 +64,8 @@ credential helpers can provision a selected agent instead of storing unrelated
 secrets.
 
 UI and component files use isolated VM threads to avoid repeated process startup;
-each suite is limited to two workers. Worker event, RPC and operation cases use
-four-way concurrency with distinct users, projects and Durable Objects, and
+each suite is limited to two workers. Worker files run at most four at a time;
+event, RPC and operation cases use four-way concurrency within each file, with distinct users, projects and Durable Objects, and
 test-context assertions. Held daemon fakes register cleanup on their own test
 context. The SVG data URL encoder lives in a small shared helper so loading Mermaid does
 not pull in the protocol/Effect schema graph; Mermaid cases retain fresh module
@@ -90,6 +90,14 @@ completed in 4m59s: Worker tests took 239.0s, other tests 93.9s, typecheck
 23.7s, the app build 41.1s and dependency installation 33s. Browser stages
 took 76.2s and 60.5s concurrently. These overlapping durations are the baseline
 for evaluating the next changes; they are not additive runner minutes.
+
+The final four-file Worker configuration passed a complete cold-task benchmark
+in **4m00s total** (run `38430168102`, job `115409966002`). `TURBO_FORCE=true`
+on a temporary benchmark branch reran every typecheck, test task and build,
+including both browser fixture builds; all 27 browser cases still executed.
+Three Worker files took 5m22s with cold tasks, despite reaching 4m09s when
+unchanged tasks were cached. Use the full cold workload to evaluate concurrency,
+not only a cached rerun. The force flag is not part of normal CI.
 
 ## Test audit
 
