@@ -2,8 +2,9 @@
 
 PRs have a **five-minute total runner budget**, not five minutes per parallel job.
 The single `check` job runs all local checks, builds, and browser regressions.
-Typecheck and builds overlap with tests on that one runner; the two browser
-suites also run concurrently on their separate fixture servers. The timing summary
+Typecheck and builds overlap with tests on that one runner. Once the builds pass,
+the two browser suites run concurrently on their separate fixture servers while
+unit and integration tests finish. The timing summary
 shows individual durations and the total elapsed time, so overlapping stages
 should not be added together.
 `bun run ci` reports stage durations to the Actions summary and fails after 270
@@ -30,6 +31,12 @@ Cases sharing DOM state, global mocks or cleanup lists remain sequential. TypeSc
 concurrent typecheck tasks. The root deployment/tooling typecheck is also cached
 with its own source/configuration inputs. Update those inputs if root scripts
 start importing files outside that scope. A cache miss must also fit the budget.
+
+PR #34's cold run spent 199.8 seconds on unit/integration tests, 39.5 seconds on
+typecheck and 31.4 seconds on the app build. Waiting for the test stage before
+starting browsers left only 8.6 seconds before the 270-second deadline. Browser
+checks now start after the build sequence completes instead of waiting for the
+independent unit/integration suite; all checks and the same deadline remain.
 
 ## Test audit
 

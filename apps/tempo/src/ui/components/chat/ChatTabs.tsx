@@ -1,4 +1,3 @@
-import type { AgentId } from "@tempo/protocol";
 import { ChevronDownIcon, HistoryIcon, PlusIcon, ShieldQuestionIcon, XIcon } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CENTER_TAB_KINDS, CenterTabPart } from "~/ui/components/chat/tab-kinds";
@@ -16,15 +15,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "~/ui/components/ui/dropdown-menu";
 import { Spinner } from "~/ui/components/ui/spinner";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useCallMutation } from "~/ui/hooks/useCall";
-import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
-import { useCustomAgents } from "~/ui/hooks/useCustomAgents";
 import { useWorkspaceSelector, useWorkspaceStore } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUi } from "~/ui/hooks/useWorkspaceUi";
 import { call } from "~/ui/lib/api";
@@ -38,14 +34,11 @@ import {
   closeTab,
   confirm,
   getWorkspaceUi,
-  openDialog,
   openTab,
   syncChatTabs,
   type OpenTab,
 } from "~/ui/state/workspace-ui";
 import {
-  agentMenu,
-  customAgentMenu,
   chatTabIds,
   closedSessions,
   nextTabIndex,
@@ -54,6 +47,7 @@ import {
   sessionTitle,
   waitUntil,
 } from "./chat-tabs-model";
+import { NewChatComposer } from "./NewChatComposer";
 import { toggleExpandAll } from "./expand-store";
 
 export interface ChatTabsProps {
@@ -92,16 +86,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     }
   }, [ready, workspaceId, tabIds]);
 
-  const createSession = useCallMutation("createSession", {
-    onSuccess: (session) => {
-      activateWhenShown.current = session.id;
-      openTab(workspaceId, { kind: "chat", sessionId: session.id });
-    },
-  });
   const renameSession = useCallMutation("renameSession");
-
-  const newChat = (agent: AgentId, customAgentId?: string) =>
-    createSession.mutate({ workspaceId, agent, ...(customAgentId ? { customAgentId } : {}) });
 
   const closeChat = async (sessionId: string) => {
     const key = `chat:${sessionId}`;
@@ -175,13 +160,30 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const closed = useMemo(() => closedSessions(sessions), [sessions]);
 
   const newChatMenu = (
-    <NewChatMenu
-      workspaceId={workspaceId}
-      open={menuOpen}
-      onOpenChange={setMenuOpen}
-      disabled={!ready || archived}
-      onPick={newChat}
-    />
+    <>
+      <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="New chat"
+          disabled={!ready || archived}
+          onClick={() => setMenuOpen(true)}
+        >
+          <PlusIcon />
+        </Button>
+      </SimpleTooltip>
+      {menuOpen && (
+        <NewChatComposer
+          workspaceId={workspaceId}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          onCreated={(session) => {
+            activateWhenShown.current = session.id;
+            openTab(workspaceId, { kind: "chat", sessionId: session.id });
+          }}
+        />
+      )}
+    </>
   );
   const closedMenu =
     closed.length > 0 ? (
@@ -397,60 +399,6 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         {body}
       </div>
     </div>
-  );
-}
-
-export function NewChatMenu({
-  workspaceId,
-  open,
-  onOpenChange,
-  disabled,
-  onPick,
-}: {
-  workspaceId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  disabled: boolean;
-  onPick: (agent: AgentId, customAgentId?: string) => void;
-}) {
-  const creds = useCredentialStatus().data;
-  const settings = useWorkspaceSelector(workspaceId, (s) => s.workspace?.settings ?? null);
-  const entries = agentMenu(creds, settings);
-  const custom = customAgentMenu(useCustomAgents().data, creds);
-  return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
-        <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="ghost" aria-label="New chat" disabled={disabled}>
-            <PlusIcon />
-          </Button>
-        </DropdownMenuTrigger>
-      </SimpleTooltip>
-      <DropdownMenuContent align="start" className="min-w-56">
-        <DropdownMenuLabel>New chat</DropdownMenuLabel>
-        {entries.map((e) => (
-          <DropdownMenuItem key={e.agent} disabled={!e.enabled} onSelect={() => onPick(e.agent)}>
-            <span className="flex-1">{e.label}</span>
-            {e.hint && <DropdownMenuShortcut className="tracking-normal">{e.hint}</DropdownMenuShortcut>}
-          </DropdownMenuItem>
-        ))}
-        {entries.length > 0 && custom.length > 0 && <DropdownMenuSeparator />}
-        {custom.map((e) => (
-          <DropdownMenuItem
-            key={e.customAgentId}
-            disabled={!e.enabled}
-            onSelect={() => onPick(e.agent, e.customAgentId)}
-          >
-            <span className="min-w-0 flex-1 truncate">{e.label}</span>
-            <DropdownMenuShortcut className="tracking-normal">{e.baseLabel}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        ))}
-        {(entries.length > 0 || custom.length > 0) && <DropdownMenuSeparator />}
-        <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", tab: "agents" })}>
-          Manage agents…
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

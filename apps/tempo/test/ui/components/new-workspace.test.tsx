@@ -53,12 +53,15 @@ describe("new workspace composer", () => {
     expect(screen.queryByRole("combobox", { name: "Agent" })).toBeNull();
     expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^Create/ }));
-    expect(mutate).toHaveBeenCalledWith({
-      projectId: "p1",
-      source: { kind: "new", baseBranch: "main" },
-      agent: "codex",
-      model: "reported-model",
-      prompt: { text: "Fix login" },
-    });
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        projectId: "p1",
+        source: { kind: "new", baseBranch: "main" },
+        agent: "codex",
+        model: "reported-model",
+        prompt: { text: "Fix login" },
+      },
+      expect.objectContaining({ onSettled: expect.any(Function) }),
+    );
   });
 });

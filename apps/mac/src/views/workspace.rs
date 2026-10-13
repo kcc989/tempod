@@ -7,7 +7,7 @@ use crate::actions::*;
 use crate::stores::workspace::WorkspaceStore;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::spinner::Spinner;
@@ -15,9 +15,9 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
-    AppContext as _, Context, DismissEvent, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Task, TestSupportExt as _, Window, div,
+    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
+    TestSupportExt as _, Window, div,
 };
 use std::collections::{HashMap, HashSet};
 use tempo_client::Client;
@@ -109,8 +109,7 @@ pub struct WorkspaceView {
     closing: Option<String>,
     close_request: bool,
     close_timeout: Option<Task<()>>,
-    new_chat_menu: Option<Entity<PopupMenu>>,
-    new_chat_dismiss: Option<Subscription>,
+    new_chat_dialog: Option<Entity<super::dialogs::Dialogs>>,
     detail: chat_model::TranscriptDetail,
     /// Opened explicitly this app session, so it stays open while the workspace is quiet.
     pub right_opened: bool,
@@ -131,14 +130,11 @@ impl WorkspaceView {
         let request = client.call::<api::GetCredentialStatus>(Default::default());
         cx.spawn_in(window, async move |this, cx| {
             if let Ok(status) = request.await {
-                let _ = this.update_in(cx, |this, window, cx| {
+                let _ = this.update_in(cx, |this, _window, cx| {
                     if this.credential_generation != 0 {
                         return;
                     }
                     this.credentials = Some(status);
-                    if this.new_chat_menu.is_some() {
-                        this.open_new_chat(window, cx);
-                    }
                     cx.notify();
                 });
             }
@@ -253,8 +249,7 @@ impl WorkspaceView {
             closing: None,
             close_request: false,
             close_timeout: None,
-            new_chat_menu: None,
-            new_chat_dismiss: None,
+            new_chat_dialog: None,
             _store_changed: changed,
         };
         view.sync(window, cx);
@@ -290,7 +285,11 @@ impl WorkspaceView {
         };
         let branch = input.read(cx).value().trim().to_string();
         let Ok(branch) = branch.try_into() else {
-            self.error = Some("That branch name is not valid.".to_string());
+            self.toast(
+                "BRANCH_INVALID".into(),
+                crate::errors::error_message("BRANCH_INVALID", None),
+                cx,
+            );
             cx.notify();
             return;
         };
@@ -306,9 +305,8 @@ impl WorkspaceView {
                 match result {
                     Ok(_) => {
                         this.branch_editor = None;
-                        this.error = None;
                     }
-                    Err(error) => this.error = Some(error.to_string()),
+                    Err(error) => this.toast_error(&error, cx),
                 }
                 cx.notify();
             });
@@ -320,11 +318,8 @@ impl WorkspaceView {
         let request = self.client.call::<api::ListCustomAgents>(p::Empty {});
         cx.spawn_in(window, async move |this, cx| {
             if let Ok(agents) = request.await {
-                let _ = this.update_in(cx, |this, window, cx| {
+                let _ = this.update_in(cx, |this, _window, cx| {
                     this.custom_agents = agents;
-                    if this.new_chat_menu.is_some() {
-                        this.open_new_chat(window, cx);
-                    }
                     cx.notify();
                 });
             }
@@ -355,9 +350,6 @@ impl WorkspaceView {
                             s.state.credential_invalid.retain(|p| *p != provider);
                             cx.notify();
                         });
-                    }
-                    if this.new_chat_menu.is_some() {
-                        this.open_new_chat(window, cx);
                     }
                     this.sync(window, cx);
                 });
@@ -556,7 +548,6 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
         use chat_model::WorkspaceBanner as B;
-        let muted = color(Token::MutedForeground, cx);
         let workspace_id = self.store.read(cx).workspace_id.clone();
         match banner {
             B::Progress { title, setup } => v_flex()
@@ -2519,73 +2510,63 @@ impl WorkspaceView {
         {
             return;
         }
-        let credentials = self.credentials.clone();
-        let settings = self
+        if self
+            .new_chat_dialog
+            .as_ref()
+            .is_some_and(|dialog| dialog.read(cx).kind.is_some())
+        {
+            return;
+        }
+        let dialogs = cx.new(|cx| super::dialogs::Dialogs::new(window, cx));
+        let workspace_id = self.store.read(cx).workspace_id.clone();
+        let agent = self
             .store
             .read(cx)
             .state
             .workspace
             .as_ref()
-            .map(|w| w.settings.clone());
-        let custom =
-            super::agents_model::menu_entries(&self.custom_agents, self.credentials.as_ref());
+            .map(|w| w.default_agent)
+            .unwrap_or(p::AgentId::Claude);
+        let client = self.client.clone();
         let weak = cx.weak_entity();
-        let menu = PopupMenu::build(window, cx, move |menu, _, _| {
-            let agents = chat_model::new_chat_agents(credentials.as_ref());
-            let menu = agents.iter().fold(menu, |menu, agent| {
-                let agent = *agent;
-                let hint =
-                    chat_model::new_chat_hint(agent, credentials.as_ref(), settings.as_ref());
-                let weak = weak.clone();
-                menu.item(
-                    PopupMenuItem::new(match hint {
-                        None => chat_model::agent_label(agent).to_string(),
-                        Some(hint) => format!("{} · {hint}", chat_model::agent_label(agent)),
-                    })
-                    .disabled(hint.is_some())
-                    .on_click(move |_, window, cx| {
-                        let _ =
-                            weak.update(cx, |this, cx| this.create_chat(agent, None, window, cx));
-                    }),
-                )
-            });
-            let menu = if agents.is_empty() || custom.is_empty() {
-                menu
-            } else {
-                menu.separator()
-            };
-            let menu = custom.iter().fold(menu, |menu, entry| {
-                let weak = weak.clone();
-                let (agent, id) = (entry.agent, entry.id.clone());
-                menu.item(
-                    PopupMenuItem::new(entry.label.clone())
-                        .disabled(!entry.enabled)
-                        .on_click(move |_, window, cx| {
-                            let id = Some(id.clone());
-                            let _ =
-                                weak.update(cx, |this, cx| this.create_chat(agent, id, window, cx));
-                        }),
-                )
-            });
-            let menu = if agents.is_empty() && custom.is_empty() {
-                menu
-            } else {
-                menu.separator()
-            };
-            menu.item(
-                PopupMenuItem::new("Manage agents…")
-                    .on_click(|_, _, cx| super::settings::open_agents(cx)),
+        dialogs.update(cx, |dialog, cx| {
+            dialog.show_chat(
+                client,
+                workspace_id,
+                agent,
+                move |session, window, cx| {
+                    let _ = weak.update(cx, |this, cx| {
+                        this.activate_created_chat(session, window, cx)
+                    });
+                },
+                window,
+                cx,
             )
         });
-        self.new_chat_dismiss =
-            Some(
-                cx.subscribe_in(&menu, window, |this, _, _: &DismissEvent, _, cx| {
-                    this.new_chat_menu = None;
-                    cx.notify();
-                }),
-            );
-        menu.read(cx).focus_handle(cx).focus(window, cx);
-        self.new_chat_menu = Some(menu);
+        self.new_chat_dialog = Some(dialogs);
+        cx.notify();
+    }
+
+    fn activate_created_chat(
+        &mut self,
+        session: p::Session,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.active = Some(session.id.clone());
+        self.store.update(cx, |store, cx| {
+            if !store.state.sessions.contains_key(&session.id) {
+                store
+                    .state
+                    .apply(p::WorkspaceServerMessage::Session(p::WsSession {
+                        type_: p::WsSessionType::Session,
+                        session,
+                    }));
+            }
+            cx.notify();
+        });
+        self.sync(window, cx);
+        self.focus_composer(window, cx);
         cx.notify();
     }
 
@@ -2606,47 +2587,6 @@ impl WorkspaceView {
         if let Some(chat) = self.active.as_ref().and_then(|id| self.chats.get(id)) {
             chat.composer.update(cx, |c, cx| c.focus_model(window, cx));
         }
-    }
-
-    fn create_chat(
-        &mut self,
-        agent: p::AgentId,
-        custom_agent_id: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.new_chat_menu = None;
-        let request = self.client.call::<api::CreateSession>(p::CreateSessionIn {
-            workspace_id: self.store.read(cx).workspace_id.clone(),
-            agent,
-            custom_agent_id,
-            model: None,
-            mode_id: None,
-        });
-        cx.spawn_in(window, async move |this, cx| {
-            let result = request.await;
-            let _ = this.update_in(cx, |this, window, cx| {
-                match result {
-                    Ok(session) => {
-                        this.active = Some(session.id.clone());
-                        this.store.update(cx, |store, cx| {
-                            store
-                                .state
-                                .apply(p::WorkspaceServerMessage::Session(p::WsSession {
-                                    type_: p::WsSessionType::Session,
-                                    session,
-                                }));
-                            cx.notify();
-                        });
-                        this.sync(window, cx);
-                        this.focus_composer(window, cx);
-                    }
-                    Err(error) => this.toast_error(&error, cx),
-                }
-                cx.notify();
-            });
-        })
-        .detach();
     }
 }
 
@@ -2773,31 +2713,14 @@ impl Render for WorkspaceView {
                 p::WorkspaceState::Archived | p::WorkspaceState::Archiving
             )
         });
-        let menu = self.new_chat_menu.clone();
-        let new_chat = Popover::new("new-chat-popover")
-            .open(menu.is_some())
-            .trigger(
-                Button::new("new-chat-menu")
-                    .ghost()
-                    .small()
-                    .icon(gpui_kit::assets::IconName::Plus)
-                    .accessibility_label("New chat")
-                    .tooltip("New chat (⌘T)")
-                    .disabled(archived),
-            )
-            .on_open_change(cx.listener(|this, open: &bool, window, cx| {
-                if *open {
-                    this.open_new_chat(window, cx);
-                } else {
-                    this.new_chat_menu = None;
-                    cx.notify();
-                }
-            }))
-            .content(move |_, _, _| {
-                menu.clone()
-                    .map(|m| m.into_any_element())
-                    .unwrap_or_else(|| div().into_any_element())
-            });
+        let new_chat = Button::new("new-chat")
+            .ghost()
+            .small()
+            .icon(gpui_kit::assets::IconName::Plus)
+            .accessibility_label("New chat")
+            .tooltip("New chat (⌘T)")
+            .disabled(archived)
+            .on_click(cx.listener(|this, _, window, cx| this.open_new_chat(window, cx)));
         let weak = cx.weak_entity();
         let closed_menu = Button::new("closed-chat-menu")
             .label("Closed chats")
@@ -3168,7 +3091,9 @@ impl Render for WorkspaceView {
                                 if let Some(id) = this.active.clone() {
                                     this.send(
                                         &id,
-                                        include_str!("../../../../packages/protocol/pr-guide-prompt.txt"),
+                                        include_str!(
+                                            "../../../../packages/protocol/pr-guide-prompt.txt"
+                                        ),
                                         window,
                                         cx,
                                     );
@@ -3180,7 +3105,8 @@ impl Render for WorkspaceView {
                             .label("Open guide")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 let id = &this.store.read(cx).workspace_id;
-                                let url = format!("{}/w/{id}?guide=true", this.client.server().origin());
+                                let url =
+                                    format!("{}/w/{id}?guide=true", this.client.server().origin());
                                 cx.open_url(&url);
                             })),
                     ),
@@ -3957,7 +3883,32 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn chat_keyboard_shortcut_opens_the_agent_menu(cx: &mut TestAppContext) {
+    fn created_chat_response_keeps_newer_streamed_session_metadata(cx: &mut TestAppContext) {
+        let state = fixture();
+        let latest = state.sessions.values().next().unwrap().clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let mut response = latest.clone();
+        response.title = "Older creation response".into();
+        response.config_options.clear();
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.activate_created_chat(response, window, cx)
+            });
+        })
+        .unwrap();
+        view.read_with(cx, |view, cx| {
+            assert_eq!(view.store.read(cx).state.sessions[&latest.id], latest);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn chat_keyboard_shortcut_opens_the_composer(cx: &mut TestAppContext) {
         let state = fixture();
         let turn = state.turns.values().next().unwrap().clone();
         let server = LocalServer::new(&turn, false);
@@ -3973,11 +3924,25 @@ mod tests {
         cx.update_window(window, |_, window, cx| window.press("cmd-t", cx))
             .unwrap();
         cx.run_until_parked();
-        view.read_with(cx, |view, _| assert!(view.new_chat_menu.is_some()));
+        view.read_with(cx, |view, cx| {
+            assert_eq!(
+                view.new_chat_dialog.as_ref().unwrap().read(cx).kind,
+                Some("New chat")
+            )
+        });
         cx.update_window(window, |_, window, cx| window.press("escape", cx))
             .unwrap();
         cx.run_until_parked();
-        view.read_with(cx, |view, _| assert!(view.new_chat_menu.is_none()));
+        view.read_with(cx, |view, cx| {
+            assert!(
+                view.new_chat_dialog
+                    .as_ref()
+                    .unwrap()
+                    .read(cx)
+                    .kind
+                    .is_none()
+            )
+        });
     }
 
     #[gpui_kit::test]

@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DEFAULT_SETTINGS, type CredentialStatus, type Settings } from "@tempo/protocol";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NewChatMenu } from "../../../src/ui/components/chat/ChatTabs";
+import { NewChatComposer } from "../../../src/ui/components/chat/NewChatComposer";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
 import { call } from "../../../src/ui/lib/api";
 import { emptyWorkspaceState } from "../../../src/ui/stores/workspace-state";
@@ -33,6 +33,16 @@ const show = (settings: Settings, status: CredentialStatus | Promise<CredentialS
   fixture.state = { ...emptyWorkspaceState, ready: true, workspace: detail({ settings }) };
   vi.mocked(call).mockImplementation(async (name) => {
     if (name === "getCredentialStatus") return status as never;
+    if (name === "listModels")
+      return [
+        { agent: "claude", currentValue: "sonnet", options: [{ value: "sonnet", name: "Sonnet" }] },
+        {
+          agent: "codex",
+          currentValue: "codex-test",
+          options: [{ value: "codex-test", name: "Codex test" }],
+        },
+        { agent: "pi", currentValue: "pi-test", options: [{ value: "pi-test", name: "Pi test" }] },
+      ] as never;
     if (name === "listCustomAgents")
       return [
         { id: "a1", name: "Reviewer", description: "", baseAgent: "codex", updatedAt: 1 },
@@ -48,50 +58,42 @@ const show = (settings: Settings, status: CredentialStatus | Promise<CredentialS
       createElement(
         TooltipProvider,
         null,
-        createElement(NewChatMenu, {
+        createElement(NewChatComposer, {
           workspaceId: "w1",
           open: true,
           onOpenChange: () => undefined,
-          disabled: false,
-          onPick: () => undefined,
+          onCreated: () => undefined,
         }),
       ),
     ),
   );
 };
 
-const item = (name: RegExp) => screen.getByRole("menuitem", { name });
-const disabled = (name: RegExp) => item(name).getAttribute("aria-disabled") === "true";
-const text = (name: RegExp) => item(name).textContent;
-
 beforeEach(() => {
   vi.mocked(call).mockReset();
 });
 
-describe("New chat menu (04, Tabs)", () => {
-  it("disables OpenCode and Pi while their agent.models entry is empty", async () => {
-    show(withModels({ pi: "openrouter/pi" }));
-    await waitFor(() => expect(disabled(/^OpenCode/)).toBe(true));
-    expect(text(/^OpenCode/)).toBe("OpenCodeSet a model in Settings → Project");
-    expect([disabled(/^Pi/), disabled(/^Claude/), disabled(/^Codex/)]).toEqual([false, false, false]);
-    expect(screen.getAllByText("Set a model in Settings → Project")).toHaveLength(1);
+describe("New chat model choices (04, Tabs)", () => {
+  it("offers discovered models even without a configured OpenRouter model", async () => {
+    show(withModels({}));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Model" }).textContent).toContain("Sonnet"),
+    );
+    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
+    expect(screen.getByRole("option", { name: /Pi test/ })).toBeDefined();
+    await waitFor(() => expect(screen.getByRole("option", { name: /Reviewer/ })).toBeDefined());
   });
-
-  it("hides unsigned agents even when they have a model", async () => {
-    show(withModels({ opencode: "openrouter/oc" }), {
-      ...credentials,
-      openrouter: { set: false, updatedAt: null },
-    });
-    await waitFor(() => expect(item(/^Claude/)).toBeDefined());
-    expect(screen.queryByRole("menuitem", { name: /^OpenCode/ })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: /^Pi/ })).toBeNull();
-    expect(screen.queryByText("Set a model in Settings → Project")).toBeNull();
-    expect([disabled(/^Claude/), disabled(/^Codex/)]).toEqual([false, false]);
-    await waitFor(() => expect(item(/^Reviewer/)).toBeDefined());
-    expect(screen.queryByRole("menuitem", { name: /^Router tester/ })).toBeNull();
+  it("hides models and custom agents without a confirmed login", async () => {
+    show(DEFAULT_SETTINGS, { ...credentials, openrouter: { set: false, updatedAt: null } });
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Model" }).textContent).toContain("Sonnet"),
+    );
+    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
+    expect(screen.queryByRole("option", { name: /Pi test/ })).toBeNull();
+    expect(screen.queryByRole("option", { name: /Router tester/ })).toBeNull();
+    expect(screen.getByRole("option", { name: /Manage agents/ })).toBeDefined();
   });
-
-  it("keeps Manage agents available when no harness has a login", async () => {
+  it("keeps Manage agents available with no confirmed login", async () => {
     const off = { set: false, updatedAt: null };
     show(DEFAULT_SETTINGS, {
       claude: off,
@@ -101,12 +103,12 @@ describe("New chat menu (04, Tabs)", () => {
       openai: off,
     });
     await waitFor(() => expect(vi.mocked(call)).toHaveBeenCalledWith("getCredentialStatus", {}));
-    expect(screen.getAllByRole("menuitem").map((e) => e.textContent)).toEqual(["Manage agents…"]);
-    expect(screen.queryByRole("separator")).toBeNull();
+    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
+    expect(screen.getAllByRole("option").map((e) => e.textContent)).toEqual(["Manage agents…"]);
   });
-
-  it("shows no harness choices while logins load", () => {
+  it("offers only Manage agents while logins load", () => {
     show(DEFAULT_SETTINGS, new Promise(() => undefined));
-    expect(screen.getAllByRole("menuitem").map((e) => e.textContent)).toEqual(["Manage agents…"]);
+    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
+    expect(screen.getAllByRole("option").map((e) => e.textContent)).toEqual(["Manage agents…"]);
   });
 });

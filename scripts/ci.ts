@@ -43,10 +43,15 @@ const runSequence = async (sequence: Check[]): Promise<void> => {
 };
 await runSequence([checks.versions, checks.lint, checks.format]);
 if (exitCode === 0) {
-  await Promise.all([runSequence([checks.typecheck, checks.daemon, checks.app]), runCheck(checks.tests)]);
-}
-if (exitCode === 0) {
-  await Promise.all([runCheck(checks.web), runCheck(checks.browser)]);
+  await Promise.all([
+    (async () => {
+      await runSequence([checks.typecheck, checks.daemon, checks.app]);
+      if (exitCode === 0) {
+        await Promise.all([runCheck(checks.web), runCheck(checks.browser)]);
+      }
+    })(),
+    runCheck(checks.tests),
+  ]);
 }
 
 const total = (Date.now() - started) / 1000;
