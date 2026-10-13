@@ -15,9 +15,9 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
-    AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Task, TestSupportExt as _, Window, div,
+    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
+    TestSupportExt as _, Window, div,
 };
 use std::collections::{HashMap, HashSet};
 use tempo_client::Client;
@@ -130,7 +130,7 @@ impl WorkspaceView {
         let request = client.call::<api::GetCredentialStatus>(Default::default());
         cx.spawn_in(window, async move |this, cx| {
             if let Ok(status) = request.await {
-                let _ = this.update_in(cx, |this, window, cx| {
+                let _ = this.update_in(cx, |this, _window, cx| {
                     if this.credential_generation != 0 {
                         return;
                     }
@@ -285,7 +285,11 @@ impl WorkspaceView {
         };
         let branch = input.read(cx).value().trim().to_string();
         let Ok(branch) = branch.try_into() else {
-            self.error = Some("That branch name is not valid.".to_string());
+            self.toast(
+                "BRANCH_INVALID".into(),
+                crate::errors::error_message("BRANCH_INVALID", None),
+                cx,
+            );
             cx.notify();
             return;
         };
@@ -301,9 +305,8 @@ impl WorkspaceView {
                 match result {
                     Ok(_) => {
                         this.branch_editor = None;
-                        this.error = None;
                     }
-                    Err(error) => this.error = Some(error.to_string()),
+                    Err(error) => this.toast_error(&error, cx),
                 }
                 cx.notify();
             });
@@ -315,7 +318,7 @@ impl WorkspaceView {
         let request = self.client.call::<api::ListCustomAgents>(p::Empty {});
         cx.spawn_in(window, async move |this, cx| {
             if let Ok(agents) = request.await {
-                let _ = this.update_in(cx, |this, window, cx| {
+                let _ = this.update_in(cx, |this, _window, cx| {
                     this.custom_agents = agents;
                     cx.notify();
                 });
