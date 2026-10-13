@@ -74,8 +74,7 @@ Each spike is throwaway code in its own branch that answers one question. Its re
 | S10 | Does the terminal work through the DO? | PTY `exec` with tmux over the DO WebSocket. Resize works. A reconnect gets the same session and scrollback. | — |
 | S18 | Do artifacts work as 01, 04 and 05 use them? Runs at the start of phase 5, not in gate A. | Claude Code, Codex, OpenCode and Pi each start the `tempo` MCP server from `tempod mcp` and call `publish_artifact`. An HTML artifact loads in Tempo's iframe through the entry link and cookie in Chrome, Safari and Firefox, and its `fetch`, image and WebSocket requests to the internet are blocked. A PDF artifact shows in the iframe. Mermaid 12.1.0 renders a flowchart with HTML labels off; record the config keys. Record which agents send `rawInput.plan` on a plan proposal. | R19 |
 | S17 | Does Browser Run work as 01 uses it? | Playwright MCP in the container connects over `wss://browser.tempo.internal/` through `TempoOutbound` to a session from `env.BROWSER.acquire`. The remote browser loads `http://localhost:<port>` through `outboundByHost`. Live View shows the page in an iframe on `APP_HOST`. `closeSession` ends it. | — |
-| S19 | Can the Worker write custom agents to Artifacts? | From a deployed Worker with the `AGENTS` binding: `create` a repo, mint a 300 s write token, push one commit with pinned `isomorphic-git` and an in-memory file system, then `readFile` at that commit. Two concurrent saves both land after the retry rule in 02. The token is revoked after each save and appears in no log. Record the CPU time and memory of one save. | R20 |
-| S20 | Does each adapter apply a custom agent profile? | For each base agent, start a session with a profile that sets every field in the table in 01, Custom agents. Record which fields take effect: the agent follows the system prompt, a denied tool is absent, an allowed-only list hides other built-in tools, a pi codemode script cannot call a denied built-in or MCP tool, an MCP server's tools are listed, and the reasoning level shows in the config options. `session/load` keeps the profile. | R21 |
+| S20 | Does each adapter apply a agent profile? | For each base agent, start a session with a profile that sets every field in the table in 01, Agents. Record which fields take effect: the agent follows the system prompt, a denied tool is absent, an allowed-only list hides other built-in tools, a pi codemode script cannot call a denied built-in or MCP tool, an MCP server's tools are listed, and the reasoning level shows in the config options. `session/load` keeps the profile. | R21 |
 
 ## Acceptance tests
 
@@ -133,14 +132,14 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-46 | A Claude plan proposal shows as a `Plan` card with Markdown, and approving it continues the turn. |
 | AT-47 | The Mac app shows artifact cards, the Artifacts tab, images and Markdown in-app, and opens HTML and PDF artifacts in the default browser. |
 
-**Gate G: Custom agents** (after Gate F in 07; the Mac app ships its part in the same phase)
+**Gate G: Agent profiles** (after Gate F in 07; the Mac app ships its part in the same phase)
 
 | ID | Test |
 | --- | --- |
-| AT-48 | Create a custom agent on `claude` with a system prompt, `tools.deny = ["Edit", "Write"]`, a model and a reasoning level. A chat from it uses that model and level, follows the prompt, and cannot edit a file. `profileIssues` is empty. |
+| AT-48 | Create a agent on `claude` with a system prompt, `tools.deny = ["Edit", "Write"]`, a model and a reasoning level. A chat from it uses that model and level, follows the prompt, and cannot edit a file. `profileIssues` is empty. |
 | AT-49 | The same definition on `codex` follows the prompt, uses the model and level, and shows the notice for `tool limits`. The same definition on `opencode` and on `pi`, with `tools.deny = ["edit", "write"]` and one stdio MCP server, follows the prompt, cannot edit a file, lists the server's tools, and shows no notice. |
-| AT-50 | Edit a custom agent while a chat from it is open. The open chat keeps the old profile after a sleep and wake; a new chat gets the new one. Delete the agent: the open chat still works and the New chat menu no longer lists it. |
-| AT-51 | An MCP server with `env = { X = "${MY_SECRET}" }` and a project secret `MY_SECRET` starts and lists its tools. Saving a literal env value fails with `VALIDATION_FAILED`. Grep of logs, D1, `events`, R2 and the Artifacts repo finds no secret value. |
+| AT-50 | Edit a agent while a chat from it is open. The open chat keeps the old profile after a sleep and wake; a new chat gets the new one. Delete the agent: the open chat still works and the New chat menu no longer lists it. |
+| AT-51 | An MCP server with `env = { X = "${MY_SECRET}" }` and a project secret `MY_SECRET` starts and lists its tools. Saving a literal env value fails with `VALIDATION_FAILED`. Grep of logs, D1, `events`, R2 and agent definitions finds no secret value. |
 
 **Also at Gate D:** during a full e2e run, grep all Worker logs, `events` rows and R2 objects for the test credentials' values. Zero matches is required.
 
@@ -211,3 +210,41 @@ A change is done only when every box below is true.
 - [ ] UI changes work at phone width and in both themes.
 - [ ] The acceptance tests of the current phase still pass.
 - [ ] If behavior changed, the spec changed in the same pull request.
+
+
+## Phase 7: Agents as data
+
+## Milestones
+
+Each milestone is one pull request and merges when its own tests pass.
+
+| Milestone | Content | Demo |
+| --- | --- | --- |
+| M1 Spec | All spec changes above, with S22 done | The owner approves the spec |
+| M2 Library | `agents`, `project_agents`, the migration, starters, agent and attachment functions, both Settings pages, chat sessions from an agent | A migrated custom agent starts a chat. A new agent attaches to a project with no deploy. |
+| M3 Runs | `runs` rebuild, the run engine, `report_result`, the run card, Send to chat, read-only controls, requests | `@reviewer` shows a findings card, and Send to chat queues the turn |
+| M4 Decisions | `AI` binding, the decision step, `run.decided`, skip lines, Diagnostics | A push that touches auth code runs the reviewer. A push that does not shows a skip line. |
+| M5 Proposals | `list_agents`, `propose_agent_change`, the proposal card, `resolveAgentProposal` | "Make me an agent that checks migrations on push" ends with an applied agent and attachment |
+| M6 Remove | Everything in Remove | No `role` names remain in code, wire types or the spec, except migration code |
+
+## Tests
+
+Follow `docs/CI.md` and the CI and test budget rules in `AGENTS.md`. Every test proves one behavior and asserts an outcome.
+
+- Unit: definition and hook validation, handle derivation, hook matching, decision batching at 64, threshold, the state builder's caps and redaction, each output kind schema, the Send to chat texts and the migration mapping.
+- Worker integration with `@cloudflare/vitest-pool-workers` and a fake `AI` binding: ownership and CRUD for every new function; event → decision → run → `report_result` → `run.completed` → auto-send; the follow-up; `RUN_RESULT_MISSING`; timeout; cancel; the files-changed warning; protected files; `max_runs`; decision failure and Run anyway; proposal apply and reject; migration idempotency.
+- `tempod`, in the container image: `report_result` is listed only with `TEMPO_RUN_ID` and uses the right schema; `list_agents` and `propose_agent_change` are hidden in run sessions.
+
+## Gate I
+
+Tab 06 rules: deployed, real logins, three runs in a row.
+
+1. An agent saved in Settings and attached to a project runs on its hook in a workspace, with no deploy.
+2. A `branch.pushed` hook with a question runs the agent for a matching change and skips it for a change that does not match. Both decisions show their probability in the trace.
+3. `@planner` shows a plan card. Approve queues a turn in the chat with the plan.
+4. A `review` run reports a blocking finding. Send to chat queues the fix request.
+5. A read-only agent that edits a file shows the warning, and Revert restores the files.
+6. A `check.failed` attachment with auto-send stops at `max_runs`.
+7. `propose_agent_change` from a chat ends with an applied agent. A rejected proposal changes nothing.
+8. Kill the container during a run: the run fails with `RUN_TURN_FAILED`, no event is lost, and dispatch resumes after the DO restarts.
+9. A grep of lifecycle events, run results and decision logs for the test credentials finds nothing.

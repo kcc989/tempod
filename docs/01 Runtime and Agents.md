@@ -272,7 +272,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 - With the OAuth token, MUST NOT set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`. In `claude -p` mode an API key always wins over the token.
 - The placeholder string is exactly `tempo-placeholder`. `TempoOutbound` swaps it for the real key (see below).
 - `tempod` sends `initialize` with `protocolVersion: 1` and these client capabilities: `fs.readTextFile: true`, `fs.writeTextFile: true`, `terminal: false`, and session.notices: true. Agents run commands with their own shell tools.
-- `tempod` serves `fs/read_text_file` and `fs/write_text_file` only for absolute paths under `/workspace`, `/home/tempo/attachments` or `/home/tempo/roles` (08). Any other path returns a JSON-RPC error.
+- `tempod` serves `fs/read_text_file` and `fs/write_text_file` only for absolute paths under `/workspace` or `/home/tempo/attachments`. Any other path returns a JSON-RPC error.
 - Every `session/new` and `session/load` passes Playwright, below, then `tempo` (Environments), then the user's servers (User MCP servers).
 
 ```json
@@ -309,53 +309,11 @@ The bridge is `tempod` itself: `command` is `/usr/local/bin/tempod`, `args` are 
 
 **ACP version.** Use ACP v1 (stable) through `@agentclientprotocol/sdk` 1.8.0. MUST NOT use v2; it is still a draft. ACP v1 mode config options (category `mode`, type `select`) define the available modes and current selection when advertised. Flatten grouped choices into Tempo’s `modes` and copy `currentValue` into `modeId`; refresh both on config updates. Use `session/set_config_option` to change that mode. Agents exposing the ACP session modes interface use `session/set_mode`. ACP v1 has no `session/set_model`. Set the model with `session/set_config_option` on the option whose category is `model`.
 
-## Custom agents
+## Agent profiles
 
-A custom agent is a saved set of defaults on top of one of the four agents. The owner gives it a name, a base agent, a system prompt, tool limits, MCP servers, a default model and a default reasoning level. A chat can start from a custom agent instead of a plain agent. Custom agents belong to the user and work in every project.
+Agents are definitions in the user's D1 library, with project attachments, hooks, runs and proposals defined in [08 Events and Agents](08%20Events%20and%20Agents.md). Definitions are JSON data, not repository or Artifacts files. MCP `env` and `headers` accept only `${NAME}` references. A missing variable omits the server and reports `mcpServers`; expansion stays in memory.
 
-**Storage.** The definition lives in Cloudflare Artifacts. D1 holds a pointer to it (02, `custom_agents`).
-
-- One Artifacts repo per user, in the namespace `tempo-agents`, named `user-<userId>`, default branch `main`.
-- One file per custom agent: `agents/<customAgentId>.yaml`. `customAgentId` is a ULID made by the Worker.
-- Every save is one commit. D1 `custom_agents.commit_sha` points to the commit that holds the current version. Reads use that commit, not `main`.
-- The Worker reads with the Artifacts binding (`readFile({ref: commit_sha, path})`). It writes with `isomorphic-git` over the Git protocol, with an in-memory file system in `apps/tempo`. No container takes part.
-
-**File format** (parse with `yaml`, validate with an Effect Schema in `packages/protocol`)
-
-```yaml
-name: Reviewer                  # 1 to 60 chars; unique per user
-description: ""                 # at most 200 chars
-base_agent: claude              # claude | codex | opencode | pi
-model: ""                       # the agent's model config value; empty = the agent's default
-thought_level: ""               # the value of the agent's thought_level config option; empty = the agent's default
-system_prompt: |                # at most 32,000 chars; empty = none
-  You review code. You do not edit files.
-
-tools:
-  allow: []                     # built-in tool names; empty = every built-in tool
-  deny: [Edit, Write]           # built-in or MCP tool names; deny wins over allow
-
-mcp:
-  playwright: true              # add the Playwright server from Agents
-  servers:
-    - name: docs                # ^[a-z0-9_-]{1,32}$, not "playwright", unique in the file
-      type: stdio               # stdio | http | sse
-      command: docs-mcp         # stdio only; must exist in the image or be installed by setup
-      args: []                  # stdio only
-      env:                      # stdio only
-        DOCS_TOKEN: "${DOCS_TOKEN}"
-    - name: search
-      type: http
-      url: https://mcp.example.com/mcp   # http and sse only; https only
-      headers:                  # http and sse only
-        Authorization: "${SEARCH_AUTH}"
-```
-
-**Limits.** At most 50 custom agents per user, 100 names in each of `tools.allow` and `tools.deny`, and 10 MCP servers. A tool name matches `^[A-Za-z0-9_.:*-]{1,128}$`.
-
-**No secrets in the file.** Every value in `env` and `headers` MUST be exactly `${NAME}`, where `NAME` matches `^[A-Z_][A-Z0-9_]*$`. A literal value fails validation. `tempod` expands `${NAME}` from the session env, which already holds the project's env vars and secrets (Project settings file). If a name is not in the env, `tempod` leaves that server out and reports `mcpServers` (below). Values are expanded only in memory: in the adapter's `session/new` or `session/load` call, or inside the Tempo pi extension. They MUST NOT be logged, written to a file or written to the outbox.
-
-**Session profile.** When a session starts from a custom agent, the Worker reads the file at `commit_sha` and passes the WorkspaceDO an `AgentProfile` (02). The DO stores it in the session row. A later edit or delete does not change a running session. Reloads and handoffs send the same profile again.
+When a session starts from an agent, the Worker reads its D1 definition and passes an `AgentProfile` to the WorkspaceDO. The session stores the profile at start. Edits and deletion do not change existing sessions, reloads or handoffs. Migration preserves already-stored profiles.
 
 **How `tempod` applies a profile.** ACP v1 has no standard field for a system prompt or a tool list. `tempod` uses each adapter's own extension or the agent's own config. Where an agent has none, the field is reported as unsupported and the session still starts.
 
@@ -369,7 +327,7 @@ mcp:
 
 - An empty `tools.allow` means every built-in tool: leave out `tools` for `claude`, the `"*"` rule for `opencode` and `--tools` for `pi`. For `claude`, `tools: []` would turn every built-in tool off.
 - Tool names are the base agent's own names, for example `Edit` for `claude`, `edit` for `opencode` and `pi`. Patterns with `*` work where the agent supports them (`opencode`, `pi`). Tempo does not translate names between agents.
-- A custom agent's MCP servers become `McpServerSpec` entries, with `${NAME}` expanded, and join the user's servers after Playwright and `tempo`; a custom server replaces a user server of the same name. They use the same transport rules and bridge as user servers (User MCP servers).
+- An agent's MCP servers become `McpServerSpec` entries, with `${NAME}` expanded, and join the user's servers after Playwright and `tempo`; a custom server replaces a user server of the same name. They use the same transport rules and bridge as user servers (User MCP servers).
 - `playwright = false` leaves Playwright out of the ACP `mcpServers`. Pi always gets Playwright from `~/.pi/agent/mcp.json`, so for `pi` its tools (`mcp__playwright__*`) are added to the deny list instead.
 
 **Profile files.** Before it spawns an adapter with a profile, `tempod` writes the directory `/home/tempo/.tempod/profiles/<sessionId>/` (mode 0700, owner `tempo`; `<dir>` above). It rewrites the directory on every start, so a reload uses the stored profile, and deletes it on `session.close`. The files hold no secret values: MCP `env` and `headers` keep their `${NAME}` references.
@@ -381,10 +339,14 @@ mcp:
 | `mcp.json` | Base agent `pi` | `{"servers": [McpServerDef], "tools": {"allow": [...], "deny": [...]}}` for the Tempo pi extension |
 
 - `OPENCODE_CONFIG_CONTENT` is set in the env of that one adapter process only. It holds `instructions` and `permission` and nothing else.
-- **Tempo pi extension.** `container/pi/tempo-profile.ts`, copied to `/opt/tempo/pi/tempo-profile.ts` in the image. It is Tempo's own code, loaded by pi through `jiti`, and adds no library. On load it reads `$TEMPO_PROFILE_DIR/mcp.json`, expands each `${NAME}` from its own process env, and calls `pi.registerMcpServer` for each server. Playwright, `tempo` and the user's servers come from `~/.pi/agent/mcp.json` (User MCP servers, Pi). It also reads `tools.allow` and `tools.deny` from `mcp.json` and adds a `tool_call` handler that returns `{block: true}` for a denied name, or for a name outside a non-empty allowlist. Pi 1.x codemode scripts call MCP tools whenever they are registered, whatever the active tool set; their nested calls pass through `tool_call`, so this guard is what enforces the limits. The flags only hide tools from the model. If the allowlist is not empty and the profile has MCP servers, `tempod` adds `codemode` to `--tools`, so MCP tools stay reachable. A server with a missing name is skipped and logged to stderr as `tempo-profile: skipped <server>`. The extension keeps a custom agent's servers to its own session; `~/.pi/agent/mcp.json` is shared by every pi session in the container.
+- **Tempo pi extension.** `container/pi/tempo-profile.ts`, copied to `/opt/tempo/pi/tempo-profile.ts` in the image. It is Tempo's own code, loaded by pi through `jiti`, and adds no library. On load it reads `$TEMPO_PROFILE_DIR/mcp.json`, expands each `${NAME}` from its own process env, and calls `pi.registerMcpServer` for each server. Playwright, `tempo` and the user's servers come from `~/.pi/agent/mcp.json` (User MCP servers, Pi). It also reads `tools.allow` and `tools.deny` from `mcp.json` and adds a `tool_call` handler that returns `{block: true}` for a denied name, or for a name outside a non-empty allowlist. Pi 1.x codemode scripts call MCP tools whenever they are registered, whatever the active tool set; their nested calls pass through `tool_call`, so this guard is what enforces the limits. The flags only hide tools from the model. If the allowlist is not empty and the profile has MCP servers, `tempod` adds `codemode` to `--tools`, so MCP tools stay reachable. A server with a missing name is skipped and logged to stderr as `tempo-profile: skipped <server>`. The extension keeps an agent's servers to its own session; `~/.pi/agent/mcp.json` is shared by every pi session in the container.
 - Model and reasoning level come from the agent's own config options, as for every agent. MUST NOT hardcode model or level lists. Set the model first, then the reasoning level, because the levels on offer can depend on the model. If the agent does not offer the value, keep its default and report `model` or `thoughtLevel`.
-- `profileIssues` is the list of fields that `tempod` could not apply: any of `systemPrompt`, `tools`, `mcpServers`, `model`, `thoughtLevel`. It is returned by `session.start` and shown in the chat (04).
+- `profileIssues` is the list of fields that `tempod` could not apply: any of `systemPrompt`, `tools`, `mcpServers`, `model`, `thoughtLevel`, `access`. It is returned by `session.start` and shown in the chat (04).
 - Spike S20 (06) MUST confirm every cell of this table for the pinned adapter versions. A cell it disproves becomes `Unsupported` until the spec changes.
+
+**Run session environment.** Run sessions add `TEMPO_RUN_ID` and `TEMPO_RUN_OUTPUT_KIND` (`plan`, `review` or `note`) to their session environment. These select `report_result` on the `tempo` MCP server. Ordinary sessions list `list_agents` and `propose_agent_change`; run sessions do not.
+
+**Read-only controls.** Apply an advertised read-only mode first, otherwise deny the base agent's edit tools through the profile, otherwise report `access`. The tree comparison always produces the warning specified in 08, while changes to protected login/config files fail the run. S20 must record the pinned adapters' exact mode IDs/tool names and shell behavior before claiming real-agent acceptance; these values are not yet established by a real-login spike.
 
 ## Credentials and egress
 
@@ -469,10 +431,10 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Start a session**
 
 1. The WorkspaceDO inserts the session row with status `starting`.
-2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, profile, browser, acpSessionId: null}`. `profile` is the session's `AgentProfile` from a custom agent, or absent (Custom agents). `model` is the model chosen for this session (`createSession` or the composer's model picker), else `agent.models.<agent>` from the effective settings, or absent when both are empty. For `opencode` and `pi` with no model, nothing is sent: the session stays `idle` and the turn that waited for it fails with `MODEL_REQUIRED`. `browser` is `"run"` when `browser.run` is true and the egress policy is `open` (Browser Run), else `"local"`.
+2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, profile, browser, acpSessionId: null}`. `profile` is the session's `AgentProfile` from a agent, or absent (Agents). `model` is the model chosen for this session (`createSession` or the composer's model picker), else `agent.models.<agent>` from the effective settings, or absent when both are empty. For `opencode` and `pi` with no model, nothing is sent: the session stays `idle` and the turn that waited for it fails with `MODEL_REQUIRED`. `browser` is `"run"` when `browser.run` is true and the egress policy is `open` (Browser Run), else `"local"`.
 3. `tempod` spawns the adapter as user `tempo` with cwd `/workspace` and the given env.
 4. `tempod` sends `initialize`. It checks `agentCapabilities` and stores them. It also reads top-level `_meta.steering.supported`, normalizes it to the boolean `capabilities.steering`, and exposes that flag as `Session.steering`. Missing support means false. Steering uses the ACP v1 `_session/steering` extension, not a concurrent `session/prompt`.
-5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright, tempo, ...userServers]}` and stores the returned ACP session id, modes and config options. With a profile, `_meta` and extra MCP servers follow Custom agents.
+5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright, tempo, ...userServers]}` and stores the returned ACP session id, modes and config options. With a profile, `_meta` and extra MCP servers follow Agents.
 6. If the requested mode differs from the current one, `tempod` sets the advertised `mode` config option with `session/set_config_option`, or uses `session/set_mode` for agents exposing session modes. If `model` is set, it sends `session/set_config_option` for the `model` option. If `profile.thoughtLevel` is set, it then sends `session/set_config_option` for the option whose category is `thought_level`.
 7. `tempod` returns the `session.start` result: `{acpSessionId, modes, configOptions, availableCommands, capabilities, profileIssues, reloaded: false, handoff: false}`. `profileIssues` is `[]` without a profile.
 
@@ -560,7 +522,7 @@ Browser Run (below) is on only when the egress policy that applies, the environm
 **Agent proposals.** The agent can ask for changes, but cannot make them.
 
 - `tempod` serves an MCP server named `tempo` to every agent session: `{"name": "tempo", "command": "/usr/local/bin/tempod", "args": ["mcp"], "env": [{"name": "TEMPO_SESSION_ID", "value": "<sessionId>"}]}`, where `<sessionId>` is the Tempo session id. It is passed next to Playwright in every `session/new` and `session/load`.
-- `tempod mcp` speaks MCP over stdio (JSON-RPC 2.0, protocol version `2025-06-18`, methods `initialize`, `tools/list`, `tools/call`, `ping`). It talks to the `tempod` daemon over the Unix socket `/home/tempo/.tempod/mcp.sock`. The socket accepts only the two tools below and `publish_artifact` (Artifacts).
+- `tempod mcp` speaks MCP over stdio (JSON-RPC 2.0, protocol version `2025-06-18`, methods `initialize`, `tools/list`, `tools/call`, `ping`). It talks to the `tempod` daemon over the Unix socket `/home/tempo/.tempod/mcp.sock`. The socket accepts the two environment tools below, `publish_artifact` (Artifacts), and the agent tools from 08. `report_result` is listed only for a run, with that run's output-kind schema. `list_agents` and `propose_agent_change` are listed only outside runs.
 - Tool `environment_status`, no input: returns the summary from the last `environment.set`: environment name or null, policy, allowlist, secrets as `{name, hosts, set}`, injectors as `{name, hosts}`, and `blockedHosts`. Never a secret value.
 - Tool `propose_environment_change`, input `EnvironmentProposal` (02): `tempod` sends the event `environment.proposed`. The tool returns "Sent to the owner for review." The agent MUST NOT ask the user to paste secret values in chat; the tool description says so.
 - The DO stores each proposal in `environment_proposals` (02) as `pending`, at most 20 pending; a new one over the limit replaces the oldest. The UI shows pending proposals (04). Applying is done by the owner's client with the environment server functions; then it calls `resolveEnvironmentProposal`.

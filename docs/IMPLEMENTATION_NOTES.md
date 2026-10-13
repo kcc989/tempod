@@ -416,3 +416,10 @@ Current-main compatibility also includes its first-prompt branch hook and guided
 PR #35 is rebased onto `8d1c434`. Its failed hosted run built the app and passed both browser suites, but the old CI runner terminated the test suite at its 270-second deadline. Current main separates suite/fixture caches, schedules browsers after other tests/builds and retains its approved 300-second check deadline after setup. This PR does not change those deadlines. Built-in role markdown now participates in the six relevant app build/test cache keys; a Turbo dry-run check verified that editing `planner.md` changes every key and that all four files are included.
 
 Local verification after the rebase: `bun run ci` passed in 117.5 seconds (Worker 116.0s, other tests 24.6s, app build 10.4s, web 35.7s and browser regressions 28.1s). Dependency/browser setup preceded that local timing. Native sources and generated Rust contracts match the previously verified 383-test revision; the chat-created callback alias and the precise queued-prompt browser locator are preserved through the rebase.
+
+
+## Agents as data (phase 7)
+
+Goal 4 replaces definitions in files and three-scope wiring with one D1 agent library and project attachments (A1–A5), owner-approved Clef-flash decisions through `AI` (A6), hidden run sessions and origin-chat run cards (A7), typed `report_result` calls (A8), adapter read-only controls with a file-change warning (A9), max-runs/timeout limits only (A10), owner-applied chat proposals (A11), and bounded/redacted decision state (A12). Existing session profiles stay frozen. Legacy definition tables remain read-only until Gate I passes.
+
+[S22](../spikes/S22.md) passed before implementing the decision call: 50 valid calls, p95 878 ms. Clef rejects colons in question IDs; the owner approved `<attachmentId>.<hookIndex>` while retaining colon-separated decision dedupe keys. The owner also approved updating access prompts to say agent and describe a warning. [Results](AGENTS-RESULTS.md) track implementation and acceptance separately. S20's read-only extension and S23 remain open; no real-adapter acceptance is inferred.

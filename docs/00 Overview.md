@@ -16,7 +16,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | D4 | Resume | Three layers: a git checkpoint at each turn end, a container snapshot on sleep, and the agent's own session files backed up to R2 | Each layer has a fallback: no snapshot means clone plus setup script; no session files means a new session with a transcript handoff |
 | D5 | Repos | GitHub App. One branch per workspace: animal default, then first-prompt name (03) | Conductor model; works on existing repos |
 | D6 | Browser testing | Chromium and Playwright inside the Sandbox image. Browser Run Live View is optional. | Tests reach `localhost` with no public exposure |
-| D7 | Stack | The standard stack: TanStack Start, shadcn/ui, Effect v4, Alchemy v2, Drizzle, D1, R2, Better Auth, Bun. Custom agents add Cloudflare Artifacts and `isomorphic-git` (01, Custom agents) | Your standard stack for new products |
+| D7 | Stack | The standard stack: TanStack Start, shadcn/ui, Effect v4, Alchemy v2, Drizzle, D1, R2, Better Auth, Bun. Agents use D1 and decisions use the Workers AI `AI` binding (08) | Your standard stack for new products |
 | D8 | SAM code | Do not copy any SAM code. Use SAM as a design reference only. | SAM is AGPL-3.0 |
 | D9 | Container API | Sandbox SDK 1.0 model. WorkspaceDO owns ctx.container under the durable\_object scheduling policy. tempod is the container entrypoint. | SDK 1.0 (2026-09-30) removed the Sandbox class |
 | D10 | GitHub and API-key credentials | Injected by the TempoOutbound egress handler. They never enter the container. | The documented Sandbox pattern for secrets |
@@ -43,7 +43,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 05 Security and Ops | Threat model, auth, secrets, egress, previews, deploy, logs, upgrades, cost |
 | 06 Build Plan | Repo layout, phases, spikes, acceptance tests, rules for coding agents |
 | 07 Mac Client | Tempo for Mac on GPUI Kit: native API, device sign-in, layout, macOS integration, release, phase 4 and gate E |
-| 08 Events and Roles | Lifecycle events, markdown roles, role runs, limits, phase 6 and gate H |
+| 08 Events and Agents | Lifecycle events, agent libraries, attachments, decisions, runs, phase 7 and gate I |
 
 ## Goals and non-goals
 
@@ -71,7 +71,7 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 - More than one user, teams, or sharing.
 - A hosted service for other people. Anthropic does not allow third parties to offer Claude sign-in.
 - Billing, quotas, or a platform model proxy (SAM's `sam` mode).
-- Tempo's own agent harness. Roles (08) drive the existing agents through ACP; they are not a harness.
+- Tempo's own agent harness. Agents (08) drive the existing agents through ACP; they are not a harness.
 - Devcontainers. Version 1 uses one Tempo base image plus a per-project setup script.
 - Docker inside the container.
 - Approval policies. Version 1 runs each agent in its most permissive mode inside the container. It MUST still show any permission request an agent sends, such as a plan approval.
@@ -96,7 +96,7 @@ Use these words exactly, in code, UI and docs.
 | Artifact | A file that an agent published for the owner to see. Each publish adds a version, kept in R2. | `artifact` |
 | Setup, run, archive scripts | Per-project shell scripts | `setupScript`, `runScript`, `archiveScript` |
 | `tempod` | The daemon inside each container. It runs agents and talks to the WorkspaceDO. | `tempod` |
-| Lifecycle event, change, role, role run, result | Defined in 08, Vocabulary | `lifecycleEvent`, `change`, `role`, `roleRun`, `result` |
+| Lifecycle event, change, agent, starter, attachment, hook, decision, run, run card, output kind | Defined in 08, Vocabulary | `lifecycleEvent`, `change`, `agent`, `starter`, `attachment`, `hook`, `decision`, `run`, `outputKind` |
 
 **Banned words.** Do not use these in code, UI or docs: "VM", "node" (as a machine), "task", "worktree". SAM uses them, and they mean different things there. Use "Sandbox" only for the Cloudflare product and its SDK classes. In the UI, say "container".
 
@@ -140,7 +140,7 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 
 | Component | Kind | Instances | Owns | Talks to |
 | --- | --- | --- | --- | --- |
-| Tempo Worker | TanStack Start app on Workers | 1 deployment | Routing, auth (Better Auth), server functions, the SPA, GitHub API calls, preview host routing, custom agent reads and writes | D1, R2, Artifacts, all DOs, GitHub API |
+| Tempo Worker | TanStack Start app on Workers | 1 deployment | Routing, auth (Better Auth), server functions, the SPA, GitHub API calls, preview host routing, agent and attachment reads and writes | D1, R2, Workers AI, all DOs, GitHub API |
 | `WorkspaceDO` | Durable Object with a container (`ctx.container`) | 1 per workspace, named by workspace id | Workspace state machine, step runner, sessions, transcript items, checkpoints index, scripts, previews, terminals, the `tempod` connection | `tempod`, `UserHubDO`, `CredentialDO`, D1, R2, GitHub API |
 | `UserHubDO` | Durable Object | 1 per user | UI WebSocket fan-out for the sidebar; workspace summaries | Browser, `WorkspaceDO` |
 | `CredentialDO` | Durable Object | 1 per user | Encrypted secrets; Codex `auth.json` versions and fan-out | `WorkspaceDO` |
@@ -150,7 +150,6 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 | Image `workspace` | Container image (Debian trixie, Node 24) | 1 image, many containers | Agents, Chromium, Playwright, dev tools | — |
 | D1 database `tempo` | SQLite (D1) | 1 | Users, GitHub installations, projects, workspace summaries | — |
 | R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs, artifacts, project conversation artifacts | — |
-| Artifacts namespace `tempo-agents` | Git-compatible storage | 1 repo per user | Custom agent definitions, one file per agent, one commit per save | — |
 
 ## Where state lives
 
@@ -160,7 +159,7 @@ The WorkspaceDO is the source of truth for a workspace. D1 holds only what lists
 | --- | --- | --- |
 | Users and login sessions | D1, Better Auth tables | Deleted |
 | GitHub installations, projects | D1 | Unlinked |
-| Custom agents | Definition in Artifacts repo `user-<userId>`; pointer and name in D1 `custom_agents` | Deleted |
+| Agents and project attachments | D1 `agents`, `project_agents` | Agent deletion is soft; project attachments remain until removed |
 | Workspace summary: name, branch, state, attention, PR | D1 `workspaces`, written only by its WorkspaceDO after createWorkspace inserts it | Deleted |
 | Workspace state, sessions, turns, transcript items, events, checkpoint index, review comments, script runs | WorkspaceDO SQLite | Workspace deleted |
 | Secrets | CredentialDO SQLite, AES-256-GCM | Deleted |
@@ -267,7 +266,7 @@ Example: 5 workspaces running 4 hours a day for 22 days is 440 hours, about $46 
 
 ## Phases
 
-Build in seven phases. Each phase ends at a gate: gate A is the spike results, and gates B to H are passing acceptance tests. Gate G covers custom agents (06). Spikes, tests and the gates are in 06 Build Plan.
+Build in seven phases. Each phase ends at a gate: gate A is the spike results, and gates B to H are passing acceptance tests. Gate G covers agents (06). Spikes, tests and the gates are in 06 Build Plan.
 
 1. **Phase 0, spikes.** Prove the risky parts in throwaway code: the container API, egress injection, each agent's login through the egress proxy, snapshots, previews, Playwright.
 2. **Phase 1, one workspace.** Claude Code only. Create, chat, stream, checkpoint, sleep, wake and resume, with the transcript intact.
@@ -275,7 +274,7 @@ Build in seven phases. Each phase ends at a gate: gate A is the spike results, a
 4. **Phase 3, ship.** Commit and push, pull requests, checks, merge, archive and restore, settings, and optional Browser Run.
 5. **Phase 4, Mac client.** The native API and device sign-in on the server, then Tempo for Mac on GPUI Kit (07).
 6. **Phase 5, artifacts.** The `publish_artifact` tool, artifact storage in R2, the artifact host, the Artifact and Artifacts tabs, image and Markdown views in file and diff tabs, and Mermaid diagrams, in the web UI and the Mac app.
-7. **Phase 6, roles.** Lifecycle events and user-defined roles (08). It MAY run in parallel with phases 2 to 5.
+7. **Phase 7, agents as data.** Lifecycle events, D1 agent libraries, project attachments, Clef decisions, runs and proposals (08), replacing phase 6 wiring.
 
 ## Risks and open questions
 
@@ -295,7 +294,6 @@ The biggest risk is that the container platform is new: Sandbox SDK 1.0 shipped 
 | R10 | Host restarts send SIGTERM, then SIGKILL within 15 minutes | A running turn stops | On SIGTERM the WorkspaceDO checkpoints and backs up before the container stops; the turn is marked interrupted; the session reloads | S6 |
 | R11 | The WorkspaceDO cannot hibernate while its container runs | Small DO duration cost | Accepted; container cost dominates | — |
 | R19 | Agent HTML runs in the owner's browser | A hostile artifact tries to read Tempo data or send data out | Own host under `PREVIEW_DOMAIN`, owner cookie, CSP `connect-src 'none'` and `sandbox`. A frame can still navigate itself to another site; this is accepted, because the same agent can already send data out through egress. | S18 |
-| R20 | Artifacts is in beta and the Worker needs a Git client to write | Saves fail or are slow | One small file per save; retry rule in 02; S19 measures cost; `ARTIFACTS_ERROR` keeps the last good version | S19 |
 | R21 | Adapters apply system prompts and tool limits through private `_meta` keys | An adapter upgrade silently drops a setting | `profileIssues` shows what was not applied; S20 and AT-48 repeat on every adapter upgrade | S20 |
 
 **Open questions for you**

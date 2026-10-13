@@ -150,7 +150,7 @@ CREATE TABLE agent_migrations (
 
 1. **Match.** Dispatch (tab 08) takes each undispatched event in `seq` order. It finds every enabled attachment of the workspace's project whose agent is active and has a hook with a matching event. Read attachments from D1 when the DO loads them and again after `agentsChanged()`, which the agent and attachment server functions call on each live WorkspaceDO of the user.
 2. **Always.** A hook with `when: null` decides "run" with no model call.
-3. **Ask.** Tempo sends one Clef-flash call for the event, with one `noul` question per matched hook that has a question. If more than 64 hooks match, it splits them into calls of at most 64. The question id is `<attachmentId>:<hookIndex>`.
+3. **Ask.** Tempo sends one Clef-flash call for the event, with one `noul` question per matched hook that has a question. If more than 64 hooks match, it splits them into calls of at most 64. The question id is `<attachmentId>.<hookIndex>` (owner-approved S22 correction; Clef rejects colons).
 4. **State.** A JSON object built by Tempo, at most 32 KiB. Every text value passes through the lifecycle redactor first.
 
    | Key | Content |
@@ -177,7 +177,7 @@ Build on the current role run engine. Rename it and remove what A9 and A10 remov
 3. **Session.** Create a session with `run_id` set and title `<name>`. Start it with the frozen definition as its `AgentProfile`, through the existing profile path. Add `TEMPO_RUN_ID` and `TEMPO_RUN_OUTPUT_KIND` to the session env. Set the run `running` and `deadline_at`.
 4. **Card.** Insert one `run` item, with content `{runId}`, in the **origin session**: the session of the change's first user turn, or the requesting session for a request. With neither, the run shows in the workspace activity list (Clients). Store the session id in `origin_session_id`.
 5. **Pin.** Take one checkpoint with reason `run_pin` before the first turn of the run. Store its id in `pin_checkpoint_id`. Do not take one before each turn.
-6. **Prompt.** The first turn's content blocks, in this order: the run header, the access text (tab 08, unchanged), the output kind text, the request text if any, then the context blocks for the hook event (below). Each block is at most 256 KiB and all blocks together at most 512 KiB, cut as today. The agent's `prompt` is the system prompt, not a content block.
+6. **Prompt.** The first turn's content blocks, in this order: the run header, the access text (tab 08, updated to match A1 and A9 by owner approval), the output kind text, the request text if any, then the context blocks for the hook event (below). Each block is at most 256 KiB and all blocks together at most 512 KiB, cut as today. The agent's `prompt` is the system prompt, not a content block.
 
    | Context | Sent for |
    | --- | --- |

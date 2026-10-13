@@ -60,9 +60,7 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 **Rules**
 
 - MUST NOT log a secret, put one in an error message, or store one in D1, in WorkspaceDO `events`, in lifecycle events (08), or in R2.
-- Role files (08) are prompts, not code, and run with no approval step. A repo role on a branch can start agent runs with write access; limits bound every run, and role files are read only on clone, fresh-disk wake and `reloadRoles`.
-- MUST NOT store a secret in Artifacts. Custom agent files hold only `${NAME}` references in MCP `env` and `headers`; validation refuses literal values (01, Custom agents).
-- Artifacts write tokens are minted per save with a 300 s TTL, kept in memory only, and revoked when the save ends. They never reach a container or the browser.
+- Agent definitions in D1 hold only `${NAME}` references in MCP `env` and `headers`; validation refuses literal values (08). Agent proposals write nothing until the owner applies them.
 - The log helper redacts any field whose name matches `/token|key|secret|password|authorization|auth_json|cookie/i`.
 - Home backups exclude `.codex/auth.json`, `.claude/.credentials.json` and `.tempod/` (01, Durability). The daemon outbox may contain unacknowledged credential refreshes.
 - Container snapshots do hold Codex `auth.json`. They stay inside the Cloudflare account; this is part of R4.
@@ -209,3 +207,8 @@ Container memory is the biggest cost; sleeping is the main control. The per-hour
 | Models | Your Claude and ChatGPT plans; OpenRouter usage | Outside Tempo |
 
 The UI shows the instance size in the container pill, so the owner can see what is running.
+
+
+## Decision state privacy
+
+The Clef-flash decision state is the only new data that leaves Tempo in phase 7. Every text value passes through the lifecycle redactor. It is at most 32 KiB and may contain the change's prompt or request text cut to 4 KiB, but never file contents, environment values or secrets. Changed paths and line counts, check names/conclusions, branch names and the other run's handle/status/redacted summary follow 08. Events and logs never store question text or decision state. Decisions record only the attachment/agent IDs, hook, outcome, probability and threshold. The `AI` binding is owner-approved; no API key enters a container.

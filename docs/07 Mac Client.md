@@ -36,7 +36,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
 | Permission cards, plan mode, model, reasoning level and mode pickers | Same |  |
-| Custom agents in New chat and New workspace, the profile-issues notice | Same | New chat hides agents and custom agents without a confirmed base-agent login, including while credential status loads or is unavailable. `Manage agents…` stays available and opens the Settings window on Agents |
+| Agents in New chat and New workspace, the profile-issues notice | Same | New chat hides agents and agents without a confirmed base-agent login, including while credential status loads or is unavailable. `Manage agents…` stays available and opens the Settings window on Agents |
 | Attachments, @-mentions, `/` commands | Same | Also accepts files dragged from Finder |
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
@@ -186,7 +186,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 
 ## Transcript, composer and permissions
 
-Phase 6 role UI (08, UI) comes to the Mac client in the same milestone as the web.
+Phase 7 agent library, project attachments, run cards, hidden run sessions, requests, proposals and decision diagnostics (08, Clients) come to the Mac client in the same milestones as the web. Open transcript presents the run session in a side panel. Runs without an origin chat appear in workspace activity.
 
 Behavior follows 04, Center. These rules are for the Mac app only.
 
@@ -388,7 +388,7 @@ Phase 4 starts after gate D passes. Server changes come first, so the web UI nev
 | AT-35 | Revoking the Mac session in web Settings → Devices returns the app to the sign-in screen within 60 s. |
 | AT-36 | Every action in 04's shortcut table works with its Mac binding. |
 | AT-37 | A logs, Keychain and disk check after a full run finds no token, secret, prompt or transcript text outside the Keychain. |
-| AT-52 | A custom agent made in web Settings → Agents shows in the Mac New chat menu. Editing it in the Mac Settings window shows the change on the web after a reload. A chat started from it on the Mac shows the same profile-issues notice as the web. |
+| AT-52 | A agent made in web Settings → Agents shows in the Mac New chat menu. Editing it in the Mac Settings window shows the change on the web after a reload. A chat started from it on the Mac shows the same profile-issues notice as the web. |
 
 ## Risks and open questions
 
