@@ -49,6 +49,14 @@ afterEach(() => vi.restoreAllMocks());
 describe("agent library", () => {
   it("copies starters once without project attachments", async () => {
     const o = await owner();
+    const workspace = await seedWorkspace(o);
+    await driveToState(workspace.stub, ["ready"]);
+
+    const markers = await env.DB.prepare("SELECT user_id FROM agent_migrations WHERE user_id=?")
+      .bind(o.userId)
+      .all();
+
+    expect(markers.results).toEqual([]);
     const list = value(await call("listAgents", o));
     expect(list.map((a) => a.handle).sort()).toEqual(["check-fixer", "planner", "reviewer"]);
     expect(value(await call("listAgents", o))).toEqual(list);

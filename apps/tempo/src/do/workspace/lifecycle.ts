@@ -14,7 +14,7 @@ import {
   type AgentAttachment,
 } from "@tempo/protocol";
 import { lifecycleEvents, runs, turns, type LifecycleRow, type RunRow } from "../../db/workspace-do.ts";
-import { agentToWire, attachmentToWire, migrateAgents } from "../../agents/library.ts";
+import { agentToWire, attachmentToWire } from "../../agents/library.ts";
 import { agents, projectAgents } from "../../db/d1.ts";
 import { d1 } from "../../server/handlers/common.ts";
 
@@ -40,24 +40,21 @@ export class Lifecycle {
     if (this.loading) await this.loading;
     this.loading = (async () => {
       const ws = this.core.ws();
-      await migrateAgents(this.core.env, ws.userId);
       const db = d1(this.core.env);
 
-      const definitions = await db
-        .select()
-        .from(agents)
-        .where(and(eq(agents.userId, ws.userId), isNull(agents.deletedAt)))
-        .all();
+      const [definitions, rows] = await db.batch([
+        db
+          .select()
+          .from(agents)
+          .where(and(eq(agents.userId, ws.userId), isNull(agents.deletedAt))),
+        db.select().from(projectAgents).where(eq(projectAgents.projectId, ws.projectId)),
+      ]);
 
       this.agents = definitions.map(agentToWire);
-
-      const rows = await db
-        .select()
-        .from(projectAgents)
-        .where(eq(projectAgents.projectId, ws.projectId))
-        .all();
-
-      this.attachments = await Promise.all(rows.map((row) => attachmentToWire(this.core.env, row)));
+      const byId = new Map(definitions.map((agent) => [agent.id, agent]));
+      this.attachments = await Promise.all(
+        rows.map((row) => attachmentToWire(this.core.env, row, byId.get(row.agentId) ?? null)),
+      );
       this.loaded = true;
     })();
 

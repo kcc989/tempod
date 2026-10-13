@@ -34,3 +34,7 @@ The replacement engine freezes definitions/options, takes one pin, accepts typed
 S20 real-adapter checks, S23 and Gate I remain open; local fake-adapter tests and Linux native checks are not deployed/macOS acceptance. M4–M6 remain pending.
 
 M3 validation: `bun run ci` passed in 92.0 seconds with cache reuse (Worker 89.7 s, non-Worker 26.9 s, browser 44.8 s, typecheck 5.9 s, app build 12.1 s). The focused run suite passed 15 cases; all five migration cases, the run-card interaction, 28 ACP cases and 17 MCP/mapper cases passed. Native tests passed 264/264 and strict Clippy passed. Browser fixtures now implement the new attachment/activity APIs, and the legacy startup fixture waits for readiness before teardown.
+
+The run PR rebases onto workspace tools (#44) and deterministic reconnect coverage (#45). Both clients place Activity and hidden run transcripts in the tool area beside the chat. Hosted cold checks hit the 300-second deadline; catalog loading now batches reads, reuses loaded agent rows and leaves one-time imports to the specified library access paths. A regression verifies that workspace startup does not import a library.
+
+The complete post-optimization forced-task benchmark passed in 90.4 seconds: Worker 88.2 s, other tests 46.1 s, typecheck 11.5 s, app build 13.1 s and all 28 browsers 37.8 s. No CI limits or concurrency changed.
