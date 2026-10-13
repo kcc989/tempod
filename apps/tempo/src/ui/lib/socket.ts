@@ -176,6 +176,24 @@ export class ReconnectingSocket {
     };
   }
 
+  /** 02 Conventions: a side that gets an unknown `v` closes with 4400 and does not reconnect. */
+  rejectVersion(): void {
+    const ws = this.ws;
+    this.ws = null;
+    if (this.pingTimer !== null) this.timers.clearInterval(this.pingTimer);
+    this.pingTimer = null;
+    if (ws) {
+      ws.onopen = ws.onmessage = ws.onerror = null;
+      ws.onclose = null;
+      try {
+        ws.close(CloseCode.badProtocolVersion, "unknown protocol version");
+      } catch {
+        // Already closed.
+      }
+    }
+    this.setStatus("bad_version");
+  }
+
   private scheduleReconnect(): void {
     if (this.stopped) return;
     this.setStatus("reconnecting");

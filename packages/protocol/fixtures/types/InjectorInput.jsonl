@@ -1,0 +1,1 @@
+{"name":"aws-sigv4","hosts":["s3.amazonaws.com"],"code":"export default { async fetch(request, env) { return fetch(request); } };\n"}

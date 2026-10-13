@@ -111,7 +111,14 @@ export const readWorkspaceFile = async (
   }
   if (!st.isFile()) throw new TempoError("NOT_FOUND", "Not a file.");
   if (st.size > maxBytes) throw new TempoError("FILE_TOO_LARGE");
-  const bytes = await readFile(abs);
+  return encodeFileBytes(await readFile(abs), maxBytes);
+};
+
+/** The `fs.read` answer for some bytes: UTF-8 text when it is text, else base64 (02). */
+export const encodeFileBytes = (
+  bytes: Buffer,
+  maxBytes: number,
+): { content: string; encoding: "utf8" | "base64"; size: number } => {
   const size = bytes.byteLength;
   if (size > maxBytes) throw new TempoError("FILE_TOO_LARGE");
   let result: { content: string; encoding: "utf8" | "base64"; size: number } | null = null;

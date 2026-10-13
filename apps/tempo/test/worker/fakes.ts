@@ -3,6 +3,7 @@ import { newId, type Source, type TempodEvent, type TempodOp } from "@tempo/prot
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import type { WorkspaceCore } from "../../src/do/workspace/core.ts";
 import type { OpRunner } from "../../src/do/workspace/runner.ts";
+import type { SessionAgentProfile } from "../../src/do/workspace/rpc.ts";
 
 /**
  * Test doubles for the parts of a workspace that need a real container: `ctx.container` and
@@ -23,6 +24,10 @@ export class FakeTempod {
   readonly handlers = new Map<string, RequestHandler>();
   /** Requests that throw: op → {code, message}. */
   readonly failures = new Map<string, { code: string; message: string }>();
+  /** The tempod side of each preview WebSocket proxied through /v1/proxy, with its close code once closed. */
+  readonly proxySockets: Array<{ socket: WebSocket; closed: number | null }> = [];
+  /** Every request proxied through /v1/proxy, with the headers tempod received. */
+  readonly proxyRequests: Array<{ path: string; headers: Headers }> = [];
   healthy = true;
 
   constructor() {
@@ -36,6 +41,7 @@ export class FakeTempod {
       sources: {},
     }));
     this.on("env.set", ok);
+    this.on("environment.set", ok);
     this.on("script.start", () => ({ pid: 1234 }));
     this.on("script.stop", ok);
     this.on("session.start", () => ({
@@ -88,6 +94,11 @@ export class FakeTempod {
     return this.socket !== null;
   }
 
+  resume(incarnation: string, seq: number): void {
+    this.incarnation = incarnation;
+    this.seq = seq;
+  }
+
   /** Sends one event with the next seq. */
   emit(event: TempodEvent): number {
     const seq = ++this.seq;
@@ -122,14 +133,28 @@ export class FakeTempod {
           return Response.json({ ok: true, version: this.version, incarnation: this.incarnation });
         }
         if (url.pathname === "/v1/connect") return this.accept();
-        if (url.pathname.startsWith("/v1/proxy/"))
+        if (url.pathname.startsWith("/v1/proxy/")) {
+          this.proxyRequests.push({ path: `${url.pathname}${url.search}`, headers: req.headers });
+          if (req.headers.get("Upgrade")?.toLowerCase() === "websocket") return this.acceptProxy();
           return new Response(`proxied ${url.pathname}${url.search}`, { status: 200 });
+        }
         return new Response("not found", { status: 404 });
       },
       connect: () => {
         throw new Error("not supported");
       },
     } as unknown as Fetcher;
+  }
+
+  private acceptProxy(): Response {
+    const pair = new WebSocketPair();
+    const entry = { socket: pair[1], closed: null as number | null };
+    entry.socket.accept();
+    entry.socket.addEventListener("close", (e) => {
+      entry.closed = e.code;
+    });
+    this.proxySockets.push(entry);
+    return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
   private accept(): Response {
@@ -196,7 +221,8 @@ export class FakeTempod {
 }
 
 export const DEFAULT_EFFECTIVE = {
-  agent: { default: "claude", model: "" },
+  agent: { default: "claude", models: { claude: "", codex: "", opencode: "", pi: "" } },
+  browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
   environment: {
     instance: "standard-3",
@@ -272,7 +298,7 @@ export class FakeContainer {
 export interface Internals {
   readonly core: WorkspaceCore;
   readonly runner: OpRunner;
-  readonly handlers: { onEvent: (e: TempodEvent) => Promise<void> };
+  readonly handlers: { onEvent: (e: TempodEvent) => Promise<void> | void };
 }
 
 export const internals = (instance: WorkspaceDO): Internals => instance as unknown as Internals;
@@ -285,7 +311,10 @@ export const installFakes = async (
   let container!: FakeContainer;
   await runInDurableObject(stub, (instance: WorkspaceDO) => {
     const core = internals(instance).core;
-    container = new FakeContainer(tempod, () => core.wsOrNull()?.tempodToken ?? null);
+    container = new FakeContainer(
+      tempod,
+      () => core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken") ?? null,
+    );
     core.container = container as unknown as Container;
   });
   return { tempod, container };
@@ -405,6 +434,7 @@ export const seedWorkspace = async (
     branch?: string;
     agent?: "claude" | "codex" | "opencode" | "pi";
     source?: Source;
+    custom?: SessionAgentProfile;
   } = {},
 ) => {
   const workspaceId = newId();
@@ -429,6 +459,7 @@ export const seedWorkspace = async (
     defaultAgent: opts.agent ?? "claude",
     agent: opts.agent ?? "claude",
     prompt: opts.prompt ? { text: opts.prompt } : null,
+    ...(opts.custom ? { custom: opts.custom } : {}),
     author: { name: "Owner", email: `${OWNER_GITHUB_ID}+owner@users.noreply.github.com` },
     createdAt: now,
   });

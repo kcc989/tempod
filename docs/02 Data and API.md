@@ -45,9 +45,40 @@ CREATE TABLE projects (
   default_branch   TEXT NOT NULL,
   settings_json    TEXT NOT NULL DEFAULT '{}',
   sort_order       INTEGER NOT NULL DEFAULT 0,
+  environment_id   TEXT REFERENCES environments(id) ON DELETE SET NULL,
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL,
   UNIQUE (user_id, repo_id)
+);
+
+-- Named environments (01, Environments). No secret values: those live in CredentialDO.
+CREATE TABLE environments (
+  id                     TEXT PRIMARY KEY,
+  user_id                TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  name                   TEXT NOT NULL,
+  egress_policy          TEXT NOT NULL DEFAULT 'allowlist' CHECK (egress_policy IN ('open','allowlist')),
+  egress_allowlist_json  TEXT NOT NULL DEFAULT '[]',
+  secrets_json           TEXT NOT NULL DEFAULT '[]',   -- [{name, hosts}]
+  injectors_json         TEXT NOT NULL DEFAULT '[]',   -- [{name, hosts, code, sha256}]
+  created_at             INTEGER NOT NULL,
+  updated_at             INTEGER NOT NULL,
+  UNIQUE (user_id, name)
+);
+
+CREATE TABLE mcp_servers (
+  id               TEXT PRIMARY KEY,           -- ULID
+  user_id          TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,              -- ^[a-z0-9][a-z0-9_-]{0,31}$, never "playwright" or "tempo"
+  transport        TEXT NOT NULL CHECK (transport IN ('stdio','http','sse')),
+  enabled          INTEGER NOT NULL DEFAULT 1,
+  command          TEXT,                       -- stdio only
+  args_json        TEXT NOT NULL DEFAULT '[]', -- stdio only: [string]
+  env_json         TEXT NOT NULL DEFAULT '[]', -- stdio only: [{name, value}]; values are not secret
+  url              TEXT,                       -- http and sse only; https only
+  headers_json     TEXT NOT NULL DEFAULT '[]', -- http and sse only: [{name, value}] or [{name, secret: true}]
+  created_at       INTEGER NOT NULL,
+  updated_at       INTEGER NOT NULL,
+  UNIQUE (user_id, name)
 );
 
 CREATE TABLE workspaces (
@@ -82,9 +113,49 @@ CREATE INDEX workspaces_by_activity ON workspaces(user_id, archived_at, last_act
 - Every DO write increments `summary_rev` and uses `UPDATE … WHERE id = ? AND summary_rev < ?`. A stale write changes nothing.
 - `setPinned` is not an exception: it calls the WorkspaceDO, which writes `pinned` and publishes the summary.
 
+**Custom agents.** Each row points to one file in the user's Artifacts repo (01, Custom agents). The file holds the definition; the row holds what menus need and the commit to read.
+
+```sql
+CREATE TABLE custom_agents (
+  id           TEXT PRIMARY KEY,           -- ULID; also the file name agents/<id>.yaml
+  user_id      TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  description  TEXT NOT NULL DEFAULT '',
+  base_agent   TEXT NOT NULL CHECK (base_agent IN ('claude','codex','opencode','pi')),
+  repo         TEXT NOT NULL,              -- Artifacts repo name, user-<userId>
+  path         TEXT NOT NULL,              -- agents/<id>.yaml
+  commit_sha   TEXT NOT NULL,              -- commit that holds the current version
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL,
+  deleted_at   INTEGER
+);
+CREATE UNIQUE INDEX custom_agents_active_name ON custom_agents(user_id, name) WHERE deleted_at IS NULL;
+```
+
+**Write rules for `custom_agents`**
+
+- Only the custom-agent server functions write this table. The row changes only after the Artifacts push succeeds, so `commit_sha` always names a commit that exists.
+- A save is idempotent: it creates the repo only if `get` returns `NOT_FOUND` and treats `ALREADY_EXISTS` as success. A rejected (non-fast-forward) push fetches `main` again and retries, at most 3 times, then fails with `ARTIFACTS_ERROR`.
+- The write token is minted per save with `createToken("write", 300)`, used in memory, and revoked in a `finally` block. It MUST NOT be stored or logged.
+- Delete sets `deleted_at` and commits the removal of the file. Sessions that already started keep their profile.
+- Deleting the user deletes the Artifacts repo too.
+
 ## WorkspaceDO schema
 
 Each WorkspaceDO holds the full record of one workspace. Everything the UI shows for a workspace comes from here.
+
+The read-only file fallback while sleeping (03, Wake triggers) uses this additional table. Null contents mean a known path whose contents are not cached.
+
+```sql
+CREATE TABLE file_cache (
+  path           TEXT PRIMARY KEY,
+  response_json  TEXT,
+  bytes          INTEGER NOT NULL DEFAULT 0,
+  updated_at     INTEGER NOT NULL DEFAULT 0
+);
+```
+
+`filesSyncedAt` in DO KV records that a tree has been synced, including an empty tree. File contents keep the existing `readFile` response format. Only paths from `fs.list` are persisted, so ignored files are excluded. Contents are bounded to 1,000 files and 16 MiB of encoded JSON per workspace; older contents are evicted while paths remain. Each best-effort sync pass takes at most 10 seconds, prioritizes changed and already cached files, and reads at most 1,000 files. Sync after create/wake, coalesce `git.changed` notifications for 5 seconds, and attempt a final sync before shutdown and on SIGTERM. Sync failures do not block work or sleep. Successful live reads refresh the cache; deletions and renames prune old paths when the tree syncs.
 
 ```sql
 -- Exactly one row, id = 1.
@@ -109,7 +180,9 @@ CREATE TABLE workspace (
   attention           TEXT NOT NULL DEFAULT 'none',
   setup_status        TEXT NOT NULL DEFAULT 'none'
                       CHECK (setup_status IN ('none','running','succeeded','failed','skipped')),
-  preview_token       TEXT NOT NULL,
+  preview_token       TEXT NOT NULL,   -- unused since preview_key; kept because 05 Upgrades forbids dropping a column
+  preview_key         TEXT NOT NULL,   -- HMAC key for preview cookies (05, Preview access)
+  browser_session_id  TEXT,            -- open Browser Run session (01); null when none
   settings_json       TEXT NOT NULL DEFAULT '{}',  -- effective settings, last read
   pushed              INTEGER NOT NULL DEFAULT 0,  -- branch exists on origin
   pr_number           INTEGER,
@@ -125,7 +198,8 @@ CREATE TABLE workspace (
   tempod_acked_seq    INTEGER NOT NULL DEFAULT 0,
   image_ref           TEXT,
   summary_rev         INTEGER NOT NULL DEFAULT 0,
-  items_rev           INTEGER NOT NULL DEFAULT 0
+  items_rev           INTEGER NOT NULL DEFAULT 0,
+  environment_id      TEXT             -- workspace override; null = the project's environment
 );
 
 -- Step runner (03).
@@ -151,7 +225,7 @@ CREATE TABLE sessions (
   agent                TEXT NOT NULL CHECK (agent IN ('claude','codex','opencode','pi')),
   title                TEXT NOT NULL DEFAULT '',
   acp_session_id       TEXT,
-  status               TEXT NOT NULL CHECK (status IN ('starting','idle','running','closed','broken')),
+  status               TEXT NOT NULL CHECK (status IN ('starting','idle','running','closed')),
   mode_id              TEXT,
   config_json          TEXT NOT NULL DEFAULT '{}',  -- {configId: value} chosen by the user
   modes_json           TEXT NOT NULL DEFAULT '[]',  -- as reported by the agent
@@ -162,6 +236,11 @@ CREATE TABLE sessions (
   handoff_pending      INTEGER NOT NULL DEFAULT 0,
   pending_note         TEXT,                        -- added to the next prompt, then cleared
   general_prompt_sent  INTEGER NOT NULL DEFAULT 0,
+  custom_agent_id      TEXT,                        -- null for a plain agent
+  custom_agent_name    TEXT,                        -- name at session start
+  custom_agent_commit  TEXT,                        -- commit the profile was read from
+  profile_json         TEXT,                        -- AgentProfile; null for a plain agent
+  profile_issues_json  TEXT NOT NULL DEFAULT '[]',  -- from session.start
   sort_order           INTEGER NOT NULL,
   created_at           INTEGER NOT NULL,
   updated_at           INTEGER NOT NULL,
@@ -183,7 +262,8 @@ CREATE TABLE turns (
   reverted       INTEGER NOT NULL DEFAULT 0,
   queued_at      INTEGER NOT NULL,
   started_at     INTEGER,
-  ended_at       INTEGER
+  ended_at       INTEGER,
+  usage_json     TEXT                      -- token usage the agent reported for this turn; null when none
 );
 CREATE INDEX turns_by_status ON turns(status, queue_pos);
 
@@ -192,7 +272,8 @@ CREATE TABLE items (
   session_id    TEXT NOT NULL,
   turn_id       TEXT,
   kind          TEXT NOT NULL CHECK (kind IN ('user_message','agent_message','agent_thought','tool_call',
-                                             'plan','permission','notice','handoff','revert_marker','error')),
+                                             'plan','permission','notice','handoff','revert_marker','error',
+                                             'artifact')),
   status        TEXT NOT NULL CHECK (status IN ('streaming','pending','in_progress','completed','failed','cancelled')),
   content_json  TEXT NOT NULL,
   rev           INTEGER NOT NULL,           -- workspace.items_rev at the last change
@@ -216,7 +297,7 @@ CREATE TABLE events (
 CREATE TABLE checkpoints (
   id            TEXT PRIMARY KEY,
   turn_id       TEXT,
-  reason        TEXT NOT NULL CHECK (reason IN ('turn_end','pre_revert','pre_sleep','pre_archive','sigterm')),
+  reason        TEXT NOT NULL CHECK (reason IN ('turn_end','pre_revert','pre_sleep','pre_archive','sigterm','role_pin')),
   commit_sha    TEXT NOT NULL,
   tree_sha      TEXT NOT NULL,
   parent_sha    TEXT NOT NULL,
@@ -251,7 +332,7 @@ CREATE TABLE review_comments (
   line_end      INTEGER,
   side          TEXT CHECK (side IN ('old','new')),
   body          TEXT NOT NULL,
-  status        TEXT NOT NULL CHECK (status IN ('draft','sent','resolved')),
+  status        TEXT NOT NULL CHECK (status IN ('draft','sent')),
   sent_turn_id  TEXT,
   created_at    INTEGER NOT NULL
 );
@@ -298,6 +379,44 @@ CREATE TABLE attachments (
   created_at      INTEGER NOT NULL
 );
 
+-- One-time preview entry codes (05, Preview access). A row is deleted when used or after 60 s.
+CREATE TABLE preview_codes (
+  code_hash   TEXT PRIMARY KEY,        -- SHA-256 of the code, hex
+  port        INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL
+);
+
+-- One row per published artifact version (01, Artifacts).
+CREATE TABLE artifacts (
+  id           TEXT NOT NULL,              -- artifact id, made by tempod; the same for every version
+  version      INTEGER NOT NULL,           -- 1, 2, 3 … per artifact
+  session_id   TEXT NOT NULL,
+  turn_id      TEXT,
+  item_id      TEXT NOT NULL,              -- the artifact item of this version
+  path         TEXT NOT NULL,              -- resolved path in the container when published
+  name         TEXT NOT NULL,              -- file base name
+  title        TEXT NOT NULL,
+  summary      TEXT,
+  mime         TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('image','markdown','pdf','html','text')),
+  size_bytes   INTEGER NOT NULL,
+  sha256       TEXT NOT NULL,              -- hex
+  staged_path  TEXT NOT NULL,
+  status       TEXT NOT NULL CHECK (status IN ('uploading','ready','lost')),
+  attempt      INTEGER NOT NULL DEFAULT 0,
+  r2_key       TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (id, version)
+);
+
+-- One-time artifact entry codes (05, Artifact access). A row is deleted when used or after 60 s.
+CREATE TABLE artifact_codes (
+  code_hash    TEXT PRIMARY KEY,           -- SHA-256 of the code, hex
+  artifact_id  TEXT NOT NULL,
+  version      INTEGER NOT NULL,
+  expires_at   INTEGER NOT NULL
+);
+
 -- Newest 10,000 rows only.
 CREATE TABLE egress_log (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -309,6 +428,14 @@ CREATE TABLE egress_log (
   ms      INTEGER NOT NULL,
   rule    INTEGER NOT NULL
 );
+
+-- Agent proposals (01, Environments). At most 20 pending.
+CREATE TABLE environment_proposals (
+  id             TEXT PRIMARY KEY,
+  created_at     INTEGER NOT NULL,
+  status         TEXT NOT NULL CHECK (status IN ('pending','applied','dismissed')),
+  proposal_json  TEXT NOT NULL           -- EnvironmentProposal
+);
 ```
 
 **Rules**
@@ -316,6 +443,7 @@ CREATE TABLE egress_log (
 - Every change to `items` increments `workspace.items_rev` by 1 and sets `items.rev` to the new value, in the same transaction.
 - Each `checkpoints.id` is a ULID. Its git ref is `refs/tempo/checkpoints/<checkpoint id>`.
 - Delete `events` rows older than 7 days in the daily `housekeeping` op.
+- Lifecycle event and role run tables, new columns on `sessions` and `turns`, the D1 `user_roles` table, new server functions, the `roleRun` channel message and new error codes are in 08. They are part of this contract.
 
 ## CredentialDO and UserHubDO
 
@@ -349,6 +477,8 @@ Secret keys are exactly:
 | `anthropic.api_key` | Anthropic API key (API-key mode) |
 | `openai.api_key` | OpenAI API key (API-key mode) |
 | `project.<projectId>.env.<NAME>` | One project secret env var |
+| `environment.<environmentId>.secret.<NAME>` | One environment secret |
+| `mcp.<serverId>.header.<name>` | The value of one secret header of a user MCP server; `<name>` is the header name in lowercase |
 
 One more CredentialDO instance is named `system`. It holds the GitHub App config under the keys `github_app.id`, `github_app.slug`, `github_app.private_key`, `github_app.client_id` and `github_app.client_secret` (05, Secrets). Its HKDF salt is `system`.
 
@@ -363,9 +493,16 @@ One more CredentialDO instance is named `system`. It holds the GitHub App config
 | `deleteSecret(key)` | `void` |
 | `status()` | `[{key, updatedAt, meta}]`, never values |
 | `listProjectEnv(projectId)` | `{NAME: value}` for that project |
+| `listEnvironmentSecrets(environmentId)` | `{NAME: value}` for that environment. WorkspaceDO only. |
+| `listEnvironmentSecretNames(environmentId)` | Names that have a stored value |
+| `deleteEnvironmentSecrets(environmentId)` | `void`; deletes every secret of the environment |
+| `hmacEnvironmentSecret(environmentId, name, data, hash, prefix)` | `ArrayBuffer`; for injectors (01). `TempoOutbound` only. |
 | `offerCodexAuth(content, lastRefresh, fromWorkspaceId)` | `{accepted, version}` |
 | `getCodexAuth()` | `{content, version, lastRefresh}` or `null`. WorkspaceDO only. |
 | `getGithubAppConfig()` | `{appId, slug, privateKey, clientId, clientSecret}` or `null`. On the `system` instance only. Only the Worker's `auth/` and `github/` modules call it. |
+| `startCodexLogin()` | `Result<{loginId, verificationUrl, userCode, expiresAt, intervalMs}>`; one active in-memory attempt per owner |
+| `pollCodexLogin(loginId)` | `Result<{status: "pending" \| "connected" \| "expired"}>`; tokens stay inside CredentialDO |
+| `cancelCodexLogin(loginId)` | `void`; idempotent and scoped to the matching attempt |
 | `addCodexLease(workspaceId)`, `dropCodexLease(workspaceId)` | `void` |
 
 **UserHubDO** (one per user)
@@ -392,10 +529,11 @@ One bucket, `tempo-data`, binding `DATA`. Keys are exact.
 | `homes/<workspaceId>/<recordId>.tar.zst` | `DirectoryBackup` of `/home/tempo` | `DirectoryBackup` | Newest 3 per workspace |
 | `attachments/<workspaceId>/<attachmentId>/<file name>` | Files the user attached to a prompt | Worker | Until the workspace is deleted |
 | `logs/<workspaceId>/<runId>.log` | Full script log, at most 50 MiB | WorkspaceDO | 30 days |
+| `artifacts/<workspaceId>/<artifactId>/<version>/<name>` | One published artifact version, at most 25 MiB (01, Artifacts) | WorkspaceDO | Until the workspace is deleted |
 | `artifacts/projects/<projectId>/conversations/<workspaceId>.json` | Version 1 conversation artifact: project/workspace identity, title, branch, save time, sessions, turns and transcript items | WorkspaceDO | Indefinitely, including after workspace deletion |
 
 - The daily `housekeeping` op in each WorkspaceDO applies these limits.
-- Deleting a workspace deletes every key under its id in the four workspace prefixes. It first saves a final conversation artifact; upload failure prevents deletion. Project conversation artifacts remain.
+- Deleting a workspace deletes every key under its id in the five workspace prefixes. It first saves a final conversation artifact; upload failure prevents deletion. Project conversation artifacts remain.
 - Transcript, session, turn and workspace-summary changes mark the artifact dirty in durable KV (`conversationRevision`, `conversationDueAt`, `conversationSavedRevision`). The DO alarm coalesces uploads within 60 seconds; turn completion makes the upload immediately due. A failed upload keeps the dirty revision and retries after 60 seconds. Uploads are serialized, and changes during an upload remain dirty.
 - Existing WorkspaceDOs schedule an initial copy when first accessed. Listing project conversations copies any existing workspace with no artifact; reading a live workspace conversation refreshes its artifact.
 - Artifacts contain only explicit transcript fields, never workspace settings, container tokens, preview tokens or agent credential/session files. Structured tool-call content uses the shared redaction helper before upload. R2 stays private; artifact reads use the owner-authenticated API and project ownership checks.
@@ -420,6 +558,7 @@ The transcript is a list of items. `tempod` turns ACP updates into items; the Wo
 | `handoff` | `{text}`, the exact handoff block that was sent |
 | `revert_marker` | `{checkpointId, toTurnSeq}` |
 | `error` | `{code, detail}` |
+| `artifact` | `{artifactId, version, title, summary?, name, path, mime, artifactKind, size}`. `artifactKind` is the `kind` from 01, Allowed files. |
 
 `toolKind`, `ToolCallContent` (`content`, `diff`, `terminal`) and `ContentBlock` are the ACP v1 types, copied as is.
 
@@ -446,6 +585,7 @@ The transcript is a list of items. `tempod` turns ACP updates into items; the Wo
 - `agent_message` and `agent_thought` are `streaming` until the next item starts or the turn ends, then `completed`.
 - `tool_call` status copies the ACP status: `pending`, `in_progress`, `completed`, `failed`.
 - When a turn ends as `cancelled`, `failed` or `interrupted`, every open item in it becomes `cancelled`.
+- The WorkspaceDO makes `artifact` items itself (01, Artifacts). Their status follows the upload, not the turn: `pending` while `uploading`, `completed` when `ready`, `failed` when `lost`. A turn end does not change it.
 
 **Capabilities `tempod` advertises:** `fs.readTextFile`, `fs.writeTextFile`, `session.notices`. It MUST NOT advertise `terminal`, `elicitation` or `session.compaction` in version 1.
 
@@ -461,7 +601,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, token)`, `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, policy, allowlist}` for `TempoOutbound`), `logEgress(row)`, `pushCodexAuth(content, version)`.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, code)` (the code names the version), `artifactFetch(request, artifactId, cookie)`, `getArtifact(artifactId, version)` (one `Artifact` or null, for the artifact route), `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`, `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
 
 **Projects and GitHub**
 
@@ -477,12 +617,27 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `unlinkProject` | `{projectId}` | `{}` | `PROJECT_HAS_WORKSPACES` |
 | `listBranches` | `{projectId, query?}` | `[{name}]`, at most 100 | `GITHUB_API_ERROR` |
 | `listOpenPullRequests` | `{projectId}` | `[{number, title, headBranch}]` | `GITHUB_API_ERROR` |
+| `setProjectEnvironment` | `{projectId, environmentId}`; `environmentId` null = none | `Project` | `NOT_FOUND` |
+
+**Environments** (01, Environments)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `listEnvironments` | `{}` | `Environment[]`, by name | — |
+| `createEnvironment` | `{name}` | `Environment` with policy `allowlist` and empty lists | `ENVIRONMENT_EXISTS` |
+| `updateEnvironment` | `{environmentId, name?, egressPolicy?, egressAllowlist?, secrets?, injectors?}`; `secrets` = `[{name, hosts}]` and `injectors` = `[{name, hosts, code}]` replace the whole list. A secret left out loses its stored value. | `Environment` | `ENVIRONMENT_EXISTS`, `VALIDATION_FAILED` |
+| `deleteEnvironment` | `{environmentId}` | `{}`; projects that used it get none; its secrets are deleted | — |
+| `setEnvironmentSecret` | `{environmentId, name, value}`; adds `{name, hosts: []}` if the name is new | `{}` | `VALIDATION_FAILED` |
+| `deleteEnvironmentSecret` | `{environmentId, name}`; removes the entry and the value | `{}` | — |
+
+`Environment` = `{id, name, egressPolicy, egressAllowlist, secrets: [{name, hosts, set}], injectors: [{name, hosts, code, sha256}], createdAt, updatedAt}`. `set` says whether a value is stored. Values are never returned. Host patterns are a host or `*.` plus a host, lower case, no port. A bad pattern, a duplicate name, or a limit from 01 over its maximum gives `VALIDATION_FAILED`. An injector's `code` must parse as an ES module with a default export; the server checks only that it is not empty and fits the size limit.
 
 **Workspaces**
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createWorkspace` | `{projectId, source, agent?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}` | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND` |
+| `createWorkspace` | `{projectId, source, agent?, model?, customAgentId?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}`. With `customAgentId`, the first session starts from that custom agent, and `agent` MUST be absent or equal its base agent; `model` defaults to the custom agent's `model`. | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND`, `VALIDATION_FAILED` |
+| `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; cached for 15 minutes and invalidated by credentials or image changes | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
 | `renameWorkspace` | `{workspaceId, title}` | `{}` | — |
@@ -493,15 +648,19 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `archiveWorkspace` | `{workspaceId}` | `{}` | `WORKSPACE_BUSY` |
 | `restoreWorkspace` | `{workspaceId}` | `{}` | `BRANCH_IN_USE` |
 | `deleteWorkspace` | `{workspaceId}` (archived only) | `{}` | `WORKSPACE_NOT_ARCHIVED` |
-| `rotatePreviewToken` | `{workspaceId}` | `{previewToken}` | — |
+| `openPreview` | `{workspaceId, port}` | `{url}`: a one-time entry link (05, Preview access) | `NOT_FOUND` (port not detected) |
+| `rotatePreviewKey` | `{workspaceId}` | `{}`. Every preview cookie for the workspace stops working. | — |
+| `getBrowserLiveView` | `{workspaceId}` | `{url}`: a Live View URL (01, Browser Run), or null when no Browser Run session is open. `POST`, because each call mints a new secret link. MUST NOT be logged or cached. | — |
 | setBaseBranch | {workspaceId, baseBranch}; allowed only while no PR exists | {} | PR\_EXISTS, NOT\_FOUND (branch not on origin) |
-| getDiagnostics | {workspaceId} | {ops, container, logs, egress, sessions} as in 05, Observability | — |
+| getDiagnostics | {workspaceId, egressHost?, egressStatus?}; `egressHost` is text the host contains, any case; `egressStatus` is `all` (default), `blocked` (rule 0, 7 or 10), `2xx`, `3xx`, `4xx` or `5xx` | {ops, container, logs, egress, sessions} as in 05, Observability | — |
+| `setWorkspaceEnvironment` | `{workspaceId, environmentId}`; null = use the project's | `{}` | `NOT_FOUND` |
+| `resolveEnvironmentProposal` | `{workspaceId, proposalId, status: "applied" or "dismissed"}` | `{}` | `NOT_FOUND` (no pending proposal with that id) |
 
 **Sessions and turns**
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createSession` | `{workspaceId, agent, model?, modeId?}` | `Session` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED` |
+| `createSession` | `{workspaceId, agent, customAgentId?, model?, modeId?}`. With `customAgentId`, `agent` MUST equal its base agent. The Worker reads the file at `commit_sha` and passes the `AgentProfile` to the DO. `model` defaults to the custom agent's `model`; an explicit `model` wins. | `Session` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `NOT_FOUND`, `VALIDATION_FAILED`, `ARTIFACTS_ERROR` |
 | `closeSession` | `{workspaceId, sessionId}` | `{}` | `SESSION_BUSY` |
 | `renameSession` | `{workspaceId, sessionId, title}` | `{}` | — |
 | `sendPrompt` | `{workspaceId, sessionId, text, mentions, attachmentIds, reviewCommentIds, delivery?: "queue" or "steer"}` | `Turn`; the running turn when steering is injected, otherwise the queued turn | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `VALIDATION_FAILED` |
@@ -514,6 +673,8 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `respondPermission` | `{workspaceId, requestId, optionId}` | `{}` | `NOT_FOUND` |
 
 Attachments use a plain route, not a server function: `POST /api/workspaces/<workspaceId>/attachments`, multipart, one file, at most 10 MiB. It returns `{attachmentId, name, mime, size}`.
+
+`GET /api/workspaces/<workspaceId>/attachments/<attachmentId>` returns the original bytes after cookie/bearer owner and workspace checks. Unknown workspaces, attachments and missing objects return `NOT_FOUND`. Archived workspace attachments remain readable. The maximum is 10 MiB; the stored and actual sizes must match. PNG, JPEG, GIF and WebP use their stored image MIME and inline disposition; other types use `application/octet-stream` and attachment disposition. Responses use `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff` and a sandbox CSP. Clients construct this same-origin route from the workspace and attachment IDs; no object-storage credentials or agent remote URLs are sent. Metadata uses shared `Attachment {id, name, mime, size}`.
 
 **Review and git**
 
@@ -529,21 +690,45 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `commitAndPush` | `{workspaceId, message}` | `{commitSha}` | `NOTHING_TO_COMMIT`, `PUSH_REJECTED` |
 | `createPullRequest` | `{workspaceId, title, body, draft}` | `{number, url}` | `NOT_PUSHED`, `PR_EXISTS`, `GITHUB_API_ERROR` |
 | `mergePullRequest` | `{workspaceId, method: "squash" or "merge" or "rebase"}` | `{}` | `PR_NOT_MERGEABLE` |
-| `refreshPullRequest` | `{workspaceId}` | `{prNumber, prState, checksState}` | `GITHUB_API_ERROR` |
+| `refreshPullRequest` | `{workspaceId}` | `{prNumber, prState, checksState, prTitle?}` | `GITHUB_API_ERROR` |
 | `listCheckRuns` | `{workspaceId}` | `[{name, status, conclusion, url}]` for the PR head | `GITHUB_API_ERROR` |
 
 **Files, scripts, terminals**
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000 | `CONTAINER_NOT_READY` |
-| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}` | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE` |
+| `listFiles` | `{workspaceId}` | `{paths}`: tracked plus untracked, not ignored, at most 50,000; last synced tree while sleeping | `CONTAINER_NOT_READY`, also while sleeping with no synced tree |
+| `readFile` | `{workspaceId, path}` | `{content, encoding: "utf8" or "base64", size}`; last synced contents while sleeping | `FILE_TOO_LARGE` (over 1 MiB), `PATH_OUTSIDE_WORKSPACE`, `CONTAINER_NOT_READY`, also while sleeping when the contents are not cached |
 | `searchFiles` | `{workspaceId, query, regex?}` | `[{path, line, text}]`, at most 500 | — |
 | `runScript` | `{workspaceId, scriptId}` | `ScriptRun` | `NOT_FOUND` |
 | `stopScript` | `{workspaceId, runId}` | `{}` | — |
 | `rerunSetup` | `{workspaceId}` | `ScriptRun` | `WORKSPACE_BUSY` |
 | `continueAfterSetupFailure` | `{workspaceId}` | `{}` | — |
 | `listTerminals` | `{workspaceId}` | `[{terminalId}]` | — |
+| `readFileAt` | `{workspaceId, path, sha}`; `sha` is `baseSha` or `headSha` from `getChanges` | `{content, encoding: "utf8" or "base64", size}`: the file as it is in that commit | `FILE_TOO_LARGE` (over 1 MiB), `NOT_FOUND` (not in that commit) |
+
+**Artifacts** (01, Artifacts). These read only the DO and R2. They work while the workspace sleeps and after it is archived, and they never wake it.
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `listArtifacts` | `{workspaceId}` | `Artifact[]`: every version, newest first | — |
+| `openArtifact` | `{workspaceId, artifactId, version}` | `{url}`: a one-time entry link to the artifact host (05, Artifact access) | `NOT_FOUND`, `ARTIFACT_NOT_READY` |
+
+The artifact route is a plain route, like the attachment route: `GET /api/workspaces/<workspaceId>/artifacts/<artifactId>/<version>`. It returns the bytes of one version from R2, after the same cookie or bearer owner and workspace checks.
+
+- Unknown workspaces, artifacts and versions, versions with status `lost`, and missing objects return `NOT_FOUND`. A version still `uploading` returns `ARTIFACT_NOT_READY`.
+- Kinds `image`, `markdown` and `text` use their stored `mime` and inline disposition. Kinds `html` and `pdf` use `application/octet-stream` and attachment disposition: they render only from the artifact host.
+- Responses use `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff` and the CSP `default-src 'none'; style-src 'unsafe-inline'; sandbox`, as the attachment route.
+- `?download=1` gives every kind attachment disposition with the file `name`.
+
+**Custom agents** (01, Custom agents)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `listCustomAgents` | `{}` | `CustomAgentSummary[]`, sorted by name. Reads D1 only. | — |
+| `getCustomAgent` | `{customAgentId}` | `CustomAgent`. Reads the file at `commit_sha`. | `NOT_FOUND`, `ARTIFACTS_ERROR` |
+| `saveCustomAgent` | `{customAgentId?, definition: CustomAgentDefinition}`. No id creates one. | `CustomAgent` | `VALIDATION_FAILED`, `NOT_FOUND`, `CUSTOM_AGENT_EXISTS`, `CUSTOM_AGENT_LIMIT`, `ARTIFACTS_ERROR` |
+| `deleteCustomAgent` | `{customAgentId}` | `{}` | `NOT_FOUND`, `ARTIFACTS_ERROR` |
 
 **Credentials**
 
@@ -552,30 +737,64 @@ Attachments use a plain route, not a server function: `POST /api/workspaces/<wor
 | `getCredentialStatus` | `{}` | `{claude, codex, openrouter, anthropic, openai}`, each `{set, updatedAt}`; `codex` adds `lastRefresh` | — |
 | `setClaudeToken` | `{token}`: no spaces, 20 to 4096 chars | `{}` | `VALIDATION_FAILED` |
 | `setCodexAuth` | `{authJson}`: MUST parse and contain `tokens.access_token`, `tokens.refresh_token`, `last_refresh` | `{}` | `VALIDATION_FAILED` |
+| `startCodexLogin` | `{}` | `{loginId, verificationUrl, userCode, expiresAt, intervalMs}` | `CREDENTIAL_INVALID` |
+| `pollCodexLogin` | `{loginId}` | `{status: "pending" \| "connected" \| "expired"}` | `CREDENTIAL_INVALID` |
+| `cancelCodexLogin` | `{loginId}` | `{}` | — |
 | `setApiKey` | `{provider: "openrouter" or "anthropic" or "openai", key}` | `{}` | `VALIDATION_FAILED` |
 | `deleteCredential` | `{key}` | `{}` | — |
 | `setProjectSecret` | `{projectId, name, value}`; `name` matches `^[A-Z_][A-Z0-9_]*$` | `{}` | `VALIDATION_FAILED` |
 | `deleteProjectSecret` | `{projectId, name}` | `{}` | — |
 | `listProjectSecretNames` | `{projectId}` | `{names}` | — |
 
+**MCP servers** (01, User MCP servers)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `listMcpServers` | `{}` | `McpServer[]`, sorted by `name` | — |
+| `saveMcpServer` | `McpServerInput`. Without `id` it creates a server; with `id` it replaces that server. | `McpServer` | `VALIDATION_FAILED`, `NOT_FOUND` |
+| `deleteMcpServer` | `{id}` | `{}`. Also deletes the server's `mcp.<id>.header.*` secrets. | — |
+
+`McpServerInput` is `{id?, name, enabled, transport, command?, args?, env?, url?, headers?}`. Each header is `{name, secret, value?}`. Validation, else `VALIDATION_FAILED`:
+
+- `name` matches `^[a-z0-9][a-z0-9_-]{0,31}$`, is not `playwright` or `tempo`, and is unique for the user. At most 20 servers per user.
+- `stdio` needs `command` (1 to 1024 chars) and has no `url` or `headers`. At most 32 `args` and 32 `env` entries; env names match `^[A-Z_][A-Z0-9_]*$`.
+- `http` and `sse` need an absolute `https:` `url` (at most 2048 chars) and have no `command`, `args` or `env`. At most 16 headers; names match `^[A-Za-z0-9-]{1,64}$`, are unique without regard to case, and are not `host`, `content-length`, `connection` or `transfer-encoding`.
+- A header with `secret: false` needs `value`. A header with `secret: true` and a `value` stores that value in CredentialDO. Without `value`, it keeps the stored value; if none is stored, the call fails.
+- Saving removes the secrets of headers that are no longer secret or no longer present.
+
+Changes apply to sessions that start or reload after the change. Running agents keep their list. TempoOutbound sees changes within its 60 s cache.
+
 ## Shared types and the workspace channel
 
 The UI loads a workspace once over its WebSocket, then applies updates. Field names are camelCase on the wire.
+
+For protocol 1 deployments made before per-agent defaults and Browser Run were added, an absent `settings.agent.models` decodes to `{claude: "", codex: "", opencode: "", pi: ""}`, an absent `settings.browser` decodes to `{run: false}`, and an absent workspace `browserActive` decodes to `false`. Present values must still pass the shared schema; `null` or malformed values are refused. Servers continue to send the full effective settings and browser state.
 
 **Shared types** (`packages/protocol`)
 
 | Type | Fields |
 | --- | --- |
-| `Project` | `id, installationId, repoId, owner, name, defaultBranch, settings, sortOrder` |
+| `Project` | `id, installationId, repoId, owner, name, defaultBranch, settings, sortOrder, environmentId` |
 | `WorkspaceSummary` | `id, projectId, slug, title, branch, baseBranch, state, attention, defaultAgent, prNumber, prState, checksState, pinned, lastActivityAt, createdAt, archivedAt, rev` |
-| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, previewToken, ports: [{port, url}], settings, runningTurnId, queue: [turnId], imageRef, op` |
-| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported) |
-| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false) |
+| `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, ports: [{port, url}], settings, browserActive, runningTurnId, queue: [turnId], imageRef, op, prTitle?, environmentId, environmentProposals` |
+| `EnvironmentProposal` | `note` (at most 2,000 chars), `egressPolicy?`, `allowlistAdd?: [pattern]`, `secrets?: [{name, hosts}]`, `injectors?: [{name, hosts, code}]`. Same limits as 01, Environments. |
+| `PendingEnvironmentProposal` | `id, createdAt, proposal: EnvironmentProposal`. `WorkspaceDetail.environmentProposals` lists the pending ones, oldest first. `WorkspaceDetail.environmentId` is the workspace override or null. |
+| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported), `customAgent?` (`{id, name, commitSha}`; absent for a plain agent), `profileIssues?` (absent means `[]`) |
+| `CustomAgentSummary` | `id, name, description, baseAgent, updatedAt` |
+| `CustomAgentDefinition` | `name, description, baseAgent, model, thoughtLevel, systemPrompt, tools: {allow, deny}, mcp: {playwright, servers: McpServerDef[]}`. Same fields and limits as the file in 01; snake_case in the file, camelCase on the wire. |
+| `CustomAgent` | `CustomAgentDefinition` plus `id, commitSha, updatedAt` |
+| `McpServerDef` | `{name, type: "stdio", command, args, env}` or `{name, type: "http" or "sse", url, headers}`. `env` and `headers` map names to `${NAME}` references only. |
+| `AgentProfile` | `systemPrompt, toolsAllow, toolsDeny, playwright, mcpServers: McpServerDef[], thoughtLevel`. Built by the Worker from a `CustomAgent`; `model` travels in the existing `model` field. |
+| `ProfileIssue` | `"systemPrompt"`, `"tools"`, `"mcpServers"`, `"model"` or `"thoughtLevel"` |
+| `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false), `usage?` (`TurnUsage`; absent when the agent sent none) |
+| `TurnUsage` | `totalTokens, inputTokens, outputTokens, thoughtTokens?, cachedReadTokens?, cachedWriteTokens?`: ACP v1 `PromptResponse.usage` for one turn. Counts that are not finite and non-negative are dropped; a missing required count drops the whole value. |
 | `Item` | `id, sessionId, turnId, kind, status, content, rev, createdAt, updatedAt` |
 | `ScriptRun` | `id, kind, scriptId, command, status, exitCode, signal, startedAt, endedAt` |
 | `ReviewComment` | `id, path, lineStart, lineEnd, side, body, status, sentTurnId, createdAt` |
 | `PermissionRequest` | `requestId, sessionId, turnId, itemId, title, options: [{optionId, name, kind}]` |
+| `McpServer` | `id, name, enabled, transport, command, args, env: [{name, value}], url, headers: [{name, secret, value}], createdAt, updatedAt`. A secret header has `value: null` and `set` (boolean); secret values are never returned. |
 | `OpProgress` | `kind, status, step, steps: [{name, status, ms}]`. `WorkspaceDetail.op` is the running op, else the next pending op, else `null`. |
+| `Artifact` | `id, version, sessionId, turnId, itemId, path, name, title, summary, mime, kind, size, sha256, status, createdAt` |
 
 **Workspace channel.** `GET /api/ws/workspace/<workspaceId>?sinceRev=<n>`, upgraded to a WebSocket and handed to the WorkspaceDO. `sinceRev` is the highest item `rev` the client has; `0` on first load.
 
@@ -648,7 +867,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 - `id` is a ULID made by the DO. Each request times out after the op's limit below; the DO then treats it as failed with `TEMPOD_TIMEOUT`.
 - The DO acks events in batches: at most every 250 ms or every 100 events.
 - Max message size: 1 MiB. `tempod` splits larger `script.output` data.
-- `env` in `hello` holds the script env from 01 plus the project env vars and secrets known at that time. After `settings.read`, and whenever project env vars or secrets change, the DO sends `env.set`, which replaces it for scripts and agents started later. `tempod` passes it to scripts and agents only. `overrides` in `settings.read` is the project's D1 `settings_json` (precedence 1 in 01).
+- `env` in `hello` holds the script env from 01 plus the project env vars, project secrets and environment secrets known at that time (01, Environments). After `settings.read`, and whenever project env vars, secrets or the environment change, the DO sends `env.set`, which replaces it for scripts and agents started later. `tempod` passes it to scripts and agents only. `overrides` in `settings.read` is the project's D1 `settings_json` (precedence 1 in 01).
 
 **Requests**
 
@@ -658,9 +877,10 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `repo.applyCheckpoint` | `{bundlePath, checkpointId, branch}` | `{headSha}` | 5 min |
 | `settings.read` | `{overrides}` | `{effective, warnings, errors}` | 10 s |
 | `env.set` | `{env}` | `{}` | 10 s |
+| `environment.set` | `{summary}`: `EnvironmentSummary` = `{name, egressPolicy, egressAllowlist, secrets: [{name, hosts, set}], injectors: [{name, hosts}], blockedHosts}`. `name` is null with no environment. `blockedHosts` = distinct hosts of `egress_log` rows with rule 7 or 10 in the last 24 h, newest first, at most 50. The DO sends it after `env.set`, and at most every 5 s after a new blocked host. | `{}` | 10 s |
 | `script.start` | `{runId, kind, scriptId, command, cwd, timeoutMs}` | `{pid}` | 10 s |
 | `script.stop` | `{runId}` | `{}` | 15 s |
-| `session.start` | `{sessionId, agent, env, modeId?, model?, acpSessionId?}` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, reloaded, handoff}` | 120 s |
+| `session.start` | `{sessionId, agent, env, modeId?, model?, profile?, browser, acpSessionId?, mcpServers?}`; `browser` is `"local"` or `"run"` (01, Browser Run); `mcpServers` is `McpServerSpec[]` (01, User MCP servers), default `[]` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, profileIssues, reloaded, handoff}` | 120 s |
 | `session.prompt` | `{sessionId, turnId, content}` | `{accepted: true}`; the end comes as `turn.ended` | 30 s |
 | `session.steer` | `{sessionId, turnId, messageId, content}` | `{outcome: "injected" or "promptRequired" or "unsupported"}`; the existing prompt owns the turn lifecycle | 30 s |
 | `session.cancel` | `{sessionId, turnId}` | `{}` | 20 s |
@@ -675,6 +895,8 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `git.revert` | `{checkpointId}` | `{headSha}` | 2 min |
 | `git.commitAndPush` | `{message, branch, forceWithLeaseSha?}` | `{commitSha}` | 5 min |
 | `git.renameBranch` | `{from, to}` | `{}` | 30 s |
+| `git.readFile` | `{sha, path, maxBytes}` | `{content, encoding, size}`: `git show <sha>:<path>` | 10 s |
+| `artifact.release` | `{artifactId, version}` | `{}`, after it deletes the staged copy; also when it is already gone | 10 s |
 | `fs.list` | `{}` | `{paths}` | 30 s |
 | `fs.read` | `{path, maxBytes}` | `{content, encoding, size}` | 10 s |
 | `fs.search` | `{query, regex, maxResults}` | `{matches}` | 30 s |
@@ -690,13 +912,14 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `item.updated` | `sessionId, itemId, patch` |
 | `session.updated` | `sessionId, patch` (mode, config options, commands, usage, title) |
 | `turn.started` | `sessionId, turnId` |
-| `turn.ended` | `sessionId, turnId, stopReason, error?, interrupted?` |
+| `turn.ended` | `sessionId, turnId, stopReason, error?, interrupted?, usage?` (`TurnUsage` from the `session/prompt` response) |
 | `permission.requested` | `requestId, sessionId, turnId, itemId, title, options` |
 | `agent.exited` | `sessionId, code, signal, stderrTail` |
 | `script.output` | `runId, stream, data` |
 | `script.exited` | `runId, exitCode, signal, timedOut` |
 | `git.changed` | `files, additions, deletions` |
 | `ports.changed` | `ports` |
+| `artifact.published` | `sessionId, turnId, artifactId, version, path, name, title, summary?, mime, artifactKind, size, sha256, stagedPath` (01, Artifacts). `artifactKind` is the `kind` from 01, Allowed files; `kind` is the event's own tag. |
 | `settings.changed` | `effective, warnings, errors` |
 | `credential.changed` | `provider, content, lastRefresh` |
 | `credential.invalid` | `provider` |
@@ -704,11 +927,13 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `outbox.overflow` | `dropped` |
 | `tempod.stopping` | `reason` |
 | `log` | `level, msg, data` |
+| `environment.proposed` | `proposal`: `EnvironmentProposal` |
 
 **Rules**
 
 - `tempod` MUST answer every request exactly once.
-- The DO MUST apply events in `seq` order and drop any `(incarnation, seq)` it has already stored.
+- `turn.started` is durable proof that the queued prompt was accepted. A later prompt acknowledgement MUST NOT resurrect a turn that already ended.
+- The DO MUST apply events in `seq` order and drop any `(incarnation, seq)` it has already stored. Local event mutations, their deduplication receipt and the applied sequence cursor commit in one SQLite transaction. If application fails, close the daemon socket and replay from the last committed cursor before applying later events. Credential refreshes are accepted by CredentialDO before their payload-free receipt and cursor commit.
 - `credential.changed` carries a secret. The DO MUST NOT store it in `events`; it goes straight to CredentialDO. The same applies to `credential.put` and to `env` in `hello` and `session.start`: never logged, never stored outside CredentialDO.
 
 ## Error codes
@@ -753,6 +978,14 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `FILE_TOO_LARGE` | File over the read limit | This file is too large to show. |
 | `PATH_OUTSIDE_WORKSPACE` | Path escapes the allowed folders | That path is outside the workspace. |
 | `CHECKPOINT_NOT_FOUND` | No such checkpoint | That checkpoint no longer exists. |
+| `ARTIFACT_NOT_READY` | The artifact version is still uploading | This artifact is still being saved. Try again in a moment. |
+| `MODEL_REQUIRED` | An OpenCode or Pi session starts while `agent.models.<agent>` is empty | Set a default model for this agent in Settings → Project. |
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
+| `ENVIRONMENT_EXISTS` | Another environment has that name | An environment with this name already exists. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |
+| `CUSTOM_AGENT_EXISTS` | Another custom agent has this name | You already have an agent with this name. |
+| `CUSTOM_AGENT_LIMIT` | The user has 50 custom agents | You have the most custom agents allowed. Delete one first. |
+| `ARTIFACTS_ERROR` | An Artifacts read, create, token or push failed | Could not reach agent storage. Try again. |
 | `INTERNAL` | Anything else | Something went wrong. |
+
+`WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle` are the GitHub PR title regardless of open, closed or merged state; null means no title has been fetched. The WorkspaceDO persists it and sends detail updates when the title changes.

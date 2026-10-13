@@ -1,14 +1,16 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import {
   AvailableCommand,
   Capabilities,
   ConfigOption,
+  ConfigSelectOption,
   ContentBlock,
   PermissionOption,
   PlanEntry,
   SessionMode,
   ToolCallContent,
   ToolLocation,
+  TurnUsage,
   Usage,
 } from "./acp.ts";
 import {
@@ -29,8 +31,11 @@ import {
   TurnStatus,
   WorkspaceState,
 } from "./enums.ts";
+import { ProfileIssue, SessionCustomAgent } from "./agents.ts";
 import { ErrorCodeSchema } from "./errors.ts";
 import { Settings, SettingsLayer, SettingsSource } from "./settings.ts";
+import { PendingEnvironmentProposal } from "./environments.ts";
+import { ArtifactItemContent } from "./artifacts.ts";
 
 const N = Schema.NullOr;
 const Ms = Schema.Number;
@@ -44,6 +49,7 @@ export const Project = Schema.Struct({
   defaultBranch: Schema.String,
   settings: SettingsLayer,
   sortOrder: Schema.Number,
+  environmentId: Schema.optional(N(Schema.String)),
 });
 export type Project = typeof Project.Type;
 
@@ -104,8 +110,12 @@ export const WorkspaceDetail = Schema.Struct({
   errorDetail: N(Schema.String),
   setupStatus: SetupStatus,
   pushed: Schema.Boolean,
-  previewToken: Schema.String,
+  prTitle: Schema.optional(N(Schema.String)),
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
+  /** A Browser Run session is open (01, Browser Run). */
+  browserActive: Schema.Boolean.annotate({ default: false }).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(false)),
+  ),
   settings: Settings,
   runningTurnId: N(Schema.String),
   queue: Schema.Array(Schema.String),
@@ -117,6 +127,8 @@ export const WorkspaceDetail = Schema.Struct({
   settingsSources: Schema.optional(Schema.Record(Schema.String, SettingsSource)),
   changes: Schema.optional(N(ChangesSummary)),
   hasUnpushedCommits: Schema.optional(Schema.Boolean),
+  environmentId: Schema.optional(N(Schema.String)),
+  environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
 });
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
 
@@ -133,8 +145,17 @@ export const Session = Schema.Struct({
   usage: Usage,
   sortOrder: Schema.Number,
   steering: Schema.optional(Schema.Boolean),
+  customAgent: Schema.optional(SessionCustomAgent),
+  profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
 });
 export type Session = typeof Session.Type;
+
+export const AgentModelOptions = Schema.Struct({
+  agent: AgentId,
+  options: Schema.Array(ConfigSelectOption),
+  currentValue: Schema.String,
+});
+export type AgentModelOptions = typeof AgentModelOptions.Type;
 
 export const Mention = Schema.Struct({ path: Schema.String });
 export type Mention = typeof Mention.Type;
@@ -162,10 +183,19 @@ export const Turn = Schema.Struct({
   queuedAt: Ms,
   startedAt: N(Ms),
   endedAt: N(Ms),
+  usage: Schema.optional(TurnUsage),
 });
 export type Turn = typeof Turn.Type;
 
 // Item content per kind (02, Item model).
+export const Attachment = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  mime: Schema.String,
+  size: Schema.Number,
+});
+export type Attachment = typeof Attachment.Type;
+
 export const UserMessageContent = Schema.Struct({
   text: Schema.String,
   mentions: Schema.Array(Mention),
@@ -219,6 +249,7 @@ export const ITEM_CONTENT = {
   handoff: HandoffContent,
   revert_marker: RevertMarkerContent,
   error: ErrorContent,
+  artifact: ArtifactItemContent,
 } as const;
 
 const itemFields = {
@@ -245,6 +276,7 @@ export const Item = Schema.Union([
   itemOf("handoff"),
   itemOf("revert_marker"),
   itemOf("error"),
+  itemOf("artifact"),
 ]);
 export type Item = typeof Item.Type;
 export type ItemOf<K extends Item["kind"]> = Extract<Item, { kind: K }>;

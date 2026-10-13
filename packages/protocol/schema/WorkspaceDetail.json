@@ -148,8 +148,22 @@
     "pushed": {
       "type": "boolean"
     },
-    "previewToken": {
-      "type": "string"
+    "prTitle": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "ports": {
       "type": "array",
@@ -174,6 +188,10 @@
         "required": ["port", "url"],
         "additionalProperties": true
       }
+    },
+    "browserActive": {
+      "type": "boolean",
+      "default": false
     },
     "settings": {
       "$ref": "Settings.json"
@@ -279,6 +297,36 @@
           "type": "null"
         }
       ]
+    },
+    "environmentId": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "environmentProposals": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "PendingEnvironmentProposal.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
@@ -303,7 +351,6 @@
     "errorDetail",
     "setupStatus",
     "pushed",
-    "previewToken",
     "ports",
     "settings",
     "runningTurnId",

@@ -26,5 +26,3 @@ export const randomToken = (length: number, alphabet: string = TOKEN_ALPHABET): 
   }
   return out.join("");
 };
-
-export const newPreviewToken = (): string => randomToken(16);

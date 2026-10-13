@@ -5,9 +5,38 @@ import * as w from "./world.ts";
 const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
+const ENV_ID = uid(901);
+const INJECTOR_CODE = "export default { async fetch(request, env) { return fetch(request); } };\n";
+const ENVIRONMENT = {
+  id: ENV_ID,
+  name: "Payments",
+  egressPolicy: "allowlist",
+  egressAllowlist: ["pypi.org", "*.stripe.com"],
+  secrets: [
+    { name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: true },
+    { name: "LOCAL_DB_URL", hosts: [], set: false },
+  ],
+  injectors: [
+    { name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE, sha256: "b".repeat(64) },
+  ],
+  createdAt: 1_790_000_000_000,
+  updatedAt: 1_790_000_100_000,
+} as const;
+const PROPOSAL = {
+  note: "The tests call the Stripe API and pip installs from PyPI.",
+  allowlistAdd: ["pypi.org", "files.pythonhosted.org"],
+  secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+} as const;
+
 export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ConversationSummary: [
-    { conversationId: W1, projectId: PROJECT_ID, title: "Saved chat", branch: "tempo/chat", updatedAt: at(10) },
+    {
+      conversationId: W1,
+      projectId: PROJECT_ID,
+      title: "Saved chat",
+      branch: "tempo/chat",
+      updatedAt: at(10),
+    },
   ],
   ConversationArtifact: [
     {
@@ -20,6 +49,13 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       sessions: [],
       turns: [],
       items: [],
+    },
+  ],
+  AgentModelOptions: [
+    {
+      agent: "claude",
+      currentValue: "reported-model",
+      options: [{ value: "reported-model", name: "Reported model" }],
     },
   ],
   ErrorBody: [
@@ -44,12 +80,42 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   PermissionOption: w.permissionOptions,
   PlanEntry: w.planContent.entries,
   ToolLocation: w.toolCallContent.locations,
+  McpStdioServer: [w.reviewerDefinition.mcp.servers[0]],
+  McpRemoteServer: [
+    w.reviewerDefinition.mcp.servers[1],
+    { name: "events", type: "sse", url: "https://mcp.example.com/sse", headers: {} },
+  ],
+  CustomAgentDefinition: [
+    w.reviewerDefinition,
+    {
+      name: "Pi tester",
+      description: "",
+      baseAgent: "pi",
+      model: "",
+      thoughtLevel: "",
+      systemPrompt: "",
+      tools: { allow: ["read", "bash", "mcp__docs__*"], deny: [] },
+      mcp: { playwright: true, servers: [] },
+    },
+  ],
+  CustomAgent: [w.reviewerAgent],
+  CustomAgentSummary: [
+    {
+      id: w.CUSTOM_AGENT_ID,
+      name: "Reviewer",
+      description: "Reviews code without editing it",
+      baseAgent: "claude",
+      updatedAt: 1_791_000_000_000,
+    },
+  ],
+  SessionCustomAgent: [w.reviewerSession.customAgent],
   ContentBlock: [
     { type: "text", text: "Done." },
     { type: "image", mimeType: "image/png", data: "iVBORw0KGgo=" },
     { type: "resource_link", uri: "file:///workspace/src/app.tsx", name: "app.tsx" },
   ],
   Usage: [{}, w.claudeSession.usage],
+  Attachment: [{ id: uid(201), name: "shot.png", mime: "image/png", size: 8 }],
   Capabilities: [{}, { loadSession: true, promptCapabilities: { image: true } }],
 
   RunScript: Object.values(w.settings.scripts.run),
@@ -63,7 +129,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { effective: DEFAULT_SETTINGS, warnings: [], errors: [] },
     {
       effective: w.settings,
-      warnings: ["Unknown key scripts.watch in .tempo/settings.toml"],
+      warnings: ["Unknown key scripts.watch in .tempo/settings.yaml"],
       errors: [],
       sources: { "agent.default": "tempo", "scripts.setup": ".tempo", "git.branch_prefix": "default" },
     },
@@ -72,6 +138,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   Project: [
     w.project,
     { ...w.project, id: uid(2), name: "docs", repoId: 812345679, settings: {}, sortOrder: 1 },
+    { ...w.project, id: uid(3), name: "pay", repoId: 812345680, sortOrder: 2, environmentId: ENV_ID },
   ],
   WorkspaceSummary: [w.lisbon, w.oslo, w.kyoto],
   OpProgress: [w.opProgress],
@@ -79,6 +146,11 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ChangesSummary: [w.changesSummary, { files: [], additions: 0, deletions: 0 }],
   WorkspaceDetail: [
     w.lisbonDetail,
+    {
+      ...w.lisbonDetail,
+      environmentId: ENV_ID,
+      environmentProposals: [{ id: uid(903), createdAt: 1_790_000_200_000, proposal: PROPOSAL }],
+    },
     w.detail(w.oslo, { pushed: true, setupStatus: "none", op: w.opProgress, imageRef: null }),
     w.detail(w.kyoto, {
       state: "error",
@@ -88,7 +160,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       changes: null,
     }),
   ],
-  Session: [w.claudeSession, w.codexSession],
+  Session: [w.claudeSession, w.codexSession, w.reviewerSession],
   Mention: [{ path: "src/app.tsx" }],
   TurnPrompt: [
     w.turn(1).prompt,
@@ -111,6 +183,9 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       endedAt: null,
     }),
     w.turn(4, { status: "failed", stopReason: null, errorCode: "AGENT_CRASHED", reverted: true }),
+    w.turn(5, {
+      usage: { totalTokens: 15300, inputTokens: 12000, outputTokens: 3300, cachedReadTokens: 9000 },
+    }),
   ],
   UserMessageContent: [w.userMessageContent],
   AgentMessageContent: [
@@ -139,6 +214,24 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { code: "AGENT_CRASHED", detail: null },
     { code: "CREDENTIAL_INVALID" },
     { code: "INTERNAL", detail: "exit 137" },
+  ],
+  ArtifactItemContent: [
+    w.artifactContent,
+    {
+      artifactId: w.ARTIFACT_ID,
+      version: 1,
+      title: "Login screen",
+      name: "login.png",
+      path: "/workspace/shots/login.png",
+      mime: "image/png",
+      artifactKind: "image",
+      size: 48213,
+    },
+  ],
+  Artifact: [
+    w.artifact,
+    { ...w.artifact, version: 1, summary: null, turnId: null, status: "uploading" },
+    { ...w.artifact, version: 3, status: "lost" },
   ],
   Item: w.itemsOfEveryKind,
   ScriptRun: [w.scriptRun, w.setupRun],
@@ -176,15 +269,91 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   CredentialState: [w.credentialStatus.claude, w.credentialStatus.openrouter],
   CredentialStatus: [w.credentialStatus],
+  McpEnvVar: [{ name: "ROOT", value: "/workspace" }],
+  McpHeader: [
+    { name: "Authorization", secret: true, value: null, set: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpHeaderInput: [
+    { name: "Authorization", secret: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpServer: [
+    {
+      id: "01jmcp0000000000000000000a",
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      command: null,
+      args: [],
+      env: [],
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: null, set: true }],
+      createdAt: 1760000000000,
+      updatedAt: 1760000000000,
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: false,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+      env: [{ name: "ROOT", value: "/workspace" }],
+      url: null,
+      headers: [],
+      createdAt: 1760000000000,
+      updatedAt: 1760000100000,
+    },
+  ],
   Diagnostics: [w.diagnostics],
   NewSource: [
     { kind: "new", baseBranch: "main" },
     { kind: "branch", branch: "feature/search" },
     { kind: "pr", number: 42 },
   ],
+  SecretBinding: [
+    { name: "STRIPE_KEY", hosts: ["api.stripe.com"] },
+    { name: "LOCAL_DB_URL", hosts: [] },
+  ],
+  InjectorInput: [{ name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE }],
+  Injector: ENVIRONMENT.injectors,
+  EnvironmentSecret: ENVIRONMENT.secrets,
+  Environment: [
+    ENVIRONMENT,
+    {
+      ...ENVIRONMENT,
+      id: uid(902),
+      name: "Open",
+      egressPolicy: "open",
+      egressAllowlist: [],
+      secrets: [],
+      injectors: [],
+    },
+  ],
+  EnvironmentProposal: [
+    PROPOSAL,
+    {
+      note: "Sign S3 requests.",
+      egressPolicy: "allowlist",
+      injectors: [ENVIRONMENT.injectors[0]].map(({ name, hosts, code }) => ({ name, hosts, code })),
+    },
+  ],
+  PendingEnvironmentProposal: [{ id: uid(903), createdAt: 1_790_000_200_000, proposal: PROPOSAL }],
+  AppSetupStatus: [
+    { configured: false, installUrl: null },
+    { configured: true, installUrl: "https://github.com/apps/tempo-example/installations/new" },
+  ],
   ApiMeta: [
     { protocol: 1, serverVersion: "0.1.0", minMacClient: "0.1.0", latestMacClient: null },
     { protocol: 1, serverVersion: "0.2.0", minMacClient: "0.1.0", latestMacClient: "0.2.1" },
+    {
+      protocol: 1,
+      serverVersion: "0.2.0",
+      minMacClient: "0.1.0",
+      latestMacClient: "0.2.1",
+      latestMacClientSha256: "a".repeat(64),
+    },
   ],
 };
 
@@ -257,13 +426,38 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   unlinkProject: [{ projectId: PROJECT_ID }],
   listBranches: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, query: "feat" }],
   listOpenPullRequests: [{ projectId: PROJECT_ID }],
+  setProjectEnvironment: [
+    { projectId: PROJECT_ID, environmentId: ENV_ID },
+    { projectId: PROJECT_ID, environmentId: null },
+  ],
+  listEnvironments: [{}],
+  createEnvironment: [{ name: "Payments" }],
+  updateEnvironment: [
+    { environmentId: ENV_ID, name: "Payments v2" },
+    {
+      environmentId: ENV_ID,
+      egressPolicy: "allowlist",
+      egressAllowlist: ["pypi.org"],
+      secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+      injectors: [{ name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE }],
+    },
+  ],
+  deleteEnvironment: [{ environmentId: ENV_ID }],
+  setEnvironmentSecret: [{ environmentId: ENV_ID, name: "STRIPE_KEY", value: "fixture-value" }],
+  deleteEnvironmentSecret: [{ environmentId: ENV_ID, name: "STRIPE_KEY" }],
   createWorkspace: [
     { projectId: PROJECT_ID, source: { kind: "new", baseBranch: "main" } },
     {
       projectId: PROJECT_ID,
       source: { kind: "pr", number: 42 },
       agent: "codex",
+      model: "reported-model",
       prompt: { text: "Fix the flaky test" },
+    },
+    {
+      projectId: PROJECT_ID,
+      source: { kind: "branch", branch: "review/auth" },
+      customAgentId: w.CUSTOM_AGENT_ID,
     },
   ],
   listProjectConversations: [{ projectId: PROJECT_ID }],
@@ -279,12 +473,15 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   archiveWorkspace: [ws],
   restoreWorkspace: [ws],
   deleteWorkspace: [ws],
-  rotatePreviewToken: [ws],
+  openPreview: [{ ...ws, port: 3000 }],
+  rotatePreviewKey: [ws],
+  getBrowserLiveView: [ws],
   setBaseBranch: [{ ...ws, baseBranch: "develop" }],
   getDiagnostics: [ws],
   createSession: [
     { ...ws, agent: "codex" },
     { ...ws, agent: "claude", model: "opus", modeId: "plan" },
+    { ...ws, agent: "claude", customAgentId: w.CUSTOM_AGENT_ID },
   ],
   closeSession: [{ ...ws, sessionId: S2 }],
   renameSession: [{ ...ws, sessionId: S1, title: "Reviewer" }],
@@ -342,14 +539,56 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   continueAfterSetupFailure: [ws],
   listTerminals: [ws],
   listScriptRuns: [ws],
+  readFileAt: [{ ...ws, path: "src/logo.png", sha: "9f2c1e0b7a6d5c4b3a291807f6e5d4c3b2a19087" }],
+  listArtifacts: [ws],
+  openArtifact: [{ ...ws, artifactId: w.ARTIFACT_ID, version: 2 }],
+  listModels: [{}],
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
   setCodexAuth: [{ authJson: '{"tokens":{"note":"fixture"}}' }],
+  startCodexLogin: [{}],
+  pollCodexLogin: [{ loginId: "fixture-login-id" }],
+  cancelCodexLogin: [{ loginId: "fixture-login-id" }],
   setApiKey: [{ provider: "openrouter", key: "fixture-openrouter-key" }],
   deleteCredential: [{ key: "codex" }],
   setProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL", value: "fixture-value" }],
   deleteProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL" }],
   listProjectSecretNames: [{ projectId: PROJECT_ID }],
+  setWorkspaceEnvironment: [
+    { ...ws, environmentId: ENV_ID },
+    { ...ws, environmentId: null },
+  ],
+  resolveEnvironmentProposal: [
+    { ...ws, proposalId: uid(903), status: "applied" },
+    { ...ws, proposalId: uid(903), status: "dismissed" },
+  ],
+  listMcpServers: [{}],
+  saveMcpServer: [
+    {
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: "Bearer lin_api_x" }],
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: true,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem"],
+      env: [],
+    },
+  ],
+  deleteMcpServer: [{ id: "01jmcp0000000000000000000b" }],
+  listCustomAgents: [{}],
+  getCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
+  saveCustomAgent: [
+    { definition: w.reviewerDefinition },
+    { customAgentId: w.CUSTOM_AGENT_ID, definition: { ...w.reviewerDefinition, thoughtLevel: "" } },
+  ],
+  deleteCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
 };
 
 /** Outputs that are not shared types, by their wire type name. */
@@ -369,6 +608,16 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     },
   ],
   Empty: [{}],
+  StartCodexLoginOut: [
+    {
+      loginId: "fixture-login-id",
+      verificationUrl: "https://auth.openai.com/codex/device",
+      userCode: "ABCD-EFGH",
+      expiresAt: 1_800_000_000_000,
+      intervalMs: 5000,
+    },
+  ],
+  PollCodexLoginOut: [{ status: "pending" }, { status: "connected" }, { status: "expired" }],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },
     { repoId: 812345679, owner: "acme", name: "docs", defaultBranch: "trunk", private: false },
@@ -394,6 +643,7 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   CommitAndPushOut: [{ commitSha: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d" }],
   CreatePullRequestOut: [{ number: 43, url: "https://github.com/acme/webapp/pull/43" }],
   RefreshPullRequestOut: [
+    { prNumber: 12, prState: "merged", checksState: "success", prTitle: "Keep the merged title" },
     { prNumber: 42, prState: "open", checksState: "pending" },
     { prNumber: null, prState: null, checksState: null },
   ],
@@ -404,6 +654,20 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   SearchFilesItem: [{ path: "src/theme/toggle.tsx", line: 3, text: "export const useTheme = () => {" }],
   ListTerminalsItem: [{ terminalId: "t1" }, { terminalId: "t2" }],
-  RotatePreviewTokenOut: [{ previewToken: "q8w7e5r1k3j9x2m4" }],
+  OpenPreviewOut: [
+    {
+      url: `https://3000-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
+    },
+  ],
+  ReadFileAtOut: [{ content: "iVBORw0KGgo=", encoding: "base64", size: 8 }],
+  OpenArtifactOut: [
+    {
+      url: `https://a-${w.ARTIFACT_ID}-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
+    },
+  ],
   ListProjectSecretNamesOut: [{ names: ["DATABASE_URL", "STRIPE_KEY"] }],
+  GetBrowserLiveViewOut: [
+    { url: "https://live.browser.run/ui/view?wss=live.browser.run/api/devtools/browser/s1/page/p1?jwt=x" },
+    { url: null },
+  ],
 };

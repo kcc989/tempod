@@ -1,0 +1,51 @@
+{
+  "agent": "opencode",
+  "bin": "opencode (isolated npm installation)",
+  "live": false,
+  "agentInfo": {
+    "name": "OpenCode",
+    "version": "1.18.35"
+  },
+  "agentCapabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "promptCapabilities": {
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "close": {},
+      "fork": {},
+      "list": {},
+      "resume": {}
+    }
+  },
+  "authMethods": [
+    "opencode-login"
+  ],
+  "modes": [
+    "build",
+    "plan"
+  ],
+  "currentModeId": "build",
+  "configOptions": [
+    {
+      "id": "model",
+      "type": "select",
+      "category": "model"
+    },
+    {
+      "id": "mode",
+      "type": "select",
+      "category": "mode"
+    }
+  ],
+  "setMode": "build",
+  "loadBeforeAnyTurn": {
+    "ok": true,
+    "replayedUpdates": 0
+  }
+}

@@ -2,5 +2,5 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SettingsSource",
   "type": "string",
-  "enum": ["tempo", ".tempo", ".conductor", "conductor.json", "default"]
+  "enum": ["tempo", ".tempo", "default"]
 }

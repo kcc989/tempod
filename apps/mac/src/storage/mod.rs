@@ -1,11 +1,11 @@
-//! Local storage (07, Local storage and settings): `config.toml` and `state.json`. The token is in
+//! Local storage (07, Local storage and settings): `config.yaml` and `state.json`. The token is in
 //! the Keychain (`crate::platform`); logs are in `crate::logging`. Nothing else goes to disk.
 mod config;
 mod file;
 mod saver;
 mod state;
 
-pub use config::{Config, Theme};
+pub use config::{Config, Theme, TranscriptDetail};
 pub use file::{LoadOutcome, Loaded, bad_path, load_or_recover, write_atomic};
 pub use saver::{Debounce, STATE_SAVE_DELAY, STATE_SAVE_MAX_WAIT, Saver};
 pub use state::{DiffViewMode, PaneSizes, Panels, SortMode, State, WindowFrame};
@@ -14,7 +14,7 @@ use crate::logging;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
-pub const CONFIG_FILE: &str = "config.toml";
+pub const CONFIG_FILE: &str = "config.yaml";
 pub const STATE_FILE: &str = "state.json";
 
 pub(crate) fn home() -> Option<PathBuf> {
@@ -149,12 +149,12 @@ mod tests {
     #[test]
     fn local_recovers_from_bad_files() {
         let dir = temp_dir("local-bad");
-        std::fs::write(dir.join(CONFIG_FILE), "url = [").unwrap();
+        std::fs::write(dir.join(CONFIG_FILE), "url: [").unwrap();
         std::fs::write(dir.join(STATE_FILE), "{").unwrap();
         let local = Local::load(Some(dir.clone()));
         assert_eq!(local.config(), &Config::default());
         assert_eq!(local.state(), &State::default());
-        assert!(dir.join("config.toml.bad").exists());
+        assert!(dir.join("config.yaml.bad").exists());
         assert!(dir.join("state.json.bad").exists());
     }
 

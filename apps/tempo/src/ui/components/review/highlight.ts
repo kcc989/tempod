@@ -12,7 +12,8 @@ export type TokenLines = ReadonlyArray<ReadonlyArray<Token>>;
 type Shiki = typeof import("shiki");
 
 let shiki: Promise<Shiki> | null = null;
-const load = (): Promise<Shiki> => (shiki ??= import("shiki"));
+const load = (): Promise<Shiki | null> =>
+  import.meta.env.SSR ? Promise.resolve(null) : (shiki ??= import("shiki"));
 
 /** Above this many characters a file shows plain: highlighting would hold the page too long. */
 export const MAX_HIGHLIGHT_CHARS = 200_000;
@@ -83,6 +84,7 @@ export const highlightFile = async (code: string, path: string): Promise<TokenLi
   const hit = cache.get(key);
   if (hit) return hit;
   const s = await load();
+  if (!s) return null;
   const lang = languageFor(path, { ...s.bundledLanguages, ...s.bundledLanguagesAlias });
   if (!lang) return null;
   const result = await s.codeToTokens(code, {

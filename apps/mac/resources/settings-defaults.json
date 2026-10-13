@@ -1,0 +1,36 @@
+{
+  "agent": {
+    "default": "claude",
+    "models": {
+      "claude": "",
+      "codex": "",
+      "opencode": "",
+      "pi": ""
+    }
+  },
+  "browser": {
+    "run": false
+  },
+  "scripts": {
+    "setup": "",
+    "archive": "",
+    "run_mode": "concurrent",
+    "auto_run_after_setup": false,
+    "run": {}
+  },
+  "environment": {
+    "instance": "standard-3",
+    "sleep_after_idle_minutes": 15,
+    "egress_policy": "allowlist",
+    "egress_allowlist": []
+  },
+  "environment_variables": {},
+  "git": {
+    "branch_prefix": "tempo/",
+    "delete_branch_on_archive": false,
+    "archive_on_merge": false
+  },
+  "prompts": {
+    "general": ""
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Environment",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "egressPolicy": {
+      "$ref": "EgressPolicy.json"
+    },
+    "egressAllowlist": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "$ref": "EnvironmentSecret.json"
+      }
+    },
+    "injectors": {
+      "type": "array",
+      "items": {
+        "$ref": "Injector.json"
+      }
+    },
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "egressPolicy",
+    "egressAllowlist",
+    "secrets",
+    "injectors",
+    "createdAt",
+    "updatedAt"
+  ],
+  "additionalProperties": true
+}

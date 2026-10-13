@@ -26,3 +26,9 @@ export const parseWorkspaceMessage = (raw: string): WorkspaceServerMessage | nul
   console.warn("tempo: dropped workspace message", String(r.failure));
   return null;
 };
+
+/** A `hello` whose `v` is not 1 (02 Conventions: close with 4400). */
+export const isUnknownVersionHello = (raw: string): boolean => {
+  const m = parseJson(raw) as { type?: unknown; v?: unknown } | undefined;
+  return typeof m === "object" && m !== null && m.type === "hello" && m.v !== 1;
+};

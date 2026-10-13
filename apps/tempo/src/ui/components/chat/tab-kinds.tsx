@@ -1,11 +1,21 @@
-import { FileCodeIcon, FileDiffIcon, GlobeIcon, MessageSquareIcon, type LucideIcon } from "lucide-react";
+import {
+  ShapesIcon,
+  FileCodeIcon,
+  FileDiffIcon,
+  GlobeIcon,
+  MessageSquareIcon,
+  RadioIcon,
+  type LucideIcon,
+} from "lucide-react";
 import type { ComponentType } from "react";
-import { sessionTitle } from "~/ui/components/chat/chat-tabs-model";
+import { sessionTitle, sessionTooltip } from "~/ui/components/chat/chat-tabs-model";
+import { ArtifactTab, ArtifactTitle } from "~/ui/components/artifacts/ArtifactTab";
 import { Composer } from "~/ui/components/chat/Composer";
 import { Transcript } from "~/ui/components/chat/Transcript";
 import { BrowserTab } from "~/ui/components/review/BrowserTab";
 import { DiffTab } from "~/ui/components/review/DiffTab";
 import { FileTab } from "~/ui/components/review/FileTab";
+import { LiveViewTab } from "~/ui/components/review/LiveViewTab";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import type { CenterTab, CenterTabKind } from "~/ui/state/workspace-ui";
 
@@ -28,7 +38,8 @@ export interface CenterTabKindDef<K extends CenterTabKind> {
 
 function ChatTitle({ workspaceId, tab }: CenterTabProps<"chat">) {
   const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[tab.sessionId]);
-  return <>{sessionTitle(session)}</>;
+  const tooltip = sessionTooltip(session);
+  return tooltip ? <span title={tooltip}>{sessionTitle(session)}</span> : <>{sessionTitle(session)}</>;
 }
 
 function ChatBody({ workspaceId, tab }: CenterTabProps<"chat">) {
@@ -58,6 +69,8 @@ export const CENTER_TAB_KINDS: { readonly [K in CenterTabKind]: CenterTabKindDef
   file: { icon: FileCodeIcon, Title: ({ tab }) => <>{baseName(tab.path)}</>, Body: FileTab },
   diff: { icon: FileDiffIcon, Title: () => <>Diff</>, Body: DiffTab },
   browser: { icon: GlobeIcon, Title: ({ tab }) => <>{hostOf(tab.url)}</>, Body: BrowserTab },
+  liveView: { icon: RadioIcon, Title: () => <>Live View</>, Body: LiveViewTab },
+  artifact: { icon: ShapesIcon, Title: ArtifactTitle, Body: ArtifactTab },
 };
 
 /** Renders a tab's title or body through the registry with the right prop types. */

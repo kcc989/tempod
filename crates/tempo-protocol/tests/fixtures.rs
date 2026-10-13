@@ -242,3 +242,39 @@ fn the_api_table_matches_api_json() {
     table.sort_unstable();
     assert_eq!(names, table);
 }
+
+#[test]
+fn legacy_workspace_hello_uses_default_models_and_rejects_malformed_maps() {
+    let hello =
+        include_str!("../../../packages/protocol/fixtures/channel/workspace-first-load.jsonl")
+            .lines()
+            .next()
+            .unwrap();
+    let mut value: Value = serde_json::from_str(hello).unwrap();
+    value["workspace"]
+        .as_object_mut()
+        .unwrap()
+        .remove("browserActive");
+    value["workspace"]["settings"]["agent"]
+        .as_object_mut()
+        .unwrap()
+        .remove("models");
+    value["workspace"]["settings"]
+        .as_object_mut()
+        .unwrap()
+        .remove("browser");
+    let WorkspaceServerMessage::Hello(decoded) = serde_json::from_value(value.clone()).unwrap()
+    else {
+        panic!("expected hello");
+    };
+    assert_eq!(
+        decoded.workspace.settings.agent.models,
+        tempo_protocol::SettingsAgentModels::default()
+    );
+    assert!(!decoded.workspace.settings.browser.run);
+    assert!(!decoded.workspace.browser_active);
+    for models in [Value::Null, serde_json::json!({"claude": 1})] {
+        value["workspace"]["settings"]["agent"]["models"] = models;
+        assert!(serde_json::from_value::<WorkspaceServerMessage>(value.clone()).is_err());
+    }
+}

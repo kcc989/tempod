@@ -340,6 +340,7 @@
       "attention": "unread",
       "baseBranch": "main",
       "branch": "tempo/lisbon",
+      "browserActive": false,
       "checksState": null,
       "createdAt": 1791622800000,
       "defaultAgent": "claude",
@@ -353,12 +354,11 @@
       "ports": [
         {
           "port": 3000,
-          "url": "https://3000-01k7000000000000000000000b-k3j9x2m4q8w7e5r1.example-previews.com"
+          "url": "https://3000-01k7000000000000000000000b.example-previews.com"
         }
       ],
       "prNumber": null,
       "prState": null,
-      "previewToken": "k3j9x2m4q8w7e5r1",
       "projectId": "01k70000000000000000000001",
       "pushed": false,
       "queue": [],
@@ -367,7 +367,15 @@
       "settings": {
         "agent": {
           "default": "claude",
-          "model": ""
+          "models": {
+            "claude": "",
+            "codex": "",
+            "opencode": "",
+            "pi": ""
+          }
+        },
+        "browser": {
+          "run": false
         },
         "environment": {
           "egress_allowlist": ["registry.npmjs.org", "*.githubusercontent.com"],

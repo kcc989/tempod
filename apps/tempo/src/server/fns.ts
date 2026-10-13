@@ -8,9 +8,7 @@ import { runFn } from "./run.ts";
 // The Result envelope travels as JSON text: wire types hold `unknown` fields (ACP pass-through)
 // that TanStack's serializability check rejects.
 const run = async <K extends FnName>(name: K, data: unknown): Promise<string> =>
-  JSON.stringify(
-    await runFn(name, env, getRequest().headers, data, { allowCookie: true, allowBearer: false }),
-  );
+  JSON.stringify(await runFn(name, env, getRequest().headers, data, { allowCookie: true, allowBearer: false }));
 
 export const listInstallationRepos = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listInstallationRepos">) => data)
@@ -44,6 +42,34 @@ export const listOpenPullRequests = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listOpenPullRequests">) => data)
   .handler(({ data }) => run("listOpenPullRequests", data));
 
+export const setProjectEnvironment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setProjectEnvironment">) => data)
+  .handler(({ data }) => run("setProjectEnvironment", data));
+
+export const listEnvironments = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listEnvironments">) => data)
+  .handler(({ data }) => run("listEnvironments", data));
+
+export const createEnvironment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"createEnvironment">) => data)
+  .handler(({ data }) => run("createEnvironment", data));
+
+export const updateEnvironment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"updateEnvironment">) => data)
+  .handler(({ data }) => run("updateEnvironment", data));
+
+export const deleteEnvironment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteEnvironment">) => data)
+  .handler(({ data }) => run("deleteEnvironment", data));
+
+export const setEnvironmentSecret = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setEnvironmentSecret">) => data)
+  .handler(({ data }) => run("setEnvironmentSecret", data));
+
+export const deleteEnvironmentSecret = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteEnvironmentSecret">) => data)
+  .handler(({ data }) => run("deleteEnvironmentSecret", data));
+
 export const listProjectConversations = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listProjectConversations">) => data)
   .handler(({ data }) => run("listProjectConversations", data));
@@ -55,6 +81,10 @@ export const getProjectConversation = createServerFn({ method: "GET" })
 export const createWorkspace = createServerFn({ method: "POST" })
   .validator((data: FnInput<"createWorkspace">) => data)
   .handler(({ data }) => run("createWorkspace", data));
+
+export const listModels = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listModels">) => data)
+  .handler(({ data }) => run("listModels", data));
 
 export const listWorkspaces = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listWorkspaces">) => data)
@@ -100,9 +130,17 @@ export const deleteWorkspace = createServerFn({ method: "POST" })
   .validator((data: FnInput<"deleteWorkspace">) => data)
   .handler(({ data }) => run("deleteWorkspace", data));
 
-export const rotatePreviewToken = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"rotatePreviewToken">) => data)
-  .handler(({ data }) => run("rotatePreviewToken", data));
+export const openPreview = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"openPreview">) => data)
+  .handler(({ data }) => run("openPreview", data));
+
+export const rotatePreviewKey = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"rotatePreviewKey">) => data)
+  .handler(({ data }) => run("rotatePreviewKey", data));
+
+export const getBrowserLiveView = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"getBrowserLiveView">) => data)
+  .handler(({ data }) => run("getBrowserLiveView", data));
 
 export const setBaseBranch = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setBaseBranch">) => data)
@@ -111,6 +149,14 @@ export const setBaseBranch = createServerFn({ method: "POST" })
 export const getDiagnostics = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getDiagnostics">) => data)
   .handler(({ data }) => run("getDiagnostics", data));
+
+export const setWorkspaceEnvironment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setWorkspaceEnvironment">) => data)
+  .handler(({ data }) => run("setWorkspaceEnvironment", data));
+
+export const resolveEnvironmentProposal = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"resolveEnvironmentProposal">) => data)
+  .handler(({ data }) => run("resolveEnvironmentProposal", data));
 
 export const createSession = createServerFn({ method: "POST" })
   .validator((data: FnInput<"createSession">) => data)
@@ -240,6 +286,34 @@ export const listScriptRuns = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listScriptRuns">) => data)
   .handler(({ data }) => run("listScriptRuns", data));
 
+export const readFileAt = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"readFileAt">) => data)
+  .handler(({ data }) => run("readFileAt", data));
+
+export const listArtifacts = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listArtifacts">) => data)
+  .handler(({ data }) => run("listArtifacts", data));
+
+export const openArtifact = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"openArtifact">) => data)
+  .handler(({ data }) => run("openArtifact", data));
+
+export const listCustomAgents = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listCustomAgents">) => data)
+  .handler(({ data }) => run("listCustomAgents", data));
+
+export const getCustomAgent = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getCustomAgent">) => data)
+  .handler(({ data }) => run("getCustomAgent", data));
+
+export const saveCustomAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"saveCustomAgent">) => data)
+  .handler(({ data }) => run("saveCustomAgent", data));
+
+export const deleteCustomAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteCustomAgent">) => data)
+  .handler(({ data }) => run("deleteCustomAgent", data));
+
 export const getCredentialStatus = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getCredentialStatus">) => data)
   .handler(({ data }) => run("getCredentialStatus", data));
@@ -251,6 +325,18 @@ export const setClaudeToken = createServerFn({ method: "POST" })
 export const setCodexAuth = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setCodexAuth">) => data)
   .handler(({ data }) => run("setCodexAuth", data));
+
+export const startCodexLogin = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"startCodexLogin">) => data)
+  .handler(({ data }) => run("startCodexLogin", data));
+
+export const pollCodexLogin = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"pollCodexLogin">) => data)
+  .handler(({ data }) => run("pollCodexLogin", data));
+
+export const cancelCodexLogin = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"cancelCodexLogin">) => data)
+  .handler(({ data }) => run("cancelCodexLogin", data));
 
 export const setApiKey = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setApiKey">) => data)
@@ -271,3 +357,15 @@ export const deleteProjectSecret = createServerFn({ method: "POST" })
 export const listProjectSecretNames = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listProjectSecretNames">) => data)
   .handler(({ data }) => run("listProjectSecretNames", data));
+
+export const listMcpServers = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listMcpServers">) => data)
+  .handler(({ data }) => run("listMcpServers", data));
+
+export const saveMcpServer = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"saveMcpServer">) => data)
+  .handler(({ data }) => run("saveMcpServer", data));
+
+export const deleteMcpServer = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteMcpServer">) => data)
+  .handler(({ data }) => run("deleteMcpServer", data));

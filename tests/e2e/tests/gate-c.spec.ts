@@ -336,44 +336,34 @@ test("AT-13 revert restores the exact tree of the chosen checkpoint, shows the m
   );
 });
 
-test("AT-14 a repo with only .conductor/settings.toml runs its setup and run scripts with CONDUCTOR_PORT set", async () => {
+test("AT-14 a repo with only .tempo/settings.yaml runs its setup and run scripts with TEMPO_PORT set", async () => {
   await requireChannels();
   const project = await testProject();
   expect(
     project.settings.scripts ?? {},
-    "project overrides must not set scripts; they win over .conductor",
+    "project overrides must not set scripts; they win over .tempo/settings.yaml",
   ).toEqual({});
   const tag = nonce();
   const { summary, watch } = await newWorkspace();
   await watch.waitState(["ready"], 15 * 60_000);
   const workspaceId = summary.id;
 
-  const setup = `echo E2E_SETUP_${tag}_PORT=$CONDUCTOR_PORT`;
-  const run = `echo E2E_RUN_${tag}_PORT=$CONDUCTOR_PORT && exec python3 -m http.server $CONDUCTOR_PORT --bind 127.0.0.1`;
-  // The workspace keeps only .conductor/settings.toml: higher-precedence files go (01, Precedence).
+  const setup = `echo E2E_SETUP_${tag}_PORT=$TEMPO_PORT`;
+  const run = `echo E2E_RUN_${tag}_PORT=$TEMPO_PORT && exec python3 -m http.server $TEMPO_PORT --bind 127.0.0.1`;
+  // JSON is valid YAML, so the file can be written without a YAML library.
+  const settingsYaml = JSON.stringify({ scripts: { setup, run: { e2e: { command: run, default: true } } } });
   await sh(
     workspaceId,
-    [
-      "rm -f .tempo/settings.toml conductor.json",
-      "mkdir -p .conductor",
-      "cat > .conductor/settings.toml <<'EOF'",
-      "[scripts]",
-      `setup = ${JSON.stringify(setup)}`,
-      "",
-      "[scripts.run.e2e]",
-      `command = ${JSON.stringify(run)}`,
-      "default = true",
-      "EOF",
-    ].join("\n"),
+    ["mkdir -p .tempo", `cat > .tempo/settings.yaml <<'EOF'`, settingsYaml, "EOF"].join("\n"),
   );
 
   const effective = await watch.until(
-    "the .conductor settings in effect",
+    "the .tempo/settings.yaml settings in effect",
     () => (watch.detail?.settings.scripts.setup === setup ? watch.detail : undefined),
     2 * 60_000,
   );
   expect(effective.settings.scripts.run["e2e"]?.command).toBe(run);
-  if (effective.settingsSources) expect(effective.settingsSources["scripts.setup"]).toBe(".conductor");
+  if (effective.settingsSources) expect(effective.settingsSources["scripts.setup"]).toBe(".tempo");
 
   const setupRun = await rpcRetry("rerunSetup", { workspaceId });
   expect(setupRun.kind).toBe("setup");
@@ -433,7 +423,7 @@ test("AT-15 a terminal runs commands; after a reconnect the session and scrollba
   second.close();
 });
 
-test("AT-16 a Vite preview works with hot reload; rotating the token breaks the old link; an agent passes a Playwright MCP check on localhost", async ({
+test("AT-16 a Vite preview opened from Tempo works with hot reload; the bare preview URL shows the preview 404 page; Reset preview access stops an open preview; an agent passes a Playwright MCP check on localhost", async ({
   page,
 }) => {
   await requireChannels();
@@ -460,13 +450,19 @@ test("AT-16 a Vite preview works with hot reload; rotating the token breaks the 
     () => watch.detail?.ports.find((p) => p.port === 5173),
     3 * 60_000,
   );
-  const token = watch.detail?.previewToken ?? "";
-  expect(token).toMatch(/^[a-z0-9]{16}$/);
-  if (E2E.previewDomain) expect(port.url).toBe(previewUrl(5173, summary.id, token));
+  if (E2E.previewDomain) expect(port.url).toBe(previewUrl(5173, summary.id));
+  const PREVIEW_404 = "This preview opens only from Tempo.";
+  const bare = await fetch(port.url);
+  expect(bare.status, "the bare preview URL in a fresh browser").toBe(404);
+  expect(await bare.text()).toContain(PREVIEW_404);
 
+  const { url: entry } = await rpc("openPreview", { workspaceId: summary.id, port: 5173 });
+  expect(entry.slice(0, port.url.length + 20)).toBe(`${port.url}/__tempo/enter?code=`);
+  expect(entry.slice(port.url.length + 20)).toMatch(/^[a-z0-9]{32}$/);
   const sockets: string[] = [];
   page.on("websocket", (ws) => sockets.push(ws.url()));
-  await page.goto(port.url);
+  await page.goto(entry);
+  await expect(page).toHaveURL(`${port.url}/`);
   await expect(page.locator("#app")).toHaveText(`E2E-${tag}-v1`, { timeout: 60_000 });
   await sh(summary.id, `sed -i 's/-v1/-v2/' ${dir}/main.js`);
   await expect(page.locator("#app")).toHaveText(`E2E-${tag}-v2`, { timeout: 60_000 });
@@ -476,13 +472,13 @@ test("AT-16 a Vite preview works with hot reload; rotating the token breaks the 
     "hot reload runs over a WebSocket through the preview",
   ).toBe(true);
 
-  const { previewToken } = await rpc("rotatePreviewToken", { workspaceId: summary.id });
-  expect(previewToken).toMatch(/^[a-z0-9]{16}$/);
-  expect(previewToken).not.toBe(token);
-  expect((await fetch(port.url)).status, "the old link").toBe(404);
-  const rotated = await fetch(port.url.replace(token, previewToken));
-  expect(rotated.status).toBe(200);
-  expect(await rotated.text()).toContain('id="app"');
+  expect((await fetch(entry)).status, "an entry link works once").toBe(404);
+
+  await rpc("rotatePreviewKey", { workspaceId: summary.id });
+  await page.reload();
+  await expect(page.locator("body")).toContainText(PREVIEW_404, { timeout: 30_000 });
+  await page.goto((await rpc("openPreview", { workspaceId: summary.id, port: 5173 })).url);
+  await expect(page.locator("#app")).toHaveText(`E2E-${tag}-v2`, { timeout: 60_000 });
 
   const check = await promptAndWait(
     watch,

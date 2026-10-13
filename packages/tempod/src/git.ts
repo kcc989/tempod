@@ -12,7 +12,7 @@ import {
 import { MESSAGE_BUDGET } from "./bounds.ts";
 import type { TempodDb } from "./db.ts";
 import { ExecError, run, tail, type ExecResult } from "./exec.ts";
-import { relativeToWorkspace, resolveWorkspacePath } from "./fs.ts";
+import { encodeFileBytes, relativeToWorkspace, resolveWorkspacePath } from "./fs.ts";
 
 export const BIG_FILE_BYTES = 50 * 1024 * 1024;
 const CKPT_REF = "refs/tempo/checkpoints/";
@@ -395,6 +395,28 @@ export class Git {
     });
   }
 
+  /** `git.readFile` (02): the file as it is in a commit, `git show <sha>:<path>`. */
+  readFileAt(sha: string, path: string, maxBytes: number) {
+    return this.op("read", false, async () => {
+      if (!/^[0-9a-f]{4,64}$/i.test(sha)) throw new TempoError("NOT_FOUND", "Not a commit.");
+      const rel = relativeToWorkspace(this.deps.workspace, resolveWorkspacePath(this.deps.workspace, path));
+      const spec = `${sha}:${rel}`;
+      const type = await this.git(["cat-file", "-t", spec], { readOnly: true });
+      if (type.code !== 0 || type.stdout.trim() !== "blob") throw new TempoError("NOT_FOUND");
+      const size = Number((await this.gitOk(["cat-file", "-s", spec], { readOnly: true })).trim());
+      if (!(size <= maxBytes)) throw new TempoError("FILE_TOO_LARGE");
+      const proc = Bun.spawn(["git", "cat-file", "blob", spec], {
+        cwd: this.deps.workspace,
+        env: this.env({ readOnly: true }),
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      const bytes = Buffer.from(await new Response(proc.stdout).arrayBuffer());
+      if ((await proc.exited) !== 0) throw new TempoError("NOT_FOUND");
+      return encodeFileBytes(bytes, maxBytes);
+    });
+  }
+
   private async identityEnv(): Promise<Record<string, string>> {
     const r = await this.git(["config", "user.email"], { readOnly: true });
     if (r.code === 0 && r.stdout.trim()) return {};
@@ -414,6 +436,24 @@ export class Git {
     return this.op("checkpoint", true, () =>
       this.wrap(async () => {
         if (!SAFE_ID.test(p.checkpointId)) throw new TempoError("VALIDATION_FAILED", "Bad checkpoint id.");
+        const ref = CKPT_REF + p.checkpointId;
+        const existing = await this.revParse(ref);
+        if (existing) {
+          const tree = (await this.gitOk(["rev-parse", `${ref}^{tree}`], { readOnly: true })).trim();
+          const parent = (await this.gitOk(["rev-parse", `${ref}^1`], { readOnly: true })).trim();
+          const base = await this.checkpointBase(parent, baseBranch);
+          const bundle = this.deps.ckptBundle;
+          await rm(bundle, { force: true });
+          await this.gitOk(["bundle", "create", bundle, ref, ...(base.exclude ? [`^${base.sha}`] : [])]);
+          return {
+            commit: existing,
+            tree,
+            parent,
+            base: base.sha,
+            bundlePath: bundle,
+            bundleBytes: statSync(bundle).size,
+          };
+        }
         const index = this.deps.ckptIndex;
         mkdirSync(this.deps.stateDir, { recursive: true });
         await this.headSha();
@@ -443,7 +483,6 @@ export class Git {
             extraEnv: await this.identityEnv(),
           })
         ).trim();
-        const ref = CKPT_REF + p.checkpointId;
         await this.gitOk(["update-ref", ref, commit]);
         const base = await this.checkpointBase(parent, baseBranch);
         const bundle = this.deps.ckptBundle;

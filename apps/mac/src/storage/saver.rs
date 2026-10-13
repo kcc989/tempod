@@ -76,7 +76,7 @@ enum Job {
     Flush(async_channel::Sender<()>),
 }
 
-/// Writes `config.toml` and `state.json` on its own thread, so the GPUI main thread does no file
+/// Writes `config.yaml` and `state.json` on its own thread, so the GPUI main thread does no file
 /// I/O (07, Threads). Config writes go out at once; state writes are debounced.
 pub struct Saver {
     tx: Option<mpsc::Sender<Job>>,
@@ -143,7 +143,7 @@ fn run(dir: &Path, mut debounce: Debounce, rx: mpsc::Receiver<Job>) {
             },
         };
         match job {
-            Some(Job::Config(config)) => write(dir, super::CONFIG_FILE, &config.to_toml()),
+            Some(Job::Config(config)) => write(dir, super::CONFIG_FILE, &config.to_yaml()),
             Some(Job::State(state)) => {
                 pending = Some(state);
                 debounce.changed(Instant::now());
@@ -250,7 +250,7 @@ mod tests {
         saver.save_state(state.clone());
         saver.flush().recv_blocking().unwrap();
         let read = |name| std::fs::read_to_string(dir.join(name)).unwrap();
-        assert_eq!(Config::parse(&read("config.toml")).unwrap(), config);
+        assert_eq!(Config::parse(&read("config.yaml")).unwrap(), config);
         assert_eq!(State::parse(&read("state.json")).unwrap(), state);
     }
 

@@ -52,7 +52,7 @@ export const OP_STATUSES = ["pending", "running", "done", "failed", "cancelled"]
 export const OpStatus = Schema.Literals(OP_STATUSES);
 export type OpStatus = typeof OpStatus.Type;
 
-export const SESSION_STATUSES = ["starting", "idle", "running", "closed", "broken"] as const;
+export const SESSION_STATUSES = ["starting", "idle", "running", "closed"] as const;
 export const SessionStatus = Schema.Literals(SESSION_STATUSES);
 export type SessionStatus = typeof SessionStatus.Type;
 
@@ -78,6 +78,7 @@ export const ITEM_KINDS = [
   "handoff",
   "revert_marker",
   "error",
+  "artifact",
 ] as const;
 export const ItemKind = Schema.Literals(ITEM_KINDS);
 export type ItemKind = typeof ItemKind.Type;
@@ -109,7 +110,7 @@ export const REVIEW_SIDES = ["old", "new"] as const;
 export const ReviewSide = Schema.Literals(REVIEW_SIDES);
 export type ReviewSide = typeof ReviewSide.Type;
 
-export const REVIEW_STATUSES = ["draft", "sent", "resolved"] as const;
+export const REVIEW_STATUSES = ["draft", "sent"] as const;
 export const ReviewStatus = Schema.Literals(REVIEW_STATUSES);
 export type ReviewStatus = typeof ReviewStatus.Type;
 
@@ -134,6 +135,14 @@ export type InstanceName = typeof InstanceName.Type;
 
 export const EgressPolicy = Schema.Literals(["open", "allowlist"]);
 export type EgressPolicy = typeof EgressPolicy.Type;
+
+/** getDiagnostics `egressStatus` (02): `blocked` means TempoOutbound rule 0, 7 or 10. */
+export const EGRESS_STATUS_FILTERS = ["all", "blocked", "2xx", "3xx", "4xx", "5xx"] as const;
+export const EgressStatusFilter = Schema.Literals(EGRESS_STATUS_FILTERS);
+export type EgressStatusFilter = typeof EgressStatusFilter.Type;
+
+/** TempoOutbound rules that refuse a request (01 and 05: rule 0 app host, 7 placeholder, 10 not allowed). */
+export const EGRESS_BLOCK_RULES = [0, 7, 10] as const;
 
 export const RunMode = Schema.Literals(["concurrent", "nonconcurrent"]);
 export type RunMode = typeof RunMode.Type;

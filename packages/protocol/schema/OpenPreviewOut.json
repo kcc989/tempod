@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenPreviewOut",
+  "type": "object",
+  "properties": {
+    "url": {
+      "type": "string"
+    }
+  },
+  "required": ["url"],
+  "additionalProperties": true
+}

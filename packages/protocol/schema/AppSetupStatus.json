@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AppSetupStatus",
+  "type": "object",
+  "properties": {
+    "configured": {
+      "type": "boolean"
+    },
+    "installUrl": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["configured", "installUrl"],
+  "additionalProperties": true
+}

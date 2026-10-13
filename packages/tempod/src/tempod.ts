@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import {
+  type EnvironmentSummary,
   SettingsLayer,
   TempoError,
   type DoHello,
@@ -18,6 +19,8 @@ import { findBinary, run } from "./exec.ts";
 import { listFiles, readWorkspaceFile, searchFiles } from "./fs.ts";
 import { Git, summarize } from "./git.ts";
 import { errorText, Logger } from "./log.ts";
+import { startMcpSocket } from "./tempo-mcp.ts";
+import { Artifacts } from "./artifacts.ts";
 import { Outbox } from "./outbox.ts";
 import { PortScanner } from "./ports.ts";
 import { pruneLogs, ScriptManager } from "./scripts.ts";
@@ -64,9 +67,12 @@ export class Tempod {
   readonly watcher: Watcher;
   readonly codex: CodexCredentials;
   readonly settings: SettingsState;
+  readonly artifacts: Artifacts;
   readonly handlers: Handlers;
   private readonly caEnv: Record<string, string>;
   private scriptEnv: Record<string, string> = {};
+  environmentSummary: EnvironmentSummary | null = null;
+  private mcpSocket: { stop: () => void } | null = null;
   workspaceInfo: DoHello["workspace"] | null = null;
   private background = false;
   sigterm = false;
@@ -123,6 +129,7 @@ export class Tempod {
       emit,
       baseEnv: () => this.baseEnv(),
       scriptEnv: () => this.scriptEnv,
+      caEnv: this.caEnv,
     });
     this.ports = new PortScanner({
       intervalMs: config.limits.portScanMs,
@@ -138,6 +145,14 @@ export class Tempod {
       env: () => this.baseEnv(),
       onChange: () => void this.refresh(),
       ...(opts.forcePollingWatcher ? { forcePolling: true } : {}),
+    });
+    this.artifacts = new Artifacts({
+      db: this.db,
+      workspace: config.workspace,
+      artifactsDir: config.artifactsDir,
+      stageDir: config.artifactsStage,
+      emit,
+      runningTurnId: (sessionId) => this.agents.runningTurnId(sessionId),
     });
     this.codex = new CodexCredentials({
       codexHome: config.codexHome,
@@ -194,10 +209,21 @@ export class Tempod {
     this.settings.prime();
     this.watcher.start();
     this.codex.start();
+    try {
+      this.mcpSocket = startMcpSocket(this.config.mcpSocket, {
+        summary: () => this.environmentSummary,
+        propose: (proposal) => this.emit({ kind: "environment.proposed", proposal }),
+        publish: (req) => this.artifacts.publish(req),
+      });
+    } catch (e) {
+      this.log.warn("tempo MCP socket failed", { error: errorText(e) });
+    }
   }
 
   private stopBackground(): void {
     this.background = false;
+    this.mcpSocket?.stop();
+    this.mcpSocket = null;
     this.ports.stop();
     this.watcher.stop();
     this.codex.stop();
@@ -256,6 +282,10 @@ export class Tempod {
         this.scriptEnv = { ...p.env };
         return {};
       },
+      "environment.set": async (p) => {
+        this.environmentSummary = p.summary;
+        return {};
+      },
       "script.start": async (p) => this.scripts.start(p),
       "script.stop": async (p) => {
         await this.scripts.stop(p.runId);
@@ -278,6 +308,7 @@ export class Tempod {
       "session.setConfig": (p) => this.agents.setConfig(p),
       "session.close": async (p) => {
         await this.agents.close(p);
+        this.codex.check();
         return {};
       },
       "permission.respond": async (p) => {
@@ -307,6 +338,11 @@ export class Tempod {
           this.workspaceInfo = { ...this.workspaceInfo, branch: p.to };
         }
         return r;
+      },
+      "git.readFile": (p) => this.git.readFileAt(p.sha, p.path, p.maxBytes),
+      "artifact.release": async (p) => {
+        this.artifacts.release(p.artifactId, p.version);
+        return {};
       },
       "fs.list": async () => ({ paths: await listFiles(ws, this.baseEnv()) }),
       "fs.read": (p) => readWorkspaceFile(ws, p.path, p.maxBytes),
