@@ -1,4 +1,4 @@
-import { ArrowRightIcon, CheckIcon } from "lucide-react";
+import { ChevronDownIcon, CheckIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ErrorState } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -39,7 +39,8 @@ export function BaseBranchPicker({
 
   const label = (
     <>
-      <ArrowRightIcon aria-hidden className="size-3 shrink-0" />
+      <span className="text-muted-foreground">Base:</span>
+      <ChevronDownIcon aria-hidden className="size-3 shrink-0" />
       <span className="truncate">{baseBranch}</span>
     </>
   );
@@ -135,9 +136,9 @@ function BranchList({
                     if (name !== baseBranch) setBase.mutate({ workspaceId, baseBranch: name });
                     onDone();
                   }}
-                  className="font-mono text-xs"
+                  className="justify-start text-left font-mono text-xs"
                 >
-                  <span className="truncate">{name}</span>
+                  <span className="min-w-0 flex-1 truncate">{name}</span>
                   {name === baseBranch && <CheckIcon className="ml-auto" />}
                 </CommandItem>
               ))}

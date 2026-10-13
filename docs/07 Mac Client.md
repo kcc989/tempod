@@ -183,6 +183,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 - Read every color through `cx.theme()`. Map the tokens of 04 (`--primary`, `--destructive`, `--warning`, `--muted-foreground`) to `ThemeColor` fields once, in `src/views/tokens.rs`. No color values in views.
 - Every custom control sets an element id, an `a11y_role()` and an `.aria_label(...)`, so AccessKit can expose it.
 - Settings uses left-aligned navigation with a `Search settings` filter and a `Search workspaces` button with a `⌘K` hint for the command palette. Section icons match 04. It uses a bounded form column, grouped login cards and content-sized action buttons. Chat uses a bounded reading column and a compact composer toolbar.
+- Base branch options align left, truncate long names and mark the current branch with a check icon at the right.
 - Minimum window size: 900 × 600 pt. Below 1,100 pt wide, the right side collapses behind its toggle.
 
 ## Transcript, composer and permissions

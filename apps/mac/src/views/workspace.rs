@@ -1356,11 +1356,33 @@ impl WorkspaceView {
                             let branch = name.clone();
                             Button::new(("base-branch-option", ix))
                                 .ghost()
-                                .label(if *name == base {
-                                    format!("{name} ✓")
+                                .w_full()
+                                .accessibility_label(if *name == base {
+                                    format!("{name}, current base branch")
                                 } else {
                                     name.clone()
                                 })
+                                .child(
+                                    h_flex()
+                                        .w_full()
+                                        .min_w_0()
+                                        .gap_2()
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .text_left()
+                                                .truncate()
+                                                .font_family("monospace")
+                                                .child(name.clone()),
+                                        )
+                                        .children((*name == base).then(|| {
+                                            gpui_kit::component::Icon::new(
+                                                gpui_kit::assets::IconName::Check,
+                                            )
+                                            .small()
+                                        })),
+                                )
                                 .on_click(move |_, _, cx| {
                                     let _ = pick.update(cx, |this, cx| {
                                         this.pick_base_branch(branch.clone(), cx)
