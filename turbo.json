@@ -33,6 +33,18 @@
       "outputs": [],
       "env": ["TEMPO_IMAGE_TEST"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/container/pi/**"]
+    },
+    "//#typecheck:root": {
+      "outputs": [],
+      "inputs": [
+        "alchemy.run.ts",
+        "scripts/**",
+        "container/**/*.ts",
+        "tsconfig*.json",
+        "package.json",
+        "bun.lock",
+        "patches/**"
+      ]
     }
   },
   "globalDependencies": ["tsconfig*.json", "bunfig.toml", "patches/**"],

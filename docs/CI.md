@@ -12,15 +12,20 @@ has a five-minute timeout, reserving the last 30 seconds for cache saves and
 cleanup. Do not raise the limits to accommodate regressions. Cancel superseded
 runs instead of paying for outdated commits.
 
-Dependencies, Chromium and deterministic Turbo task results are restored between
-runs. Dependency installation still uses the frozen lockfile. Turbo hashes package
+Chromium and deterministic Turbo task results are restored between runs. The
+multi-gigabyte Bun dependency cache is not archived: saving it exceeded the
+cleanup budget. Dependency installation still uses the frozen lockfile. Turbo hashes package
 sources, transitive dependencies, root TypeScript configuration, Bun configuration
 and dependency patches. Image tests have a separate `TEMPO_IMAGE_TEST` hash. Live
 agent/deployment tasks are never cached. Builds used by CI still execute, and
 browser fixtures build before previewing to avoid development-server transform
 costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
 to avoid loading the same dependency module graph into every workerd isolate.
-Component tests use two workers to limit CPU and memory contention. A cache miss must also fit the budget.
+Component tests use two workers to limit CPU and memory contention. TypeScript
+7.0.2 provides the native checker; use two checkers per project and at most two
+concurrent typecheck tasks. The root deployment/tooling typecheck is also cached
+with its own source/configuration inputs. Update those inputs if root scripts
+start importing files outside that scope. A cache miss must also fit the budget.
 
 ## Test audit
 

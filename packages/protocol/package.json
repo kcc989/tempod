@@ -8,7 +8,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json && tsc -p scripts/tsconfig.json",
+    "typecheck": "tsc --checkers 2 -p tsconfig.json && tsc --checkers 2 -p scripts/tsconfig.json",
     "test": "vitest run",
     "protocol:gen": "bun scripts/gen-schema.ts",
     "protocol:fixtures": "bun scripts/gen-fixtures.ts",

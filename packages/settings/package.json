@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc --checkers 2 -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {

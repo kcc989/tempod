@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc --checkers 2 -p tsconfig.json",
     "test": "vitest run && vitest run -c vitest.ui.config.ts && vitest run -c vitest.components.config.ts",
     "cf-typegen": "wrangler types --include-env=false ./worker-runtime.d.ts",
     "db:generate": "drizzle-kit generate",
