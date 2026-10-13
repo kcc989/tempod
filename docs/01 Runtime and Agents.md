@@ -95,7 +95,7 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]
 
 | Path | Content |
 | --- | --- |
-| `.codex/config.toml` | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `check_for_update_on_startup = false`, `cli_auth_credentials_store = "file"`, `[analytics] enabled = false`, `[feedback] enabled = false` |
+| `.codex/config.toml` (Codex reads only TOML) | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `check_for_update_on_startup = false`, `cli_auth_credentials_store = "file"`, `[analytics] enabled = false`, `[feedback] enabled = false` |
 | `.claude/settings.json` | `{"cleanupPeriodDays": 365}` so session files outlive the 30-day default |
 | `.gitconfig` | `init.defaultBranch = main`, `pull.rebase = false`, `safe.directory = /workspace` |
 
@@ -272,7 +272,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 - With the OAuth token, MUST NOT set `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`. In `claude -p` mode an API key always wins over the token.
 - The placeholder string is exactly `tempo-placeholder`. `TempoOutbound` swaps it for the real key (see below).
 - `tempod` sends `initialize` with `protocolVersion: 1` and these client capabilities: `fs.readTextFile: true`, `fs.writeTextFile: true`, `terminal: false`, and session.notices: true. Agents run commands with their own shell tools.
-- `tempod` serves `fs/read_text_file` and `fs/write_text_file` only for absolute paths under `/workspace` or `/home/tempo/attachments`. Any other path returns a JSON-RPC error.
+- `tempod` serves `fs/read_text_file` and `fs/write_text_file` only for absolute paths under `/workspace`, `/home/tempo/attachments` or `/home/tempo/roles` (08). Any other path returns a JSON-RPC error.
 - Every `session/new` and `session/load` passes Playwright, below, then `tempo` (Environments), then the user's servers (User MCP servers).
 
 ```json
@@ -316,41 +316,39 @@ A custom agent is a saved set of defaults on top of one of the four agents. The 
 **Storage.** The definition lives in Cloudflare Artifacts. D1 holds a pointer to it (02, `custom_agents`).
 
 - One Artifacts repo per user, in the namespace `tempo-agents`, named `user-<userId>`, default branch `main`.
-- One file per custom agent: `agents/<customAgentId>.toml`. `customAgentId` is a ULID made by the Worker.
+- One file per custom agent: `agents/<customAgentId>.yaml`. `customAgentId` is a ULID made by the Worker.
 - Every save is one commit. D1 `custom_agents.commit_sha` points to the commit that holds the current version. Reads use that commit, not `main`.
 - The Worker reads with the Artifacts binding (`readFile({ref: commit_sha, path})`). It writes with `isomorphic-git` over the Git protocol, with an in-memory file system in `apps/tempo`. No container takes part.
 
-**File format** (parse with `smol-toml`, validate with an Effect Schema in `packages/protocol`)
+**File format** (parse with `yaml`, validate with an Effect Schema in `packages/protocol`)
 
-```toml
-name = "Reviewer"               # 1 to 60 chars; unique per user
-description = ""                # at most 200 chars
-base_agent = "claude"           # claude | codex | opencode | pi
-model = ""                      # the agent's model config value; empty = the agent's default
-thought_level = ""              # the value of the agent's thought_level config option; empty = the agent's default
-system_prompt = """
-You review code. You do not edit files.
-"""                             # at most 32,000 chars; empty = none
+```yaml
+name: Reviewer                  # 1 to 60 chars; unique per user
+description: ""                 # at most 200 chars
+base_agent: claude              # claude | codex | opencode | pi
+model: ""                       # the agent's model config value; empty = the agent's default
+thought_level: ""               # the value of the agent's thought_level config option; empty = the agent's default
+system_prompt: |                # at most 32,000 chars; empty = none
+  You review code. You do not edit files.
 
-[tools]
-allow = []                      # built-in tool names; empty = every built-in tool
-deny = ["Edit", "Write"]        # built-in or MCP tool names; deny wins over allow
+tools:
+  allow: []                     # built-in tool names; empty = every built-in tool
+  deny: [Edit, Write]           # built-in or MCP tool names; deny wins over allow
 
-[mcp]
-playwright = true               # add the Playwright server from Agents
-
-[[mcp.servers]]
-name = "docs"                   # ^[a-z0-9_-]{1,32}$, not "playwright", unique in the file
-type = "stdio"                  # stdio | http | sse
-command = "docs-mcp"            # stdio only; must exist in the image or be installed by setup
-args = []                       # stdio only
-env = { DOCS_TOKEN = "${DOCS_TOKEN}" }  # stdio only
-
-[[mcp.servers]]
-name = "search"
-type = "http"
-url = "https://mcp.example.com/mcp"     # http and sse only; https only
-headers = { Authorization = "${SEARCH_AUTH}" }  # http and sse only
+mcp:
+  playwright: true              # add the Playwright server from Agents
+  servers:
+    - name: docs                # ^[a-z0-9_-]{1,32}$, not "playwright", unique in the file
+      type: stdio               # stdio | http | sse
+      command: docs-mcp         # stdio only; must exist in the image or be installed by setup
+      args: []                  # stdio only
+      env:                      # stdio only
+        DOCS_TOKEN: "${DOCS_TOKEN}"
+    - name: search
+      type: http
+      url: https://mcp.example.com/mcp   # http and sse only; https only
+      headers:                  # http and sse only
+        Authorization: "${SEARCH_AUTH}"
 ```
 
 **Limits.** At most 50 custom agents per user, 100 names in each of `tools.allow` and `tools.deny`, and 10 MCP servers. A tool name matches `^[A-Za-z0-9_.:*-]{1,128}$`.
@@ -534,7 +532,7 @@ Browser Run (below) is on only when the egress policy that applies, the environm
 
 - A secret with `hosts` is the string `tempo-secret-<NAME>`, for example `STRIPE_KEY=tempo-secret-STRIPE_KEY`. Its value never enters the container.
 - A secret with no `hosts` is its plain value. The UI marks it "visible to the agent".
-- Precedence for a name that is set twice, highest first: the `TEMPO_` and `CONDUCTOR_` vars, project secrets, environment secrets, `environment_variables`.
+- Precedence for a name that is set twice, highest first: the `TEMPO_` vars, project secrets, environment secrets, `environment_variables`.
 
 **Rule 14, secret swap.**
 
@@ -568,7 +566,7 @@ Browser Run (below) is on only when the egress policy that applies, the environm
 
 ## Scripts, ports and previews
 
-Scripts work as in Conductor: one setup script, any number of run scripts, one archive script. Every container has its own network, so every workspace uses the same port numbers.
+Each project has one setup script, any number of run scripts and one archive script. Every container has its own network, so every workspace uses the same port numbers.
 
 **Script env.** `tempod` gives every script and every agent these vars, plus the project's `environment_variables` and secrets, and the environment secrets (Environments, above):
 
@@ -580,7 +578,6 @@ Scripts work as in Conductor: one setup script, any number of run scripts, one a
 | `TEMPO_DEFAULT_BRANCH` | The workspace's base branch |
 | `TEMPO_PORT` | `3000`. Ports 3000 to 3009 are for the project. |
 | `TEMPO_ARTIFACTS_DIR` | `/home/tempo/artifacts`. A place for files an agent makes only to publish (Artifacts). It is not in the repo or in checkpoints. |
-| `CONDUCTOR_WORKSPACE_NAME`, `CONDUCTOR_WORKSPACE_PATH`, `CONDUCTOR_ROOT_PATH`, `CONDUCTOR_DEFAULT_BRANCH`, `CONDUCTOR_PORT` | Same values as the `TEMPO_` vars, so Conductor scripts run unchanged. `CONDUCTOR_ROOT_PATH` is `/workspace`. |
 
 **Setup script**
 
@@ -794,82 +791,64 @@ A snapshot is usable only if both are true:
 
 ## Project settings file
 
-A repo MAY hold `.tempo/settings.toml`. Tempo also reads Conductor's files, so a repo set up for Conductor works with no changes.
+A repo MAY hold `.tempo/settings.yaml`. It is the only settings file Tempo reads from a repo.
 
-```toml
-[agent]
-default = "claude"              # claude | codex | opencode | pi
+```yaml
+agent:
+  default: claude               # claude | codex | opencode | pi
+  models:                       # each agent's default model: its model config value; "" = the agent's own default
+    claude: ""
+    codex: ""
+    opencode: ""                # required to start an OpenCode session
+    pi: ""                      # required to start a Pi session
 
-[agent.models]                  # each agent's default model: its model config value; "" = the agent's own default
-claude = ""
-codex = ""
-opencode = ""                   # required to start an OpenCode session
-pi = ""                         # required to start a Pi session
+browser:
+  run: false                    # true: agents use Browser Run, watched in Live View; ignored under egress_policy: allowlist
 
-[browser]
-run = false                     # true: agents use Browser Run, watched in Live View; ignored under egress_policy = "allowlist"
+scripts:
+  setup: bun install
+  archive: ""
+  run_mode: concurrent          # concurrent | nonconcurrent
+  auto_run_after_setup: false
+  run:
+    dev:
+      command: bun run dev
+      cwd: ""                   # relative to /workspace; empty = /workspace
+      default: true
 
-[scripts]
-setup = "bun install"
-archive = ""
-run_mode = "concurrent"         # concurrent | nonconcurrent
-auto_run_after_setup = false
+environment:
+  instance: standard-3          # standard-2 | standard-3 | standard-4
+  sleep_after_idle_minutes: 15  # 5 to 240
+  egress_policy: allowlist      # open | allowlist; Tempo UI only, ignored in repo files
+  egress_allowlist: []          # host patterns; "*.example.com" is allowed; Tempo UI only
 
-[scripts.run.dev]
-command = "bun run dev"
-cwd = ""                        # relative to /workspace; empty = /workspace
-default = true
+environment_variables:
+  NODE_ENV: development
 
-[environment]
-instance = "standard-3"         # standard-2 | standard-3 | standard-4
-sleep_after_idle_minutes = 15   # 5 to 240
-egress_policy = "allowlist"     # open | allowlist; Tempo UI only, ignored in repo files
-egress_allowlist = []           # host patterns; "*.example.com" is allowed; Tempo UI only
+git:
+  branch_prefix: tempo/
+  delete_branch_on_archive: false
+  archive_on_merge: false
 
-[environment_variables]
-NODE_ENV = "development"
-
-[git]
-branch_prefix = "tempo/"
-delete_branch_on_archive = false
-archive_on_merge = false
-
-[prompts]
-general = ""                    # added to the first prompt of every session
+prompts:
+  general: ""                   # added to the first prompt of every session
 ```
 
 **Precedence**, highest first:
 
 1. Project overrides set in the Tempo UI (D1 `projects.settings_json`).
-2. `.tempo/settings.toml` on the workspace branch.
-3. `.conductor/settings.toml`, mapped as below.
-4. `conductor.json`, mapped as below.
-5. Defaults (the values shown above, with all scripts empty).
+2. `.tempo/settings.yaml` on the workspace branch.
+3. Defaults (the values shown above, with all scripts empty).
 
-**Conductor mapping**
-
-| Conductor key | Tempo key |
-| --- | --- |
-| `scripts.setup`, `scripts.archive`, `scripts.run_mode`, `scripts.auto_run_after_setup` | Same names |
-| `scripts.run.<id>.command` plus `args` (joined with spaces) | `scripts.run.<id>.command` |
-| `scripts.run.<id>.options.cwd` | `scripts.run.<id>.cwd` |
-| `scripts.run.<id>.default` | Same |
-| `environment_variables.cloud`, else `environment_variables` | `environment_variables` |
-| `prompts.general` | Same |
-| `git.branch_prefix`, `git.delete_branch_on_archive`, `git.archive_on_merge` | Same |
-| `conductor.json` `scripts.setup`, `scripts.archive` | Same |
-| `conductor.json` `scripts.run` (one string) | `scripts.run.default.command`, with `default = true` |
-| `conductor.json` `runScriptMode` | `scripts.run_mode` |
-
-Other Conductor keys (for example `spotlight_testing`, `file_include_globs`, `preview_urls`) are ignored. The Setup tab shows one warning that lists them.
+Tempo reads no Conductor files (`conductor.json`, `.conductor/`) and sets no `CONDUCTOR_*` env vars. Tempo uses no TOML of its own; the only TOML files are ones other tools require (Codex `config.toml`, Rust `Cargo.toml` and `rust-toolchain.toml`).
 
 **Rules**
 
-- Parse TOML with `smol-toml`. Validate with an Effect Schema.
-- If a file fails to parse or validate, ignore the whole file, show the error in the Setup tab, and use the next source.
+- Parse YAML with `yaml`. An empty file means no settings. Validate with an Effect Schema.
+- If the file fails to parse or validate, ignore the whole file, show the error in the Setup tab, and use the defaults.
 - Unknown keys are warnings, not errors.
 - Secrets MUST NOT be in the repo file. Set them in the UI; they live in CredentialDO and join `environment_variables` at runtime.
-- Read settings after the clone, and again when the file watcher sees a change to any of the three files. A script uses the settings in effect when it starts.
+- Read settings after the clone, and again when the file watcher sees a change to it. A script uses the settings in effect when it starts.
 
 ## Sources
 
@@ -887,4 +866,3 @@ Other Conductor keys (for example `spotlight_testing`, `file_include_globs`, `pr
 - [claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp), [codex-acp](https://github.com/agentclientprotocol/codex-acp), [pi-acp](https://github.com/svkozak/pi-acp), [OpenCode ACP](https://opencode.ai/docs/acp)
 - [Claude Code env vars](https://code.claude.com/docs/en/env-vars) and [sessions](https://code.claude.com/docs/en/sessions)
 - [Codex config reference](https://learn.chatgpt.com/docs/config-file/config-reference) and [auth in CI/CD](https://learn.chatgpt.com/docs/auth/ci-cd-auth)
-- [Conductor settings reference](https://www.conductor.build/docs/reference/settings/reference) and [environment variables](https://www.conductor.build/docs/reference/environment-variables)

@@ -29,7 +29,7 @@ tempo/
     protocol/                   Effect Schemas: shared types, channels, tempod protocol, errors
     tempod/                     the daemon: main.ts, server.ts, outbox.ts, acp/, scripts.ts,
                                 git.ts, ports.ts, watcher.ts, proxy.ts, artifacts.ts
-    settings/                   settings.toml parsing and Conductor mapping (used by tempod and the Worker)
+    settings/                   settings.yaml parsing (used by tempod and the Worker)
     cities/                     the fixed slug list
   container/
     Dockerfile
@@ -53,6 +53,8 @@ tempo/
 &#91;embedded content: Build roadmap · 4 phases, 4 test gates\]
 
 A phase starts only after the gate before it passes. Work for the next phase MAY begin early in a branch, but it MUST NOT merge until the gate passes. If a spike shows the spec is wrong, change the spec first, then the code.
+
+Phase 6 (08) is the exception: it MAY run in parallel with phases 2 to 5, its milestones merge when their own tests pass, and gate H needs gate B. Its spike is S21 (08).
 
 ## Spikes
 
@@ -101,7 +103,7 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-11 | A Codex token refresh in one workspace reaches a second running workspace, which then completes a turn. |
 | AT-12 | The diff view is correct for added, changed, deleted, renamed and untracked files in both scopes. Review comments reach the agent in the next prompt. |
 | AT-13 | Revert restores the exact tree of the chosen checkpoint, shows the marker, and the next prompt carries the revert note. |
-| AT-14 | A repo with only `.conductor/settings.toml` runs its setup and run scripts, with `CONDUCTOR_PORT` set. |
+| AT-14 | A repo with only `.tempo/settings.yaml` runs its setup and run scripts, with `TEMPO_PORT` set. |
 | AT-15 | A terminal runs commands; after a reconnect, the session and scrollback are still there. |
 | AT-16 | A Vite preview opened from Tempo works with hot reload, also in a Browser tab. The bare preview URL in a fresh browser shows the preview 404 page. Reset preview access stops an open preview. An agent passes a Playwright MCP check on `localhost`. |
 

@@ -71,7 +71,7 @@ describe("custom agent definition (01, Custom agents)", () => {
       thoughtLevel: "",
     });
     expect(customAgentRepo("abc")).toBe("user-abc");
-    expect(customAgentPath("01x")).toBe("agents/01x.toml");
+    expect(customAgentPath("01x")).toBe("agents/01x.yaml");
   });
 
   it("has the functions, codes and session.start fields from 02", () => {

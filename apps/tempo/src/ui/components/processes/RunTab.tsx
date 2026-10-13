@@ -44,7 +44,7 @@ export function RunTab({ workspaceId }: { workspaceId: string }) {
     return (
       <EmptyState
         title="No run scripts."
-        description="Add one to .tempo/settings.toml or in project settings."
+        description="Add one to .tempo/settings.yaml or in project settings."
         action={
           <Button
             size="sm"

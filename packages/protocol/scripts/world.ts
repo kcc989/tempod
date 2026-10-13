@@ -160,7 +160,7 @@ export const detail = (
 
 export const lisbonDetail = detail(lisbon, {
   ports: [{ port: 3000, url: `https://3000-${W1}.example-previews.com` }],
-  settingsWarnings: ["Unknown key scripts.watch in .tempo/settings.toml"],
+  settingsWarnings: ["Unknown key scripts.watch in .tempo/settings.yaml"],
   settingsErrors: [],
   settingsSources: { "agent.default": "tempo", "scripts.setup": ".tempo", "environment.instance": "default" },
   changes: changesSummary,
