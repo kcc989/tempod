@@ -328,6 +328,14 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     });
   }
 
+  async agentsChanged(): Promise<Result<{}>> {
+    return capture(async () => {
+      this.core.setKv("agentsDirty", true);
+
+      return {};
+    });
+  }
+
   async rolesChanged(): Promise<Result<{}>> {
     return capture(async () => {
       if (this.core.wsOrNull()) {

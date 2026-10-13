@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PutProjectAgentIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "agentId": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "hooks": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "$ref": "HookEvent.json"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["event"],
+        "additionalProperties": true
+      }
+    },
+    "autoSend": {
+      "type": "boolean"
+    },
+    "maxRuns": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 1,
+          "maximum": 10
+        }
+      ]
+    },
+    "timeout": {
+      "type": "string"
+    }
+  },
+  "required": ["projectId", "agentId"],
+  "additionalProperties": true
+}

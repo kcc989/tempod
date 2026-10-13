@@ -254,6 +254,7 @@ export class WebFixture {
         return [];
       case "listProjectSecretNames":
         return { names: [] };
+      case "listAgents":
       case "listCustomAgents":
         return [];
       case "refreshPullRequest":

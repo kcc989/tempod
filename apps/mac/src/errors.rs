@@ -2,6 +2,10 @@
 
 pub fn error_text(code: &str) -> &'static str {
     match code {
+        "AGENT_INVALID" => "The agent is not valid.",
+        "AGENT_LIMIT" => "You have the most agents allowed. Delete one first.",
+        "AGENT_NAME_TAKEN" => "Another agent has this name or handle.",
+        "ATTACHMENT_INVALID" => "The agent's hooks or limits are not valid.",
         "UNAUTHENTICATED" => "Sign in to continue.",
         "FORBIDDEN" => "This Tempo belongs to someone else.",
         "NOT_FOUND" => "Not found.",

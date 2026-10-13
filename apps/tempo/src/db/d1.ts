@@ -166,6 +166,65 @@ export const customAgents = sqliteTable(
 
 export type CustomAgentRow = typeof customAgents.$inferSelect;
 
+export const agents = sqliteTable(
+  "agents",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    handle: text("handle").notNull(),
+    name: text("name").notNull(),
+    definitionJson: text("definition_json").notNull(),
+    version: integer("version").notNull(),
+    sha: text("sha").notNull(),
+    starter: text("starter"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("agents_active_handle")
+      .on(t.userId, t.handle)
+      .where(sql`deleted_at IS NULL`),
+    uniqueIndex("agents_active_name")
+      .on(t.userId, t.name)
+      .where(sql`deleted_at IS NULL`),
+  ],
+);
+
+export const projectAgents = sqliteTable(
+  "project_agents",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id),
+    enabled: integer("enabled").notNull().default(1),
+    hooksJson: text("hooks_json").notNull().default("[]"),
+    autoSend: integer("auto_send").notNull().default(0),
+    maxRuns: integer("max_runs").notNull().default(3),
+    timeout: text("timeout").notNull().default("20m"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("project_agents_project_agent").on(t.projectId, t.agentId)],
+);
+
+export const agentMigrations = sqliteTable("agent_migrations", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  migratedAt: integer("migrated_at").notNull(),
+});
+
+export type AgentRow = typeof agents.$inferSelect;
+
+export type ProjectAgentRow = typeof projectAgents.$inferSelect;
+
 export type ProjectRow = typeof projects.$inferSelect;
 
 export type WorkspaceRow = typeof workspaces.$inferSelect;

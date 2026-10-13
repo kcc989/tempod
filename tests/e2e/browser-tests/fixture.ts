@@ -141,6 +141,7 @@ export async function browserFixture(page: Page) {
       case "listTerminals":
       case "listCheckRuns":
       case "listOpenPullRequests":
+      case "listAgents":
       case "listCustomAgents":
       case "listRoles":
         value = [];

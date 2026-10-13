@@ -89,6 +89,7 @@ export const createInput = (
   prompt: string,
   model?: string,
   customAgentId?: string,
+  library = false,
 ): FnInput<"createWorkspace"> | null => {
   const source = buildSource(draft, project);
 
@@ -100,7 +101,7 @@ export const createInput = (
 
   if (model) input = { ...input, model };
 
-  if (customAgentId) input = { ...input, customAgentId };
+  if (customAgentId) input = library ? { ...input, agentId: customAgentId } : { ...input, customAgentId };
 
   if (text) input = { ...input, prompt: { text } };
 

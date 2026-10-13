@@ -93,7 +93,65 @@ const PROPOSAL = {
   secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
 } as const;
 
+const LIBRARY_DEFINITION: P.AgentDefinition = {
+  handle: "reviewer",
+  name: "Reviewer",
+  description: "Reviews code",
+  baseAgent: "auto",
+  model: "",
+  thoughtLevel: "",
+  prompt: "Review code.",
+  access: "read-only",
+  tools: { allow: [], deny: ["Edit"] },
+  mcp: { playwright: true, servers: [] },
+  outputKind: "review",
+};
+
+const LIBRARY_AGENT: P.Agent = {
+  ...LIBRARY_DEFINITION,
+  id: uid(701),
+  version: 1,
+  sha: "a".repeat(64),
+  starter: null,
+  createdAt: at(0),
+  updatedAt: at(1),
+};
+
+const LIBRARY_SUMMARY: P.AgentSummary = {
+  id: LIBRARY_AGENT.id,
+  handle: LIBRARY_AGENT.handle,
+  name: LIBRARY_AGENT.name,
+  description: LIBRARY_AGENT.description,
+  baseAgent: LIBRARY_AGENT.baseAgent,
+  access: LIBRARY_AGENT.access,
+  outputKind: LIBRARY_AGENT.outputKind,
+  version: 1,
+  sha: LIBRARY_AGENT.sha,
+  starter: null,
+  updatedAt: at(1),
+};
+
+const AGENT_ATTACHMENT: P.AgentAttachment = {
+  id: uid(702),
+  projectId: PROJECT_ID,
+  agentId: LIBRARY_AGENT.id,
+  enabled: true,
+  hooks: [{ event: "branch.pushed", when: "Does this change touch auth?", threshold: 0.7 }],
+  autoSend: false,
+  maxRuns: 3,
+  timeout: "20m",
+  createdAt: at(0),
+  updatedAt: at(1),
+  agent: LIBRARY_SUMMARY,
+};
+
 export const SHARED_SAMPLES = {
+  AgentDefinition: [LIBRARY_DEFINITION],
+  Agent: [LIBRARY_AGENT],
+  AgentSummary: [LIBRARY_SUMMARY],
+  AgentHandle: ["reviewer"],
+  AttachmentHook: AGENT_ATTACHMENT.hooks,
+  AgentAttachment: [AGENT_ATTACHMENT, { ...AGENT_ATTACHMENT, agent: null }],
   ConversationSummary: [
     {
       conversationId: W1,
@@ -570,6 +628,26 @@ const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
 export const INPUT_SAMPLES = {
+  listAgents: [{}],
+  getAgent: [{ agentId: LIBRARY_AGENT.id }],
+  saveAgent: [
+    { definition: LIBRARY_DEFINITION },
+    { agentId: LIBRARY_AGENT.id, definition: LIBRARY_DEFINITION },
+  ],
+  deleteAgent: [{ agentId: LIBRARY_AGENT.id }],
+  listProjectAgents: [{ projectId: PROJECT_ID }],
+  putProjectAgent: [
+    {
+      projectId: PROJECT_ID,
+      agentId: LIBRARY_AGENT.id,
+      enabled: true,
+      hooks: AGENT_ATTACHMENT.hooks,
+      autoSend: false,
+      maxRuns: 3,
+      timeout: "20m",
+    },
+  ],
+  deleteProjectAgent: [{ projectId: PROJECT_ID, agentId: LIBRARY_AGENT.id }],
   listRoles: [{}, { workspaceId: W1 }],
   getRoleText: [{ name: "reviewer", scope: "builtin" }],
   putUserRole: [{ name: "reviewer", text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],

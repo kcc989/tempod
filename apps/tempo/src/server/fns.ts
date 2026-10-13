@@ -12,6 +12,34 @@ const run = async <K extends FnName>(name: K, data: FnInput<K>): Promise<string>
     await runFn(name, env, getRequest().headers, data, { allowCookie: true, allowBearer: false }),
   );
 
+export const listAgents = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listAgents">) => data)
+  .handler(({ data }) => run("listAgents", data));
+
+export const getAgent = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getAgent">) => data)
+  .handler(({ data }) => run("getAgent", data));
+
+export const saveAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"saveAgent">) => data)
+  .handler(({ data }) => run("saveAgent", data));
+
+export const deleteAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteAgent">) => data)
+  .handler(({ data }) => run("deleteAgent", data));
+
+export const listProjectAgents = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listProjectAgents">) => data)
+  .handler(({ data }) => run("listProjectAgents", data));
+
+export const putProjectAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"putProjectAgent">) => data)
+  .handler(({ data }) => run("putProjectAgent", data));
+
+export const deleteProjectAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteProjectAgent">) => data)
+  .handler(({ data }) => run("deleteProjectAgent", data));
+
 export const listRoles = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listRoles">) => data)
   .handler(({ data }) => run("listRoles", data));

@@ -11,3 +11,14 @@ M1 updates tabs 00–08 for D1 agent libraries, attachments/hooks, frozen run de
 Implementation, S20's read-only adapter spike, S23, Gate I, final commands and milestone PR links remain pending. No real-agent or native-rendering acceptance is claimed by S22 or local fake-adapter tests.
 
 M1 validation: `bun install --frozen-lockfile` passed. `bun run ci --docs-only` passed in 3.7 seconds (lint 2.7 s, formatting 1.0 s). Baseline full CI passed typecheck, lint, formatting, version checks, both builds and non-browser tests; its browser stage failed because Chromium was absent. Chromium installation is in progress before subsequent code verification.
+
+
+## M2 Library implementation
+
+D1 migration `0005_agents` adds the library, project attachments and migration sentinel. Agent saves use canonical JSON, SHA-256 and incrementing versions. Imports and their sentinel commit atomically and prevent duplicate work across isolates; starters are copied once and never attached automatically. The owner approved invalid-handle normalization, duplicate-name suffixes, preservation of imports above the limit, and the `AgentAttachment` wire name. New creates enforce the 50-agent limit atomically.
+
+Both settings clients expose the definition fields, Duplicate/Delete, a read-only JSON view, and structured project attachment/hook controls. New chats and workspaces read the library; saved session profiles stay frozen through edits and deletion. Deleted agents retain their attachment rows with Remove.
+
+`bun run ci` passed in 54.9 seconds with restored task results: typecheck 7.3 s, non-Worker tests 23.1 s and browser suites 29.4 s. The new Worker suite has eight cases, including a real DO session with frozen profile data. `cargo check -p tempo-mac` passed; `cargo test -p tempo-mac` passed all 264 native tests. Native compilation also required correcting four pre-existing chat accesses from the old tuple-shaped `ContentBlock` to the current named fields. This Linux verification does not establish macOS rendering or real-agent acceptance.
+
+The legacy long-prompt migration policy is awaiting owner clarification. M3–M6, S20/S23 and Gate I remain pending; hook execution is not provided by M2 alone.

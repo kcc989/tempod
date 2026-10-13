@@ -369,6 +369,7 @@ pub struct SettingsForm {
     credentials_rev: u64,
     secret_inputs: BTreeMap<String, Entity<InputState>>,
     project: Option<p::Project>,
+    agent_attachments: Option<Entity<super::agent_attachments::AgentAttachments>>,
     workspace: Option<p::WorkspaceDetail>,
     fields: Vec<Field>,
     initial: Vec<FieldState>,
@@ -459,6 +460,7 @@ impl SettingsForm {
                 .unwrap_or(0),
             secret_inputs,
             project: None,
+            agent_attachments: None,
             workspace: None,
             fields: vec![],
             initial: vec![],
@@ -714,6 +716,10 @@ impl SettingsForm {
         self.default_model_reset = None;
         self.field_errors.clear();
         self.problem = None;
+        let project_id = project.id.clone();
+        self.agent_attachments = Some(
+            cx.new(|cx| super::agent_attachments::AgentAttachments::new(project_id, window, cx)),
+        );
         self.project = Some(project);
         self.workspace = workspace;
         cx.notify();
@@ -2630,6 +2636,11 @@ impl SettingsForm {
             .when(self.section == PROJECT_PAGES.len() - 1, |col| {
                 col.child(format!("{}/{}", project.owner, project.name))
             })
+            .children(
+                (self.section == 0)
+                    .then(|| self.agent_attachments.clone())
+                    .flatten(),
+            )
             .children(fields)
             .children(secrets)
             .into_any_element()

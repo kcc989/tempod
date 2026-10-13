@@ -11,7 +11,7 @@ import {
 } from "~/ui/components/ui/select";
 import { useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
-import { useCustomAgents } from "~/ui/hooks/useCustomAgents";
+import { useAgentChoices } from "~/ui/hooks/useAgentChoices";
 import { agentLabel } from "~/ui/lib/agents";
 import { openDialog } from "~/ui/state/workspace-ui";
 import {
@@ -29,7 +29,7 @@ export function useLaunchModels(settings: Project["settings"]) {
   const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
   const available = agentsWithLogin(credentials.data);
   const choices = modelChoices(available, models.data ?? []);
-  const custom = customAgentsWithLogin(useCustomAgents().data, available);
+  const custom = customAgentsWithLogin(useAgentChoices(settings.agent?.default ?? "claude").data, available);
   const [picked, setPicked] = useState<string | null>(null);
 
   const selected =

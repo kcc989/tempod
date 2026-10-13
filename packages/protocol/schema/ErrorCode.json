@@ -3,6 +3,10 @@
   "title": "ErrorCode",
   "type": "string",
   "enum": [
+    "AGENT_INVALID",
+    "AGENT_LIMIT",
+    "AGENT_NAME_TAKEN",
+    "ATTACHMENT_INVALID",
     "UNAUTHENTICATED",
     "FORBIDDEN",
     "NOT_FOUND",

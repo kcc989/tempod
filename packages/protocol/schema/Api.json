@@ -4,6 +4,124 @@
   "description": "Server functions at POST /api/v1/rpc/<name>: the HTTP method of the web wrapper, the input and the output.",
   "type": "object",
   "properties": {
+    "listAgents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetAgentIn.json"
+        },
+        "output": {
+          "$ref": "Agent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SaveAgentIn.json"
+        },
+        "output": {
+          "$ref": "Agent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteAgentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listProjectAgents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProjectAgentsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentAttachment.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "putProjectAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "PutProjectAgentIn.json"
+        },
+        "output": {
+          "$ref": "AgentAttachment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteProjectAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteProjectAgentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listRoles": {
       "type": "object",
       "properties": {
@@ -1666,6 +1784,13 @@
     }
   },
   "required": [
+    "listAgents",
+    "getAgent",
+    "saveAgent",
+    "deleteAgent",
+    "listProjectAgents",
+    "putProjectAgent",
+    "deleteProjectAgent",
     "listRoles",
     "getRoleText",
     "putUserRole",

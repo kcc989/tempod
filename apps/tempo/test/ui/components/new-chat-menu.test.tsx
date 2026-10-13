@@ -46,10 +46,34 @@ const show = (settings: Settings, status: CredentialStatus | Promise<CredentialS
         { agent: "pi", currentValue: "pi-test", options: [{ value: "pi-test", name: "Pi test" }] },
       ];
 
-    if (name === "listCustomAgents")
+    if (name === "listAgents")
       return [
-        { id: "a1", name: "Reviewer", description: "", baseAgent: "codex", updatedAt: 1 },
-        { id: "a2", name: "Router tester", description: "", baseAgent: "pi", updatedAt: 1 },
+        {
+          id: "a1",
+          handle: "reviewer",
+          name: "Reviewer",
+          description: "",
+          baseAgent: "codex",
+          access: "read-only",
+          outputKind: "review",
+          version: 1,
+          sha: "a".repeat(64),
+          starter: null,
+          updatedAt: 1,
+        },
+        {
+          id: "a2",
+          handle: "router-tester",
+          name: "Router tester",
+          description: "",
+          baseAgent: "pi",
+          access: "read-only",
+          outputKind: "note",
+          version: 1,
+          sha: "a".repeat(64),
+          starter: null,
+          updatedAt: 1,
+        },
       ];
     throw new Error(`unexpected ${name}`);
   });

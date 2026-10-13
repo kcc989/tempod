@@ -35,7 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tab
 import { Textarea } from "~/ui/components/ui/textarea";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
-import { useCustomAgents } from "~/ui/hooks/useCustomAgents";
+import { useAgentChoices } from "~/ui/hooks/useAgentChoices";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
@@ -120,7 +120,6 @@ function NewWorkspaceForm({
   const [source, setSource] = useState<SourceDraft>(emptySource);
   const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
   const [pickedModel, setPickedModel] = useState<string | null>(null);
-  const customAgents = useCustomAgents();
   const [prompt, setPrompt] = useState(args.prompt ?? "");
   const [keepOpen, setKeepOpen] = useState(false);
   const [tried, setTried] = useState(false);
@@ -128,6 +127,7 @@ function NewWorkspaceForm({
   const creating = useRef(false);
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
+  const customAgents = useAgentChoices(project.settings.agent?.default ?? "claude");
   const available = agentsWithLogin(credentials.data);
   const choices = modelChoices(available, models.data ?? []);
 
@@ -138,7 +138,7 @@ function NewWorkspaceForm({
   const pickedCustom = customAgentOf(pickedModel, custom);
 
   const input = pickedCustom
-    ? createInput(project, source, pickedCustom.baseAgent, prompt, undefined, pickedCustom.id)
+    ? createInput(project, source, pickedCustom.baseAgent, prompt, undefined, pickedCustom.id, true)
     : models.isSuccess && selected
       ? createInput(project, source, selected.agent, prompt, selected.model)
       : !prompt.trim()

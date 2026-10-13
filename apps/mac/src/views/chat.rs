@@ -336,7 +336,7 @@ impl TranscriptView {
                 if self.inline_images.contains_key(&key) || self.media_pending.contains(&key) {
                     continue;
                 }
-                let block = serde_json::Value::Object(block.0.clone());
+                let block = serde_json::to_value(block).unwrap_or_default();
                 let inner = if block["type"] == "content" {
                     &block["content"]
                 } else {
@@ -835,7 +835,7 @@ fn render_native_row(
                                 .max_h(gpui_kit::px(240.))
                                 .into_any_element();
                         }
-                        let value = serde_json::Value::Object(block.0.clone());
+                        let value = serde_json::to_value(block).unwrap_or_default();
                         if value["type"] == "diff" {
                             let path = value["path"].as_str().unwrap_or("");
                             let old = value["oldText"].as_str().unwrap_or("");
