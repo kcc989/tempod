@@ -113,32 +113,48 @@ CREATE INDEX workspaces_by_activity ON workspaces(user_id, archived_at, last_act
 - Every DO write increments `summary_rev` and uses `UPDATE … WHERE id = ? AND summary_rev < ?`. A stale write changes nothing.
 - `setPinned` is not an exception: it calls the WorkspaceDO, which writes `pinned` and publishes the summary.
 
-**Custom agents.** Each row points to one file in the user's Artifacts repo (01, Custom agents). The file holds the definition; the row holds what menus need and the commit to read.
+**D1** (migration `0005_agents`)
 
 ```sql
-CREATE TABLE custom_agents (
-  id           TEXT PRIMARY KEY,           -- ULID; also the file name agents/<id>.yaml
-  user_id      TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
-  name         TEXT NOT NULL,
-  description  TEXT NOT NULL DEFAULT '',
-  base_agent   TEXT NOT NULL CHECK (base_agent IN ('claude','codex','opencode','pi')),
-  repo         TEXT NOT NULL,              -- Artifacts repo name, user-<userId>
-  path         TEXT NOT NULL,              -- agents/<id>.yaml
-  commit_sha   TEXT NOT NULL,              -- commit that holds the current version
+CREATE TABLE agents (
+  id               TEXT PRIMARY KEY,                -- ULID
+  user_id          TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  handle           TEXT NOT NULL,
+  name             TEXT NOT NULL,
+  definition_json  TEXT NOT NULL,                   -- AgentDefinition
+  version          INTEGER NOT NULL,                -- +1 on each save
+  sha              TEXT NOT NULL,                   -- SHA-256 of the canonical definition JSON
+  starter          TEXT,                            -- starter id this row came from, or null
+  created_at       INTEGER NOT NULL,
+  updated_at       INTEGER NOT NULL,
+  deleted_at       INTEGER
+);
+CREATE UNIQUE INDEX agents_active_handle ON agents(user_id, handle) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX agents_active_name ON agents(user_id, name) WHERE deleted_at IS NULL;
+
+CREATE TABLE project_agents (
+  id           TEXT PRIMARY KEY,                    -- ULID
+  project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  agent_id     TEXT NOT NULL REFERENCES agents(id),
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  hooks_json   TEXT NOT NULL DEFAULT '[]',          -- AttachmentHook[]
+  auto_send    INTEGER NOT NULL DEFAULT 0,
+  max_runs     INTEGER NOT NULL DEFAULT 3,          -- per change, 1 to 10
+  timeout      TEXT NOT NULL DEFAULT '20m',         -- <n>m or <n>h, at most 2h
   created_at   INTEGER NOT NULL,
   updated_at   INTEGER NOT NULL,
-  deleted_at   INTEGER
+  UNIQUE (project_id, agent_id)
 );
-CREATE UNIQUE INDEX custom_agents_active_name ON custom_agents(user_id, name) WHERE deleted_at IS NULL;
+
+CREATE TABLE agent_migrations (
+  user_id      TEXT PRIMARY KEY REFERENCES user(id) ON DELETE CASCADE,
+  migrated_at  INTEGER NOT NULL
+);
 ```
 
-**Write rules for `custom_agents`**
-
-- Only the custom-agent server functions write this table. The row changes only after the Artifacts push succeeds, so `commit_sha` always names a commit that exists.
-- A save is idempotent: it creates the repo only if `get` returns `NOT_FOUND` and treats `ALREADY_EXISTS` as success. A rejected (non-fast-forward) push fetches `main` again and retries, at most 3 times, then fails with `ARTIFACTS_ERROR`.
-- The write token is minted per save with `createToken("write", 300)`, used in memory, and revoked in a `finally` block. It MUST NOT be stored or logged.
-- Delete sets `deleted_at` and commits the removal of the file. Sessions that already started keep their profile.
-- Deleting the user deletes the Artifacts repo too.
+- Only the agent and attachment server functions, the proposal apply path and the one-time migration write these tables.
+- Delete sets `deleted_at`. An attachment whose agent is deleted stays, does not run, and shows "This agent was deleted." with a Remove action.
+- A session that started from an agent keeps its profile, as today. A run freezes the definition text in WorkspaceDO storage, for every run, and stores `agent_version` and `agent_sha`.
 
 ## WorkspaceDO schema
 
@@ -236,9 +252,11 @@ CREATE TABLE sessions (
   handoff_pending      INTEGER NOT NULL DEFAULT 0,
   pending_note         TEXT,                        -- added to the next prompt, then cleared
   general_prompt_sent  INTEGER NOT NULL DEFAULT 0,
-  custom_agent_id      TEXT,                        -- null for a plain agent
-  custom_agent_name    TEXT,                        -- name at session start
-  custom_agent_commit  TEXT,                        -- commit the profile was read from
+  agent_id             TEXT,                        -- null for a plain agent
+  agent_name           TEXT,                        -- name at session start
+  agent_version        INTEGER,
+  agent_sha            TEXT,                        -- definition hash at session start
+  run_id               TEXT,                        -- hidden run session
   profile_json         TEXT,                        -- AgentProfile; null for a plain agent
   profile_issues_json  TEXT NOT NULL DEFAULT '[]',  -- from session.start
   sort_order           INTEGER NOT NULL,
@@ -273,7 +291,7 @@ CREATE TABLE items (
   turn_id       TEXT,
   kind          TEXT NOT NULL CHECK (kind IN ('user_message','agent_message','agent_thought','tool_call',
                                              'plan','permission','notice','handoff','revert_marker','error',
-                                             'artifact')),
+                                             'artifact','run','agent_proposal')),
   status        TEXT NOT NULL CHECK (status IN ('streaming','pending','in_progress','completed','failed','cancelled')),
   content_json  TEXT NOT NULL,
   rev           INTEGER NOT NULL,           -- workspace.items_rev at the last change
@@ -297,7 +315,7 @@ CREATE TABLE events (
 CREATE TABLE checkpoints (
   id            TEXT PRIMARY KEY,
   turn_id       TEXT,
-  reason        TEXT NOT NULL CHECK (reason IN ('turn_end','pre_revert','pre_sleep','pre_archive','sigterm','role_pin')),
+  reason        TEXT NOT NULL CHECK (reason IN ('turn_end','pre_revert','pre_sleep','pre_archive','sigterm','run_pin')),
   commit_sha    TEXT NOT NULL,
   tree_sha      TEXT NOT NULL,
   parent_sha    TEXT NOT NULL,
@@ -443,7 +461,7 @@ CREATE TABLE environment_proposals (
 - Every change to `items` increments `workspace.items_rev` by 1 and sets `items.rev` to the new value, in the same transaction.
 - Each `checkpoints.id` is a ULID. Its git ref is `refs/tempo/checkpoints/<checkpoint id>`.
 - Delete `events` rows older than 7 days in the daily `housekeeping` op.
-- Lifecycle event and role run tables, new columns on `sessions` and `turns`, the D1 `user_roles` table, new server functions, the `roleRun` channel message and new error codes are in 08. They are part of this contract.
+- Lifecycle event and run tables, migration `0010_agents`, agent proposals, turn origins and the `run` channel message are defined in 08 and are part of this contract. Released profile data remains available to existing sessions; legacy D1 tables remain read-only until Gate I passes.
 
 ## CredentialDO and UserHubDO
 
@@ -636,7 +654,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createWorkspace` | `{projectId, source, agent?, model?, customAgentId?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}`. With `customAgentId`, the first session starts from that custom agent, and `agent` MUST be absent or equal its base agent; `model` defaults to the custom agent's `model`. | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND`, `VALIDATION_FAILED` |
+| `createWorkspace` | `{projectId, source, agent?, model?, agentId?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}`. With `agentId`, the first session starts from that agent, and `agent` MUST be absent or equal its base agent; `model` defaults to the agent's `model`. | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND`, `VALIDATION_FAILED` |
 | `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; cached for 15 minutes and invalidated by credentials or image changes | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
@@ -660,7 +678,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `createSession` | `{workspaceId, agent, customAgentId?, model?, modeId?}`. With `customAgentId`, `agent` MUST equal its base agent. The Worker reads the file at `commit_sha` and passes the `AgentProfile` to the DO. `model` defaults to the custom agent's `model`; an explicit `model` wins. | `Session` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `NOT_FOUND`, `VALIDATION_FAILED`, `ARTIFACTS_ERROR` |
+| `createSession` | `{workspaceId, agent, agentId?, model?, modeId?}`. With `agentId`, `agent` MUST equal its resolved base agent. The Worker reads the D1 definition and passes the `AgentProfile` to the DO. `model` defaults to the agent's `model`; an explicit `model` wins. | `Session` | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `NOT_FOUND`, `VALIDATION_FAILED`, `AGENT_INVALID` |
 | `closeSession` | `{workspaceId, sessionId}` | `{}` | `SESSION_BUSY` |
 | `renameSession` | `{workspaceId, sessionId, title}` | `{}` | — |
 | `sendPrompt` | `{workspaceId, sessionId, text, mentions, attachmentIds, reviewCommentIds, delivery?: "queue" or "steer"}` | `Turn`; the running turn when steering is injected, otherwise the queued turn | `CREDENTIAL_MISSING`, `WORKSPACE_ARCHIVED`, `VALIDATION_FAILED` |
@@ -721,14 +739,51 @@ The artifact route is a plain route, like the attachment route: `GET /api/worksp
 - Responses use `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff` and the CSP `default-src 'none'; style-src 'unsafe-inline'; sandbox`, as the attachment route.
 - `?download=1` gives every kind attachment disposition with the file `name`.
 
-**Custom agents** (01, Custom agents)
+**Agents, attachments and runs** (08)
+
+The tab 02 rules apply. The `/api/v1` routes for native clients mirror them (tab 07).
+
+**Migration API removals:** `listRoles`, `getRoleText`, `putUserRole`, `deleteUserRole`, `reloadRoles`, `requestRole`, `cancelRoleRun`, `listRoleRuns`, `listCustomAgents`, `getCustomAgent`, `saveCustomAgent` and `deleteCustomAgent`.
+
+**Add:**
 
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
-| `listCustomAgents` | `{}` | `CustomAgentSummary[]`, sorted by name. Reads D1 only. | — |
-| `getCustomAgent` | `{customAgentId}` | `CustomAgent`. Reads the file at `commit_sha`. | `NOT_FOUND`, `ARTIFACTS_ERROR` |
-| `saveCustomAgent` | `{customAgentId?, definition: CustomAgentDefinition}`. No id creates one. | `CustomAgent` | `VALIDATION_FAILED`, `NOT_FOUND`, `CUSTOM_AGENT_EXISTS`, `CUSTOM_AGENT_LIMIT`, `ARTIFACTS_ERROR` |
-| `deleteCustomAgent` | `{customAgentId}` | `{}` | `NOT_FOUND`, `ARTIFACTS_ERROR` |
+| `listAgents` | `{}` | `AgentSummary[]` | — |
+| `getAgent` | `{agentId}` | `Agent` | `NOT_FOUND` |
+| `saveAgent` | `{agentId?, definition}` | `Agent` | `AGENT_INVALID`, `AGENT_LIMIT`, `AGENT_NAME_TAKEN` |
+| `deleteAgent` | `{agentId}` | `{}` | `NOT_FOUND` |
+| `listProjectAgents` | `{projectId}` | `Attachment[]` | `NOT_FOUND` |
+| `putProjectAgent` | `{projectId, agentId, enabled, hooks, autoSend, maxRuns, timeout}` | `Attachment` | `ATTACHMENT_INVALID`, `NOT_FOUND` |
+| `deleteProjectAgent` | `{projectId, agentId}` | `{}` | `NOT_FOUND` |
+| `requestAgent` | `{workspaceId, agentId, text?, sessionId?}` | `{changeId, runId}` | `NOT_FOUND`, `RUN_LIMIT`, `WORKSPACE_ARCHIVED` |
+| `cancelRun` | `{workspaceId, runId}` | `{}` | `NOT_FOUND` |
+| `listRuns` | `{workspaceId, changeId?}` | `Run[]`, newest first, at most 200 | — |
+| `sendRunToChat` | `{workspaceId, runId}` | `{turnId}` | `NOT_FOUND`, `RUN_NOT_COMPLETED`, `RUN_ALREADY_SENT`, `RUN_NO_CHAT` |
+| `resolveAgentProposal` | `{workspaceId, proposalId, apply}` | `{}` | `NOT_FOUND`, `AGENT_INVALID`, `ATTACHMENT_INVALID` |
+
+`createSession` keeps its custom agent option, renamed `agentId`, and reads the definition from D1. `listLifecycleEvents` and `getTrace` stay. `getTrace` returns runs with `handle`, `agentSha` and the matched hook.
+
+Workspace channel: `roleRun {run}` becomes `run {run}`. `Session` gains `runId?` and loses `roleRunId?`.
+
+**Agent and run error codes.**
+
+| Code | UI message |
+| --- | --- |
+| `AGENT_INVALID` | The agent is not valid. |
+| `AGENT_LIMIT` | You have the most agents allowed. Delete one first. |
+| `AGENT_NAME_TAKEN` | Another agent has this name or handle. |
+| `ATTACHMENT_INVALID` | The agent's hooks or limits are not valid. |
+| `RUN_LIMIT` | This agent ran the most times allowed for this change. |
+| `RUN_NO_AGENT` | No agent can run this. Add a login in Settings. |
+| `RUN_TURN_FAILED` | The agent stopped before it finished. |
+| `RUN_RESULT_MISSING` | The agent did not report a result. |
+| `RUN_ACCESS_VIOLATION` | The agent changed protected login files. |
+| `RUN_TIMED_OUT` | The agent ran out of time. |
+| `RUN_NOT_RUNNING` | (Tool error only.) |
+| `RUN_NOT_COMPLETED` | The run has no result yet. |
+| `RUN_ALREADY_SENT` | This result is already in the chat. |
+| `RUN_NO_CHAT` | This run has no chat to send to. |
 
 **Credentials**
 
@@ -764,6 +819,8 @@ The artifact route is a plain route, like the attachment route: `GET /api/worksp
 
 Changes apply to sessions that start or reload after the change. Running agents keep their list. TempoOutbound sees changes within its 60 s cache.
 
+**Run and proposal items.** A `run` item has content `{runId}` in its origin chat, and resolves its card from `listRuns` and `run` channel updates. An `agent_proposal` item refers to its pending proposal; Apply and Reject call `resolveAgentProposal`. Definitions and result schemas live in `packages/protocol` as specified in 08.
+
 ## Shared types and the workspace channel
 
 The UI loads a workspace once over its WebSocket, then applies updates. Field names are camelCase on the wire.
@@ -779,13 +836,13 @@ For protocol 1 deployments made before per-agent defaults and Browser Run were a
 | `WorkspaceDetail` | `WorkspaceSummary` plus `errorCode, errorDetail, setupStatus, pushed, ports: [{port, url}], settings, browserActive, runningTurnId, queue: [turnId], imageRef, op, prTitle?, environmentId, environmentProposals` |
 | `EnvironmentProposal` | `note` (at most 2,000 chars), `egressPolicy?`, `allowlistAdd?: [pattern]`, `secrets?: [{name, hosts}]`, `injectors?: [{name, hosts, code}]`. Same limits as 01, Environments. |
 | `PendingEnvironmentProposal` | `id, createdAt, proposal: EnvironmentProposal`. `WorkspaceDetail.environmentProposals` lists the pending ones, oldest first. `WorkspaceDetail.environmentId` is the workspace override or null. |
-| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported), `customAgent?` (`{id, name, commitSha}`; absent for a plain agent), `profileIssues?` (absent means `[]`) |
-| `CustomAgentSummary` | `id, name, description, baseAgent, updatedAt` |
-| `CustomAgentDefinition` | `name, description, baseAgent, model, thoughtLevel, systemPrompt, tools: {allow, deny}, mcp: {playwright, servers: McpServerDef[]}`. Same fields and limits as the file in 01; snake_case in the file, camelCase on the wire. |
-| `CustomAgent` | `CustomAgentDefinition` plus `id, commitSha, updatedAt` |
+| `Session` | `id, agent, title, status, modeId, modes, configOptions, config, commands, usage, sortOrder, steering?` (boolean; absent means unsupported), `libraryAgent?` (`{id, name, version, sha}`; absent for a plain agent), `runId?`, `profileIssues?` (absent means `[]`) |
+| `AgentSummary` | `id, handle, name, description, baseAgent, access, outputKind, version, sha, starter, updatedAt` |
+| `AgentDefinition` | `handle, name, description, baseAgent, model, thoughtLevel, prompt, access, tools: {allow, deny}, mcp: {playwright, servers: McpServerDef[]}, outputKind`. Fields, defaults and limits in 08. |
+| `Agent` | `AgentDefinition` plus `id, version, sha, starter, createdAt, updatedAt` |
 | `McpServerDef` | `{name, type: "stdio", command, args, env}` or `{name, type: "http" or "sse", url, headers}`. `env` and `headers` map names to `${NAME}` references only. |
-| `AgentProfile` | `systemPrompt, toolsAllow, toolsDeny, playwright, mcpServers: McpServerDef[], thoughtLevel`. Built by the Worker from a `CustomAgent`; `model` travels in the existing `model` field. |
-| `ProfileIssue` | `"systemPrompt"`, `"tools"`, `"mcpServers"`, `"model"` or `"thoughtLevel"` |
+| `AgentProfile` | `systemPrompt, toolsAllow, toolsDeny, playwright, mcpServers: McpServerDef[], thoughtLevel`. Built by the Worker from a `Agent`; `model` travels in the existing `model` field. |
+| `ProfileIssue` | `"systemPrompt"`, `"tools"`, `"mcpServers"`, `"model"`, `"thoughtLevel"` or `"access"` |
 | `Turn` | `id, sessionId, seq, status, queuePos, prompt, stopReason, errorCode, checkpointId, reverted, queuedAt, startedAt, endedAt, steeringPending?` (boolean; absent means false), `usage?` (`TurnUsage`; absent when the agent sent none) |
 | `TurnUsage` | `totalTokens, inputTokens, outputTokens, thoughtTokens?, cachedReadTokens?, cachedWriteTokens?`: ACP v1 `PromptResponse.usage` for one turn. Counts that are not finite and non-negative are dropped; a missing required count drops the whole value. |
 | `Item` | `id, sessionId, turnId, kind, status, content, rev, createdAt, updatedAt` |
@@ -808,6 +865,7 @@ Server to client:
 | `item.delta` | `itemId, append: {text}, itemsRev` | Streaming text; live only |
 | `workspace` | `workspace: WorkspaceDetail` | Any workspace field changed |
 | `session` | `session: Session` | A session changed |
+| `run` | `run: Run` | A run changed |
 | `turn` | `turn: Turn` | A turn changed |
 | `permission` | `request: PermissionRequest` | An agent asked for permission |
 | `script.output` | `runId, stream: "stdout" or "stderr", data` | Script output |
@@ -983,9 +1041,7 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `ENVIRONMENT_EXISTS` | Another environment has that name | An environment with this name already exists. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |
-| `CUSTOM_AGENT_EXISTS` | Another custom agent has this name | You already have an agent with this name. |
-| `CUSTOM_AGENT_LIMIT` | The user has 50 custom agents | You have the most custom agents allowed. Delete one first. |
-| `ARTIFACTS_ERROR` | An Artifacts read, create, token or push failed | Could not reach agent storage. Try again. |
+| `AGENT_INVALID` | An Artifacts read, create, token or push failed | Could not reach agent storage. Try again. |
 | `INTERNAL` | Anything else | Something went wrong. |
 
 `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle` are the GitHub PR title regardless of open, closed or merged state; null means no title has been fetched. The WorkspaceDO persists it and sends detail updates when the title changes.
