@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AgentMessageContent, AgentThoughtContent, ArtifactItemContent, ErrorContent, HandoffContent,
-    ItemKind, ItemStatus, NoticeContent, PermissionContent, PlanContent, RevertMarkerContent,
-    ToolCallItemContent, UserMessageContent,
+    AgentMessageContent, AgentProposalContent, AgentThoughtContent, ArtifactItemContent,
+    ErrorContent, HandoffContent, ItemKind, ItemStatus, NoticeContent, PermissionContent,
+    PlanContent, RevertMarkerContent, RunContent, ToolCallItemContent, UserMessageContent,
 };
 
 /// One transcript item (02, Item model). The fields every kind shares sit on the struct; `kind` and
@@ -29,6 +29,8 @@ pub struct Item {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "content", rename_all = "snake_case")]
 pub enum ItemContent {
+    Run(RunContent),
+    AgentProposal(AgentProposalContent),
     UserMessage(UserMessageContent),
     AgentMessage(AgentMessageContent),
     AgentThought(AgentThoughtContent),
@@ -51,6 +53,8 @@ impl Item {
 impl ItemContent {
     pub fn kind(&self) -> ItemKind {
         match self {
+            Self::Run(_) => ItemKind::Run,
+            Self::AgentProposal(_) => ItemKind::AgentProposal,
             Self::UserMessage(_) => ItemKind::UserMessage,
             Self::AgentMessage(_) => ItemKind::AgentMessage,
             Self::AgentThought(_) => ItemKind::AgentThought,

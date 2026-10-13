@@ -6,6 +6,8 @@ import {
   PLAYWRIGHT_MCP_SERVER,
   TEMPO_MCP_SERVER,
   TEMPO_SESSION_ID_ENV,
+  TEMPO_RUN_ID_ENV,
+  TEMPO_RUN_OUTPUT_KIND_ENV,
   type BrowserMode,
   type McpServerSpec,
 } from "@tempo/protocol";
@@ -30,11 +32,16 @@ export const playwrightServer = (browser: BrowserMode = "local"): Stdio => ({
 });
 
 /** The agent's `tempo` server: environment status, proposals and artifacts (01, Environments, Artifacts). */
-export const tempoServer = (sessionId: string): Stdio => ({
+export const tempoServer = (sessionId: string, env: Record<string, string> = {}): Stdio => ({
   name: TEMPO_MCP_SERVER.name,
   command: TEMPO_MCP_SERVER.command,
   args: [...TEMPO_MCP_SERVER.args],
-  env: [{ name: TEMPO_SESSION_ID_ENV, value: sessionId }],
+  env: [
+    { name: TEMPO_SESSION_ID_ENV, value: sessionId },
+    ...[TEMPO_RUN_ID_ENV, TEMPO_RUN_OUTPUT_KIND_ENV].flatMap((name) =>
+      env[name] ? [{ name, value: env[name] }] : [],
+    ),
+  ],
 });
 
 export const bridgeServer = (spec: Remote, bridge: Bridge): Stdio => {
@@ -73,12 +80,13 @@ export const acpMcpServers = (
   bridge: Bridge,
   browser: BrowserMode,
   sessionId: string,
+  env: Record<string, string> = {},
 ): McpServer[] => {
   const supports = mcpTransports(capabilities);
 
   return [
     playwrightServer(browser),
-    tempoServer(sessionId),
+    tempoServer(sessionId, env),
     ...specs.map((spec): McpServer => {
       if (spec.transport === "stdio")
         return {
@@ -120,11 +128,12 @@ export const piMcpConfig = (
   bridge: Bridge,
   browser: BrowserMode,
   sessionId: string,
+  env: Record<string, string> = {},
 ) => {
   const servers: Record<string, PiEntry> = {};
   const playwright = playwrightServer(browser);
   servers[playwright.name] = stdioEntry(playwright);
-  servers[TEMPO_MCP_SERVER.name] = stdioEntry(tempoServer(sessionId));
+  servers[TEMPO_MCP_SERVER.name] = stdioEntry(tempoServer(sessionId, env));
 
   for (const spec of specs) {
     if (spec.transport === "stdio") servers[spec.name] = stdioEntry(spec);
@@ -145,10 +154,11 @@ export const writePiMcpConfig = (
   bridge: Bridge,
   browser: BrowserMode,
   sessionId: string,
+  env: Record<string, string> = {},
 ): void => {
   mkdirSync(piAgentDir, { recursive: true });
   const path = join(piAgentDir, "mcp.json");
-  writeFileSync(path, `${JSON.stringify(piMcpConfig(specs, bridge, browser, sessionId), null, 2)}\n`, {
+  writeFileSync(path, `${JSON.stringify(piMcpConfig(specs, bridge, browser, sessionId, env), null, 2)}\n`, {
     mode: 0o600,
   });
   chmodSync(path, 0o600);

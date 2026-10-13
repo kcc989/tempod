@@ -518,7 +518,7 @@ export function OptionsMenu({
 }
 
 export type PickerRow =
-  | { readonly kind: "role"; readonly key: string; readonly name: string; readonly description: string }
+  | { readonly kind: "agent"; readonly key: string; readonly name: string; readonly description: string }
   | { readonly kind: "file"; readonly key: string; readonly path: string }
   | { readonly kind: "command"; readonly key: string; readonly entry: SlashEntry };
 
@@ -570,9 +570,9 @@ export function PickerList({
           )}
         >
           {Match.value(row).pipe(
-            Match.when({ kind: "role" }, (row) => (
+            Match.when({ kind: "agent" }, (row) => (
               <>
-                <span className="text-xs text-muted-foreground">Roles</span>
+                <span className="text-xs text-muted-foreground">Agents</span>
                 <span className="font-mono text-xs">@{row.name}</span>
                 <span className="truncate text-xs text-muted-foreground">{row.description}</span>
               </>

@@ -3,6 +3,7 @@ import {
   ERROR_CODES,
   TempodToDo,
   type TempodRes,
+  type ToolReq,
   TEMPOD_REQUESTS,
   TEMPOD_PORT,
   TempodEvent,
@@ -171,6 +172,27 @@ export class TempodClient {
       return;
     }
 
+    if (msg.type === "tool.req") {
+      const work = this.agentTool(msg)
+        .then((result) => ({ type: "tool.res", id: msg.id, ok: true, result }))
+        .catch((error) => ({
+          type: "tool.res",
+          id: msg.id,
+          ok: false,
+          error: {
+            code: error instanceof TempoError ? error.code : "INTERNAL",
+            message: error instanceof TempoError ? (error.detail ?? error.message) : "Tool failed.",
+          },
+        }))
+        .then((response) => {
+          if (!this.closed) this.socket.send(JSON.stringify(response));
+        });
+
+      this.core.ctx.waitUntil(work);
+
+      return;
+    }
+
     if (msg.type === "event") {
       const envelope = msg;
       this.chain = this.chain
@@ -183,6 +205,19 @@ export class TempodClient {
           this.close(1011, "event application failed");
         });
     }
+  }
+  private async agentTool(request: ToolReq): Promise<Schema.Json> {
+    if (this.catalogUserId) throw new TempoError("NOT_FOUND");
+    const session = this.core.sessionRow(request.sessionId);
+
+    if (request.op === "report_result") {
+      if (!request.runId || session.runId !== request.runId) throw new TempoError("RUN_NOT_RUNNING");
+
+      return this.core.lifecycle.runs.report(session.id, request.runId, request.params);
+    }
+
+    if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
+    throw new TempoError("UNKNOWN_OP");
   }
   private async applyEvent(envelope: TempodEventEnvelope): Promise<void> {
     if (this.closed) return;
@@ -259,19 +294,21 @@ export class TempodClient {
 
         if (turn && turn.status !== "queued" && turn.status !== "running") {
           const session = this.core.sessionRow(turn.sessionId);
-          const roleRunId = turn.origin !== "user" ? session.roleRunId : null;
+          const runId = turn.origin !== "user" ? session.runId : null;
 
-          const cause = roleRunId
-            ? this.core.db
-                .select()
-                .from(lifecycleEvents)
-                .where(
-                  and(eq(lifecycleEvents.roleRunId, roleRunId), eq(lifecycleEvents.type, "role.run.started")),
-                )
-                .get()
-            : turn.changeId
-              ? this.core.lifecycle.origin(turn.changeId)
-              : null;
+          const sentCause = this.core.kv<string>(`turnCause:${turn.id}`);
+
+          const cause = sentCause
+            ? this.core.lifecycle.row(sentCause)
+            : runId
+              ? this.core.db
+                  .select()
+                  .from(lifecycleEvents)
+                  .where(and(eq(lifecycleEvents.runId, runId), eq(lifecycleEvents.type, "run.started")))
+                  .get()
+              : turn.changeId
+                ? this.core.lifecycle.origin(turn.changeId)
+                : null;
 
           let payload: Extract<LifecycleEvent, { type: "agent.turn.ended" }>["payload"] = {
             status: turn.status,
@@ -299,7 +336,7 @@ export class TempodClient {
 
           if (turn.changeId) input = { ...input, changeId: turn.changeId };
 
-          if (roleRunId) input = { ...input, roleRunId };
+          if (runId) input = { ...input, runId };
 
           if (cause) input = { ...input, causationId: cause.id };
           this.core.lifecycle.append(input);

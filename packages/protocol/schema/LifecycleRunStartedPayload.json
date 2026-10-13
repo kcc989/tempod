@@ -3,24 +3,48 @@
   "title": "LifecycleRunStartedPayload",
   "type": "object",
   "properties": {
-    "role": {
-      "$ref": "RoleName.json"
-    },
-    "scope": {
-      "$ref": "RoleScope.json"
-    },
-    "roleSha": {
-      "type": "string"
-    },
-    "round": {
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991,
-      "allOf": [
+    "agentId": {
+      "anyOf": [
         {
-          "minimum": 0
+          "type": "string"
+        },
+        {
+          "type": "null"
         }
       ]
+    },
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
+    "attachmentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentVersion": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentSha": {
+      "type": "string"
     },
     "agent": {
       "anyOf": [
@@ -33,9 +57,12 @@
       ]
     },
     "access": {
-      "$ref": "RoleAccess.json"
+      "$ref": "AgentAccess.json"
+    },
+    "outputKind": {
+      "$ref": "OutputKind.json"
     }
   },
-  "required": ["role", "scope", "roleSha", "round", "agent", "access"],
+  "required": ["agentId", "handle", "agentVersion", "agentSha", "agent", "access", "outputKind"],
   "additionalProperties": true
 }

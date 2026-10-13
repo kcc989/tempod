@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "RoleRun",
+  "title": "Run",
   "type": "object",
   "properties": {
     "id": {
@@ -19,29 +19,87 @@
         }
       ]
     },
-    "depth": {
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991,
-      "allOf": [
+    "agentId": {
+      "anyOf": [
         {
-          "minimum": 0
+          "type": "string"
+        },
+        {
+          "type": "null"
         }
       ]
     },
-    "roleName": {
-      "$ref": "RoleName.json"
+    "attachmentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
-    "scope": {
-      "$ref": "RoleScope.json"
+    "handle": {
+      "$ref": "AgentHandle.json"
     },
-    "roleSha": {
+    "name": {
+      "type": "string"
+    },
+    "agentVersion": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            },
+            {
+              "minimum": 1
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentSha": {
       "type": "string"
     },
     "triggerEventId": {
       "type": "string"
     },
+    "decisionP": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "sessionId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "originSessionId": {
       "anyOf": [
         {
           "type": "string"
@@ -62,30 +120,16 @@
       ]
     },
     "access": {
-      "$ref": "RoleAccess.json"
+      "$ref": "AgentAccess.json"
+    },
+    "outputKind": {
+      "$ref": "OutputKind.json"
     },
     "status": {
-      "$ref": "RoleRunStatus.json"
+      "$ref": "RunStatus.json"
     },
-    "round": {
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991,
-      "allOf": [
-        {
-          "minimum": 0
-        }
-      ]
-    },
-    "continuesUsed": {
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991,
-      "allOf": [
-        {
-          "minimum": 0
-        }
-      ]
+    "followUpSent": {
+      "type": "boolean"
     },
     "tokens": {
       "type": "integer",
@@ -107,10 +151,31 @@
         }
       ]
     },
+    "warning": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["files_changed"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "result": {
       "anyOf": [
         {
-          "$ref": "RoleResult.json"
+          "$ref": "RunResult.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sentTurnId": {
+      "anyOf": [
+        {
+          "type": "string"
         },
         {
           "type": "null"
@@ -198,10 +263,23 @@
         }
       ]
     },
-    "trigger": {
+    "hook": {
       "anyOf": [
         {
-          "$ref": "RoleTrigger.json"
+          "$ref": "AttachmentHook.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "profileIssues": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "ProfileIssue.json"
+          }
         },
         {
           "type": "null"
@@ -213,20 +291,26 @@
     "id",
     "changeId",
     "parentRunId",
-    "depth",
-    "roleName",
-    "scope",
-    "roleSha",
+    "agentId",
+    "attachmentId",
+    "handle",
+    "name",
+    "agentVersion",
+    "agentSha",
     "triggerEventId",
+    "decisionP",
     "sessionId",
+    "originSessionId",
     "agent",
     "access",
+    "outputKind",
     "status",
-    "round",
-    "continuesUsed",
+    "followUpSent",
     "tokens",
     "pinCheckpointId",
+    "warning",
     "result",
+    "sentTurnId",
     "errorCode",
     "errorDetail",
     "deadlineAt",

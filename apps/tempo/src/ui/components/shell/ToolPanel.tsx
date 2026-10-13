@@ -1,3 +1,4 @@
+import { RunActivity } from "../chat/RunCard";
 import { useState } from "react";
 import {
   FileIcon,
@@ -38,6 +39,7 @@ const tools: ReadonlyArray<{ key: UtilityTab; label: string; icon: LucideIcon }>
   { key: "changes", label: "Changes", icon: FileDiffIcon },
   { key: "checks", label: "Checks", icon: FileIcon },
   { key: "artifacts", label: "Artifacts", icon: BoxesIcon },
+  { key: "activity", label: "Activity", icon: PlayIcon },
   { key: "setup", label: "Setup", icon: SettingsIcon },
   { key: "run", label: "Run", icon: PlayIcon },
 ];
@@ -149,6 +151,9 @@ export function ToolPanel({ workspaceId }: { workspaceId: string }) {
         </TabsContent>
         <TabsContent value="checks" className="flex min-h-0 flex-col">
           <ChecksView workspaceId={workspaceId} />
+        </TabsContent>
+        <TabsContent value="activity" className="min-h-0 overflow-auto p-2">
+          <RunActivity workspaceId={workspaceId} />
         </TabsContent>
         <TabsContent value="artifacts" className="flex min-h-0 flex-col">
           <ArtifactsView workspaceId={workspaceId} />

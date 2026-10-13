@@ -24,6 +24,9 @@ mod artifacts;
 
 #[derive(Clone)]
 pub enum ReviewEvent {
+    OpenRun(String),
+    CancelRun(String),
+    RevertRun(String),
     Document,
     Selected(usize),
     Comments(Vec<String>),
@@ -55,6 +58,7 @@ type DiffSide = Option<Option<Arc<gpui_kit::Image>>>;
 /// image diffs).
 #[derive(Clone, Default)]
 struct Extra {
+    run_transcript: Option<Entity<super::chat::TranscriptView>>,
     /// `(artifactId, version)` of an Artifact tab.
     artifact: Option<(String, f64)>,
     image: Option<Arc<gpui_kit::Image>>,
@@ -67,6 +71,7 @@ pub struct ReviewPanel {
     store: Entity<WorkspaceStore>,
     client: Client,
     tab: usize,
+    dismissed_runs: std::collections::HashSet<String>,
     scope: p::DiffScope,
     files: Vec<p::ChangedFile>,
     changes_focus: gpui_kit::FocusHandle,
@@ -204,6 +209,7 @@ impl ReviewPanel {
             store,
             client,
             tab: 0,
+            dismissed_runs: Default::default(),
             scope: p::DiffScope::Branch,
             files: vec![],
             changes_focus: cx.focus_handle(),
@@ -591,6 +597,30 @@ impl ReviewPanel {
             self.documents.push(doc);
         }
     }
+    pub fn open_run_transcript(
+        &mut self,
+        session_id: &str,
+        title: String,
+        transcript: Entity<super::chat::TranscriptView>,
+        cx: &mut Context<Self>,
+    ) {
+        self.cache_document();
+        self.document_generation += 1;
+        self.document_loading = false;
+        self.document_open = true;
+        self.active_document = Some(format!("run-transcript:{session_id}"));
+        self.selected = Some(format!("Run · {title}"));
+        self.document_title = self.selected.clone();
+        self.file = None;
+        self.diff = None;
+        self.extra = Extra {
+            run_transcript: Some(transcript),
+            ..Default::default()
+        };
+        self.cache_document();
+        cx.emit(ReviewEvent::Document);
+        cx.notify();
+    }
     pub fn document_tabs(&self) -> Vec<(String, String)> {
         self.documents
             .iter()
@@ -603,7 +633,7 @@ impl ReviewPanel {
                 self.open_artifact(artifact_id, Some(version), window, cx);
                 return;
             }
-            if doc.stale {
+            if doc.stale && doc.content.run_transcript.is_none() {
                 if let Some(scope) = doc.scope {
                     self.scope = scope;
                     self.open_diff(doc.path, window, cx);
@@ -649,6 +679,9 @@ impl ReviewPanel {
         cx.notify();
     }
     pub fn document(&self, cx: &gpui_kit::App) -> AnyElement {
+        if let Some(transcript) = &self.extra.run_transcript {
+            return transcript.clone().into_any_element();
+        }
         if self.extra.artifact.is_some() {
             return self.render_artifact_document(cx);
         }
@@ -993,6 +1026,96 @@ impl ReviewPanel {
 }
 impl ReviewPanel {
     /// 04, Checks: PR number, title, state and a link to GitHub; one row per check run.
+    fn render_run_activity(&self, cx: &mut Context<Self>) -> AnyElement {
+        let mut runs: Vec<_> = self
+            .store
+            .read(cx)
+            .state
+            .runs
+            .values()
+            .filter(|r| r.origin_session_id.is_none() && !self.dismissed_runs.contains(&r.id))
+            .cloned()
+            .collect();
+        runs.sort_by_key(|run| std::cmp::Reverse(run.created_at));
+        v_flex()
+            .id("run-activity")
+            .overflow_y_scroll()
+            .gap_2()
+            .p_2()
+            .children(runs.into_iter().map(|run| {
+                let active = matches!(run.status, p::RunStatus::Running | p::RunStatus::Queued);
+                let mut card = v_flex()
+                    .p_3()
+                    .gap_2()
+                    .border_1()
+                    .rounded_lg()
+                    .border_color(color(Token::Border, cx))
+                    .child(format!("{} · @{} · {}", run.name, run.handle, run.status))
+                    .child(format!(
+                        "{} · {} · {} tokens",
+                        run.agent.map(|a| a.to_string()).unwrap_or_default(),
+                        run.access,
+                        run.tokens
+                    ));
+                if let Some(result) = run.result {
+                    card = card
+                        .child(result.summary.to_string())
+                        .child(serde_json::to_string_pretty(&result).unwrap_or_default());
+                }
+                if let Some(error) = run.error_code {
+                    card = card.child(crate::errors::error_message(&error, None));
+                }
+                if run.warning.is_some() {
+                    card = card.child("This read-only agent changed files.");
+                    if let Some(pin) = run.pin_checkpoint_id {
+                        card = card.child(
+                            Button::new(SharedString::from(format!("revert-run-{}", run.id)))
+                                .label("Revert")
+                                .disabled(self.store.read(cx).state.workspace.as_ref().is_none_or(
+                                    |w| w.running_turn_id.is_some() || !w.queue.is_empty(),
+                                ))
+                                .on_click(cx.listener(move |_, _, _, cx| {
+                                    cx.emit(ReviewEvent::RevertRun(pin.clone()))
+                                })),
+                        );
+                    }
+                }
+                if active {
+                    let id = run.id.clone();
+                    card = card.child(
+                        Button::new(SharedString::from(format!("cancel-run-{id}")))
+                            .label("Cancel")
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                cx.emit(ReviewEvent::CancelRun(id.clone()))
+                            })),
+                    );
+                }
+                if let Some(session) = run.session_id {
+                    card = card.child(
+                        Button::new(SharedString::from(format!("open-run-{}", run.id)))
+                            .label("Open transcript")
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                cx.emit(ReviewEvent::OpenRun(session.clone()))
+                            })),
+                    );
+                }
+                if !active {
+                    let id = run.id;
+                    card = card.child(
+                        Button::new(SharedString::from(format!("dismiss-run-{id}")))
+                            .ghost()
+                            .label("Dismiss")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.dismissed_runs.insert(id.clone());
+                                cx.notify();
+                            })),
+                    );
+                }
+                card
+            }))
+            .into_any_element()
+    }
+
     fn render_checks(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(w) = self.store.read(cx).state.workspace.clone() else {
             return super::skeleton_rows(4).into_any_element();
@@ -1491,6 +1614,7 @@ impl Render for ReviewPanel {
                 })
                 .into_any_element(),
             3 => self.render_artifacts(cx),
+            4 => self.render_run_activity(cx),
             _ => self.render_checks(cx),
         };
         let draft_ids: Vec<_> = self

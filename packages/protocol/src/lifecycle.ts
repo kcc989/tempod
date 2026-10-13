@@ -1,6 +1,8 @@
 import { Schema } from "effect";
 import { AgentId } from "./enums.ts";
 import { Id as Ulid } from "./ids.ts";
+import { Run, RunResult } from "./runs.ts";
+import { AgentAccess, AgentHandle, HookEvent, OutputKind } from "./agent-library.ts";
 import { TurnUsage } from "./acp.ts";
 
 const S = Schema.String;
@@ -95,51 +97,13 @@ export const RoleInfo = Schema.Struct({
 
 export type RoleInfo = typeof RoleInfo.Type;
 
-export const RoleRunStatus = Schema.Literals([
-  "queued",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-  "timed_out",
-]);
-
-export const RoleRun = Schema.Struct({
-  id: Ulid,
-  changeId: Ulid,
-  parentRunId: Schema.NullOr(Ulid),
-  depth: Int,
-  roleName: RoleName,
-  scope: RoleScope,
-  roleSha: S,
-  triggerEventId: Ulid,
-  sessionId: Schema.NullOr(Ulid),
-  agent: Schema.NullOr(AgentId),
-  access: RoleAccess,
-  status: RoleRunStatus,
-  round: Int,
-  continuesUsed: Int,
-  tokens: Int,
-  pinCheckpointId: Schema.NullOr(Ulid),
-  result: Schema.NullOr(RoleResult),
-  errorCode: Schema.NullOr(S),
-  errorDetail: Schema.NullOr(S),
-  deadlineAt: Schema.NullOr(Int),
-  createdAt: Int,
-  startedAt: Schema.NullOr(Int),
-  endedAt: Schema.NullOr(Int),
-  trigger: opt(RoleTrigger),
-});
-
-export type RoleRun = typeof RoleRun.Type;
-
 const envelope = {
   id: Ulid,
   occurredAt: Int,
   workspaceId: Ulid,
   changeId: opt(Ulid),
   turnId: opt(Ulid),
-  roleRunId: opt(Ulid),
+  runId: opt(Ulid),
   sessionId: opt(Ulid),
   agent: opt(AgentId),
   causationId: opt(Ulid),
@@ -150,13 +114,13 @@ export const LifecycleTempoSource = Schema.Literal("tempo");
 
 export const LifecycleAgentSource = Schema.Literal("agent");
 
-export const LifecycleRoleSource = Schema.Literal("role");
+export const LifecycleRunSource = Schema.Literal("run");
 
-const sources = { tempo: LifecycleTempoSource, agent: LifecycleAgentSource, role: LifecycleRoleSource };
+const sources = { tempo: LifecycleTempoSource, agent: LifecycleAgentSource, run: LifecycleRunSource };
 
 export const LifecycleChangeCreatedPayload = Schema.Struct({
   origin: Schema.Literals(["prompt", "request", "event"]),
-  role: opt(RoleName),
+  handle: opt(AgentHandle),
   text: opt(S.check(Schema.isMaxLength(65536))),
 });
 
@@ -168,21 +132,38 @@ export const LifecycleTurnEndedPayload = Schema.Struct({
 });
 
 export const LifecycleRunStartedPayload = Schema.Struct({
-  role: RoleName,
-  scope: RoleScope,
-  roleSha: S,
-  round: Int,
+  agentId: Schema.NullOr(Ulid),
+  handle: AgentHandle,
+  attachmentId: opt(Ulid),
+  agentVersion: Schema.NullOr(Int),
+  agentSha: S,
   agent: Schema.NullOr(AgentId),
-  access: RoleAccess,
+  access: AgentAccess,
+  outputKind: OutputKind,
 });
 
-export const LifecycleRunCompletedPayload = Schema.Struct({ role: RoleName, round: Int, result: RoleResult });
+export const LifecycleRunCompletedPayload = Schema.Struct({
+  agentId: Schema.NullOr(Ulid),
+  handle: AgentHandle,
+  result: RunResult,
+});
 
 export const LifecycleRunFailedPayload = Schema.Struct({
-  role: RoleName,
-  round: Int,
+  agentId: Schema.NullOr(Ulid),
+  handle: AgentHandle,
   errorCode: S,
   detail: opt(S),
+});
+
+export const LifecycleRunDecidedPayload = Schema.Struct({
+  attachmentId: Ulid,
+  agentId: Ulid,
+  handle: AgentHandle,
+  hookIndex: Int,
+  hookEvent: HookEvent,
+  outcome: Schema.Literals(["run", "skip", "error"]),
+  p: opt(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 }))),
+  threshold: Schema.Number,
 });
 
 export const LifecycleChangeEndedPayload = Schema.Struct({
@@ -202,9 +183,10 @@ const event = <T extends string, Source extends keyof typeof sources, P extends 
 export const LifecycleEvent = Schema.Union([
   event("tempo.change.created", "tempo", LifecycleChangeCreatedPayload),
   event("agent.turn.ended", "agent", LifecycleTurnEndedPayload),
-  event("role.run.started", "role", LifecycleRunStartedPayload),
-  event("role.run.completed", "role", LifecycleRunCompletedPayload),
-  event("role.run.failed", "role", LifecycleRunFailedPayload),
+  event("run.started", "run", LifecycleRunStartedPayload),
+  event("run.completed", "run", LifecycleRunCompletedPayload),
+  event("run.failed", "run", LifecycleRunFailedPayload),
+  event("run.decided", "tempo", LifecycleRunDecidedPayload),
   event("tempo.change.ended", "tempo", LifecycleChangeEndedPayload),
   event("tempo.branch.pushed", "tempo", LifecycleBranchPushedPayload),
   event("tempo.check.passed", "tempo", LifecycleCheckPayload),
@@ -225,5 +207,5 @@ export const LifecyclePage = Schema.Struct({
 export const LifecycleTrace = Schema.Struct({
   chain: Schema.Array(LifecycleLogEvent),
   children: Schema.Array(LifecycleLogEvent),
-  runs: Schema.Array(RoleRun),
+  runs: Schema.Array(Run),
 });

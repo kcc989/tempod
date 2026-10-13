@@ -1,3 +1,4 @@
+import type { ToolReq } from "@tempo/protocol";
 import { mkdirSync } from "node:fs";
 import {
   type EnvironmentSummary,
@@ -58,6 +59,7 @@ export const processEnv = () => {
 
 /** The daemon: state and request handlers (02, tempod protocol). The server and sockets live in server.ts. */
 export class Tempod {
+  toolCall: ((input: Omit<ToolReq, "id" | "type">) => Promise<Schema.Json>) | null = null;
   readonly config: Config;
   readonly log: Logger;
   readonly db: TempodDb;
@@ -223,6 +225,19 @@ export class Tempod {
         summary: () => this.environmentSummary,
         propose: (proposal) => this.emit({ kind: "environment.proposed", proposal }),
         publish: (req) => this.artifacts.publish(req),
+        agentTool: async (input) => {
+          const runId = this.agents.toolRunId(input.sessionId);
+
+          if (
+            (input.op === "report_result" && (!runId || runId !== input.runId)) ||
+            (input.op !== "report_result" && runId)
+          )
+            throw new TempoError("RUN_NOT_RUNNING");
+
+          if (!this.toolCall) throw new TempoError("TEMPOD_UNREACHABLE");
+
+          return this.toolCall(input);
+        },
       });
     } catch (e) {
       this.log.warn("tempo MCP socket failed", { error: errorText(e) });

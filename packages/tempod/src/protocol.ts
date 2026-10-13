@@ -1,4 +1,7 @@
 import {
+  ToolRes,
+  newId,
+  type ToolReq,
   DoAck,
   DoHello,
   DoReq,
@@ -83,6 +86,35 @@ export const dispatch = (
 
 /** One `/v1/connect` socket: hello, ack and req (02, tempod protocol). */
 export class ProtocolConnection {
+  private readonly tools = new Map<
+    string,
+    {
+      resolve: (value: Schema.Json) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  private readonly callTool = (input: Omit<ToolReq, "id" | "type">): Promise<Schema.Json> => {
+    if (this.closed || !this.helloDone) return Promise.reject(new TempoError("TEMPOD_UNREACHABLE"));
+    const id = newId();
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.tools.delete(id);
+        reject(new TempoError("TEMPOD_TIMEOUT"));
+      }, 15000);
+
+      this.tools.set(id, { resolve, reject, timer });
+
+      try {
+        this.ws.send(JSON.stringify({ type: "tool.req", id, ...input }));
+      } catch {
+        clearTimeout(timer);
+        this.tools.delete(id);
+        reject(new TempoError("TEMPOD_UNREACHABLE"));
+      }
+    });
+  };
   private helloDone = false;
   private closed = false;
   private readonly inflight = new Set<string>();
@@ -93,6 +125,7 @@ export class ProtocolConnection {
     private readonly log: Logger,
   ) {
     app.outbox.attach(ws);
+    app.toolCall = this.callTool;
   }
 
   get isOpen(): boolean {
@@ -102,6 +135,15 @@ export class ProtocolConnection {
   onClose(): void {
     this.closed = true;
     this.app.outbox.detach(this.ws);
+
+    if (this.app.toolCall === this.callTool) this.app.toolCall = null;
+
+    for (const pending of this.tools.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new TempoError("TEMPOD_UNREACHABLE"));
+    }
+
+    this.tools.clear();
   }
 
   close(code: number, reason: string): void {
@@ -167,6 +209,23 @@ export class ProtocolConnection {
         const ack = decodeAck(msg);
 
         if (Exit.isSuccess(ack) && this.helloDone) this.app.outbox.ack(ack.value.upTo);
+
+        return;
+      }
+
+      case "tool.res": {
+        const decoded = Schema.decodeUnknownExit(ToolRes)(msg);
+
+        if (Exit.isFailure(decoded)) return;
+        const response = decoded.value;
+        const pending = this.tools.get(response.id);
+
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        this.tools.delete(response.id);
+
+        if (response.ok) pending.resolve(response.result);
+        else pending.reject(new Error(response.error.message));
 
         return;
       }

@@ -99,6 +99,8 @@ export const ITEM_KINDS = [
   "revert_marker",
   "error",
   "artifact",
+  "run",
+  "agent_proposal",
 ] as const;
 
 export const ItemKind = Schema.Literals(ITEM_KINDS);
@@ -119,7 +121,7 @@ export const ItemStatus = Schema.Literals(ITEM_STATUSES);
 export type ItemStatus = typeof ItemStatus.Type;
 
 export const CHECKPOINT_REASONS = [
-  "role_pin",
+  "run_pin",
   "turn_end",
   "pre_revert",
   "pre_sleep",

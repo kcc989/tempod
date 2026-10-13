@@ -33,6 +33,7 @@ export interface StartParams {
   readonly modeId?: string | null | undefined;
   readonly model?: string | null | undefined;
   readonly profile?: AgentProfile | undefined;
+  readonly access?: "read-only" | "write" | undefined;
   readonly acpSessionId?: string | null | undefined;
   readonly browser?: BrowserMode | undefined;
   readonly mcpServers?: ReadonlyArray<McpServerSpec> | undefined;
@@ -43,6 +44,12 @@ const acpError = (cause: unknown): TempoError =>
 
 /** Live adapter processes, at most `maxLiveAgents` (01, Sessions). */
 export class SessionManager {
+  private readonly toolRuns = new Map<string, string>();
+  toolRunId(sessionId: string): string | undefined {
+    this.live(sessionId);
+
+    return this.toolRuns.get(sessionId);
+  }
   private readonly sessions = new Map<string, AgentSession>();
   private readonly starting = new Map<string, Promise<SessionStartResult>>();
   private readonly ready = new Set<AgentSession>();
@@ -101,12 +108,28 @@ export class SessionManager {
     await this.makeRoom(p.sessionId);
     const { config, log } = this.deps;
     const command = config.agentCommands[p.agent];
+
+    if (p.access === "read-only" && p.agent === "pi" && p.profile)
+      p = {
+        ...p,
+        profile: { ...p.profile, toolsDeny: [...new Set([...p.profile.toolsDeny, "write", "edit"])] },
+      };
     const env = agentEnv(p.agent, config, this.deps.baseEnv(), this.deps.scriptEnv(), p.env);
+
+    if (p.env["TEMPO_RUN_ID"]) this.toolRuns.set(p.sessionId, p.env["TEMPO_RUN_ID"]);
+    else this.toolRuns.delete(p.sessionId);
     const bridge: Bridge = { command: config.selfCommand, env: { ...this.deps.caEnv } };
 
     if (p.agent === "pi") {
       try {
-        writePiMcpConfig(config.piAgentDir, p.mcpServers ?? [], bridge, p.browser ?? "local", p.sessionId);
+        writePiMcpConfig(
+          config.piAgentDir,
+          p.mcpServers ?? [],
+          bridge,
+          p.browser ?? "local",
+          p.sessionId,
+          p.env,
+        );
       } catch (e) {
         log.warn("writing pi mcp.json failed", { sessionId: p.sessionId, error: errorText(e) });
       }

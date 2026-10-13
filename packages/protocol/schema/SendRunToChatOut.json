@@ -1,15 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "RequestRoleOut",
+  "title": "SendRunToChatOut",
   "type": "object",
   "properties": {
-    "changeId": {
-      "type": "string"
-    },
-    "roleRunId": {
+    "turnId": {
       "type": "string"
     }
   },
-  "required": ["changeId", "roleRunId"],
+  "required": ["turnId"],
   "additionalProperties": true
 }

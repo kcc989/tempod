@@ -3,6 +3,9 @@
   "title": "CheckRun",
   "type": "object",
   "properties": {
+    "summary": {
+      "type": "string"
+    },
     "name": {
       "type": "string"
     },

@@ -1,3 +1,4 @@
+import { lifecycleRedactor } from "../../roles/secrets.ts";
 import { desc } from "drizzle-orm";
 import { TempoError, type ChangedFile, type ChangesSummary, type FnOutput } from "@tempo/protocol";
 import { EMPTY_PROMPT, json } from "../../db/json.ts";
@@ -57,6 +58,20 @@ export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<
   const prState = prStateOf(pr);
   const runs = await github.listCheckRuns(token, repo, pr.head.sha);
   const checksState = checksStateOf(runs);
+  const redact = await lifecycleRedactor(core);
+  core.setKv(
+    "checkRuns",
+    runs.map((run) => {
+      const check = {
+        ...run,
+        name: redact(run.name),
+        url: redact(run.url),
+        conclusion: run.conclusion ? redact(run.conclusion) : null,
+      };
+
+      return run.summary ? { ...check, summary: redact(run.summary) } : check;
+    }),
+  );
   const titleChanged = core.kv<string>("prTitle") !== pr.title;
   core.setKv("prTitle", pr.title);
 
@@ -66,7 +81,7 @@ export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<
 
       if (checksState !== row.checksState && (checksState === "success" || checksState === "failure")) {
         const type = checksState === "success" ? "tempo.check.passed" : "tempo.check.failed";
-        core.lifecycle.append({
+        core.lifecycle.recordCause({
           type,
           source: "tempo",
           changeId: core.lifecycle.newestOpenChange(),

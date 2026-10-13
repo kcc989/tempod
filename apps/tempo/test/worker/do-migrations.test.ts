@@ -35,6 +35,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0007_custom_agents",
       "0008_artifacts",
       "0009_lifecycle",
+      "0010_agents",
     ]);
   });
 });
@@ -151,7 +152,7 @@ describe("DO migration 0004_drop_unused_statuses", () => {
           "INSERT INTO turns (id, session_id, seq, status, prompt_json, queued_at) VALUES ('t9', 'no-such-session', 9, 'queued', '{}', 1)",
         ),
       ).toThrow(/FOREIGN KEY/);
-      expect(schema("turns_by_status")).toMatch(/ON turns\s*\(status, queue_pos\)/);
+      expect(schema("turns_by_status")).toMatch(/ON turns\s*\(status,\s*queue_pos\)/);
       expect(tablesOf(sql).filter((t) => t.endsWith("_new"))).toEqual([]);
       expect(sql.exec("SELECT * FROM __drizzle_migrations").toArray()).toHaveLength(
         WORKSPACE_MIGRATIONS.length,
@@ -177,7 +178,8 @@ describe("deployed workspace upgrade", () => {
           release === "file-cache"
             ? WORKSPACE_MIGRATIONS.filter((m) => oldTags.includes(m.tag))
             : WORKSPACE_MIGRATIONS.filter(
-                (m) => !["0007_custom_agents", "0008_artifacts", "0009_lifecycle"].includes(m.tag),
+                (m) =>
+                  !["0007_custom_agents", "0008_artifacts", "0009_lifecycle", "0010_agents"].includes(m.tag),
               )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
                 .sort((a, b) => a.when - b.when);
@@ -216,4 +218,106 @@ describe("deployed workspace upgrade", () => {
       });
     },
   );
+});
+
+describe("DO migration 0010_agents", () => {
+  it("preserves run/session/checkpoint data and rewrites lifecycle events without changing sequence or dedupe", async () => {
+    const stub = env.WORKSPACE.getByName(newId());
+    await runInDurableObject(stub, async (_i: WorkspaceDO, state: DurableObjectState) => {
+      const sql = state.storage.sql;
+      sql.exec("DROP TABLE turns");
+
+      for (const name of tablesOf(sql)) sql.exec(`DROP TABLE "${name}"`);
+      const db = drizzle(state.storage);
+      const before = WORKSPACE_MIGRATIONS.findIndex((m) => m.tag === "0010_agents");
+      await runMigrations(db, WORKSPACE_MIGRATIONS.slice(0, before));
+      const runId = newId();
+      const eventId = newId();
+      const changeId = newId();
+      const sessionId = newId();
+      sql.exec(
+        "INSERT INTO sessions(id,agent,title,status,sort_order,created_at,updated_at,role_run_id,profile_json) VALUES (?,'claude','Historical','idle',1,1,2,?,?)",
+        sessionId,
+        runId,
+        JSON.stringify({ systemPrompt: "Frozen original" }),
+      );
+      sql.exec(
+        "INSERT INTO turns(id,session_id,seq,status,prompt_json,queued_at,change_id,origin) VALUES (?, ?,1,'completed','{}',3,?,'role')",
+        newId(),
+        sessionId,
+        changeId,
+      );
+      sql.exec(
+        "INSERT INTO role_runs(id,change_id,depth,role_name,scope,role_sha,trigger_event_id,session_id,access,status,round,tokens,continues_used,result_json,created_at,deadline_at) VALUES (?,?,1,'reviewer','builtin','old-sha',?,?,'read-only','running',2,7,1,?,4,9999999999999)",
+        runId,
+        changeId,
+        eventId,
+        sessionId,
+        JSON.stringify({ status: "pass", summary: "Legacy result", findings: [] }),
+      );
+      sql.exec(
+        "INSERT INTO lifecycle_events(seq,id,type,source,occurred_at,change_id,role_run_id,dedupe_key,payload_json) VALUES (9,?,'role.run.started','role',4,?,?,'original-dedupe',?)",
+        eventId,
+        changeId,
+        runId,
+        JSON.stringify({
+          role: "reviewer",
+          scope: "builtin",
+          roleSha: "old-sha",
+          round: 2,
+          agent: null,
+          access: "read-only",
+        }),
+      );
+      sql.exec(
+        "INSERT INTO checkpoints(id,reason,commit_sha,tree_sha,parent_sha,base_sha,created_at) VALUES ('pin','role_pin','a','b','c','d',5)",
+      );
+      await runMigrations(db, WORKSPACE_MIGRATIONS);
+      expect(
+        sql
+          .exec("SELECT handle,agent_sha,output_kind,status,follow_up_sent,tokens,deadline_at FROM runs")
+          .toArray(),
+      ).toEqual([
+        {
+          handle: "reviewer",
+          agent_sha: "old-sha",
+          output_kind: "review",
+          status: "running",
+          follow_up_sent: 1,
+          tokens: 7,
+          deadline_at: 9999999999999,
+        },
+      ]);
+      expect(sql.exec("SELECT run_id,profile_json FROM sessions").toArray()).toEqual([
+        { run_id: runId, profile_json: JSON.stringify({ systemPrompt: "Frozen original" }) },
+      ]);
+      expect(sql.exec("SELECT origin FROM turns").toArray()).toEqual([{ origin: "run" }]);
+      expect(sql.exec("SELECT reason FROM checkpoints").toArray()).toEqual([{ reason: "run_pin" }]);
+
+      const event = sql
+        .exec<{ seq: number; type: string; source: string; dedupe_key: string; payload_json: string }>(
+          "SELECT seq,type,source,dedupe_key,payload_json FROM lifecycle_events",
+        )
+        .toArray()[0]!;
+
+      expect(event).toMatchObject({
+        seq: 9,
+        type: "run.started",
+        source: "run",
+        dedupe_key: "original-dedupe",
+      });
+      expect(JSON.parse(event.payload_json)).toEqual({
+        handle: "reviewer",
+        agentId: null,
+        agentVersion: null,
+        agentSha: "old-sha",
+        agent: null,
+        access: "read-only",
+        outputKind: "review",
+      });
+      await runMigrations(db, WORKSPACE_MIGRATIONS);
+      expect(sql.exec("SELECT id FROM runs").toArray()).toEqual([{ id: runId }]);
+      expect(sql.exec("SELECT seq FROM lifecycle_events").toArray()).toEqual([{ seq: 9 }]);
+    });
+  });
 });

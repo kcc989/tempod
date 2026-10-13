@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RunResult",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["done", "pass", "fail", "blocked"]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "$ref": "PlanStep.json"
+      }
+    },
+    "verify": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "$ref": "RunFinding.json"
+      }
+    }
+  },
+  "required": ["status", "summary"],
+  "additionalProperties": true
+}

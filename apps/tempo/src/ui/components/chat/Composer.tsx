@@ -94,27 +94,25 @@ export function Composer({ workspaceId, sessionId }: ComposerProps) {
     );
   }
 
-  if (session.roleRunId) return <RoleComposer workspaceId={workspaceId} session={session} />;
+  if (session.runId) return <RunComposer workspaceId={workspaceId} session={session} />;
 
   return <ComposerBody key={sessionId} workspaceId={workspaceId} session={session} />;
 }
 
-function RoleComposer({ workspaceId, session }: { workspaceId: string; session: Session }) {
-  const live = useWorkspaceSelector(workspaceId, (s) =>
-    session.roleRunId ? s.roleRuns[session.roleRunId] : undefined,
-  );
+function RunComposer({ workspaceId, session }: { workspaceId: string; session: Session }) {
+  const live = useWorkspaceSelector(workspaceId, (s) => (session.runId ? s.runs[session.runId] : undefined));
 
-  const runs = useCallQuery("listRoleRuns", { workspaceId });
-  const cancel = useCallMutation("cancelRoleRun", { invalidates: ["listRoleRuns"] });
-  const run = live ?? runs.data?.find((r) => r.id === session.roleRunId);
+  const runs = useCallQuery("listRuns", { workspaceId });
+  const cancel = useCallMutation("cancelRun", { invalidates: ["listRuns"] });
+  const run = live ?? runs.data?.find((r) => r.id === session.runId);
 
   if (!run || run.status === "running" || run.status === "queued")
     return (
       <div className="flex items-center justify-between border-t p-3">
-        <span>{run ? `${run.roleName} · ${run.status}` : "Loading role run…"}</span>
+        <span>{run ? `${run.name} · ${run.status}` : "Loading run…"}</span>
         <Button
           disabled={!run || cancel.isPending}
-          onClick={() => cancel.mutate({ workspaceId, roleRunId: session.roleRunId! })}
+          onClick={() => cancel.mutate({ workspaceId, runId: session.runId! })}
         >
           Cancel run
         </Button>
@@ -241,10 +239,17 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     },
   });
 
-  const roles = useCallQuery("listRoles", { workspaceId });
+  const agents = useCallQuery("listAgents", {});
+  const projectId = useWorkspaceSelector(workspaceId, (s) => s.workspace?.projectId);
 
-  const requestRole = useCallMutation("requestRole", {
-    invalidates: ["listRoleRuns", "listLifecycleEvents"],
+  const attachmentsQuery = useCallQuery(
+    "listProjectAgents",
+    { projectId: projectId ?? "" },
+    { enabled: !!projectId },
+  );
+
+  const requestAgent = useCallMutation("requestAgent", {
+    invalidates: ["listRuns", "listLifecycleEvents"],
     onSuccess: () => {
       clearSent(sentDraft.current);
       sending.current = false;
@@ -360,15 +365,26 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     if (query === null) return [];
 
     if (triggerKind === "mention") {
-      const roleRows: PickerRow[] = fuzzyFilter(
-        query,
-        roles.data?.filter((r) => r.requestable && !r.error && !r.shadowedBy) ?? [],
-        (r) => r.name,
-        20,
-      ).map((r) => ({ kind: "role", key: `role:${r.name}`, name: r.name, description: r.description }));
+      const attached = new Set(attachmentsQuery.data?.map((row) => row.agentId));
+      const library = agents.data ?? [];
+
+      const agentRows: PickerRow[] = [
+        ...fuzzyFilter(
+          query,
+          library.filter((a) => attached.has(a.id)),
+          (a) => a.handle,
+          20,
+        ),
+        ...fuzzyFilter(
+          query,
+          library.filter((a) => !attached.has(a.id)),
+          (a) => a.handle,
+          20,
+        ),
+      ].map((a) => ({ kind: "agent", key: `agent:${a.id}`, name: a.handle, description: a.description }));
 
       return [
-        ...roleRows,
+        ...agentRows,
         ...fuzzyFilter(query, files.data?.paths ?? [], (p) => p, 30).map((path) => ({
           kind: "file" as const,
           key: path,
@@ -382,7 +398,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       key: entry.key,
       entry,
     }));
-  }, [query, triggerKind, files.data, roles.data, session.commands, planId]);
+  }, [query, triggerKind, files.data, agents.data, attachmentsQuery.data, session.commands, planId]);
 
   const pickerStatus =
     triggerKind !== "mention"
@@ -417,11 +433,11 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
 
     if (!row || !trigger) return;
 
-    if (row.kind === "role") {
-      if (/^\s*\/role\b/.test(draft)) return;
+    if (row.kind === "agent") {
+      if (/^\s*\/agent\b/.test(draft)) return;
       const next = replaceTrigger(draft, caret, trigger, "");
-      setDraft(`/role ${row.name} ${next.text}`);
-      pendingCaret.current = `/role ${row.name} `.length + next.caret;
+      setDraft(`/agent ${row.name} ${next.text}`);
+      pendingCaret.current = `/agent ${row.name} `.length + next.caret;
     } else if (row.kind === "file") {
       const next = replaceTrigger(draft, caret, trigger, "");
       setDraft(next.text);
@@ -440,21 +456,30 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   };
 
   const submit = (delivery: "queue" | "steer" = "queue") => {
-    if (!sendable || sending.current || sendPending || requestRole.isPending) return;
+    if (!sendable || sending.current || sendPending || requestAgent.isPending) return;
     sending.current = true;
     sentDraft.current = savedDraft;
 
-    if (/^\s*\/role\b/.test(draft)) {
-      const request = /^\s*\/role\s+([a-z][a-z0-9-]{1,31})(?:\s+([\s\S]*))?$/.exec(draft);
+    if (/^\s*\/agent\b/.test(draft)) {
+      const request = /^\s*\/agent\s+([a-z][a-z0-9-]{1,31})(?:\s+([\s\S]*))?$/.exec(draft);
 
       if (!request || mentions.length || ready.length || reviewCommentIds.length) {
         sending.current = false;
-        toast.error("Use /role <name> <text>, with one role per message.");
+        toast.error("Use /agent <handle> <text>, with one agent per message.");
 
         return;
       }
 
-      requestRole.mutate({ workspaceId, sessionId, role: request[1]!, text: request[2] });
+      const agent = agents.data?.find((a) => a.handle === request[1]);
+
+      if (!agent) {
+        sending.current = false;
+        toast.error("No agent with that handle.");
+
+        return;
+      }
+
+      requestAgent.mutate({ workspaceId, sessionId, agentId: agent.id, text: request[2] });
 
       return;
     }
@@ -682,15 +707,15 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   }
                 />
               )}
-              {/^\s*\/role\s+([a-z][a-z0-9-]{1,31})/.exec(draft)?.[1] && (
+              {/^\s*\/agent\s+([a-z][a-z0-9-]{1,31})/.exec(draft)?.[1] && (
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  aria-label="Remove role"
-                  onClick={() => setDraft(draft.replace(/^\s*\/role\s+[a-z][a-z0-9-]{1,31}\s*/, ""))}
+                  aria-label="Remove agent"
+                  onClick={() => setDraft(draft.replace(/^\s*\/agent\s+[a-z][a-z0-9-]{1,31}\s*/, ""))}
                 >
-                  @{/^\s*\/role\s+([a-z][a-z0-9-]{1,31})/.exec(draft)?.[1]}
+                  @{/^\s*\/agent\s+([a-z][a-z0-9-]{1,31})/.exec(draft)?.[1]}
                 </Button>
               )}
               <Textarea

@@ -353,12 +353,19 @@ export const saveDefinition = async (
   }
 };
 
-export const attachmentToWire = async (env: Env, row: ProjectAgentRow): Promise<AgentAttachment> => {
-  const agent = await d1(env)
-    .select()
-    .from(agents)
-    .where(and(eq(agents.id, row.agentId), isNull(agents.deletedAt)))
-    .get();
+export const attachmentToWire = async (
+  env: Env,
+  row: ProjectAgentRow,
+  known?: AgentRow | null,
+): Promise<AgentAttachment> => {
+  const agent =
+    known === undefined
+      ? await d1(env)
+          .select()
+          .from(agents)
+          .where(and(eq(agents.id, row.agentId), isNull(agents.deletedAt)))
+          .get()
+      : known;
 
   const { hooksJson, ...fields } = row;
 

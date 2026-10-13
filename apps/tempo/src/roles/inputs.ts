@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { ContentBlock, RoleFile } from "@tempo/protocol";
-import { items, roleRuns, turns } from "../db/workspace-do.ts";
+import { items, runs, turns } from "../db/workspace-do.ts";
 import { EMPTY_PROMPT, json } from "../db/json.ts";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
 import { requireTempod } from "../do/workspace/container.ts";
@@ -70,15 +70,9 @@ export const roleInputs = async (
 
         const run = core.db
           .select()
-          .from(roleRuns)
-          .where(
-            and(
-              eq(roleRuns.changeId, changeId),
-              eq(roleRuns.roleName, name),
-              eq(roleRuns.status, "completed"),
-            ),
-          )
-          .orderBy(desc(roleRuns.endedAt))
+          .from(runs)
+          .where(and(eq(runs.changeId, changeId), eq(runs.handle, name), eq(runs.status, "completed")))
+          .orderBy(desc(runs.endedAt))
           .get();
 
         value = run?.resultJson ?? "(none)";

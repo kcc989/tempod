@@ -27,30 +27,65 @@ const ROLE_INFO = {
   limits: ROLE_FILE.limits,
 } as const;
 
-const ROLE_RUN = {
+const RUN = {
   id: uid(920),
   changeId: uid(921),
   parentRunId: null,
-  depth: 1,
-  roleName: "reviewer",
-  scope: "builtin",
-  roleSha: "a".repeat(64),
+  agentId: uid(923),
+  attachmentId: null,
+  handle: "reviewer",
+  name: "Reviewer",
+  agentVersion: 1,
+  agentSha: "a".repeat(64),
   triggerEventId: uid(922),
+  decisionP: null,
   sessionId: S1,
+  originSessionId: S2,
   agent: "codex",
   access: "read-only",
+  outputKind: "review",
   status: "running",
-  round: 1,
-  continuesUsed: 0,
+  followUpSent: false,
   tokens: 0,
   pinCheckpointId: null,
+  warning: null,
   result: null,
+  sentTurnId: null,
   errorCode: null,
   errorDetail: null,
   deadlineAt: at(40),
   createdAt: at(1),
   startedAt: at(2),
   endedAt: null,
+} as const;
+
+const RUN_STARTED = {
+  agentId: uid(923),
+  handle: "reviewer",
+  agentVersion: 1,
+  agentSha: "a".repeat(64),
+  agent: "codex",
+  access: "read-only",
+  outputKind: "review",
+} as const;
+
+const RUN_COMPLETED = {
+  agentId: uid(923),
+  handle: "reviewer",
+  result: { status: "pass", summary: "No blocking findings." },
+} as const;
+
+const RUN_FAILED = { agentId: uid(923), handle: "reviewer", errorCode: "RUN_LIMIT" } as const;
+
+const RUN_DECIDED = {
+  attachmentId: uid(924),
+  agentId: uid(923),
+  handle: "reviewer",
+  hookIndex: 0,
+  hookEvent: "prompt",
+  outcome: "run",
+  threshold: 0.5,
+  p: 0.8,
 } as const;
 
 const LIFE_EVENT = {
@@ -61,7 +96,7 @@ const LIFE_EVENT = {
   source: "tempo",
   changeId: uid(921),
   dedupeKey: `change:${uid(921)}:created`,
-  payload: { origin: "request", role: "reviewer", text: "Review auth" },
+  payload: { origin: "request", handle: "reviewer", text: "Review auth" },
 } as const;
 
 const LIFE_LOG = { seq: 1, event: LIFE_EVENT };
@@ -184,7 +219,16 @@ export const SHARED_SAMPLES = {
   ],
   RoleFile: [ROLE_FILE],
   RoleInfo: [ROLE_INFO],
-  RoleRun: [ROLE_RUN],
+  Run: [RUN],
+  RunResult: [RUN_COMPLETED.result],
+  RunFinding: [{ path: "src/auth.ts", line: 1, text: "Check auth", blocking: true }],
+  PlanStep: [{ text: "Check auth", files: ["src/auth.ts"] }],
+  PlanReport: [{ status: "done", summary: "Plan", steps: [{ text: "Check auth" }], verify: "Run tests" }],
+  ReviewReport: [RUN_COMPLETED.result],
+  NoteReport: [{ status: "done", summary: "Finished" }],
+  RunContent: [{ runId: uid(920) }],
+  AgentProposalContent: [{ proposalId: uid(925) }],
+  LifecycleRunDecidedPayload: [RUN_DECIDED],
   LifecycleEvent: [
     LIFE_EVENT,
     {
@@ -199,29 +243,13 @@ export const SHARED_SAMPLES = {
     },
     {
       ...LIFE_EVENT,
-      type: "role.run.started",
-      source: "role",
-      payload: {
-        role: "reviewer",
-        scope: "builtin",
-        roleSha: "a".repeat(64),
-        round: 1,
-        agent: "codex",
-        access: "read-only",
-      },
+      type: "run.started",
+      source: "run",
+      payload: RUN_STARTED,
     },
-    {
-      ...LIFE_EVENT,
-      type: "role.run.completed",
-      source: "role",
-      payload: { role: "reviewer", round: 1, result: { status: "pass", summary: "No blocking findings." } },
-    },
-    {
-      ...LIFE_EVENT,
-      type: "role.run.failed",
-      source: "role",
-      payload: { role: "reviewer", round: 1, errorCode: "ROLE_LIMIT", detail: "limits.rounds" },
-    },
+    { ...LIFE_EVENT, type: "run.completed", source: "run", payload: RUN_COMPLETED },
+    { ...LIFE_EVENT, type: "run.failed", source: "run", payload: RUN_FAILED },
+    { ...LIFE_EVENT, type: "run.decided", source: "tempo", payload: RUN_DECIDED },
     { ...LIFE_EVENT, type: "tempo.change.ended", payload: { status: "done" } },
     {
       ...LIFE_EVENT,
@@ -239,28 +267,15 @@ export const SHARED_SAMPLES = {
       usage: { totalTokens: 8, inputTokens: 5, outputTokens: 3 },
     },
   ],
-  LifecycleRunStartedPayload: [
-    {
-      role: "reviewer",
-      scope: "builtin",
-      roleSha: "a".repeat(64),
-      round: 1,
-      agent: "codex",
-      access: "read-only",
-    },
-  ],
-  LifecycleRunCompletedPayload: [
-    { role: "reviewer", round: 1, result: { status: "pass", summary: "No blocking findings." } },
-  ],
-  LifecycleRunFailedPayload: [
-    { role: "reviewer", round: 1, errorCode: "ROLE_LIMIT", detail: "limits.rounds" },
-  ],
+  LifecycleRunStartedPayload: [RUN_STARTED],
+  LifecycleRunCompletedPayload: [RUN_COMPLETED],
+  LifecycleRunFailedPayload: [RUN_FAILED],
   LifecycleChangeEndedPayload: [{ status: "done" }],
   LifecycleBranchPushedPayload: [{ branch: "tempo/test", commitSha: "a".repeat(40) }],
   LifecycleCheckPayload: [{ prNumber: 25 }],
   LifecycleLogEvent: [LIFE_LOG],
   LifecyclePage: [{ events: [LIFE_LOG], nextBeforeSeq: null }],
-  LifecycleTrace: [{ chain: [LIFE_LOG], children: [], runs: [ROLE_RUN] }],
+  LifecycleTrace: [{ chain: [LIFE_LOG], children: [], runs: [RUN] }],
   RolesSettings: [DEFAULT_SETTINGS.roles],
   TurnUsage: [{ totalTokens: 0, inputTokens: 0, outputTokens: 0 }],
 
@@ -569,7 +584,7 @@ export const SHARED_SAMPLES = {
 } satisfies Record<string, ReadonlyArray<unknown>>;
 
 export const CHANNEL_SAMPLES = {
-  WsRoleRun: [{ type: "roleRun", run: ROLE_RUN }],
+  WsRun: [{ type: "run", run: RUN }],
   WsHello: [
     {
       type: "hello",
@@ -653,9 +668,10 @@ export const INPUT_SAMPLES = {
   putUserRole: [{ name: "reviewer", text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],
   deleteUserRole: [{ name: "reviewer" }],
   reloadRoles: [{ workspaceId: W1 }],
-  requestRole: [{ workspaceId: W1, role: "reviewer", text: "Review auth", sessionId: S1 }],
-  cancelRoleRun: [{ workspaceId: W1, roleRunId: uid(920) }],
-  listRoleRuns: [{ workspaceId: W1 }],
+  requestAgent: [{ workspaceId: W1, agentId: uid(923), text: "Review auth", sessionId: S1 }],
+  cancelRun: [{ workspaceId: W1, runId: uid(920) }],
+  listRuns: [{ workspaceId: W1 }],
+  sendRunToChat: [{ workspaceId: W1, runId: uid(920) }],
   listLifecycleEvents: [{ workspaceId: W1, limit: 500 }],
   getTrace: [{ workspaceId: W1, eventId: uid(922) }],
   listInstallationRepos: [{ installationId: 51234567 }],
@@ -850,7 +866,8 @@ export const OUTPUT_SAMPLES = {
     },
   ],
   GetRoleTextOut: [{ text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],
-  RequestRoleOut: [{ changeId: uid(921), roleRunId: uid(920) }],
+  SendRunToChatOut: [{ turnId: uid(926) }],
+  RequestAgentOut: [{ changeId: uid(921), runId: uid(920) }],
 
   Empty: [{}],
   StartCodexLoginOut: [

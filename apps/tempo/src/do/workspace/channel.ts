@@ -39,7 +39,7 @@ export const openUiChannel = (core: WorkspaceCore, request: Request): Response =
     itemsRev: row.itemsRev,
   });
 
-  for (const run of core.lifecycle.listRuns()) core.sendTo(server, { type: "roleRun", run });
+  for (const run of core.lifecycle.listRuns()) core.sendTo(server, { type: "run", run });
   let after = sinceRev;
 
   for (;;) {

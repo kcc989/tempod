@@ -24,7 +24,7 @@
       "$ref": "WsTurn.json"
     },
     {
-      "$ref": "WsRoleRun.json"
+      "$ref": "WsRun.json"
     },
     {
       "$ref": "WsTurnDeleted.json"

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleRunDecidedPayload",
+  "type": "object",
+  "properties": {
+    "attachmentId": {
+      "type": "string"
+    },
+    "agentId": {
+      "type": "string"
+    },
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
+    "hookIndex": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "hookEvent": {
+      "$ref": "HookEvent.json"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["run", "skip", "error"]
+    },
+    "p": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "threshold": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": ["attachmentId", "agentId", "handle", "hookIndex", "hookEvent", "outcome", "threshold"],
+  "additionalProperties": true
+}

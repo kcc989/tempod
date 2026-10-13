@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RequestAgentOut",
+  "type": "object",
+  "properties": {
+    "changeId": {
+      "type": "string"
+    },
+    "runId": {
+      "type": "string"
+    }
+  },
+  "required": ["changeId", "runId"],
+  "additionalProperties": true
+}

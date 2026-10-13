@@ -96,8 +96,9 @@ pub struct Composer {
     files_loaded: Option<std::time::Instant>,
     file_menu: Entity<ListState<FilePicker>>,
     _file_events: Subscription,
-    pub role_running: bool,
-    roles: Vec<String>,
+    pub run_running: bool,
+    agents: Vec<String>,
+    attached_agents: std::collections::HashSet<String>,
     pub read_only: bool,
     pub sending: bool,
     pub working: bool,
@@ -205,8 +206,9 @@ impl Composer {
             files_loaded: None,
             file_menu,
             _file_events: file_events,
-            role_running: false,
-            roles: vec![],
+            run_running: false,
+            agents: vec![],
+            attached_agents: Default::default(),
             read_only: false,
             sending: false,
             working: false,
@@ -385,11 +387,14 @@ impl Composer {
             cx.emit(ComposerEvent::Change(String::new()));
         }
     }
-    pub fn set_roles(&mut self, roles: Vec<p::RoleInfo>, cx: &mut Context<Self>) {
-        self.roles = roles
+    pub fn set_attached_agents(&mut self, handles: Vec<String>, cx: &mut Context<Self>) {
+        self.attached_agents = handles.into_iter().map(|h| format!("@{h}")).collect();
+        cx.notify();
+    }
+    pub fn set_agents(&mut self, agents: Vec<p::AgentSummary>, cx: &mut Context<Self>) {
+        self.agents = agents
             .into_iter()
-            .filter(|r| r.requestable && r.error.is_none() && r.shadowed_by.is_none())
-            .map(|r| format!("@{}", r.name))
+            .map(|r| format!("@{}", r.handle))
             .collect();
         cx.notify();
     }
@@ -418,7 +423,20 @@ impl Composer {
         let input = self.input.read(cx);
         composer_model::mention_query(input.value().as_ref(), input.cursor())
             .map(|(_, query)| {
-                let mut matches = composer_model::file_matches(&self.roles, query);
+                let attached: Vec<_> = self
+                    .agents
+                    .iter()
+                    .filter(|h| self.attached_agents.contains(*h))
+                    .cloned()
+                    .collect();
+                let rest: Vec<_> = self
+                    .agents
+                    .iter()
+                    .filter(|h| !self.attached_agents.contains(*h))
+                    .cloned()
+                    .collect();
+                let mut matches = composer_model::file_matches(&attached, query);
+                matches.extend(composer_model::file_matches(&rest, query));
                 matches.extend(composer_model::file_matches(
                     self.files.as_deref().unwrap_or_default(),
                     query,
@@ -454,13 +472,13 @@ impl Composer {
         let Some((start, _)) = composer_model::mention_query(&text, caret) else {
             return;
         };
-        if self.roles.contains(&path) {
-            if text.trim_start().starts_with("/role ") {
+        if self.agents.contains(&path) {
+            if text.trim_start().starts_with("/agent ") {
                 return;
             }
             self.set_text(
                 &format!(
-                    "/role {} {}{}",
+                    "/agent {} {}{}",
                     path.trim_start_matches('@'),
                     &text[..start],
                     &text[caret..]
@@ -820,17 +838,19 @@ impl Render for Composer {
             .children(
                 self.text(cx)
                     .trim_start()
-                    .strip_prefix("/role ")
+                    .strip_prefix("/agent ")
                     .and_then(|rest| rest.split_whitespace().next())
                     .map(|name| {
                         Button::new("role-chip")
                             .ghost()
                             .label(format!("@{name}"))
-                            .tooltip("Remove role")
+                            .tooltip("Remove agent")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 let text = this.text(cx);
-                                let rest =
-                                    text.trim_start().strip_prefix("/role ").unwrap_or_default();
+                                let rest = text
+                                    .trim_start()
+                                    .strip_prefix("/agent ")
+                                    .unwrap_or_default();
                                 let request = rest
                                     .split_once(char::is_whitespace)
                                     .map(|(_, text)| text)
@@ -987,7 +1007,7 @@ impl Render for Composer {
                     )
                     .children(self.working.then(|| {
                         Button::new("stop-turn")
-                            .label(if self.role_running {
+                            .label(if self.run_running {
                                 "Cancel run"
                             } else {
                                 "Stop"
@@ -1313,7 +1333,7 @@ mod attachment_tests {
         assert_eq!(*sends.borrow(), vec![String::new(), String::new()]);
     }
     #[gpui_kit::test]
-    fn role_picker_inserts_one_request_and_no_file_mention(cx: &mut TestAppContext) {
+    fn agent_picker_inserts_one_request_and_no_file_mention(cx: &mut TestAppContext) {
         let (window, composer) = cx.update(|cx| {
             gpui_kit::init(cx);
             gpui_kit::open_window(Default::default(), cx, |window, cx| {
@@ -1323,12 +1343,14 @@ mod attachment_tests {
         });
         cx.update_window(window, |_, window, cx| {
             composer.update(cx, |c, cx| {
-                let role: p::RoleInfo = serde_json::from_str(
-                    include_str!("../../../../packages/protocol/fixtures/types/RoleInfo.jsonl")
-                        .trim(),
+                let agent: p::AgentSummary = serde_json::from_str(
+                    include_str!("../../../../packages/protocol/fixtures/types/AgentSummary.jsonl")
+                        .lines()
+                        .next()
+                        .unwrap(),
                 )
                 .unwrap();
-                c.set_roles(vec![role], cx);
+                c.set_agents(vec![agent], cx);
                 c.set_files(Ok(vec!["reviewer.md".into()]), cx);
                 c.set_text("@rev focus on auth", window, cx);
                 c.input.update(cx, |i, cx| {
@@ -1336,7 +1358,7 @@ mod attachment_tests {
                 });
                 assert_eq!(c.file_rows(cx)[0], "@reviewer");
                 c.pick_file(0, window, cx);
-                assert_eq!(c.text(cx), "/role reviewer  focus on auth");
+                assert_eq!(c.text(cx), "/agent reviewer  focus on auth");
                 assert!(c.prompt(&c.text(cx)).mentions.is_empty());
             })
         })

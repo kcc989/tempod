@@ -3,18 +3,18 @@
   "title": "LifecycleRunFailedPayload",
   "type": "object",
   "properties": {
-    "role": {
-      "$ref": "RoleName.json"
-    },
-    "round": {
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991,
-      "allOf": [
+    "agentId": {
+      "anyOf": [
         {
-          "minimum": 0
+          "type": "string"
+        },
+        {
+          "type": "null"
         }
       ]
+    },
+    "handle": {
+      "$ref": "AgentHandle.json"
     },
     "errorCode": {
       "type": "string"
@@ -30,6 +30,6 @@
       ]
     }
   },
-  "required": ["role", "round", "errorCode"],
+  "required": ["agentId", "handle", "errorCode"],
   "additionalProperties": true
 }

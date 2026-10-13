@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "RoleRunStatus",
+  "title": "RunStatus",
   "type": "string",
   "enum": ["queued", "running", "completed", "failed", "cancelled", "timed_out"]
 }

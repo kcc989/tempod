@@ -60,17 +60,21 @@ export const reloadRoles = createServerFn({ method: "POST" })
   .validator((data: FnInput<"reloadRoles">) => data)
   .handler(({ data }) => run("reloadRoles", data));
 
-export const requestRole = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"requestRole">) => data)
-  .handler(({ data }) => run("requestRole", data));
+export const requestAgent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"requestAgent">) => data)
+  .handler(({ data }) => run("requestAgent", data));
 
-export const cancelRoleRun = createServerFn({ method: "POST" })
-  .validator((data: FnInput<"cancelRoleRun">) => data)
-  .handler(({ data }) => run("cancelRoleRun", data));
+export const cancelRun = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"cancelRun">) => data)
+  .handler(({ data }) => run("cancelRun", data));
 
-export const listRoleRuns = createServerFn({ method: "GET" })
-  .validator((data: FnInput<"listRoleRuns">) => data)
-  .handler(({ data }) => run("listRoleRuns", data));
+export const listRuns = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listRuns">) => data)
+  .handler(({ data }) => run("listRuns", data));
+
+export const sendRunToChat = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"sendRunToChat">) => data)
+  .handler(({ data }) => run("sendRunToChat", data));
 
 export const listLifecycleEvents = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listLifecycleEvents">) => data)

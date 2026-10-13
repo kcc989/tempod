@@ -431,6 +431,7 @@ fn issue_label(issue: p::ProfileIssue) -> &'static str {
         p::ProfileIssue::Tools => "tool limits",
         p::ProfileIssue::McpServers => "MCP servers",
         p::ProfileIssue::Model => "model",
+        p::ProfileIssue::Access => "read-only controls",
         p::ProfileIssue::ThoughtLevel => "reasoning level",
     }
 }

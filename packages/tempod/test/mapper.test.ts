@@ -349,3 +349,32 @@ describe("mode config updates", () => {
     });
   });
 });
+
+test("agent MCP report and proposal arguments never enter the item event stream", () => {
+  const { mapper, events } = setup();
+  mapper.startTurn("run-turn");
+  mapper.handle({
+    sessionUpdate: "tool_call",
+    toolCallId: "report",
+    title: "mcp__tempo__report_result",
+    rawInput: { summary: "private report" },
+    content: [{ type: "text", text: "private report" }],
+  });
+  mapper.handle({
+    sessionUpdate: "tool_call_update",
+    toolCallId: "report",
+    status: "completed",
+    rawOutput: { summary: "private report" },
+    content: [{ type: "text", text: "private report" }],
+  });
+  mapper.handle({
+    sessionUpdate: "tool_call",
+    toolCallId: "proposal",
+    title: "propose_agent_change",
+    rawInput: { prompt: "private proposal" },
+  });
+  mapper.endTurn("completed");
+  expect(events.some((event) => event.kind === "item.created")).toBe(true);
+  expect(JSON.stringify(events)).not.toContain("private report");
+  expect(JSON.stringify(events)).not.toContain("private proposal");
+});

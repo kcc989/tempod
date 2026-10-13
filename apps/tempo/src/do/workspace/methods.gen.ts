@@ -22,16 +22,20 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("reloadRoles", input);
   }
 
-  requestRole(input: MethodInput<"requestRole">): Promise<Result<FnOutput<"requestRole">>> {
-    return this.rpc("requestRole", input);
+  requestAgent(input: MethodInput<"requestAgent">): Promise<Result<FnOutput<"requestAgent">>> {
+    return this.rpc("requestAgent", input);
   }
 
-  cancelRoleRun(input: MethodInput<"cancelRoleRun">): Promise<Result<FnOutput<"cancelRoleRun">>> {
-    return this.rpc("cancelRoleRun", input);
+  cancelRun(input: MethodInput<"cancelRun">): Promise<Result<FnOutput<"cancelRun">>> {
+    return this.rpc("cancelRun", input);
   }
 
-  listRoleRuns(input: MethodInput<"listRoleRuns">): Promise<Result<FnOutput<"listRoleRuns">>> {
-    return this.rpc("listRoleRuns", input);
+  listRuns(input: MethodInput<"listRuns">): Promise<Result<FnOutput<"listRuns">>> {
+    return this.rpc("listRuns", input);
+  }
+
+  sendRunToChat(input: MethodInput<"sendRunToChat">): Promise<Result<FnOutput<"sendRunToChat">>> {
+    return this.rpc("sendRunToChat", input);
   }
 
   listLifecycleEvents(

@@ -20,7 +20,7 @@ import {
   TURN_STATUSES,
   WORKSPACE_STATES,
 } from "@tempo/protocol";
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { real, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /** WorkspaceDO SQLite (02). DDL lives in do-migrations.ts; these tables type the queries. */
 export const workspace = sqliteTable("workspace", {
@@ -99,7 +99,7 @@ export const sessions = sqliteTable("sessions", {
   handoffPending: integer("handoff_pending").notNull(),
   pendingNote: text("pending_note"),
   generalPromptSent: integer("general_prompt_sent").notNull(),
-  roleRunId: text("role_run_id"),
+  runId: text("run_id"),
   customAgentId: text("custom_agent_id"),
   customAgentName: text("custom_agent_name"),
   customAgentCommit: text("custom_agent_commit"),
@@ -309,7 +309,7 @@ export const lifecycleEvents = sqliteTable("lifecycle_events", {
   occurredAt: integer("occurred_at").notNull(),
   changeId: text("change_id"),
   turnId: text("turn_id"),
-  roleRunId: text("role_run_id"),
+  runId: text("run_id"),
   sessionId: text("session_id"),
   agent: text("agent", { enum: AGENT_IDS }),
   causationId: text("causation_id"),
@@ -318,24 +318,29 @@ export const lifecycleEvents = sqliteTable("lifecycle_events", {
   dispatchedAt: integer("dispatched_at"),
 });
 
-export const roleRuns = sqliteTable("role_runs", {
+export const runs = sqliteTable("runs", {
   id: text("id").primaryKey(),
   changeId: text("change_id").notNull(),
   parentRunId: text("parent_run_id"),
-  depth: integer("depth").notNull(),
-  roleName: text("role_name").notNull(),
-  scope: text("scope").notNull(),
-  roleSha: text("role_sha").notNull(),
+  agentId: text("agent_id"),
+  attachmentId: text("attachment_id"),
+  handle: text("handle").notNull(),
+  agentVersion: integer("agent_version"),
+  agentSha: text("agent_sha").notNull(),
   triggerEventId: text("trigger_event_id").notNull(),
+  decisionP: real("decision_p"),
   sessionId: text("session_id"),
+  originSessionId: text("origin_session_id"),
   agent: text("agent", { enum: AGENT_IDS }),
   access: text("access").notNull(),
+  outputKind: text("output_kind").notNull(),
   status: text("status").notNull(),
-  round: integer("round").notNull(),
-  continuesUsed: integer("continues_used").notNull().default(0),
+  followUpSent: integer("follow_up_sent").notNull().default(0),
   tokens: integer("tokens").notNull().default(0),
   pinCheckpointId: text("pin_checkpoint_id"),
+  warning: text("warning"),
   resultJson: text("result_json"),
+  sentTurnId: text("sent_turn_id"),
   errorCode: text("error_code"),
   errorDetail: text("error_detail"),
   deadlineAt: integer("deadline_at"),
@@ -346,11 +351,11 @@ export const roleRuns = sqliteTable("role_runs", {
 
 export type LifecycleRow = typeof lifecycleEvents.$inferSelect;
 
-export type RoleRunRow = typeof roleRuns.$inferSelect;
+export type RunRow = typeof runs.$inferSelect;
 
 export const workspaceSchema = {
   lifecycleEvents,
-  roleRuns,
+  runs,
   artifacts,
   artifactCodes,
   environmentProposals,

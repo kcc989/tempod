@@ -163,6 +163,23 @@ impl WorkspaceView {
             &review,
             window,
             |this, _, event: &super::review::ReviewEvent, window, cx| {
+                if let super::review::ReviewEvent::OpenRun(id) = event {
+                    this.open_run_transcript(id, window, cx);
+                }
+                if let super::review::ReviewEvent::CancelRun(id) = event {
+                    this.mutate::<api::CancelRun>(
+                        p::CancelRunIn {
+                            workspace_id: this.store.read(cx).workspace_id.clone(),
+                            run_id: id.clone(),
+                        },
+                        cx,
+                    );
+                }
+                if let super::review::ReviewEvent::RevertRun(id) = event {
+                    this.revert_checkpoint = Some(id.clone());
+                    this.revert_seq = None;
+                    this.operation("Revert", window, cx);
+                }
                 if let super::review::ReviewEvent::CommentDeleted(id) = event {
                     this.review_comments.retain(|c| c != id);
                     for chat in this.chats.values() {
@@ -1445,6 +1462,24 @@ impl WorkspaceView {
         cx.notify();
     }
 
+    fn open_run_transcript(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.ensure_chat(id, window, cx);
+        let title = self
+            .store
+            .read(cx)
+            .state
+            .sessions
+            .get(id)
+            .map(chat_model::session_title)
+            .unwrap_or_else(|| "Run".into());
+        if let Some(chat) = self.chats.get(id) {
+            let transcript = chat.transcript.clone();
+            self.review
+                .update(cx, |r, cx| r.open_run_transcript(id, title, transcript, cx));
+        }
+        self.sync(window, cx);
+        cx.emit(RevealRight);
+    }
     fn tab_ids(&self, cx: &gpui_kit::App) -> Vec<String> {
         let state = &self.store.read(cx).state;
         let mut ids: Vec<_> = chat_model::sessions(state, false)
@@ -1588,6 +1623,23 @@ impl WorkspaceView {
                         }
                     }
                 }
+                TranscriptEvent::CancelRun { run_id } => this.mutate::<api::CancelRun>(
+                    p::CancelRunIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        run_id: run_id.clone(),
+                    },
+                    cx,
+                ),
+                TranscriptEvent::SendRun { run_id } => this.mutate::<api::SendRunToChat>(
+                    p::SendRunToChatIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        run_id: run_id.clone(),
+                    },
+                    cx,
+                ),
+                TranscriptEvent::OpenRun { session_id } => {
+                    this.open_run_transcript(session_id, window, cx);
+                }
                 TranscriptEvent::OpenArtifact {
                     artifact_id,
                     version,
@@ -1700,18 +1752,14 @@ impl WorkspaceView {
                 .into_iter()
                 .map(TranscriptRow::from_native)
                 .collect();
-            let role = state
+            let run = state
                 .sessions
                 .get(id)
-                .and_then(|s| s.role_run_id.as_ref())
-                .and_then(|id| state.role_runs.get(id));
-            let role_running = role.is_some_and(|r| {
-                matches!(
-                    r.status,
-                    p::RoleRunStatus::Running | p::RoleRunStatus::Queued
-                )
-            });
-            let working = chat_model::running_turn(state, id).is_some() || role_running;
+                .and_then(|s| s.run_id.as_ref())
+                .and_then(|id| state.runs.get(id));
+            let run_running = run
+                .is_some_and(|r| matches!(r.status, p::RunStatus::Running | p::RunStatus::Queued));
+            let working = chat_model::running_turn(state, id).is_some() || run_running;
             let steering = state
                 .sessions
                 .get(id)
@@ -1728,15 +1776,17 @@ impl WorkspaceView {
                 ),
                 _ => String::new(),
             };
+            let runs = state.runs.clone();
             chat.transcript.update(cx, |t, cx| {
                 t.read_only = read_only;
+                t.runs = runs;
                 t.agent = session.as_ref().map(|s| s.agent);
                 t.can_revert = can_revert;
                 t.sync(rows, cx);
             });
             chat.composer.update(cx, |c, cx| {
-                c.read_only = read_only || role_running;
-                c.role_running = role_running;
+                c.read_only = read_only || run_running;
+                c.run_running = run_running;
                 c.review_count = self.review_comments.len();
                 c.working = working;
                 c.steering = steering;
@@ -1949,15 +1999,30 @@ impl WorkspaceView {
         .detach();
     }
     fn load_files(&mut self, session_id: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let roles = self.client.call::<api::ListRoles>(p::ListRolesIn {
-            workspace_id: Some(self.store.read(cx).workspace_id.clone()),
-        });
+        let agents = self.client.call::<api::ListAgents>(p::Empty {});
+        let project_id = self
+            .store
+            .read(cx)
+            .state
+            .workspace
+            .as_ref()
+            .map(|w| w.project_id.clone())
+            .unwrap_or_default();
+        let attachments = self
+            .client
+            .call::<api::ListProjectAgents>(p::ListProjectAgentsIn { project_id });
         let request = self.client.call::<api::ListFiles>(p::ListFilesIn {
             workspace_id: self.store.read(cx).workspace_id.clone(),
         });
         let id = session_id.to_string();
         cx.spawn_in(window, async move |this, cx| {
-            let role_list = roles.await.unwrap_or_default();
+            let agent_list = agents.await.unwrap_or_default();
+            let attached: Vec<_> = attachments
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|a| a.agent.map(|agent| agent.handle.0))
+                .collect();
             let result = request
                 .await
                 .map(|out| out.paths)
@@ -1965,7 +2030,8 @@ impl WorkspaceView {
             let _ = this.update_in(cx, |this, _, cx| {
                 if let Some(chat) = this.chats.get(&id) {
                     chat.composer.update(cx, |c, cx| {
-                        c.set_roles(role_list, cx);
+                        c.set_agents(agent_list, cx);
+                        c.set_attached_agents(attached, cx);
                         c.set_files(result, cx);
                     });
                 }
@@ -2002,13 +2068,13 @@ impl WorkspaceView {
             c.sending = true;
             cx.notify();
         });
-        if prompt.text.trim_start().starts_with("/role")
-            && prompt.text.split_whitespace().next() == Some("/role")
+        if prompt.text.trim_start().starts_with("/agent")
+            && prompt.text.split_whitespace().next() == Some("/agent")
         {
             let rest = prompt
                 .text
                 .trim_start()
-                .strip_prefix("/role")
+                .strip_prefix("/agent")
                 .unwrap_or_default()
                 .trim_start();
             let (name, text) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
@@ -2022,16 +2088,29 @@ impl WorkspaceView {
                     cx.notify();
                 });
                 self.toast(
-                    "ROLE_INVALID".into(),
-                    "Use /role <name> <text>, with one role per message.".into(),
+                    "AGENT_INVALID".into(),
+                    "Use /agent <handle> <text>, with one agent per message.".into(),
                     cx,
                 );
                 return;
             }
-            let request = self.client.call::<api::RequestRole>(p::RequestRoleIn {
+            let Some(agent_id) = self
+                .custom_agents
+                .iter()
+                .find(|a| a.handle.0 == name)
+                .map(|a| a.id.clone())
+            else {
+                chat.composer.update(cx, |c, cx| {
+                    c.sending = false;
+                    cx.notify();
+                });
+                self.toast("NOT_FOUND".into(), "No agent with that handle.".into(), cx);
+                return;
+            };
+            let request = self.client.call::<api::RequestAgent>(p::RequestAgentIn {
                 workspace_id: self.store.read(cx).workspace_id.clone(),
                 session_id: Some(session_id.into()),
-                role: p::RoleName(name.into()),
+                agent_id,
                 text: (!text.is_empty()).then(|| text.into()),
             });
             let session_id = session_id.to_string();
@@ -2290,11 +2369,11 @@ impl WorkspaceView {
             .state
             .sessions
             .get(session_id)
-            .and_then(|s| s.role_run_id.clone())
+            .and_then(|s| s.run_id.clone())
         {
-            let request = self.client.call::<api::CancelRoleRun>(p::CancelRoleRunIn {
+            let request = self.client.call::<api::CancelRun>(p::CancelRunIn {
                 workspace_id: self.store.read(cx).workspace_id.clone(),
-                role_run_id: run_id,
+                run_id,
             });
             cx.spawn(async move |this, cx| {
                 if let Err(error) = request.await {
@@ -2736,10 +2815,10 @@ impl Render for WorkspaceView {
             .filter_map(|id| store.state.sessions.get(id))
             .map(|s| {
                 (
-                    s.role_run_id
+                    s.run_id
                         .as_ref()
-                        .and_then(|id| self.store.read(cx).state.role_runs.get(id))
-                        .map(|run| format!("{} #{} · {}", run.role_name, run.round, run.status))
+                        .and_then(|id| self.store.read(cx).state.runs.get(id))
+                        .map(|run| format!("{} · {}", run.name, run.status))
                         .unwrap_or_else(|| chat_model::session_title(s)),
                     chat_model::session_tooltip(s),
                 )

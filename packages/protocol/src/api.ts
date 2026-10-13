@@ -1,4 +1,5 @@
-import { RoleInfo, RoleName, RoleScope, RoleRun, LifecyclePage, LifecycleTrace } from "./lifecycle.ts";
+import { Run } from "./runs.ts";
+import { RoleInfo, RoleName, RoleScope, LifecyclePage, LifecycleTrace } from "./lifecycle.ts";
 import { Schema } from "effect";
 import { AgentId, ApiKeyProvider, DiffScope, EgressStatusFilter, MergeMethod, ReviewSide } from "./enums.ts";
 import { EgressPolicy } from "./enums.ts";
@@ -91,13 +92,14 @@ export const API = {
   putUserRole: fn("POST", Schema.Struct({ name: S, text: S }), RoleInfo),
   deleteUserRole: fn("POST", Schema.Struct({ name: RoleName }), Empty),
   reloadRoles: fn("POST", Schema.Struct(W), Schema.Array(RoleInfo)),
-  requestRole: fn(
+  requestAgent: fn(
     "POST",
-    Schema.Struct({ ...W, role: RoleName, text: opt(S), sessionId: opt(S) }),
-    Schema.Struct({ changeId: S, roleRunId: S }),
+    Schema.Struct({ ...W, agentId: S, text: opt(S), sessionId: opt(S) }),
+    Schema.Struct({ changeId: S, runId: S }),
   ),
-  cancelRoleRun: fn("POST", Schema.Struct({ ...W, roleRunId: S }), Empty),
-  listRoleRuns: fn("GET", Schema.Struct({ ...W, changeId: opt(S) }), Schema.Array(RoleRun)),
+  cancelRun: fn("POST", Schema.Struct({ ...W, runId: S }), Empty),
+  listRuns: fn("GET", Schema.Struct({ ...W, changeId: opt(S) }), Schema.Array(Run)),
+  sendRunToChat: fn("POST", Schema.Struct({ ...W, runId: S }), Schema.Struct({ turnId: S })),
   listLifecycleEvents: fn(
     "GET",
     Schema.Struct({ ...W, changeId: opt(S), beforeSeq: opt(N), limit: opt(N) }),

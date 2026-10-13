@@ -1,5 +1,11 @@
 import { Schema, SchemaGetter } from "effect";
-import { TempoError, type PrState, type ChecksState, type MergeMethod } from "@tempo/protocol";
+import {
+  TempoError,
+  type PrState,
+  type ChecksState,
+  type MergeMethod,
+  type CheckRun as CheckRunWire,
+} from "@tempo/protocol";
 import { githubFetch, githubPaginate } from "./client.ts";
 import { GhPull } from "./api.ts";
 
@@ -26,11 +32,7 @@ export interface GitProvider {
     input: { title: string; head: string; base: string; body: string; draft: boolean },
   ): Promise<{ number: number; url: string; state: PrState }>;
   mergePullRequest(token: string, repo: Repo, number: number, method: MergeMethod): Promise<void>;
-  listCheckRuns(
-    token: string,
-    repo: Repo,
-    sha: string,
-  ): Promise<{ name: string; status: string; conclusion: string | null; url: string }[]>;
+  listCheckRuns(token: string, repo: Repo, sha: string): Promise<CheckRunWire[]>;
   deleteBranch(token: string, repo: Repo, branch: string): Promise<void>;
 }
 
@@ -136,6 +138,7 @@ export const github: GitProvider = {
       status: Schema.String,
       conclusion: Schema.NullOr(Schema.String),
       html_url: Schema.String,
+      output: Schema.optional(Schema.Struct({ summary: Schema.NullOr(Schema.String) })),
     });
 
     const runs = await githubPaginate(
@@ -149,7 +152,13 @@ export const github: GitProvider = {
       ),
     );
 
-    return runs.map((c) => ({ name: c.name, status: c.status, conclusion: c.conclusion, url: c.html_url }));
+    return runs.map((c) => {
+      let check: CheckRunWire = { name: c.name, status: c.status, conclusion: c.conclusion, url: c.html_url };
+
+      if (c.output?.summary) check = { ...check, summary: c.output.summary };
+
+      return check;
+    });
   },
   async deleteBranch(token, repo, branch) {
     await githubFetch(

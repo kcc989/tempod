@@ -358,6 +358,13 @@ export class SessionMapper {
     const status = TOOL_STATUSES.find((status) => status === u["status"]);
     const existing = this.tools.get(toolCallId);
 
+    const title = Schema.is(Schema.String)(u["title"])
+      ? u["title"]
+      : String(existing?.content["title"] ?? "");
+
+    if (/report[_ ]result|propose[_ ]agent[_ ]change/i.test(title))
+      u = { ...u, rawInput: undefined, rawOutput: undefined, content: [], locations: [] };
+
     if (!existing) {
       if (!isNew)
         this.deps.log.debug("tool_call_update for an unknown tool call", { sessionId: this.sessionId });
