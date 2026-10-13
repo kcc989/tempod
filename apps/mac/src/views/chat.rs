@@ -78,6 +78,10 @@ impl TranscriptRow {
 
 #[derive(Clone, Debug)]
 pub enum TranscriptEvent {
+    ResolveAgentProposal {
+        proposal_id: String,
+        apply: bool,
+    },
     RequestAgent {
         agent_id: String,
     },
@@ -171,6 +175,7 @@ fn thumbnail_image(file: AttachmentFile) -> Option<Arc<Image>> {
 
 pub struct TranscriptView {
     pub runs: HashMap<String, tempo_protocol::Run>,
+    pub agent_proposals: HashMap<String, tempo_protocol::AgentProposalRecord>,
     rows: Vec<TranscriptRow>,
     scroller: Entity<MessageScrollerState>,
     images: Entity<LocalImageCache>,
@@ -200,6 +205,7 @@ impl TranscriptView {
         Self {
             rows,
             runs: HashMap::new(),
+            agent_proposals: HashMap::new(),
             scroller: cx.new(|cx| MessageScrollerState::new(count, cx)),
             images: LocalImageCache::new(cx),
             open: HashMap::new(),
@@ -1025,7 +1031,54 @@ fn render_native_row(
                     )
                 }
                 ItemContent::Run(c) => run_card(&c.run_id, view.clone(), cx),
-                ItemContent::AgentProposal(_) => div().into_any_element(),
+                ItemContent::AgentProposal(content) => {
+                    let record = view.upgrade().and_then(|v| {
+                        v.read(cx)
+                            .agent_proposals
+                            .get(&content.proposal_id)
+                            .cloned()
+                    });
+                    if let Some(record) = record {
+                        let disabled = view.upgrade().is_none_or(|v| v.read(cx).read_only);
+                        let mut card = v_flex()
+                            .gap_2()
+                            .p_3()
+                            .border_1()
+                            .border_color(color(Token::Border, cx))
+                            .child(format!(
+                                "Agent changes · {}",
+                                serde_json::to_value(record.status)
+                                    .unwrap_or_default()
+                                    .as_str()
+                                    .unwrap_or_default()
+                            ))
+                            .child(record.proposal.note.clone())
+                            .child(div().font_family("monospace").child(
+                                serde_json::to_string_pretty(&record.proposal).unwrap_or_default(),
+                            ));
+                        if record.status == tempo_protocol::AgentProposalRecordStatus::Pending {
+                            for (label, apply) in [("Apply", true), ("Reject", false)] {
+                                let view = view.clone();
+                                let id = record.id.clone();
+                                card = card.child(
+                                    Button::new(label).label(label).disabled(disabled).on_click(
+                                        move |_, _, cx| {
+                                            let _ = view.update(cx, |_, cx| {
+                                                cx.emit(TranscriptEvent::ResolveAgentProposal {
+                                                    proposal_id: id.clone(),
+                                                    apply,
+                                                })
+                                            });
+                                        },
+                                    ),
+                                );
+                            }
+                        }
+                        card.into_any_element()
+                    } else {
+                        div().child("Loading agent proposal…").into_any_element()
+                    }
+                }
                 ItemContent::Artifact(a) => artifact_card(&id, &item, a, view.clone(), cx),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {

@@ -180,7 +180,24 @@ const AGENT_ATTACHMENT: P.AgentAttachment = {
   agent: LIBRARY_SUMMARY,
 };
 
+const AGENT_PROPOSAL: P.AgentProposal = {
+  note: "Review auth on push",
+  agent: LIBRARY_DEFINITION,
+  attach: {
+    handle: LIBRARY_DEFINITION.handle,
+    hooks: AGENT_ATTACHMENT.hooks,
+    autoSend: false,
+    maxRuns: 3,
+    timeout: "20m",
+  },
+};
+
 export const SHARED_SAMPLES = {
+  AgentProposal: [AGENT_PROPOSAL],
+  AgentProposalRecord: [
+    { id: uid(704), sessionId: S1, createdAt: at(0), status: "pending", proposal: AGENT_PROPOSAL },
+  ],
+  AgentLibraryToolResult: [{ agents: [LIBRARY_SUMMARY], attachments: [AGENT_ATTACHMENT] }],
   AgentDefinition: [LIBRARY_DEFINITION],
   Agent: [LIBRARY_AGENT],
   AgentSummary: [LIBRARY_SUMMARY],
@@ -643,6 +660,7 @@ const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
 export const INPUT_SAMPLES = {
+  resolveAgentProposal: [{ workspaceId: W1, proposalId: uid(704), apply: true }],
   listAgents: [{}],
   getAgent: [{ agentId: LIBRARY_AGENT.id }],
   saveAgent: [

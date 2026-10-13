@@ -41,3 +41,5 @@ export * from "./credentials.ts";
 export * from "./github.ts";
 
 export * from "./decisions.ts";
+
+export * from "./agent-proposals.ts";

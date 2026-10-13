@@ -247,3 +247,19 @@ export const userRoles = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.name] })],
 );
+
+export const agentProposalApplications = sqliteTable(
+  "agent_proposal_applications",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull(),
+    guard: integer("guard").notNull(),
+  },
+  (t) => [check("agent_proposal_guard", sql`${t.guard} = 1`)],
+);

@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentProposal",
+  "type": "object",
+  "properties": {
+    "note": {
+      "type": "string"
+    },
+    "agent": {
+      "$ref": "AgentDefinition.json"
+    },
+    "attach": {
+      "type": "object",
+      "properties": {
+        "handle": {
+          "$ref": "AgentHandle.json"
+        },
+        "hooks": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "AttachmentHook.json"
+          }
+        },
+        "autoSend": {
+          "type": "boolean"
+        },
+        "maxRuns": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 1,
+              "maximum": 10
+            }
+          ]
+        },
+        "timeout": {
+          "type": "string"
+        }
+      },
+      "required": ["handle", "hooks"],
+      "additionalProperties": true
+    },
+    "detach": {
+      "$ref": "AgentHandle.json"
+    }
+  },
+  "required": ["note"],
+  "additionalProperties": true
+}

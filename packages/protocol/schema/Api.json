@@ -259,6 +259,22 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "resolveAgentProposal": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ResolveAgentProposalIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "sendRunToChat": {
       "type": "object",
       "properties": {
@@ -1815,6 +1831,7 @@
     "requestAgent",
     "cancelRun",
     "listRuns",
+    "resolveAgentProposal",
     "sendRunToChat",
     "listLifecycleEvents",
     "getTrace",

@@ -1,3 +1,4 @@
+import { proposalRecords } from "../../agents/proposals.ts";
 import { Lifecycle } from "./lifecycle.ts";
 import type { OpResult } from "./runner.ts";
 import { and, asc, desc, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
@@ -500,6 +501,7 @@ export class WorkspaceCore {
       hasUnpushedCommits: this.kv<boolean>("hasUnpushedCommits") ?? false,
       environmentId: row.environmentId,
       environmentProposals: this.pendingProposals(),
+      agentProposals: proposalRecords(this),
     };
   }
   /**

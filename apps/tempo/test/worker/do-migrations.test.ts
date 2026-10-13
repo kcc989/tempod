@@ -36,6 +36,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0008_artifacts",
       "0009_lifecycle",
       "0010_agents",
+      "0011_agent_proposals",
     ]);
   });
 });
@@ -179,7 +180,13 @@ describe("deployed workspace upgrade", () => {
             ? WORKSPACE_MIGRATIONS.filter((m) => oldTags.includes(m.tag))
             : WORKSPACE_MIGRATIONS.filter(
                 (m) =>
-                  !["0007_custom_agents", "0008_artifacts", "0009_lifecycle", "0010_agents"].includes(m.tag),
+                  ![
+                    "0007_custom_agents",
+                    "0008_artifacts",
+                    "0009_lifecycle",
+                    "0010_agents",
+                    "0011_agent_proposals",
+                  ].includes(m.tag),
               )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
                 .sort((a, b) => a.when - b.when);

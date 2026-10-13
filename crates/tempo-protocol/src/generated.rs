@@ -574,6 +574,12 @@ impl ::std::convert::TryFrom<::std::string::String> for AgentId {
         value.parse()
     }
 }
+///`AgentLibraryToolResult`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AgentLibraryToolResult {
+    pub agents: ::std::vec::Vec<AgentSummary>,
+    pub attachments: ::std::vec::Vec<AgentAttachment>,
+}
 ///`AgentMcp`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct AgentMcp {
@@ -698,11 +704,106 @@ impl<'de> ::serde::Deserialize<'de> for AgentPrompt {
             })
     }
 }
+///`AgentProposal`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AgentProposal {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub agent: ::std::option::Option<AgentDefinition>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub attach: ::std::option::Option<AgentProposalAttach>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub detach: ::std::option::Option<AgentHandle>,
+    pub note: ::std::string::String,
+}
+///`AgentProposalAttach`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AgentProposalAttach {
+    #[serde(
+        rename = "autoSend",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub auto_send: ::std::option::Option<bool>,
+    pub handle: AgentHandle,
+    pub hooks: ::std::vec::Vec<AttachmentHook>,
+    #[serde(
+        rename = "maxRuns",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub max_runs: ::std::option::Option<::std::num::NonZeroU64>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub timeout: ::std::option::Option<::std::string::String>,
+}
 ///`AgentProposalContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct AgentProposalContent {
     #[serde(rename = "proposalId")]
     pub proposal_id: ::std::string::String,
+}
+///`AgentProposalRecord`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AgentProposalRecord {
+    #[serde(rename = "createdAt")]
+    pub created_at: f64,
+    pub id: ::std::string::String,
+    pub proposal: AgentProposal,
+    #[serde(rename = "sessionId")]
+    pub session_id: ::std::string::String,
+    pub status: AgentProposalRecordStatus,
+}
+///`AgentProposalRecordStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum AgentProposalRecordStatus {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "applied")]
+    Applied,
+    #[serde(rename = "rejected")]
+    Rejected,
+}
+impl ::std::fmt::Display for AgentProposalRecordStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Pending => f.write_str("pending"),
+            Self::Applied => f.write_str("applied"),
+            Self::Rejected => f.write_str("rejected"),
+        }
+    }
+}
+impl ::std::str::FromStr for AgentProposalRecordStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "applied" => Ok(Self::Applied),
+            "rejected" => Ok(Self::Rejected),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for AgentProposalRecordStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for AgentProposalRecordStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`AgentSummary`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -7096,6 +7197,15 @@ pub struct RerunSetupIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`ResolveAgentProposalIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ResolveAgentProposalIn {
+    pub apply: bool,
+    #[serde(rename = "proposalId")]
+    pub proposal_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
 ///`ResolveEnvironmentProposalIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ResolveEnvironmentProposalIn {
@@ -10026,6 +10136,12 @@ pub struct WakeWorkspaceIn {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct WorkspaceDetail {
     #[serde(
+        rename = "agentProposals",
+        default,
+        skip_serializing_if = "::std::vec::Vec::is_empty"
+    )]
+    pub agent_proposals: ::std::vec::Vec<AgentProposalRecord>,
+    #[serde(
         rename = "archivedAt",
         deserialize_with = "::std::option::Option::deserialize"
     )]
@@ -12083,6 +12199,15 @@ pub mod api {
         type Input = crate::RerunSetupIn;
         type Output = crate::ScriptRun;
     }
+    /// `resolveAgentProposal`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ResolveAgentProposal;
+    impl crate::Function for ResolveAgentProposal {
+        const NAME: &'static str = "resolveAgentProposal";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::ResolveAgentProposalIn;
+        type Output = crate::Empty;
+    }
     /// `resolveEnvironmentProposal`
     #[derive(Clone, Copy, Debug)]
     pub struct ResolveEnvironmentProposal;
@@ -12433,6 +12558,7 @@ pub mod api {
         ("reorderQueue", crate::Method::Post),
         ("requestAgent", crate::Method::Post),
         ("rerunSetup", crate::Method::Post),
+        ("resolveAgentProposal", crate::Method::Post),
         ("resolveEnvironmentProposal", crate::Method::Post),
         ("respondPermission", crate::Method::Post),
         ("restoreWorkspace", crate::Method::Post),
@@ -12478,9 +12604,12 @@ pub mod wire {
         "AgentDefinition",
         "AgentHandle",
         "AgentId",
+        "AgentLibraryToolResult",
         "AgentMessageContent",
         "AgentModelOptions",
+        "AgentProposal",
         "AgentProposalContent",
+        "AgentProposalRecord",
         "AgentSummary",
         "AgentThoughtContent",
         "ApiKeyProvider",
@@ -12677,6 +12806,7 @@ pub mod wire {
         "RequestAgentIn",
         "RequestAgentOut",
         "RerunSetupIn",
+        "ResolveAgentProposalIn",
         "ResolveEnvironmentProposalIn",
         "RespondPermissionIn",
         "RestoreWorkspaceIn",
@@ -12792,9 +12922,12 @@ pub mod wire {
             "AgentDefinition" => crate::roundtrip::<crate::AgentDefinition>(text),
             "AgentHandle" => crate::roundtrip::<crate::AgentHandle>(text),
             "AgentId" => crate::roundtrip::<crate::AgentId>(text),
+            "AgentLibraryToolResult" => crate::roundtrip::<crate::AgentLibraryToolResult>(text),
             "AgentMessageContent" => crate::roundtrip::<crate::AgentMessageContent>(text),
             "AgentModelOptions" => crate::roundtrip::<crate::AgentModelOptions>(text),
+            "AgentProposal" => crate::roundtrip::<crate::AgentProposal>(text),
             "AgentProposalContent" => crate::roundtrip::<crate::AgentProposalContent>(text),
+            "AgentProposalRecord" => crate::roundtrip::<crate::AgentProposalRecord>(text),
             "AgentSummary" => crate::roundtrip::<crate::AgentSummary>(text),
             "AgentThoughtContent" => crate::roundtrip::<crate::AgentThoughtContent>(text),
             "ApiKeyProvider" => crate::roundtrip::<crate::ApiKeyProvider>(text),
@@ -13021,6 +13154,7 @@ pub mod wire {
             "RequestAgentIn" => crate::roundtrip::<crate::RequestAgentIn>(text),
             "RequestAgentOut" => crate::roundtrip::<crate::RequestAgentOut>(text),
             "RerunSetupIn" => crate::roundtrip::<crate::RerunSetupIn>(text),
+            "ResolveAgentProposalIn" => crate::roundtrip::<crate::ResolveAgentProposalIn>(text),
             "ResolveEnvironmentProposalIn" => {
                 crate::roundtrip::<crate::ResolveEnvironmentProposalIn>(text)
             }

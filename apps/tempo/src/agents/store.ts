@@ -1,7 +1,5 @@
 import { Schema, Option } from "effect";
 import { TempoError } from "@tempo/protocol";
-import git from "isomorphic-git";
-import http from "isomorphic-git/http/web";
 import type { Env } from "../env.ts";
 import { log } from "../log.ts";
 import { memoryFs } from "./memfs.ts";
@@ -72,6 +70,11 @@ const commitOnce = async (
   content: string | null,
   message: string,
 ): Promise<string> => {
+  const [{ default: git }, { default: http }] = await Promise.all([
+    import("isomorphic-git"),
+    import("isomorphic-git/http/web"),
+  ]);
+
   const fs = memoryFs();
   const headers = { Authorization: `Bearer ${token}` };
   await fs.promises.mkdir(DIR);

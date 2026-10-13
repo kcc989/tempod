@@ -1623,6 +1623,16 @@ impl WorkspaceView {
                         }
                     }
                 }
+                TranscriptEvent::ResolveAgentProposal { proposal_id, apply } => {
+                    this.mutate::<api::ResolveAgentProposal>(
+                        p::ResolveAgentProposalIn {
+                            workspace_id: this.store.read(cx).workspace_id.clone(),
+                            proposal_id: proposal_id.clone(),
+                            apply: *apply,
+                        },
+                        cx,
+                    )
+                }
                 TranscriptEvent::RequestAgent { agent_id } => this.mutate::<api::RequestAgent>(
                     p::RequestAgentIn {
                         workspace_id: this.store.read(cx).workspace_id.clone(),
@@ -1785,10 +1795,19 @@ impl WorkspaceView {
                 ),
                 _ => String::new(),
             };
+            let agent_proposals = state
+                .workspace
+                .as_ref()
+                .map(|w| w.agent_proposals.clone())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|p| (p.id.clone(), p))
+                .collect();
             let runs = state.runs.clone();
             chat.transcript.update(cx, |t, cx| {
                 t.read_only = read_only;
                 t.runs = runs;
+                t.agent_proposals = agent_proposals;
                 t.agent = session.as_ref().map(|s| s.agent);
                 t.can_revert = can_revert;
                 t.sync(rows, cx);

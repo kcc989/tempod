@@ -1,3 +1,4 @@
+import { AgentProposalCard } from "./AgentProposalCard";
 import { RunCard } from "./RunCard";
 import { Match, Schema } from "effect";
 import type { AgentId, Item, ItemOf, Turn } from "@tempo/protocol";
@@ -94,7 +95,13 @@ export const ItemView = memo(function ItemView({
         />
       );
     case "agent_proposal":
-      return null;
+      return (
+        <AgentProposalCard
+          workspaceId={ctx.workspaceId}
+          proposalId={item.content.proposalId}
+          writable={ctx.writable}
+        />
+      );
     case "user_message":
       return <UserMessage ctx={ctx} item={item} turn={turn} />;
     case "agent_message":
