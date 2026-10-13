@@ -751,7 +751,6 @@ pub enum WorkspaceBanner {
         detail: Option<String>,
     },
     SetupFailed,
-    Sleeping,
 }
 
 pub fn workspace_banners(w: &p::WorkspaceDetail) -> Vec<WorkspaceBanner> {
@@ -787,9 +786,6 @@ pub fn workspace_banners(w: &p::WorkspaceDetail) -> Vec<WorkspaceBanner> {
         && !matches!(w.state, S::Error | S::Archiving | S::Archived)
     {
         out.push(WorkspaceBanner::SetupFailed);
-    }
-    if w.state == S::Sleeping {
-        out.push(WorkspaceBanner::Sleeping);
     }
     out
 }
@@ -1018,10 +1014,7 @@ mod tests {
         );
         w.state = p::WorkspaceState::Sleeping;
         let banners = workspace_banners(&w);
-        assert_eq!(
-            banners,
-            [WorkspaceBanner::SetupFailed, WorkspaceBanner::Sleeping]
-        );
+        assert_eq!(banners, [WorkspaceBanner::SetupFailed]);
         assert_eq!(banner_codes(&banners), ["SETUP_FAILED"]);
         w.state = p::WorkspaceState::SettingUp;
         w.setup_status = p::SetupStatus::Running;

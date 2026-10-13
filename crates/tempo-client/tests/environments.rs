@@ -52,7 +52,7 @@ async fn round_trip<F: Function>(input: &str, reply: String) -> Vec<F::Output> {
     outputs
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn each_environment_call_posts_its_input_and_decodes_its_output() {
     let environments = format!("[{}]", fixtures("Environment").join(","));
     let listed = round_trip::<api::ListEnvironments>("Empty", environments).await;
@@ -111,7 +111,7 @@ fn apply(target: Option<p::Environment>, values: &[(&str, &str)]) -> ProposalApp
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn apply_without_an_environment_creates_one_selects_it_updates_sets_values_and_resolves() {
     let environment = fixtures("Environment").swap_remove(1);
     let project = fixtures("Project").swap_remove(2);
@@ -175,7 +175,7 @@ async fn apply_without_an_environment_creates_one_selects_it_updates_sets_values
     );
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn apply_to_an_environment_updates_it_and_stops_at_the_first_error() {
     let environment = fixture("Environment");
     let target: p::Environment = serde_json::from_str(&environment).expect("environment");

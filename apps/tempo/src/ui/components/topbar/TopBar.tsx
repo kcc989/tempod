@@ -41,7 +41,7 @@ export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
 
   if (!view) {
     return (
-      <header aria-busy="true" className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+      <header aria-busy="true" className="flex h-10 shrink-0 items-center gap-2 border-b bg-card px-3">
         <Skeleton className="h-4 w-40" />
         <Skeleton className="ml-auto h-5 w-24 rounded-full" />
       </header>
@@ -75,7 +75,7 @@ function pillFor({ w, d }: WorkspaceView) {
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
   return (
-    <header className="flex h-10 shrink-0 items-center gap-3 border-b px-2">
+    <header className="flex h-10 shrink-0 items-center gap-3 border-b bg-card px-2">
       <div className="flex min-w-0 shrink items-center gap-1.5">
         <EditableTitle title={w.title} onSave={actions.rename} />
         <span className="flex min-w-0 items-center gap-0.5 font-mono text-xs text-muted-foreground">
@@ -144,7 +144,7 @@ function PrLinkAnchor({ workspace: w }: { workspace: WorkspaceSummary }) {
 function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+    <header className="flex h-11 shrink-0 items-center gap-2 border-b bg-card px-3">
       <StatusIcon workspace={w} op={d?.op ?? null} />
       <div className="flex min-w-0 flex-1 flex-col">
         <EditableTitle title={w.title} onSave={actions.rename} />

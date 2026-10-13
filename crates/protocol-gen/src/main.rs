@@ -133,6 +133,12 @@ fn normalize_object(map: Map<String, Value>) -> Value {
     if map.get("additionalProperties") == Some(&Value::Bool(true)) {
         map.remove("additionalProperties");
     }
+    if map.get("type") == Some(&json!("object"))
+        && let Some(default) = map.remove("default")
+    {
+        // Typify drops property defaults on inline structs unless metadata wraps the schema.
+        return json!({"allOf": [Value::Object(map)], "default": default});
+    }
     if let Some(Value::Array(members)) = map.remove("anyOf") {
         let mut unique: Vec<Value> = Vec::new();
         for m in members {
@@ -256,6 +262,15 @@ fn wire_registry(defs: &Defs) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inline_object_defaults_stay_property_metadata() {
+        let schema = json!({"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"], "default": {"a": ""}});
+        assert_eq!(
+            normalize(schema),
+            json!({"allOf": [{"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]}], "default": {"a": ""}})
+        );
+    }
 
     #[test]
     fn numbers_drop_the_non_finite_strings() {
