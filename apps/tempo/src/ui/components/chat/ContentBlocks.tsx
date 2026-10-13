@@ -4,6 +4,7 @@ import { diffLines } from "~/ui/lib/diff";
 import { stripAnsi } from "~/ui/lib/format";
 import { cn } from "~/ui/lib/utils";
 import { openFile } from "~/ui/state/workspace-ui";
+import { MessageMarkdown } from "./Markdown";
 import { fileLinkTarget, toUnifiedHunks, workspacePath, type BlockView } from "./transcript-model";
 
 /** One ACP content block (agent message blocks and tool call content). */
@@ -11,13 +12,28 @@ export function BlockViewer({
   workspaceId,
   block,
   monospace = false,
+  markdown = false,
+  streaming = false,
 }: {
   workspaceId: string;
   block: BlockView;
   monospace?: boolean;
+  markdown?: boolean;
+  streaming?: boolean;
 }) {
   switch (block.kind) {
     case "text":
+      if (markdown && (!monospace || /(?:^|\n) {0,3}(?:`{3,}|~{3,})/.test(stripAnsi(block.text)))) {
+        return (
+          <div className="max-h-80 overflow-auto">
+            <MessageMarkdown
+              workspaceId={workspaceId}
+              text={monospace ? stripAnsi(block.text) : block.text}
+              streaming={streaming}
+            />
+          </div>
+        );
+      }
       return (
         <pre
           className={cn(

@@ -1,5 +1,5 @@
 //! 07 Testing, Client row: the server check and device sign-in (07, Sign-in steps 2 to 7) against a
-//! fake Better Auth, on tokio's paused clock.
+//! fake Better Auth over real TCP. Polling-clock rules also have paused-clock unit tests.
 
 mod common;
 
@@ -65,7 +65,7 @@ async fn sign_in(server: &FakeHttp) -> Result<Token, SignInError> {
     s.poll_token(&auth).await
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn check_server_accepts_protocol_1_and_a_new_enough_app() {
     let server = fake_http(|_, _| {
         (
@@ -88,7 +88,7 @@ async fn check_server_accepts_protocol_1_and_a_new_enough_app() {
     );
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn check_server_refuses_another_protocol_or_a_failing_meta() {
     let rt = RuntimeHandle::current();
     let other = fake_http(|_, _| {
@@ -126,7 +126,7 @@ async fn check_server_refuses_another_protocol_or_a_failing_meta() {
     assert_eq!(err, SignInError::NotTempo);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn check_server_asks_for_an_update_below_min_mac_client() {
     let server = fake_http(|_, _| {
         (
@@ -151,7 +151,7 @@ async fn check_server_asks_for_an_update_below_min_mac_client() {
     );
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn device_flow_polls_every_interval_and_slows_down_by_five_seconds() {
     let server = better_auth(vec![
         oauth_error("authorization_pending"),
@@ -184,10 +184,14 @@ async fn device_flow_polls_every_interval_and_slows_down_by_five_seconds() {
         .map(|w| w[1] - w[0])
         .collect();
     let s = Duration::from_secs;
-    assert_eq!(gaps, [s(5), s(5), s(10), s(10)]);
+    assert!(
+        gaps.iter()
+            .zip([s(5), s(5), s(10), s(10)])
+            .all(|(actual, minimum)| *actual >= minimum)
+    );
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn access_denied_and_expired_token_end_sign_in() {
     for code in ["access_denied", "expired_token"] {
         let server = better_auth(vec![
@@ -209,7 +213,7 @@ async fn access_denied_and_expired_token_end_sign_in() {
     );
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn get_session_tells_a_valid_token_from_a_revoked_one() {
     let server = fake_http(|req, _| match req.header("authorization") {
         Some("Bearer test-session-token") => (
@@ -237,7 +241,7 @@ async fn get_session_tells_a_valid_token_from_a_revoked_one() {
     assert_eq!(r.header("origin"), None);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn sign_out_posts_with_the_token() {
     let server = fake_http(|_, _| (200, json!({"success": true}).to_string())).await;
     let rt = RuntimeHandle::current();

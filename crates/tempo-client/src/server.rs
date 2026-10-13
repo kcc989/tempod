@@ -10,7 +10,7 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, Header
 use reqwest::{RequestBuilder, Response, Url};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use tempo_protocol::{ApiMeta, ErrorBody, Function, PROTOCOL_VERSION};
+use tempo_protocol::{ApiMeta, AppSetupStatus, ErrorBody, ErrorCode, Function, PROTOCOL_VERSION};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
@@ -28,6 +28,8 @@ pub const CLIENT_ID: &str = "tempo-mac";
 pub const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 /// 04, 07: each attachment is at most 10 MiB.
 pub const MAX_ATTACHMENT_BYTES: u64 = 10 * 1024 * 1024;
+/// 01 Artifacts: at most 25 MiB per version.
+pub const MAX_ARTIFACT_BYTES: u64 = 25 * 1024 * 1024;
 /// RFC 8628 3.5: `slow_down` adds 5 s to the polling interval.
 pub const SLOW_DOWN_STEP: Duration = Duration::from_secs(5);
 /// RFC 8628 3.2: the interval when the server sends none.
@@ -108,6 +110,23 @@ pub enum TokenStatus {
     Revoked,
 }
 
+/// An attachment as the attachment route serves it (02, Attachments).
+#[derive(Clone, PartialEq, Eq)]
+pub struct AttachmentFile {
+    /// The `Content-Type` without parameters, lowercase.
+    pub mime: String,
+    pub bytes: Vec<u8>,
+}
+
+impl fmt::Debug for AttachmentFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AttachmentFile")
+            .field("mime", &self.mime)
+            .field("len", &self.bytes.len())
+            .finish()
+    }
+}
+
 #[derive(Deserialize)]
 struct OAuthError {
     error: String,
@@ -136,6 +155,8 @@ impl Server {
         let http = reqwest::Client::builder()
             .tls_backend_preconfigured(tls::client_config(&[b"http/1.1"]).map_err(tls_error)?)
             .default_headers(headers)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| SignInError::Network(network_error(e)))?;
@@ -248,6 +269,21 @@ impl Server {
         async move { run.await.unwrap_or(Err(ApiError::Cancelled)) }
     }
 
+    /// `GET /api/setup/status`, no auth: whether the GitHub App exists, and its install page.
+    pub fn setup_status(
+        &self,
+    ) -> impl Future<Output = Result<AppSetupStatus, ApiError>> + Send + 'static {
+        let request = self.http().get(self.url(&["api", "setup", "status"]));
+        let run = self.inner.rt.run(async move {
+            let response = request
+                .send()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?;
+            read_api::<AppSetupStatus>(response).await
+        });
+        async move { run.await.unwrap_or(Err(ApiError::Cancelled)) }
+    }
+
     /// Sign-in step 2: `meta` must answer with `protocol` 1, and the app must not be older than
     /// `minMacClient`.
     pub fn check_server(
@@ -310,32 +346,17 @@ impl Server {
             n => n,
         };
         let run = self.inner.rt.run(async move {
-            let mut interval = Duration::from_secs(seconds);
-            loop {
-                tokio::time::sleep(interval).await;
-                let response = http
+            poll_device_token(seconds, || {
+                let request = http
                     .post(url.clone())
                     .header(CONTENT_TYPE, "application/json")
-                    .body(body.clone())
-                    .send()
-                    .await
-                    .map_err(sign_in_network)?;
-                match read_auth::<TokenResponse>(response).await {
-                    Ok(t) => return Ok(Token::new(t.access_token)),
-                    Err(SignInError::Rejected {
-                        error: Some(code), ..
-                    }) if code == "authorization_pending" => {}
-                    Err(SignInError::Rejected {
-                        error: Some(code), ..
-                    }) if code == "slow_down" => interval += SLOW_DOWN_STEP,
-                    Err(SignInError::Rejected {
-                        error: Some(code), ..
-                    }) if code == "access_denied" || code == "expired_token" => {
-                        return Err(SignInError::Denied);
-                    }
-                    Err(e) => return Err(e),
+                    .body(body.clone());
+                async move {
+                    let response = request.send().await.map_err(sign_in_network)?;
+                    read_auth::<TokenResponse>(response).await
                 }
-            }
+            })
+            .await
         });
         async move { run.await.unwrap_or(Err(SignInError::Cancelled)) }
     }
@@ -348,7 +369,8 @@ impl Server {
         let request = with_bearer(
             self.http().get(self.url(&["api", "auth", "get-session"])),
             token,
-        );
+        )
+        .timeout(Duration::from_secs(10));
         let run = self.inner.rt.run(async move {
             let response = request.send().await.map_err(sign_in_network)?;
             if response.status().as_u16() == 401 {
@@ -425,6 +447,9 @@ impl Client {
     }
 
     /// Closes every channel of this client (sign out). Their receivers get `Closed(Stopped)`.
+    pub fn invalidate_session(&self) {
+        self.unauthorized();
+    }
     pub fn close_channels(&self) {
         self.shared.stop.send_if_modified(|s| {
             let first = s.is_none();
@@ -460,6 +485,11 @@ impl Client {
             &self.token,
         )
         .header(CONTENT_TYPE, "application/json");
+        let request = if matches!(F::NAME, "commitAndPush" | "revertToCheckpoint") {
+            request.timeout(Duration::from_secs(360))
+        } else {
+            request
+        };
         self.send(async move {
             let body = body.map_err(|e| ApiError::Decode(decode_error(&e)))?;
             let response = request
@@ -510,12 +540,171 @@ impl Client {
         })
     }
 
+    /// `GET /api/workspaces/<workspaceId>/attachments/<attachmentId>` (02, Attachments): the original
+    /// bytes and their served type, at most 10 MiB. A 404 is `NOT_FOUND`.
+    pub fn get_attachment(
+        &self,
+        workspace_id: &str,
+        attachment_id: &str,
+    ) -> impl Future<Output = Result<AttachmentFile, ApiError>> + Send + 'static {
+        let url = self.server.url(&[
+            "api",
+            "workspaces",
+            workspace_id,
+            "attachments",
+            attachment_id,
+        ]);
+        self.get_bytes(url, MAX_ATTACHMENT_BYTES)
+    }
+
+    /// The artifact route (02): `GET /api/workspaces/<workspaceId>/artifacts/<artifactId>/<version>`.
+    /// Images, Markdown and text come with their type; HTML and PDF only as downloads. At most
+    /// 25 MiB; a version still uploading is `ARTIFACT_NOT_READY`.
+    pub fn get_artifact(
+        &self,
+        workspace_id: &str,
+        artifact_id: &str,
+        version: u32,
+    ) -> impl Future<Output = Result<AttachmentFile, ApiError>> + Send + 'static {
+        let version = version.to_string();
+        let url = self.server.url(&[
+            "api",
+            "workspaces",
+            workspace_id,
+            "artifacts",
+            artifact_id,
+            &version,
+        ]);
+        self.get_bytes(url, MAX_ARTIFACT_BYTES)
+    }
+
+    fn get_bytes(
+        &self,
+        url: Url,
+        limit: u64,
+    ) -> impl Future<Output = Result<AttachmentFile, ApiError>> + Send + 'static {
+        let request =
+            with_bearer(self.server.http().get(url), &self.token).timeout(Duration::from_secs(120));
+        self.send(async move {
+            let mut response = request
+                .send()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?;
+            let status = response.status().as_u16();
+            if status != 200 {
+                return Err(read_error(response, status).await);
+            }
+            if let Some(size) = response.content_length().filter(|size| *size > limit) {
+                return Err(ApiError::TooLarge { size });
+            }
+            let mime = response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.split(';').next())
+                .map(|v| v.trim().to_ascii_lowercase())
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| "application/octet-stream".into());
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?
+            {
+                let size = bytes.len() as u64 + chunk.len() as u64;
+                if size > limit {
+                    return Err(ApiError::TooLarge { size });
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            Ok(AttachmentFile { mime, bytes })
+        })
+    }
+
+    pub fn download_mac(
+        &self,
+        version: &str,
+        expected_size: u64,
+    ) -> impl Future<Output = Result<Vec<u8>, ApiError>> + Send + 'static {
+        self.download_mac_inner(version, expected_size, Some(expected_size))
+    }
+
+    pub fn download_mac_bounded(
+        &self,
+        version: &str,
+        maximum_size: u64,
+    ) -> impl Future<Output = Result<Vec<u8>, ApiError>> + Send + 'static {
+        self.download_mac_inner(version, maximum_size, None)
+    }
+
+    fn download_mac_inner(
+        &self,
+        version: &str,
+        maximum_size: u64,
+        exact_size: Option<u64>,
+    ) -> impl Future<Output = Result<Vec<u8>, ApiError>> + Send + 'static {
+        let valid = crate::parse_version(version).is_some() && maximum_size > 0;
+        let request = with_bearer(
+            self.server
+                .http()
+                .get(self.server.url(&["downloads", "mac", version])),
+            &self.token,
+        )
+        .timeout(Duration::from_secs(600));
+        self.send(async move {
+            if !valid {
+                return Err(ApiError::Decode("Invalid release information".into()));
+            }
+            let mut response = request
+                .send()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?;
+            if response.status().as_u16() != 200 {
+                return Err(ApiError::Http {
+                    status: response.status().as_u16(),
+                });
+            }
+            let declared_size = response.content_length();
+            if declared_size.is_some_and(|size| {
+                size > maximum_size || exact_size.is_some_and(|expected| size != expected)
+            }) {
+                return Err(ApiError::Decode(
+                    "The download size does not match the release".into(),
+                ));
+            }
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| ApiError::Network(network_error(e)))?
+            {
+                if bytes.len() as u64 + chunk.len() as u64 > maximum_size {
+                    return Err(ApiError::Decode(
+                        "The download is larger than the release".into(),
+                    ));
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            if bytes.is_empty()
+                || exact_size
+                    .or(declared_size)
+                    .is_some_and(|size| bytes.len() as u64 != size)
+            {
+                return Err(ApiError::Decode("The download is incomplete".into()));
+            }
+            Ok(bytes)
+        })
+    }
+
     fn send<T: Send + 'static>(
         &self,
         fut: impl Future<Output = Result<T, ApiError>> + Send + 'static,
     ) -> impl Future<Output = Result<T, ApiError>> + Send + 'static {
         let this = self.clone();
         let run = self.server.inner.rt.run(async move {
+            if this.is_unauthorized() {
+                return Err(ApiError::Http { status: 401 });
+            }
             let result = fut.await;
             if matches!(&result, Err(e) if e.is_unauthorized()) {
                 this.unauthorized();
@@ -523,6 +712,32 @@ impl Client {
             result
         });
         async move { run.await.unwrap_or(Err(ApiError::Cancelled)) }
+    }
+}
+
+async fn poll_device_token<F, Fut>(seconds: u64, mut exchange: F) -> Result<Token, SignInError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<TokenResponse, SignInError>>,
+{
+    let mut interval = Duration::from_secs(seconds);
+    loop {
+        tokio::time::sleep(interval).await;
+        match exchange().await {
+            Ok(token) => return Ok(Token::new(token.access_token)),
+            Err(SignInError::Rejected {
+                error: Some(code), ..
+            }) if code == "authorization_pending" => {}
+            Err(SignInError::Rejected {
+                error: Some(code), ..
+            }) if code == "slow_down" => interval += SLOW_DOWN_STEP,
+            Err(SignInError::Rejected {
+                error: Some(code), ..
+            }) if code == "access_denied" || code == "expired_token" => {
+                return Err(SignInError::Denied);
+            }
+            Err(error) => return Err(error),
+        }
     }
 }
 
@@ -552,6 +767,29 @@ async fn read_api<T: DeserializeOwned>(response: Response) -> Result<T, ApiError
     match serde_json::from_slice::<ErrorBody>(&bytes) {
         Ok(error) => Err(ApiError::Server { status, error }),
         Err(_) => Err(ApiError::Http { status }),
+    }
+}
+
+/// The error of a non-200 answer whose body is not JSON output. Reads at most 64 KiB of it.
+async fn read_error(mut response: Response, status: u16) -> ApiError {
+    let mut body = Vec::new();
+    while let Ok(Some(chunk)) = response.chunk().await {
+        if body.len() + chunk.len() > 64 * 1024 {
+            break;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    match serde_json::from_slice::<ErrorBody>(&body) {
+        Ok(error) => ApiError::Server { status, error },
+        Err(_) if status == 404 => ApiError::Server {
+            status,
+            error: ErrorBody {
+                code: ErrorCode::NotFound,
+                message: "Not found.".into(),
+                detail: None,
+            },
+        },
+        Err(_) => ApiError::Http { status },
     }
 }
 
@@ -623,5 +861,42 @@ mod tests {
         let debug = format!("{auth:?}");
         assert!(!debug.contains("secret-device-code"));
         assert!(debug.contains("ABCD1234"));
+    }
+}
+
+#[cfg(test)]
+mod polling_tests {
+    use super::*;
+    #[tokio::test(start_paused = true)]
+    async fn polling_clock_excludes_transport_latency_and_slow_down_adds_five_seconds() {
+        let start = tokio::time::Instant::now();
+        let mut calls = vec![];
+        let token = poll_device_token(5, || {
+            calls.push(tokio::time::Instant::now());
+            let result = match calls.len() {
+                1 | 3 => Err(SignInError::Rejected {
+                    status: 400,
+                    error: Some("authorization_pending".into()),
+                }),
+                2 => Err(SignInError::Rejected {
+                    status: 400,
+                    error: Some("slow_down".into()),
+                }),
+                _ => Ok(TokenResponse {
+                    access_token: "test-token".into(),
+                }),
+            };
+            std::future::ready(result)
+        })
+        .await
+        .unwrap();
+        assert_eq!(token.expose(), "test-token");
+        let gaps: Vec<_> = std::iter::once(start)
+            .chain(calls)
+            .collect::<Vec<_>>()
+            .windows(2)
+            .map(|w| w[1] - w[0])
+            .collect();
+        assert_eq!(gaps, [5, 5, 10, 10].map(Duration::from_secs));
     }
 }

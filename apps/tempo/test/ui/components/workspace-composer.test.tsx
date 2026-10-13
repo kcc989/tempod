@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from "@tempo/protocol";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
@@ -9,6 +10,7 @@ const state = vi.hoisted(() => ({
   call: vi.fn(),
   navigate: vi.fn(),
   close: vi.fn(),
+  modelsLoading: false,
   summary: { id: "w1", title: "lisbon" },
 }));
 vi.mock("~/ui/lib/api", () => ({ call: state.call }));
@@ -32,7 +34,7 @@ vi.mock("~/ui/hooks/useCredentialStatus", () => ({
     },
   }),
 }));
-vi.mock("~/ui/hooks/useWorkspace", () => ({ useWorkspaceSelector: () => "claude" }));
+vi.mock("~/ui/hooks/useWorkspace", () => ({ useWorkspaceSelector: () => DEFAULT_SETTINGS }));
 vi.mock("~/ui/hooks/useMediaQuery", () => ({ useIsPhone: () => false }));
 vi.mock("~/ui/hooks/useWorkspaceUi", () => ({
   useDialog: () => ({ open: true, args: {}, onOpenChange: vi.fn() }),
@@ -43,6 +45,33 @@ vi.mock("~/ui/state/workspace-ui", () => ({
   setPhonePane: vi.fn(),
 }));
 vi.mock("~/ui/stores/hub-store", () => ({ getHubStore: () => ({ merge: vi.fn() }) }));
+vi.mock("~/ui/hooks/useCustomAgents", () => ({ useCustomAgents: () => ({ data: [] }) }));
+vi.mock("~/ui/hooks/useCall", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/ui/hooks/useCall")>();
+  return {
+    ...actual,
+    useCallQuery: (name: string) => ({
+      isSuccess: !state.modelsLoading,
+      isPending: state.modelsLoading,
+      data:
+        name === "listModels" && !state.modelsLoading
+          ? [
+              {
+                agent: "claude",
+                currentValue: "test-opus",
+                options: [{ value: "test-opus", name: "Test Opus" }],
+              },
+              {
+                agent: "codex",
+                currentValue: "test-codex",
+                options: [{ value: "test-codex", name: "Test Codex" }],
+              },
+            ]
+          : [],
+      refetch: vi.fn(),
+    }),
+  };
+});
 vi.mock("~/ui/stores/workspace-store", () => ({
   knownModels: () => [
     { agent: "claude", value: "test-opus", name: "Test Opus" },
@@ -60,10 +89,24 @@ function show() {
   );
 }
 beforeEach(() => {
+  state.modelsLoading = false;
+  state.call.mockReset();
   state.call.mockResolvedValue(state.summary);
 });
 
 describe("workspace creation composer", () => {
+  it("opens an empty workspace while model discovery is still loading", async () => {
+    state.modelsLoading = true;
+    show();
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Prompt" }), { key: "Enter", code: "Enter" });
+    await waitFor(() =>
+      expect(state.call).toHaveBeenCalledWith("createWorkspace", {
+        projectId: "p1",
+        source: { kind: "new", baseBranch: "main" },
+        agent: "claude",
+      }),
+    );
+  });
   it.each(["", "   \n "])("Enter on a blank prompt creates and opens a workspace (%j)", async (text) => {
     show();
     const prompt = screen.getByRole("textbox", { name: "Prompt" });
@@ -75,6 +118,7 @@ describe("workspace creation composer", () => {
         projectId: "p1",
         source: { kind: "new", baseBranch: "main" },
         agent: "claude",
+        model: "test-opus",
       }),
     );
     await waitFor(() =>
@@ -84,8 +128,8 @@ describe("workspace creation composer", () => {
   });
   it("sends a trimmed first prompt and a model picked inside the composer", async () => {
     show();
-    fireEvent.click(screen.getByRole("button", { name: "Select model" }));
-    fireEvent.click(screen.getByRole("option", { name: "Test Codex" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
+    fireEvent.click(screen.getByRole("option", { name: /Test Codex/ }));
     const prompt = screen.getByRole("textbox", { name: "Prompt" });
     fireEvent.change(prompt, { target: { value: "  Fix the login  " } });
     fireEvent.keyDown(prompt, { key: "Enter", code: "Enter" });
@@ -158,7 +202,11 @@ describe("new chat composer", () => {
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Prompt" }), { key: "Enter", code: "Enter" });
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ id: "s1", agent: "claude" }));
     expect(state.call).toHaveBeenCalledTimes(1);
-    expect(state.call).toHaveBeenCalledWith("createSession", { workspaceId: "w1", agent: "claude" });
+    expect(state.call).toHaveBeenCalledWith("createSession", {
+      workspaceId: "w1",
+      agent: "claude",
+      model: "test-opus",
+    });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
   it("keeps the prompt and reuses the created chat when sending fails", async () => {

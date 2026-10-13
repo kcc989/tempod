@@ -1,9 +1,13 @@
 import { Link } from "@tanstack/react-router";
+import { ChevronLeftIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
 import { BottomPanel } from "~/ui/components/processes/BottomPanel";
+import { SetupTab } from "~/ui/components/processes/SetupTab";
+import { useToggleRunAction } from "~/ui/components/processes/useScripts";
+import { ReviewDialogs } from "~/ui/components/review/ReviewDialogs";
 import { RightPanel } from "~/ui/components/review/RightPanel";
 import { CenteredLoading, NotFoundState } from "~/ui/components/shell/States";
 import { TopBar } from "~/ui/components/topbar/TopBar";
@@ -13,14 +17,17 @@ import { useAction } from "~/ui/hooks/useActions";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useWorkspaceLifecycle, useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
-import { useLayout } from "~/ui/hooks/useWorkspaceUi";
+import { useLayout, useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
 import { safeLayoutStorage } from "~/ui/lib/storage";
 import {
   cycleTab,
   focusComposer,
+  isRightOpen,
   openDiff,
   openDialog,
   setLayout,
+  setPhonePane,
+  setRightQuiet,
   toggleDiffScope,
 } from "~/ui/state/workspace-ui";
 
@@ -34,6 +41,7 @@ export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
   const ready = useWorkspaceSelector(workspaceId, (s) => s.ready);
   const summary = useHubWorkspace(workspaceId);
   useWorkspaceLifecycle(workspaceId);
+  useToggleRunAction(workspaceId, !isPhone);
   useWorkspaceActions(workspaceId, summary?.projectId);
   useEffect(() => setLayout({ lastWorkspaceId: workspaceId }), [workspaceId]);
 
@@ -50,10 +58,15 @@ export function WorkspaceLayout({ workspaceId }: { workspaceId: string }) {
     );
   }
   if (!ready && !summary) return <CenteredLoading label="Loading workspace" />;
-  return isPhone ? (
-    <PhoneWorkspace workspaceId={workspaceId} />
-  ) : (
-    <DesktopWorkspace workspaceId={workspaceId} />
+  return (
+    <>
+      {isPhone ? (
+        <PhoneWorkspace workspaceId={workspaceId} />
+      ) : (
+        <DesktopWorkspace workspaceId={workspaceId} />
+      )}
+      <ReviewDialogs workspaceId={workspaceId} />
+    </>
   );
 }
 
@@ -71,7 +84,17 @@ function useWorkspaceActions(workspaceId: string, projectId: string | undefined)
 }
 
 function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
-  const { rightOpen } = useLayout();
+  const layout = useLayout();
+  const quiet = useWorkspaceSelector(workspaceId, (s) => {
+    const w = s.workspace;
+    if (!w) return false;
+    return (
+      w.state === "sleeping" || (((s.changes ?? w.changes)?.files.length ?? 0) === 0 && w.prNumber === null)
+    );
+  });
+  useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
+  const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
+  const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned });
   const horizontal = useDefaultLayout({
     id: "workspace",
     panelIds: rightOpen ? ["center", "right"] : ["center"],
@@ -150,6 +173,18 @@ function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
       {phonePane === "changes" ? (
         <section aria-label="Changes" className="flex min-h-0 flex-1 flex-col">
           <RightPanel workspaceId={workspaceId} variant="phone" />
+        </section>
+      ) : phonePane === "setup" ? (
+        <section aria-label="Setup" className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center border-b px-2 py-1">
+            <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
+              <ChevronLeftIcon aria-hidden />
+              Back to chat
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1">
+            <SetupTab workspaceId={workspaceId} />
+          </div>
         </section>
       ) : (
         <section aria-label="Chat" className="flex min-h-0 flex-1 flex-col">

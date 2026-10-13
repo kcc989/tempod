@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CustomAgentSummary",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "baseAgent": {
+      "$ref": "AgentId.json"
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": ["id", "name", "description", "baseAgent", "updatedAt"],
+  "additionalProperties": true
+}

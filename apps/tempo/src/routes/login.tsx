@@ -63,7 +63,7 @@ function LoginPage() {
         {setup.isPending ? (
           <LoadingText label="Checking setup" />
         ) : setup.data && !setup.data.configured ? (
-          <p className="text-sm">Tempo is not set up yet. Open the setup link that the deploy printed.</p>
+          <p className="text-sm">Tempo is not set up yet. Open your private setup link.</p>
         ) : (
           <Button size="lg" onClick={() => void signIn()} disabled={busy}>
             <LogInIcon />

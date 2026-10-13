@@ -7,11 +7,11 @@ use std::path::Path;
 use std::sync::Arc;
 use std::task::{Context, Poll, Wake, Waker};
 
-use common::{APP_VERSION, TOKEN, fake_http};
+use common::{APP_VERSION, RawReply, TOKEN, fake_http, fake_http_raw};
 use serde_json::json;
 use tempo_client::{
-    ApiError, ChannelEvent, CloseReason, MAX_ATTACHMENT_BYTES, Runtime, RuntimeHandle, Server,
-    Signal, Status, Token,
+    ApiError, AttachmentFile, ChannelEvent, CloseReason, MAX_ARTIFACT_BYTES, MAX_ATTACHMENT_BYTES,
+    Runtime, RuntimeHandle, Server, Signal, Status, Token,
 };
 use tempo_protocol::{ErrorCode, SendPromptIn, Turn, api};
 
@@ -33,7 +33,7 @@ fn client(rt: &RuntimeHandle, base: &str) -> tempo_client::Client {
         .client(Token::new(TOKEN))
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn call_posts_the_input_with_bearer_and_client_header_and_decodes_the_output() {
     let turn = fixture("Turn");
     let reply = turn.clone();
@@ -60,7 +60,7 @@ async fn call_posts_the_input_with_bearer_and_client_header_and_decodes_the_outp
     assert_eq!(r.json(), serde_json::to_value(&input).expect("encodes"));
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn an_error_answer_decodes_into_api_error_with_its_status() {
     let server = fake_http(|req, _| match req.path.as_str() {
         "/api/v1/rpc/cancelTurn" => (
@@ -93,7 +93,7 @@ async fn an_error_answer_decodes_into_api_error_with_its_status() {
     assert!(!c.is_unauthorized());
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_401_raises_unauthorized_once_and_closes_every_channel() {
     let server = fake_http(|_, _| {
         (
@@ -132,7 +132,7 @@ async fn a_401_raises_unauthorized_once_and_closes_every_channel() {
     assert!(rx.recv().await.is_err(), "nothing follows Closed");
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn meta_sends_no_token() {
     let server = fake_http(|_, _| (200, fixture("ApiMeta"))).await;
     let rt = RuntimeHandle::current();
@@ -151,7 +151,36 @@ async fn meta_sends_no_token() {
     assert_eq!(r.header("origin"), None);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
+async fn setup_status_sends_no_token_and_reads_the_install_link() {
+    let server = fake_http(|_, _| {
+        (
+            200,
+            json!({"configured": true, "installUrl": "https://github.com/apps/t/installations/new"})
+                .to_string(),
+        )
+    })
+    .await;
+    let rt = RuntimeHandle::current();
+    let status = Server::new(&rt, &server.base, APP_VERSION)
+        .expect("server")
+        .setup_status()
+        .await
+        .expect("setup status");
+    assert!(status.configured);
+    assert_eq!(
+        status.install_url.as_deref(),
+        Some("https://github.com/apps/t/installations/new")
+    );
+    let r = &server.requests()[0];
+    assert_eq!(
+        (r.method.as_str(), r.path.as_str()),
+        ("GET", "/api/setup/status")
+    );
+    assert_eq!(r.header("authorization"), None);
+}
+
+#[tokio::test]
 async fn upload_attachment_sends_one_multipart_file_with_the_bearer_token() {
     let server = fake_http(|_, _| {
         (
@@ -206,6 +235,117 @@ async fn upload_attachment_sends_one_multipart_file_with_the_bearer_token() {
     assert_eq!(server.requests().len(), 1, "an oversized file is not sent");
 }
 
+#[tokio::test]
+async fn get_attachment_reads_the_bytes_with_the_bearer_token_up_to_10_mib() {
+    let server = fake_http_raw(|req, _| {
+        let reply = |status, content_type, body: Vec<u8>, content_length| RawReply {
+            status,
+            content_type,
+            body,
+            content_length,
+        };
+        let big = vec![0u8; MAX_ATTACHMENT_BYTES as usize + 1];
+        match req.path.rsplit('/').next().unwrap_or_default() {
+            "png" => reply(200, "image/png", vec![137, 80, 78, 71], true),
+            "gone" => reply(
+                404,
+                "application/json",
+                json!({"code":"NOT_FOUND","message":"Not found."})
+                    .to_string()
+                    .into_bytes(),
+                true,
+            ),
+            "plain404" => reply(404, "text/plain", b"missing".to_vec(), true),
+            "big" => reply(200, "image/png", big, true),
+            "stream" => reply(200, "image/png; charset=binary", big, false),
+            _ => reply(500, "text/plain", vec![], true),
+        }
+    })
+    .await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    let file = c
+        .get_attachment("01k7000000000000000000000b", "png")
+        .await
+        .expect("reads");
+    assert_eq!(
+        file,
+        AttachmentFile {
+            mime: "image/png".into(),
+            bytes: vec![137, 80, 78, 71]
+        }
+    );
+    let r = &server.requests()[0];
+    assert_eq!(
+        (r.method.as_str(), r.path.as_str()),
+        (
+            "GET",
+            "/api/workspaces/01k7000000000000000000000b/attachments/png"
+        )
+    );
+    assert_eq!(r.header("authorization"), Some("Bearer test-session-token"));
+    assert_eq!(r.header("x-tempo-client"), Some("mac/0.2.0"));
+    assert_eq!(r.header("origin"), None);
+
+    for id in ["gone", "plain404"] {
+        let err = c.get_attachment("w", id).await.expect_err("404");
+        assert_eq!(err.status(), Some(404));
+        assert_eq!(err.code(), Some(ErrorCode::NotFound), "{id}");
+    }
+    for id in ["big", "stream"] {
+        let err = c.get_attachment("w", id).await.expect_err("too large");
+        assert!(
+            matches!(err, ApiError::TooLarge { size } if size > MAX_ATTACHMENT_BYTES),
+            "{id}: {err:?}"
+        );
+    }
+    assert!(!c.is_unauthorized());
+}
+
+#[tokio::test(start_paused = true)]
+async fn get_artifact_reads_one_version_up_to_25_mib_and_keeps_artifact_not_ready() {
+    let server = fake_http_raw(|req, _| {
+        let reply = |status, content_type, body: Vec<u8>| RawReply {
+            status,
+            content_type,
+            body,
+            content_length: true,
+        };
+        match req.path.rsplit('/').next().unwrap_or_default() {
+            "1" => reply(200, "text/markdown", b"# Plan".to_vec()),
+            "2" => reply(
+                409,
+                "application/json",
+                json!({"code":"ARTIFACT_NOT_READY","message":"This artifact is still being saved. Try again in a moment."})
+                    .to_string()
+                    .into_bytes(),
+            ),
+            _ => reply(200, "image/png", vec![0u8; MAX_ARTIFACT_BYTES as usize + 1]),
+        }
+    })
+    .await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    let file = c
+        .get_artifact(
+            "01k7000000000000000000000b",
+            "01jart00000000000000000001",
+            1,
+        )
+        .await
+        .expect("reads");
+    assert_eq!(file.mime, "text/markdown");
+    assert_eq!(file.bytes, b"# Plan");
+    assert_eq!(
+        server.requests()[0].path,
+        "/api/workspaces/01k7000000000000000000000b/artifacts/01jart00000000000000000001/1"
+    );
+    let err = c.get_artifact("w", "a", 2).await.expect_err("not ready");
+    assert_eq!(err.code(), Some(ErrorCode::ArtifactNotReady));
+    let err = c.get_artifact("w", "a", 3).await.expect_err("too large");
+    assert!(matches!(err, ApiError::TooLarge { size } if size > MAX_ARTIFACT_BYTES));
+}
+
 #[test]
 fn a_call_runs_on_the_runtime_and_resolves_on_another_executor() {
     let runtime = Runtime::start().expect("runtime");
@@ -221,7 +361,7 @@ fn a_call_runs_on_the_runtime_and_resolves_on_another_executor() {
     drop(runtime);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_server_url_must_be_http_or_https() {
     let rt = RuntimeHandle::current();
     for bad in [
@@ -254,4 +394,56 @@ fn block_on<F: std::future::Future>(fut: F) -> F::Output {
         }
         std::thread::park();
     }
+}
+
+#[tokio::test]
+async fn release_download_is_authenticated_size_bound_and_revocation_closes_the_client() {
+    let server = fake_http(|_, _| (200, "dmg bytes".into())).await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    assert_eq!(c.download_mac("0.2.0", 9).await.unwrap(), b"dmg bytes");
+    assert!(matches!(
+        c.download_mac("0.2.0", 8).await,
+        Err(ApiError::Decode(_))
+    ));
+    let reqs = server.requests();
+    assert_eq!(reqs[0].path, "/downloads/mac/0.2.0");
+    assert_eq!(
+        reqs[0].header("authorization"),
+        Some("Bearer test-session-token")
+    );
+    assert_eq!(reqs[0].header("origin"), None);
+    let denied = fake_http(|_, _| (401, "Denied".into())).await;
+    let c = client(&rt, &denied.base);
+    assert!(
+        c.download_mac("0.2.0", 9)
+            .await
+            .unwrap_err()
+            .is_unauthorized()
+    );
+    assert!(c.is_unauthorized());
+}
+
+#[tokio::test]
+async fn hash_metadata_download_honors_a_hard_size_bound_without_an_exact_manifest_size() {
+    let server = fake_http(|_, _| (200, "dmg bytes".into())).await;
+    let rt = RuntimeHandle::current();
+    let c = client(&rt, &server.base);
+    assert_eq!(
+        c.download_mac_bounded("0.2.0", 1024).await.unwrap(),
+        b"dmg bytes"
+    );
+    assert!(matches!(
+        c.download_mac_bounded("0.2.0", 8).await,
+        Err(ApiError::Decode(_))
+    ));
+    assert!(matches!(
+        c.download_mac_bounded("0.2.0", 0).await,
+        Err(ApiError::Decode(_))
+    ));
+    assert_eq!(server.requests().len(), 2);
+    assert_eq!(
+        server.requests()[0].header("authorization"),
+        Some("Bearer test-session-token")
+    );
 }

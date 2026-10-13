@@ -7,7 +7,6 @@ import {
   type AnyMessage,
   type ClientConnection,
   type ContentBlock as AcpContentBlock,
-  type McpServer,
   type ReadTextFileRequest,
   type RequestPermissionResponse,
   type WriteTextFileRequest,
@@ -17,10 +16,16 @@ import {
   newId,
   PLAYWRIGHT_MCP_SERVER,
   TempoError,
+  toTurnUsage,
   type AgentId,
+  type BrowserMode,
+  type McpServerSpec,
+  type AgentProfile,
   type PermissionOption,
+  type ProfileIssue,
   type SessionStartResult,
   type TempodEvent,
+  type TurnUsage,
 } from "@tempo/protocol";
 import type { Subprocess } from "bun";
 import { ITEM_CONTENT_MAX, tailLines } from "../bounds.ts";
@@ -28,20 +33,15 @@ import { VERSION } from "../config.ts";
 import { killGroup } from "../exec.ts";
 import { insideRoots } from "../fs.ts";
 import { errorText, type Logger } from "../log.ts";
-import { isObj, toConfigOptions, toModes } from "./convert.ts";
+import { isObj, modeConfig, toConfigOptions, toModes } from "./convert.ts";
+import { offeredOption, sessionProfile } from "./profile.ts";
 import { SessionMapper, type TurnOutcome } from "./mapper.ts";
+import { acpMcpServers, type Bridge } from "./mcp.ts";
 
 const STDERR_LINES = 200;
 const STDERR_LINE_CHARS = 2_000;
 const START_STEP_MS = 90_000;
 const CLOSE_REQUEST_MS = 3_000;
-
-export const playwrightServer = (): McpServer => ({
-  name: PLAYWRIGHT_MCP_SERVER.name,
-  command: PLAYWRIGHT_MCP_SERVER.command,
-  args: [...PLAYWRIGHT_MCP_SERVER.args],
-  env: PLAYWRIGHT_MCP_SERVER.env.map((e) => ({ ...e })),
-});
 
 export const CLIENT_CAPABILITIES = {
   fs: { readTextFile: true, writeTextFile: true },
@@ -60,6 +60,7 @@ export interface SessionDeps {
   readonly killGraceMs: number;
   readonly mergeMs: number;
   readonly maxBytes: number;
+  readonly bridge: Bridge;
   readonly onGone: (session: AgentSession) => void;
   readonly onProcess: (session: AgentSession, pid: number | null) => void;
 }
@@ -117,13 +118,14 @@ export class AgentSession {
   private readonly permissions = new Map<string, PendingPermission>();
   private readonly byRpcId = new Map<string, Promise<RequestPermissionResponse>>();
   private readonly seenTurns: string[] = [];
+  private profileIssues: ProfileIssue[] = [];
   readonly exited: Promise<{ code: number | null; signal: string | null }>;
 
   constructor(
     readonly sessionId: string,
     readonly agent: AgentId,
     command: ReadonlyArray<string>,
-    env: Record<string, string>,
+    private readonly env: Record<string, string>,
     private readonly deps: SessionDeps,
   ) {
     this.mapper = new SessionMapper(sessionId, {
@@ -189,6 +191,10 @@ export class AgentSession {
 
   get busy(): boolean {
     return this.turn !== null && !this.turn.ended;
+  }
+
+  get runningTurnId(): string | null {
+    return this.turn !== null && !this.turn.ended ? this.turn.turnId : null;
   }
 
   /** The last 200 stderr lines, each cut at 2,000 chars (01, Crashes), within the message size limit. */
@@ -352,7 +358,10 @@ export class AgentSession {
   async start(p: {
     modeId?: string | null;
     model?: string | null;
+    browser?: BrowserMode;
+    profile?: AgentProfile | undefined;
     acpSessionId?: string | null;
+    mcpServers?: ReadonlyArray<McpServerSpec> | undefined;
   }): Promise<SessionStartResult> {
     const init = await this.request<{
       protocolVersion?: unknown;
@@ -368,6 +377,19 @@ export class AgentSession {
     this.capabilities = isObj(init.agentCapabilities) ? structuredClone(init.agentCapabilities) : {};
     const steering = isObj(init._meta) ? init._meta["steering"] : undefined;
     this.capabilities["steering"] = isObj(steering) && steering["supported"] === true;
+    const profile = sessionProfile(this.agent, p.profile, this.env);
+    const issues = new Set<ProfileIssue>(profile.issues);
+    // A custom agent's server replaces a user server of the same name.
+    const names = new Set(profile.specs.map((s) => s.name));
+    const specs = [...(p.mcpServers ?? []).filter((s) => !names.has(s.name)), ...profile.specs];
+    const mcpServers = acpMcpServers(
+      specs,
+      this.capabilities,
+      this.deps.bridge,
+      p.browser ?? "local",
+      this.sessionId,
+    ).filter((s) => !(profile.dropPlaywright && s.name === PLAYWRIGHT_MCP_SERVER.name));
+    const meta = profile.meta ? { _meta: profile.meta } : {};
     let reloaded = false;
     let handoff = false;
     const wanted = p.acpSessionId ?? null;
@@ -378,7 +400,8 @@ export class AgentSession {
           const res = await this.request<unknown>("session/load", {
             sessionId: wanted,
             cwd: this.deps.workspace,
-            mcpServers: [playwrightServer()],
+            mcpServers,
+            ...meta,
           });
           this.acpSessionId = wanted;
           this.applySessionResponse(res);
@@ -398,7 +421,8 @@ export class AgentSession {
     if (!reloaded) {
       const res = await this.request<{ sessionId?: unknown }>("session/new", {
         cwd: this.deps.workspace,
-        mcpServers: [playwrightServer()],
+        mcpServers,
+        ...meta,
       });
       if (typeof res.sessionId !== "string") throw new Error("session/new returned no sessionId");
       this.acpSessionId = res.sessionId;
@@ -409,21 +433,47 @@ export class AgentSession {
       try {
         await this.setMode(p.modeId);
       } catch (e) {
-        this.deps.log.warn("session/set_mode failed", { sessionId: this.sessionId, error: errorText(e) });
+        this.deps.log.warn("setting the mode failed", { sessionId: this.sessionId, error: errorText(e) });
       }
     }
     if (p.model) {
       const option = modelOption(state.configOptions);
-      if (!option)
+      if (!option) {
         this.deps.log.warn("agent has no model option", { sessionId: this.sessionId, agent: this.agent });
-      else if (option.currentValue !== p.model) {
-        try {
-          await this.setConfig(option.id, p.model);
-        } catch (e) {
-          this.deps.log.warn("setting the model failed", { sessionId: this.sessionId, error: errorText(e) });
+        issues.add("model");
+      } else if (option.currentValue !== p.model) {
+        if (p.profile && !offeredOption(state.configOptions, "model", p.model)) issues.add("model");
+        else {
+          try {
+            await this.setConfig(option.id, p.model);
+          } catch (e) {
+            this.deps.log.warn("setting the model failed", {
+              sessionId: this.sessionId,
+              error: errorText(e),
+            });
+            issues.add("model");
+          }
         }
       }
     }
+    // The reasoning level comes after the model: the levels on offer can depend on it (01, Custom agents).
+    const level = p.profile?.thoughtLevel;
+    if (level) {
+      const option = offeredOption(this.mapper.state.configOptions, "thought_level", level);
+      if (!option) issues.add("thoughtLevel");
+      else if (option.currentValue !== level) {
+        try {
+          await this.setConfig(option.id, level);
+        } catch (e) {
+          this.deps.log.warn("setting the reasoning level failed", {
+            sessionId: this.sessionId,
+            error: errorText(e),
+          });
+          issues.add("thoughtLevel");
+        }
+      }
+    }
+    this.profileIssues = p.profile ? [...issues] : [];
     this.started = true;
     return this.result(reloaded, handoff);
   }
@@ -437,6 +487,7 @@ export class AgentSession {
       configOptions: s.configOptions,
       availableCommands: s.commands,
       capabilities: this.capabilities,
+      profileIssues: this.profileIssues,
       reloaded,
       handoff,
     };
@@ -451,11 +502,16 @@ export class AgentSession {
       if (typeof modes["currentModeId"] === "string") state.modeId = modes["currentModeId"];
     }
     if (Array.isArray(res["configOptions"])) state.configOptions = toConfigOptions(res["configOptions"]);
+    this.mapper.syncModeConfig();
   }
 
   async setMode(modeId: string): Promise<void> {
-    await this.request("session/set_mode", { sessionId: this.acpSessionId, modeId }, 30_000);
-    this.mapper.state.modeId = modeId;
+    const option = modeConfig(this.mapper.state.configOptions);
+    if (option) await this.setConfig(option.id, modeId);
+    else {
+      await this.request("session/set_mode", { sessionId: this.acpSessionId, modeId }, 30_000);
+      this.mapper.state.modeId = modeId;
+    }
     this.lastUsed = Date.now();
   }
 
@@ -467,6 +523,17 @@ export class AgentSession {
     const res = await this.request<{ configOptions?: unknown }>("session/set_config_option", params, 30_000);
     if (Array.isArray(res.configOptions))
       this.mapper.state.configOptions = toConfigOptions(res.configOptions);
+    this.mapper.syncModeConfig();
+    this.deps.emit({
+      kind: "session.updated",
+      sessionId: this.sessionId,
+      patch: {
+        configOptions: this.mapper.state.configOptions,
+        ...(modeConfig(this.mapper.state.configOptions)
+          ? { modes: this.mapper.state.modes, modeId: this.mapper.state.modeId }
+          : {}),
+      },
+    });
     this.lastUsed = Date.now();
     return this.mapper.state.configOptions;
   }
@@ -491,12 +558,19 @@ export class AgentSession {
     this.mapper.startTurn(turnId);
     this.deps.emit({ kind: "turn.started", sessionId: this.sessionId, turnId });
     this.conn.agent
-      .request<{ stopReason?: unknown }>("session/prompt", {
+      .request<{ stopReason?: unknown; usage?: unknown }>("session/prompt", {
         sessionId: this.acpSessionId,
         prompt: content as unknown as AcpContentBlock[],
       })
       .then(
-        (res) => this.finishTurn(turn, typeof res?.stopReason === "string" ? res.stopReason : null),
+        (res) =>
+          this.finishTurn(
+            turn,
+            typeof res?.stopReason === "string" ? res.stopReason : null,
+            undefined,
+            false,
+            toTurnUsage(res?.usage),
+          ),
         (e: unknown) => void this.onPromptError(turn, e),
       );
     return true;
@@ -557,6 +631,7 @@ export class AgentSession {
     stopReason: string | null,
     error?: { code: string; message: string },
     interrupted = false,
+    usage: TurnUsage | null = null,
   ): void {
     if (turn.ended) return;
     turn.ended = true;
@@ -577,6 +652,7 @@ export class AgentSession {
       stopReason,
       ...(error ? { error } : {}),
       ...(interrupted ? { interrupted: true } : {}),
+      ...(usage ? { usage } : {}),
     });
     if (this.turn === turn) this.turn = null;
     this.lastUsed = Date.now();

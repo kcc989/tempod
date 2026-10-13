@@ -346,12 +346,12 @@ test.describe("AT-22 keyboard shortcuts", () => {
     await page.keyboard.press("Escape");
   });
 
-  // Manual: Playwright drives Chromium, WebKit and Firefox builds, not Safari and Firefox as
-  // shipped on macOS, and 06 requires those browsers. On a Mac, in Chrome, Safari and Firefox,
+  // Manual: Linux Chromium does not establish shortcut behavior in Chrome on macOS.
+  // On a Mac, in Chrome,
   // go through every row of 04's shortcut table in a test workspace (⌥Y, ⌥P, ⌥M, ⌥A and ⌥R act on
   // git and scripts, so use a throwaway branch) and check each action runs and the browser does not
   // take the key.
-  test.fixme("AT-22 every shortcut in 04 works in Chrome, Safari and Firefox on macOS", async () => {});
+  test.fixme("AT-22 every shortcut in 04 works in Chrome on macOS", async () => {});
 });
 
 test.describe("Gate D credential grep", () => {

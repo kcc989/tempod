@@ -28,9 +28,9 @@ tempo/
   packages/
     protocol/                   Effect Schemas: shared types, channels, tempod protocol, errors
     tempod/                     the daemon: main.ts, server.ts, outbox.ts, acp/, scripts.ts,
-                                git.ts, ports.ts, watcher.ts, proxy.ts
-    settings/                   settings.toml parsing and Conductor mapping (used by tempod and the Worker)
-    cities/                     the fixed slug list
+                                git.ts, ports.ts, watcher.ts, proxy.ts, artifacts.ts
+    settings/                   settings.yaml parsing (used by tempod and the Worker)
+    cities/                     the fixed animal slug list
   container/
     Dockerfile
     versions.json
@@ -54,6 +54,8 @@ tempo/
 
 A phase starts only after the gate before it passes. Work for the next phase MAY begin early in a branch, but it MUST NOT merge until the gate passes. If a spike shows the spec is wrong, change the spec first, then the code.
 
+Phase 6 (08) is the exception: it MAY run in parallel with phases 2 to 5, its milestones merge when their own tests pass, and gate H needs gate B. Its spike is S21 (08).
+
 ## Spikes
 
 Each spike is throwaway code in its own branch that answers one question. Its result goes in `spikes/S<n>.md`: what was tried, what worked, exact names and timings. If a result differs from the spec, change the spec before phase 1. Gate A, the end of phase 0, passes when every spike has its result file and the spec matches every result.
@@ -70,6 +72,10 @@ Each spike is throwaway code in its own branch that answers one question. Its re
 | S8 | Do previews work for real dev servers? | A Vite dev server bound to `127.0.0.1` loads through the preview URL, and hot reload over WebSocket works. A sleeping workspace shows the wake page. | — |
 | S9 | Do OpenCode and Pi work through ACP? | `opencode acp` and `pi-acp` complete 3 turns each with OpenRouter via the placeholder swap. Record whether `session/load` works for each. | R6 |
 | S10 | Does the terminal work through the DO? | PTY `exec` with tmux over the DO WebSocket. Resize works. A reconnect gets the same session and scrollback. | — |
+| S18 | Do artifacts work as 01, 04 and 05 use them? Runs at the start of phase 5, not in gate A. | Claude Code, Codex, OpenCode and Pi each start the `tempo` MCP server from `tempod mcp` and call `publish_artifact`. An HTML artifact loads in Tempo's iframe through the entry link and cookie in Chrome, Safari and Firefox, and its `fetch`, image and WebSocket requests to the internet are blocked. A PDF artifact shows in the iframe. Mermaid 12.1.0 renders a flowchart with HTML labels off; record the config keys. Record which agents send `rawInput.plan` on a plan proposal. | R19 |
+| S17 | Does Browser Run work as 01 uses it? | Playwright MCP in the container connects over `wss://browser.tempo.internal/` through `TempoOutbound` to a session from `env.BROWSER.acquire`. The remote browser loads `http://localhost:<port>` through `outboundByHost`. Live View shows the page in an iframe on `APP_HOST`. `closeSession` ends it. | — |
+| S19 | Can the Worker write custom agents to Artifacts? | From a deployed Worker with the `AGENTS` binding: `create` a repo, mint a 300 s write token, push one commit with pinned `isomorphic-git` and an in-memory file system, then `readFile` at that commit. Two concurrent saves both land after the retry rule in 02. The token is revoked after each save and appears in no log. Record the CPU time and memory of one save. | R20 |
+| S20 | Does each adapter apply a custom agent profile? | For each base agent, start a session with a profile that sets every field in the table in 01, Custom agents. Record which fields take effect: the agent follows the system prompt, a denied tool is absent, an allowed-only list hides other built-in tools, a pi codemode script cannot call a denied built-in or MCP tool, an MCP server's tools are listed, and the reasoning level shows in the config options. `session/load` keeps the profile. | R21 |
 
 ## Acceptance tests
 
@@ -97,9 +103,9 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-11 | A Codex token refresh in one workspace reaches a second running workspace, which then completes a turn. |
 | AT-12 | The diff view is correct for added, changed, deleted, renamed and untracked files in both scopes. Review comments reach the agent in the next prompt. |
 | AT-13 | Revert restores the exact tree of the chosen checkpoint, shows the marker, and the next prompt carries the revert note. |
-| AT-14 | A repo with only `.conductor/settings.toml` runs its setup and run scripts, with `CONDUCTOR_PORT` set. |
+| AT-14 | A repo with only `.tempo/settings.yaml` runs its setup and run scripts, with `TEMPO_PORT` set. |
 | AT-15 | A terminal runs commands; after a reconnect, the session and scrollback are still there. |
-| AT-16 | A Vite preview works with hot reload. Rotating the token breaks the old link. An agent passes a Playwright MCP check on `localhost`. |
+| AT-16 | A Vite preview opened from Tempo works with hot reload, also in a Browser tab. The bare preview URL in a fresh browser shows the preview 404 page. Reset preview access stops an open preview. An agent passes a Playwright MCP check on `localhost`. |
 
 **Gate D: Phase 3**
 
@@ -110,7 +116,31 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-19 | Archive, restore, wake: transcript and files are intact. |
 | AT-20 | With the `allowlist` policy, a host not on the list gets 403 and an `egress_log` row. `APP_HOST` is blocked under both policies. |
 | AT-21 | At phone width: list workspaces, read a live transcript, send a prompt, approve a permission. |
-| AT-22 | Every shortcut in 04 works in Chrome, Safari and Firefox on macOS. |
+| AT-22 | Every shortcut in 04 works in Chrome on macOS. |
+| AT-38 | A workspace created from a PR shows `#<number> ↗` and the PR state at once; Create PR is not offered. |
+| AT-39 | With `browser.run = true`, an agent checks the app on `localhost` in Browser Run, and the Live View tab shows it. Under `allowlist`, the agent uses local Chromium. |
+| AT-40 | An OpenCode chat with no `agent.models.opencode` is disabled in the New chat menu; a queued OpenCode turn fails with `MODEL_REQUIRED`. |
+
+**Gate F: Phase 5**
+
+| ID | Test |
+| --- | --- |
+| AT-41 | Each of the four agents publishes a PNG, a Markdown file with a Mermaid block, a PDF and an HTML file. Each shows as an artifact card in its turn and in the Artifacts tab, and opens in the Artifact tab. The Mermaid block is a diagram. |
+| AT-42 | Publishing the same path again makes version 2. The Artifact tab shows version 2 and can switch back to version 1. |
+| AT-43 | After the workspace sleeps, and again after archive, every artifact opens and downloads without waking the container. |
+| AT-44 | An HTML artifact that calls `fetch`, loads a remote image and opens a WebSocket gets no network response, and no request reaches the network. The bare artifact URL in a fresh browser shows the preview 404 page. Reset preview access stops an open artifact. |
+| AT-45 | A file tab shows a PNG and a Markdown preview with a Mermaid diagram. The Diff tab shows before and after images for a changed PNG in both scopes. |
+| AT-46 | A Claude plan proposal shows as a `Plan` card with Markdown, and approving it continues the turn. |
+| AT-47 | The Mac app shows artifact cards, the Artifacts tab, images and Markdown in-app, and opens HTML and PDF artifacts in the default browser. |
+
+**Gate G: Custom agents** (after Gate F in 07; the Mac app ships its part in the same phase)
+
+| ID | Test |
+| --- | --- |
+| AT-48 | Create a custom agent on `claude` with a system prompt, `tools.deny = ["Edit", "Write"]`, a model and a reasoning level. A chat from it uses that model and level, follows the prompt, and cannot edit a file. `profileIssues` is empty. |
+| AT-49 | The same definition on `codex` follows the prompt, uses the model and level, and shows the notice for `tool limits`. The same definition on `opencode` and on `pi`, with `tools.deny = ["edit", "write"]` and one stdio MCP server, follows the prompt, cannot edit a file, lists the server's tools, and shows no notice. |
+| AT-50 | Edit a custom agent while a chat from it is open. The open chat keeps the old profile after a sleep and wake; a new chat gets the new one. Delete the agent: the open chat still works and the New chat menu no longer lists it. |
+| AT-51 | An MCP server with `env = { X = "${MY_SECRET}" }` and a project secret `MY_SECRET` starts and lists its tools. Saving a literal env value fails with `VALIDATION_FAILED`. Grep of logs, D1, `events`, R2 and the Artifacts repo finds no secret value. |
 
 **Also at Gate D:** during a full e2e run, grep all Worker logs, `events` rows and R2 objects for the test credentials' values. Zero matches is required.
 

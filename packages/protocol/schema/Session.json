@@ -69,6 +69,29 @@
           "type": "null"
         }
       ]
+    },
+    "customAgent": {
+      "anyOf": [
+        {
+          "$ref": "SessionCustomAgent.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "profileIssues": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "ProfileIssue.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

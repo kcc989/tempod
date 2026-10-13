@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Artifact",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "turnId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "itemId": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mime": {
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "ArtifactKind.json"
+    },
+    "size": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "status": {
+      "$ref": "ArtifactStatus.json"
+    },
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "sessionId",
+    "turnId",
+    "itemId",
+    "path",
+    "name",
+    "title",
+    "summary",
+    "mime",
+    "kind",
+    "size",
+    "sha256",
+    "status",
+    "createdAt"
+  ],
+  "additionalProperties": true
+}

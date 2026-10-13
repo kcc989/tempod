@@ -1,5 +1,6 @@
-import { isErrorBody, TempoError, type ConfigOption, type Mention, type Session } from "@tempo/protocol";
-import { ArchiveRestoreIcon, ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
+import { isErrorBody, TempoError, type ConfigOption, type FnInput, type Session } from "@tempo/protocol";
+import { useIsMutating } from "@tanstack/react-query";
+import { ArchiveRestoreIcon, ArrowUpIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/ui/components/ui/button";
@@ -9,7 +10,6 @@ import { useAction } from "~/ui/hooks/useActions";
 import { useBanner } from "~/ui/hooks/useBanner";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
-import { useLocalStorage } from "~/ui/hooks/useLocalStorage";
 import { useShortcuts } from "~/ui/hooks/useShortcuts";
 import { useWorkspaceSelector, useWorkspaceStore } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
@@ -27,15 +27,20 @@ import { fuzzyFilter } from "~/ui/lib/fuzzy";
 import { cn } from "~/ui/lib/utils";
 import { getWorkspaceUi, takeInsertions, workspaceUiStore } from "~/ui/state/workspace-ui";
 import { reorderedQueue, runningPlan } from "~/ui/stores/workspace-state";
-import { isPreviewable, rememberAttachment } from "./attachment-cache";
+import {
+  finishAttachmentUpload,
+  isPreviewable,
+  rememberAttachment,
+  startAttachmentUpload,
+} from "./attachment-cache";
 import { runningTurnOf } from "./chat-tabs-model";
+import { useComposerDraft } from "./useComposerDraft";
 import {
   applyInsertions,
   canSend,
   configPickers,
+  profileIssuesText,
   contextUsage,
-  draftKey,
-  isDraft,
   mentionTrigger,
   moveIndex,
   replaceTrigger,
@@ -47,7 +52,9 @@ import {
   AttachmentChip,
   ContextRing,
   LoginBanner,
+  ProfileIssuesNotice,
   MentionChip,
+  LevelPicker,
   ModelPicker,
   ModePicker,
   OptionsMenu,
@@ -59,6 +66,7 @@ import {
   type PendingAttachment,
   type PickerRow,
 } from "./ComposerParts";
+import { EnvironmentProposalBanner } from "./EnvironmentProposals";
 
 export interface ComposerProps {
   readonly workspaceId: string;
@@ -66,6 +74,9 @@ export interface ComposerProps {
 }
 
 /** 04, Composer. Archived workspaces show `Restore to continue`; closed chats are read-only. */
+/** Sessions whose profile-issues notice was dismissed; kept in memory only (04, browser storage). */
+const dismissedProfileIssues = new Set<string>();
+
 export function Composer({ workspaceId, sessionId }: ComposerProps) {
   const state = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state);
   const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[sessionId]);
@@ -112,8 +123,6 @@ const uploadAttachment = async (
   return body as { attachmentId: string; name: string; mime: string; size: number };
 };
 
-let localSeq = 0;
-
 const triggerKeyOf = (text: string, caret: number): string | null => {
   const t = slashTrigger(text, caret) ?? mentionTrigger(text, caret);
   return t ? `${text[t.start] === "@" ? "mention" : "slash"}:${t.start}` : null;
@@ -129,13 +138,31 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     return p ? `${p.done}/${p.total}` : null;
   });
   const workspaceBusy = useWorkspaceSelector(workspaceId, (s) => s.workspace?.runningTurnId ?? null) !== null;
+  const sleeping = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state === "sleeping");
   const focusSeq = useWorkspaceUiSelector(workspaceId, (s) => s.composerFocusSeq);
 
-  const [draft, setDraft] = useLocalStorage(draftKey(workspaceId, sessionId), "", isDraft);
-  const [mentions, setMentions] = useState<ReadonlyArray<Mention>>([]);
-  const [reviewCommentIds, setReviewCommentIds] = useState<ReadonlyArray<string>>([]);
-  const [attachments, setAttachments] = useState<ReadonlyArray<PendingAttachment>>([]);
+  const { draft: savedDraft, update, clearSent } = useComposerDraft(workspaceId, sessionId);
+  const { text: draft, mentions, reviewCommentIds, attachments } = savedDraft;
+  const setDraft = (next: string | ((value: string) => string)) => update("text", next);
+  const setMentions = (next: typeof mentions | ((value: typeof mentions) => typeof mentions)) =>
+    update("mentions", next);
+  const setReviewCommentIds = (
+    next: typeof reviewCommentIds | ((value: typeof reviewCommentIds) => typeof reviewCommentIds),
+  ) => update("reviewCommentIds", next);
+  const setAttachments = (next: typeof attachments | ((value: typeof attachments) => typeof attachments)) =>
+    update("attachments", next);
+  const sending = useRef(false);
+  const sentDraft = useRef(savedDraft);
+  const sendPending =
+    useIsMutating({
+      mutationKey: ["call", "sendPrompt"],
+      predicate: (mutation) => {
+        const input = mutation.state.variables as FnInput<"sendPrompt"> | undefined;
+        return input?.workspaceId === workspaceId && input.sessionId === sessionId;
+      },
+    }) > 0;
   const [caret, setCaret] = useState(0);
+  const [, rerender] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [active, setActive] = useState({ key: "", index: 0 });
   const [modelOpen, setModelOpen] = useState(false);
@@ -147,7 +174,16 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const previousMode = useRef<string | null>(null);
   const pickerId = useId();
 
-  const send = useCallMutation("sendPrompt");
+  const send = useCallMutation("sendPrompt", {
+    invalidates: ["listReviewComments"],
+    onSuccess: () => {
+      clearSent(sentDraft.current);
+      sending.current = false;
+    },
+    onError: () => {
+      sending.current = false;
+    },
+  });
   const cancel = useCallMutation("cancelTurn");
   const setMode = useCallMutation("setSessionMode");
   const setConfig = useCallMutation("setSessionConfig");
@@ -300,36 +336,26 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   };
 
   const submit = (delivery: "queue" | "steer" = "queue") => {
-    if (!sendable) return;
-    const backup = { draft, mentions, reviewCommentIds, attachments };
-    send.mutate(
-      {
-        workspaceId,
-        sessionId,
-        text: draft.trim(),
-        mentions: [...mentions],
-        attachmentIds: ready.map((a) => a.attachmentId!),
-        reviewCommentIds: [...reviewCommentIds],
-        delivery,
-      },
-      {
-        onError: () => {
-          setDraft((cur) => (cur === "" ? backup.draft : cur));
-          setMentions((cur) => (cur.length === 0 ? backup.mentions : cur));
-          setReviewCommentIds((cur) => (cur.length === 0 ? backup.reviewCommentIds : cur));
-          setAttachments((cur) => (cur.length === 0 ? backup.attachments : cur));
-        },
-      },
-    );
-    setDraft("");
-    setMentions([]);
-    setReviewCommentIds([]);
-    setAttachments([]);
+    if (!sendable || sending.current || sendPending) return;
+    sending.current = true;
+    sentDraft.current = savedDraft;
+    send.mutate({
+      workspaceId,
+      sessionId,
+      text: draft.trim(),
+      mentions: [...mentions],
+      attachmentIds: ready.map((a) => a.attachmentId!),
+      reviewCommentIds: [...reviewCommentIds],
+      delivery,
+    });
   };
 
   const stop = () => {
     if (running) cancel.mutate({ workspaceId, turnId: running.id });
   };
+
+  useAction("stop", stop, { enabled: !!running });
+  useAction("togglePlan", () => togglePlan(), { enabled: planId !== null && !pickersDisabled });
 
   useShortcuts(
     {
@@ -350,7 +376,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         stop();
       },
       togglePlan: () => {
-        if (planId === null) return false;
+        if (planId === null || pickersDisabled) return false;
         togglePlan();
       },
     },
@@ -361,8 +387,9 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     const { ok, tooLarge } = splitBySize(list);
     if (tooLarge.length > 0) toast.error("Each file can be at most 10 MiB.");
     for (const file of ok) {
-      const localId = `a${++localSeq}`;
+      const localId = crypto.randomUUID();
       const preview = isPreviewable(file.type) ? URL.createObjectURL(file) : undefined;
+      startAttachmentUpload(localId, preview);
       setAttachments((a) => [
         ...a,
         {
@@ -377,6 +404,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
       ]);
       uploadAttachment(workspaceId, file)
         .then((r) => {
+          finishAttachmentUpload(localId);
           if (preview) rememberAttachment(r.attachmentId, preview);
           setAttachments((a) =>
             a.map((x) =>
@@ -385,6 +413,8 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           );
         })
         .catch((e: unknown) => {
+          finishAttachmentUpload(localId);
+          if (preview) URL.revokeObjectURL(preview);
           toastError(e);
           setAttachments((a) => a.map((x) => (x.localId === localId ? { ...x, status: "failed" } : x)));
         });
@@ -416,13 +446,24 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
     : missing
       ? `Add your ${label} login in Settings.`
       : null;
+  const issuesText = profileIssuesText(session);
   const hasChips = mentions.length > 0 || reviewCommentIds.length > 0 || attachments.length > 0;
 
   return (
     <div className="shrink-0">
+      <EnvironmentProposalBanner workspaceId={workspaceId} />
       {loginText && <LoginBanner text={loginText} />}
+      {issuesText && !dismissedProfileIssues.has(sessionId) && (
+        <ProfileIssuesNotice
+          text={issuesText}
+          onDismiss={() => {
+            dismissedProfileIssues.add(sessionId);
+            rerender((n) => n + 1);
+          }}
+        />
+      )}
       <div
-        className={cn("relative px-3 pt-2 pb-3", dragging && "bg-accent/40")}
+        className="relative px-3 pt-2 pb-3"
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
@@ -438,7 +479,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           addFiles([...e.dataTransfer.files]);
         }}
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border bg-muted p-3">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
           {(plan !== null || inPlan || queued.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5" aria-label="Queued messages">
               {plan !== null && <PlanPill progress={plan} />}
@@ -462,151 +503,192 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
               ))}
             </div>
           )}
-          {hasChips && (
-            <div className="flex flex-wrap gap-1">
-              {reviewCommentIds.length > 0 && (
-                <ReviewChip count={reviewCommentIds.length} onRemove={() => setReviewCommentIds([])} />
-              )}
-              {mentions.map((m) => (
-                <MentionChip
-                  key={m.path}
-                  path={m.path}
-                  onRemove={() => setMentions((list) => list.filter((x) => x.path !== m.path))}
-                />
-              ))}
-              {attachments.map((a) => (
-                <AttachmentChip key={a.localId} a={a} onRemove={() => removeAttachment(a)} />
-              ))}
-            </div>
-          )}
-          <div className="relative">
-            {pickerOpen && (
-              <PickerList
-                id={pickerId}
-                rows={rows}
-                activeIndex={activeIndex}
-                status={pickerStatus}
-                onPick={pick}
-              />
+          <div
+            className={cn(
+              "rounded-2xl border border-input bg-muted p-3 shadow-md",
+              dragging && "border-ring bg-accent/40 ring-2 ring-ring/20",
             )}
-            <Textarea
-              ref={textRef}
-              value={draft}
-              rows={1}
-              placeholder={workspaceBusy ? `Queue a message for ${label}` : `Message ${label}`}
-              aria-label="Message"
-              aria-autocomplete="list"
-              aria-expanded={pickerOpen}
-              aria-controls={pickerOpen ? pickerId : undefined}
-              aria-activedescendant={pickerOpen && rows.length > 0 ? `${pickerId}-${activeIndex}` : undefined}
-              onChange={(e) => {
-                const text = e.target.value;
-                const at = e.target.selectionStart;
-                setDraft(text);
-                setCaret(at);
-                if (dismissed !== null && dismissed !== triggerKeyOf(text, at)) setDismissed(null);
-              }}
-              onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-              onKeyDown={(e) => {
-                if (!pickerOpen || rows.length === 0) return;
-                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                  e.preventDefault();
-                  const delta = e.key === "ArrowDown" ? 1 : -1;
-                  setActive({ key: activeKey, index: (activeIndex + delta + rows.length) % rows.length });
-                } else if (e.key === "Tab" && !e.shiftKey) {
-                  e.preventDefault();
-                  pick(activeIndex);
-                }
-              }}
-              onPaste={(e) => {
-                const pasted = [...e.clipboardData.files];
-                if (pasted.length === 0) return;
-                if (!e.clipboardData.getData("text/plain")) e.preventDefault();
-                addFiles(pasted);
-              }}
-              className="max-h-48 min-h-24 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <SimpleTooltip label={`Attach a file (${formatBinding("attach")})`}>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Attach a file"
-                onClick={() => fileRef.current?.click()}
+          >
+            {hasChips && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {reviewCommentIds.length > 0 && (
+                  <ReviewChip count={reviewCommentIds.length} onRemove={() => setReviewCommentIds([])} />
+                )}
+                {mentions.map((m) => (
+                  <MentionChip
+                    key={m.path}
+                    path={m.path}
+                    onRemove={() => setMentions((list) => list.filter((x) => x.path !== m.path))}
+                  />
+                ))}
+                {attachments.map((a) => (
+                  <AttachmentChip key={a.localId} a={a} onRemove={() => removeAttachment(a)} />
+                ))}
+              </div>
+            )}
+            <div className="relative">
+              <span
+                className="pointer-events-none absolute top-0 right-0 hidden text-xs text-muted-foreground/70 sm:block"
+                aria-hidden="true"
               >
-                <PaperclipIcon />
-              </Button>
-            </SimpleTooltip>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              hidden
-              tabIndex={-1}
-              aria-hidden
-              onChange={(e) => {
-                addFiles([...(e.target.files ?? [])]);
-                e.target.value = "";
-              }}
-            />
-            {pickers.model && (
-              <ModelPicker
-                option={pickers.model}
-                open={modelOpen}
-                onOpenChange={setModelOpen}
+                {formatBinding("focusComposer")} to focus
+              </span>
+              {sendPending && (
+                <p role="status" className="pb-1 text-xs text-muted-foreground">
+                  Saving message…
+                </p>
+              )}
+              {pickerOpen && (
+                <PickerList
+                  id={pickerId}
+                  rows={rows}
+                  activeIndex={activeIndex}
+                  status={pickerStatus}
+                  onPick={pick}
+                  onRetry={
+                    triggerKind === "mention" && files.isError ? () => void files.refetch() : undefined
+                  }
+                />
+              )}
+              <Textarea
+                ref={textRef}
+                value={draft}
+                rows={1}
+                placeholder={
+                  workspaceBusy
+                    ? `Queue a message for ${label}`
+                    : sleeping
+                      ? `Message ${label} to wake this workspace`
+                      : "Ask to make changes, @mention files, run /commands"
+                }
+                aria-label="Message"
+                aria-autocomplete="list"
+                aria-expanded={pickerOpen}
+                aria-controls={pickerOpen ? pickerId : undefined}
+                aria-activedescendant={
+                  pickerOpen && rows.length > 0 ? `${pickerId}-${activeIndex}` : undefined
+                }
+                onChange={(e) => {
+                  const text = e.target.value;
+                  const at = e.target.selectionStart;
+                  setDraft(text);
+                  setCaret(at);
+                  if (dismissed !== null && dismissed !== triggerKeyOf(text, at)) setDismissed(null);
+                }}
+                onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+                onKeyDown={(e) => {
+                  if (!pickerOpen || rows.length === 0) return;
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const delta = e.key === "ArrowDown" ? 1 : -1;
+                    setActive({ key: activeKey, index: (activeIndex + delta + rows.length) % rows.length });
+                  } else if (e.key === "Tab" && !e.shiftKey) {
+                    e.preventDefault();
+                    pick(activeIndex);
+                  }
+                }}
+                onPaste={(e) => {
+                  const pasted = [...e.clipboardData.files];
+                  if (pasted.length === 0) return;
+                  if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+                  addFiles(pasted);
+                }}
+                className="max-h-72 min-h-16 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent sm:pr-28"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2">
+              {pickers.model && (
+                <ModelPicker
+                  option={pickers.model}
+                  open={modelOpen}
+                  onOpenChange={setModelOpen}
+                  disabled={pickersDisabled}
+                  onPick={(v) => onConfig(pickers.model!, v)}
+                  onClosed={refocus}
+                />
+              )}
+              {pickers.thoughtLevel && (
+                <LevelPicker
+                  option={pickers.thoughtLevel}
+                  disabled={pickersDisabled}
+                  onPick={(v) => onConfig(pickers.thoughtLevel!, v)}
+                  onClosed={refocus}
+                />
+              )}
+              <ModePicker
+                session={session}
+                modeOption={pickers.modeOption}
                 disabled={pickersDisabled}
-                onPick={(v) => onConfig(pickers.model!, v)}
+                onMode={(modeId) => setMode.mutate({ workspaceId, sessionId, modeId })}
+                onConfig={onConfig}
                 onClosed={refocus}
               />
-            )}
-            <ModePicker
-              session={session}
-              modeOption={pickers.modeOption}
-              disabled={pickersDisabled}
-              onMode={(modeId) => setMode.mutate({ workspaceId, sessionId, modeId })}
-              onConfig={onConfig}
-              onClosed={refocus}
-            />
-            <OptionsMenu
-              options={pickers.others}
-              disabled={pickersDisabled}
-              onConfig={onConfig}
-              onClosed={refocus}
-            />
-            <div className="ml-auto flex items-center gap-1">
-              {usage && <ContextRing usage={usage} />}
-              {running && (
-                <SimpleTooltip label="Stop (Esc)">
+              <OptionsMenu
+                options={pickers.others}
+                disabled={pickersDisabled}
+                onConfig={onConfig}
+                onClosed={refocus}
+              />
+              <div className="ml-auto flex items-center gap-2">
+                <SimpleTooltip label={`Attach a file (${formatBinding("attach")})`}>
                   <Button
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Stop"
-                    onClick={stop}
-                    disabled={cancel.isPending}
+                    size="icon"
+                    variant="ghost"
+                    className="rounded-lg text-muted-foreground"
+                    aria-label="Attach a file"
+                    onClick={() => fileRef.current?.click()}
                   >
-                    <SquareIcon className="fill-current" />
+                    <PlusIcon className="size-5" />
                   </Button>
                 </SimpleTooltip>
-              )}
-              <Button
-                size="icon-sm"
-                aria-label={workspaceBusy ? "Queue" : "Send"}
-                onClick={() => submit()}
-                disabled={!sendable || send.isPending}
-              >
-                <ArrowUpIcon />
-              </Button>
-              {running && session.steering === true && (
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  hidden
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(e) => {
+                    addFiles([...(e.target.files ?? [])]);
+                    e.target.value = "";
+                  }}
+                />
+
+                {usage && <ContextRing usage={usage} />}
+                {running && (
+                  <SimpleTooltip label="Stop (Esc)">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="rounded-lg"
+                      aria-label="Stop"
+                      onClick={stop}
+                      disabled={cancel.isPending}
+                    >
+                      <SquareIcon className="fill-current" />
+                    </Button>
+                  </SimpleTooltip>
+                )}
                 <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => submit("steer")}
-                  disabled={!sendable || send.isPending}
+                  size="icon"
+                  className="rounded-lg disabled:bg-muted-foreground/25 disabled:text-muted-foreground disabled:opacity-100"
+                  aria-label={workspaceBusy ? "Queue" : "Send"}
+                  onClick={() => submit()}
+                  disabled={!sendable || sendPending}
                 >
-                  Send now
+                  <ArrowUpIcon className="size-4" />
                 </Button>
-              )}
+                {running && session.steering === true && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => submit("steer")}
+                    disabled={!sendable || sendPending}
+                  >
+                    Send now
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>

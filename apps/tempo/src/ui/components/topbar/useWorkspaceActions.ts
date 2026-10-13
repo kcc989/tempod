@@ -47,11 +47,10 @@ export function useWorkspaceActions(workspaceId: string) {
   const merge = useCallMutation("mergePullRequest", { onSuccess: () => toast.success("Merged.") });
   const wake = useCallMutation("wakeWorkspace");
   const sleep = useCallMutation("sleepWorkspace");
-  const rotate = useCallMutation("rotatePreviewToken", {
-    onSuccess: () => toast.success("Preview link rotated."),
-  });
+  const resetPreview = useCallMutation("rotatePreviewKey");
   const pin = useCallMutation("setPinned");
   const rename = useCallMutation("renameWorkspace");
+  const renameBranch = useCallMutation("renameBranch");
   const archive = useCallMutation("archiveWorkspace", {
     invalidates: ["listWorkspaces"],
     onSuccess: () =>
@@ -93,8 +92,9 @@ export function useWorkspaceActions(workspaceId: string) {
     archive: () => archive.mutate(input),
     setPinned: (pinned: boolean) => pin.mutate({ workspaceId, pinned }),
     rename: (title: string) => rename.mutate({ workspaceId, title }),
-    rotatePreview: async () => {
-      if (await confirm(CONFIRM_TEXT.rotatePreview())) rotate.mutate(input);
+    renameBranch: (branch: string) => renameBranch.mutate({ workspaceId, branch }),
+    resetPreviewAccess: async () => {
+      if (await confirm(CONFIRM_TEXT.resetPreviewAccess())) resetPreview.mutate(input);
     },
     copyLink: () => copyText(workspaceUrl(workspaceId), "Link copied."),
     copyBranch: (branch: string) => copyText(branch, "Branch name copied."),

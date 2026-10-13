@@ -1,0 +1,1 @@
+{"name":"docs","type":"stdio","command":"docs-mcp","args":["--stdio"],"env":{"DOCS_TOKEN":"${DOCS_TOKEN}"}}

@@ -6,10 +6,15 @@ import {
   ContentBlock,
   PermissionOption,
   SessionMode,
+  TurnUsage,
 } from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
+import { McpServerSpec } from "./mcp.ts";
+import { AgentProfile, ProfileIssue } from "./agents.ts";
 import { ChangedFile } from "./types.ts";
 import { Settings, SettingsLayer, SettingsReadResult } from "./settings.ts";
+import { EnvironmentProposal, EnvironmentSummary } from "./environments.ts";
+import { ArtifactKind } from "./artifacts.ts";
 
 /** tempod protocol (02): envelopes, requests and events between WorkspaceDO and tempod. */
 
@@ -112,6 +117,7 @@ export const TempodEvent = Schema.Union([
     stopReason: Schema.NullOr(Schema.String),
     error: Schema.optional(ResError),
     interrupted: Schema.optional(Schema.Boolean),
+    usage: Schema.optional(TurnUsage),
   }),
   ev("permission.requested", {
     requestId: Schema.String,
@@ -156,6 +162,23 @@ export const TempodEvent = Schema.Union([
   ev("outbox.overflow", { dropped: Schema.Number }),
   ev("tempod.stopping", { reason: Schema.String }),
   ev("log", { level: LogLevel, msg: Schema.String, data: Schema.optional(Schema.Unknown) }),
+  ev("environment.proposed", { proposal: EnvironmentProposal }),
+  ev("artifact.published", {
+    sessionId: Schema.String,
+    turnId: Schema.NullOr(Schema.String),
+    artifactId: Schema.String,
+    version: Schema.Number,
+    path: Schema.String,
+    name: Schema.String,
+    title: Schema.String,
+    summary: Schema.optional(Schema.String),
+    mime: Schema.String,
+    /** 02 names this `kind`, which is the event tag; it is the item content's name instead. */
+    artifactKind: ArtifactKind,
+    size: Schema.Number,
+    sha256: Schema.String,
+    stagedPath: Schema.String,
+  }),
 ]);
 export type TempodEvent = typeof TempodEvent.Type;
 export type TempodEventOf<K extends TempodEvent["kind"]> = Extract<TempodEvent, { kind: K }>;
@@ -198,6 +221,10 @@ export const CheckpointResult = Schema.Union([
 ]);
 export type CheckpointResult = typeof CheckpointResult.Type;
 
+/** 01 Browser Run: `"run"` drives a Browser Run session, `"local"` the container's Chromium. */
+export const BrowserMode = Schema.Literals(["local", "run"]);
+export type BrowserMode = typeof BrowserMode.Type;
+
 export const SessionStartResult = Schema.Struct({
   acpSessionId: Schema.String,
   modes: Schema.Array(SessionMode),
@@ -206,6 +233,8 @@ export const SessionStartResult = Schema.Struct({
   configOptions: Schema.Array(ConfigOption),
   availableCommands: Schema.Array(AvailableCommand),
   capabilities: Capabilities,
+  /** Fields of the profile tempod could not apply; absent from an older tempod means none. */
+  profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
   reloaded: Schema.Boolean,
   handoff: Schema.Boolean,
 });
@@ -234,6 +263,7 @@ export const TEMPOD_REQUESTS = {
   ),
   "settings.read": req(Schema.Struct({ overrides: SettingsLayer }), SettingsReadResult, 10_000),
   "env.set": req(Schema.Struct({ env: Env }), Empty, 10_000),
+  "environment.set": req(Schema.Struct({ summary: EnvironmentSummary }), Empty, 10_000),
   "script.start": req(
     Schema.Struct({
       runId: Schema.String,
@@ -254,7 +284,10 @@ export const TEMPOD_REQUESTS = {
       env: Env,
       modeId: Schema.optional(Schema.NullOr(Schema.String)),
       model: Schema.optional(Schema.NullOr(Schema.String)),
+      browser: BrowserMode,
+      profile: Schema.optional(AgentProfile),
       acpSessionId: Schema.optional(Schema.NullOr(Schema.String)),
+      mcpServers: Schema.optional(Schema.Array(McpServerSpec)),
     }),
     SessionStartResult,
     120_000,
@@ -337,6 +370,20 @@ export const TEMPOD_REQUESTS = {
     5 * 60_000,
   ),
   "git.renameBranch": req(Schema.Struct({ from: Schema.String, to: Schema.String }), Empty, 30_000),
+  "git.readFile": req(
+    Schema.Struct({ sha: Schema.String, path: Schema.String, maxBytes: Schema.Number }),
+    Schema.Struct({
+      content: Schema.String,
+      encoding: Schema.Literals(["utf8", "base64"]),
+      size: Schema.Number,
+    }),
+    10_000,
+  ),
+  "artifact.release": req(
+    Schema.Struct({ artifactId: Schema.String, version: Schema.Number }),
+    Empty,
+    10_000,
+  ),
   "fs.list": req(Empty, Schema.Struct({ paths: Schema.Array(Schema.String) }), 30_000),
   "fs.read": req(
     Schema.Struct({ path: Schema.String, maxBytes: Schema.Number }),
@@ -374,6 +421,10 @@ export const HANDOFF_FIRST_LINE =
   "This conversation continues an earlier session that was lost. Here is the transcript so far, oldest first:";
 export const HANDOFF_MAX_CHARS = 24_000;
 
+/** Turn-summary rule (01, Send a prompt, block 1). */
+export const TURN_SUMMARY_RULE =
+  "Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that says what you changed, which checks you ran and their results, and what is left to do. Name the command for each check. Link each file you name as file:///workspace/<path>.";
+
 export const revertNote = (seq: number): string =>
   `Note: the user reverted the files to the state after turn ${seq}. Changes made after that point are gone.`;
 
@@ -384,4 +435,17 @@ export const PLAYWRIGHT_MCP_SERVER = {
   env: [{ name: "PLAYWRIGHT_BROWSERS_PATH", value: "/opt/ms-playwright" }],
 } as const;
 
+/** 01 Browser Run: Playwright MCP reaches the session through `TempoOutbound` rule 11. */
+export const BROWSER_RUN_HOST = "browser.tempo.internal";
+export const BROWSER_RUN_CDP_ENDPOINT = `wss://${BROWSER_RUN_HOST}/`;
+
 export const PLACEHOLDER = "tempo-placeholder";
+
+/** The MCP server tempod serves to every agent (01, Environments). Its env adds `TEMPO_SESSION_ID`. */
+export const TEMPO_MCP_SERVER = {
+  name: "tempo",
+  command: "/usr/local/bin/tempod",
+  args: ["mcp"],
+} as const;
+export const TEMPO_SESSION_ID_ENV = "TEMPO_SESSION_ID";
+export const TEMPO_MCP_SOCKET = "/home/tempo/.tempod/mcp.sock";

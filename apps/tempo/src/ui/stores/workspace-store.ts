@@ -1,7 +1,7 @@
-import { flattenConfigOptions, modelOption, type AgentId, type CredentialProvider } from "@tempo/protocol";
+import type { CredentialProvider } from "@tempo/protocol";
 import { ReconnectingSocket, wsUrl, type SocketLike, type SocketStatus } from "~/ui/lib/socket";
 import { connectionMonitor } from "./connection";
-import { parseWorkspaceMessage } from "./parse";
+import { isUnknownVersionHello, parseWorkspaceMessage } from "./parse";
 import {
   applyWorkspaceMessage,
   clearCredentialInvalid,
@@ -82,6 +82,7 @@ export class WorkspaceStore {
 
   /** Exposed for tests and for replaying a frame. */
   receive(raw: string): void {
+    if (isUnknownVersionHello(raw)) return this.socket.rejectVersion();
     const msg = parseWorkspaceMessage(raw);
     if (!msg) return;
     const { state, events } = applyWorkspaceMessage(this.snapshot, msg);
@@ -154,22 +155,3 @@ export const peekWorkspaceStore = (workspaceId: string): WorkspaceStore | undefi
   stores.get(workspaceId)?.store;
 
 export const openWorkspaceStores = (): WorkspaceStore[] => [...stores.values()].map((e) => e.store);
-
-/** Model names come from ACP sessions already observed in this browser. */
-export const knownModels = (): Array<{ agent: AgentId; value: string; name: string }> => {
-  const models = new Map<string, { agent: AgentId; value: string; name: string }>();
-  for (const { store } of stores.values()) {
-    for (const session of Object.values(store.getSnapshot().sessions)) {
-      const option = modelOption(session.configOptions);
-      if (!option) continue;
-      for (const model of flattenConfigOptions(option)) {
-        models.set(`${session.agent}:${model.value}`, {
-          agent: session.agent,
-          value: model.value,
-          name: model.name,
-        });
-      }
-    }
-  }
-  return [...models.values()];
-};

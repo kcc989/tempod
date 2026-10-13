@@ -154,9 +154,9 @@ export const uploadAttachment = (
   return fetchApp(`/api/workspaces/${workspaceId}/attachments`, { ...opts, method: "POST", body: form });
 };
 
-/** `https://<port>-<workspaceId>-<previewToken>.<PREVIEW_DOMAIN>` (01, Preview URL). */
-export const previewUrl = (port: number, workspaceId: string, previewToken: string): string =>
-  `https://${port}-${workspaceId.toLowerCase()}-${previewToken}.${E2E.previewDomain ?? required("TEMPO_E2E_PREVIEW_DOMAIN")}`;
+/** `https://<port>-<workspaceId lowercase>.<PREVIEW_DOMAIN>` (01, Preview URL). */
+export const previewUrl = (port: number, workspaceId: string): string =>
+  `https://${port}-${workspaceId.toLowerCase()}.${E2E.previewDomain ?? required("TEMPO_E2E_PREVIEW_DOMAIN")}`;
 
 /** `Cookie` header value for the app host, from the Playwright storage state of a signed-in owner. */
 export const storageStateCookie = (): string | undefined => {

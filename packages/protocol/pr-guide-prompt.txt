@@ -1,0 +1,28 @@
+Create or update a guided PR for this workspace's branch against its base branch. Inspect the actual diff and relevant code first. Explain what changed and why, in the order a reviewer needs to understand it. Do not change application code, commit, push, or create a GitHub PR as part of this task.
+
+Write .tempo/pr-guide.json as JSON with this format:
+{
+  "version": 1,
+  "title": "Short PR title",
+  "summary": "Markdown overview, intent, tradeoffs, risks and validation actually performed",
+  "before": "How the system behaved before",
+  "after": "How the system behaves now",
+  "chapters": [
+    {
+      "id": "unique-stable-id",
+      "title": "One focused change",
+      "description": "Markdown explanation grounded in the actual diff",
+      "files": ["src/changed-file.ts"],
+      "visuals": []
+    }
+  ]
+}
+
+Use one or more visuals where they help explain the PR. Each chapter may contain several:
+- Comparison: {"kind":"comparison","title":"Behavior","before":"Markdown before","after":"Markdown after"}.
+- Interactive flow: {"kind":"flow","title":"Request flow","nodes":[{"id":"request","label":"Request","description":"What happens here","path":"src/changed-file.ts"}],"edges":[{"from":"request","to":"another-node-id","label":"calls"}]}. Nodes can be selected to inspect their explanation and open the corresponding diff. Every edge must refer to an existing node.
+- Markdown artifact: {"kind":"markdown","title":"Validation evidence","path":".tempo/artifacts/evidence.md","caption":"Optional explanation"}.
+- Image artifact: {"kind":"image","title":"Screenshot","path":".tempo/artifacts/screenshot.png","caption":"Optional explanation"}. Supported formats are PNG, JPEG, GIF and WebP.
+- Interactive artifact: {"kind":"html","title":"Interactive walkthrough","path":".tempo/artifacts/walkthrough.html","caption":"Optional explanation"}. Make it self-contained, using inline CSS and JavaScript and data images. It runs in an isolated frame with no network, parent access, forms, popups, or external dependencies. Include accessible controls and support light and dark color schemes.
+
+All file and artifact paths must be repository-relative, without empty, . or .. segments, backslashes or control characters. Artifact files and the guide must each fit the 1 MiB read limit. Use at most 50 chapters, 100 files and 10 visuals per chapter, 30 nodes and 60 edges per flow. Chapter and node ids must be unique. Titles and ids are at most 200 characters; explanations at most 20,000 characters. Do not invent screenshots, test results or behavior. Do not include secrets. Keep generated and test changes in their own focused chapters when useful. Reuse existing artifacts where possible. Finish by telling the user to open Guide in Tempo, review it against the live diff, and commit the guide and artifacts with their PR.

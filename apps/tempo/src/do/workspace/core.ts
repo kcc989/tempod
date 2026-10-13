@@ -3,8 +3,9 @@ import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlit
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
   DEFAULT_SETTINGS,
-  Settings as SettingsSchema,
-  SettingsLayer,
+  secretPlaceholder,
+  type EnvironmentSummary,
+  type PendingEnvironmentProposal,
   TempoError,
   type AgentId,
   type Attention,
@@ -14,20 +15,25 @@ import {
   type ItemStatus,
   type Session,
   type Settings,
+  type SettingsLayer,
   type SettingsSource,
   type Turn,
-  type TurnPrompt,
+  type TurnUsage,
   type WorkspaceDetail,
   type WorkspaceServerMessage,
   type WorkspaceState,
   type WorkspaceSummary,
   CloseCode,
   newId,
+  TEMPO_ARTIFACTS_DIR,
 } from "@tempo/protocol";
 import { resolveSettings } from "@tempo/settings";
-import { Schema } from "effect";
-import { projects, workspaces } from "../../db/d1.ts";
+import { environments, mcpServers, projects, workspaces, type McpServerRow } from "../../db/d1.ts";
+import { EMPTY_PROMPT, json, readItemContent, validItemContent, type ItemContent } from "../../db/json.ts";
+import { parseEnvironment, type EnvironmentConfig } from "../../lib/environments.ts";
 import {
+  egressLog,
+  environmentProposals,
   items,
   permissions,
   ports,
@@ -41,9 +47,10 @@ import {
   type WorkspaceRowDO,
 } from "../../db/workspace-do.ts";
 import type { Env } from "../../env.ts";
-import { log } from "../../log.ts";
+import { errorText, log } from "../../log.ts";
 import type { TempodClient } from "./tempod-client.ts";
 import { assertTransition } from "./transitions.ts";
+import { WorkspaceFiles } from "./files.ts";
 
 export type DB = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
@@ -55,6 +62,7 @@ export interface ProjectInfo {
   readonly name: string;
   readonly defaultBranch: string;
   readonly overrides: SettingsLayer;
+  readonly environmentId: string | null;
 }
 
 export interface Author {
@@ -63,9 +71,8 @@ export interface Author {
 }
 
 const MAX_BUFFERED = 4 * 1024 * 1024;
-const decodeSettings = Schema.decodeUnknownOption(SettingsSchema);
-const decodeLayer = Schema.decodeUnknownOption(SettingsLayer);
 
+/** Unvalidated: only for internal columns (op state and input, raw events, backup records). */
 export const parseJson = <T>(text: string | null | undefined, fallback: T): T => {
   if (!text) return fallback;
   try {
@@ -75,8 +82,14 @@ export const parseJson = <T>(text: string | null | undefined, fallback: T): T =>
   }
 };
 
+const withUsage = (text: string | null): { usage?: TurnUsage } => {
+  const usage = json.turnUsage.read(text, null);
+  return usage ? { usage } : {};
+};
+
 /** Everything the WorkspaceDO modules share: storage, in-memory state, and helpers. */
 export class WorkspaceCore {
+  readonly files = new WorkspaceFiles(this);
   readonly db: DB;
   tempod: TempodClient | null = null;
   /** The connect in flight, shared by every caller (container.ts, connectTempod). */
@@ -98,13 +111,30 @@ export class WorkspaceCore {
   scheduleAlarm: () => void = () => undefined;
   closingTempod = false;
   queueBusy = false;
+  /** The queue runner's work in flight (a turn start or a steer), while queueBusy is set. */
+  queueWork: Promise<void> | null = null;
+  /** Aborts the turn start in flight before its prompt is sent (archive, 03 turns.cancel). */
+  turnStartAbort: AbortController | null = null;
   tempodStopping = false;
   turnEndInProgress = false;
   reconnectAttempt = 0;
   reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   /** Open terminal sockets and their PTY exec processes (01, Terminal). */
   readonly terminals = new Map<WebSocket, { readonly terminalId: string; proc: ExecProcess | null }>();
+  /** Open preview WebSocket relays: the browser side and the tempod side. */
+  readonly previewSockets = new Set<WebSocket>();
   private detailTimer: ReturnType<typeof setTimeout> | null = null;
+
+  closePreviews(code: number, reason: string): void {
+    for (const ws of this.previewSockets) {
+      try {
+        ws.close(code, reason);
+      } catch {
+        // already closed
+      }
+    }
+    this.previewSockets.clear();
+  }
 
   closeTerminals(code: number, reason: string): void {
     for (const [ws, t] of this.terminals) {
@@ -133,6 +163,13 @@ export class WorkspaceCore {
 
   /** The container API (ctx.container). A field, so tests can put a fake in its place. */
   container: Container | undefined;
+  /** The Browser Run binding (01, Browser Run). A field, so tests can put a fake in its place. */
+  browser: BrowserRun | undefined;
+  /** BrowserOutbound for this workspace: Browser Run's route to `localhost`. */
+  browserOutbound: () => Fetcher = () =>
+    this.ctx.exports.BrowserOutbound({ props: { workspaceId: this.workspaceId } });
+  /** The Browser Run acquire in flight, shared by concurrent CDP connections. */
+  browserAcquire: Promise<string | null> | null = null;
 
   constructor(
     readonly ctx: DurableObjectState,
@@ -140,6 +177,7 @@ export class WorkspaceCore {
   ) {
     this.db = drizzle(ctx.storage, { schema: workspaceSchema });
     this.container = ctx.container;
+    this.browser = env.BROWSER;
   }
 
   // ---------- workspace row ----------
@@ -155,7 +193,11 @@ export class WorkspaceCore {
   }
 
   get workspaceId(): string {
-    return this.ws().workspaceId;
+    const row = this.wsOrNull();
+    if (row) return row.workspaceId;
+    const userId = this.kv<string>("catalogUserId");
+    if (userId && this.ctx.id.name === `models:${userId}`) return this.ctx.id.name;
+    throw new TempoError("NOT_FOUND");
   }
 
   updateWs(patch: Partial<typeof workspace.$inferInsert>): void {
@@ -189,9 +231,8 @@ export class WorkspaceCore {
   // ---------- settings ----------
 
   settings(): Settings {
-    const row = this.ws();
-    const stored = decodeSettings(parseJson(row.settingsJson, {}));
-    if (stored._tag === "Some") return stored.value;
+    const stored = json.settings.read(this.ws().settingsJson, null);
+    if (stored) return stored;
     const overrides = this.projectCache?.info.overrides ?? {};
     return resolveSettings(overrides, {}).effective ?? DEFAULT_SETTINGS;
   }
@@ -218,7 +259,6 @@ export class WorkspaceCore {
       .where(eq(projects.id, this.ws().projectId))
       .get();
     if (!row) throw new TempoError("NOT_FOUND", undefined, "project not found");
-    const overrides = decodeLayer(parseJson(row.settingsJson, {}));
     const info: ProjectInfo = {
       id: row.id,
       installationId: row.installationId,
@@ -226,7 +266,8 @@ export class WorkspaceCore {
       owner: row.repoOwner,
       name: row.repoName,
       defaultBranch: row.defaultBranch,
-      overrides: overrides._tag === "Some" ? overrides.value : {},
+      overrides: json.projectSettings.read(row.settingsJson, {}),
+      environmentId: row.environmentId,
     };
     this.projectCache = { info, at: Date.now() };
     return info;
@@ -236,14 +277,97 @@ export class WorkspaceCore {
     return this.kv<Author>("author") ?? { name: "Tempo", email: "tempo@users.noreply.github.com" };
   }
 
-  credentials() {
-    return this.env.CREDENTIALS.getByName(this.ws().userId);
+  /** The owner's enabled MCP servers (01, User MCP servers), read from D1 each time. */
+  async mcpServers(): Promise<McpServerRow[]> {
+    return drizzleD1(this.env.DB)
+      .select()
+      .from(mcpServers)
+      .where(and(eq(mcpServers.userId, this.ws().userId), eq(mcpServers.enabled, 1)))
+      .orderBy(asc(mcpServers.name))
+      .all();
   }
 
-  /** Script env (01, Scripts): TEMPO_* and CONDUCTOR_* vars plus the project's env vars and secrets. */
+  credentials() {
+    const userId = this.wsOrNull()?.userId ?? this.kv<string>("catalogUserId");
+    if (!userId) throw new TempoError("NOT_FOUND");
+    return this.env.CREDENTIALS.getByName(userId);
+  }
+
+  /** The workspace override, else the project's environment, else none (01, Environments). */
+  async environment(fresh = false): Promise<EnvironmentConfig | null> {
+    const project = await this.project(fresh);
+    const row = this.ws();
+    for (const id of [row.environmentId, project.environmentId]) {
+      if (!id) continue;
+      const env = await drizzleD1(this.env.DB)
+        .select()
+        .from(environments)
+        .where(and(eq(environments.id, id), eq(environments.userId, row.userId)))
+        .get();
+      if (env) return parseEnvironment(env);
+    }
+    return null;
+  }
+
+  /** Environment secrets for the container: placeholders when bound to hosts, else values (01). */
+  private async environmentEnv(env: EnvironmentConfig | null): Promise<Record<string, string>> {
+    if (!env || env.secrets.length === 0) return {};
+    const values = await this.credentials().listEnvironmentSecrets(env.id);
+    const out: Record<string, string> = {};
+    for (const s of env.secrets) {
+      if (s.hosts.length > 0) out[s.name] = secretPlaceholder(s.name);
+      else if (values[s.name] !== undefined) out[s.name] = values[s.name]!;
+    }
+    return out;
+  }
+
+  /** What the agent may see (01, Environments): no secret values. */
+  async environmentSummary(): Promise<EnvironmentSummary> {
+    const env = await this.environment();
+    const settings = this.settings().environment;
+    const set = env
+      ? new Set(await this.credentials().listEnvironmentSecretNames(env.id))
+      : new Set<string>();
+    return {
+      name: env?.name ?? null,
+      egressPolicy: env?.egressPolicy ?? settings.egress_policy,
+      egressAllowlist: [...(env?.egressAllowlist ?? settings.egress_allowlist)],
+      secrets: (env?.secrets ?? []).map((s) => ({ name: s.name, hosts: [...s.hosts], set: set.has(s.name) })),
+      injectors: (env?.injectors ?? []).map((i) => ({ name: i.name, hosts: [...i.hosts] })),
+      blockedHosts: this.blockedHosts(),
+    };
+  }
+
+  /** Distinct hosts blocked by rule 7 or 10 in the last 24 h, newest first, at most 50 (02). */
+  blockedHosts(): string[] {
+    const rows = this.db
+      .select({ host: egressLog.host })
+      .from(egressLog)
+      .where(and(inArray(egressLog.rule, [7, 10]), gt(egressLog.ts, Date.now() - 24 * 3600_000)))
+      .orderBy(desc(egressLog.id))
+      .limit(2000)
+      .all();
+    return [...new Set(rows.map((r) => r.host))].slice(0, 50);
+  }
+
+  pendingProposals(): PendingEnvironmentProposal[] {
+    return this.db
+      .select()
+      .from(environmentProposals)
+      .where(eq(environmentProposals.status, "pending"))
+      .orderBy(asc(environmentProposals.createdAt), asc(environmentProposals.id))
+      .all()
+      .flatMap((r) => {
+        const proposal = json.environmentProposal.read(r.proposalJson, null);
+        return proposal ? [{ id: r.id, createdAt: r.createdAt, proposal }] : [];
+      });
+  }
+
+  /** Script env (01, Scripts): TEMPO_* vars plus the project's env vars and secrets. */
   async scriptEnv(): Promise<Record<string, string>> {
     const row = this.ws();
     const settings = this.settings();
+    const envSecrets = await this.environmentEnv(await this.environment());
     const secrets = await this.credentials().listProjectEnv(row.projectId);
     const base = {
       TEMPO_WORKSPACE_ID: row.workspaceId,
@@ -251,13 +375,9 @@ export class WorkspaceCore {
       TEMPO_WORKSPACE_PATH: "/workspace",
       TEMPO_DEFAULT_BRANCH: row.baseBranch,
       TEMPO_PORT: "3000",
-      CONDUCTOR_WORKSPACE_NAME: row.slug,
-      CONDUCTOR_WORKSPACE_PATH: "/workspace",
-      CONDUCTOR_ROOT_PATH: "/workspace",
-      CONDUCTOR_DEFAULT_BRANCH: row.baseBranch,
-      CONDUCTOR_PORT: "3000",
+      TEMPO_ARTIFACTS_DIR,
     };
-    return { ...settings.environment_variables, ...secrets, ...base };
+    return { ...settings.environment_variables, ...envSecrets, ...secrets, ...base };
   }
 
   // ---------- attention, summary, detail ----------
@@ -315,7 +435,7 @@ export class WorkspaceCore {
   }
 
   previewUrl(port: number, row: WorkspaceRowDO = this.ws()): string {
-    return `https://${port}-${row.workspaceId}-${row.previewToken}.${this.env.PREVIEW_DOMAIN}`;
+    return `https://${port}-${row.workspaceId}.${this.env.PREVIEW_DOMAIN}`;
   }
 
   /** Set by the op runner: the running op, else the next pending op. */
@@ -338,13 +458,14 @@ export class WorkspaceCore {
       errorDetail: row.errorDetail,
       setupStatus: row.setupStatus as WorkspaceDetail["setupStatus"],
       pushed: row.pushed === 1,
-      previewToken: row.previewToken,
+      prTitle: row.prNumber === null ? null : (this.kv<string>("prTitle") ?? null),
       ports: this.db
         .select()
         .from(ports)
         .orderBy(asc(ports.port))
         .all()
         .map((p) => ({ port: p.port, url: this.previewUrl(p.port, row) })),
+      browserActive: row.browserSessionId !== null,
       settings: this.settings(),
       runningTurnId: running?.id ?? null,
       queue,
@@ -355,12 +476,15 @@ export class WorkspaceCore {
       settingsSources: issues.sources,
       changes: this.kv<ChangesSummary>("changes") ?? null,
       hasUnpushedCommits: this.kv<boolean>("hasUnpushedCommits") ?? false,
+      environmentId: row.environmentId,
+      environmentProposals: this.pendingProposals(),
     };
   }
 
   /**
    * Writes the D1 summary row with a monotonic `summary_rev`, publishes to UserHubDO, and
-   * sends the detail to every UI socket (02, Write rules).
+   * sends the detail to every UI socket (02, Write rules). The hub gets the summary even when
+   * the D1 write fails: the DO stays the source of truth and the next publish repairs D1.
    */
   publish(): void {
     const row = this.ws();
@@ -368,30 +492,33 @@ export class WorkspaceCore {
     this.updateWs({ summaryRev: rev });
     const fresh = this.ws();
     const summary = this.summary(fresh);
-    const d1 = drizzleD1(this.env.DB);
-    const write = d1
-      .update(workspaces)
-      .set({
-        slug: summary.slug,
-        title: summary.title,
-        branch: summary.branch,
-        baseBranch: summary.baseBranch,
-        state: summary.state,
-        attention: summary.attention,
-        defaultAgent: summary.defaultAgent,
-        prNumber: summary.prNumber,
-        prState: summary.prState,
-        checksState: summary.checksState,
-        pinned: summary.pinned ? 1 : 0,
-        lastActivityAt: summary.lastActivityAt,
-        archivedAt: summary.archivedAt,
-        summaryRev: rev,
-      })
-      .where(and(eq(workspaces.id, summary.id), sql`${workspaces.summaryRev} < ${rev}`))
-      .run()
+    const writeD1 = async () => {
+      await drizzleD1(this.env.DB)
+        .update(workspaces)
+        .set({
+          slug: summary.slug,
+          title: summary.title,
+          branch: summary.branch,
+          baseBranch: summary.baseBranch,
+          state: summary.state,
+          attention: summary.attention,
+          defaultAgent: summary.defaultAgent,
+          prNumber: summary.prNumber,
+          prState: summary.prState,
+          checksState: summary.checksState,
+          pinned: summary.pinned ? 1 : 0,
+          lastActivityAt: summary.lastActivityAt,
+          archivedAt: summary.archivedAt,
+          summaryRev: rev,
+        })
+        .where(and(eq(workspaces.id, summary.id), sql`${workspaces.summaryRev} < ${rev}`))
+        .run();
+    };
+    const done = writeD1()
+      .catch((e) => log("warn", "summary D1 write failed", { workspaceId: summary.id, error: errorText(e) }))
       .then(() => this.env.USER_HUB.getByName(fresh.userId).publish(summary))
-      .catch((e) => log("warn", "summary publish failed", { workspaceId: summary.id, error: String(e) }));
-    this.ctx.waitUntil(write);
+      .catch((e) => log("warn", "summary publish failed", { workspaceId: summary.id, error: errorText(e) }));
+    this.ctx.waitUntil(done);
     this.broadcast({ type: "workspace", workspace: this.detail() });
   }
 
@@ -410,13 +537,23 @@ export class WorkspaceCore {
       title: r.title,
       status: r.status as Session["status"],
       modeId: r.modeId,
-      modes: parseJson(r.modesJson, []),
-      configOptions: parseJson(r.configOptionsJson, []),
-      config: parseJson(r.configJson, {}),
-      commands: parseJson(r.commandsJson, []),
-      usage: parseJson(r.usageJson, {}),
+      modes: json.modes.read(r.modesJson, []),
+      configOptions: json.configOptions.read(r.configOptionsJson, []),
+      config: json.config.read(r.configJson, {}),
+      commands: json.commands.read(r.commandsJson, []),
+      usage: json.usage.read(r.usageJson, {}),
       sortOrder: r.sortOrder,
-      steering: parseJson<Record<string, unknown>>(r.capabilitiesJson, {})["steering"] === true,
+      steering: json.capabilities.read(r.capabilitiesJson, {})["steering"] === true,
+      ...(r.customAgentId
+        ? {
+            customAgent: {
+              id: r.customAgentId,
+              name: r.customAgentName ?? "",
+              commitSha: r.customAgentCommit ?? "",
+            },
+            profileIssues: [...json.profileIssues.read(r.profileIssuesJson, [])],
+          }
+        : {}),
     };
   }
 
@@ -445,12 +582,7 @@ export class WorkspaceCore {
       status: r.status as Turn["status"],
       queuePos: r.queuePos,
       steeringPending: r.steeringPending === 1,
-      prompt: parseJson<TurnPrompt>(r.promptJson, {
-        text: "",
-        mentions: [],
-        attachmentIds: [],
-        reviewCommentIds: [],
-      }),
+      prompt: json.prompt.read(r.promptJson, EMPTY_PROMPT),
       stopReason: r.stopReason,
       errorCode: r.errorCode,
       checkpointId: r.checkpointId,
@@ -458,6 +590,7 @@ export class WorkspaceCore {
       queuedAt: r.queuedAt,
       startedAt: r.startedAt,
       endedAt: r.endedAt,
+      ...withUsage(r.usageJson),
     };
   }
 
@@ -505,14 +638,14 @@ export class WorkspaceCore {
     return rev;
   }
 
-  itemToWire(r: ItemRow): Item {
+  itemToWire(r: ItemRow, content: ItemContent = readItemContent(r.kind, r.contentJson)): Item {
     return {
       id: r.id,
       sessionId: r.sessionId,
       turnId: r.turnId,
       kind: r.kind,
       status: r.status,
-      content: parseJson(r.contentJson, {}),
+      content,
       rev: r.rev,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
@@ -535,6 +668,8 @@ export class WorkspaceCore {
   }): Item {
     const now = Date.now();
     const id = input.id ?? newId();
+    const content = validItemContent(input.kind, input.content);
+    const contentJson = JSON.stringify(content);
     const row = this.ctx.storage.transactionSync(() => {
       const rev = this.bumpItemsRev();
       const values = {
@@ -543,7 +678,7 @@ export class WorkspaceCore {
         turnId: input.turnId,
         kind: input.kind,
         status: input.status,
-        contentJson: JSON.stringify(input.content),
+        contentJson,
         rev,
         createdAt: input.createdAt ?? now,
         updatedAt: now,
@@ -551,42 +686,50 @@ export class WorkspaceCore {
       this.db.insert(items).values(values).onConflictDoNothing().run();
       return this.itemRow(id)!;
     });
-    const item = this.itemToWire(row);
+    const item = row.contentJson === contentJson ? this.itemToWire(row, content) : this.itemToWire(row);
     this.broadcast({ type: "item.upsert", item, itemsRev: row.rev });
     return item;
   }
 
   updateItem(id: string, patch: { status?: ItemStatus; content?: unknown; turnId?: string }): Item | null {
-    const row = this.ctx.storage.transactionSync(() => {
+    const result = this.ctx.storage.transactionSync(() => {
       const existing = this.itemRow(id);
       if (!existing) return null;
+      const content = patch.content !== undefined ? validItemContent(existing.kind, patch.content) : null;
       const rev = this.bumpItemsRev();
       this.db
         .update(items)
         .set({
           ...(patch.status ? { status: patch.status } : {}),
-          ...(patch.content !== undefined ? { contentJson: JSON.stringify(patch.content) } : {}),
+          ...(content ? { contentJson: JSON.stringify(content) } : {}),
           ...(patch.turnId !== undefined ? { turnId: patch.turnId } : {}),
           rev,
           updatedAt: Date.now(),
         })
         .where(eq(items.id, id))
         .run();
-      return this.itemRow(id);
+      return { row: this.itemRow(id)!, content };
     });
-    if (!row) return null;
-    const item = this.itemToWire(row);
-    this.broadcast({ type: "item.upsert", item, itemsRev: row.rev });
+    if (!result) return null;
+    const item = result.content ? this.itemToWire(result.row, result.content) : this.itemToWire(result.row);
+    this.broadcast({ type: "item.upsert", item, itemsRev: result.row.rev });
     return item;
   }
 
-  /** Appends streamed text. Every change bumps items_rev; the delta goes to live sockets only. */
+  /**
+   * Appends streamed text. Every change bumps items_rev; the delta goes to live sockets only.
+   * Appending to a string keeps valid content valid, so only content without a string `text` is re-validated.
+   */
   appendItemText(id: string, text: string): void {
     const rev = this.ctx.storage.transactionSync(() => {
       const existing = this.itemRow(id);
       if (!existing) return null;
-      const content = parseJson<{ text?: string }>(existing.contentJson, {});
-      content.text = (content.text ?? "") + text;
+      const raw = parseJson<unknown>(existing.contentJson, null);
+      const content: Record<string, unknown> =
+        typeof raw === "object" && raw !== null && typeof (raw as { text?: unknown }).text === "string"
+          ? (raw as Record<string, unknown>)
+          : { ...validItemContent(existing.kind, raw) };
+      content["text"] = String(content["text"] ?? "") + text;
       const rev = this.bumpItemsRev();
       this.db
         .update(items)
@@ -596,6 +739,20 @@ export class WorkspaceCore {
       return rev;
     });
     if (rev !== null) this.broadcast({ type: "item.delta", itemId: id, append: { text }, itemsRev: rev });
+  }
+
+  /**
+   * Deletes a turn and its items in one transaction (02, Rules: items_rev goes up when items go),
+   * runs `alsoInTransaction`, then broadcasts turn.deleted.
+   */
+  deleteTurn(turnId: string, alsoInTransaction?: () => void): void {
+    this.ctx.storage.transactionSync(() => {
+      const removed = this.db.delete(items).where(eq(items.turnId, turnId)).returning({ id: items.id }).all();
+      if (removed.length > 0) this.bumpItemsRev();
+      this.db.delete(turns).where(eq(turns.id, turnId)).run();
+      alsoInTransaction?.();
+    });
+    this.broadcast({ type: "turn.deleted", turnId });
   }
 
   /** Closes open items of a turn: completed for a normal end, cancelled otherwise (02, Status). */

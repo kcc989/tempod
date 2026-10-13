@@ -1,0 +1,2 @@
+{"name":"search","type":"http","url":"https://mcp.example.com/mcp","headers":{"Authorization":"${SEARCH_AUTH}"}}
+{"name":"events","type":"sse","url":"https://mcp.example.com/sse","headers":{}}

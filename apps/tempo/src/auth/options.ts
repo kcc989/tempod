@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "better-auth/minimal";
 import { bearer } from "better-auth/plugins/bearer";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { ERROR_MESSAGES } from "@tempo/protocol";
+import { errorText, log } from "../log.ts";
 
 /** Pure Better Auth options, so the `auth` CLI can load them to generate the schema. */
 export interface AuthEnv {
@@ -13,6 +14,28 @@ export interface AuthEnv {
 
 export const MAC_CLIENT_ID = "tempo-mac";
 export const SESSION_SECONDS = 60 * 60 * 24 * 30;
+
+/** 05, Secrets: no secret in D1. Sign-in needs only the GitHub profile, so the OAuth tokens are never stored. */
+export const withoutOAuthTokens = <T extends object>(account: T): T => ({
+  ...account,
+  accessToken: null,
+  refreshToken: null,
+  idToken: null,
+  accessTokenExpiresAt: null,
+  refreshTokenExpiresAt: null,
+});
+
+/** 05, Observability: Better Auth's own log lines pass through the redact helper too. */
+export const authLog = (
+  level: "debug" | "info" | "warn" | "error",
+  message: string,
+  ...args: unknown[]
+): void =>
+  log(
+    level,
+    `auth: ${message}`,
+    args.length ? { args: args.map((a) => (a instanceof Error ? errorText(a) : a)) } : {},
+  );
 
 export const authOptions = (env: AuthEnv) =>
   ({
@@ -26,6 +49,13 @@ export const authOptions = (env: AuthEnv) =>
       : {},
     session: { expiresIn: SESSION_SECONDS, updateAge: 60 * 60 * 24 },
     account: { accountLinking: { enabled: false } },
+    databaseHooks: {
+      account: {
+        create: { before: async (account) => ({ data: withoutOAuthTokens(account) }) },
+        update: { before: async (account) => ({ data: withoutOAuthTokens(account) }) },
+      },
+    },
+    logger: { log: authLog },
     advanced: { defaultCookieAttributes: { sameSite: "lax", httpOnly: true, secure: true } },
     user: {
       // Runs before create-user, link-account and every OAuth sign-in (05, owner check).

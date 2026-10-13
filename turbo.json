@@ -18,6 +18,7 @@
       "persistent": true
     },
     "@tempo/tempod#build": {
+      "env": ["TEMPO_BUILD_ID"],
       "outputs": ["$TURBO_ROOT$/dist/tempod"]
     }
   }

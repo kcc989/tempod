@@ -6,6 +6,7 @@ members = [
   "crates/tempo-protocol",
   "crates/tempo-client",
   "crates/tempo-terminal",
+  "crates/tempo-keychain",
   "crates/protocol-gen",
 ]
 

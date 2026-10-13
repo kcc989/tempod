@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PendingEnvironmentProposal",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "proposal": {
+      "$ref": "EnvironmentProposal.json"
+    }
+  },
+  "required": ["id", "createdAt", "proposal"],
+  "additionalProperties": true
+}

@@ -14,11 +14,18 @@ export type CenterTab =
   | { readonly kind: "chat"; readonly sessionId: string }
   | { readonly kind: "file"; readonly path: string; readonly line: number | null }
   | { readonly kind: "diff"; readonly path: string | null }
-  | { readonly kind: "browser"; readonly url: string };
+  | { readonly kind: "guide" }
+  | { readonly kind: "browser"; readonly url: string }
+  | { readonly kind: "liveView" }
+  /** `version` null: the newest version (04, Artifact tab). */
+  | { readonly kind: "artifact"; readonly artifactId: string; readonly version: number | null };
 
 export type CenterTabKind = CenterTab["kind"];
 
-/** Identity: one tab per session, one per file path, one diff tab, one per browser URL. */
+/**
+ * Identity: one tab per session, one per file path, one diff tab, one per browser URL, one Live View,
+ * one per artifact.
+ */
 export const tabKey = (t: CenterTab): string => {
   switch (t.kind) {
     case "chat":
@@ -27,12 +34,21 @@ export const tabKey = (t: CenterTab): string => {
       return `file:${t.path}`;
     case "diff":
       return "diff";
+    case "guide":
+      return "guide";
     case "browser":
       return `browser:${t.url}`;
+    case "liveView":
+      return "liveView";
+    case "artifact":
+      return `artifact:${t.artifactId}`;
   }
 };
 
-/** Serialized form: `chat:<sessionId>`, `file:<path>:<line?>`, `diff:<path?>`, `browser:<url>`. */
+/**
+ * Serialized form: `chat:<sessionId>`, `file:<path>:<line?>`, `diff:<path?>`, `browser:<url>`,
+ * `liveView:`, `artifact:<artifactId>:<version?>`.
+ */
 export const tabRef = (t: CenterTab): string => {
   switch (t.kind) {
     case "chat":
@@ -41,8 +57,14 @@ export const tabRef = (t: CenterTab): string => {
       return `file:${t.path}:${t.line ?? ""}`;
     case "diff":
       return `diff:${t.path ?? ""}`;
+    case "guide":
+      return "guide:";
     case "browser":
       return `browser:${t.url}`;
+    case "liveView":
+      return "liveView:";
+    case "artifact":
+      return `artifact:${t.artifactId}:${t.version ?? ""}`;
   }
 };
 
@@ -65,8 +87,19 @@ export const parseTabRef = (ref: string): CenterTab | null => {
     }
     case "diff":
       return { kind: "diff", path: rest === "" ? null : rest };
+    case "guide":
+      return rest === "" ? { kind: "guide" } : null;
     case "browser":
       return rest ? { kind: "browser", url: rest } : null;
+    case "liveView":
+      return rest === "" ? { kind: "liveView" } : null;
+    case "artifact": {
+      const [artifactId = "", versionText = "", ...extra] = rest.split(":");
+      const version = versionText === "" ? null : Number(versionText);
+      if (!/^[0-9a-z]{26}$/.test(artifactId) || extra.length > 0) return null;
+      if (version !== null && (!Number.isInteger(version) || version < 1)) return null;
+      return { kind: "artifact", artifactId, version };
+    }
     default:
       return null;
   }
@@ -79,7 +112,7 @@ export interface OpenTab {
   readonly seq: number;
 }
 
-export type RightTab = "changes" | "files" | "checks";
+export type RightTab = "changes" | "files" | "checks" | "artifacts";
 export type BottomTab = "setup" | "run" | "terminal";
 
 export type ComposerInsertion =
@@ -105,6 +138,10 @@ export interface WorkspaceUiState {
   readonly diffScope: DiffScope;
   readonly rightTab: RightTab;
   readonly bottomTab: BottomTab;
+  /** Sleeping, or no changes and no PR: the right side starts closed (04, Right and bottom panels). */
+  readonly rightQuiet: boolean;
+  /** The user opened the right side while quiet. Not kept. */
+  readonly rightPinned: boolean;
 }
 
 const emptyWorkspaceUi: WorkspaceUiState = {
@@ -116,6 +153,8 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   diffScope: "branch",
   rightTab: "changes",
   bottomTab: "setup",
+  rightQuiet: false,
+  rightPinned: false,
 };
 
 const workspaceStores = new Map<string, Store<WorkspaceUiState>>();
@@ -239,8 +278,19 @@ export const openFile = (workspaceId: string, path: string, line: number | null 
 export const openDiff = (workspaceId: string, path: string | null = null): string =>
   openTab(workspaceId, { kind: "diff", path });
 
+export const openGuide = (workspaceId: string): string => openTab(workspaceId, { kind: "guide" });
+
 export const openBrowser = (workspaceId: string, url: string): string =>
   openTab(workspaceId, { kind: "browser", url });
+
+export const openArtifactTab = (
+  workspaceId: string,
+  artifactId: string,
+  version: number | null = null,
+): string => openTab(workspaceId, { kind: "artifact", artifactId, version });
+
+/** The tab holds no link: a Live View link is a secret, so the tab asks for its own (04, Browser tabs). */
+export const openLiveView = (workspaceId: string): string => openTab(workspaceId, { kind: "liveView" });
 
 /** The session of the active chat tab, else of the chat shown most recently. */
 export const targetChatSession = (s: WorkspaceUiState): string | null => {
@@ -306,22 +356,45 @@ export const setRightTab = (workspaceId: string, rightTab: RightTab): void =>
 export const setBottomTab = (workspaceId: string, bottomTab: BottomTab): void =>
   update(workspaceId, (s) => (s.bottomTab === bottomTab ? s : { ...s, bottomTab }));
 
+export const setRightQuiet = (workspaceId: string, rightQuiet: boolean): void =>
+  update(workspaceId, (s) => (s.rightQuiet === rightQuiet ? s : { ...s, rightQuiet }));
+
+const pinRight = (workspaceId: string | null): void => {
+  if (workspaceId) update(workspaceId, (s) => (s.rightPinned ? s : { ...s, rightPinned: true }));
+};
+
+/** Whether the right side shows for this workspace: the layout choice, unless it starts closed. */
+export const isRightOpen = (
+  layout: Pick<LayoutState, "rightOpen">,
+  ui: Pick<WorkspaceUiState, "rightQuiet" | "rightPinned">,
+): boolean => layout.rightOpen && (ui.rightPinned || !ui.rightQuiet);
+
 /** Selects a right-panel tab and makes sure the right side is open. */
 export const showRightTab = (workspaceId: string, tab: RightTab): void => {
   setRightTab(workspaceId, tab);
+  pinRight(workspaceId);
   setLayout({ rightOpen: true });
 };
 
-/** Selects a bottom-panel tab and makes sure the right side and the bottom panel are open. */
+/**
+ * Selects a bottom-panel tab and makes sure the right side and the bottom panel are open. At
+ * phone width there is no bottom panel, so the Setup output shows as its own pane.
+ */
 export const showBottomTab = (workspaceId: string, tab: BottomTab): void => {
   setBottomTab(workspaceId, tab);
-  setLayout({ rightOpen: true, bottomOpen: true });
+  pinRight(workspaceId);
+  setLayout(
+    tab === "setup"
+      ? { rightOpen: true, bottomOpen: true, phonePane: "setup" }
+      : { rightOpen: true, bottomOpen: true },
+  );
 };
 
 // ---------------------------------------------------------------------------------------------
 // Layout (global, kept in localStorage)
 
-export type PhonePane = "chat" | "changes";
+/** `setup` has no bottom-navigation entry; the Setup banners open it. */
+export type PhonePane = "chat" | "changes" | "setup";
 
 export interface LayoutState {
   readonly sidebarOpen: boolean;
@@ -389,14 +462,26 @@ export const setLayout = (patch: Partial<LayoutState>): void => {
 /** ⌘B. */
 export const toggleSidebar = (): void => setLayout({ sidebarOpen: !getLayout().sidebarOpen });
 
-/** ⌘⌥B. */
-export const toggleRight = (): void => setLayout({ rightOpen: !getLayout().rightOpen });
+const shownRight = (l: LayoutState): boolean =>
+  l.lastWorkspaceId ? isRightOpen(l, getWorkspaceUi(l.lastWorkspaceId)) : l.rightOpen;
+
+/** ⌘⌥B. Opening pins the right side for the open workspace; closing is kept as the layout choice. */
+export const toggleRight = (): void => {
+  const l = getLayout();
+  if (shownRight(l)) setLayout({ rightOpen: false });
+  else {
+    pinRight(l.lastWorkspaceId);
+    setLayout({ rightOpen: true });
+  }
+};
 
 /** ⌥J. The bottom panel lives in the right side, so opening it also opens the right side. */
 export const toggleBottom = (): void => {
   const l = getLayout();
-  if (!l.rightOpen) setLayout({ rightOpen: true, bottomOpen: true });
-  else setLayout({ bottomOpen: !l.bottomOpen });
+  if (!shownRight(l)) {
+    pinRight(l.lastWorkspaceId);
+    setLayout({ rightOpen: true, bottomOpen: true });
+  } else setLayout({ bottomOpen: !l.bottomOpen });
 };
 
 export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePane });
@@ -404,13 +489,24 @@ export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePan
 // ---------------------------------------------------------------------------------------------
 // App dialogs
 
-export type SettingsTab = "logins" | "project" | "appearance" | "notifications" | "shortcuts" | "devices";
+export type SettingsTab =
+  | "general"
+  | "logins"
+  | "agents"
+  | "environments"
+  | "mcp"
+  | "project"
+  | "appearance"
+  | "notifications"
+  | "shortcuts"
+  | "devices";
 
 export type DialogState =
   | { readonly kind: "newWorkspace"; readonly projectId?: string; readonly prompt?: string }
   | { readonly kind: "addProject" }
   | { readonly kind: "settings"; readonly tab?: SettingsTab; readonly projectId?: string }
   | { readonly kind: "diagnostics"; readonly workspaceId: string }
+  | { readonly kind: "environment"; readonly workspaceId: string }
   | { readonly kind: "palette" }
   | { readonly kind: "openFile"; readonly workspaceId: string }
   | { readonly kind: "searchFiles"; readonly workspaceId: string };
@@ -439,10 +535,21 @@ export interface DialogStoreState {
 
 export const dialogStore = new Store<DialogStoreState>({ dialog: null, confirm: null });
 
-export const openDialog = (dialog: DialogState): void => dialogStore.update({ dialog });
+export const settingsStore = new Store<DialogOf<"settings"> | null>(null);
+
+export const openDialog = (dialog: DialogState): void => {
+  if (dialog.kind === "settings") {
+    settingsStore.set(dialog);
+    dialogStore.update({ dialog: null });
+  } else dialogStore.update({ dialog });
+};
 
 /** Closes the open dialog; with a kind, only when that dialog is the open one. */
 export const closeDialog = (kind?: DialogKind): void => {
+  if (kind === "settings") {
+    settingsStore.set(null);
+    return;
+  }
   const cur = dialogStore.getSnapshot().dialog;
   if (cur && (kind === undefined || cur.kind === kind)) dialogStore.update({ dialog: null });
 };
@@ -481,10 +588,10 @@ export const CONFIRM_TEXT = {
     confirmLabel: "Stop and close",
     destructive: true,
   }),
-  rotatePreview: (): ConfirmOptions => ({
-    title: "Rotate preview link?",
-    description: "Old preview links will stop working.",
-    confirmLabel: "Rotate",
+  resetPreviewAccess: (): ConfirmOptions => ({
+    title: "Reset preview access?",
+    description: "Open previews will stop working. Open them again from Tempo.",
+    confirmLabel: "Reset",
     destructive: true,
   }),
   deleteWorkspace: (slug: string): ConfirmOptions => ({
@@ -493,6 +600,11 @@ export const CONFIRM_TEXT = {
     confirmLabel: "Delete",
     destructive: true,
     typeToConfirm: slug,
+  }),
+  deleteCustomAgent: (name: string): ConfirmOptions => ({
+    title: `Delete ${name}? Open chats keep using it.`,
+    confirmLabel: "Delete",
+    destructive: true,
   }),
 } as const;
 
@@ -503,4 +615,5 @@ export const resetUiState = (): void => {
   for (const resolve of confirmResolvers.values()) resolve(false);
   confirmResolvers.clear();
   dialogStore.set({ dialog: null, confirm: null });
+  settingsStore.set(null);
 };

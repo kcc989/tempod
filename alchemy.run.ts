@@ -43,7 +43,6 @@ const migrationsDir = (() => {
   return flat;
 })();
 
-const reveal = (r: Redacted.Redacted<string>) => Redacted.value(r);
 const hexToBase64 = (r: Redacted.Redacted<string>) =>
   Redacted.make(Buffer.from(Redacted.value(r), "hex").toString("base64"));
 
@@ -67,6 +66,7 @@ export default Alchemy.Stack(
 
     yield* Command.Exec("WranglerDeploy", {
       command: "bun scripts/deploy-worker.ts",
+      memo: false,
       timeout: "45 minutes",
       env: {
         APP_HOST,
@@ -83,7 +83,7 @@ export default Alchemy.Stack(
 
     return {
       d1DatabaseId: db.databaseId,
-      setupUrl: Output.interpolate`https://${APP_HOST}/setup/github?token=${setupToken.text.pipe(Output.map(reveal))}`,
+      appUrl: `https://${APP_HOST}`,
     };
   }),
 );

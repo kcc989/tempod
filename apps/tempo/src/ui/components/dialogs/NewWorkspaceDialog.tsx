@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import type { AgentId, Project } from "@tempo/protocol";
+import type { Project } from "@tempo/protocol";
 import { CheckIcon, FolderGit2Icon, MoreHorizontalIcon, CornerDownLeftIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -21,27 +21,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/ui/components/ui/dialog";
-import { LaunchModelPicker } from "~/ui/components/chat/LaunchModelPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Label } from "~/ui/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "~/ui/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
 import { Textarea } from "~/ui/components/ui/textarea";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
+import { useCustomAgents } from "~/ui/hooks/useCustomAgents";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
+import { agentLabel } from "~/ui/lib/agents";
 import { cn } from "~/ui/lib/utils";
 import { getHubStore } from "~/ui/stores/hub-store";
 import { closeDialog, openDialog, setPhonePane, type DialogOf } from "~/ui/state/workspace-ui";
 import { BranchPicker } from "./BranchPicker";
 import {
+  customAgentOf,
   agentsWithLogin,
+  customAgentValue,
+  customAgentsWithLogin,
   createInput,
   emptySource,
   filterPullRequests,
   initialAgent,
+  initialModel,
+  modelChoices,
   isSourceTab,
   SOURCE_TABS,
   type SourceDraft,
@@ -65,7 +78,9 @@ function NewWorkspaceBody({ args }: { args: DialogOf<"newWorkspace"> }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New workspace</DialogTitle>
-          <DialogDescription className="sr-only">Pick a project, a branch and an agent.</DialogDescription>
+          <DialogDescription className="sr-only">
+            Choose a project and model, then describe what you want to work on.
+          </DialogDescription>
         </DialogHeader>
         {projects.isPending ? (
           <SkeletonRows rows={4} />
@@ -98,21 +113,29 @@ function NewWorkspaceForm({
     args.projectId && projects.some((p) => p.id === args.projectId) ? args.projectId : projects[0]!.id,
   );
   const [source, setSource] = useState<SourceDraft>(emptySource);
-  const [pickedAgent, setPickedAgent] = useState<AgentId | null>(null);
+  const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
+  const [pickedModel, setPickedModel] = useState<string | null>(null);
+  const customAgents = useCustomAgents();
   const [prompt, setPrompt] = useState(args.prompt ?? "");
-  const [model, setModel] = useState("");
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const creating = useRef(false);
-  const promptRef = useRef<HTMLTextAreaElement>(null);
   const [keepOpen, setKeepOpen] = useState(false);
   const [tried, setTried] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const creating = useRef(false);
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
   const available = agentsWithLogin(credentials.data);
-  const agent =
-    pickedAgent && available.includes(pickedAgent) ? pickedAgent : initialAgent(available, project);
-  const selectedModel = pickedAgent === agent ? model : "";
-  const input = createInput(project, source, agent, prompt, selectedModel);
+  const choices = modelChoices(available, models.data ?? []);
+  const selected =
+    choices.find((choice) => choice.key === pickedModel) ?? initialModel(choices, models.data ?? [], project);
+  const custom = customAgentsWithLogin(customAgents.data, available);
+  const pickedCustom = customAgentOf(pickedModel, custom);
+  const input = pickedCustom
+    ? createInput(project, source, pickedCustom.baseAgent, prompt, undefined, pickedCustom.id)
+    : models.isSuccess && selected
+      ? createInput(project, source, selected.agent, prompt, selected.model)
+      : !prompt.trim()
+        ? createInput(project, source, initialAgent(available, project), prompt)
+        : null;
 
   const create = useCallMutation("createWorkspace", {
     invalidates: ["listWorkspaces"],
@@ -152,16 +175,15 @@ function NewWorkspaceForm({
       className="gap-0 overflow-visible rounded-2xl bg-muted p-0"
       style={{ width: "min(48rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
       overlayClassName="backdrop-blur-sm"
-      onOpenAutoFocus={(e) => {
-        e.preventDefault();
-        promptRef.current?.focus();
+      onOpenAutoFocus={(event) => {
+        event.preventDefault();
+        document.getElementById("nw-prompt")?.focus();
       }}
     >
       <DialogHeader className="sr-only">
         <DialogTitle>New workspace</DialogTitle>
         <DialogDescription>
-          Pick a project and model, then describe what you want to work on. Enter creates an empty workspace
-          too.
+          Choose a project and model, then describe what you want to work on.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -171,19 +193,18 @@ function NewWorkspaceForm({
           submit();
         }}
       >
-        <div className="flex items-center gap-1 border-b px-3 py-2 pr-12">
+        <div className="flex items-center gap-2 border-b px-4 py-2 pr-12">
           <Select
             value={project.id}
-            onValueChange={(v) => {
-              setProjectId(v);
+            onValueChange={(value) => {
+              setProjectId(value);
               setSource(emptySource());
-              setModel("");
             }}
           >
             <SelectTrigger
-              aria-label="Project"
               id="nw-project"
-              className="w-auto max-w-64 border-0 bg-transparent shadow-none"
+              aria-label="Project"
+              className="w-auto max-w-[70%] border-0 bg-transparent shadow-none"
             >
               <SelectValue />
             </SelectTrigger>
@@ -195,14 +216,13 @@ function NewWorkspaceForm({
               ))}
             </SelectContent>
           </Select>
-
           <Popover open={optionsOpen} onOpenChange={setOptionsOpen}>
             <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Workspace options">
-                <MoreHorizontalIcon />
+              <Button type="button" variant="ghost" size="icon" aria-label="Workspace options">
+                <MoreHorizontalIcon className="size-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-[min(28rem,calc(100vw-3rem))]">
+            <PopoverContent align="start" className="w-[min(24rem,calc(100vw-3rem))] space-y-3">
               <Tabs
                 value={source.tab}
                 onValueChange={(v) => isSourceTab(v) && setSource((s) => ({ ...s, tab: v }))}
@@ -256,9 +276,12 @@ function NewWorkspaceForm({
                   />
                 </TabsContent>
               </Tabs>
-
-              <div className="mt-3 flex items-center gap-2">
-                <Checkbox id="nw-keep" checked={keepOpen} onCheckedChange={(c) => setKeepOpen(c === true)} />
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="nw-keep"
+                  checked={keepOpen}
+                  onCheckedChange={(value) => setKeepOpen(value === true)}
+                />
                 <Label htmlFor="nw-keep" className="font-normal">
                   Keep open
                 </Label>
@@ -266,37 +289,80 @@ function NewWorkspaceForm({
             </PopoverContent>
           </Popover>
         </div>
+
         <Textarea
-          ref={promptRef}
           id="nw-prompt"
           aria-label="Prompt"
           disabled={create.isPending}
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(event) => setPrompt(event.target.value)}
           placeholder="What do you want to work on?"
-          onKeyDown={(e) => {
-            if (e.key !== "Enter" || e.shiftKey || e.altKey || e.nativeEvent.isComposing) return;
-            e.preventDefault();
-            if (!input) setOptionsOpen(true);
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing)
+              return;
+            event.preventDefault();
             submit();
           }}
-          className="max-h-[min(24rem,50dvh)] min-h-48 flex-1 resize-none rounded-none border-0 bg-transparent p-4 shadow-none focus-visible:ring-0 dark:bg-transparent"
+          className="min-h-48 flex-1 max-h-[50dvh] resize-none rounded-none border-0 bg-transparent px-5 py-4 text-base shadow-none focus-visible:ring-1 focus-visible:ring-inset"
         />
-        <div className="flex items-center justify-between gap-2 px-3 pb-3">
-          <LaunchModelPicker
-            agent={agent}
-            model={selectedModel}
-            disabled={create.isPending}
-            defaultModel={
-              project.settings.agent?.default === agent ? project.settings.agent?.model : undefined
-            }
-            onPick={(a, m) => {
-              setPickedAgent(a);
-              setModel(m);
-            }}
-            onClosed={() => promptRef.current?.focus()}
-          />
-          <Button type="submit" size="sm" disabled={create.isPending}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4">
+          <div className="min-w-0 flex-1">
+            <Select
+              value={pickedCustom ? customAgentValue(pickedCustom.id) : (selected?.key ?? "")}
+              onValueChange={setPickedModel}
+              disabled={!choices.length && !custom.length}
+            >
+              <SelectTrigger
+                id="nw-model"
+                aria-label="Model"
+                className="w-auto max-w-full border-0 bg-transparent shadow-none"
+              >
+                <SelectValue
+                  placeholder={
+                    credentials.isPending || models.isPending ? "Loading models…" : "Choose a model"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((choice) => (
+                  <SelectItem key={choice.key} value={choice.key}>
+                    {choice.name} <span className="text-muted-foreground">· {agentLabel(choice.agent)}</span>
+                  </SelectItem>
+                ))}
+                {custom.length > 0 && <SelectSeparator />}
+                {custom.map((a) => (
+                  <SelectItem key={a.id} value={customAgentValue(a.id)}>
+                    {a.name} <span className="text-muted-foreground">· {agentLabel(a.baseAgent)}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {credentials.isSuccess && !available.length && (
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto px-3 text-xs"
+                onClick={() => openDialog({ kind: "settings", tab: "logins" })}
+              >
+                Add a login to choose a model
+              </Button>
+            )}
+            {models.isError && (
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto px-3 text-xs"
+                onClick={() => void models.refetch()}
+              >
+                Retry loading models
+              </Button>
+            )}
+          </div>
+          <Button
+            type="submit"
+            className="bg-foreground text-background hover:bg-foreground/90"
+            disabled={create.isPending || !input}
+          >
             {create.isPending ? "Creating…" : "Create"}
             <CornerDownLeftIcon className="size-3.5" />
           </Button>

@@ -120,6 +120,17 @@ describe("ReconnectingSocket", () => {
     expect(s.status).toBe(status);
   });
 
+  it("rejectVersion closes with 4400 and never reconnects", () => {
+    const sock = make();
+    sock.start();
+    sockets[0]!.open();
+    sock.rejectVersion();
+    expect(sockets[0]!.closed).toBe(4400);
+    expect(sock.status).toBe("bad_version");
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(1);
+  });
+
   it("stop closes the socket and cancels retries", () => {
     const s = make();
     s.start();
@@ -128,5 +139,15 @@ describe("ReconnectingSocket", () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
     expect(s.status).toBe("stopped");
+  });
+});
+
+describe("isUnknownVersionHello", () => {
+  it("flags only a hello whose v is not 1", async () => {
+    const { isUnknownVersionHello } = await import("~/ui/stores/parse");
+    expect(isUnknownVersionHello(JSON.stringify({ type: "hello", v: 2, workspaces: [] }))).toBe(true);
+    expect(isUnknownVersionHello(JSON.stringify({ type: "hello", v: 1, workspaces: [] }))).toBe(false);
+    expect(isUnknownVersionHello(JSON.stringify({ type: "pong" }))).toBe(false);
+    expect(isUnknownVersionHello("not json")).toBe(false);
   });
 });

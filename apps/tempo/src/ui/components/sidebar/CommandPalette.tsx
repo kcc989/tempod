@@ -63,6 +63,7 @@ function PaletteBody() {
                 onSelect={() => {
                   closeDialog("palette");
                   if (isPhone) setPhonePane("chat");
+                  closeDialog("settings");
                   void navigate({ to: "/w/$workspaceId", params: { workspaceId: w.id } });
                 }}
               >

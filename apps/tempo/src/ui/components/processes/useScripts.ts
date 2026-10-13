@@ -57,7 +57,7 @@ export function useScriptMutations(workspaceId: string) {
 const NOT_LIVE: ReadonlySet<WorkspaceState> = new Set(["archiving", "archived"]);
 
 /** ⌥R: start or stop the default run script (04). */
-export function useToggleRunAction(workspaceId: string): void {
+export function useToggleRunAction(workspaceId: string, enabled = true): void {
   const settings = useWorkspaceSelector(workspaceId, (s) => s.workspace?.settings ?? null);
   const state = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state ?? null);
   const { runs } = useScriptRuns(workspaceId);
@@ -72,6 +72,6 @@ export function useToggleRunAction(workspaceId: string): void {
       if (target.kind === "start") start.mutate({ workspaceId, scriptId: target.scriptId });
       else stop.mutate({ workspaceId, runId: target.runId });
     },
-    { enabled: target !== null && state !== null && !NOT_LIVE.has(state) },
+    { enabled: enabled && target !== null && state !== null && !NOT_LIVE.has(state) },
   );
 }

@@ -1,12 +1,13 @@
 import { desc } from "drizzle-orm";
-import { TempoError, type ChangedFile, type ChangesSummary } from "@tempo/protocol";
+import { TempoError, type ChangedFile, type ChangesSummary, type FnOutput } from "@tempo/protocol";
+import { EMPTY_PROMPT, json } from "../../db/json.ts";
 import { turns } from "../../db/workspace-do.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
 import { mintInstallationToken } from "../../github/api.ts";
 import { checksStateOf, github, prStateOf } from "../../github/provider.ts";
 import { errorText, log } from "../../log.ts";
 import { requireTempod } from "./container.ts";
-import { parseJson, type WorkspaceCore } from "./core.ts";
+import type { WorkspaceCore } from "./core.ts";
 
 const TOKEN_MARGIN_MS = 5 * 60_000;
 
@@ -43,11 +44,9 @@ export const refreshChanges = async (core: WorkspaceCore): Promise<void> => {
 };
 
 /** 03, Status polling: PR state, then check runs for the PR head. */
-export const refreshPullRequest = async (
-  core: WorkspaceCore,
-): Promise<{ prNumber: number | null; prState: string | null; checksState: string | null }> => {
+export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<"refreshPullRequest">> => {
   const row = core.ws();
-  if (row.prNumber === null) return { prNumber: null, prState: null, checksState: null };
+  if (row.prNumber === null) return { prNumber: null, prState: null, checksState: null, prTitle: null };
   const project = await core.project();
   const token = await getGithubToken(core);
   const repo = { owner: project.owner, name: project.name };
@@ -55,11 +54,13 @@ export const refreshPullRequest = async (
   const prState = prStateOf(pr);
   const runs = await github.listCheckRuns(token, repo, pr.head.sha);
   const checksState = checksStateOf(runs);
-  if (prState !== row.prState || checksState !== row.checksState) {
+  const titleChanged = core.kv<string>("prTitle") !== pr.title;
+  core.setKv("prTitle", pr.title);
+  if (prState !== row.prState || checksState !== row.checksState || titleChanged) {
     core.updateWs({ prState, checksState });
     core.publish();
   }
-  return { prNumber: row.prNumber, prState, checksState };
+  return { prNumber: row.prNumber, prState, checksState, prTitle: pr.title };
 };
 
 export const pollPullRequestSafe = async (core: WorkspaceCore): Promise<void> => {
@@ -78,7 +79,7 @@ export const defaultPrBody = (core: WorkspaceCore): string => {
     .orderBy(desc(turns.seq))
     .all()
     .reverse()
-    .map((t) => parseJson<{ text?: string }>(t.promptJson, {}).text?.split("\n")[0]?.trim() ?? "")
+    .map((t) => json.prompt.read(t.promptJson, EMPTY_PROMPT).text.split("\n")[0]?.trim() ?? "")
     .filter((l) => l.length > 0)
     .slice(0, 20);
   return ["Created with Tempo.", "", ...lines.map((l) => `- ${l}`)].join("\n");
