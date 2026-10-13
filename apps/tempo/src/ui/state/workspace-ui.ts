@@ -125,6 +125,8 @@ export type RightTab = "changes" | "files" | "checks" | "artifacts";
 
 export type BottomTab = "setup" | "run" | "terminal";
 
+export type UtilityTab = RightTab | BottomTab;
+
 export type ComposerInsertion =
   | { readonly kind: "mention"; readonly path: string }
   | { readonly kind: "reviewComments"; readonly commentIds: ReadonlyArray<string> }
@@ -146,6 +148,8 @@ export interface WorkspaceUiState {
   /** Increments when something asks the composer to take focus. */
   readonly composerFocusSeq: number;
   readonly diffScope: DiffScope;
+  readonly toolTabs: ReadonlyArray<UtilityTab>;
+  readonly activeToolKey: string | null;
   readonly rightTab: RightTab;
   readonly bottomTab: BottomTab;
   /** Sleeping, or no changes and no PR: the right side starts closed (04, Right and bottom panels). */
@@ -161,6 +165,8 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   insertions: [],
   composerFocusSeq: 0,
   diffScope: "branch",
+  toolTabs: ["changes"],
+  activeToolKey: "changes",
   rightTab: "changes",
   bottomTab: "setup",
   rightQuiet: false,
@@ -192,7 +198,12 @@ const withActive = (s: WorkspaceUiState, key: string | null): WorkspaceUiState =
 
   if (s.activeKey === key && s.lastChatSessionId === lastChatSessionId) return s;
 
-  return { ...s, activeKey: key, lastChatSessionId };
+  return {
+    ...s,
+    activeKey: key,
+    lastChatSessionId,
+    activeToolKey: open && open.tab.kind !== "chat" ? key : s.activeToolKey,
+  };
 };
 
 let tabSeq = 0;
@@ -214,6 +225,11 @@ export const openTab = (
     return activate || s.activeKey === null ? withActive(next, key) : next;
   });
 
+  if (tab.kind !== "chat" && activate) {
+    pinRight(workspaceId);
+    setLayout({ rightOpen: true });
+  }
+
   return key;
 };
 
@@ -223,7 +239,12 @@ export const closeTab = (workspaceId: string, key: string): void =>
 
     if (i < 0) return s;
     const tabs = s.tabs.filter((t) => t.key !== key);
-    let next: WorkspaceUiState = { ...s, tabs };
+
+    let next: WorkspaceUiState = {
+      ...s,
+      tabs,
+      activeToolKey: s.activeToolKey === key ? null : s.activeToolKey,
+    };
 
     if (s.activeKey === key) {
       const neighbor = tabs[Math.min(i, tabs.length - 1)];
@@ -237,6 +258,8 @@ export const closeTab = (workspaceId: string, key: string): void =>
       next = { ...next, lastChatSessionId: chat?.tab.kind === "chat" ? chat.tab.sessionId : null };
     }
 
+    if (s.activeToolKey === key) next = { ...next, activeToolKey: null };
+
     return next;
   });
 
@@ -244,13 +267,19 @@ export const activateTab = (workspaceId: string, key: string): void =>
   update(workspaceId, (s) => (s.tabs.some((t) => t.key === key) ? withActive(s, key) : s));
 
 /** ⌥] and ⌥[: the next or previous tab, wrapping around. */
-export const cycleTab = (workspaceId: string, delta: 1 | -1): void =>
+export const cycleTab = (workspaceId: string, delta: 1 | -1, chatOnly = false): void =>
   update(workspaceId, (s) => {
-    if (s.tabs.length === 0) return s;
-    const i = s.tabs.findIndex((t) => t.key === s.activeKey);
-    const j = i < 0 ? 0 : (i + delta + s.tabs.length) % s.tabs.length;
+    const tabs = chatOnly ? s.tabs.filter((t) => t.tab.kind === "chat") : s.tabs;
 
-    return withActive(s, s.tabs[j]!.key);
+    if (tabs.length === 0) return s;
+
+    const active =
+      chatOnly && !s.activeKey?.startsWith("chat:") ? `chat:${s.lastChatSessionId}` : s.activeKey;
+
+    const i = tabs.findIndex((t) => t.key === active);
+    const j = i < 0 ? 0 : (i + delta + tabs.length) % tabs.length;
+
+    return withActive(s, tabs[j]!.key);
   });
 
 export const moveTab = (workspaceId: string, key: string, toIndex: number): void =>
@@ -389,11 +418,32 @@ export const setDiffScope = (workspaceId: string, diffScope: DiffScope): void =>
 export const toggleDiffScope = (workspaceId: string): void =>
   update(workspaceId, (s) => ({ ...s, diffScope: s.diffScope === "branch" ? "uncommitted" : "branch" }));
 
-export const setRightTab = (workspaceId: string, rightTab: RightTab): void =>
-  update(workspaceId, (s) => (s.rightTab === rightTab ? s : { ...s, rightTab }));
+export const setRightTab = (workspaceId: string, rightTab: RightTab): void => {
+  update(workspaceId, (s) => ({ ...s, rightTab }));
+  selectTool(workspaceId, rightTab);
+};
 
-export const setBottomTab = (workspaceId: string, bottomTab: BottomTab): void =>
-  update(workspaceId, (s) => (s.bottomTab === bottomTab ? s : { ...s, bottomTab }));
+export const setBottomTab = (workspaceId: string, bottomTab: BottomTab): void => {
+  update(workspaceId, (s) => ({ ...s, bottomTab }));
+  selectTool(workspaceId, bottomTab);
+};
+
+export const selectTool = (workspaceId: string, key: UtilityTab | null): void => {
+  update(workspaceId, (s) => ({
+    ...s,
+    toolTabs: key && !s.toolTabs.includes(key) ? [...s.toolTabs, key] : s.toolTabs,
+    activeToolKey: key,
+  }));
+  pinRight(workspaceId);
+  setLayout({ rightOpen: true });
+};
+
+export const closeTool = (workspaceId: string, key: UtilityTab): void =>
+  update(workspaceId, (s) => ({
+    ...s,
+    toolTabs: s.toolTabs.filter((t) => t !== key),
+    activeToolKey: s.activeToolKey === key ? null : s.activeToolKey,
+  }));
 
 export const setRightQuiet = (workspaceId: string, rightQuiet: boolean): void =>
   update(workspaceId, (s) => (s.rightQuiet === rightQuiet ? s : { ...s, rightQuiet }));
@@ -522,14 +572,19 @@ export const toggleRight = (): void => {
   }
 };
 
-/** ⌥J. The bottom panel lives in the right side, so opening it also opens the right side. */
+/** ⌥J: Terminal, then the tool launcher. Legacy bottomOpen remains readable in saved layouts. */
 export const toggleBottom = (): void => {
   const l = getLayout();
 
-  if (!shownRight(l)) {
-    pinRight(l.lastWorkspaceId);
-    setLayout({ rightOpen: true, bottomOpen: true });
-  } else setLayout({ bottomOpen: !l.bottomOpen });
+  if (!l.lastWorkspaceId) {
+    setLayout({ rightOpen: true, bottomOpen: !l.bottomOpen });
+
+    return;
+  }
+
+  const terminalSelected = shownRight(l) && getWorkspaceUi(l.lastWorkspaceId).activeToolKey === "terminal";
+  selectTool(l.lastWorkspaceId, terminalSelected ? null : "terminal");
+  setLayout({ bottomOpen: !terminalSelected });
 };
 
 export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePane });

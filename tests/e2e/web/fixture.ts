@@ -65,6 +65,7 @@ export class WebFixture {
     agentMessage("i2", "Ready to review **keeled**.", { status: "completed" }),
   ];
   comments: ReviewComment[] = [];
+  liveViewUrl: string | null = null;
   runs: ScriptRun[] = [];
   calls: { name: FnName; input: Schema.JsonObject }[] = [];
   failures = new Map<FnName, TempoError>();
@@ -212,6 +213,8 @@ export class WebFixture {
         };
       case "listRoles":
         return [];
+      case "getBrowserLiveView":
+        return { url: this.liveViewUrl };
       case "listFiles":
         return {
           paths: ["README.md", "src/main.ts", ...Array.from({ length: 220 }, (_, i) => `src/file-${i}.ts`)],

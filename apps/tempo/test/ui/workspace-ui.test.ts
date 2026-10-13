@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   activateTab,
+  selectTool,
+  closeTool,
   closeDialog,
   closeTab,
   confirm,
@@ -248,10 +250,13 @@ describe("panels and layout", () => {
   });
 
   it("⌥J opens the right side when it is closed", () => {
+    setLayout({ lastWorkspaceId: W });
     toggleRight();
     toggleBottom();
+    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: true });
     toggleBottom();
+    expect(getWorkspaceUi(W).activeToolKey).toBeNull();
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: false });
   });
 
@@ -348,5 +353,25 @@ describe("right side starts closed (04, Right and bottom panels)", () => {
     setRightQuiet("w2", true);
     showRightTab("w2", "changes");
     expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(true);
+  });
+});
+
+describe("independent tools", () => {
+  it("keeps the target chat while opening documents and selecting tools", () => {
+    syncChatTabs(W, ["s1", "s2"]);
+    activateTab(W, "chat:s2");
+    setLayout({ rightOpen: false });
+    openFile(W, "README.md", 3);
+    expect(getWorkspaceUi(W).activeToolKey).toBe("file:README.md");
+    expect(getLayout().rightOpen).toBe(true);
+    selectTool(W, "terminal");
+    expect(targetChatSession(getWorkspaceUi(W))).toBe("s2");
+    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
+    activateTab(W, "chat:s1");
+    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
+    expect(targetChatSession(getWorkspaceUi(W))).toBe("s1");
+    closeTool(W, "terminal");
+    expect(getWorkspaceUi(W).activeToolKey).toBeNull();
+    expect(keys()).toContain("file:README.md");
   });
 });

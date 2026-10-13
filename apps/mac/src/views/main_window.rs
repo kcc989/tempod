@@ -1,6 +1,6 @@
 //! The main window (04, Layout; 07, Window layout): `Root` (from `gpui_kit::open_window`) with a
 //! `TitleBar`, then `Resizable` panes: sidebar | center | right side, the right side split into
-//! review (Changes, All files, Checks) over processes (Setup, Run, Terminal).
+//! one full-height tool area with review, process and document tabs.
 use super::chat::{TranscriptRow, TranscriptView};
 use super::composer::Composer;
 use super::sidebar::{self, SidebarSection, WorkspaceSidebar};
@@ -503,26 +503,25 @@ impl MainWindow {
             .into_any_element()
     }
 
+    fn hide_browser_views(&self, except: Option<gpui_kit::EntityId>, cx: &gpui_kit::App) {
+        for view in &self.live_workspaces {
+            if Some(view.entity_id()) != except {
+                view.read(cx).tools.read(cx).hide_browser();
+            }
+        }
+    }
+
     fn render_right(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let visible = self.right_visible(cx);
+        let active = self.live_active(cx).map(|view| view.entity_id());
+        self.hide_browser_views(if visible { active } else { None }, cx);
         if crate::app::AppState::try_global(cx).is_some() && self.live_active(cx).is_none() {
             return div().p_4().child("Select a workspace.").into_any_element();
         }
         if let Some(view) = self.live_active(cx) {
-            let view = view.read(cx);
-            let bottom = cx.global::<crate::storage::Local>().state().panes.bottom;
-            return v_resizable("live-right-side")
-                .on_resize(|state, _, cx| {
-                    let bottom = state.read(cx).sizes().get(1).map(|s| f32::from(*s));
-                    cx.global_mut::<crate::storage::Local>()
-                        .update_state(|s| s.panes.bottom = bottom);
-                })
-                .child(resizable_panel().child(view.review.clone()))
-                .child(
-                    resizable_panel()
-                        .size(px(bottom.unwrap_or(300.)))
-                        .visible(self.panes.bottom)
-                        .child(view.processes.clone()),
-                )
+            return div()
+                .size_full()
+                .child(view.read(cx).tools.clone())
                 .into_any_element();
         }
         let review = v_flex()
@@ -581,6 +580,7 @@ impl Render for MainWindow {
                 crate::app::AuthState::SignedIn
             )
         {
+            self.hide_browser_views(None, cx);
             self.live_workspaces.clear();
             return v_flex()
                 .size_full()
@@ -593,6 +593,7 @@ impl Render for MainWindow {
         if crate::app::AppState::try_global(cx).is_some_and(|a| a.read(cx).settings_open)
             && let Some(settings) = self.settings.clone()
         {
+            self.hide_browser_views(None, cx);
             return v_flex()
                 .size_full()
                 .bg(color(Token::Background, cx))
@@ -732,11 +733,11 @@ impl Render for MainWindow {
             }))
             .on_action(cx.listener(|this, _: &ToggleRightSide, _, cx| this.toggle_right(cx)))
             .on_action(cx.listener(|this, _: &ToggleBottomPanel, _, cx| {
-                this.panes.bottom = !this.panes.bottom;
-                if this.panes.bottom {
-                    this.open_right(cx);
+                if let Some(view) = this.live_active(cx) {
+                    let tools = view.read(cx).tools.clone();
+                    tools.update(cx, |tools, cx| tools.toggle_terminal(cx));
                 }
-                cx.notify();
+                this.open_right(cx);
             }))
             .on_action(
                 cx.listener(|this, _: &NextTab, window, cx| this.cycle_tab(true, window, cx)),
@@ -844,7 +845,10 @@ impl Render for MainWindow {
                         .child(resizable_panel().child(center))
                         .child(
                             resizable_panel()
-                                .size(px(pane_sizes.right.unwrap_or(380.).clamp(300., 600.)))
+                                .size(px(pane_sizes
+                                    .right
+                                    .unwrap_or((width - 280.) / 2.)
+                                    .clamp(300., (width - 600.).max(300.))))
                                 .size_range(px(300.)..px(600.))
                                 .visible(show_right)
                                 .child(div().size_full().bg(color(Token::Panel, cx)).child(right)),

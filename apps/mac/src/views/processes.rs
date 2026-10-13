@@ -1,6 +1,5 @@
 use crate::stores::workspace::WorkspaceStore;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString,
@@ -9,6 +8,10 @@ use gpui_kit::{
 use std::collections::BTreeMap;
 use tempo_client::{ChannelEvent, Client, TerminalFrame, TerminalHandle};
 use tempo_protocol::{self as p, api};
+
+#[derive(Clone)]
+pub struct ProcessSelected(pub usize);
+impl gpui_kit::EventEmitter<ProcessSelected> for ProcessPanel {}
 
 struct RemoteTerminal {
     view: Entity<tempo_terminal::TerminalView>,
@@ -54,12 +57,18 @@ impl ProcessPanel {
     fn id(&self, cx: &gpui_kit::App) -> String {
         self.store.read(cx).workspace_id.clone()
     }
-    /// Selects the Setup tab (04: `setting_up` and `View output` open it).
-    pub fn show_setup(&mut self, cx: &mut Context<Self>) {
-        if self.tab != 0 {
-            self.tab = 0;
-            cx.notify();
+    pub fn select_tab(&mut self, tab: usize, cx: &mut Context<Self>) {
+        self.tab = tab;
+        self.run = None;
+        self.refresh(cx);
+        if tab == 2 && self.terminal.is_none() {
+            self.add_terminal(cx);
         }
+        cx.emit(ProcessSelected(tab));
+        cx.notify();
+    }
+    pub fn show_setup(&mut self, cx: &mut Context<Self>) {
+        self.select_tab(0, cx);
     }
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         let request = self
@@ -80,6 +89,7 @@ impl ProcessPanel {
         .detach();
     }
     pub fn toggle_default_run(&mut self, cx: &mut Context<Self>) {
+        self.select_tab(1, cx);
         self.script = self.store.read(cx).state.workspace.as_ref().and_then(|w| {
             w.settings
                 .scripts
@@ -563,20 +573,6 @@ impl Render for ProcessPanel {
         };
         v_flex()
             .size_full()
-            .child(
-                TabBar::new("process-tabs")
-                    .selected_index(self.tab)
-                    .children(["Setup", "Run", "Terminal"].map(|t| Tab::new().label(t)))
-                    .on_click(cx.listener(|this, ix: &usize, _, cx| {
-                        this.tab = *ix;
-                        this.run = None;
-                        this.refresh(cx);
-                        if *ix == 2 && this.terminal.is_none() {
-                            this.add_terminal(cx);
-                        }
-                        cx.notify();
-                    })),
-            )
             .children(self.error.clone().map(|e| div().p_2().child(e)))
             .child(div().flex_1().min_h_0().child(body))
     }

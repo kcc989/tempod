@@ -84,7 +84,7 @@ export const CENTER_TAB_KINDS = {
   diff: { icon: FileDiffIcon, Title: () => <>Diff</>, Body: DiffTab },
   guide: { icon: BookOpenIcon, Title: () => <>Guide</>, Body: GuideTab },
   browser: { icon: GlobeIcon, Title: ({ tab }) => <>{hostOf(tab.url)}</>, Body: BrowserTab },
-  liveView: { icon: RadioIcon, Title: () => <>Live View</>, Body: LiveViewTab },
+  liveView: { icon: RadioIcon, Title: () => <>Browser</>, Body: LiveViewTab },
   artifact: { icon: Icons.ShapesIcon, Title: ArtifactTitle, Body: ArtifactTab },
 } satisfies { readonly [K in CenterTabKind]: CenterTabKindDef<K> };
 

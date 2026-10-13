@@ -1,14 +1,6 @@
 import { TempoError, type Item } from "@tempo/protocol";
-import type { Page } from "@playwright/test";
 import { test, expect } from "./fixture";
-
-const pressMod = async (page: Page, key: string) => {
-  const mac = await page.evaluate(
-    () => /mac|iphone|ipad|ipod/i.test(navigator.platform) || /Mac OS X/.test(navigator.userAgent),
-  );
-
-  await page.keyboard.press(`${mac ? "Meta" : "Control"}+${key}`);
-};
+import { pressMod } from "../platform";
 
 test.beforeEach(async ({ page, fixture }) => {
   expect(fixture.workspace.id).toBe("w1");
@@ -336,7 +328,8 @@ test("desktop shortcuts, settings, live scripts and terminal", async ({ page, fi
   await expect(page.getByText("Ready on port 3000", { exact: false })).toBeVisible();
   await page.keyboard.press("Alt+r");
   await expect.poll(() => fixture.inputs("stopScript").length).toBe(1);
-  await page.getByRole("tab", { name: "Terminal", exact: true }).click();
+  await page.getByRole("tab", { name: "New tool tab" }).click();
+  await page.getByRole("button", { name: "Terminal", exact: true }).click();
   await expect(page.getByRole("button", { name: /New terminal/ })).toBeVisible();
   await expect(page.locator(".xterm-screen")).toBeVisible();
 });
@@ -393,4 +386,35 @@ test("theme follows the selected appearance and persists across reloads", async 
   await expect(root).toHaveCSS("color-scheme", "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(root).toHaveCSS("color-scheme", "light");
+});
+
+test("tool tabs keep the chat and draft visible beside files and Browser Run", async ({ page, fixture }) => {
+  const message = page.getByRole("textbox", { name: "Message", exact: true });
+  await message.fill("Keep this draft");
+  await page.getByRole("tab", { name: "New tool tab" }).click();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await page.getByRole("treeitem", { name: "README.md", exact: true }).click();
+  await expect(page.getByText("export const keeled = true;", { exact: false })).toBeVisible();
+  await expect(message).toHaveValue("Keep this draft");
+  await expect(
+    page.getByRole("region", { name: "Chat", exact: true }).getByRole("tab", { name: "README.md" }),
+  ).toHaveCount(0);
+  fixture.liveViewUrl = "https://browser.fixture.test/live";
+  await page.route("https://browser.fixture.test/live", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<p>Browser Run fixture</p>" }),
+  );
+  fixture.updateWorkspace({ browserActive: true });
+  await page.getByRole("tab", { name: "New tool tab" }).click();
+  await page.getByRole("button", { name: "Browser", exact: true }).click();
+  await expect(page.frameLocator('iframe[title="Live View"]').getByText("Browser Run fixture")).toBeVisible();
+  await expect(message).toHaveValue("Keep this draft");
+  await page.getByRole("tab", { name: "Second chat", exact: true }).click();
+  await expect(message).toHaveValue("");
+  await expect(page.getByRole("tab", { name: "Browser", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.getByRole("button", { name: "Close tool tab" }).last().click();
+  await expect(page.getByRole("heading", { name: "Open a tool" })).toBeVisible();
+  await expect(message).toBeVisible();
 });

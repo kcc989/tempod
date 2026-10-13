@@ -150,8 +150,8 @@ export const SHORTCUT_ROWS: ReadonlyArray<ShortcutRow> = [
     mac: "⌘⌥B",
   },
   {
-    action: "Toggle bottom panel",
-    bindings: [b("toggleBottom", "Toggle bottom panel", { code: "KeyJ", alt: true })],
+    action: "Terminal / tool launcher",
+    bindings: [b("toggleBottom", "Terminal / tool launcher", { code: "KeyJ", alt: true })],
     mac: "⌘J",
   },
   {

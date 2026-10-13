@@ -34,6 +34,7 @@ pub mod sign_in;
 pub mod terminal;
 pub mod toast;
 pub mod tokens;
+pub mod tools;
 pub mod top_bar;
 pub mod workspace;
 

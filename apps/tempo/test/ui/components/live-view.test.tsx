@@ -104,7 +104,7 @@ describe("Live View tab (04, Browser tabs)", () => {
 
   const frame = () => elementOrNull(screen.queryByTitle("Live View"), HTMLIFrameElement);
 
-  it("is titled Live View in the tab bar", () => {
+  it("is titled Browser in the tool tab bar", () => {
     render(
       tree(
         createElement(CenterTabPart, {
@@ -117,7 +117,7 @@ describe("Live View tab (04, Browser tabs)", () => {
       ),
       { wrapper: environment.Provider },
     );
-    expect(screen.getByText("Live View")).toBeTruthy();
+    expect(screen.getByText("Browser")).toBeTruthy();
   });
 
   it("asks getBrowserLiveView for a link when it opens and shows it in an iframe", async () => {

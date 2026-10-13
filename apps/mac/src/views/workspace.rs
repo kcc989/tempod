@@ -64,13 +64,15 @@ struct BranchPicker {
 /// Error toasts with the same code replace each other, as the web's `error:<code>` toast id.
 struct ErrorToast;
 
-const BROWSER_SESSION_ENDED: &str = "Browser session ended.";
+pub(super) const BROWSER_SESSION_ENDED: &str = "Browser session ended.";
 
 pub struct WorkspaceView {
     pub store: Entity<WorkspaceStore>,
     client: Client,
     pub review: Entity<super::review::ReviewPanel>,
     pub processes: Entity<super::processes::ProcessPanel>,
+    pub tools: Entity<super::tools::ToolPanel>,
+    _tool_events: Subscription,
     review_comments: Vec<String>,
     _review_events: Subscription,
     _review_changed: Subscription,
@@ -144,6 +146,18 @@ impl WorkspaceView {
             cx.new(|cx| super::processes::ProcessPanel::new(store.clone(), client.clone(), cx));
         let review =
             cx.new(|cx| super::review::ReviewPanel::new(store.clone(), client.clone(), window, cx));
+        let tools = cx.new(|cx| {
+            super::tools::ToolPanel::new(
+                store.clone(),
+                client.clone(),
+                review.clone(),
+                processes.clone(),
+                cx,
+            )
+        });
+        let tool_events = cx.subscribe(&tools, |this, _, _: &super::tools::RevealTools, cx| {
+            this.reveal_right(cx)
+        });
         let review_changed = cx.observe(&review, |_, _, cx| cx.notify());
         let review_events = cx.subscribe_in(
             &review,
@@ -166,10 +180,6 @@ impl WorkspaceView {
                             cx.notify();
                         });
                     }
-                    this.review.update(cx, |r, cx| {
-                        r.document_open = false;
-                        cx.notify();
-                    });
                     this.focus_composer(window, cx);
                 }
                 cx.notify();
@@ -206,6 +216,8 @@ impl WorkspaceView {
         let mut view = Self {
             detail: transcript_detail(cx),
             right_opened: false,
+            tools,
+            _tool_events: tool_events,
             _detail_changed: detail_changed,
             processes,
             review,
@@ -706,25 +718,9 @@ impl WorkspaceView {
         .detach();
     }
 
-    /// 07 Previews: `Live` opens a new Live View link in the default browser. The link is a
-    /// secret: it is never logged or kept.
     fn open_live_view(&mut self, cx: &mut Context<Self>) {
-        let request = self
-            .client
-            .call::<api::GetBrowserLiveView>(p::GetBrowserLiveViewIn {
-                workspace_id: self.store.read(cx).workspace_id.clone(),
-            });
-        cx.spawn(async move |this, cx| {
-            let result = request.await;
-            let _ = this.update(cx, |this, cx| match result {
-                Ok(p::GetBrowserLiveViewOut { url: Some(url) }) => cx.open_url(&url),
-                Ok(p::GetBrowserLiveViewOut { url: None }) => {
-                    this.push_notification(Notification::info(BROWSER_SESSION_ENDED), cx)
-                }
-                Err(e) => this.toast_error(&e, cx),
-            });
-        })
-        .detach();
+        self.tools.update(cx, |tools, cx| tools.open_browser(cx));
+        self.reveal_right(cx);
     }
 
     fn mutate<F: p::Function>(&mut self, input: F::Input, cx: &mut Context<Self>) {
@@ -1470,47 +1466,22 @@ impl WorkspaceView {
     }
 
     pub fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let mut ids: Vec<_> = self
-            .tab_ids(cx)
-            .into_iter()
-            .map(|id| format!("chat:{id}"))
-            .collect();
-        ids.extend(
-            self.review
-                .read(cx)
-                .document_tabs()
-                .into_iter()
-                .map(|(key, _)| key),
-        );
+        let ids = self.tab_ids(cx);
         if ids.is_empty() {
             return;
         }
-        let review = self.review.read(cx);
-        let active = if review.document_open {
-            review.active_document.clone()
-        } else {
-            self.active.as_ref().map(|id| format!("chat:{id}"))
-        };
-        let ix = active
-            .and_then(|id| ids.iter().position(|s| s == &id))
+        let ix = self
+            .active
+            .as_ref()
+            .and_then(|id| ids.iter().position(|s| s == id))
             .unwrap_or(0);
-        let ix = if forward {
+        let next = if forward {
             (ix + 1) % ids.len()
         } else {
             (ix + ids.len() - 1) % ids.len()
         };
-        let id = &ids[ix];
-        if let Some(chat) = id.strip_prefix("chat:") {
-            self.active = Some(chat.into());
-            self.review.update(cx, |r, cx| {
-                r.document_open = false;
-                cx.notify();
-            });
-            self.sync(window, cx);
-        } else {
-            self.review
-                .update(cx, |r, cx| r.select_document(id, window, cx));
-        }
+        self.active = Some(ids[next].clone());
+        self.sync(window, cx);
         cx.notify();
     }
 
@@ -2755,22 +2726,11 @@ impl Render for WorkspaceView {
                 .into_any_element();
         }
         let ids = self.tab_ids(cx);
-        let documents = self.review.read(cx).document_tabs();
-        let document_keys: Vec<_> = documents.iter().map(|(key, _)| key.clone()).collect();
         let selected = self
             .active
             .as_ref()
             .and_then(|id| ids.iter().position(|s| s == id))
             .unwrap_or(0);
-        let selected = if self.review.read(cx).document_open {
-            ids.len()
-                + document_keys
-                    .iter()
-                    .position(|key| Some(key) == self.review.read(cx).active_document.as_ref())
-                    .unwrap_or(0)
-        } else {
-            selected
-        };
         let titles: Vec<_> = ids
             .iter()
             .filter_map(|id| store.state.sessions.get(id))
@@ -2863,9 +2823,7 @@ impl Render for WorkspaceView {
                 )
             })
             .collect();
-        let content = if self.review.read(cx).document_open {
-            self.review.read(cx).document(cx)
-        } else if let Some(chat) = chat {
+        let content = if let Some(chat) = chat {
             let has_queue = !queued.is_empty();
             v_flex()
                 .size_full()
@@ -3129,16 +3087,7 @@ impl Render for WorkspaceView {
                             .on_click(cx.listener(move |this, ix: &usize, window, cx| {
                                 if let Some(id) = ids.get(*ix) {
                                     this.active = Some(id.clone());
-                                    this.review.update(cx, |r, cx| {
-                                        r.document_open = false;
-                                        cx.notify();
-                                    });
                                     this.sync(window, cx);
-                                } else if let Some(key) =
-                                    document_keys.get(ix.saturating_sub(ids.len()))
-                                {
-                                    this.review
-                                        .update(cx, |r, cx| r.select_document(key, window, cx));
                                 }
                             }))
                             .children(titles.into_iter().zip(tab_ids).map(
@@ -3170,23 +3119,7 @@ impl Render for WorkspaceView {
                                             })),
                                     )
                                 },
-                            ))
-                            .children(documents.into_iter().map(|(key, title)| {
-                                let close_key = key.clone();
-                                Tab::new().label(SharedString::from(title)).suffix(
-                                    Button::new(SharedString::from(format!(
-                                        "close-document-{key}"
-                                    )))
-                                    .icon(gpui_kit::assets::IconName::X)
-                                    .accessibility_label("Close file tab")
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        cx.stop_propagation();
-                                        this.review.update(cx, |r, cx| {
-                                            r.close_document_key(&close_key, cx)
-                                        });
-                                    })),
-                                )
-                            })),
+                            )),
                     )
                     .child(new_chat)
                     .child(closed_menu)
@@ -4624,9 +4557,8 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn live_opens_a_new_live_view_link_in_the_default_browser(cx: &mut TestAppContext) {
+    fn live_opens_in_the_tool_area_and_reports_request_failures(cx: &mut TestAppContext) {
         assert_eq!(BROWSER_SESSION_ENDED, "Browser session ended.");
-        // The opened URL stays recorded on `cx`, so the case that opens one runs last.
         for (fail, link) in [(true, None), (false, None), (false, Some(LIVE_VIEW_LINK))] {
             let mut state = fixture();
             state.workspace.as_mut().unwrap().browser_active = true;
@@ -4647,7 +4579,7 @@ mod tests {
                 .unwrap()
                 .iter()
                 .any(|(path, _)| path.ends_with("/getBrowserLiveView"))
-                || (cx.opened_url().is_none() && toasts(cx, window) == 0)
+                || view.read_with(cx, |view, cx| view.tools.read(cx).browser_pending)
             {
                 cx.run_until_parked();
                 assert!(
@@ -4662,8 +4594,22 @@ mod tests {
                 .find(|(path, _)| path.ends_with("/getBrowserLiveView"))
                 .unwrap();
             assert_eq!(call.1, serde_json::json!({"workspaceId": id}));
-            assert_eq!(cx.opened_url().as_deref(), link);
-            assert_eq!(toasts(cx, window), usize::from(link.is_none()));
+            assert!(cx.opened_url().is_none());
+            assert_eq!(
+                view.read_with(cx, |view, cx| view.tools.read(cx).browser_ready()),
+                link.is_some()
+            );
+            assert!(view.read_with(cx, |view, _| view.right_opened));
+            assert_eq!(toasts(cx, window), 0);
+            if link.is_some() {
+                let store = view.read_with(cx, |view, _| view.store.clone());
+                store.update(cx, |store, cx| {
+                    store.state.workspace.as_mut().unwrap().browser_active = false;
+                    cx.notify();
+                });
+                cx.run_until_parked();
+                assert!(!view.read_with(cx, |view, cx| view.tools.read(cx).browser_ready()));
+            }
             cx.update_window(window, |_, window, _| window.remove_window())
                 .unwrap();
         }
