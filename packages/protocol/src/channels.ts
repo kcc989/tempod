@@ -1,4 +1,4 @@
-import { RoleRun } from "./lifecycle.ts";
+import { Run } from "./runs.ts";
 import { Schema } from "effect";
 import { CredentialProvider } from "./enums.ts";
 import {
@@ -51,7 +51,7 @@ export const WsWorkspace = msg("workspace", { workspace: WorkspaceDetail });
 
 export const WsSession = msg("session", { session: Session });
 
-export const WsRoleRun = msg("roleRun", { run: RoleRun });
+export const WsRun = msg("run", { run: Run });
 
 export const WsTurn = msg("turn", { turn: Turn });
 
@@ -88,7 +88,7 @@ export const WorkspaceServerMessage = Schema.Union([
   WsWorkspace,
   WsSession,
   WsTurn,
-  WsRoleRun,
+  WsRun,
   WsTurnDeleted,
   WsPermission,
   WsScriptOutput,

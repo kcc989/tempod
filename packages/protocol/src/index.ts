@@ -12,6 +12,8 @@ export * from "./agents.ts";
 
 export * from "./agent-library.ts";
 
+export * from "./runs.ts";
+
 export * from "./types.ts";
 
 export * from "./channels.ts";

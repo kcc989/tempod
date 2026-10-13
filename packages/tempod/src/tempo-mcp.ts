@@ -1,10 +1,15 @@
 import { chmodSync, rmSync } from "node:fs";
-import { Schema, Exit } from "effect";
+import { Schema, Exit, JsonSchema } from "effect";
 import {
   ARTIFACT_SUMMARY_MAX,
   ARTIFACT_TITLE_MAX,
   ARTIFACT_TOOL_DESCRIPTION,
   EnvironmentProposal,
+  OutputKind,
+  RUN_REPORTS,
+  TEMPO_RUN_ID_ENV,
+  TEMPO_RUN_OUTPUT_KIND_ENV,
+  type ToolReq,
   PublishArtifactRequest,
   TEMPO_SESSION_ID_ENV,
   EnvironmentSummary,
@@ -92,6 +97,7 @@ export const TOOLS = [
 ] as const;
 
 export interface McpBackend {
+  readonly agentTool?: (input: Omit<ToolReq, "id" | "type">) => Promise<Schema.Json>;
   readonly summary: () => EnvironmentSummary | null;
   readonly propose: (proposal: EnvironmentProposal) => void;
   readonly publish: (req: PublishArtifactRequest) => Promise<PublishAnswer>;
@@ -145,6 +151,37 @@ export const startMcpSocket = (path: string, backend: McpBackend) => {
         return Response.json(answer, { status: "error" in answer ? 400 : 200 });
       }
 
+      if (req.method === "POST" && url.pathname === "/agent-tools") {
+        try {
+          const input = Schema.decodeUnknownSync(
+            Schema.Struct({
+              op: Schema.Literals(["report_result", "list_agents", "propose_agent_change"]),
+              sessionId: Schema.String,
+              runId: Schema.optional(Schema.String),
+              params: Schema.Json,
+            }),
+            { onExcessProperty: "error" },
+          )(await req.json());
+
+          if (!backend.agentTool)
+            return Response.json({ error: "Agent tools are unavailable." }, { status: 503 });
+          const result = await backend.agentTool(input);
+
+          return Response.json({ result });
+        } catch (error) {
+          return Response.json(
+            {
+              error: Schema.isSchemaError(error)
+                ? "Invalid tool request."
+                : error instanceof Error
+                  ? error.message
+                  : "Tool failed.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
       return new Response("not found", { status: 404 });
     },
   });
@@ -184,6 +221,8 @@ export const handleMcpMessage = async (
   msg: Json,
   call: Call,
   sessionId: string | undefined = process.env[TEMPO_SESSION_ID_ENV],
+  runId: string | undefined = process.env[TEMPO_RUN_ID_ENV],
+  outputKind: string | undefined = process.env[TEMPO_RUN_OUTPUT_KIND_ENV],
 ) => {
   const id = msg["id"];
   const method = msg["method"];
@@ -202,7 +241,23 @@ export const handleMcpMessage = async (
     case "ping":
       return reply({});
     case "tools/list":
-      return reply({ tools: TOOLS });
+      return reply({
+        tools: [
+          ...TOOLS,
+          ...(runId && Schema.is(OutputKind)(outputKind)
+            ? [
+                {
+                  name: "report_result",
+                  description:
+                    "Report the result of this Tempo run. Correct invalid reports and try again before ending the turn.",
+                  inputSchema: JsonSchema.toDocumentDraft07(
+                    Schema.toJsonSchemaDocument(RUN_REPORTS[outputKind], { onExcessProperty: "error" }),
+                  ).schema,
+                },
+              ]
+            : []),
+        ],
+      });
     case "tools/call": {
       const params = Schema.is(JsonObject)(msg["params"]) ? msg["params"] : {};
       const args = Schema.is(JsonObject)(params["arguments"]) ? params["arguments"] : {};
@@ -250,6 +305,20 @@ export const handleMcpMessage = async (
           if (!res.ok) return reply(text(body.error ?? `tempod answered ${res.status}`, true));
 
           return reply(text(body.text ?? ""));
+        }
+
+        if (params["name"] === "report_result" && runId && Schema.is(OutputKind)(outputKind)) {
+          const res = await call("/agent-tools", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ op: "report_result", sessionId: sessionId ?? "", runId, params: args }),
+          });
+
+          const body = Schema.decodeUnknownSync(Schema.Struct({ error: Schema.optional(Schema.String) }))(
+            await res.json(),
+          );
+
+          return reply(text(res.ok ? "Result reported." : (body.error ?? "Report rejected."), !res.ok));
         }
 
         return fail(-32602, `unknown tool ${String(params["name"])}`);

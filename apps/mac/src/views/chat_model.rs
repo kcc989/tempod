@@ -81,7 +81,7 @@ pub fn sessions(state: &WorkspaceState, closed: bool) -> Vec<&Session> {
     let mut sessions: Vec<_> = state
         .sessions
         .values()
-        .filter(|s| (s.status == SessionStatus::Closed) == closed)
+        .filter(|s| s.run_id.is_none() && (s.status == SessionStatus::Closed) == closed)
         .collect();
     sessions.sort_by(|a, b| {
         a.sort_order

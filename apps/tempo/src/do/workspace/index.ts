@@ -14,7 +14,7 @@ import {
 import { resolveSettings } from "@tempo/settings";
 import {
   lifecycleEvents,
-  roleRuns,
+  runs,
   attachments,
   egressLog,
   ops,
@@ -330,7 +330,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
   async agentsChanged(): Promise<Result<{}>> {
     return capture(async () => {
-      this.core.setKv("agentsDirty", true);
+      if (this.core.wsOrNull()) {
+        await this.core.lifecycle.load();
+        this.core.lifecycle.kick();
+      }
 
       return {};
     });
@@ -761,8 +764,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       core.notice("warning", text, running.sessionId, running.id);
     } else core.notice("warning", text);
 
-    for (const run of core.db.select().from(roleRuns).where(eq(roleRuns.status, "running")).all())
-      core.lifecycle.runs.fail(run, "ROLE_TURN_FAILED");
+    for (const run of core.db.select().from(runs).where(eq(runs.status, "running")).all())
+      core.lifecycle.runs.fail(run, "RUN_TURN_FAILED");
     closeOpenRuns(core);
     core.closeTerminals(1001, "container stopped");
     core.tempod?.close(1000, "container stopped");

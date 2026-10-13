@@ -7,7 +7,7 @@ const call = environment.request;
 import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { TempoError, type RoleInfo, type CredentialStatus } from "@tempo/protocol";
+import { TempoError, type AgentSummary, type CredentialStatus } from "@tempo/protocol";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
@@ -79,7 +79,7 @@ beforeEach(() => {
   vi.mocked(call).mockImplementation(async (name) => {
     if (name === "getCredentialStatus") return credentials;
 
-    if (name === "listRoles") return [];
+    if (name === "listAgents" || name === "listProjectAgents") return [];
 
     if (name === "listFiles") return { paths: ["src/main.ts"] };
 
@@ -223,24 +223,28 @@ describe("composer delivery and draft recovery", () => {
     expect(elementOf(message(), HTMLTextAreaElement).value).toBe("New typing survives");
   });
   it("sends a role request from the Roles picker without sending it to the agent", async () => {
-    const role = {
-      name: "reviewer",
-      scope: "builtin",
-      sha: "a".repeat(64),
+    const agent = {
+      id: "reviewer-id",
+      handle: "reviewer",
+      name: "Reviewer",
       description: "Review auth",
-      agent: "other",
+      baseAgent: "auto",
       access: "read-only",
-      requestable: true,
-      on: [],
-      limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
-    } satisfies RoleInfo;
+      outputKind: "review",
+      version: 1,
+      sha: "a".repeat(64),
+      starter: null,
+      updatedAt: 0,
+    } satisfies AgentSummary;
 
     call.mockImplementation(async (name) => {
-      if (name === "listRoles") return [role];
+      if (name === "listAgents") return [agent];
+
+      if (name === "listProjectAgents") return [];
 
       if (name === "listFiles") return { paths: [] };
 
-      if (name === "requestRole") return { changeId: "change", roleRunId: "run" };
+      if (name === "requestAgent") return { changeId: "change", runId: "run" };
 
       return credentials;
     });
@@ -248,14 +252,14 @@ describe("composer delivery and draft recovery", () => {
     type("@reviewer");
     await screen.findByRole("option");
     enter();
-    await waitFor(() => expect(elementOf(message(), HTMLTextAreaElement).value).toBe("/role reviewer "));
-    type("/role reviewer focus on auth");
+    await waitFor(() => expect(elementOf(message(), HTMLTextAreaElement).value).toBe("/agent reviewer "));
+    type("/agent reviewer focus on auth");
     enter();
     await waitFor(() =>
-      expect(call).toHaveBeenCalledWith("requestRole", {
+      expect(call).toHaveBeenCalledWith("requestAgent", {
         workspaceId: "composer-w",
         sessionId: "s1",
-        role: "reviewer",
+        agentId: "reviewer-id",
         text: "focus on auth",
       }),
     );

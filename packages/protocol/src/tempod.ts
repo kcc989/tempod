@@ -54,7 +54,35 @@ export const DoReq = Schema.Struct({
 
 export type DoReq = typeof DoReq.Type;
 
-export const DoToTempod = Schema.Union([DoHello, DoAck, DoReq]);
+export const ToolReq = Schema.Struct({
+  type: Schema.Literal("tool.req"),
+  id: Schema.String,
+  op: Schema.Literals(["report_result", "list_agents", "propose_agent_change"]),
+  sessionId: Schema.String,
+  runId: Schema.optional(Schema.String),
+  params: Schema.Json,
+});
+
+export type ToolReq = typeof ToolReq.Type;
+
+export const ToolRes = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("tool.res"),
+    id: Schema.String,
+    ok: Schema.Literal(true),
+    result: Schema.Json,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("tool.res"),
+    id: Schema.String,
+    ok: Schema.Literal(false),
+    error: Schema.Struct({ code: Schema.String, message: Schema.String }),
+  }),
+]);
+
+export type ToolRes = typeof ToolRes.Type;
+
+export const DoToTempod = Schema.Union([DoHello, DoAck, DoReq, ...ToolRes.members]);
 
 export type DoToTempod = typeof DoToTempod.Type;
 
@@ -204,7 +232,7 @@ export const TempodEventEnvelope = Schema.Struct({
 
 export type TempodEventEnvelope = typeof TempodEventEnvelope.Type;
 
-export const TempodToDo = Schema.Union([...TempodRes.members, TempodEventEnvelope]);
+export const TempodToDo = Schema.Union([...TempodRes.members, TempodEventEnvelope, ToolReq]);
 
 export type TempodToDo = typeof TempodToDo.Type;
 
@@ -304,6 +332,7 @@ export const TEMPOD_REQUESTS = {
       model: Schema.optional(Schema.NullOr(Schema.String)),
       browser: BrowserMode,
       profile: Schema.optional(AgentProfile),
+      access: Schema.optional(Schema.Literals(["read-only", "write"])),
       acpSessionId: Schema.optional(Schema.NullOr(Schema.String)),
       mcpServers: Schema.optional(Schema.Array(McpServerSpec)),
     }),

@@ -1,12 +1,25 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ListRoleRunsIn",
+  "title": "RequestAgentIn",
   "type": "object",
   "properties": {
     "workspaceId": {
       "type": "string"
     },
-    "changeId": {
+    "agentId": {
+      "type": "string"
+    },
+    "text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sessionId": {
       "anyOf": [
         {
           "type": "string"
@@ -17,6 +30,6 @@
       ]
     }
   },
-  "required": ["workspaceId"],
+  "required": ["workspaceId", "agentId"],
   "additionalProperties": true
 }

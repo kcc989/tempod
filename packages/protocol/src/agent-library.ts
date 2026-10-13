@@ -138,3 +138,5 @@ export const AgentAttachment = Schema.Struct({
 });
 
 export type AgentAttachment = typeof AgentAttachment.Type;
+
+export type AttachmentOptions = typeof AttachmentOptions.Type;

@@ -102,7 +102,14 @@ export const AgentProfile = Schema.Struct({
 
 export type AgentProfile = typeof AgentProfile.Type;
 
-export const PROFILE_ISSUES = ["systemPrompt", "tools", "mcpServers", "model", "thoughtLevel"] as const;
+export const PROFILE_ISSUES = [
+  "systemPrompt",
+  "tools",
+  "mcpServers",
+  "model",
+  "thoughtLevel",
+  "access",
+] as const;
 
 export const ProfileIssue = Schema.Literals(PROFILE_ISSUES);
 

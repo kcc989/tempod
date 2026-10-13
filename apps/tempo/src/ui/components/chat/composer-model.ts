@@ -223,6 +223,7 @@ const ISSUE_LABELS: Record<ProfileIssue, string> = {
   mcpServers: "MCP servers",
   model: "model",
   thoughtLevel: "reasoning level",
+  access: "read-only controls",
 };
 
 /** The profile-issues notice (04, Composer): null when there is nothing to show. */

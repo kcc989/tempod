@@ -41,7 +41,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -137,7 +137,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -233,7 +233,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -278,10 +278,10 @@
         },
         "type": {
           "type": "string",
-          "enum": ["role.run.started"]
+          "enum": ["run.started"]
         },
         "source": {
-          "$ref": "LifecycleRoleSource.json"
+          "$ref": "LifecycleRunSource.json"
         },
         "payload": {
           "$ref": "LifecycleRunStartedPayload.json"
@@ -329,7 +329,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -374,10 +374,10 @@
         },
         "type": {
           "type": "string",
-          "enum": ["role.run.completed"]
+          "enum": ["run.completed"]
         },
         "source": {
-          "$ref": "LifecycleRoleSource.json"
+          "$ref": "LifecycleRunSource.json"
         },
         "payload": {
           "$ref": "LifecycleRunCompletedPayload.json"
@@ -425,7 +425,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -470,10 +470,10 @@
         },
         "type": {
           "type": "string",
-          "enum": ["role.run.failed"]
+          "enum": ["run.failed"]
         },
         "source": {
-          "$ref": "LifecycleRoleSource.json"
+          "$ref": "LifecycleRunSource.json"
         },
         "payload": {
           "$ref": "LifecycleRunFailedPayload.json"
@@ -521,7 +521,103 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agent": {
+          "anyOf": [
+            {
+              "$ref": "AgentId.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "causationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dedupeKey": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["run.decided"]
+        },
+        "source": {
+          "$ref": "LifecycleTempoSource.json"
+        },
+        "payload": {
+          "$ref": "LifecycleRunDecidedPayload.json"
+        }
+      },
+      "required": ["id", "occurredAt", "workspaceId", "dedupeKey", "type", "source", "payload"],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "changeId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -617,7 +713,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -713,7 +809,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"
@@ -809,7 +905,7 @@
             }
           ]
         },
-        "roleRunId": {
+        "runId": {
           "anyOf": [
             {
               "type": "string"

@@ -3,74 +3,61 @@ import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { Schema } from "effect";
 import {
   LifecycleEvent,
-  RoleRun,
+  Run,
   TempoError,
   newId,
   type AgentId,
   type FnInput,
   type FnOutput,
-  type RoleTrigger,
+  type AttachmentHook,
+  type Agent,
+  type AgentAttachment,
 } from "@tempo/protocol";
-import {
-  lifecycleEvents,
-  roleRuns,
-  turns,
-  type LifecycleRow,
-  type RoleRunRow,
-} from "../../db/workspace-do.ts";
-import { baseRoles, parseRole, withPrecedence, type ParsedRole } from "../../roles/catalog.ts";
-import { matchTrigger } from "../../roles/match.ts";
+import { lifecycleEvents, runs, turns, type LifecycleRow, type RunRow } from "../../db/workspace-do.ts";
+import { agentToWire, attachmentToWire, migrateAgents } from "../../agents/library.ts";
+import { agents, projectAgents } from "../../db/d1.ts";
+import { d1 } from "../../server/handlers/common.ts";
+
 import { errorText, log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
-import { requireTempod } from "./container.ts";
-import { RoleRuns } from "./role-runs.ts";
+
+import { Runs } from "./runs.ts";
 
 export class Lifecycle {
-  readonly runs: RoleRuns;
-  private roles: ParsedRole[] = [];
+  readonly runs: Runs;
+  agents: Agent[] = [];
+  attachments: AgentAttachment[] = [];
   private loading: Promise<void> | null = null;
   private dispatching: Promise<void> | null = null;
   private dirty = false;
   private loaded = false;
   retryAt: number | null = null;
   constructor(readonly core: WorkspaceCore) {
-    this.runs = new RoleRuns(this);
+    this.runs = new Runs(this);
   }
 
-  async load(repo = false): Promise<void> {
+  async load(_repo = false): Promise<void> {
     if (this.loading) await this.loading;
     this.loading = (async () => {
-      const base = await baseRoles(this.core.env, this.core.ws().userId);
-      let cached = this.core.kv<Array<{ name: string; text: string }>>("repoRoles") ?? [];
+      const ws = this.core.ws();
+      await migrateAgents(this.core.env, ws.userId);
+      const db = d1(this.core.env);
 
-      if (repo) {
-        const tempod = requireTempod(this.core);
-        const { paths } = await tempod.request("fs.list", {});
-        const next: typeof cached = [];
+      const definitions = await db
+        .select()
+        .from(agents)
+        .where(and(eq(agents.userId, ws.userId), isNull(agents.deletedAt)))
+        .all();
 
-        for (const path of paths.filter((p) => /^\.tempo\/roles\/[^/]+\.md$/.test(p))) {
-          let read: Pick<FnOutput<"readFile">, "content" | "encoding">;
+      this.agents = definitions.map(agentToWire);
 
-          try {
-            read = await tempod.request("fs.read", { path, maxBytes: 65536 });
-          } catch {
-            read = { content: "", encoding: "utf8" };
-          }
+      const rows = await db
+        .select()
+        .from(projectAgents)
+        .where(eq(projectAgents.projectId, ws.projectId))
+        .all();
 
-          next.push({
-            name: path.slice(".tempo/roles/".length, -3),
-            text: read.encoding === "utf8" ? read.content : "",
-          });
-        }
-
-        cached = next;
-        this.core.setKv("repoRoles", cached);
-      }
-
-      this.roles = withPrecedence([
-        ...base,
-        ...(await Promise.all(cached.map((r) => parseRole(r.name, "repo", r.text)))),
-      ]);
+      this.attachments = await Promise.all(rows.map((row) => attachmentToWire(this.core.env, row)));
       this.loaded = true;
     })();
 
@@ -81,17 +68,36 @@ export class Lifecycle {
     }
   }
   async list(): Promise<FnOutput<"listRoles">> {
-    if (!this.loaded) await this.load();
-
-    return this.roles.map((r) => r.info);
+    return [];
   }
-  async text(name: string, scope: ParsedRole["info"]["scope"]): Promise<{ text: string }> {
-    if (!this.loaded) await this.load();
-    const r = this.roles.find((r) => r.info.name === name && r.info.scope === scope);
+  async text(_name: string, _scope: string): Promise<{ text: string }> {
+    throw new TempoError("NOT_FOUND");
+  }
+  matches(
+    attachment: AgentAttachment,
+    event: LifecycleEvent,
+  ): Array<{ hook: AttachmentHook; index: number }> {
+    if (!attachment.enabled || !attachment.agent) return [];
 
-    if (!r) throw new TempoError("NOT_FOUND");
+    const type =
+      event.type === "tempo.change.created" && event.payload.origin === "prompt"
+        ? "prompt"
+        : event.type === "agent.turn.ended"
+          ? "turn.ended"
+          : event.type.replace(/^tempo\./, "");
 
-    return { text: r.text };
+    if (type === "turn.ended" && event.runId) return [];
+
+    if (
+      (type === "run.completed" || type === "run.failed") &&
+      event.runId &&
+      this.runs.row(event.runId).attachmentId === attachment.id
+    )
+      return [];
+
+    if (event.type === "run.failed" && event.payload.errorCode === "RUN_LIMIT") return [];
+
+    return attachment.hooks.flatMap((hook, index) => (hook.event === type ? [{ hook, index }] : []));
   }
   private validated(input: Omit<LifecycleEvent, "id" | "occurredAt" | "workspaceId">): LifecycleEvent {
     try {
@@ -134,21 +140,26 @@ export class Lifecycle {
   row(id: string): LifecycleRow | null {
     return this.core.db.select().from(lifecycleEvents).where(eq(lifecycleEvents.id, id)).get() ?? null;
   }
-  runWire(row: RoleRunRow): RoleRun {
-    const { resultJson, ...rest } = row;
+  runWire(row: RunRow): Run {
+    const { resultJson, followUpSent, ...rest } = row;
+    const definition = this.runs.snapshot(row);
+    const session = row.sessionId ? this.core.sessionRow(row.sessionId) : null;
 
-    return Schema.decodeUnknownSync(RoleRun)({
+    return Schema.decodeUnknownSync(Run)({
       ...rest,
+      name: definition.name,
+      followUpSent: !!followUpSent,
       result: resultJson ? JSON.parse(resultJson) : null,
-      trigger: this.core.kv<RoleTrigger>(`runTrigger:${row.id}`),
+      hook: this.core.kv<AttachmentHook>(`runHook:${row.id}`),
+      profileIssues: session ? JSON.parse(session.profileIssuesJson) : [],
     });
   }
-  listRuns(changeId?: string): RoleRun[] {
+  listRuns(changeId?: string): Run[] {
     return this.core.db
       .select()
-      .from(roleRuns)
-      .where(changeId ? eq(roleRuns.changeId, changeId) : undefined)
-      .orderBy(desc(roleRuns.createdAt), desc(roleRuns.id))
+      .from(runs)
+      .where(changeId ? eq(runs.changeId, changeId) : undefined)
+      .orderBy(desc(runs.createdAt), desc(runs.id))
       .limit(200)
       .all()
       .map((r) => this.runWire(r));
@@ -206,9 +217,9 @@ export class Lifecycle {
         .map((r) => this.logEvent(r)),
       runs: this.core.db
         .select()
-        .from(roleRuns)
-        .where(eq(roleRuns.triggerEventId, id))
-        .orderBy(asc(roleRuns.createdAt))
+        .from(runs)
+        .where(eq(runs.triggerEventId, id))
+        .orderBy(asc(runs.createdAt))
         .all()
         .map((r) => this.runWire(r)),
     };
@@ -240,13 +251,7 @@ export class Lifecycle {
     let changeId = input.changeId;
     let causationId: string | undefined;
 
-    if (
-      !changeId &&
-      this.core.settings().roles.enabled &&
-      this.roles.some(
-        (r) => r.file && !r.info.shadowedBy && !r.info.error && r.file.on.some((t) => matchTrigger(t, probe)),
-      )
-    ) {
+    if (!changeId && this.attachments.some((attachment) => this.matches(attachment, probe).length)) {
       changeId = newId();
 
       const origin = this.append({
@@ -266,7 +271,7 @@ export class Lifecycle {
   newestOpenChange(): string | undefined {
     return this.core.ctx.storage.sql
       .exec<{ change_id: string }>(
-        "SELECT change_id FROM lifecycle_events e WHERE e.type = 'tempo.change.created' AND NOT EXISTS (SELECT 1 FROM lifecycle_events ended WHERE ended.change_id = e.change_id AND ended.type = 'tempo.change.ended') ORDER BY e.seq DESC LIMIT 1",
+        "SELECT change_id FROM lifecycle_events e WHERE e.type = 'tempo.change.created' AND (NOT EXISTS (SELECT 1 FROM lifecycle_events ended WHERE ended.change_id = e.change_id AND ended.type = 'tempo.change.ended') OR EXISTS (SELECT 1 FROM turns t WHERE t.change_id=e.change_id AND t.status IN ('queued','running')) OR EXISTS (SELECT 1 FROM runs r WHERE r.change_id=e.change_id AND r.status IN ('queued','running'))) ORDER BY e.seq DESC LIMIT 1",
       )
       .toArray()[0]?.change_id;
   }
@@ -279,44 +284,37 @@ export class Lifecycle {
         .get() ?? null
     );
   }
-  async request(roleName: string, text?: string, sessionId?: string): Promise<FnOutput<"requestRole">> {
+  async request(agentId: string, text?: string, sessionId?: string): Promise<FnOutput<"requestAgent">> {
     if (["archived", "archiving"].includes(this.core.state)) throw new TempoError("WORKSPACE_ARCHIVED");
 
     if (new TextEncoder().encode(text ?? "").length > 65536) throw new TempoError("VALIDATION_FAILED");
     await this.load();
-    const role = this.roles.find((r) => r.info.name === roleName && !r.info.shadowedBy && !r.info.error);
+    const agent = this.agents.find((a) => a.id === agentId);
 
-    if (!role) throw new TempoError("ROLE_NOT_FOUND");
-
-    if (!role.file?.requestable) throw new TempoError("ROLE_NOT_REQUESTABLE");
-
-    if (!this.core.settings().roles.enabled) throw new TempoError("ROLE_LIMIT", undefined, "roles.enabled");
+    if (!agent) throw new TempoError("NOT_FOUND");
+    const attachment = this.attachments.find((a) => a.agentId === agentId) ?? null;
 
     if (text) text = (await lifecycleRedactor(this.core))(text);
-    const agent = sessionId ? this.core.sessionRow(sessionId).agent : undefined;
+    const baseAgent = sessionId ? this.core.sessionRow(sessionId).agent : undefined;
     const changeId = newId();
 
     const run = this.core.ctx.storage.transactionSync(() => {
-      const payload = text
-        ? { origin: "request" as const, role: roleName, text }
-        : { origin: "request" as const, role: roleName };
-
-      const input: Parameters<Lifecycle["append"]>[0] = {
+      const cause = this.append({
         type: "tempo.change.created",
         source: "tempo",
         changeId,
+        sessionId,
+        agent: baseAgent,
         dedupeKey: `change:${changeId}:created`,
-        payload,
-      };
+        payload: { origin: "request", handle: agent.handle, text },
+      })!;
 
-      const cause = this.append(sessionId ? { ...input, sessionId, agent } : input)!;
-
-      return this.runs.insert(role, this.event(cause));
+      return this.runs.insert(agent, attachment, this.event(cause));
     });
 
     this.kick();
 
-    return { changeId, roleRunId: run.id };
+    return { changeId, runId: run.id };
   }
   kick(): void {
     this.dirty = true;
@@ -358,16 +356,12 @@ export class Lifecycle {
       ) {
         const event = this.event(row);
         this.core.ctx.storage.transactionSync(() => {
-          if (
-            this.core.settings().roles.enabled &&
-            event.changeId &&
-            !(event.type === "role.run.failed" && event.payload.errorCode === "ROLE_LIMIT")
-          ) {
-            for (const role of this.roles) {
-              if (!role.file || role.info.error || role.info.shadowedBy) continue;
-              const trigger = role.file.on.find((t) => matchTrigger(t, event));
+          if (event.changeId) {
+            for (const attachment of this.attachments) {
+              const match = this.matches(attachment, event).find((m) => m.hook.when === null);
+              const agent = this.agents.find((a) => a.id === attachment.agentId);
 
-              if (trigger) this.runs.insert(role, event, trigger);
+              if (match && agent) this.runs.insert(agent, attachment, event, match.hook);
             }
           }
 
@@ -402,8 +396,8 @@ export class Lifecycle {
 
     const pendingRun = this.core.db
       .select()
-      .from(roleRuns)
-      .where(and(eq(roleRuns.changeId, changeId), inArray(roleRuns.status, ["queued", "running"])))
+      .from(runs)
+      .where(and(eq(runs.changeId, changeId), inArray(runs.status, ["queued", "running"])))
       .get();
 
     if (pendingEvent || pendingTurn || pendingRun) return;
@@ -419,12 +413,12 @@ export class Lifecycle {
 
     const run = this.core.db
       .select()
-      .from(roleRuns)
-      .where(eq(roleRuns.changeId, changeId))
-      .orderBy(desc(roleRuns.createdAt), desc(roleRuns.id))
+      .from(runs)
+      .where(eq(runs.changeId, changeId))
+      .orderBy(desc(runs.createdAt), desc(runs.id))
       .get();
 
-    this.append({
+    const ended = this.append({
       type: "tempo.change.ended",
       source: "tempo",
       changeId,
@@ -439,6 +433,7 @@ export class Lifecycle {
               : "done",
       },
     });
-    this.dirty = true;
+
+    if (ended) this.dirty = true;
   }
 }

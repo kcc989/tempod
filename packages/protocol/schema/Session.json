@@ -3,7 +3,7 @@
   "title": "Session",
   "type": "object",
   "properties": {
-    "roleRunId": {
+    "runId": {
       "anyOf": [
         {
           "type": "string"

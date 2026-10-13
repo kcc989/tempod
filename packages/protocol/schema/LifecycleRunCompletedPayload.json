@@ -3,23 +3,23 @@
   "title": "LifecycleRunCompletedPayload",
   "type": "object",
   "properties": {
-    "role": {
-      "$ref": "RoleName.json"
-    },
-    "round": {
-      "type": "integer",
-      "minimum": -9007199254740991,
-      "maximum": 9007199254740991,
-      "allOf": [
+    "agentId": {
+      "anyOf": [
         {
-          "minimum": 0
+          "type": "string"
+        },
+        {
+          "type": "null"
         }
       ]
     },
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
     "result": {
-      "$ref": "RoleResult.json"
+      "$ref": "RunResult.json"
     }
   },
-  "required": ["role", "round", "result"],
+  "required": ["agentId", "handle", "result"],
   "additionalProperties": true
 }

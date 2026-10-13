@@ -569,7 +569,7 @@ export class WorkspaceCore {
       steering: json.capabilities.read(r.capabilitiesJson, {})["steering"] === true,
     } satisfies Session;
 
-    const session = r.roleRunId ? { ...wire, roleRunId: r.roleRunId } : wire;
+    const session = r.runId ? { ...wire, runId: r.runId } : wire;
 
     return r.customAgentId
       ? {

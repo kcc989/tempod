@@ -22,6 +22,17 @@ export type RequestHandler = (
   | Promise<import("@tempo/protocol").TempodResult<TempodOp> | import("@tempo/protocol").JsonData>;
 
 export class FakeTempod {
+  private readonly toolReplies = new Map<string, (reply: import("@tempo/protocol").ToolRes) => void>();
+  tool(
+    input: Omit<import("@tempo/protocol").ToolReq, "id" | "type">,
+  ): Promise<import("@tempo/protocol").ToolRes> {
+    const id = newId();
+
+    return new Promise((resolve) => {
+      this.toolReplies.set(id, resolve);
+      this.socket?.send(JSON.stringify({ type: "tool.req", id, ...input }));
+    });
+  }
   readonly requests: Array<{ op: string; params: any }> = [];
   readonly hellos: any[] = [];
   readonly acks: number[] = [];
@@ -248,6 +259,13 @@ export class FakeTempod {
   }
   private async onMessage(ws: WebSocket, data: string): Promise<void> {
     const msg = JSON.parse(data);
+
+    if (msg.type === "tool.res") {
+      this.toolReplies.get(msg.id)?.(msg);
+      this.toolReplies.delete(msg.id);
+
+      return;
+    }
 
     if (msg.type === "hello") {
       this.hellos.push(msg);

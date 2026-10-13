@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NoteReport",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["done", "blocked"]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 4000
+    }
+  },
+  "required": ["status", "summary"],
+  "additionalProperties": true
+}

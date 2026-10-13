@@ -1,7 +1,7 @@
 import { AcpFields } from "@tempo/protocol";
 import { Schema } from "effect";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { rmSync, existsSync, readFileSync, symlinkSync } from "node:fs";
+import { existsSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { MAX_MESSAGE_BYTES } from "@tempo/protocol";
 import { TRUNCATED } from "../src/bounds.ts";
@@ -86,28 +86,22 @@ const textOf = (c: DoClient, itemId: string): string => {
   return String(created?.item.content["text"] ?? "") + deltas.join("");
 };
 
-test.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")(
-  "role results use the ACP filesystem callbacks under /home/tempo/roles",
-  async () => {
-    const { start, prompt, ended, c } = await setup();
-    const dir = `/home/tempo/roles/test-${Date.now()}`;
-
-    try {
-      await start("role-session");
-      await prompt("role-session", "role-write", `write ${dir}/result.json`);
-      await ended("role-write");
-      expect(existsSync(`${dir}/result.json`)).toBe(true);
-      await prompt("role-session", "role-read", `read ${dir}/result.json`);
-      await ended("role-read");
-      expect(c.of("turn.ended").find((e) => e.turnId === "role-read")?.error).toBeUndefined();
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  },
-  T,
-);
-
 describe("session.start", () => {
+  test(
+    "read-only selects an advertised mode and reports access when no supported control exists",
+    async () => {
+      const { start, calls } = await setup();
+      const readonly = await start("readonly", { access: "read-only" });
+      expect(readonly.modeId).toBe("plan");
+      expect(readonly.profileIssues).not.toContain("access");
+      expect(calls()).toContain("mode plan");
+      const unavailable = await start("no-readonly-mode", { agent: "codex", access: "read-only" });
+      expect(unavailable.profileIssues).toContain("access");
+      expect(unavailable.modeId).toBe("default");
+    },
+    T,
+  );
+
   test(
     "ACP mode config drives modes, setters and reload without session/set_mode",
     async () => {

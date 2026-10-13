@@ -22,7 +22,7 @@ pub struct WorkspaceState {
     pub backlog_done: bool,
     pub workspace: Option<WorkspaceDetail>,
     pub sessions: HashMap<String, Session>,
-    pub role_runs: HashMap<String, tempo_protocol::RoleRun>,
+    pub runs: HashMap<String, tempo_protocol::Run>,
     pub turns: HashMap<String, Turn>,
     pub items: HashMap<String, Item>,
     /// Item ids per session, oldest first.
@@ -134,8 +134,8 @@ impl WorkspaceState {
             return Vec::new();
         }
         match msg {
-            M::RoleRun(m) => {
-                self.role_runs.insert(m.run.id.clone(), m.run);
+            M::Run(m) => {
+                self.runs.insert(m.run.id.clone(), m.run);
             }
             M::Hello(h) => {
                 self.ready = true;

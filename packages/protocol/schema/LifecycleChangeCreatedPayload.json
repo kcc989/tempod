@@ -7,10 +7,10 @@
       "type": "string",
       "enum": ["prompt", "request", "event"]
     },
-    "role": {
+    "handle": {
       "anyOf": [
         {
-          "$ref": "RoleName.json"
+          "$ref": "AgentHandle.json"
         },
         {
           "type": "null"

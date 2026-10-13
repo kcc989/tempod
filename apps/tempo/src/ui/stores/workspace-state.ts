@@ -1,7 +1,7 @@
 import { Item as ItemSchema } from "@tempo/protocol";
 import { Schema } from "effect";
 import type {
-  RoleRun,
+  Run,
   ChangesSummary,
   CredentialProvider,
   Item,
@@ -25,7 +25,7 @@ export interface WorkspaceState {
   readonly backlogDone: boolean;
   readonly workspace: WorkspaceDetail | null;
   readonly sessions: Readonly<Record<string, Session>>;
-  readonly roleRuns: Readonly<Record<string, RoleRun>>;
+  readonly runs: Readonly<Record<string, Run>>;
   readonly turns: Readonly<Record<string, Turn>>;
   readonly items: Readonly<Record<string, Item>>;
   /** Item ids per session, oldest first. */
@@ -53,7 +53,7 @@ export const emptyWorkspaceState: WorkspaceState = {
   backlogDone: false,
   workspace: null,
   sessions: {},
-  roleRuns: {},
+  runs: {},
   turns: {},
   items: {},
   order: {},
@@ -226,8 +226,8 @@ export const applyWorkspaceMessage = (state: WorkspaceState, msg: WorkspaceServe
       return same({ ...state, workspace: msg.workspace });
     case "session":
       return same({ ...state, sessions: { ...state.sessions, [msg.session.id]: msg.session } });
-    case "roleRun":
-      return same({ ...state, roleRuns: { ...state.roleRuns, [msg.run.id]: msg.run } });
+    case "run":
+      return same({ ...state, runs: { ...state.runs, [msg.run.id]: msg.run } });
     case "turn": {
       const prev = state.turns[msg.turn.id];
 

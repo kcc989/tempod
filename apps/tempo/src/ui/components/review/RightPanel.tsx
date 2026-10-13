@@ -1,3 +1,4 @@
+import { RunActivity } from "../chat/RunCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
 import { setRightTab, type RightTab } from "~/ui/state/workspace-ui";
@@ -13,7 +14,7 @@ export interface RightPanelProps {
 }
 
 const isRightTab = (v: string): v is RightTab =>
-  v === "changes" || v === "files" || v === "checks" || v === "artifacts";
+  v === "changes" || v === "files" || v === "checks" || v === "artifacts" || v === "activity";
 
 /** 04, Right and bottom panels: Changes, All files, Checks and Artifacts. */
 export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps) {
@@ -23,6 +24,7 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
     return (
       <>
         <ChangesView workspaceId={workspaceId} variant="phone" />
+        <RunActivity workspaceId={workspaceId} />
       </>
     );
   }
@@ -40,8 +42,12 @@ export function RightPanel({ workspaceId, variant = "desktop" }: RightPanelProps
           <TabsTrigger value="changes">Changes</TabsTrigger>
           <TabsTrigger value="files">All files</TabsTrigger>
           <TabsTrigger value="checks">Checks</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
         </TabsList>
+        <TabsContent value="activity" className="min-h-0 overflow-auto p-2">
+          <RunActivity workspaceId={workspaceId} />
+        </TabsContent>
         <TabsContent value="changes" className="flex min-h-0 flex-col">
           <ChangesView workspaceId={workspaceId} />
         </TabsContent>

@@ -162,7 +162,10 @@ export const ensureSessionLive = async (
   const agent = session.agent;
   const config = json.config.read(session.configJson, {});
   const model = sessionModel(agent, config, core.settings());
-  const env = await agentEnv(core, agent, signal);
+  let env = await agentEnv(core, agent, signal);
+  const run = session.runId ? core.lifecycle.runs.row(session.runId) : null;
+
+  if (run) env = { ...env, TEMPO_RUN_ID: run.id, TEMPO_RUN_OUTPUT_KIND: run.outputKind };
   const opts = signal ? { signal } : {};
 
   let input: import("@tempo/protocol").TempodParams<"session.start"> = {
@@ -174,6 +177,8 @@ export const ensureSessionLive = async (
     acpSessionId: session.acpSessionId,
     mcpServers: (await core.mcpServers()).map(mcpToSpec),
   };
+
+  if (run) input = { ...input, access: core.lifecycle.runs.snapshot(run).access };
 
   if (model) input = { ...input, model };
 
@@ -296,7 +301,7 @@ export const buildContent = async (
     patch.pendingNote = null;
   }
 
-  if (session.roleRunId && turn.origin !== "user") {
+  if (session.runId && turn.origin !== "user") {
     blocks.push(...(await core.lifecycle.runs.content(turn)));
 
     return { blocks, patch, handoff };
@@ -681,10 +686,10 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
       errorDetail: err.detail ?? err.message,
     });
 
-    if (session.roleRunId && turn.origin !== "user")
+    if (session.runId && turn.origin !== "user")
       core.lifecycle.runs.fail(
-        core.lifecycle.runs.row(session.roleRunId),
-        err.code === "ROLE_ACCESS_VIOLATION" ? "ROLE_ACCESS_VIOLATION" : "ROLE_TURN_FAILED",
+        core.lifecycle.runs.row(session.runId),
+        err.code === "ROLE_ACCESS_VIOLATION" ? "ROLE_ACCESS_VIOLATION" : "RUN_TURN_FAILED",
         err.code === "ROLE_ACCESS_VIOLATION"
           ? "Protected login or config files could not be checked."
           : undefined,
@@ -693,8 +698,8 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
     core.lifecycle.kick();
     core.kickQueue();
   } finally {
-    if (signal.aborted && session.roleRunId && turn.origin !== "user") {
-      const run = core.lifecycle.runs.row(session.roleRunId);
+    if (signal.aborted && session.runId && turn.origin !== "user") {
+      const run = core.lifecycle.runs.row(session.runId);
 
       if (run.status !== "running") core.lifecycle.runs.close(run);
     }

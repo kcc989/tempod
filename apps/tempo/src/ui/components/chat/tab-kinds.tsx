@@ -41,14 +41,12 @@ export interface CenterTabKindDef<K extends CenterTabKind> {
 function ChatTitle({ workspaceId, tab }: CenterTabProps<"chat">) {
   const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[tab.sessionId]);
 
-  const run = useWorkspaceSelector(workspaceId, (s) =>
-    session?.roleRunId ? s.roleRuns[session.roleRunId] : undefined,
-  );
+  const run = useWorkspaceSelector(workspaceId, (s) => (session?.runId ? s.runs[session.runId] : undefined));
 
   if (run)
     return (
       <>
-        {run.roleName} #{run.round} · {run.status}
+        {run.name} · {run.status}
       </>
     );
   const tooltip = sessionTooltip(session);
@@ -67,6 +65,16 @@ function ChatBody({ workspaceId, tab }: CenterTabProps<"chat">) {
   );
 }
 
+function RunTranscriptTitle({ workspaceId, tab }: CenterTabProps<"runTranscript">) {
+  const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[tab.sessionId]);
+
+  return <>Run · {sessionTitle(session)}</>;
+}
+
+function RunTranscriptBody({ workspaceId, tab }: CenterTabProps<"runTranscript">) {
+  return <Transcript workspaceId={workspaceId} sessionId={tab.sessionId} />;
+}
+
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
 const hostOf = (url: string) => {
@@ -80,6 +88,7 @@ const hostOf = (url: string) => {
 /** The tab-kind registry: how each kind of center tab renders. Chat is region B; the rest region C. */
 export const CENTER_TAB_KINDS = {
   chat: { icon: MessageSquareIcon, Title: ChatTitle, Body: ChatBody },
+  runTranscript: { icon: MessageSquareIcon, Title: RunTranscriptTitle, Body: RunTranscriptBody },
   file: { icon: FileCodeIcon, Title: ({ tab }) => <>{baseName(tab.path)}</>, Body: FileTab },
   diff: { icon: FileDiffIcon, Title: () => <>Diff</>, Body: DiffTab },
   guide: { icon: BookOpenIcon, Title: () => <>Guide</>, Body: GuideTab },
@@ -105,6 +114,13 @@ export function CenterTabPart({
   switch (tab.kind) {
     case "chat":
       return renderTab<"chat">(CENTER_TAB_KINDS.chat, part, { workspaceId, tab, active, seq });
+    case "runTranscript":
+      return renderTab<"runTranscript">(CENTER_TAB_KINDS.runTranscript, part, {
+        workspaceId,
+        tab,
+        active,
+        seq,
+      });
     case "file":
       return renderTab<"file">(CENTER_TAB_KINDS.file, part, { workspaceId, tab, active, seq });
     case "diff":

@@ -2,5 +2,5 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CheckpointReason",
   "type": "string",
-  "enum": ["role_pin", "turn_end", "pre_revert", "pre_sleep", "pre_archive", "sigterm"]
+  "enum": ["run_pin", "turn_end", "pre_revert", "pre_sleep", "pre_archive", "sigterm"]
 }

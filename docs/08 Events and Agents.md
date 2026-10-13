@@ -222,7 +222,7 @@ Each answer has `type: "noul"` and `noul` in `[0, 1]`. A missing answer, wrong t
 
 ## Runs
 
-The run engine uses the existing session, turn, checkpoint and protected-file paths.
+The run engine uses the existing session, turn, checkpoint and protected-file paths. The wire `Run.name` comes from the frozen definition; its SQLite columns stay as specified below. `CheckRun.summary?` carries GitHub's output summary for failed-check context. Legacy active runs preserve status and resume using their frozen migration data.
 
 1. **Admit.** Insert the run as `queued`. `UNIQUE (trigger_event_id, handle)` makes a repeat do nothing. If the attachment already has `max_runs` runs in the change, fail the run with `RUN_LIMIT`. A `RUN_LIMIT` failure does not dispatch hooks. At most one `write` run is `running` per workspace, as today.
 2. **Agent.** Use `baseAgent`, or the project's default agent for `auto`. If it has no login, or it is `opencode` or `pi` with no model, fail with `RUN_NO_AGENT`.

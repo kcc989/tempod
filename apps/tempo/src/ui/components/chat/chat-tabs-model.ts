@@ -50,14 +50,14 @@ const bySortOrder = (a: Session, b: Session) => a.sortOrder - b.sortOrder;
 
 export const openSessionIds = (sessions: Readonly<Record<string, Session>>): string[] =>
   Object.values(sessions)
-    .filter((s) => s.status !== "closed")
+    .filter((s) => s.status !== "closed" && !s.runId)
     .sort(bySortOrder)
     .map((s) => s.id);
 
 /** Closed sessions for the `Closed chats` menu, newest first. */
 export const closedSessions = (sessions: Readonly<Record<string, Session>>): Session[] =>
   Object.values(sessions)
-    .filter((s) => s.status === "closed")
+    .filter((s) => s.status === "closed" && !s.runId)
     .sort((a, b) => b.sortOrder - a.sortOrder);
 
 /** Open sessions plus the closed chats the user opened to read. */
@@ -67,7 +67,9 @@ export const chatTabIds = (
   sessions: Readonly<Record<string, Session>>,
 ): string[] => [
   ...openIds,
-  ...viewingClosed.filter((id) => !openIds.includes(id) && sessions[id]?.status === "closed"),
+  ...viewingClosed.filter(
+    (id) => !openIds.includes(id) && sessions[id]?.status === "closed" && !sessions[id]?.runId,
+  ),
 ];
 
 export const sessionTitle = (

@@ -698,6 +698,12 @@ impl<'de> ::serde::Deserialize<'de> for AgentPrompt {
             })
     }
 }
+///`AgentProposalContent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct AgentProposalContent {
+    #[serde(rename = "proposalId")]
+    pub proposal_id: ::std::string::String,
+}
 ///`AgentSummary`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct AgentSummary {
@@ -1310,11 +1316,11 @@ impl<'de> ::serde::Deserialize<'de> for CancelCodexLoginInLoginId {
             })
     }
 }
-///`CancelRoleRunIn`
+///`CancelRunIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CancelRoleRunIn {
-    #[serde(rename = "roleRunId")]
-    pub role_run_id: ::std::string::String,
+pub struct CancelRunIn {
+    #[serde(rename = "runId")]
+    pub run_id: ::std::string::String,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
@@ -1377,6 +1383,8 @@ pub struct CheckRun {
     pub conclusion: ::std::option::Option<::std::string::String>,
     pub name: ::std::string::String,
     pub status: ::std::string::String,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub summary: ::std::option::Option<::std::string::String>,
     pub url: ::std::string::String,
 }
 ///`CheckpointInfo`
@@ -1411,8 +1419,8 @@ pub struct CheckpointInfo {
     PartialOrd,
 )]
 pub enum CheckpointReason {
-    #[serde(rename = "role_pin")]
-    RolePin,
+    #[serde(rename = "run_pin")]
+    RunPin,
     #[serde(rename = "turn_end")]
     TurnEnd,
     #[serde(rename = "pre_revert")]
@@ -1427,7 +1435,7 @@ pub enum CheckpointReason {
 impl ::std::fmt::Display for CheckpointReason {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
-            Self::RolePin => f.write_str("role_pin"),
+            Self::RunPin => f.write_str("run_pin"),
             Self::TurnEnd => f.write_str("turn_end"),
             Self::PreRevert => f.write_str("pre_revert"),
             Self::PreSleep => f.write_str("pre_sleep"),
@@ -1440,7 +1448,7 @@ impl ::std::str::FromStr for CheckpointReason {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         match value {
-            "role_pin" => Ok(Self::RolePin),
+            "run_pin" => Ok(Self::RunPin),
             "turn_end" => Ok(Self::TurnEnd),
             "pre_revert" => Ok(Self::PreRevert),
             "pre_sleep" => Ok(Self::PreSleep),
@@ -3030,6 +3038,26 @@ pub enum ErrorCode {
     ArtifactsError,
     #[serde(rename = "EVENT_INVALID")]
     EventInvalid,
+    #[serde(rename = "RUN_LIMIT")]
+    RunLimit,
+    #[serde(rename = "RUN_NO_AGENT")]
+    RunNoAgent,
+    #[serde(rename = "RUN_TURN_FAILED")]
+    RunTurnFailed,
+    #[serde(rename = "RUN_RESULT_MISSING")]
+    RunResultMissing,
+    #[serde(rename = "RUN_ACCESS_VIOLATION")]
+    RunAccessViolation,
+    #[serde(rename = "RUN_TIMED_OUT")]
+    RunTimedOut,
+    #[serde(rename = "RUN_NOT_RUNNING")]
+    RunNotRunning,
+    #[serde(rename = "RUN_NOT_COMPLETED")]
+    RunNotCompleted,
+    #[serde(rename = "RUN_ALREADY_SENT")]
+    RunAlreadySent,
+    #[serde(rename = "RUN_NO_CHAT")]
+    RunNoChat,
     #[serde(rename = "ROLE_NOT_FOUND")]
     RoleNotFound,
     #[serde(rename = "ROLE_NOT_REQUESTABLE")]
@@ -3105,6 +3133,16 @@ impl ::std::fmt::Display for ErrorCode {
             Self::CustomAgentLimit => f.write_str("CUSTOM_AGENT_LIMIT"),
             Self::ArtifactsError => f.write_str("ARTIFACTS_ERROR"),
             Self::EventInvalid => f.write_str("EVENT_INVALID"),
+            Self::RunLimit => f.write_str("RUN_LIMIT"),
+            Self::RunNoAgent => f.write_str("RUN_NO_AGENT"),
+            Self::RunTurnFailed => f.write_str("RUN_TURN_FAILED"),
+            Self::RunResultMissing => f.write_str("RUN_RESULT_MISSING"),
+            Self::RunAccessViolation => f.write_str("RUN_ACCESS_VIOLATION"),
+            Self::RunTimedOut => f.write_str("RUN_TIMED_OUT"),
+            Self::RunNotRunning => f.write_str("RUN_NOT_RUNNING"),
+            Self::RunNotCompleted => f.write_str("RUN_NOT_COMPLETED"),
+            Self::RunAlreadySent => f.write_str("RUN_ALREADY_SENT"),
+            Self::RunNoChat => f.write_str("RUN_NO_CHAT"),
             Self::RoleNotFound => f.write_str("ROLE_NOT_FOUND"),
             Self::RoleNotRequestable => f.write_str("ROLE_NOT_REQUESTABLE"),
             Self::RoleInvalid => f.write_str("ROLE_INVALID"),
@@ -3172,6 +3210,16 @@ impl ::std::str::FromStr for ErrorCode {
             "CUSTOM_AGENT_LIMIT" => Ok(Self::CustomAgentLimit),
             "ARTIFACTS_ERROR" => Ok(Self::ArtifactsError),
             "EVENT_INVALID" => Ok(Self::EventInvalid),
+            "RUN_LIMIT" => Ok(Self::RunLimit),
+            "RUN_NO_AGENT" => Ok(Self::RunNoAgent),
+            "RUN_TURN_FAILED" => Ok(Self::RunTurnFailed),
+            "RUN_RESULT_MISSING" => Ok(Self::RunResultMissing),
+            "RUN_ACCESS_VIOLATION" => Ok(Self::RunAccessViolation),
+            "RUN_TIMED_OUT" => Ok(Self::RunTimedOut),
+            "RUN_NOT_RUNNING" => Ok(Self::RunNotRunning),
+            "RUN_NOT_COMPLETED" => Ok(Self::RunNotCompleted),
+            "RUN_ALREADY_SENT" => Ok(Self::RunAlreadySent),
+            "RUN_NO_CHAT" => Ok(Self::RunNoChat),
             "ROLE_NOT_FOUND" => Ok(Self::RoleNotFound),
             "ROLE_NOT_REQUESTABLE" => Ok(Self::RoleNotRequestable),
             "ROLE_INVALID" => Ok(Self::RoleInvalid),
@@ -3741,6 +3789,10 @@ pub enum ItemKind {
     Error,
     #[serde(rename = "artifact")]
     Artifact,
+    #[serde(rename = "run")]
+    Run,
+    #[serde(rename = "agent_proposal")]
+    AgentProposal,
 }
 impl ::std::fmt::Display for ItemKind {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -3756,6 +3808,8 @@ impl ::std::fmt::Display for ItemKind {
             Self::RevertMarker => f.write_str("revert_marker"),
             Self::Error => f.write_str("error"),
             Self::Artifact => f.write_str("artifact"),
+            Self::Run => f.write_str("run"),
+            Self::AgentProposal => f.write_str("agent_proposal"),
         }
     }
 }
@@ -3774,6 +3828,8 @@ impl ::std::str::FromStr for ItemKind {
             "revert_marker" => Ok(Self::RevertMarker),
             "error" => Ok(Self::Error),
             "artifact" => Ok(Self::Artifact),
+            "run" => Ok(Self::Run),
+            "agent_proposal" => Ok(Self::AgentProposal),
             _ => Err("invalid value".into()),
         }
     }
@@ -3916,9 +3972,9 @@ pub struct LifecycleBranchPushedPayload {
 ///`LifecycleChangeCreatedPayload`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct LifecycleChangeCreatedPayload {
-    pub origin: LifecycleChangeCreatedPayloadOrigin,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub role: ::std::option::Option<RoleName>,
+    pub handle: ::std::option::Option<AgentHandle>,
+    pub origin: LifecycleChangeCreatedPayloadOrigin,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub text: ::std::option::Option<LifecycleChangeCreatedPayloadText>,
 }
@@ -4118,10 +4174,10 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleChangeCreatedPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4157,10 +4213,10 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleTurnEndedPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4175,8 +4231,8 @@ pub enum LifecycleEvent {
         #[serde(rename = "workspaceId")]
         workspace_id: ::std::string::String,
     },
-    #[serde(rename = "role.run.started")]
-    RoleRunStarted {
+    #[serde(rename = "run.started")]
+    RunStarted {
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         agent: ::std::option::Option<AgentId>,
         #[serde(
@@ -4196,16 +4252,16 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleRunStartedPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
         session_id: ::std::option::Option<::std::string::String>,
-        source: LifecycleRoleSource,
+        source: LifecycleRunSource,
         #[serde(
             rename = "turnId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4214,8 +4270,8 @@ pub enum LifecycleEvent {
         #[serde(rename = "workspaceId")]
         workspace_id: ::std::string::String,
     },
-    #[serde(rename = "role.run.completed")]
-    RoleRunCompleted {
+    #[serde(rename = "run.completed")]
+    RunCompleted {
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         agent: ::std::option::Option<AgentId>,
         #[serde(
@@ -4235,16 +4291,16 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleRunCompletedPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
         session_id: ::std::option::Option<::std::string::String>,
-        source: LifecycleRoleSource,
+        source: LifecycleRunSource,
         #[serde(
             rename = "turnId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4253,8 +4309,8 @@ pub enum LifecycleEvent {
         #[serde(rename = "workspaceId")]
         workspace_id: ::std::string::String,
     },
-    #[serde(rename = "role.run.failed")]
-    RoleRunFailed {
+    #[serde(rename = "run.failed")]
+    RunFailed {
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
         agent: ::std::option::Option<AgentId>,
         #[serde(
@@ -4274,16 +4330,55 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleRunFailedPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
         session_id: ::std::option::Option<::std::string::String>,
-        source: LifecycleRoleSource,
+        source: LifecycleRunSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "run.decided")]
+    RunDecided {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleRunDecidedPayload,
+        #[serde(
+            rename = "runId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
         #[serde(
             rename = "turnId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4313,10 +4408,10 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleChangeEndedPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4352,10 +4447,10 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleBranchPushedPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4391,10 +4486,10 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleCheckPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4430,10 +4525,10 @@ pub enum LifecycleEvent {
         occurred_at: i64,
         payload: LifecycleCheckPayload,
         #[serde(
-            rename = "roleRunId",
+            rename = "runId",
             skip_serializing_if = "::std::option::Option::is_none"
         )]
-        role_run_id: ::std::option::Option<::std::string::String>,
+        run_id: ::std::option::Option<::std::string::String>,
         #[serde(
             rename = "sessionId",
             skip_serializing_if = "::std::option::Option::is_none"
@@ -4465,7 +4560,35 @@ pub struct LifecyclePage {
     )]
     pub next_before_seq: ::std::option::Option<i64>,
 }
-///`LifecycleRoleSource`
+///`LifecycleRunCompletedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleRunCompletedPayload {
+    #[serde(
+        rename = "agentId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub agent_id: ::std::option::Option<::std::string::String>,
+    pub handle: AgentHandle,
+    pub result: RunResult,
+}
+///`LifecycleRunDecidedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleRunDecidedPayload {
+    #[serde(rename = "agentId")]
+    pub agent_id: ::std::string::String,
+    #[serde(rename = "attachmentId")]
+    pub attachment_id: ::std::string::String,
+    pub handle: AgentHandle,
+    #[serde(rename = "hookEvent")]
+    pub hook_event: HookEvent,
+    #[serde(rename = "hookIndex")]
+    pub hook_index: i64,
+    pub outcome: LifecycleRunDecidedPayloadOutcome,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub p: ::std::option::Option<f64>,
+    pub threshold: f64,
+}
+///`LifecycleRunDecidedPayloadOutcome`
 #[derive(
     ::serde::Deserialize,
     ::serde::Serialize,
@@ -4478,33 +4601,41 @@ pub struct LifecyclePage {
     PartialEq,
     PartialOrd,
 )]
-pub enum LifecycleRoleSource {
-    #[serde(rename = "role")]
-    Role,
+pub enum LifecycleRunDecidedPayloadOutcome {
+    #[serde(rename = "run")]
+    Run,
+    #[serde(rename = "skip")]
+    Skip,
+    #[serde(rename = "error")]
+    Error,
 }
-impl ::std::fmt::Display for LifecycleRoleSource {
+impl ::std::fmt::Display for LifecycleRunDecidedPayloadOutcome {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
-            Self::Role => f.write_str("role"),
+            Self::Run => f.write_str("run"),
+            Self::Skip => f.write_str("skip"),
+            Self::Error => f.write_str("error"),
         }
     }
 }
-impl ::std::str::FromStr for LifecycleRoleSource {
+impl ::std::str::FromStr for LifecycleRunDecidedPayloadOutcome {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         match value {
-            "role" => Ok(Self::Role),
+            "run" => Ok(Self::Run),
+            "skip" => Ok(Self::Skip),
+            "error" => Ok(Self::Error),
             _ => Err("invalid value".into()),
         }
     }
 }
-impl ::std::convert::TryFrom<&str> for LifecycleRoleSource {
+impl ::std::convert::TryFrom<&str> for LifecycleRunDecidedPayloadOutcome {
     type Error = self::error::ConversionError;
     fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<::std::string::String> for LifecycleRoleSource {
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleRunDecidedPayloadOutcome {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -4512,34 +4643,93 @@ impl ::std::convert::TryFrom<::std::string::String> for LifecycleRoleSource {
         value.parse()
     }
 }
-///`LifecycleRunCompletedPayload`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct LifecycleRunCompletedPayload {
-    pub result: RoleResult,
-    pub role: RoleName,
-    pub round: i64,
-}
 ///`LifecycleRunFailedPayload`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct LifecycleRunFailedPayload {
+    #[serde(
+        rename = "agentId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub agent_id: ::std::option::Option<::std::string::String>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub detail: ::std::option::Option<::std::string::String>,
     #[serde(rename = "errorCode")]
     pub error_code: ::std::string::String,
-    pub role: RoleName,
-    pub round: i64,
+    pub handle: AgentHandle,
+}
+///`LifecycleRunSource`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleRunSource {
+    #[serde(rename = "run")]
+    Run,
+}
+impl ::std::fmt::Display for LifecycleRunSource {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Run => f.write_str("run"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleRunSource {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "run" => Ok(Self::Run),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleRunSource {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleRunSource {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`LifecycleRunStartedPayload`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct LifecycleRunStartedPayload {
-    pub access: RoleAccess,
+    pub access: AgentAccess,
     #[serde(deserialize_with = "::std::option::Option::deserialize")]
     pub agent: ::std::option::Option<AgentId>,
-    pub role: RoleName,
-    #[serde(rename = "roleSha")]
-    pub role_sha: ::std::string::String,
-    pub round: i64,
-    pub scope: RoleScope,
+    #[serde(
+        rename = "agentId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub agent_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "agentSha")]
+    pub agent_sha: ::std::string::String,
+    #[serde(
+        rename = "agentVersion",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub agent_version: ::std::option::Option<i64>,
+    #[serde(
+        rename = "attachmentId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub attachment_id: ::std::option::Option<::std::string::String>,
+    pub handle: AgentHandle,
+    #[serde(rename = "outputKind")]
+    pub output_kind: OutputKind,
 }
 ///`LifecycleTempoSource`
 #[derive(
@@ -4593,7 +4783,7 @@ impl ::std::convert::TryFrom<::std::string::String> for LifecycleTempoSource {
 pub struct LifecycleTrace {
     pub chain: ::std::vec::Vec<LifecycleLogEvent>,
     pub children: ::std::vec::Vec<LifecycleLogEvent>,
-    pub runs: ::std::vec::Vec<RoleRun>,
+    pub runs: ::std::vec::Vec<Run>,
 }
 ///`LifecycleTurnEndedPayload`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4867,17 +5057,6 @@ pub struct ListReviewCommentsIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
-///`ListRoleRunsIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct ListRoleRunsIn {
-    #[serde(
-        rename = "changeId",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub change_id: ::std::option::Option<::std::string::String>,
-    #[serde(rename = "workspaceId")]
-    pub workspace_id: ::std::string::String,
-}
 ///`ListRolesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
 pub struct ListRolesIn {
@@ -4886,6 +5065,17 @@ pub struct ListRolesIn {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub workspace_id: ::std::option::Option<::std::string::String>,
+}
+///`ListRunsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListRunsIn {
+    #[serde(
+        rename = "changeId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub change_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
 }
 ///`ListScriptRunsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -5360,6 +5550,113 @@ pub enum NewSource {
     Branch { branch: ::std::string::String },
     #[serde(rename = "pr")]
     Pr { number: f64 },
+}
+///`NoteReport`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct NoteReport {
+    pub status: NoteReportStatus,
+    pub summary: NoteReportSummary,
+}
+///`NoteReportStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum NoteReportStatus {
+    #[serde(rename = "done")]
+    Done,
+    #[serde(rename = "blocked")]
+    Blocked,
+}
+impl ::std::fmt::Display for NoteReportStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Done => f.write_str("done"),
+            Self::Blocked => f.write_str("blocked"),
+        }
+    }
+}
+impl ::std::str::FromStr for NoteReportStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "done" => Ok(Self::Done),
+            "blocked" => Ok(Self::Blocked),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for NoteReportStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NoteReportStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`NoteReportSummary`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NoteReportSummary(::std::string::String);
+impl ::std::ops::Deref for NoteReportSummary {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NoteReportSummary> for ::std::string::String {
+    fn from(value: NoteReportSummary) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NoteReportSummary {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 4000usize {
+            return Err("longer than 4000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NoteReportSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NoteReportSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NoteReportSummary {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`NoticeContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -5890,6 +6187,223 @@ pub struct PlanEntry {
     pub priority: ::std::string::String,
     pub status: ::std::string::String,
 }
+///`PlanReport`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PlanReport {
+    pub status: PlanReportStatus,
+    pub steps: ::std::vec::Vec<PlanStep>,
+    pub summary: PlanReportSummary,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub verify: ::std::option::Option<PlanReportVerify>,
+}
+///`PlanReportStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum PlanReportStatus {
+    #[serde(rename = "done")]
+    Done,
+    #[serde(rename = "blocked")]
+    Blocked,
+}
+impl ::std::fmt::Display for PlanReportStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Done => f.write_str("done"),
+            Self::Blocked => f.write_str("blocked"),
+        }
+    }
+}
+impl ::std::str::FromStr for PlanReportStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "done" => Ok(Self::Done),
+            "blocked" => Ok(Self::Blocked),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for PlanReportStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PlanReportStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`PlanReportSummary`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PlanReportSummary(::std::string::String);
+impl ::std::ops::Deref for PlanReportSummary {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PlanReportSummary> for ::std::string::String {
+    fn from(value: PlanReportSummary) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PlanReportSummary {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 4000usize {
+            return Err("longer than 4000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PlanReportSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PlanReportSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PlanReportSummary {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`PlanReportVerify`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PlanReportVerify(::std::string::String);
+impl ::std::ops::Deref for PlanReportVerify {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PlanReportVerify> for ::std::string::String {
+    fn from(value: PlanReportVerify) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PlanReportVerify {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 2000usize {
+            return Err("longer than 2000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PlanReportVerify {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PlanReportVerify {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PlanReportVerify {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`PlanStep`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PlanStep {
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub files: ::std::vec::Vec<::std::string::String>,
+    pub text: PlanStepText,
+}
+///`PlanStepText`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PlanStepText(::std::string::String);
+impl ::std::ops::Deref for PlanStepText {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PlanStepText> for ::std::string::String {
+    fn from(value: PlanStepText) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PlanStepText {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 1000usize {
+            return Err("longer than 1000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PlanStepText {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PlanStepText {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PlanStepText {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`PollCodexLoginIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct PollCodexLoginIn {
@@ -6089,6 +6603,8 @@ pub enum ProfileIssue {
     Model,
     #[serde(rename = "thoughtLevel")]
     ThoughtLevel,
+    #[serde(rename = "access")]
+    Access,
 }
 impl ::std::fmt::Display for ProfileIssue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -6098,6 +6614,7 @@ impl ::std::fmt::Display for ProfileIssue {
             Self::McpServers => f.write_str("mcpServers"),
             Self::Model => f.write_str("model"),
             Self::ThoughtLevel => f.write_str("thoughtLevel"),
+            Self::Access => f.write_str("access"),
         }
     }
 }
@@ -6110,6 +6627,7 @@ impl ::std::str::FromStr for ProfileIssue {
             "mcpServers" => Ok(Self::McpServers),
             "model" => Ok(Self::Model),
             "thoughtLevel" => Ok(Self::ThoughtLevel),
+            "access" => Ok(Self::Access),
             _ => Err("invalid value".into()),
         }
     }
@@ -6539,10 +7057,11 @@ pub struct ReorderQueueIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
-///`RequestRoleIn`
+///`RequestAgentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RequestRoleIn {
-    pub role: RoleName,
+pub struct RequestAgentIn {
+    #[serde(rename = "agentId")]
+    pub agent_id: ::std::string::String,
     #[serde(
         rename = "sessionId",
         skip_serializing_if = "::std::option::Option::is_none"
@@ -6553,13 +7072,13 @@ pub struct RequestRoleIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
-///`RequestRoleOut`
+///`RequestAgentOut`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RequestRoleOut {
+pub struct RequestAgentOut {
     #[serde(rename = "changeId")]
     pub change_id: ::std::string::String,
-    #[serde(rename = "roleRunId")]
-    pub role_run_id: ::std::string::String,
+    #[serde(rename = "runId")]
+    pub run_id: ::std::string::String,
 }
 ///`RerunSetupIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6685,6 +7204,119 @@ pub struct ReviewComment {
     #[serde(deserialize_with = "::std::option::Option::deserialize")]
     pub side: ::std::option::Option<ReviewSide>,
     pub status: ReviewStatus,
+}
+///`ReviewReport`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ReviewReport {
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub findings: ::std::vec::Vec<RunFinding>,
+    pub status: ReviewReportStatus,
+    pub summary: ReviewReportSummary,
+}
+///`ReviewReportStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ReviewReportStatus {
+    #[serde(rename = "pass")]
+    Pass,
+    #[serde(rename = "fail")]
+    Fail,
+    #[serde(rename = "blocked")]
+    Blocked,
+}
+impl ::std::fmt::Display for ReviewReportStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Pass => f.write_str("pass"),
+            Self::Fail => f.write_str("fail"),
+            Self::Blocked => f.write_str("blocked"),
+        }
+    }
+}
+impl ::std::str::FromStr for ReviewReportStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "pass" => Ok(Self::Pass),
+            "fail" => Ok(Self::Fail),
+            "blocked" => Ok(Self::Blocked),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ReviewReportStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ReviewReportStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`ReviewReportSummary`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ReviewReportSummary(::std::string::String);
+impl ::std::ops::Deref for ReviewReportSummary {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ReviewReportSummary> for ::std::string::String {
+    fn from(value: ReviewReportSummary) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ReviewReportSummary {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 4000usize {
+            return Err("longer than 4000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ReviewReportSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ReviewReportSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ReviewReportSummary {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`ReviewSide`
 #[derive(
@@ -7155,142 +7787,6 @@ impl<'de> ::serde::Deserialize<'de> for RoleResultSummary {
             })
     }
 }
-///`RoleRun`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RoleRun {
-    pub access: RoleAccess,
-    #[serde(deserialize_with = "::std::option::Option::deserialize")]
-    pub agent: ::std::option::Option<AgentId>,
-    #[serde(rename = "changeId")]
-    pub change_id: ::std::string::String,
-    #[serde(rename = "continuesUsed")]
-    pub continues_used: i64,
-    #[serde(rename = "createdAt")]
-    pub created_at: i64,
-    #[serde(
-        rename = "deadlineAt",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub deadline_at: ::std::option::Option<i64>,
-    pub depth: i64,
-    #[serde(
-        rename = "endedAt",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub ended_at: ::std::option::Option<i64>,
-    #[serde(
-        rename = "errorCode",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub error_code: ::std::option::Option<::std::string::String>,
-    #[serde(
-        rename = "errorDetail",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub error_detail: ::std::option::Option<::std::string::String>,
-    pub id: ::std::string::String,
-    #[serde(
-        rename = "parentRunId",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub parent_run_id: ::std::option::Option<::std::string::String>,
-    #[serde(
-        rename = "pinCheckpointId",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub pin_checkpoint_id: ::std::option::Option<::std::string::String>,
-    #[serde(deserialize_with = "::std::option::Option::deserialize")]
-    pub result: ::std::option::Option<RoleResult>,
-    #[serde(rename = "roleName")]
-    pub role_name: RoleName,
-    #[serde(rename = "roleSha")]
-    pub role_sha: ::std::string::String,
-    pub round: i64,
-    pub scope: RoleScope,
-    #[serde(
-        rename = "sessionId",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub session_id: ::std::option::Option<::std::string::String>,
-    #[serde(
-        rename = "startedAt",
-        deserialize_with = "::std::option::Option::deserialize"
-    )]
-    pub started_at: ::std::option::Option<i64>,
-    pub status: RoleRunStatus,
-    pub tokens: i64,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub trigger: ::std::option::Option<RoleTrigger>,
-    #[serde(rename = "triggerEventId")]
-    pub trigger_event_id: ::std::string::String,
-}
-///`RoleRunStatus`
-#[derive(
-    ::serde::Deserialize,
-    ::serde::Serialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-)]
-pub enum RoleRunStatus {
-    #[serde(rename = "queued")]
-    Queued,
-    #[serde(rename = "running")]
-    Running,
-    #[serde(rename = "completed")]
-    Completed,
-    #[serde(rename = "failed")]
-    Failed,
-    #[serde(rename = "cancelled")]
-    Cancelled,
-    #[serde(rename = "timed_out")]
-    TimedOut,
-}
-impl ::std::fmt::Display for RoleRunStatus {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        match *self {
-            Self::Queued => f.write_str("queued"),
-            Self::Running => f.write_str("running"),
-            Self::Completed => f.write_str("completed"),
-            Self::Failed => f.write_str("failed"),
-            Self::Cancelled => f.write_str("cancelled"),
-            Self::TimedOut => f.write_str("timed_out"),
-        }
-    }
-}
-impl ::std::str::FromStr for RoleRunStatus {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        match value {
-            "queued" => Ok(Self::Queued),
-            "running" => Ok(Self::Running),
-            "completed" => Ok(Self::Completed),
-            "failed" => Ok(Self::Failed),
-            "cancelled" => Ok(Self::Cancelled),
-            "timed_out" => Ok(Self::TimedOut),
-            _ => Err("invalid value".into()),
-        }
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleRunStatus {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleRunStatus {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
 ///`RoleScope`
 #[derive(
     ::serde::Deserialize,
@@ -7502,6 +7998,126 @@ pub struct RotatePreviewKeyIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`Run`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct Run {
+    pub access: AgentAccess,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub agent: ::std::option::Option<AgentId>,
+    #[serde(
+        rename = "agentId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub agent_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "agentSha")]
+    pub agent_sha: ::std::string::String,
+    #[serde(
+        rename = "agentVersion",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub agent_version: ::std::option::Option<::std::num::NonZeroU64>,
+    #[serde(
+        rename = "attachmentId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub attachment_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "changeId")]
+    pub change_id: ::std::string::String,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(
+        rename = "deadlineAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub deadline_at: ::std::option::Option<i64>,
+    #[serde(
+        rename = "decisionP",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub decision_p: ::std::option::Option<f64>,
+    #[serde(
+        rename = "endedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub ended_at: ::std::option::Option<i64>,
+    #[serde(
+        rename = "errorCode",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub error_code: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "errorDetail",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub error_detail: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "followUpSent")]
+    pub follow_up_sent: bool,
+    pub handle: AgentHandle,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub hook: ::std::option::Option<AttachmentHook>,
+    pub id: ::std::string::String,
+    pub name: ::std::string::String,
+    #[serde(
+        rename = "originSessionId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub origin_session_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "outputKind")]
+    pub output_kind: OutputKind,
+    #[serde(
+        rename = "parentRunId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub parent_run_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "pinCheckpointId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub pin_checkpoint_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "profileIssues",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub profile_issues: ::std::option::Option<::std::vec::Vec<ProfileIssue>>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub result: ::std::option::Option<RunResult>,
+    #[serde(
+        rename = "sentTurnId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub sent_turn_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "sessionId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub session_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "startedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub started_at: ::std::option::Option<i64>,
+    pub status: RunStatus,
+    pub tokens: i64,
+    #[serde(rename = "triggerEventId")]
+    pub trigger_event_id: ::std::string::String,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub warning: ::std::option::Option<RunWarning>,
+}
+///`RunContent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RunContent {
+    #[serde(rename = "runId")]
+    pub run_id: ::std::string::String,
+}
+///`RunFinding`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RunFinding {
+    pub blocking: bool,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub line: ::std::option::Option<::std::num::NonZeroU64>,
+    pub path: ::std::string::String,
+    pub text: ::std::string::String,
+}
 ///`RunMode`
 #[derive(
     ::serde::Deserialize,
@@ -7553,6 +8169,177 @@ impl ::std::convert::TryFrom<::std::string::String> for RunMode {
         value.parse()
     }
 }
+///`RunResult`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RunResult {
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub findings: ::std::vec::Vec<RunFinding>,
+    pub status: RunResultStatus,
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub steps: ::std::vec::Vec<PlanStep>,
+    pub summary: RunResultSummary,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub verify: ::std::option::Option<RunResultVerify>,
+}
+///`RunResultStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RunResultStatus {
+    #[serde(rename = "done")]
+    Done,
+    #[serde(rename = "pass")]
+    Pass,
+    #[serde(rename = "fail")]
+    Fail,
+    #[serde(rename = "blocked")]
+    Blocked,
+}
+impl ::std::fmt::Display for RunResultStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Done => f.write_str("done"),
+            Self::Pass => f.write_str("pass"),
+            Self::Fail => f.write_str("fail"),
+            Self::Blocked => f.write_str("blocked"),
+        }
+    }
+}
+impl ::std::str::FromStr for RunResultStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "done" => Ok(Self::Done),
+            "pass" => Ok(Self::Pass),
+            "fail" => Ok(Self::Fail),
+            "blocked" => Ok(Self::Blocked),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RunResultStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RunResultStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RunResultSummary`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct RunResultSummary(::std::string::String);
+impl ::std::ops::Deref for RunResultSummary {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RunResultSummary> for ::std::string::String {
+    fn from(value: RunResultSummary) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for RunResultSummary {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 4000usize {
+            return Err("longer than 4000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for RunResultSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RunResultSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for RunResultSummary {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`RunResultVerify`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct RunResultVerify(::std::string::String);
+impl ::std::ops::Deref for RunResultVerify {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RunResultVerify> for ::std::string::String {
+    fn from(value: RunResultVerify) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for RunResultVerify {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 2000usize {
+            return Err("longer than 2000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for RunResultVerify {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RunResultVerify {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for RunResultVerify {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`RunScript`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct RunScript {
@@ -7567,6 +8354,120 @@ pub struct RunScriptIn {
     pub script_id: ::std::string::String,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`RunStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RunStatus {
+    #[serde(rename = "queued")]
+    Queued,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "completed")]
+    Completed,
+    #[serde(rename = "failed")]
+    Failed,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "timed_out")]
+    TimedOut,
+}
+impl ::std::fmt::Display for RunStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Queued => f.write_str("queued"),
+            Self::Running => f.write_str("running"),
+            Self::Completed => f.write_str("completed"),
+            Self::Failed => f.write_str("failed"),
+            Self::Cancelled => f.write_str("cancelled"),
+            Self::TimedOut => f.write_str("timed_out"),
+        }
+    }
+}
+impl ::std::str::FromStr for RunStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "running" => Ok(Self::Running),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            "timed_out" => Ok(Self::TimedOut),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RunStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RunStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RunWarning`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RunWarning {
+    #[serde(rename = "files_changed")]
+    FilesChanged,
+}
+impl ::std::fmt::Display for RunWarning {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::FilesChanged => f.write_str("files_changed"),
+        }
+    }
+}
+impl ::std::str::FromStr for RunWarning {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "files_changed" => Ok(Self::FilesChanged),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RunWarning {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RunWarning {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 ///`SaveAgentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -7901,6 +8802,20 @@ impl ::std::convert::TryFrom<::std::string::String> for SendPromptInDelivery {
         value.parse()
     }
 }
+///`SendRunToChatIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SendRunToChatIn {
+    #[serde(rename = "runId")]
+    pub run_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`SendRunToChatOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SendRunToChatOut {
+    #[serde(rename = "turnId")]
+    pub turn_id: ::std::string::String,
+}
 ///`Session`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Session {
@@ -7927,10 +8842,10 @@ pub struct Session {
     )]
     pub profile_issues: ::std::option::Option<::std::vec::Vec<ProfileIssue>>,
     #[serde(
-        rename = "roleRunId",
+        rename = "runId",
         skip_serializing_if = "::std::option::Option::is_none"
     )]
-    pub role_run_id: ::std::option::Option<::std::string::String>,
+    pub run_id: ::std::option::Option<::std::string::String>,
     #[serde(rename = "sortOrder")]
     pub sort_order: f64,
     pub status: SessionStatus,
@@ -9224,7 +10139,7 @@ pub enum WorkspaceServerMessage {
     Workspace(WsWorkspace),
     Session(WsSession),
     Turn(WsTurn),
-    RoleRun(WsRoleRun),
+    Run(WsRun),
     TurnDeleted(WsTurnDeleted),
     Permission(WsPermission),
     ScriptOutput(WsScriptOutput),
@@ -9269,9 +10184,9 @@ impl ::std::convert::From<WsTurn> for WorkspaceServerMessage {
         Self::Turn(value)
     }
 }
-impl ::std::convert::From<WsRoleRun> for WorkspaceServerMessage {
-    fn from(value: WsRoleRun) -> Self {
-        Self::RoleRun(value)
+impl ::std::convert::From<WsRun> for WorkspaceServerMessage {
+    fn from(value: WsRun) -> Self {
+        Self::Run(value)
     }
 }
 impl ::std::convert::From<WsTurnDeleted> for WorkspaceServerMessage {
@@ -9980,14 +10895,14 @@ impl ::std::convert::TryFrom<::std::string::String> for WsPongType {
         value.parse()
     }
 }
-///`WsRoleRun`
+///`WsRun`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct WsRoleRun {
-    pub run: RoleRun,
+pub struct WsRun {
+    pub run: Run,
     #[serde(rename = "type")]
-    pub type_: WsRoleRunType,
+    pub type_: WsRunType,
 }
-///`WsRoleRunType`
+///`WsRunType`
 #[derive(
     ::serde::Deserialize,
     ::serde::Serialize,
@@ -10000,33 +10915,33 @@ pub struct WsRoleRun {
     PartialEq,
     PartialOrd,
 )]
-pub enum WsRoleRunType {
-    #[serde(rename = "roleRun")]
-    RoleRun,
+pub enum WsRunType {
+    #[serde(rename = "run")]
+    Run,
 }
-impl ::std::fmt::Display for WsRoleRunType {
+impl ::std::fmt::Display for WsRunType {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
-            Self::RoleRun => f.write_str("roleRun"),
+            Self::Run => f.write_str("run"),
         }
     }
 }
-impl ::std::str::FromStr for WsRoleRunType {
+impl ::std::str::FromStr for WsRunType {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         match value {
-            "roleRun" => Ok(Self::RoleRun),
+            "run" => Ok(Self::Run),
             _ => Err("invalid value".into()),
         }
     }
 }
-impl ::std::convert::TryFrom<&str> for WsRoleRunType {
+impl ::std::convert::TryFrom<&str> for WsRunType {
     type Error = self::error::ConversionError;
     fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
 }
-impl ::std::convert::TryFrom<::std::string::String> for WsRoleRunType {
+impl ::std::convert::TryFrom<::std::string::String> for WsRunType {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -10483,13 +11398,13 @@ pub mod api {
         type Input = crate::CancelCodexLoginIn;
         type Output = crate::Empty;
     }
-    /// `cancelRoleRun`
+    /// `cancelRun`
     #[derive(Clone, Copy, Debug)]
-    pub struct CancelRoleRun;
-    impl crate::Function for CancelRoleRun {
-        const NAME: &'static str = "cancelRoleRun";
+    pub struct CancelRun;
+    impl crate::Function for CancelRun {
+        const NAME: &'static str = "cancelRun";
         const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::CancelRoleRunIn;
+        type Input = crate::CancelRunIn;
         type Output = crate::Empty;
     }
     /// `cancelTurn`
@@ -10960,15 +11875,6 @@ pub mod api {
         type Input = crate::ListReviewCommentsIn;
         type Output = ::std::vec::Vec<crate::ReviewComment>;
     }
-    /// `listRoleRuns`
-    #[derive(Clone, Copy, Debug)]
-    pub struct ListRoleRuns;
-    impl crate::Function for ListRoleRuns {
-        const NAME: &'static str = "listRoleRuns";
-        const METHOD: crate::Method = crate::Method::Get;
-        type Input = crate::ListRoleRunsIn;
-        type Output = ::std::vec::Vec<crate::RoleRun>;
-    }
     /// `listRoles`
     #[derive(Clone, Copy, Debug)]
     pub struct ListRoles;
@@ -10977,6 +11883,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListRolesIn;
         type Output = ::std::vec::Vec<crate::RoleInfo>;
+    }
+    /// `listRuns`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListRuns;
+    impl crate::Function for ListRuns {
+        const NAME: &'static str = "listRuns";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListRunsIn;
+        type Output = ::std::vec::Vec<crate::Run>;
     }
     /// `listScriptRuns`
     #[derive(Clone, Copy, Debug)]
@@ -11140,14 +12055,14 @@ pub mod api {
         type Input = crate::ReorderQueueIn;
         type Output = crate::Empty;
     }
-    /// `requestRole`
+    /// `requestAgent`
     #[derive(Clone, Copy, Debug)]
-    pub struct RequestRole;
-    impl crate::Function for RequestRole {
-        const NAME: &'static str = "requestRole";
+    pub struct RequestAgent;
+    impl crate::Function for RequestAgent {
+        const NAME: &'static str = "requestAgent";
         const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::RequestRoleIn;
-        type Output = crate::RequestRoleOut;
+        type Input = crate::RequestAgentIn;
+        type Output = crate::RequestAgentOut;
     }
     /// `rerunSetup`
     #[derive(Clone, Copy, Debug)]
@@ -11256,6 +12171,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::SendPromptIn;
         type Output = crate::Turn;
+    }
+    /// `sendRunToChat`
+    #[derive(Clone, Copy, Debug)]
+    pub struct SendRunToChat;
+    impl crate::Function for SendRunToChat {
+        const NAME: &'static str = "sendRunToChat";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::SendRunToChatIn;
+        type Output = crate::SendRunToChatOut;
     }
     /// `setApiKey`
     #[derive(Clone, Copy, Debug)]
@@ -11424,7 +12348,7 @@ pub mod api {
         ("addReviewComment", crate::Method::Post),
         ("archiveWorkspace", crate::Method::Post),
         ("cancelCodexLogin", crate::Method::Post),
-        ("cancelRoleRun", crate::Method::Post),
+        ("cancelRun", crate::Method::Post),
         ("cancelTurn", crate::Method::Post),
         ("closeSession", crate::Method::Post),
         ("commitAndPush", crate::Method::Post),
@@ -11477,8 +12401,8 @@ pub mod api {
         ("listProjectSecretNames", crate::Method::Get),
         ("listProjects", crate::Method::Get),
         ("listReviewComments", crate::Method::Get),
-        ("listRoleRuns", crate::Method::Get),
         ("listRoles", crate::Method::Get),
+        ("listRuns", crate::Method::Get),
         ("listScriptRuns", crate::Method::Get),
         ("listTerminals", crate::Method::Get),
         ("listWorkspaces", crate::Method::Get),
@@ -11497,7 +12421,7 @@ pub mod api {
         ("renameSession", crate::Method::Post),
         ("renameWorkspace", crate::Method::Post),
         ("reorderQueue", crate::Method::Post),
-        ("requestRole", crate::Method::Post),
+        ("requestAgent", crate::Method::Post),
         ("rerunSetup", crate::Method::Post),
         ("resolveEnvironmentProposal", crate::Method::Post),
         ("respondPermission", crate::Method::Post),
@@ -11510,6 +12434,7 @@ pub mod api {
         ("saveMcpServer", crate::Method::Post),
         ("searchFiles", crate::Method::Get),
         ("sendPrompt", crate::Method::Post),
+        ("sendRunToChat", crate::Method::Post),
         ("setApiKey", crate::Method::Post),
         ("setBaseBranch", crate::Method::Post),
         ("setClaudeToken", crate::Method::Post),
@@ -11545,6 +12470,7 @@ pub mod wire {
         "AgentId",
         "AgentMessageContent",
         "AgentModelOptions",
+        "AgentProposalContent",
         "AgentSummary",
         "AgentThoughtContent",
         "ApiKeyProvider",
@@ -11560,7 +12486,7 @@ pub mod wire {
         "Attention",
         "AvailableCommand",
         "CancelCodexLoginIn",
-        "CancelRoleRunIn",
+        "CancelRunIn",
         "CancelTurnIn",
         "Capabilities",
         "ChangedFile",
@@ -11651,9 +12577,10 @@ pub mod wire {
         "LifecycleEvent",
         "LifecycleLogEvent",
         "LifecyclePage",
-        "LifecycleRoleSource",
         "LifecycleRunCompletedPayload",
+        "LifecycleRunDecidedPayload",
         "LifecycleRunFailedPayload",
+        "LifecycleRunSource",
         "LifecycleRunStartedPayload",
         "LifecycleTempoSource",
         "LifecycleTrace",
@@ -11678,8 +12605,8 @@ pub mod wire {
         "ListProjectSecretNamesIn",
         "ListProjectSecretNamesOut",
         "ListReviewCommentsIn",
-        "ListRoleRunsIn",
         "ListRolesIn",
+        "ListRunsIn",
         "ListScriptRunsIn",
         "ListTerminalsIn",
         "ListTerminalsItem",
@@ -11699,6 +12626,7 @@ pub mod wire {
         "MergeMethod",
         "MergePullRequestIn",
         "NewSource",
+        "NoteReport",
         "NoticeContent",
         "NoticeLevel",
         "OpKind",
@@ -11716,6 +12644,8 @@ pub mod wire {
         "PermissionStatus",
         "PlanContent",
         "PlanEntry",
+        "PlanReport",
+        "PlanStep",
         "PollCodexLoginIn",
         "PollCodexLoginOut",
         "PrState",
@@ -11734,8 +12664,8 @@ pub mod wire {
         "RenameSessionIn",
         "RenameWorkspaceIn",
         "ReorderQueueIn",
-        "RequestRoleIn",
-        "RequestRoleOut",
+        "RequestAgentIn",
+        "RequestAgentOut",
         "RerunSetupIn",
         "ResolveEnvironmentProposalIn",
         "RespondPermissionIn",
@@ -11743,6 +12673,7 @@ pub mod wire {
         "RevertMarkerContent",
         "RevertToCheckpointIn",
         "ReviewComment",
+        "ReviewReport",
         "ReviewSide",
         "ReviewStatus",
         "RoleAccess",
@@ -11754,15 +12685,18 @@ pub mod wire {
         "RoleName",
         "RoleResult",
         "RoleResultStatus",
-        "RoleRun",
-        "RoleRunStatus",
         "RoleScope",
         "RoleTrigger",
         "RolesSettings",
         "RotatePreviewKeyIn",
+        "Run",
+        "RunContent",
+        "RunFinding",
         "RunMode",
+        "RunResult",
         "RunScript",
         "RunScriptIn",
+        "RunStatus",
         "SaveAgentIn",
         "SaveCustomAgentIn",
         "ScriptKind",
@@ -11773,6 +12707,8 @@ pub mod wire {
         "SearchFilesItem",
         "SecretBinding",
         "SendPromptIn",
+        "SendRunToChatIn",
+        "SendRunToChatOut",
         "Session",
         "SessionCustomAgent",
         "SessionMode",
@@ -11823,7 +12759,7 @@ pub mod wire {
         "WsItems",
         "WsPermission",
         "WsPong",
-        "WsRoleRun",
+        "WsRun",
         "WsScriptOutput",
         "WsScriptRun",
         "WsSession",
@@ -11848,6 +12784,7 @@ pub mod wire {
             "AgentId" => crate::roundtrip::<crate::AgentId>(text),
             "AgentMessageContent" => crate::roundtrip::<crate::AgentMessageContent>(text),
             "AgentModelOptions" => crate::roundtrip::<crate::AgentModelOptions>(text),
+            "AgentProposalContent" => crate::roundtrip::<crate::AgentProposalContent>(text),
             "AgentSummary" => crate::roundtrip::<crate::AgentSummary>(text),
             "AgentThoughtContent" => crate::roundtrip::<crate::AgentThoughtContent>(text),
             "ApiKeyProvider" => crate::roundtrip::<crate::ApiKeyProvider>(text),
@@ -11863,7 +12800,7 @@ pub mod wire {
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
             "CancelCodexLoginIn" => crate::roundtrip::<crate::CancelCodexLoginIn>(text),
-            "CancelRoleRunIn" => crate::roundtrip::<crate::CancelRoleRunIn>(text),
+            "CancelRunIn" => crate::roundtrip::<crate::CancelRunIn>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
             "Capabilities" => crate::roundtrip::<crate::Capabilities>(text),
             "ChangedFile" => crate::roundtrip::<crate::ChangedFile>(text),
@@ -11964,13 +12901,16 @@ pub mod wire {
             "LifecycleEvent" => crate::roundtrip::<crate::LifecycleEvent>(text),
             "LifecycleLogEvent" => crate::roundtrip::<crate::LifecycleLogEvent>(text),
             "LifecyclePage" => crate::roundtrip::<crate::LifecyclePage>(text),
-            "LifecycleRoleSource" => crate::roundtrip::<crate::LifecycleRoleSource>(text),
             "LifecycleRunCompletedPayload" => {
                 crate::roundtrip::<crate::LifecycleRunCompletedPayload>(text)
+            }
+            "LifecycleRunDecidedPayload" => {
+                crate::roundtrip::<crate::LifecycleRunDecidedPayload>(text)
             }
             "LifecycleRunFailedPayload" => {
                 crate::roundtrip::<crate::LifecycleRunFailedPayload>(text)
             }
+            "LifecycleRunSource" => crate::roundtrip::<crate::LifecycleRunSource>(text),
             "LifecycleRunStartedPayload" => {
                 crate::roundtrip::<crate::LifecycleRunStartedPayload>(text)
             }
@@ -12007,8 +12947,8 @@ pub mod wire {
                 crate::roundtrip::<crate::ListProjectSecretNamesOut>(text)
             }
             "ListReviewCommentsIn" => crate::roundtrip::<crate::ListReviewCommentsIn>(text),
-            "ListRoleRunsIn" => crate::roundtrip::<crate::ListRoleRunsIn>(text),
             "ListRolesIn" => crate::roundtrip::<crate::ListRolesIn>(text),
+            "ListRunsIn" => crate::roundtrip::<crate::ListRunsIn>(text),
             "ListScriptRunsIn" => crate::roundtrip::<crate::ListScriptRunsIn>(text),
             "ListTerminalsIn" => crate::roundtrip::<crate::ListTerminalsIn>(text),
             "ListTerminalsItem" => crate::roundtrip::<crate::ListTerminalsItem>(text),
@@ -12028,6 +12968,7 @@ pub mod wire {
             "MergeMethod" => crate::roundtrip::<crate::MergeMethod>(text),
             "MergePullRequestIn" => crate::roundtrip::<crate::MergePullRequestIn>(text),
             "NewSource" => crate::roundtrip::<crate::NewSource>(text),
+            "NoteReport" => crate::roundtrip::<crate::NoteReport>(text),
             "NoticeContent" => crate::roundtrip::<crate::NoticeContent>(text),
             "NoticeLevel" => crate::roundtrip::<crate::NoticeLevel>(text),
             "OpKind" => crate::roundtrip::<crate::OpKind>(text),
@@ -12047,6 +12988,8 @@ pub mod wire {
             "PermissionStatus" => crate::roundtrip::<crate::PermissionStatus>(text),
             "PlanContent" => crate::roundtrip::<crate::PlanContent>(text),
             "PlanEntry" => crate::roundtrip::<crate::PlanEntry>(text),
+            "PlanReport" => crate::roundtrip::<crate::PlanReport>(text),
+            "PlanStep" => crate::roundtrip::<crate::PlanStep>(text),
             "PollCodexLoginIn" => crate::roundtrip::<crate::PollCodexLoginIn>(text),
             "PollCodexLoginOut" => crate::roundtrip::<crate::PollCodexLoginOut>(text),
             "PrState" => crate::roundtrip::<crate::PrState>(text),
@@ -12065,8 +13008,8 @@ pub mod wire {
             "RenameSessionIn" => crate::roundtrip::<crate::RenameSessionIn>(text),
             "RenameWorkspaceIn" => crate::roundtrip::<crate::RenameWorkspaceIn>(text),
             "ReorderQueueIn" => crate::roundtrip::<crate::ReorderQueueIn>(text),
-            "RequestRoleIn" => crate::roundtrip::<crate::RequestRoleIn>(text),
-            "RequestRoleOut" => crate::roundtrip::<crate::RequestRoleOut>(text),
+            "RequestAgentIn" => crate::roundtrip::<crate::RequestAgentIn>(text),
+            "RequestAgentOut" => crate::roundtrip::<crate::RequestAgentOut>(text),
             "RerunSetupIn" => crate::roundtrip::<crate::RerunSetupIn>(text),
             "ResolveEnvironmentProposalIn" => {
                 crate::roundtrip::<crate::ResolveEnvironmentProposalIn>(text)
@@ -12076,6 +13019,7 @@ pub mod wire {
             "RevertMarkerContent" => crate::roundtrip::<crate::RevertMarkerContent>(text),
             "RevertToCheckpointIn" => crate::roundtrip::<crate::RevertToCheckpointIn>(text),
             "ReviewComment" => crate::roundtrip::<crate::ReviewComment>(text),
+            "ReviewReport" => crate::roundtrip::<crate::ReviewReport>(text),
             "ReviewSide" => crate::roundtrip::<crate::ReviewSide>(text),
             "ReviewStatus" => crate::roundtrip::<crate::ReviewStatus>(text),
             "RoleAccess" => crate::roundtrip::<crate::RoleAccess>(text),
@@ -12087,15 +13031,18 @@ pub mod wire {
             "RoleName" => crate::roundtrip::<crate::RoleName>(text),
             "RoleResult" => crate::roundtrip::<crate::RoleResult>(text),
             "RoleResultStatus" => crate::roundtrip::<crate::RoleResultStatus>(text),
-            "RoleRun" => crate::roundtrip::<crate::RoleRun>(text),
-            "RoleRunStatus" => crate::roundtrip::<crate::RoleRunStatus>(text),
             "RoleScope" => crate::roundtrip::<crate::RoleScope>(text),
             "RoleTrigger" => crate::roundtrip::<crate::RoleTrigger>(text),
             "RolesSettings" => crate::roundtrip::<crate::RolesSettings>(text),
             "RotatePreviewKeyIn" => crate::roundtrip::<crate::RotatePreviewKeyIn>(text),
+            "Run" => crate::roundtrip::<crate::Run>(text),
+            "RunContent" => crate::roundtrip::<crate::RunContent>(text),
+            "RunFinding" => crate::roundtrip::<crate::RunFinding>(text),
             "RunMode" => crate::roundtrip::<crate::RunMode>(text),
+            "RunResult" => crate::roundtrip::<crate::RunResult>(text),
             "RunScript" => crate::roundtrip::<crate::RunScript>(text),
             "RunScriptIn" => crate::roundtrip::<crate::RunScriptIn>(text),
+            "RunStatus" => crate::roundtrip::<crate::RunStatus>(text),
             "SaveAgentIn" => crate::roundtrip::<crate::SaveAgentIn>(text),
             "SaveCustomAgentIn" => crate::roundtrip::<crate::SaveCustomAgentIn>(text),
             "ScriptKind" => crate::roundtrip::<crate::ScriptKind>(text),
@@ -12106,6 +13053,8 @@ pub mod wire {
             "SearchFilesItem" => crate::roundtrip::<crate::SearchFilesItem>(text),
             "SecretBinding" => crate::roundtrip::<crate::SecretBinding>(text),
             "SendPromptIn" => crate::roundtrip::<crate::SendPromptIn>(text),
+            "SendRunToChatIn" => crate::roundtrip::<crate::SendRunToChatIn>(text),
+            "SendRunToChatOut" => crate::roundtrip::<crate::SendRunToChatOut>(text),
             "Session" => crate::roundtrip::<crate::Session>(text),
             "SessionCustomAgent" => crate::roundtrip::<crate::SessionCustomAgent>(text),
             "SessionMode" => crate::roundtrip::<crate::SessionMode>(text),
@@ -12158,7 +13107,7 @@ pub mod wire {
             "WsItems" => crate::roundtrip::<crate::WsItems>(text),
             "WsPermission" => crate::roundtrip::<crate::WsPermission>(text),
             "WsPong" => crate::roundtrip::<crate::WsPong>(text),
-            "WsRoleRun" => crate::roundtrip::<crate::WsRoleRun>(text),
+            "WsRun" => crate::roundtrip::<crate::WsRun>(text),
             "WsScriptOutput" => crate::roundtrip::<crate::WsScriptOutput>(text),
             "WsScriptRun" => crate::roundtrip::<crate::WsScriptRun>(text),
             "WsSession" => crate::roundtrip::<crate::WsSession>(text),

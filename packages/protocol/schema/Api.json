@@ -208,30 +208,30 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "requestRole": {
+    "requestAgent": {
       "type": "object",
       "properties": {
         "method": {
           "const": "POST"
         },
         "input": {
-          "$ref": "RequestRoleIn.json"
+          "$ref": "RequestAgentIn.json"
         },
         "output": {
-          "$ref": "RequestRoleOut.json"
+          "$ref": "RequestAgentOut.json"
         }
       },
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "cancelRoleRun": {
+    "cancelRun": {
       "type": "object",
       "properties": {
         "method": {
           "const": "POST"
         },
         "input": {
-          "$ref": "CancelRoleRunIn.json"
+          "$ref": "CancelRunIn.json"
         },
         "output": {
           "$ref": "Empty.json"
@@ -240,20 +240,36 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "listRoleRuns": {
+    "listRuns": {
       "type": "object",
       "properties": {
         "method": {
           "const": "GET"
         },
         "input": {
-          "$ref": "ListRoleRunsIn.json"
+          "$ref": "ListRunsIn.json"
         },
         "output": {
           "type": "array",
           "items": {
-            "$ref": "RoleRun.json"
+            "$ref": "Run.json"
           }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "sendRunToChat": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SendRunToChatIn.json"
+        },
+        "output": {
+          "$ref": "SendRunToChatOut.json"
         }
       },
       "required": ["method", "input", "output"],
@@ -1796,9 +1812,10 @@
     "putUserRole",
     "deleteUserRole",
     "reloadRoles",
-    "requestRole",
-    "cancelRoleRun",
-    "listRoleRuns",
+    "requestAgent",
+    "cancelRun",
+    "listRuns",
+    "sendRunToChat",
     "listLifecycleEvents",
     "getTrace",
     "listInstallationRepos",

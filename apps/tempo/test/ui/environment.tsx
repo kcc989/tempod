@@ -62,6 +62,8 @@ export const createUiEnvironment = () => {
         itemsRev: state.itemsRev,
       }),
     );
+
+    for (const run of Object.values(state.runs)) store.receive(JSON.stringify({ type: "run", run }));
     store.receive(
       JSON.stringify({
         type: "items",

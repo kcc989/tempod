@@ -140,7 +140,7 @@ export const WorkspaceDetail = Schema.Struct({
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
 
 export const Session = Schema.Struct({
-  roleRunId: Schema.optional(Schema.String),
+  runId: Schema.optional(Schema.String),
   id: Schema.String,
   agent: AgentId,
   title: Schema.String,
@@ -272,7 +272,13 @@ export type RevertMarkerContent = typeof RevertMarkerContent.Type;
 
 export type ErrorContent = typeof ErrorContent.Type;
 
+export const RunContent = Schema.Struct({ runId: Schema.String });
+
+export const AgentProposalContent = Schema.Struct({ proposalId: Schema.String });
+
 export const ITEM_CONTENT = {
+  run: RunContent,
+  agent_proposal: AgentProposalContent,
   user_message: UserMessageContent,
   agent_message: AgentMessageContent,
   agent_thought: AgentThoughtContent,
@@ -300,6 +306,8 @@ const itemOf = <K extends keyof typeof ITEM_CONTENT>(kind: K) =>
   Schema.Struct({ ...itemFields, kind: Schema.Literal(kind), content: ITEM_CONTENT[kind] });
 
 export const Item = Schema.Union([
+  itemOf("run"),
+  itemOf("agent_proposal"),
   itemOf("user_message"),
   itemOf("agent_message"),
   itemOf("agent_thought"),
@@ -367,6 +375,7 @@ export const CheckpointInfo = Schema.Struct({
 export type CheckpointInfo = typeof CheckpointInfo.Type;
 
 export const CheckRun = Schema.Struct({
+  summary: Schema.optionalKey(Schema.String),
   name: Schema.String,
   status: Schema.String,
   conclusion: N(Schema.String),

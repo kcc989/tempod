@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { handleMcpMessage, TOOLS } from "../src/tempo-mcp.ts";
-import { cleanupDirs, DoClient, startTempod, type Harness } from "./helpers.ts";
+import { cleanupDirs, DoClient, fakeAgentCommand, testConfig, startTempod, type Harness } from "./helpers.ts";
 
 afterAll(cleanupDirs);
 
@@ -124,5 +124,98 @@ describe("tempo MCP server (01, Environments)", () => {
     expect(bad).toHaveProperty("result.isError", true);
     expect(client.of("environment.proposed")).toHaveLength(1);
     client.close();
+  });
+});
+
+describe("run MCP reports", () => {
+  test("lists only the selected report schema in run sessions and carries validation replies outside events", async () => {
+    const config = testConfig();
+    h = startTempod({ ...config, agentCommands: { ...config.agentCommands, claude: fakeAgentCommand() } });
+    const client = new DoClient(h.base);
+    await client.hello();
+    await client.waitFor(() => existsSync(h!.app.config.mcpSocket), 5000, "mcp socket");
+    await client.ok("session.start", {
+      sessionId: "run-session",
+      agent: "claude",
+      env: { TEMPO_RUN_ID: "run-id", TEMPO_RUN_OUTPUT_KIND: "plan", FAKE_STATE_DIR: h.app.config.stateDir },
+      browser: "local",
+    });
+    const call = viaSocket(h.app.config.mcpSocket);
+
+    const list = await handleMcpMessage(
+      { id: 1, method: "tools/list" },
+      call,
+      "run-session",
+      "run-id",
+      "plan",
+    );
+
+    expect(list).toMatchObject({
+      result: {
+        tools: expect.arrayContaining([
+          {
+            name: "report_result",
+            description: expect.any(String),
+            inputSchema: expect.objectContaining({
+              required: expect.arrayContaining(["steps"]),
+              additionalProperties: false,
+            }),
+          },
+        ]),
+      },
+    });
+
+    const request = {
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "report_result",
+        arguments: { status: "done", summary: "private report", steps: [{ text: "Build" }] },
+      },
+    } as const;
+
+    const pending = handleMcpMessage(request, call, "run-session", "run-id", "plan");
+    await client.waitFor(() => client.raw.some((m) => m.type === "tool.req"), 5000, "report request");
+    const frame = client.raw.find((m) => m.type === "tool.req")!;
+    expect(frame).toMatchObject({
+      type: "tool.req",
+      op: "report_result",
+      sessionId: "run-session",
+      runId: "run-id",
+      params: request.params.arguments,
+    });
+    client.send({
+      type: "tool.res",
+      id: frame.id,
+      ok: false,
+      error: { code: "VALIDATION_FAILED", message: "Correct the steps." },
+    });
+    expect(await pending).toMatchObject({
+      result: { isError: true, content: [{ type: "text", text: "Correct the steps." }] },
+    });
+    const corrected = handleMcpMessage(request, call, "run-session", "run-id", "plan");
+    await client.waitFor(
+      () => client.raw.filter((m) => m.type === "tool.req").length === 2,
+      5000,
+      "corrected report",
+    );
+    const next = client.raw.filter((m) => m.type === "tool.req")[1]!;
+    client.send({ type: "tool.res", id: next.id, ok: true, result: {} });
+    expect(await corrected).toMatchObject({
+      result: { content: [{ type: "text", text: "Result reported." }] },
+    });
+    expect(JSON.stringify(client.events)).not.toContain("private report");
+    const stale = await handleMcpMessage(request, call, "run-session", "wrong-run", "plan");
+    expect(stale).toMatchObject({ result: { isError: true } });
+    const missing = await handleMcpMessage(request, call, "run-session");
+    expect(missing).toMatchObject({ error: { code: -32602 } });
+    const disconnected = handleMcpMessage(request, call, "run-session", "run-id", "plan");
+    await client.waitFor(
+      () => client.raw.filter((m) => m.type === "tool.req").length === 3,
+      5000,
+      "disconnect report",
+    );
+    client.close();
+    expect(await disconnected).toMatchObject({ result: { isError: true } });
   });
 });

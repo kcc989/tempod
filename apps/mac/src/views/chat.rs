@@ -78,6 +78,15 @@ impl TranscriptRow {
 
 #[derive(Clone, Debug)]
 pub enum TranscriptEvent {
+    CancelRun {
+        run_id: String,
+    },
+    SendRun {
+        run_id: String,
+    },
+    OpenRun {
+        session_id: String,
+    },
     Permission {
         request_id: String,
         option_id: String,
@@ -158,6 +167,7 @@ fn thumbnail_image(file: AttachmentFile) -> Option<Arc<Image>> {
 }
 
 pub struct TranscriptView {
+    pub runs: HashMap<String, tempo_protocol::Run>,
     rows: Vec<TranscriptRow>,
     scroller: Entity<MessageScrollerState>,
     images: Entity<LocalImageCache>,
@@ -186,6 +196,7 @@ impl TranscriptView {
         .detach();
         Self {
             rows,
+            runs: HashMap::new(),
             scroller: cx.new(|cx| MessageScrollerState::new(count, cx)),
             images: LocalImageCache::new(cx),
             open: HashMap::new(),
@@ -578,6 +589,195 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         )
 }
 
+fn run_card(
+    run_id: &str,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> gpui_kit::AnyElement {
+    let state = view
+        .update(cx, |this, _| {
+            (
+                this.runs.get(run_id).cloned(),
+                this.read_only,
+                this.can_revert,
+                this.open
+                    .get(&format!("dismiss-run:{run_id}"))
+                    .copied()
+                    .unwrap_or(false),
+            )
+        })
+        .ok();
+    let Some((Some(run), read_only, can_revert, dismissed)) = state else {
+        return div().child("Loading run…").into_any_element();
+    };
+    if dismissed {
+        return div().into_any_element();
+    }
+    let active = matches!(
+        run.status,
+        tempo_protocol::RunStatus::Queued | tempo_protocol::RunStatus::Running
+    );
+    let id = run.id.clone();
+    let mut card = v_flex()
+        .p_3()
+        .gap_2()
+        .border_1()
+        .rounded_lg()
+        .border_color(color(Token::Border, cx))
+        .child(format!("{} · @{} · {}", run.name, run.handle, run.status))
+        .child(format!(
+            "{} · {} · {} · {} tokens",
+            run.hook
+                .as_ref()
+                .map(|h| h.event.to_string())
+                .unwrap_or_else(|| "request".into()),
+            run.agent
+                .map(|a| a.to_string())
+                .unwrap_or_else(|| "waiting".into()),
+            run.access,
+            run.tokens
+        ));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(run.created_at);
+    let seconds = run
+        .ended_at
+        .unwrap_or(now)
+        .saturating_sub(run.started_at.unwrap_or(run.created_at))
+        / 1000;
+    card = card.child(format!("{seconds}s"));
+    if let Some(issues) = &run.profile_issues
+        && !issues.is_empty()
+    {
+        card = card.child(format!(
+            "Ignored settings: {}",
+            issues
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if let Some(p) = run.decision_p {
+        card = card.child(format!("Decision: {:.0}%", p * 100.));
+    }
+    if let Some(result) = &run.result {
+        card = card.child(format!("{}: {}", result.status, result.summary.as_str()));
+        for (index, step) in result.steps.iter().enumerate() {
+            card = card.child(format!(
+                "{}. {}{}",
+                index + 1,
+                step.text.as_str(),
+                if step.files.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", step.files.join(", "))
+                }
+            ));
+        }
+        if let Some(verify) = &result.verify {
+            card = card.child(format!("Verify: {}", verify.as_str()));
+        }
+        for finding in &result.findings {
+            card = card.child(format!(
+                "{} {}:{} {}",
+                if finding.blocking {
+                    "Blocking"
+                } else {
+                    "Finding"
+                },
+                finding.path,
+                finding.line.map(|l| l.to_string()).unwrap_or_default(),
+                finding.text
+            ));
+        }
+    }
+    if let Some(error) = run.error_code {
+        card = card.child(crate::errors::error_message(&error, None));
+    }
+    if run.warning.is_some() {
+        card = card.child("This read-only agent changed files.");
+        if let Some(checkpoint_id) = run.pin_checkpoint_id {
+            let view = view.clone();
+            card = card.child(
+                Button::new("run-revert")
+                    .label("Revert")
+                    .disabled(read_only || !can_revert)
+                    .on_click(move |_, _, cx| {
+                        let _ = view.update(cx, |_, cx| {
+                            cx.emit(TranscriptEvent::RevertCheckpoint {
+                                checkpoint_id: checkpoint_id.clone(),
+                            })
+                        });
+                    }),
+            );
+        }
+    }
+    if active {
+        let view = view.clone();
+        let id = id.clone();
+        card = card.child(
+            Button::new("run-cancel")
+                .label("Cancel")
+                .disabled(read_only)
+                .on_click(move |_, _, cx| {
+                    let _ = view.update(cx, |_, cx| {
+                        cx.emit(TranscriptEvent::CancelRun { run_id: id.clone() })
+                    });
+                }),
+        );
+    }
+    if run.status == tempo_protocol::RunStatus::Completed {
+        let view = view.clone();
+        let id = id.clone();
+        card = card.child(
+            Button::new("run-send")
+                .label(if run.sent_turn_id.is_some() {
+                    "Sent to chat"
+                } else if run.output_kind == tempo_protocol::OutputKind::Plan {
+                    "Approve"
+                } else {
+                    "Send to chat"
+                })
+                .disabled(
+                    read_only || run.sent_turn_id.is_some() || run.origin_session_id.is_none(),
+                )
+                .on_click(move |_, _, cx| {
+                    let _ = view.update(cx, |_, cx| {
+                        cx.emit(TranscriptEvent::SendRun { run_id: id.clone() })
+                    });
+                }),
+        );
+    }
+    if let Some(session_id) = run.session_id {
+        let view = view.clone();
+        card = card.child(Button::new("run-open").label("Open transcript").on_click(
+            move |_, _, cx| {
+                let _ = view.update(cx, |_, cx| {
+                    cx.emit(TranscriptEvent::OpenRun {
+                        session_id: session_id.clone(),
+                    })
+                });
+            },
+        ));
+    }
+    if !active {
+        card = card.child(
+            Button::new("run-dismiss")
+                .ghost()
+                .label("Dismiss")
+                .on_click(move |_, _, cx| {
+                    let _ = view.update(cx, |this, cx| {
+                        this.open.insert(format!("dismiss-run:{id}"), true);
+                        cx.notify();
+                    });
+                }),
+        );
+    }
+    card.into_any_element()
+}
+
 fn artifact_thumbnail_key(a: &tempo_protocol::ArtifactItemContent) -> String {
     format!("artifact:{}:{}", a.artifact_id, a.version)
 }
@@ -821,6 +1021,8 @@ fn render_native_row(
                         cx,
                     )
                 }
+                ItemContent::Run(c) => run_card(&c.run_id, view.clone(), cx),
+                ItemContent::AgentProposal(_) => div().into_any_element(),
                 ItemContent::Artifact(a) => artifact_card(&id, &item, a, view.clone(), cx),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {

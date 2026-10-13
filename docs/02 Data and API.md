@@ -921,8 +921,11 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | DO to tempod | `{type: "req", id, op, params}` |
 | tempod to DO | `{type: "res", id, ok: true, result}` or `{type: "res", id, ok: false, error: {code, message}}` |
 | tempod to DO | `{type: "event", seq, ts, event: {kind, ...}}` |
+| tempod to DO | `{type: "tool.req", id, op, sessionId, runId?, params}`; `op` is `report_result`, `list_agents` or `propose_agent_change` |
+| DO to tempod | `{type: "tool.res", id, ok: true, result}` or `{type: "tool.res", id, ok: false, error: {code, message}}` |
 
 - `id` is a ULID made by the DO. Each request times out after the op's limit below; the DO then treats it as failed with `TEMPOD_TIMEOUT`.
+- Agent tool frames use a daemon-created ULID, a 15-second response timeout and JSON params/results. They are sent only after hello, never enter the outbox or raw `events` log, and reject pending calls on disconnect. The daemon checks the live session/run binding; WorkspaceDO checks ownership, run state and the typed report, then redacts it before storage. ACP report/proposal tool items retain status only, without their inputs/outputs. The owner approved this request/response transport on 2026-10-13.
 - The DO acks events in batches: at most every 250 ms or every 100 events.
 - Max message size: 1 MiB. `tempod` splits larger `script.output` data.
 - `env` in `hello` holds the script env from 01 plus the project env vars, project secrets and environment secrets known at that time (01, Environments). After `settings.read`, and whenever project env vars, secrets or the environment change, the DO sends `env.set`, which replaces it for scripts and agents started later. `tempod` passes it to scripts and agents only. `overrides` in `settings.read` is the project's D1 `settings_json` (precedence 1 in 01).
@@ -938,7 +941,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `environment.set` | `{summary}`: `EnvironmentSummary` = `{name, egressPolicy, egressAllowlist, secrets: [{name, hosts, set}], injectors: [{name, hosts}], blockedHosts}`. `name` is null with no environment. `blockedHosts` = distinct hosts of `egress_log` rows with rule 7 or 10 in the last 24 h, newest first, at most 50. The DO sends it after `env.set`, and at most every 5 s after a new blocked host. | `{}` | 10 s |
 | `script.start` | `{runId, kind, scriptId, command, cwd, timeoutMs}` | `{pid}` | 10 s |
 | `script.stop` | `{runId}` | `{}` | 15 s |
-| `session.start` | `{sessionId, agent, env, modeId?, model?, profile?, browser, acpSessionId?, mcpServers?}`; `browser` is `"local"` or `"run"` (01, Browser Run); `mcpServers` is `McpServerSpec[]` (01, User MCP servers), default `[]` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, profileIssues, reloaded, handoff}` | 120 s |
+| `session.start` | `{sessionId, agent, env, modeId?, model?, profile?, access?, browser, acpSessionId?, mcpServers?}`; `browser` is `"local"` or `"run"` (01, Browser Run); `mcpServers` is `McpServerSpec[]` (01, User MCP servers), default `[]` | `{acpSessionId, modes, configOptions, availableCommands, capabilities, profileIssues, reloaded, handoff}` | 120 s |
 | `session.prompt` | `{sessionId, turnId, content}` | `{accepted: true}`; the end comes as `turn.ended` | 30 s |
 | `session.steer` | `{sessionId, turnId, messageId, content}` | `{outcome: "injected" or "promptRequired" or "unsupported"}`; the existing prompt owns the turn lifecycle | 30 s |
 | `session.cancel` | `{sessionId, turnId}` | `{}` | 20 s |

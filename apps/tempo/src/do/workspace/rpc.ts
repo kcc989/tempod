@@ -287,18 +287,24 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
 
       return core.lifecycle.list();
     },
-    requestRole: async ({ role, text, sessionId }) => {
+    requestAgent: async ({ agentId, text, sessionId }) => {
       notArchived(core);
       rt.ensureAwake();
 
-      return core.lifecycle.request(role, text, sessionId);
+      return core.lifecycle.request(agentId, text, sessionId);
     },
-    cancelRoleRun: async ({ roleRunId }) => {
-      await core.lifecycle.runs.cancel(roleRunId);
+    cancelRun: async ({ runId }) => {
+      await core.lifecycle.runs.cancel(runId);
 
       return {};
     },
-    listRoleRuns: async ({ changeId }) => core.lifecycle.listRuns(changeId),
+    listRuns: async ({ changeId }) => core.lifecycle.listRuns(changeId),
+    sendRunToChat: async ({ runId }) => {
+      notArchived(core);
+      rt.ensureAwake();
+
+      return core.lifecycle.runs.send(runId);
+    },
     listLifecycleEvents: async (input) => core.lifecycle.listEvents(input),
     getTrace: async ({ eventId }) => core.lifecycle.trace(eventId),
     getWorkspace: async () => core.detail(),
@@ -631,8 +637,8 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
 
       if (s.status === "closed") return {};
 
-      if (s.roleRunId && ["queued", "running"].includes(core.lifecycle.runs.row(s.roleRunId).status))
-        await core.lifecycle.runs.cancel(s.roleRunId);
+      if (s.runId && ["queued", "running"].includes(core.lifecycle.runs.row(s.runId).status))
+        await core.lifecycle.runs.cancel(s.runId);
       sessionBusy(core, sessionId);
       dropQueuedTurnsOf(core, sessionId);
 
@@ -661,14 +667,11 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
     }): Promise<Turn> => {
       notArchived(core);
 
-      if (/^\s*\/role(?:\s|$)/.test(text))
-        throw new TempoError("VALIDATION_FAILED", undefined, "Use requestRole for /role requests.");
+      if (/^\s*\/agent(?:\s|$)/.test(text))
+        throw new TempoError("VALIDATION_FAILED", undefined, "Use requestAgent for /agent requests.");
       const session = core.sessionRow(sessionId);
 
-      if (
-        session.roleRunId &&
-        ["queued", "running"].includes(core.lifecycle.runs.row(session.roleRunId).status)
-      )
+      if (session.runId && ["queued", "running"].includes(core.lifecycle.runs.row(session.runId).status))
         throw new TempoError("SESSION_BUSY");
 
       if (session.status === "closed")

@@ -392,6 +392,7 @@ describe("createWorkspace with a custom agent", () => {
     };
 
     const w = await seedWorkspace(o, { custom });
+    await driveToState(w.stub, ["ready"]);
 
     const sessions = await inDo(w.stub, (instance: WorkspaceDO) =>
       internals(instance).core.db.select().from(sessionsTable).all(),

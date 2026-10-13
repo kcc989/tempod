@@ -11,6 +11,7 @@ import { Store } from "~/ui/lib/store";
 // Center tabs
 export type CenterTab =
   | { readonly kind: "chat"; readonly sessionId: string }
+  | { readonly kind: "runTranscript"; readonly sessionId: string }
   | { readonly kind: "file"; readonly path: string; readonly line: number | null }
   | { readonly kind: "diff"; readonly path: string | null }
   | { readonly kind: "guide" }
@@ -29,6 +30,8 @@ export const tabKey = (t: CenterTab): string => {
   switch (t.kind) {
     case "chat":
       return `chat:${t.sessionId}`;
+    case "runTranscript":
+      return `runTranscript:${t.sessionId}`;
     case "file":
       return `file:${t.path}`;
     case "diff":
@@ -52,6 +55,8 @@ export const tabRef = (t: CenterTab): string => {
   switch (t.kind) {
     case "chat":
       return `chat:${t.sessionId}`;
+    case "runTranscript":
+      return `runTranscript:${t.sessionId}`;
     case "file":
       return `file:${t.path}:${t.line ?? ""}`;
     case "diff":
@@ -77,6 +82,8 @@ export const parseTabRef = (ref: string): CenterTab | null => {
   switch (kind) {
     case "chat":
       return rest ? { kind: "chat", sessionId: rest } : null;
+    case "runTranscript":
+      return rest ? { kind: "runTranscript", sessionId: rest } : null;
     case "file": {
       const j = rest.lastIndexOf(":");
 
@@ -121,7 +128,7 @@ export interface OpenTab {
   readonly seq: number;
 }
 
-export type RightTab = "changes" | "files" | "checks" | "artifacts";
+export type RightTab = "changes" | "files" | "checks" | "artifacts" | "activity";
 
 export type BottomTab = "setup" | "run" | "terminal";
 

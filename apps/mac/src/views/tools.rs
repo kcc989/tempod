@@ -20,6 +20,7 @@ pub enum Tool {
     Files,
     Checks,
     Artifacts,
+    Activity,
     Setup,
     Run,
     Terminal,
@@ -32,6 +33,7 @@ impl Tool {
             Self::Files => "Files",
             Self::Checks => "Checks",
             Self::Artifacts => "Artifacts",
+            Self::Activity => "Activity",
             Self::Setup => "Setup",
             Self::Run => "Run",
             Self::Terminal => "Terminal",
@@ -39,17 +41,24 @@ impl Tool {
         }
     }
 }
-const TOOLS: [Tool; 8] = [
+const TOOLS: [Tool; 9] = [
     Tool::Browser,
     Tool::Files,
     Tool::Terminal,
     Tool::Changes,
     Tool::Checks,
     Tool::Artifacts,
+    Tool::Activity,
     Tool::Setup,
     Tool::Run,
 ];
-const REVIEW: [Tool; 4] = [Tool::Changes, Tool::Files, Tool::Checks, Tool::Artifacts];
+const REVIEW: [Tool; 5] = [
+    Tool::Changes,
+    Tool::Files,
+    Tool::Checks,
+    Tool::Artifacts,
+    Tool::Activity,
+];
 const PROCESSES: [Tool; 3] = [Tool::Setup, Tool::Run, Tool::Terminal];
 #[derive(Clone)]
 pub struct RevealTools;

@@ -103,6 +103,8 @@ export const EMPTY_PROMPT: TurnPrompt = { text: "", mentions: [], attachmentIds:
 export type ItemContent<K extends ItemKind = ItemKind> = (typeof ITEM_CONTENT)[K]["Type"];
 
 const ITEM_DEFAULTS = {
+  run: { runId: "" },
+  agent_proposal: { proposalId: "" },
   user_message: { text: "", mentions: [], attachments: [], reviewCommentIds: [] },
   agent_message: { text: "" },
   agent_thought: { text: "" },

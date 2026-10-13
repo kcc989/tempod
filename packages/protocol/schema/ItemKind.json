@@ -13,6 +13,8 @@
     "handoff",
     "revert_marker",
     "error",
-    "artifact"
+    "artifact",
+    "run",
+    "agent_proposal"
   ]
 }

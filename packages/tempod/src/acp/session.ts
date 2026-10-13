@@ -384,6 +384,7 @@ export class AgentSession {
   }
   /** Steps 4 to 7 of "Start a session", or the reload path (01, Sessions). */
   async start(p: {
+    access?: "read-only" | "write" | undefined;
     modeId?: string | null;
     model?: string | null;
     browser?: BrowserMode;
@@ -418,6 +419,7 @@ export class AgentSession {
       this.deps.bridge,
       p.browser ?? "local",
       this.sessionId,
+      this.env,
     ).filter((s) => !(profile.dropPlaywright && s.name === PLAYWRIGHT_MCP_SERVER.name));
 
     const meta = profile.meta ? { _meta: profile.meta } : {};
@@ -467,10 +469,25 @@ export class AgentSession {
 
     const state = this.mapper.state;
 
-    if (p.modeId && p.modeId !== state.modeId) {
+    let requestedMode = p.modeId;
+
+    if (p.access === "read-only") {
+      const known = { claude: "plan", codex: "read-only", opencode: "plan", pi: null }[this.agent];
+      const offered = known && state.modes.some((m) => m.id === known);
+
+      if (offered) requestedMode = known;
+      else {
+        requestedMode = null;
+
+        if (this.agent !== "pi") issues.add("access");
+      }
+    }
+
+    if (requestedMode && requestedMode !== state.modeId) {
       try {
-        await this.setMode(p.modeId);
+        await this.setMode(requestedMode);
       } catch (e) {
+        if (p.access === "read-only") issues.add("access");
         this.deps.log.warn("setting the mode failed", { sessionId: this.sessionId, error: errorText(e) });
       }
     }
@@ -517,7 +534,7 @@ export class AgentSession {
       }
     }
 
-    this.profileIssues = p.profile ? [...issues] : [];
+    this.profileIssues = p.profile || p.access === "read-only" ? [...issues] : [];
     this.started = true;
 
     return this.result(reloaded, handoff);
