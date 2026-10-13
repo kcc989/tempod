@@ -227,3 +227,12 @@ See `IMPLEMENTATION_NOTES.md`:
 Core continues on `codex/complete-tempo-core`, based on published `b1ba351` (the original cloud checkout was `1984b89`; the named integration branch was deleted after PR #1 merged). The cloud change adds atomic daemon-event application and replay after failures, accepts fast turn lifecycle events before prompt acknowledgements, persists checkpoint request identities and regenerates immutable checkpoint bundles, excludes daemon SQLite/outbox files from home backups, and fixes aborted requests and health probes. Concurrent adapter starts now preserve the process limit. ACP v1 mode config options drive the mode choices, selection and setters when advertised; the evaluated TUI-v2 snapshot provided no protocol advantage, so OpenCode remains pinned at 1.18.35. A native DO abort/reacquisition test verifies recovery of waiting setup without rerunning its script. The owner resolved Q-1 (a safety checkpoint is required before revert) and MQ-1 (optional `latestMacClientSha256` in version 1 metadata); specs, generated TypeScript/Rust contracts and fixtures are updated.
 
 Deployment tooling has a local `--prepare` mode and a review configuration under `docs/deployment/`. Cloud image builds use temporary CA mounts with TLS verification; Linux runners can mount source/dependencies read-only into the full image for daemon tests. This section does not close hosted gates or replace their real-account evidence. Exact commands, results, SHAs and remaining inputs are in `CORE-RESULTS.md`.
+
+## Phase 6 implementation (PR #25)
+
+- [x] M1: closed lifecycle schemas, transactional cause ingestion, durable dispatch, trace/pagination APIs and Events diagnostics in web and Mac.
+- [x] M2: built-in/user/repo role files, D1 storage and precedence, frozen role runs, checkpoints/access checks, bounded results and continuations, personal/project settings and `/role`/`@` requests in both clients.
+- [x] M3: exact triggers, agent selection, write-run serialization, all budgets and timeouts, change completion, built-in planner/coder/CI/reviewer chain and terminal `ROLE_LIMIT` behavior.
+- [x] Local Worker integration, shared TypeScript/Rust fixtures, both client test suites and full-image daemon verification.
+- [ ] S21: real-agent continuation/result-file spike. See `spikes/S21.md` for the evidence boundary and procedure.
+- [ ] Gate H: deployed real-login acceptance, three consecutive runs after Gate B. No deployment or real-agent acceptance was performed for this implementation.

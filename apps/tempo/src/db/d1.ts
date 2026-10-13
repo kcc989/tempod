@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { primaryKey, check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
@@ -169,3 +169,16 @@ export type WorkspaceRow = typeof workspaces.$inferSelect;
 export type EnvironmentRow = typeof environments.$inferSelect;
 export type McpServerRow = typeof mcpServers.$inferSelect;
 export type InstallationRow = typeof githubInstallations.$inferSelect;
+
+export const userRoles = sqliteTable(
+  "user_roles",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    text: text("text").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.name] })],
+);

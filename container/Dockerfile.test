@@ -6,7 +6,7 @@ RUN install -d -o tempo -g tempo /opt/tempo
 USER tempo
 WORKDIR /opt/tempo
 COPY --chown=tempo:tempo . .
-RUN --mount=type=secret,id=proxy_ca \
+RUN --mount=type=secret,id=proxy_ca,mode=0444 \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
     bun install --frozen-lockfile
 ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "--cwd", "packages/tempod", "test"]

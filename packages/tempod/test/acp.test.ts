@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, symlinkSync } from "node:fs";
+import { rmSync, existsSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { MAX_MESSAGE_BYTES, type SessionStartResult } from "@tempo/protocol";
 import { TRUNCATED } from "../src/bounds.ts";
@@ -69,6 +69,26 @@ const textOf = (c: DoClient, itemId: string): string => {
     .map((e) => e.append.text);
   return String(created?.item.content["text"] ?? "") + deltas.join("");
 };
+
+test.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")(
+  "role results use the ACP filesystem callbacks under /home/tempo/roles",
+  async () => {
+    const { start, prompt, ended, c } = await setup();
+    const dir = `/home/tempo/roles/test-${Date.now()}`;
+    try {
+      await start("role-session");
+      await prompt("role-session", "role-write", `write ${dir}/result.json`);
+      await ended("role-write");
+      expect(existsSync(`${dir}/result.json`)).toBe(true);
+      await prompt("role-session", "role-read", `read ${dir}/result.json`);
+      await ended("role-read");
+      expect(c.of("turn.ended").find((e) => e.turnId === "role-read")?.error).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  T,
+);
 
 describe("session.start", () => {
   test(

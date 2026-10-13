@@ -107,7 +107,7 @@ export const ItemView = memo(function ItemView({
     case "permission":
       return <Permission ctx={ctx} item={item} />;
     case "notice":
-      return <Notice item={item} />;
+      return <Notice item={item} ctx={ctx} />;
     case "handoff":
       return (
         <Collapsed label="Session restarted; transcript handed to the agent" text={item.content.text} mono />
@@ -517,7 +517,8 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
   );
 }
 
-function Notice({ item }: { item: ItemOf<"notice"> }) {
+function Notice({ item, ctx }: { item: ItemOf<"notice">; ctx: ItemContext }) {
+  const revert = useCallMutation("revertToCheckpoint");
   const { level, text } = item.content;
   return (
     <p
@@ -530,6 +531,18 @@ function Notice({ item }: { item: ItemOf<"notice"> }) {
       )}
     >
       {text}
+      {item.content.checkpointId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={revert.isPending}
+          onClick={() =>
+            revert.mutate({ workspaceId: ctx.workspaceId, checkpointId: item.content.checkpointId! })
+          }
+        >
+          Revert
+        </Button>
+      )}
     </p>
   );
 }

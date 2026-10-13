@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleRunFailedPayload",
+  "type": "object",
+  "properties": {
+    "role": {
+      "$ref": "RoleName.json"
+    },
+    "round": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "errorCode": {
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["role", "round", "errorCode"],
+  "additionalProperties": true
+}

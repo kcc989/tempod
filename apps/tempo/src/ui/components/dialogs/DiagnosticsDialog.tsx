@@ -1,3 +1,4 @@
+import { LifecycleEvents } from "./LifecycleEvents";
 import {
   ERROR_CODES,
   ERROR_MESSAGES,
@@ -96,6 +97,7 @@ function Body({ workspaceId }: { workspaceId: string }) {
           aria-label="Diagnostics"
           className="min-w-0 flex-1 justify-start overflow-x-auto"
         >
+          <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="ops">Ops</TabsTrigger>
           <TabsTrigger value="container">Container</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
@@ -107,6 +109,9 @@ function Body({ workspaceId }: { workspaceId: string }) {
           Refresh
         </Button>
       </div>
+      <TabsContent value="events" className="min-h-0 overflow-auto">
+        <LifecycleEvents workspaceId={workspaceId} />
+      </TabsContent>
       <TabsContent value="ops" className="min-h-0 overflow-y-auto">
         <Ops ops={data.ops} />
       </TabsContent>

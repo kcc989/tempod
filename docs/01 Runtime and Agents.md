@@ -448,6 +448,8 @@ CredentialDO holds one login attempt in memory per owner; a repeated start retur
 
 **Codex `auth.json` sync**
 
+Credential synchronization runs only while no turn is running or being checked. WorkspaceDO holds incoming offers and pushes in memory until those checks finish, then applies them before the next turn. It does not perform a remote auth refresh during a turn. Role runs treat any login-file change as an access violation (08).
+
 Codex rewrites `auth.json` when its token is about 8 days old or a request returns 401. Parallel containers each hold a copy, so Tempo keeps one newest version and pushes it everywhere.
 
 1. Before a `codex` session starts, the WorkspaceDO calls `CredentialDO.getCodexAuth()` and sends `credential.put {provider: "codex", content, version}` to `tempod`.

@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetRoleTextIn",
+  "type": "object",
+  "properties": {
+    "name": {
+      "$ref": "RoleName.json"
+    },
+    "scope": {
+      "$ref": "RoleScope.json"
+    },
+    "workspaceId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["name", "scope"],
+  "additionalProperties": true
+}

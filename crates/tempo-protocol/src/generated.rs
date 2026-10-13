@@ -567,6 +567,14 @@ impl<'de> ::serde::Deserialize<'de> for CancelCodexLoginInLoginId {
             })
     }
 }
+///`CancelRoleRunIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CancelRoleRunIn {
+    #[serde(rename = "roleRunId")]
+    pub role_run_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
 ///`CancelTurnIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CancelTurnIn {
@@ -660,6 +668,8 @@ pub struct CheckpointInfo {
     PartialOrd,
 )]
 pub enum CheckpointReason {
+    #[serde(rename = "role_pin")]
+    RolePin,
     #[serde(rename = "turn_end")]
     TurnEnd,
     #[serde(rename = "pre_revert")]
@@ -674,6 +684,7 @@ pub enum CheckpointReason {
 impl ::std::fmt::Display for CheckpointReason {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
+            Self::RolePin => f.write_str("role_pin"),
             Self::TurnEnd => f.write_str("turn_end"),
             Self::PreRevert => f.write_str("pre_revert"),
             Self::PreSleep => f.write_str("pre_sleep"),
@@ -686,6 +697,7 @@ impl ::std::str::FromStr for CheckpointReason {
     type Err = self::error::ConversionError;
     fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
         match value {
+            "role_pin" => Ok(Self::RolePin),
             "turn_end" => Ok(Self::TurnEnd),
             "pre_revert" => Ok(Self::PreRevert),
             "pre_sleep" => Ok(Self::PreSleep),
@@ -1762,6 +1774,11 @@ pub struct DeleteReviewCommentIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`DeleteUserRoleIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeleteUserRoleIn {
+    pub name: RoleName,
+}
 ///`DeleteWorkspaceIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeleteWorkspaceIn {
@@ -2252,6 +2269,28 @@ pub enum ErrorCode {
     CustomAgentLimit,
     #[serde(rename = "ARTIFACTS_ERROR")]
     ArtifactsError,
+    #[serde(rename = "EVENT_INVALID")]
+    EventInvalid,
+    #[serde(rename = "ROLE_NOT_FOUND")]
+    RoleNotFound,
+    #[serde(rename = "ROLE_NOT_REQUESTABLE")]
+    RoleNotRequestable,
+    #[serde(rename = "ROLE_INVALID")]
+    RoleInvalid,
+    #[serde(rename = "ROLE_LIMIT")]
+    RoleLimit,
+    #[serde(rename = "ROLE_NO_AGENT")]
+    RoleNoAgent,
+    #[serde(rename = "ROLE_TURN_FAILED")]
+    RoleTurnFailed,
+    #[serde(rename = "ROLE_RESULT_MISSING")]
+    RoleResultMissing,
+    #[serde(rename = "ROLE_RESULT_INVALID")]
+    RoleResultInvalid,
+    #[serde(rename = "ROLE_ACCESS_VIOLATION")]
+    RoleAccessViolation,
+    #[serde(rename = "ROLE_TIMED_OUT")]
+    RoleTimedOut,
     #[serde(rename = "INTERNAL")]
     Internal,
 }
@@ -2302,6 +2341,17 @@ impl ::std::fmt::Display for ErrorCode {
             Self::CustomAgentExists => f.write_str("CUSTOM_AGENT_EXISTS"),
             Self::CustomAgentLimit => f.write_str("CUSTOM_AGENT_LIMIT"),
             Self::ArtifactsError => f.write_str("ARTIFACTS_ERROR"),
+            Self::EventInvalid => f.write_str("EVENT_INVALID"),
+            Self::RoleNotFound => f.write_str("ROLE_NOT_FOUND"),
+            Self::RoleNotRequestable => f.write_str("ROLE_NOT_REQUESTABLE"),
+            Self::RoleInvalid => f.write_str("ROLE_INVALID"),
+            Self::RoleLimit => f.write_str("ROLE_LIMIT"),
+            Self::RoleNoAgent => f.write_str("ROLE_NO_AGENT"),
+            Self::RoleTurnFailed => f.write_str("ROLE_TURN_FAILED"),
+            Self::RoleResultMissing => f.write_str("ROLE_RESULT_MISSING"),
+            Self::RoleResultInvalid => f.write_str("ROLE_RESULT_INVALID"),
+            Self::RoleAccessViolation => f.write_str("ROLE_ACCESS_VIOLATION"),
+            Self::RoleTimedOut => f.write_str("ROLE_TIMED_OUT"),
             Self::Internal => f.write_str("INTERNAL"),
         }
     }
@@ -2354,6 +2404,17 @@ impl ::std::str::FromStr for ErrorCode {
             "CUSTOM_AGENT_EXISTS" => Ok(Self::CustomAgentExists),
             "CUSTOM_AGENT_LIMIT" => Ok(Self::CustomAgentLimit),
             "ARTIFACTS_ERROR" => Ok(Self::ArtifactsError),
+            "EVENT_INVALID" => Ok(Self::EventInvalid),
+            "ROLE_NOT_FOUND" => Ok(Self::RoleNotFound),
+            "ROLE_NOT_REQUESTABLE" => Ok(Self::RoleNotRequestable),
+            "ROLE_INVALID" => Ok(Self::RoleInvalid),
+            "ROLE_LIMIT" => Ok(Self::RoleLimit),
+            "ROLE_NO_AGENT" => Ok(Self::RoleNoAgent),
+            "ROLE_TURN_FAILED" => Ok(Self::RoleTurnFailed),
+            "ROLE_RESULT_MISSING" => Ok(Self::RoleResultMissing),
+            "ROLE_RESULT_INVALID" => Ok(Self::RoleResultInvalid),
+            "ROLE_ACCESS_VIOLATION" => Ok(Self::RoleAccessViolation),
+            "ROLE_TIMED_OUT" => Ok(Self::RoleTimedOut),
             "INTERNAL" => Ok(Self::Internal),
             _ => Err("invalid value".into()),
         }
@@ -2450,6 +2511,30 @@ pub struct GetProjectConversationIn {
     pub conversation_id: ::std::string::String,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
+}
+///`GetRoleTextIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetRoleTextIn {
+    pub name: RoleName,
+    pub scope: RoleScope,
+    #[serde(
+        rename = "workspaceId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub workspace_id: ::std::option::Option<::std::string::String>,
+}
+///`GetRoleTextOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetRoleTextOut {
+    pub text: ::std::string::String,
+}
+///`GetTraceIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetTraceIn {
+    #[serde(rename = "eventId")]
+    pub event_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
 }
 ///`GetWorkspaceIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -2930,6 +3015,818 @@ impl ::std::convert::TryFrom<::std::string::String> for ItemStatus {
         value.parse()
     }
 }
+///`LifecycleAgentSource`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleAgentSource {
+    #[serde(rename = "agent")]
+    Agent,
+}
+impl ::std::fmt::Display for LifecycleAgentSource {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Agent => f.write_str("agent"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleAgentSource {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "agent" => Ok(Self::Agent),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleAgentSource {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleAgentSource {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`LifecycleBranchPushedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleBranchPushedPayload {
+    pub branch: ::std::string::String,
+    #[serde(rename = "commitSha")]
+    pub commit_sha: ::std::string::String,
+}
+///`LifecycleChangeCreatedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleChangeCreatedPayload {
+    pub origin: LifecycleChangeCreatedPayloadOrigin,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub role: ::std::option::Option<RoleName>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub text: ::std::option::Option<LifecycleChangeCreatedPayloadText>,
+}
+///`LifecycleChangeCreatedPayloadOrigin`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleChangeCreatedPayloadOrigin {
+    #[serde(rename = "prompt")]
+    Prompt,
+    #[serde(rename = "request")]
+    Request,
+    #[serde(rename = "event")]
+    Event,
+}
+impl ::std::fmt::Display for LifecycleChangeCreatedPayloadOrigin {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Prompt => f.write_str("prompt"),
+            Self::Request => f.write_str("request"),
+            Self::Event => f.write_str("event"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleChangeCreatedPayloadOrigin {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "prompt" => Ok(Self::Prompt),
+            "request" => Ok(Self::Request),
+            "event" => Ok(Self::Event),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleChangeCreatedPayloadOrigin {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleChangeCreatedPayloadOrigin {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`LifecycleChangeCreatedPayloadText`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LifecycleChangeCreatedPayloadText(::std::string::String);
+impl ::std::ops::Deref for LifecycleChangeCreatedPayloadText {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LifecycleChangeCreatedPayloadText> for ::std::string::String {
+    fn from(value: LifecycleChangeCreatedPayloadText) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LifecycleChangeCreatedPayloadText {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 65536usize {
+            return Err("longer than 65536 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleChangeCreatedPayloadText {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleChangeCreatedPayloadText {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LifecycleChangeCreatedPayloadText {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`LifecycleChangeEndedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleChangeEndedPayload {
+    pub status: LifecycleChangeEndedPayloadStatus,
+}
+///`LifecycleChangeEndedPayloadStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleChangeEndedPayloadStatus {
+    #[serde(rename = "done")]
+    Done,
+    #[serde(rename = "failed")]
+    Failed,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+}
+impl ::std::fmt::Display for LifecycleChangeEndedPayloadStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Done => f.write_str("done"),
+            Self::Failed => f.write_str("failed"),
+            Self::Cancelled => f.write_str("cancelled"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleChangeEndedPayloadStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "done" => Ok(Self::Done),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleChangeEndedPayloadStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleChangeEndedPayloadStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`LifecycleCheckPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleCheckPayload {
+    #[serde(rename = "prNumber")]
+    pub pr_number: i64,
+}
+///`LifecycleEvent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type")]
+pub enum LifecycleEvent {
+    #[serde(rename = "tempo.change.created")]
+    TempoChangeCreated {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleChangeCreatedPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "agent.turn.ended")]
+    AgentTurnEnded {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleTurnEndedPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleAgentSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "role.run.started")]
+    RoleRunStarted {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleRunStartedPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleRoleSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "role.run.completed")]
+    RoleRunCompleted {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleRunCompletedPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleRoleSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "role.run.failed")]
+    RoleRunFailed {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleRunFailedPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleRoleSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "tempo.change.ended")]
+    TempoChangeEnded {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleChangeEndedPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "tempo.branch.pushed")]
+    TempoBranchPushed {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleBranchPushedPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "tempo.check.passed")]
+    TempoCheckPassed {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleCheckPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "tempo.check.failed")]
+    TempoCheckFailed {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleCheckPayload,
+        #[serde(
+            rename = "roleRunId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        role_run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+}
+///`LifecycleLogEvent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleLogEvent {
+    pub event: LifecycleEvent,
+    pub seq: i64,
+}
+///`LifecyclePage`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecyclePage {
+    pub events: ::std::vec::Vec<LifecycleLogEvent>,
+    #[serde(
+        rename = "nextBeforeSeq",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub next_before_seq: ::std::option::Option<i64>,
+}
+///`LifecycleRoleSource`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleRoleSource {
+    #[serde(rename = "role")]
+    Role,
+}
+impl ::std::fmt::Display for LifecycleRoleSource {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Role => f.write_str("role"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleRoleSource {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "role" => Ok(Self::Role),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleRoleSource {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleRoleSource {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`LifecycleRunCompletedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleRunCompletedPayload {
+    pub result: RoleResult,
+    pub role: RoleName,
+    pub round: i64,
+}
+///`LifecycleRunFailedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleRunFailedPayload {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub detail: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "errorCode")]
+    pub error_code: ::std::string::String,
+    pub role: RoleName,
+    pub round: i64,
+}
+///`LifecycleRunStartedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleRunStartedPayload {
+    pub access: RoleAccess,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub agent: ::std::option::Option<AgentId>,
+    pub role: RoleName,
+    #[serde(rename = "roleSha")]
+    pub role_sha: ::std::string::String,
+    pub round: i64,
+    pub scope: RoleScope,
+}
+///`LifecycleTempoSource`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleTempoSource {
+    #[serde(rename = "tempo")]
+    Tempo,
+}
+impl ::std::fmt::Display for LifecycleTempoSource {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Tempo => f.write_str("tempo"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleTempoSource {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "tempo" => Ok(Self::Tempo),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleTempoSource {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleTempoSource {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`LifecycleTrace`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleTrace {
+    pub chain: ::std::vec::Vec<LifecycleLogEvent>,
+    pub children: ::std::vec::Vec<LifecycleLogEvent>,
+    pub runs: ::std::vec::Vec<RoleRun>,
+}
+///`LifecycleTurnEndedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleTurnEndedPayload {
+    #[serde(
+        rename = "errorCode",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub error_code: ::std::option::Option<::std::string::String>,
+    pub status: LifecycleTurnEndedPayloadStatus,
+    #[serde(
+        rename = "stopReason",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub stop_reason: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub usage: ::std::option::Option<TurnUsage>,
+}
+///`LifecycleTurnEndedPayloadStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleTurnEndedPayloadStatus {
+    #[serde(rename = "completed")]
+    Completed,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "failed")]
+    Failed,
+    #[serde(rename = "interrupted")]
+    Interrupted,
+}
+impl ::std::fmt::Display for LifecycleTurnEndedPayloadStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Completed => f.write_str("completed"),
+            Self::Cancelled => f.write_str("cancelled"),
+            Self::Failed => f.write_str("failed"),
+            Self::Interrupted => f.write_str("interrupted"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleTurnEndedPayloadStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "completed" => Ok(Self::Completed),
+            "cancelled" => Ok(Self::Cancelled),
+            "failed" => Ok(Self::Failed),
+            "interrupted" => Ok(Self::Interrupted),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleTurnEndedPayloadStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleTurnEndedPayloadStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`LinkProjectIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct LinkProjectIn {
@@ -3056,6 +3953,24 @@ impl ::std::convert::TryFrom<::std::string::String> for ListInstallationsItemAcc
         value.parse()
     }
 }
+///`ListLifecycleEventsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListLifecycleEventsIn {
+    #[serde(
+        rename = "beforeSeq",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub before_seq: ::std::option::Option<f64>,
+    #[serde(
+        rename = "changeId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub change_id: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub limit: ::std::option::Option<f64>,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
 ///`ListOpenPullRequestsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ListOpenPullRequestsIn {
@@ -3101,6 +4016,26 @@ pub struct ListProjectSecretNamesOut {
 pub struct ListReviewCommentsIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`ListRoleRunsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListRoleRunsIn {
+    #[serde(
+        rename = "changeId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub change_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`ListRolesIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct ListRolesIn {
+    #[serde(
+        rename = "workspaceId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub workspace_id: ::std::option::Option<::std::string::String>,
 }
 ///`ListScriptRunsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3579,6 +4514,11 @@ pub enum NewSource {
 ///`NoticeContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct NoticeContent {
+    #[serde(
+        rename = "checkpointId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub checkpoint_id: ::std::option::Option<::std::string::String>,
     pub level: NoticeLevel,
     pub text: ::std::string::String,
 }
@@ -4304,6 +5244,12 @@ pub struct Project {
     #[serde(rename = "sortOrder")]
     pub sort_order: f64,
 }
+///`PutUserRoleIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PutUserRoleIn {
+    pub name: ::std::string::String,
+    pub text: ::std::string::String,
+}
 ///`ReadFileAtIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ReadFileAtIn {
@@ -4515,6 +5461,12 @@ pub struct RefreshPullRequestOut {
     )]
     pub pr_title: ::std::option::Option<::std::string::String>,
 }
+///`ReloadRolesIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ReloadRolesIn {
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
 ///`RenameBranchIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct RenameBranchIn {
@@ -4595,6 +5547,28 @@ pub struct ReorderQueueIn {
     pub turn_ids: ::std::vec::Vec<::std::string::String>,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`RequestRoleIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RequestRoleIn {
+    pub role: RoleName,
+    #[serde(
+        rename = "sessionId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub session_id: ::std::option::Option<::std::string::String>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub text: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`RequestRoleOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RequestRoleOut {
+    #[serde(rename = "changeId")]
+    pub change_id: ::std::string::String,
+    #[serde(rename = "roleRunId")]
+    pub role_run_id: ::std::string::String,
 }
 ///`RerunSetupIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4822,6 +5796,714 @@ impl ::std::convert::TryFrom<::std::string::String> for ReviewStatus {
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
+}
+///`RoleAccess`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RoleAccess {
+    #[serde(rename = "read-only")]
+    ReadOnly,
+    #[serde(rename = "write")]
+    Write,
+}
+impl ::std::fmt::Display for RoleAccess {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::ReadOnly => f.write_str("read-only"),
+            Self::Write => f.write_str("write"),
+        }
+    }
+}
+impl ::std::str::FromStr for RoleAccess {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "read-only" => Ok(Self::ReadOnly),
+            "write" => Ok(Self::Write),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleAccess {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleAccess {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RoleAgent`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RoleAgent {
+    #[serde(rename = "claude")]
+    Claude,
+    #[serde(rename = "codex")]
+    Codex,
+    #[serde(rename = "opencode")]
+    Opencode,
+    #[serde(rename = "pi")]
+    Pi,
+    #[serde(rename = "auto")]
+    Auto,
+    #[serde(rename = "other")]
+    Other,
+}
+impl ::std::fmt::Display for RoleAgent {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Claude => f.write_str("claude"),
+            Self::Codex => f.write_str("codex"),
+            Self::Opencode => f.write_str("opencode"),
+            Self::Pi => f.write_str("pi"),
+            Self::Auto => f.write_str("auto"),
+            Self::Other => f.write_str("other"),
+        }
+    }
+}
+impl ::std::str::FromStr for RoleAgent {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "claude" => Ok(Self::Claude),
+            "codex" => Ok(Self::Codex),
+            "opencode" => Ok(Self::Opencode),
+            "pi" => Ok(Self::Pi),
+            "auto" => Ok(Self::Auto),
+            "other" => Ok(Self::Other),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleAgent {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleAgent {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RoleFile`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RoleFile {
+    pub access: RoleAccess,
+    pub agent: RoleAgent,
+    pub description: RoleFileDescription,
+    pub inputs: ::std::vec::Vec<::std::string::String>,
+    pub limits: RoleLimits,
+    pub model: ::std::string::String,
+    pub on: ::std::vec::Vec<RoleTrigger>,
+    pub requestable: bool,
+}
+///`RoleFileDescription`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct RoleFileDescription(::std::string::String);
+impl ::std::ops::Deref for RoleFileDescription {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RoleFileDescription> for ::std::string::String {
+    fn from(value: RoleFileDescription) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for RoleFileDescription {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 500usize {
+            return Err("longer than 500 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleFileDescription {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleFileDescription {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for RoleFileDescription {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`RoleFinding`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RoleFinding {
+    pub blocking: bool,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub line: ::std::option::Option<::std::num::NonZeroU64>,
+    pub path: ::std::string::String,
+    pub text: ::std::string::String,
+}
+///`RoleInfo`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RoleInfo {
+    pub access: RoleAccess,
+    pub agent: RoleAgent,
+    pub description: ::std::string::String,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub error: ::std::option::Option<::std::string::String>,
+    pub limits: RoleLimits,
+    pub name: ::std::string::String,
+    pub on: ::std::vec::Vec<RoleTrigger>,
+    pub requestable: bool,
+    pub scope: RoleScope,
+    pub sha: ::std::string::String,
+    #[serde(
+        rename = "shadowedBy",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub shadowed_by: ::std::option::Option<RoleScope>,
+}
+///`RoleLimits`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RoleLimits {
+    pub continues: i64,
+    pub rounds: ::std::num::NonZeroU64,
+    pub timeout: ::std::string::String,
+    pub tokens: i64,
+}
+///`RoleName`
+#[derive(
+    ::serde::Deserialize, ::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd,
+)]
+#[serde(transparent)]
+pub struct RoleName(pub ::std::string::String);
+impl ::std::ops::Deref for RoleName {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RoleName> for ::std::string::String {
+    fn from(value: RoleName) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::std::string::String> for RoleName {
+    fn from(value: ::std::string::String) -> Self {
+        Self(value)
+    }
+}
+impl ::std::fmt::Display for RoleName {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl ::std::str::FromStr for RoleName {
+    type Err = ::std::convert::Infallible;
+    fn from_str(value: &str) -> ::std::result::Result<Self, Self::Err> {
+        Ok(Self(value.to_string()))
+    }
+}
+///`RoleResult`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RoleResult {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub findings: ::std::option::Option<::std::vec::Vec<RoleFinding>>,
+    pub status: RoleResultStatus,
+    pub summary: RoleResultSummary,
+}
+///`RoleResultStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RoleResultStatus {
+    #[serde(rename = "done")]
+    Done,
+    #[serde(rename = "pass")]
+    Pass,
+    #[serde(rename = "fail")]
+    Fail,
+    #[serde(rename = "blocked")]
+    Blocked,
+}
+impl ::std::fmt::Display for RoleResultStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Done => f.write_str("done"),
+            Self::Pass => f.write_str("pass"),
+            Self::Fail => f.write_str("fail"),
+            Self::Blocked => f.write_str("blocked"),
+        }
+    }
+}
+impl ::std::str::FromStr for RoleResultStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "done" => Ok(Self::Done),
+            "pass" => Ok(Self::Pass),
+            "fail" => Ok(Self::Fail),
+            "blocked" => Ok(Self::Blocked),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleResultStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleResultStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RoleResultSummary`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct RoleResultSummary(::std::string::String);
+impl ::std::ops::Deref for RoleResultSummary {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RoleResultSummary> for ::std::string::String {
+    fn from(value: RoleResultSummary) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for RoleResultSummary {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 4000usize {
+            return Err("longer than 4000 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleResultSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleResultSummary {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for RoleResultSummary {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`RoleRun`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RoleRun {
+    pub access: RoleAccess,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub agent: ::std::option::Option<AgentId>,
+    #[serde(rename = "changeId")]
+    pub change_id: ::std::string::String,
+    #[serde(rename = "continuesUsed")]
+    pub continues_used: i64,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(
+        rename = "deadlineAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub deadline_at: ::std::option::Option<i64>,
+    pub depth: i64,
+    #[serde(
+        rename = "endedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub ended_at: ::std::option::Option<i64>,
+    #[serde(
+        rename = "errorCode",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub error_code: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "errorDetail",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub error_detail: ::std::option::Option<::std::string::String>,
+    pub id: ::std::string::String,
+    #[serde(
+        rename = "parentRunId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub parent_run_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "pinCheckpointId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub pin_checkpoint_id: ::std::option::Option<::std::string::String>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub result: ::std::option::Option<RoleResult>,
+    #[serde(rename = "roleName")]
+    pub role_name: RoleName,
+    #[serde(rename = "roleSha")]
+    pub role_sha: ::std::string::String,
+    pub round: i64,
+    pub scope: RoleScope,
+    #[serde(
+        rename = "sessionId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub session_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "startedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub started_at: ::std::option::Option<i64>,
+    pub status: RoleRunStatus,
+    pub tokens: i64,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub trigger: ::std::option::Option<RoleTrigger>,
+    #[serde(rename = "triggerEventId")]
+    pub trigger_event_id: ::std::string::String,
+}
+///`RoleRunStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RoleRunStatus {
+    #[serde(rename = "queued")]
+    Queued,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "completed")]
+    Completed,
+    #[serde(rename = "failed")]
+    Failed,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "timed_out")]
+    TimedOut,
+}
+impl ::std::fmt::Display for RoleRunStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Queued => f.write_str("queued"),
+            Self::Running => f.write_str("running"),
+            Self::Completed => f.write_str("completed"),
+            Self::Failed => f.write_str("failed"),
+            Self::Cancelled => f.write_str("cancelled"),
+            Self::TimedOut => f.write_str("timed_out"),
+        }
+    }
+}
+impl ::std::str::FromStr for RoleRunStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "running" => Ok(Self::Running),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            "timed_out" => Ok(Self::TimedOut),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleRunStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleRunStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RoleScope`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RoleScope {
+    #[serde(rename = "builtin")]
+    Builtin,
+    #[serde(rename = "user")]
+    User,
+    #[serde(rename = "repo")]
+    Repo,
+}
+impl ::std::fmt::Display for RoleScope {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Builtin => f.write_str("builtin"),
+            Self::User => f.write_str("user"),
+            Self::Repo => f.write_str("repo"),
+        }
+    }
+}
+impl ::std::str::FromStr for RoleScope {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "builtin" => Ok(Self::Builtin),
+            "user" => Ok(Self::User),
+            "repo" => Ok(Self::Repo),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleScope {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleScope {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RoleTrigger`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(tag = "event")]
+pub enum RoleTrigger {
+    #[serde(rename = "role.run.completed")]
+    RoleRunCompleted {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        role: ::std::option::Option<RoleName>,
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        status: ::std::option::Option<RoleResultStatus>,
+    },
+    #[serde(rename = "role.run.failed")]
+    RoleRunFailed {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        role: ::std::option::Option<RoleName>,
+    },
+    #[serde(rename = "agent.turn.ended")]
+    AgentTurnEnded {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        session: ::std::option::Option<RoleTriggerSession>,
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        status: ::std::option::Option<RoleTriggerStatus>,
+    },
+    #[serde(rename = "tempo.branch.pushed")]
+    TempoBranchPushed,
+    #[serde(rename = "tempo.check.passed")]
+    TempoCheckPassed,
+    #[serde(rename = "tempo.check.failed")]
+    TempoCheckFailed,
+    #[serde(rename = "tempo.change.created")]
+    TempoChangeCreated,
+}
+///`RoleTriggerSession`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RoleTriggerSession {
+    #[serde(rename = "user")]
+    User,
+    #[serde(rename = "role")]
+    Role,
+}
+impl ::std::fmt::Display for RoleTriggerSession {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::User => f.write_str("user"),
+            Self::Role => f.write_str("role"),
+        }
+    }
+}
+impl ::std::str::FromStr for RoleTriggerSession {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "user" => Ok(Self::User),
+            "role" => Ok(Self::Role),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleTriggerSession {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleTriggerSession {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RoleTriggerStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum RoleTriggerStatus {
+    #[serde(rename = "completed")]
+    Completed,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "failed")]
+    Failed,
+    #[serde(rename = "interrupted")]
+    Interrupted,
+}
+impl ::std::fmt::Display for RoleTriggerStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Completed => f.write_str("completed"),
+            Self::Cancelled => f.write_str("cancelled"),
+            Self::Failed => f.write_str("failed"),
+            Self::Interrupted => f.write_str("interrupted"),
+        }
+    }
+}
+impl ::std::str::FromStr for RoleTriggerStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "completed" => Ok(Self::Completed),
+            "cancelled" => Ok(Self::Cancelled),
+            "failed" => Ok(Self::Failed),
+            "interrupted" => Ok(Self::Interrupted),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for RoleTriggerStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RoleTriggerStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`RolesSettings`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RolesSettings {
+    pub enabled: bool,
+    pub max_chain_depth: ::std::num::NonZeroU64,
+    pub max_runs_per_change: ::std::num::NonZeroU64,
+    pub max_tokens_per_change: i64,
 }
 ///`RotatePreviewKeyIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -5243,6 +6925,11 @@ pub struct Session {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub profile_issues: ::std::option::Option<::std::vec::Vec<ProfileIssue>>,
+    #[serde(
+        rename = "roleRunId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub role_run_id: ::std::option::Option<::std::string::String>,
     #[serde(rename = "sortOrder")]
     pub sort_order: f64,
     pub status: SessionStatus,
@@ -5651,6 +7338,8 @@ pub struct Settings {
         ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
     pub git: SettingsGit,
     pub prompts: SettingsPrompts,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub roles: ::std::option::Option<RolesSettings>,
     pub scripts: SettingsScripts,
 }
 ///`SettingsAgent`
@@ -5721,6 +7410,8 @@ pub struct SettingsLayer {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub prompts: ::std::option::Option<SettingsLayerPrompts>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub roles: ::std::option::Option<SettingsLayerRoles>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub scripts: ::std::option::Option<SettingsLayerScripts>,
 }
 ///`SettingsLayerAgent`
@@ -5776,6 +7467,18 @@ pub struct SettingsLayerGit {
 pub struct SettingsLayerPrompts {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub general: ::std::option::Option<::std::string::String>,
+}
+///`SettingsLayerRoles`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct SettingsLayerRoles {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub enabled: ::std::option::Option<bool>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub max_chain_depth: ::std::option::Option<::std::num::NonZeroU64>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub max_runs_per_change: ::std::option::Option<::std::num::NonZeroU64>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub max_tokens_per_change: ::std::option::Option<i64>,
 }
 ///`SettingsLayerScripts`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
@@ -6520,6 +8223,7 @@ pub enum WorkspaceServerMessage {
     Workspace(WsWorkspace),
     Session(WsSession),
     Turn(WsTurn),
+    RoleRun(WsRoleRun),
     TurnDeleted(WsTurnDeleted),
     Permission(WsPermission),
     ScriptOutput(WsScriptOutput),
@@ -6562,6 +8266,11 @@ impl ::std::convert::From<WsSession> for WorkspaceServerMessage {
 impl ::std::convert::From<WsTurn> for WorkspaceServerMessage {
     fn from(value: WsTurn) -> Self {
         Self::Turn(value)
+    }
+}
+impl ::std::convert::From<WsRoleRun> for WorkspaceServerMessage {
+    fn from(value: WsRoleRun) -> Self {
+        Self::RoleRun(value)
     }
 }
 impl ::std::convert::From<WsTurnDeleted> for WorkspaceServerMessage {
@@ -7270,6 +8979,60 @@ impl ::std::convert::TryFrom<::std::string::String> for WsPongType {
         value.parse()
     }
 }
+///`WsRoleRun`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct WsRoleRun {
+    pub run: RoleRun,
+    #[serde(rename = "type")]
+    pub type_: WsRoleRunType,
+}
+///`WsRoleRunType`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum WsRoleRunType {
+    #[serde(rename = "roleRun")]
+    RoleRun,
+}
+impl ::std::fmt::Display for WsRoleRunType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::RoleRun => f.write_str("roleRun"),
+        }
+    }
+}
+impl ::std::str::FromStr for WsRoleRunType {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "roleRun" => Ok(Self::RoleRun),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for WsRoleRunType {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for WsRoleRunType {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`WsScriptOutput`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct WsScriptOutput {
@@ -7719,6 +9482,15 @@ pub mod api {
         type Input = crate::CancelCodexLoginIn;
         type Output = crate::Empty;
     }
+    /// `cancelRoleRun`
+    #[derive(Clone, Copy, Debug)]
+    pub struct CancelRoleRun;
+    impl crate::Function for CancelRoleRun {
+        const NAME: &'static str = "cancelRoleRun";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::CancelRoleRunIn;
+        type Output = crate::Empty;
+    }
     /// `cancelTurn`
     #[derive(Clone, Copy, Debug)]
     pub struct CancelTurn;
@@ -7863,6 +9635,15 @@ pub mod api {
         type Input = crate::DeleteReviewCommentIn;
         type Output = crate::Empty;
     }
+    /// `deleteUserRole`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DeleteUserRole;
+    impl crate::Function for DeleteUserRole {
+        const NAME: &'static str = "deleteUserRole";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::DeleteUserRoleIn;
+        type Output = crate::Empty;
+    }
     /// `deleteWorkspace`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteWorkspace;
@@ -7943,6 +9724,24 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::GetProjectConversationIn;
         type Output = crate::ConversationArtifact;
+    }
+    /// `getRoleText`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetRoleText;
+    impl crate::Function for GetRoleText {
+        const NAME: &'static str = "getRoleText";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetRoleTextIn;
+        type Output = crate::GetRoleTextOut;
+    }
+    /// `getTrace`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetTrace;
+    impl crate::Function for GetTrace {
+        const NAME: &'static str = "getTrace";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetTraceIn;
+        type Output = crate::LifecycleTrace;
     }
     /// `getWorkspace`
     #[derive(Clone, Copy, Debug)]
@@ -8043,6 +9842,15 @@ pub mod api {
         type Input = crate::Empty;
         type Output = ::std::vec::Vec<crate::ListInstallationsItem>;
     }
+    /// `listLifecycleEvents`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListLifecycleEvents;
+    impl crate::Function for ListLifecycleEvents {
+        const NAME: &'static str = "listLifecycleEvents";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListLifecycleEventsIn;
+        type Output = crate::LifecyclePage;
+    }
     /// `listMcpServers`
     #[derive(Clone, Copy, Debug)]
     pub struct ListMcpServers;
@@ -8105,6 +9913,24 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListReviewCommentsIn;
         type Output = ::std::vec::Vec<crate::ReviewComment>;
+    }
+    /// `listRoleRuns`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListRoleRuns;
+    impl crate::Function for ListRoleRuns {
+        const NAME: &'static str = "listRoleRuns";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListRoleRunsIn;
+        type Output = ::std::vec::Vec<crate::RoleRun>;
+    }
+    /// `listRoles`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListRoles;
+    impl crate::Function for ListRoles {
+        const NAME: &'static str = "listRoles";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListRolesIn;
+        type Output = ::std::vec::Vec<crate::RoleInfo>;
     }
     /// `listScriptRuns`
     #[derive(Clone, Copy, Debug)]
@@ -8178,6 +10004,15 @@ pub mod api {
         type Input = crate::PollCodexLoginIn;
         type Output = crate::PollCodexLoginOut;
     }
+    /// `putUserRole`
+    #[derive(Clone, Copy, Debug)]
+    pub struct PutUserRole;
+    impl crate::Function for PutUserRole {
+        const NAME: &'static str = "putUserRole";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::PutUserRoleIn;
+        type Output = crate::RoleInfo;
+    }
     /// `readFile`
     #[derive(Clone, Copy, Debug)]
     pub struct ReadFile;
@@ -8204,6 +10039,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::RefreshPullRequestIn;
         type Output = crate::RefreshPullRequestOut;
+    }
+    /// `reloadRoles`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ReloadRoles;
+    impl crate::Function for ReloadRoles {
+        const NAME: &'static str = "reloadRoles";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::ReloadRolesIn;
+        type Output = ::std::vec::Vec<crate::RoleInfo>;
     }
     /// `renameBranch`
     #[derive(Clone, Copy, Debug)]
@@ -8240,6 +10084,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::ReorderQueueIn;
         type Output = crate::Empty;
+    }
+    /// `requestRole`
+    #[derive(Clone, Copy, Debug)]
+    pub struct RequestRole;
+    impl crate::Function for RequestRole {
+        const NAME: &'static str = "requestRole";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::RequestRoleIn;
+        type Output = crate::RequestRoleOut;
     }
     /// `rerunSetup`
     #[derive(Clone, Copy, Debug)]
@@ -8507,6 +10360,7 @@ pub mod api {
         ("addReviewComment", crate::Method::Post),
         ("archiveWorkspace", crate::Method::Post),
         ("cancelCodexLogin", crate::Method::Post),
+        ("cancelRoleRun", crate::Method::Post),
         ("cancelTurn", crate::Method::Post),
         ("closeSession", crate::Method::Post),
         ("commitAndPush", crate::Method::Post),
@@ -8523,6 +10377,7 @@ pub mod api {
         ("deleteProjectSecret", crate::Method::Post),
         ("deleteQueuedTurn", crate::Method::Post),
         ("deleteReviewComment", crate::Method::Post),
+        ("deleteUserRole", crate::Method::Post),
         ("deleteWorkspace", crate::Method::Post),
         ("editQueuedTurn", crate::Method::Post),
         ("getBrowserLiveView", crate::Method::Post),
@@ -8532,6 +10387,8 @@ pub mod api {
         ("getDiagnostics", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
+        ("getRoleText", crate::Method::Get),
+        ("getTrace", crate::Method::Get),
         ("getWorkspace", crate::Method::Get),
         ("linkProject", crate::Method::Post),
         ("listArtifacts", crate::Method::Get),
@@ -8543,6 +10400,7 @@ pub mod api {
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
         ("listInstallations", crate::Method::Get),
+        ("listLifecycleEvents", crate::Method::Get),
         ("listMcpServers", crate::Method::Get),
         ("listModels", crate::Method::Get),
         ("listOpenPullRequests", crate::Method::Get),
@@ -8550,6 +10408,8 @@ pub mod api {
         ("listProjectSecretNames", crate::Method::Get),
         ("listProjects", crate::Method::Get),
         ("listReviewComments", crate::Method::Get),
+        ("listRoleRuns", crate::Method::Get),
+        ("listRoles", crate::Method::Get),
         ("listScriptRuns", crate::Method::Get),
         ("listTerminals", crate::Method::Get),
         ("listWorkspaces", crate::Method::Get),
@@ -8558,13 +10418,16 @@ pub mod api {
         ("openArtifact", crate::Method::Post),
         ("openPreview", crate::Method::Post),
         ("pollCodexLogin", crate::Method::Post),
+        ("putUserRole", crate::Method::Post),
         ("readFile", crate::Method::Get),
         ("readFileAt", crate::Method::Get),
         ("refreshPullRequest", crate::Method::Post),
+        ("reloadRoles", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
         ("renameSession", crate::Method::Post),
         ("renameWorkspace", crate::Method::Post),
         ("reorderQueue", crate::Method::Post),
+        ("requestRole", crate::Method::Post),
         ("rerunSetup", crate::Method::Post),
         ("resolveEnvironmentProposal", crate::Method::Post),
         ("respondPermission", crate::Method::Post),
@@ -8618,6 +10481,7 @@ pub mod wire {
         "Attention",
         "AvailableCommand",
         "CancelCodexLoginIn",
+        "CancelRoleRunIn",
         "CancelTurnIn",
         "Capabilities",
         "ChangedFile",
@@ -8657,6 +10521,7 @@ pub mod wire {
         "DeleteProjectSecretIn",
         "DeleteQueuedTurnIn",
         "DeleteReviewCommentIn",
+        "DeleteUserRoleIn",
         "DeleteWorkspaceIn",
         "Diagnostics",
         "DiffScope",
@@ -8679,6 +10544,9 @@ pub mod wire {
         "GetFileDiffIn",
         "GetFileDiffOut",
         "GetProjectConversationIn",
+        "GetRoleTextIn",
+        "GetRoleTextOut",
+        "GetTraceIn",
         "GetWorkspaceIn",
         "HandoffContent",
         "HubHello",
@@ -8692,6 +10560,21 @@ pub mod wire {
         "Item",
         "ItemKind",
         "ItemStatus",
+        "LifecycleAgentSource",
+        "LifecycleBranchPushedPayload",
+        "LifecycleChangeCreatedPayload",
+        "LifecycleChangeEndedPayload",
+        "LifecycleCheckPayload",
+        "LifecycleEvent",
+        "LifecycleLogEvent",
+        "LifecyclePage",
+        "LifecycleRoleSource",
+        "LifecycleRunCompletedPayload",
+        "LifecycleRunFailedPayload",
+        "LifecycleRunStartedPayload",
+        "LifecycleTempoSource",
+        "LifecycleTrace",
+        "LifecycleTurnEndedPayload",
         "LinkProjectIn",
         "ListArtifactsIn",
         "ListBranchesIn",
@@ -8703,6 +10586,7 @@ pub mod wire {
         "ListInstallationReposIn",
         "ListInstallationReposItem",
         "ListInstallationsItem",
+        "ListLifecycleEventsIn",
         "ListOpenPullRequestsIn",
         "ListOpenPullRequestsItem",
         "ListProjectConversationsIn",
@@ -8710,6 +10594,8 @@ pub mod wire {
         "ListProjectSecretNamesIn",
         "ListProjectSecretNamesOut",
         "ListReviewCommentsIn",
+        "ListRoleRunsIn",
+        "ListRolesIn",
         "ListScriptRunsIn",
         "ListTerminalsIn",
         "ListTerminalsItem",
@@ -8750,16 +10636,20 @@ pub mod wire {
         "PrState",
         "ProfileIssue",
         "Project",
+        "PutUserRoleIn",
         "ReadFileAtIn",
         "ReadFileAtOut",
         "ReadFileIn",
         "ReadFileOut",
         "RefreshPullRequestIn",
         "RefreshPullRequestOut",
+        "ReloadRolesIn",
         "RenameBranchIn",
         "RenameSessionIn",
         "RenameWorkspaceIn",
         "ReorderQueueIn",
+        "RequestRoleIn",
+        "RequestRoleOut",
         "RerunSetupIn",
         "ResolveEnvironmentProposalIn",
         "RespondPermissionIn",
@@ -8769,6 +10659,20 @@ pub mod wire {
         "ReviewComment",
         "ReviewSide",
         "ReviewStatus",
+        "RoleAccess",
+        "RoleAgent",
+        "RoleFile",
+        "RoleFinding",
+        "RoleInfo",
+        "RoleLimits",
+        "RoleName",
+        "RoleResult",
+        "RoleResultStatus",
+        "RoleRun",
+        "RoleRunStatus",
+        "RoleScope",
+        "RoleTrigger",
+        "RolesSettings",
         "RotatePreviewKeyIn",
         "RunMode",
         "RunScript",
@@ -8812,6 +10716,7 @@ pub mod wire {
         "Turn",
         "TurnPrompt",
         "TurnStatus",
+        "TurnUsage",
         "UnlinkProjectIn",
         "UpdateEnvironmentIn",
         "UpdateProjectSettingsIn",
@@ -8831,6 +10736,7 @@ pub mod wire {
         "WsItems",
         "WsPermission",
         "WsPong",
+        "WsRoleRun",
         "WsScriptOutput",
         "WsScriptRun",
         "WsSession",
@@ -8862,6 +10768,7 @@ pub mod wire {
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
             "CancelCodexLoginIn" => crate::roundtrip::<crate::CancelCodexLoginIn>(text),
+            "CancelRoleRunIn" => crate::roundtrip::<crate::CancelRoleRunIn>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
             "Capabilities" => crate::roundtrip::<crate::Capabilities>(text),
             "ChangedFile" => crate::roundtrip::<crate::ChangedFile>(text),
@@ -8905,6 +10812,7 @@ pub mod wire {
             "DeleteProjectSecretIn" => crate::roundtrip::<crate::DeleteProjectSecretIn>(text),
             "DeleteQueuedTurnIn" => crate::roundtrip::<crate::DeleteQueuedTurnIn>(text),
             "DeleteReviewCommentIn" => crate::roundtrip::<crate::DeleteReviewCommentIn>(text),
+            "DeleteUserRoleIn" => crate::roundtrip::<crate::DeleteUserRoleIn>(text),
             "DeleteWorkspaceIn" => crate::roundtrip::<crate::DeleteWorkspaceIn>(text),
             "Diagnostics" => crate::roundtrip::<crate::Diagnostics>(text),
             "DiffScope" => crate::roundtrip::<crate::DiffScope>(text),
@@ -8927,6 +10835,9 @@ pub mod wire {
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
             "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
+            "GetRoleTextIn" => crate::roundtrip::<crate::GetRoleTextIn>(text),
+            "GetRoleTextOut" => crate::roundtrip::<crate::GetRoleTextOut>(text),
+            "GetTraceIn" => crate::roundtrip::<crate::GetTraceIn>(text),
             "GetWorkspaceIn" => crate::roundtrip::<crate::GetWorkspaceIn>(text),
             "HandoffContent" => crate::roundtrip::<crate::HandoffContent>(text),
             "HubHello" => crate::roundtrip::<crate::HubHello>(text),
@@ -8940,6 +10851,35 @@ pub mod wire {
             "Item" => crate::roundtrip::<crate::Item>(text),
             "ItemKind" => crate::roundtrip::<crate::ItemKind>(text),
             "ItemStatus" => crate::roundtrip::<crate::ItemStatus>(text),
+            "LifecycleAgentSource" => crate::roundtrip::<crate::LifecycleAgentSource>(text),
+            "LifecycleBranchPushedPayload" => {
+                crate::roundtrip::<crate::LifecycleBranchPushedPayload>(text)
+            }
+            "LifecycleChangeCreatedPayload" => {
+                crate::roundtrip::<crate::LifecycleChangeCreatedPayload>(text)
+            }
+            "LifecycleChangeEndedPayload" => {
+                crate::roundtrip::<crate::LifecycleChangeEndedPayload>(text)
+            }
+            "LifecycleCheckPayload" => crate::roundtrip::<crate::LifecycleCheckPayload>(text),
+            "LifecycleEvent" => crate::roundtrip::<crate::LifecycleEvent>(text),
+            "LifecycleLogEvent" => crate::roundtrip::<crate::LifecycleLogEvent>(text),
+            "LifecyclePage" => crate::roundtrip::<crate::LifecyclePage>(text),
+            "LifecycleRoleSource" => crate::roundtrip::<crate::LifecycleRoleSource>(text),
+            "LifecycleRunCompletedPayload" => {
+                crate::roundtrip::<crate::LifecycleRunCompletedPayload>(text)
+            }
+            "LifecycleRunFailedPayload" => {
+                crate::roundtrip::<crate::LifecycleRunFailedPayload>(text)
+            }
+            "LifecycleRunStartedPayload" => {
+                crate::roundtrip::<crate::LifecycleRunStartedPayload>(text)
+            }
+            "LifecycleTempoSource" => crate::roundtrip::<crate::LifecycleTempoSource>(text),
+            "LifecycleTrace" => crate::roundtrip::<crate::LifecycleTrace>(text),
+            "LifecycleTurnEndedPayload" => {
+                crate::roundtrip::<crate::LifecycleTurnEndedPayload>(text)
+            }
             "LinkProjectIn" => crate::roundtrip::<crate::LinkProjectIn>(text),
             "ListArtifactsIn" => crate::roundtrip::<crate::ListArtifactsIn>(text),
             "ListBranchesIn" => crate::roundtrip::<crate::ListBranchesIn>(text),
@@ -8953,6 +10893,7 @@ pub mod wire {
                 crate::roundtrip::<crate::ListInstallationReposItem>(text)
             }
             "ListInstallationsItem" => crate::roundtrip::<crate::ListInstallationsItem>(text),
+            "ListLifecycleEventsIn" => crate::roundtrip::<crate::ListLifecycleEventsIn>(text),
             "ListOpenPullRequestsIn" => crate::roundtrip::<crate::ListOpenPullRequestsIn>(text),
             "ListOpenPullRequestsItem" => crate::roundtrip::<crate::ListOpenPullRequestsItem>(text),
             "ListProjectConversationsIn" => {
@@ -8966,6 +10907,8 @@ pub mod wire {
                 crate::roundtrip::<crate::ListProjectSecretNamesOut>(text)
             }
             "ListReviewCommentsIn" => crate::roundtrip::<crate::ListReviewCommentsIn>(text),
+            "ListRoleRunsIn" => crate::roundtrip::<crate::ListRoleRunsIn>(text),
+            "ListRolesIn" => crate::roundtrip::<crate::ListRolesIn>(text),
             "ListScriptRunsIn" => crate::roundtrip::<crate::ListScriptRunsIn>(text),
             "ListTerminalsIn" => crate::roundtrip::<crate::ListTerminalsIn>(text),
             "ListTerminalsItem" => crate::roundtrip::<crate::ListTerminalsItem>(text),
@@ -9008,16 +10951,20 @@ pub mod wire {
             "PrState" => crate::roundtrip::<crate::PrState>(text),
             "ProfileIssue" => crate::roundtrip::<crate::ProfileIssue>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
+            "PutUserRoleIn" => crate::roundtrip::<crate::PutUserRoleIn>(text),
             "ReadFileAtIn" => crate::roundtrip::<crate::ReadFileAtIn>(text),
             "ReadFileAtOut" => crate::roundtrip::<crate::ReadFileAtOut>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
             "ReadFileOut" => crate::roundtrip::<crate::ReadFileOut>(text),
             "RefreshPullRequestIn" => crate::roundtrip::<crate::RefreshPullRequestIn>(text),
             "RefreshPullRequestOut" => crate::roundtrip::<crate::RefreshPullRequestOut>(text),
+            "ReloadRolesIn" => crate::roundtrip::<crate::ReloadRolesIn>(text),
             "RenameBranchIn" => crate::roundtrip::<crate::RenameBranchIn>(text),
             "RenameSessionIn" => crate::roundtrip::<crate::RenameSessionIn>(text),
             "RenameWorkspaceIn" => crate::roundtrip::<crate::RenameWorkspaceIn>(text),
             "ReorderQueueIn" => crate::roundtrip::<crate::ReorderQueueIn>(text),
+            "RequestRoleIn" => crate::roundtrip::<crate::RequestRoleIn>(text),
+            "RequestRoleOut" => crate::roundtrip::<crate::RequestRoleOut>(text),
             "RerunSetupIn" => crate::roundtrip::<crate::RerunSetupIn>(text),
             "ResolveEnvironmentProposalIn" => {
                 crate::roundtrip::<crate::ResolveEnvironmentProposalIn>(text)
@@ -9029,6 +10976,20 @@ pub mod wire {
             "ReviewComment" => crate::roundtrip::<crate::ReviewComment>(text),
             "ReviewSide" => crate::roundtrip::<crate::ReviewSide>(text),
             "ReviewStatus" => crate::roundtrip::<crate::ReviewStatus>(text),
+            "RoleAccess" => crate::roundtrip::<crate::RoleAccess>(text),
+            "RoleAgent" => crate::roundtrip::<crate::RoleAgent>(text),
+            "RoleFile" => crate::roundtrip::<crate::RoleFile>(text),
+            "RoleFinding" => crate::roundtrip::<crate::RoleFinding>(text),
+            "RoleInfo" => crate::roundtrip::<crate::RoleInfo>(text),
+            "RoleLimits" => crate::roundtrip::<crate::RoleLimits>(text),
+            "RoleName" => crate::roundtrip::<crate::RoleName>(text),
+            "RoleResult" => crate::roundtrip::<crate::RoleResult>(text),
+            "RoleResultStatus" => crate::roundtrip::<crate::RoleResultStatus>(text),
+            "RoleRun" => crate::roundtrip::<crate::RoleRun>(text),
+            "RoleRunStatus" => crate::roundtrip::<crate::RoleRunStatus>(text),
+            "RoleScope" => crate::roundtrip::<crate::RoleScope>(text),
+            "RoleTrigger" => crate::roundtrip::<crate::RoleTrigger>(text),
+            "RolesSettings" => crate::roundtrip::<crate::RolesSettings>(text),
             "RotatePreviewKeyIn" => crate::roundtrip::<crate::RotatePreviewKeyIn>(text),
             "RunMode" => crate::roundtrip::<crate::RunMode>(text),
             "RunScript" => crate::roundtrip::<crate::RunScript>(text),
@@ -9074,6 +11035,7 @@ pub mod wire {
             "Turn" => crate::roundtrip::<crate::Turn>(text),
             "TurnPrompt" => crate::roundtrip::<crate::TurnPrompt>(text),
             "TurnStatus" => crate::roundtrip::<crate::TurnStatus>(text),
+            "TurnUsage" => crate::roundtrip::<crate::TurnUsage>(text),
             "UnlinkProjectIn" => crate::roundtrip::<crate::UnlinkProjectIn>(text),
             "UpdateEnvironmentIn" => crate::roundtrip::<crate::UpdateEnvironmentIn>(text),
             "UpdateProjectSettingsIn" => crate::roundtrip::<crate::UpdateProjectSettingsIn>(text),
@@ -9093,6 +11055,7 @@ pub mod wire {
             "WsItems" => crate::roundtrip::<crate::WsItems>(text),
             "WsPermission" => crate::roundtrip::<crate::WsPermission>(text),
             "WsPong" => crate::roundtrip::<crate::WsPong>(text),
+            "WsRoleRun" => crate::roundtrip::<crate::WsRoleRun>(text),
             "WsScriptOutput" => crate::roundtrip::<crate::WsScriptOutput>(text),
             "WsScriptRun" => crate::roundtrip::<crate::WsScriptRun>(text),
             "WsSession" => crate::roundtrip::<crate::WsSession>(text),

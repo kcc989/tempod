@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RequestRoleOut",
+  "type": "object",
+  "properties": {
+    "changeId": {
+      "type": "string"
+    },
+    "roleRunId": {
+      "type": "string"
+    }
+  },
+  "required": ["changeId", "roleRunId"],
+  "additionalProperties": true
+}

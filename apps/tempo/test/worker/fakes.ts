@@ -221,6 +221,7 @@ export class FakeTempod {
 }
 
 export const DEFAULT_EFFECTIVE = {
+  roles: { enabled: true, max_chain_depth: 10, max_runs_per_change: 20, max_tokens_per_change: 0 },
   agent: { default: "claude", models: { claude: "", codex: "", opencode: "", pi: "" } },
   browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },

@@ -1,3 +1,4 @@
+import { RolesTab } from "~/ui/components/dialogs/settings/RolesTab";
 import {
   ArrowLeftIcon,
   BellIcon,
@@ -44,6 +45,7 @@ const PERSONAL = [
     description: "Custom agents with their own prompt, tools, model and reasoning level.",
     icon: BotIcon,
   },
+  { id: "roles", label: "Roles", description: "Agent jobs triggered by events or requests.", icon: BotIcon },
   {
     id: "environments",
     label: "Environments",
@@ -227,6 +229,7 @@ export function SettingsPage() {
           {tab === "general" && <NotificationsTab />}
           {tab === "logins" && <LoginsTab />}
           {tab === "agents" && <AgentsTab />}
+          {tab === "roles" && <RolesTab />}
           {tab === "environments" && <EnvironmentsTab />}
           {tab === "mcp" && <McpServersTab />}
           {tab === "appearance" && <AppearanceTab />}

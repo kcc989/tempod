@@ -20,9 +20,13 @@ impl ListDelegate for FilePicker {
         _: &mut Context<ListState<Self>>,
     ) -> Option<Self::Item> {
         self.paths.get(ix.row).map(|path| {
-            ListItem::new(ix)
-                .accessibility_label(path.clone())
-                .child(div().min_w_0().truncate().child(path.clone()))
+            ListItem::new(ix).accessibility_label(path.clone()).child(
+                div().min_w_0().truncate().child(if path.starts_with("@") {
+                    format!("Roles · {path}")
+                } else {
+                    path.clone()
+                }),
+            )
         })
     }
     fn set_selected_index(

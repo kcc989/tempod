@@ -52,7 +52,7 @@ These words join the vocabulary in 00. Use them exactly.
 
 | Type | Source | When | Payload | Caused by |
 | --- | --- | --- | --- | --- |
-| `tempo.change.created` | `tempo` | A turn is queued in a session with no `role_run_id`, or `requestRole` is called | `origin: "prompt" or "request"`, `role?`, `text?` | Nothing (origin) |
+| `tempo.change.created` | `tempo` | A user-origin turn is queued (including in a retained chat after its role ends), or `requestRole` is called | `origin: "prompt", "request" or "event"`, `role?`, `text?` | Nothing (origin) |
 | `agent.turn.ended` | `agent` | `turn.ended` from `tempod` | `status: "completed", "cancelled", "failed" or "interrupted"`, `stopReason`, `errorCode?`, `usage?` | The change's `tempo.change.created`, or the run's `role.run.started` |
 | `role.run.started` | `role` | A role run is inserted | `role, scope, roleSha, round, agent, access` | The event that triggered it |
 | `role.run.completed` | `role` | A valid result is stored | `role, round, result` | The run's last `agent.turn.ended` |
@@ -64,7 +64,7 @@ These words join the vocabulary in 00. Use them exactly.
 - `status` in `agent.turn.ended` uses the turn status rules in 03.
 - `tempo.change.ended` status: `cancelled` if the user cancelled the change's last run; else `failed` if its last role run failed; else `done`.
 - Status polling runs only while a UI socket is open (03), so `tempo.check.*` arrives only then.
-- `tempo.branch.pushed` and `tempo.check.*` belong to the newest open change, if one exists.
+- `tempo.branch.pushed` and `tempo.check.*` belong to the newest open change. If none exists and an enabled role matches, create a change with `origin: "event"` in the same transaction, and use its created event as the cause.
 
 **Dedupe keys**
 
@@ -158,7 +158,7 @@ When two scopes have a role with the same name, the workspace uses `repo`, then 
 
 ## Storage
 
-**WorkspaceDO SQLite** (migration `0006_lifecycle`)
+**WorkspaceDO SQLite** (migration `0009_lifecycle`)
 
 ```sql
 CREATE TABLE lifecycle_events (
@@ -218,7 +218,7 @@ ALTER TABLE turns ADD COLUMN origin TEXT NOT NULL DEFAULT 'user' CHECK (origin I
 - Lifecycle events and role runs are kept until the workspace is deleted. The `housekeeping` op does not prune them.
 - Readers order events by `seq`, not `occurred_at`.
 
-**D1** (migration `0001_user_roles`)
+**D1** (migration `0004_user_roles`)
 
 ```sql
 CREATE TABLE user_roles (
@@ -238,7 +238,7 @@ After the transaction that writes events commits, the WorkspaceDO runs dispatch.
 
 1. Take undispatched events in `seq` order.
 2. Find the roles with a trigger that matches the event. Skip all of them if `roles.enabled` is false.
-3. Apply the limits (Limits). A role that fails a limit gets `role.run.failed` with `ROLE_LIMIT`.
+3. Apply the limits (Limits). A role that fails a limit gets `role.run.failed` with `ROLE_LIMIT`. A `ROLE_LIMIT` failure is terminal and does not trigger roles, so cyclic failure handlers stop.
 4. Insert a role run for each match, with its `role.run.started`, in one transaction. `UNIQUE (trigger_event_id, role_name)` makes a repeat do nothing.
 5. Set `dispatched_at`. Then check whether the event's change has ended.
 
@@ -265,6 +265,7 @@ A crash during dispatch leaves `dispatched_at` null. The DO constructor runs dis
 - Other sessions keep working. Their turns can run between the run's turns.
 - `cancelRoleRun` cancels the running turn, deletes the session's queued turns, and sets the run `cancelled`.
 - A continue turn is not the first prompt of the session, so the turn-summary rule and `prompts.general` are not added again (01).
+- After the run ends, ordinary user prompts in its retained chat create new changes. They carry no `roleRunId` in lifecycle events and do not restart role checks or add usage to the ended run. The session keeps its role reference for its title and status.
 
 **Timeout.** `deadline_at` joins the single alarm (03, Step runner). When it passes, send `session.cancel`, set the run `timed_out`, and emit `role.run.failed` with `ROLE_TIMED_OUT`.
 
@@ -317,7 +318,7 @@ A missing input is the text `(none)`.
 | Runs per change | At most `roles.max_runs_per_change` |
 | Tokens | `limits.tokens` per run; `roles.max_tokens_per_change` per change. Checked before each turn of a run. 0 means no cap. |
 | Timeout | `limits.timeout` per run |
-| Logins | Role runs MUST NOT change agent login files or the static agent config files (01) |
+| Logins | Role runs MUST NOT change agent login files or the static agent config files (01). Hash the protected files before the prompt and compare at turn end; any change fails with `ROLE_ACCESS_VIOLATION`. There is no refresh exception during a turn. |
 
 A limit hit fails the run with `ROLE_LIMIT` and names the limit in `detail`.
 
@@ -415,7 +416,7 @@ These join the table in 02.
 | `apps/tempo/src/do/workspace/lifecycle.ts` | Append, dispatch, change end |
 | `apps/tempo/src/do/workspace/role-runs.ts` | Run lifecycle, write lock, read-only check, result check |
 | `apps/tempo/src/server/handlers/roles.ts` | Role server functions |
-| `apps/tempo/src/db/` | D1 migration `0001_user_roles`, DO migration `0006_lifecycle` |
+| `apps/tempo/src/db/` | D1 migration `0004_user_roles`, DO migration `0009_lifecycle` |
 | `spikes/S21.md` | Spike result |
 
 No new dependencies.

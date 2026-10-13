@@ -40,6 +40,15 @@ export interface CenterTabKindDef<K extends CenterTabKind> {
 
 function ChatTitle({ workspaceId, tab }: CenterTabProps<"chat">) {
   const session = useWorkspaceSelector(workspaceId, (s) => s.sessions[tab.sessionId]);
+  const run = useWorkspaceSelector(workspaceId, (s) =>
+    session?.roleRunId ? s.roleRuns[session.roleRunId] : undefined,
+  );
+  if (run)
+    return (
+      <>
+        {run.roleName} #{run.round} · {run.status}
+      </>
+    );
   const tooltip = sessionTooltip(session);
   return tooltip ? <span title={tooltip}>{sessionTitle(session)}</span> : <>{sessionTitle(session)}</>;
 }

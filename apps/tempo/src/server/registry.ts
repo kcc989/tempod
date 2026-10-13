@@ -1,3 +1,4 @@
+import * as roles from "./handlers/roles.ts";
 import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protocol";
 import * as conversations from "./handlers/conversations.ts";
 import * as agents from "./handlers/agents.ts";
@@ -17,6 +18,8 @@ import type { Handler } from "./run.ts";
 type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
 
 const own: { [K in NonWorkspace]: Handler<K> } = {
+  putUserRole: roles.putUserRole,
+  deleteUserRole: roles.deleteUserRole,
   listInstallationRepos: projects.listInstallationReposFn,
   listInstallations: projects.listInstallations,
   linkProject: projects.linkProject,
@@ -62,4 +65,6 @@ export const HANDLERS = {
   ...own,
   ...Object.fromEntries(WORKSPACE_FNS.map((n) => [n, viaWorkspace(n)])),
   createSession,
+  listRoles: roles.listRoles,
+  getRoleText: roles.getRoleText,
 } as { [K in FnName]: Handler<K> };

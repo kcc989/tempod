@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleRunCompletedPayload",
+  "type": "object",
+  "properties": {
+    "role": {
+      "$ref": "RoleName.json"
+    },
+    "round": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "result": {
+      "$ref": "RoleResult.json"
+    }
+  },
+  "required": ["role", "round", "result"],
+  "additionalProperties": true
+}

@@ -46,6 +46,17 @@ pub fn error_text(code: &str) -> &'static str {
         "CUSTOM_AGENT_LIMIT" => "You have the most custom agents allowed. Delete one first.",
         "ARTIFACTS_ERROR" => "Could not reach agent storage. Try again.",
         "EGRESS_BLOCKED" => "(Shown only in the egress log.)",
+        "EVENT_INVALID" => "(Logged only.)",
+        "ROLE_NOT_FOUND" => "No role with that name.",
+        "ROLE_NOT_REQUESTABLE" => "This role can't be started by hand.",
+        "ROLE_INVALID" => "The role file is not valid.",
+        "ROLE_LIMIT" => "A role limit stopped this run.",
+        "ROLE_NO_AGENT" => "No agent can run this role. Add a login in Settings.",
+        "ROLE_TURN_FAILED" => "The role's agent stopped before it finished.",
+        "ROLE_RESULT_MISSING" => "The role did not report a result.",
+        "ROLE_RESULT_INVALID" => "The role's result was not valid.",
+        "ROLE_ACCESS_VIOLATION" => "This read-only role changed files.",
+        "ROLE_TIMED_OUT" => "The role ran out of time.",
         _ => "Something went wrong.",
     }
 }

@@ -133,6 +133,7 @@ export const WorkspaceDetail = Schema.Struct({
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
 
 export const Session = Schema.Struct({
+  roleRunId: Schema.optional(Schema.String),
   id: Schema.String,
   agent: AgentId,
   title: Schema.String,
@@ -224,7 +225,11 @@ export const PermissionContent = Schema.Struct({
   options: Schema.Array(PermissionOption),
   chosenOptionId: Schema.optional(N(Schema.String)),
 });
-export const NoticeContent = Schema.Struct({ level: NoticeLevel, text: Schema.String });
+export const NoticeContent = Schema.Struct({
+  level: NoticeLevel,
+  text: Schema.String,
+  checkpointId: Schema.optional(Schema.String),
+});
 export const HandoffContent = Schema.Struct({ text: Schema.String });
 export const RevertMarkerContent = Schema.Struct({ checkpointId: Schema.String, toTurnSeq: Schema.Number });
 export const ErrorContent = Schema.Struct({ code: Schema.String, detail: Schema.optional(N(Schema.String)) });

@@ -58,6 +58,7 @@ pub fn diagnostics_input(
 }
 
 pub struct DiagnosticsView {
+    events: Entity<super::roles::EventsView>,
     client: tempo_client::Client,
     id: String,
     data: Option<p::Diagnostics>,
@@ -77,6 +78,8 @@ impl DiagnosticsView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let events =
+            cx.new(|cx| super::roles::EventsView::new(client.clone(), id.clone(), window, cx));
         let host = cx.new(|cx| InputState::new(window, cx).placeholder("Filter by host"));
         let status =
             cx.new(|cx| SelectState::new(status_choices(), Some(IndexPath::default()), window, cx));
@@ -98,6 +101,7 @@ impl DiagnosticsView {
         ];
         let mut this = Self {
             client,
+            events,
             id,
             data: None,
             tab: 0,
@@ -205,11 +209,14 @@ impl Render for DiagnosticsView {
                 TabBar::new("diagnostics-tabs")
                     .selected_index(self.tab)
                     .children(
-                        ["Ops", "Container", "Logs", "Egress", "Sessions"]
+                        ["Ops", "Container", "Logs", "Egress", "Sessions", "Events"]
                             .map(|t| Tab::new().label(t)),
                     )
                     .on_click(cx.listener(|this, ix: &usize, _, cx| {
                         this.tab = *ix;
+                        if *ix == 5 {
+                            this.events.update(cx, |events, cx| events.refresh(cx));
+                        }
                         cx.notify();
                     })),
             )
@@ -230,7 +237,9 @@ impl Render for DiagnosticsView {
                     .is_none()
                     .then(|| div().child("Loading diagnostics…")),
             )
-            .child(
+            .child(if self.tab == 5 {
+                self.events.clone().into_any_element()
+            } else {
                 uniform_list(
                     "diagnostics-rows",
                     rows.len(),
@@ -240,8 +249,9 @@ impl Render for DiagnosticsView {
                             .collect()
                     }),
                 )
-                .flex_1(),
-            )
+                .flex_1()
+                .into_any_element()
+            })
     }
 }
 

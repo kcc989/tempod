@@ -507,6 +507,7 @@ export function OptionsMenu({
 }
 
 export type PickerRow =
+  | { readonly kind: "role"; readonly key: string; readonly name: string; readonly description: string }
   | { readonly kind: "file"; readonly key: string; readonly path: string }
   | { readonly kind: "command"; readonly key: string; readonly entry: SlashEntry };
 
@@ -557,7 +558,13 @@ export function PickerList({
             i === activeIndex && "bg-accent text-accent-foreground",
           )}
         >
-          {row.kind === "file" ? (
+          {row.kind === "role" ? (
+            <>
+              <span className="text-xs text-muted-foreground">Roles</span>
+              <span className="font-mono text-xs">@{row.name}</span>
+              <span className="truncate text-xs text-muted-foreground">{row.description}</span>
+            </>
+          ) : row.kind === "file" ? (
             <>
               <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="truncate font-mono text-xs">{row.path}</span>

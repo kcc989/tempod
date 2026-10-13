@@ -69,6 +69,7 @@ beforeEach(() => {
   };
   vi.mocked(call).mockImplementation(async (name) => {
     if (name === "getCredentialStatus") return credentials as never;
+    if (name === "listRoles") return [] as never;
     if (name === "listFiles") return { paths: ["src/main.ts"] } as never;
     return turn({ status: "queued" }) as never;
   });
@@ -206,5 +207,43 @@ describe("composer delivery and draft recovery", () => {
     });
     type("New typing survives");
     expect((message() as HTMLTextAreaElement).value).toBe("New typing survives");
+  });
+  it("sends a role request from the Roles picker without sending it to the agent", async () => {
+    const role = {
+      name: "reviewer",
+      scope: "builtin",
+      sha: "a".repeat(64),
+      description: "Review auth",
+      agent: "other",
+      access: "read-only",
+      requestable: true,
+      on: [],
+      limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
+    };
+    vi.mocked(call).mockImplementation(async (name) =>
+      name === "listRoles"
+        ? ([role] as never)
+        : name === "listFiles"
+          ? ({ paths: [] } as never)
+          : name === "requestRole"
+            ? ({ changeId: "change", roleRunId: "run" } as never)
+            : (credentials as never),
+    );
+    show();
+    type("@reviewer");
+    await screen.findByRole("option");
+    enter();
+    await waitFor(() => expect((message() as HTMLTextAreaElement).value).toBe("/role reviewer "));
+    type("/role reviewer focus on auth");
+    enter();
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("requestRole", {
+        workspaceId: "composer-w",
+        sessionId: "s1",
+        role: "reviewer",
+        text: "focus on auth",
+      }),
+    );
+    expect(vi.mocked(call).mock.calls.some(([name]) => name === "sendPrompt")).toBe(false);
   });
 });

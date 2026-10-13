@@ -34,6 +34,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0006_environments",
       "0007_custom_agents",
       "0008_artifacts",
+      "0009_lifecycle",
     ]);
   });
 });
@@ -170,7 +171,9 @@ describe("deployed workspace upgrade", () => {
         const previous =
           release === "file-cache"
             ? WORKSPACE_MIGRATIONS.filter((m) => oldTags.includes(m.tag))
-            : WORKSPACE_MIGRATIONS.filter((m) => !["0007_custom_agents", "0008_artifacts"].includes(m.tag))
+            : WORKSPACE_MIGRATIONS.filter(
+                (m) => !["0007_custom_agents", "0008_artifacts", "0009_lifecycle"].includes(m.tag),
+              )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
                 .sort((a, b) => a.when - b.when);
         await runMigrations(db, previous);
