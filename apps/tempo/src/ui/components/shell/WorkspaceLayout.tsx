@@ -119,7 +119,7 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
             <section
               aria-label="Chat"
               className="flex h-full min-h-0 flex-col"
-              style={{ "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 4vw, 48px)" } as CSSProperties}
+              style={{ "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 2vw, 24px)" } as CSSProperties}
             >
               <WorkspaceBanners workspaceId={workspaceId} />
               <div className="min-h-0 flex-1">

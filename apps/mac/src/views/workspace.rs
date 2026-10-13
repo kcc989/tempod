@@ -3053,7 +3053,7 @@ impl Render for WorkspaceView {
                         .flex_1()
                         .min_h_0()
                         .w_full()
-                        .max_w(gpui_kit::px(680.))
+                        .max_w(gpui_kit::px(820.))
                         .mx_auto()
                         // The list and message row contribute 16 pt more than the composer.
                         .px(gpui_kit::px((self.chat_inset - 16.).max(0.)))
@@ -3184,7 +3184,7 @@ impl Render for WorkspaceView {
                         .child(
                             div()
                                 .w_full()
-                                .max_w(gpui_kit::px(680.))
+                                .max_w(gpui_kit::px(820.))
                                 .mx_auto()
                                 .px(gpui_kit::px(self.chat_inset))
                                 .child(chat.composer.clone()),

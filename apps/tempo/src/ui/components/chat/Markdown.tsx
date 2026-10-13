@@ -106,7 +106,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
 }) {
   return (
     <Env.Provider value={{ workspaceId, streaming }}>
-      <div className="prose-tempo text-sm">
+      <div className="prose-tempo max-w-[75ch] text-sm">
         <Markdown remarkPlugins={plugins} components={components} urlTransform={urlTransform}>
           {text}
         </Markdown>

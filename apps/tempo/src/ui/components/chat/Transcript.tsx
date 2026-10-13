@@ -176,7 +176,7 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
         aria-label="Transcript"
         className="h-full overflow-y-auto outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
       >
-        <div className="mx-auto w-full min-w-0 max-w-[90ch] px-[var(--chat-gutter,12px)] py-3">
+        <div className="mx-auto w-full min-w-0 max-w-[51.25rem] px-[var(--chat-gutter,12px)] py-3">
           {virtual ? (
             <div ref={contentRef} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
               {virtualizer.getVirtualItems().map((v) => {

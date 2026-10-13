@@ -551,6 +551,7 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         .id(id.clone())
         .role(Role::Article)
         .w_full()
+        .max_w(px(632.))
         .px_4()
         .py_2()
         .child(

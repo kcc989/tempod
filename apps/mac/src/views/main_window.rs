@@ -667,7 +667,7 @@ impl Render for MainWindow {
         let chat_inset = if show_right {
             16.
         } else {
-            (width * 0.04).clamp(16., 48.)
+            (width * 0.02).clamp(16., 24.)
         };
         let center = self.render_center(
             window,
