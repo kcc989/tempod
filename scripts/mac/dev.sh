@@ -14,6 +14,7 @@ if ! security find-identity -v -p codesigning | python3 -c 'import sys; identity
   exit 1
 fi
 cargo build --locked -p tempo-mac
+target_dir=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')
 app="dist/mac/dev/Tempo.app"
 if [[ "$mode" == --check-workspace ]]; then
   app="dist/mac/check/Tempo.app"
@@ -34,19 +35,20 @@ PYHELPER
 )
 if [[ ! -f "$helper_cache/$helper_key" || ! -f "$helper_cache/TempoKeychain" ]]; then
   cargo build --locked -p tempo-keychain
-  cp target/debug/TempoKeychain "$helper_cache/TempoKeychain"
+  cp "$target_dir/debug/TempoKeychain" "$helper_cache/TempoKeychain"
   codesign --force --sign "$identity" --identifier dev.tempo.mac.keychain "$helper_cache/TempoKeychain"
   touch "$helper_cache/$helper_key"
 fi
 codesign --verify --strict "$helper_cache/TempoKeychain"
 cp "$helper_cache/TempoKeychain" "$app/Contents/Helpers/TempoKeychain"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp target/debug/Tempo "$app/Contents/MacOS/Tempo"
+cp "$target_dir/debug/Tempo" "$app/Contents/MacOS/Tempo"
 cp apps/mac/resources/Info.plist "$app/Contents/Info.plist"
 python3 scripts/mac/icon.py dist/mac/dev/Tempo.iconset
 iconutil --convert icns --output "$app/Contents/Resources/AppIcon.icns" dist/mac/dev/Tempo.iconset
 codesign --force --sign "$identity" --identifier dev.tempo.mac "$app"
 codesign --verify --deep --strict "$app"
+python3 scripts/mac/verify-dev-signing.py "$app"
 printf 'Built %s\n' "$app"
 if [[ "$mode" == --open ]]; then
   open -W "$app"
