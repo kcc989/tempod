@@ -171,9 +171,9 @@ export function SettingsPage() {
             {PERSONAL.flatMap(({ id, label, description, icon: Icon }) =>
               matches(`${label} ${description}`)
                 ? [
-                <NavItem key={id} active={tab === id} onClick={() => go(id)}>
-                  <Icon aria-hidden className="size-4" />
-                  {label}
+                    <NavItem key={id} active={tab === id} onClick={() => go(id)}>
+                      <Icon aria-hidden className="size-4" />
+                      {label}
                     </NavItem>,
                   ]
                 : [],
@@ -210,8 +210,8 @@ export function SettingsPage() {
                       {PROJECT_SECTIONS.flatMap((s) =>
                         matches(s) || matches(`${p.owner}/${p.name}`)
                           ? [
-                          <NavItem key={s} active={section === s} onClick={() => setSection(s)}>
-                            {s === "Agent" ? "Agents" : s}
+                              <NavItem key={s} active={section === s} onClick={() => setSection(s)}>
+                                {s === "Agent" ? "Agents" : s}
                               </NavItem>,
                             ]
                           : [],

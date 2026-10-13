@@ -508,14 +508,17 @@ export class RoleRuns {
       const redact = await lifecycleRedactor(this.core);
       const parsed = parseRoleResult(resultText);
 
+      const redacted = { ...parsed, summary: redact(parsed.summary) };
+
       const result = parseRoleResult(
-        JSON.stringify({
-          ...parsed,
-          summary: redact(parsed.summary),
-          ...(parsed.findings
-            ? { findings: parsed.findings.map((f) => ({ ...f, path: redact(f.path), text: redact(f.text) })) }
-            : {}),
-        }),
+        JSON.stringify(
+          parsed.findings
+            ? {
+                ...redacted,
+                findings: parsed.findings.map((f) => ({ ...f, path: redact(f.path), text: redact(f.text) })),
+              }
+            : redacted,
+        ),
       );
 
       if (this.row(run.id).status !== "running") return;
@@ -527,17 +530,19 @@ export class RoleRuns {
           endedAt: Date.now(),
           deadlineAt: null,
         });
-        this.lifecycle.append({
+
+        const event = {
           type: "role.run.completed",
           source: "role",
           changeId: run.changeId,
           roleRunId: run.id,
           sessionId: session.id,
-          ...(run.agent ? { agent: run.agent as "claude" | "codex" | "opencode" | "pi" } : {}),
           causationId: causeId,
           dedupeKey: `run:${run.id}:role.run.completed`,
           payload: { role: run.roleName, round: run.round, result },
-        });
+        } satisfies Parameters<Lifecycle["append"]>[0];
+
+        this.lifecycle.append(run.agent ? { ...event, agent: run.agent } : event);
       });
       this.close(run);
       this.lifecycle.kick();
@@ -598,17 +603,31 @@ export class RoleRuns {
           this.core.deleteTurn(t.id);
         }
 
-      this.lifecycle.append({
+      const basePayload = { role: run.roleName, round: run.round, errorCode: code };
+
+      let event: Parameters<Lifecycle["append"]>[0] = {
         type: "role.run.failed",
         source: "role",
         changeId: run.changeId,
         roleRunId: run.id,
-        ...(run.sessionId ? { sessionId: run.sessionId } : {}),
-        ...(run.agent ? { agent: run.agent as "claude" | "codex" | "opencode" | "pi" } : {}),
         causationId: causeId,
         dedupeKey: `run:${run.id}:role.run.failed`,
-        payload: { role: run.roleName, round: run.round, errorCode: code, ...(detail ? { detail } : {}) },
-      });
+        payload: detail ? { ...basePayload, detail } : basePayload,
+      };
+
+      if (run.sessionId) event = { ...event, sessionId: run.sessionId };
+
+      if (run.agent) event = { ...event, agent: run.agent };
+      this.lifecycle.append(event);
+
+      const violationNotice = {
+        level: "error",
+        text: "This read-only role changed files. Revert to the checkpoint before its turn to undo.",
+      };
+
+      const notice = run.pinCheckpointId
+        ? { ...violationNotice, checkpointId: run.pinCheckpointId }
+        : violationNotice;
 
       if (run.sessionId)
         this.core.insertItem({
@@ -618,11 +637,7 @@ export class RoleRuns {
           status: "completed",
           content:
             code === "ROLE_ACCESS_VIOLATION" && !detail?.startsWith("Protected")
-              ? {
-                  level: "error",
-                  text: "This read-only role changed files. Revert to the checkpoint before its turn to undo.",
-                  ...(run.pinCheckpointId ? { checkpointId: run.pinCheckpointId } : {}),
-                }
+              ? notice
               : { level: "error", text: errorMessage(code) },
         });
     });

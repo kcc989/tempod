@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { ConfigOption, Session, Turn } from "@tempo/protocol";
 import {
   ChevronDownIcon,
@@ -568,23 +569,27 @@ export function PickerList({
             i === activeIndex && "bg-accent text-accent-foreground",
           )}
         >
-          {row.kind === "role" ? (
-            <>
-              <span className="text-xs text-muted-foreground">Roles</span>
-              <span className="font-mono text-xs">@{row.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{row.description}</span>
-            </>
-          ) : row.kind === "file" ? (
-            <>
-              <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate font-mono text-xs">{row.path}</span>
-            </>
-          ) : (
-            <>
-              <SlashIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="shrink-0 font-mono text-xs">{row.entry.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{row.entry.description}</span>
-            </>
+          {Match.value(row).pipe(
+            Match.when({ kind: "role" }, (row) => (
+              <>
+                <span className="text-xs text-muted-foreground">Roles</span>
+                <span className="font-mono text-xs">@{row.name}</span>
+                <span className="truncate text-xs text-muted-foreground">{row.description}</span>
+              </>
+            )),
+            Match.when({ kind: "file" }, (row) => (
+              <>
+                <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate font-mono text-xs">{row.path}</span>
+              </>
+            )),
+            Match.orElse((row) => (
+              <>
+                <SlashIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="shrink-0 font-mono text-xs">{row.entry.name}</span>
+                <span className="truncate text-xs text-muted-foreground">{row.entry.description}</span>
+              </>
+            )),
           )}
         </div>
       ))}

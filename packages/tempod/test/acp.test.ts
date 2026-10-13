@@ -505,9 +505,9 @@ describe("session.setMode, session.setConfig, session.close", () => {
       expect(c.of("session.updated").some((e) => e.patch.modeId === "plan")).toBe(true);
 
       const cfg = await c.ok("session.setConfig", {
-          sessionId: "s1",
-          configId: "model",
-          value: "m2",
+        sessionId: "s1",
+        configId: "model",
+        value: "m2",
       });
 
       expect(cfg.configOptions[0]).toMatchObject({ id: "model", currentValue: "m2" });

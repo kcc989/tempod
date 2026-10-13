@@ -9,6 +9,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import {
   createMemoryHistory,
   createRootRoute,
+  createRoute,
   createRouter,
   RouterContextProvider,
 } from "@tanstack/react-router";
@@ -90,17 +91,23 @@ export const createUiEnvironment = () => {
     for (const store of stores.values()) if (state.workspace) seed(store, state.workspace);
   };
 
+  const history = createMemoryHistory({ initialEntries: ["/"] });
+
   function Provider({ children }: { children: ReactNode }) {
     const [client] = useState(
       () => new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
     );
 
-    const [router] = useState(() =>
-      createRouter({
-        routeTree: createRootRoute({ component: Content }),
-        history: createMemoryHistory({ initialEntries: ["/"] }),
-      }),
-    );
+    const [router] = useState(() => {
+      const root = createRootRoute({ component: Content });
+
+      return createRouter({
+        routeTree: root.addChildren([
+          createRoute({ getParentRoute: () => root, path: "/w/$workspaceId", component: Content }),
+        ]),
+        history,
+      });
+    });
 
     return (
       <QueryClientProvider client={client}>
@@ -120,7 +127,7 @@ export const createUiEnvironment = () => {
     );
   }
 
-  return { request, Provider, setState, storeFor };
+  return { request, Provider, setState, storeFor, history };
 };
 
 export const requestInput = <K extends FnName>(name: K, input: FnInput<FnName>): FnInput<K> =>

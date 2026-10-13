@@ -49,7 +49,7 @@ export class Lifecycle {
         const next: typeof cached = [];
 
         for (const path of paths.filter((p) => /^\.tempo\/roles\/[^/]+\.md$/.test(p))) {
-          let read: { content: string; encoding: string };
+          let read: Pick<FnOutput<"readFile">, "content" | "encoding">;
 
           try {
             read = await tempod.request("fs.read", { path, maxBytes: 65536 });
@@ -93,15 +93,20 @@ export class Lifecycle {
 
     return { text: r.text };
   }
-  append(input: Omit<LifecycleEvent, "id" | "occurredAt" | "workspaceId">): LifecycleRow | null {
-    const event = { ...input, id: newId(), occurredAt: Date.now(), workspaceId: this.core.workspaceId };
-    let valid: LifecycleEvent;
-
+  private validated(input: Omit<LifecycleEvent, "id" | "occurredAt" | "workspaceId">): LifecycleEvent {
     try {
-      valid = Schema.decodeUnknownSync(LifecycleEvent, { onExcessProperty: "error" })(event);
+      return Schema.decodeUnknownSync(LifecycleEvent, { onExcessProperty: "error" })({
+        ...input,
+        id: newId(),
+        occurredAt: Date.now(),
+        workspaceId: this.core.workspaceId,
+      });
     } catch {
       throw new TempoError("EVENT_INVALID");
     }
+  }
+  append(input: Omit<LifecycleEvent, "id" | "occurredAt" | "workspaceId">): LifecycleRow | null {
+    const valid = this.validated(input);
 
     const { payload, ...fields } = valid;
 
@@ -230,12 +235,7 @@ export class Lifecycle {
     )
       return;
 
-    const probe = {
-      ...input,
-      id: newId(),
-      occurredAt: Date.now(),
-      workspaceId: this.core.workspaceId,
-    } as LifecycleEvent;
+    const probe = this.validated(input);
 
     let changeId = input.changeId;
     let causationId: string | undefined;
@@ -260,7 +260,8 @@ export class Lifecycle {
       causationId = origin!.id;
     }
 
-    this.append({ ...input, changeId, ...(causationId ? { causationId } : {}) });
+    const next = { ...input, changeId };
+    this.append(causationId ? { ...next, causationId } : next);
   }
   newestOpenChange(): string | undefined {
     return this.core.ctx.storage.sql
@@ -292,18 +293,23 @@ export class Lifecycle {
     if (!this.core.settings().roles.enabled) throw new TempoError("ROLE_LIMIT", undefined, "roles.enabled");
 
     if (text) text = (await lifecycleRedactor(this.core))(text);
-    const agent = sessionId ? (this.core.sessionRow(sessionId).agent as AgentId) : undefined;
+    const agent = sessionId ? this.core.sessionRow(sessionId).agent : undefined;
     const changeId = newId();
 
     const run = this.core.ctx.storage.transactionSync(() => {
-      const cause = this.append({
+      const payload = text
+        ? { origin: "request" as const, role: roleName, text }
+        : { origin: "request" as const, role: roleName };
+
+      const input: Parameters<Lifecycle["append"]>[0] = {
         type: "tempo.change.created",
         source: "tempo",
         changeId,
-        ...(sessionId ? { sessionId, agent } : {}),
         dedupeKey: `change:${changeId}:created`,
-        payload: { origin: "request", role: roleName, ...(text ? { text } : {}) },
-      })!;
+        payload,
+      };
+
+      const cause = this.append(sessionId ? { ...input, sessionId, agent } : input)!;
 
       return this.runs.insert(role, this.event(cause));
     });

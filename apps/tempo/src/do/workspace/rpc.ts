@@ -732,7 +732,7 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
             endedAt: null,
           })
           .run();
-        core.lifecycle.createPromptChange(turnId, sessionId, session.agent as AgentId);
+        core.lifecycle.createPromptChange(turnId, sessionId, session.agent);
 
         if (reviewCommentIds.length) {
           core.db

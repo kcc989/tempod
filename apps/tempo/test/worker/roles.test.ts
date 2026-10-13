@@ -1,7 +1,9 @@
+import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
+import { Schema } from "effect";
 import { Files } from "@cloudflare/sandbox";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { newId, unwrap, type LifecycleEvent } from "@tempo/protocol";
+import { newId, unwrap, LifecycleEvent } from "@tempo/protocol";
 import { parseRoleFile } from "@tempo/settings";
 import { chooseRoleAgent, matchTrigger } from "../../src/roles/match.ts";
 import { parseRole, withPrecedence } from "../../src/roles/catalog.ts";
@@ -75,11 +77,13 @@ const finish = async (
 const activePrompt = async (w: Awaited<ReturnType<typeof setup>>, index = 0) => {
   await waitFor(() => w.tempod.requestsOf("session.prompt").length > index);
 
-  return w.tempod.requestsOf("session.prompt")[index] as {
-    turnId: string;
-    sessionId: string;
-    content: Array<{ text: string }>;
-  };
+  return Schema.decodeUnknownSync(
+    Schema.Struct({
+      turnId: Schema.String,
+      sessionId: Schema.String,
+      content: Schema.Array(Schema.Struct({ text: Schema.String })),
+    }),
+  )(w.tempod.requestsOf("session.prompt")[index]);
 };
 
 describe("role matching and inputs", () => {
@@ -93,7 +97,7 @@ describe("role matching and inputs", () => {
       roleRunId: newId(),
       dedupeKey: "test",
       payload: { status: "completed", stopReason: null },
-    } as LifecycleEvent;
+    } satisfies LifecycleEvent;
 
     expect(matchTrigger({ event: "agent.turn.ended" }, event)).toBe(false);
     expect(matchTrigger({ event: "agent.turn.ended", session: "role", status: "completed" }, event)).toBe(
@@ -105,7 +109,7 @@ describe("role matching and inputs", () => {
       source: "role",
       type: "role.run.completed",
       payload: { role: "coder", round: 1, result: { status: "done", summary: "" } },
-    } as LifecycleEvent;
+    } satisfies LifecycleEvent;
 
     expect(matchTrigger({ event: "role.run.completed", role: "coder", status: "done" }, completed)).toBe(
       true,
@@ -114,7 +118,18 @@ describe("role matching and inputs", () => {
   });
   it("chooses other from credentialed agents with models", () => {
     const file = parseRoleFile("checker", text("", "requestable: true\nagent: other")).file;
-    const event = { agent: "claude" } as LifecycleEvent;
+
+    const event = {
+      id: newId(),
+      workspaceId: newId(),
+      occurredAt: 1,
+      type: "agent.turn.ended",
+      source: "agent",
+      agent: "claude",
+      dedupeKey: "test",
+      payload: { status: "completed", stopReason: null },
+    } satisfies LifecycleEvent;
+
     expect(chooseRoleAgent(file, event, DEFAULT_EFFECTIVE, () => true)).toBe("codex");
     expect(chooseRoleAgent(file, event, DEFAULT_EFFECTIVE, (a) => a === "pi")).toBeNull();
     expect(
@@ -149,7 +164,10 @@ describe("role matching and inputs", () => {
 describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
   it("stores prompt cause and raw turn end exactly once, with no prompt text", async () => {
     const w = await setup();
-    const sid = (await sqlRows(w.stub, "SELECT id FROM sessions ORDER BY sort_order"))[0]!.id;
+
+    const sid = Schema.decodeUnknownSync(Schema.String)(
+      (await sqlRows(w.stub, "SELECT id FROM sessions ORDER BY sort_order"))[0]!.id,
+    );
 
     const turn = unwrap(
       await w.stub.sendPrompt({
@@ -175,7 +193,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     const count = (await sqlRows(w.stub, "SELECT * FROM lifecycle_events")).length;
     const raw = await sqlRows(w.stub, "SELECT seq FROM events WHERE kind='turn.ended'");
     await runInDurableObject(w.stub, () =>
-      w.tempod.emitRaw(raw[0]!.seq, {
+      w.tempod.emitRaw(Schema.decodeUnknownSync(Schema.Number)(raw[0]!.seq), {
         kind: "turn.ended",
         turnId: turn.id,
         sessionId: sid,
@@ -269,10 +287,14 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
         prompt.sessionId,
       )
     )
-      .map((r) => JSON.parse(r.content_json))
+      .map((r) =>
+        Schema.decodeUnknownSync(Schema.JsonObject)(
+          JSON.parse(Schema.decodeUnknownSync(Schema.String)(r.content_json)),
+        ),
+      )
       .find((r) => r.checkpointId);
 
-    expect(notice.checkpointId).toBe(unwrap(await w.stub.listRoleRuns({}))[0]!.pinCheckpointId);
+    expect(notice?.checkpointId).toBe(unwrap(await w.stub.listRoleRuns({}))[0]!.pinCheckpointId);
     expect(w.tempod.requestsOf("git.revert")).toHaveLength(0);
   });
   it("serializes write runs and cancels a queued run without sending a turn", async () => {
@@ -280,7 +302,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     const first = unwrap(await w.stub.requestRole({ role: "checker" }));
     await activePrompt(w);
     const second = unwrap(await w.stub.requestRole({ role: "checker" }));
-    await runInDurableObject(w.stub, async (i) => await internals(i).core.lifecycle.drain());
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => await internals(i).core.lifecycle.drain());
     const runs = unwrap(await w.stub.listRoleRuns({}));
     expect(runs.find((r) => r.id === first.roleRunId)?.status).toBe("running");
     expect(runs.find((r) => r.id === second.roleRunId)?.status).toBe("queued");
@@ -314,7 +336,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     );
 
     await waitFor(async () =>
-      runInDurableObject(w.stub, (i) => internals(i).core.startingTurnId === userTurn.id),
+      runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.startingTurnId === userTurn.id),
     );
     expect(w.tempod.requestsOf("session.start")).toHaveLength(1);
     expect(w.tempod.requestsOf("session.prompt")).toHaveLength(1);
@@ -376,7 +398,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     await waitFor(() => w.tempod.requestsOf("session.start").length > 0);
     unwrap(await w.stub.cancelRoleRun({ roleRunId: requested.roleRunId }));
     release();
-    await waitFor(async () => runInDurableObject(w.stub, (i) => !internals(i).core.queueBusy));
+    await waitFor(async () => runInDurableObject(w.stub, (i: WorkspaceDO) => !internals(i).core.queueBusy));
     expect(w.tempod.requestsOf("session.prompt")).toHaveLength(0);
     const run = unwrap(await w.stub.listRoleRuns({}))[0]!;
     expect(run.status).toBe("cancelled");
@@ -426,14 +448,14 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
   it("retains pending credential pushes after a failed delivery", async () => {
     const w = await setup();
     w.tempod.fail("credential.put", "TEMPOD_UNREACHABLE");
-    await runInDurableObject(w.stub, async (i) => {
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const core = internals(i).core;
       core.pendingCodexPush = { content: "pending-auth", version: 3 };
       await expect(syncIdleCredentials(core)).rejects.toThrow();
       expect(core.pendingCodexPush).toEqual({ content: "pending-auth", version: 3 });
     });
     w.tempod.failures.delete("credential.put");
-    await runInDurableObject(w.stub, async (i) => {
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const core = internals(i).core;
       await syncIdleCredentials(core);
       expect(core.pendingCodexPush).toBeNull();
@@ -473,7 +495,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
       ),
     );
     await w.stub.rolesChanged();
-    await runInDurableObject(w.stub, (i) => {
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       const core = internals(i).core;
       core.ctx.storage.transactionSync(() =>
         core.lifecycle.recordCause({
@@ -495,7 +517,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     await waitFor(async () =>
       unwrap(await w.stub.listRoleRuns({})).some((r) => r.errorCode === "ROLE_LIMIT"),
     );
-    await runInDurableObject(w.stub, async (i) => await internals(i).core.lifecycle.drain());
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => await internals(i).core.lifecycle.drain());
     const runs = unwrap(await w.stub.listRoleRuns({}));
     expect(runs).toHaveLength(2);
     expect(runs.every((r) => r.changeId === runs[0]!.changeId)).toBe(true);
@@ -569,7 +591,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     "enforces project %s before a child starts",
     async (limit) => {
       const w = await setup();
-      await runInDurableObject(w.stub, (i) =>
+      await runInDurableObject(w.stub, (i: WorkspaceDO) =>
         internals(i).core.updateWs({
           settingsJson: JSON.stringify({
             ...DEFAULT_EFFECTIVE,
@@ -598,7 +620,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
       );
       await w.stub.rolesChanged();
     } else
-      await runInDurableObject(w.stub, (i) =>
+      await runInDurableObject(w.stub, (i: WorkspaceDO) =>
         internals(i).core.updateWs({
           settingsJson: JSON.stringify({
             ...DEFAULT_EFFECTIVE,
@@ -670,7 +692,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     const w = await setup();
     unwrap(await w.stub.requestRole({ role: "checker" }));
     const prompt = await activePrompt(w);
-    await runInDurableObject(w.stub, (i) => {
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       const core = internals(i).core;
       core.ctx.storage.sql.exec(
         "UPDATE turns SET status='completed',usage_json=?,ended_at=?,checkpoint_id=(SELECT pin_checkpoint_id FROM role_runs WHERE session_id=?) WHERE id=?",
@@ -683,7 +705,10 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
       core.lifecycle.kick();
     });
     await waitFor(async () => unwrap(await w.stub.listRoleRuns({}))[0]?.status === "completed");
-    await runInDurableObject(w.stub, async (i) => await internals(i).core.lifecycle.runs.recover());
+    await runInDurableObject(
+      w.stub,
+      async (i: WorkspaceDO) => await internals(i).core.lifecycle.runs.recover(),
+    );
     expect(unwrap(await w.stub.listRoleRuns({}))[0]!.tokens).toBe(8);
   });
   it("preserves lifecycle rows across incarnation changes and replays dispatch once", async () => {
@@ -693,12 +718,12 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     const before = unwrap(await w.stub.listLifecycleEvents({})).events.map((e) => e.event.id);
     const seq = await emitEvent(w.stub, w.tempod, { kind: "incarnation.changed", incarnation: newId() });
     await waitApplied(w.stub, seq);
-    await runInDurableObject(w.stub, (i) => {
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       const core = internals(i).core;
       core.ctx.storage.sql.exec("UPDATE lifecycle_events SET dispatched_at=NULL");
       core.lifecycle.kick();
     });
-    await runInDurableObject(w.stub, async (i) => await internals(i).core.lifecycle.drain());
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => await internals(i).core.lifecycle.drain());
     expect(unwrap(await w.stub.listRoleRuns({}))).toHaveLength(1);
     expect(unwrap(await w.stub.listLifecycleEvents({})).events.map((e) => e.event.id)).toEqual(before);
   });
@@ -711,7 +736,7 @@ describe("workspace lifecycle and roles", { timeout: 15000 }, () => {
     await w.stub.rolesChanged();
     unwrap(await w.stub.requestRole({ role: "checker" }));
     await waitFor(async () => unwrap(await w.stub.listRoleRuns({}))[0]?.errorCode === "ROLE_NO_AGENT");
-    await runInDurableObject(w.stub, (i) =>
+    await runInDurableObject(w.stub, (i: WorkspaceDO) =>
       internals(i).core.updateWs({
         settingsJson: JSON.stringify({
           ...DEFAULT_EFFECTIVE,

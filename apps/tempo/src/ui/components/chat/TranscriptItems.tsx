@@ -445,13 +445,13 @@ function Plan({ item }: { item: ItemOf<"plan"> }) {
           <li key={i} className="flex items-start gap-2 text-sm">
             {Match.value(e).pipe(
               Match.when({ status: "completed" }, () => (
-              <CheckCircle2Icon aria-label="Done" className="mt-0.5 size-3.5 shrink-0 text-success" />
+                <CheckCircle2Icon aria-label="Done" className="mt-0.5 size-3.5 shrink-0 text-success" />
               )),
               Match.when({ status: "in_progress" }, () => (
-              <Spinner aria-label="In progress" className="mt-0.5 text-primary" />
+                <Spinner aria-label="In progress" className="mt-0.5 text-primary" />
               )),
               Match.orElse(() => (
-              <CircleIcon aria-label="To do" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <CircleIcon aria-label="To do" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
               )),
             )}
             <span className={cn(e.status === "completed" && "text-muted-foreground line-through")}>

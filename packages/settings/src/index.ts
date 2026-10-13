@@ -125,6 +125,7 @@ const apply = (base: Settings, layer: SettingsLayer, source: SettingsSource, sou
   const cloned = structuredClone(base);
 
   const next = {
+    roles: { ...cloned.roles },
     agent: { ...cloned.agent },
     browser: { ...cloned.browser },
     scripts: { ...cloned.scripts },

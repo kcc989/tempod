@@ -37,13 +37,11 @@ export function RolesTab() {
 
   const reload = useCallMutation("reloadRoles", { invalidates: ["listRoles"] });
 
+  const baseScope = { name: selected?.name ?? "reviewer", scope: selected?.scope ?? "builtin" };
+
   const source = useCallQuery(
     "getRoleText",
-    {
-      name: selected?.name ?? "reviewer",
-      scope: selected?.scope ?? "builtin",
-      ...(workspace ? { workspaceId: workspace.id } : {}),
-    },
+    workspace ? { ...baseScope, workspaceId: workspace.id } : baseScope,
     { enabled: !!selected },
   );
 

@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { AgentId, LifecycleEvent, RoleFile, RoleTrigger, Settings } from "@tempo/protocol";
 
 export const matchTrigger = (trigger: RoleTrigger, event: LifecycleEvent): boolean => {
@@ -11,12 +12,11 @@ export const matchTrigger = (trigger: RoleTrigger, event: LifecycleEvent): boole
     return false;
 
   if ("status" in trigger && trigger.status !== undefined) {
-    const status =
-      event.type === "role.run.completed"
-        ? event.payload.result.status
-        : event.type === "agent.turn.ended"
-          ? event.payload.status
-          : undefined;
+    const status = Match.value(event).pipe(
+      Match.when({ type: "role.run.completed" }, (matched) => matched.payload.result.status),
+      Match.when({ type: "agent.turn.ended" }, (matched) => matched.payload.status),
+      Match.orElse(() => undefined),
+    );
 
     if (trigger.status !== status) return false;
   }
@@ -43,7 +43,7 @@ export const chooseRoleAgent = (
 
   if (file.agent === "other" && event.agent)
     return (
-      ([settings.agent.default, "claude", "codex", "opencode", "pi"] as AgentId[]).find(
+      ([settings.agent.default, "claude", "codex", "opencode", "pi"] as const).find(
         (a) => a !== event.agent && qualifies(a),
       ) ?? null
     );

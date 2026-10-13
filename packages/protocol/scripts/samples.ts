@@ -14,6 +14,7 @@ const ROLE_FILE = {
   on: [],
   limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
 } as const;
+
 const ROLE_INFO = {
   name: "reviewer",
   scope: "builtin",
@@ -25,6 +26,7 @@ const ROLE_INFO = {
   on: [],
   limits: ROLE_FILE.limits,
 } as const;
+
 const ROLE_RUN = {
   id: uid(920),
   changeId: uid(921),
@@ -50,6 +52,7 @@ const ROLE_RUN = {
   startedAt: at(2),
   endedAt: null,
 } as const;
+
 const LIFE_EVENT = {
   id: uid(922),
   occurredAt: at(1),
@@ -60,6 +63,7 @@ const LIFE_EVENT = {
   dedupeKey: `change:${uid(921)}:created`,
   payload: { origin: "request", role: "reviewer", text: "Review auth" },
 } as const;
+
 const LIFE_LOG = { seq: 1, event: LIFE_EVENT };
 
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
@@ -566,7 +570,6 @@ const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
 export const INPUT_SAMPLES = {
-readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> } = {
   listRoles: [{}, { workspaceId: W1 }],
   getRoleText: [{ name: "reviewer", scope: "builtin" }],
   putUserRole: [{ name: "reviewer", text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],

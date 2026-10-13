@@ -1,4 +1,4 @@
-import { toTurnUsage, type AgentId } from "@tempo/protocol";
+import { toTurnUsage, type LifecycleEvent } from "@tempo/protocol";
 import {
   ERROR_CODES,
   TempodToDo,
@@ -257,7 +257,7 @@ export class TempodClient {
       if (event.kind === "turn.ended") {
         const turn = this.core.db.select().from(turns).where(eq(turns.id, event.turnId)).get();
 
-        if (turn && !["queued", "running"].includes(turn.status)) {
+        if (turn && turn.status !== "queued" && turn.status !== "running") {
           const session = this.core.sessionRow(turn.sessionId);
           const roleRunId = turn.origin !== "user" ? session.roleRunId : null;
 
@@ -273,23 +273,36 @@ export class TempodClient {
               ? this.core.lifecycle.origin(turn.changeId)
               : null;
 
-          this.core.lifecycle.append({
+          let payload: Extract<LifecycleEvent, { type: "agent.turn.ended" }>["payload"] = {
+            status: turn.status,
+            stopReason: turn.stopReason,
+          };
+
+          const usage = toTurnUsage(event.usage);
+
+          if (turn.errorCode) payload = { ...payload, errorCode: turn.errorCode };
+
+          if (usage) payload = { ...payload, usage };
+
+          let input: Omit<
+            Extract<LifecycleEvent, { type: "agent.turn.ended" }>,
+            "id" | "occurredAt" | "workspaceId"
+          > = {
             type: "agent.turn.ended",
             source: "agent",
-            ...(turn.changeId ? { changeId: turn.changeId } : {}),
             turnId: turn.id,
             sessionId: turn.sessionId,
-            agent: session.agent as AgentId,
-            ...(roleRunId ? { roleRunId } : {}),
-            ...(cause ? { causationId: cause.id } : {}),
+            agent: session.agent,
             dedupeKey: `tempod:${incarnation}:${envelope.seq}`,
-            payload: {
-              status: turn.status as "completed" | "cancelled" | "failed" | "interrupted",
-              stopReason: turn.stopReason,
-              ...(turn.errorCode ? { errorCode: turn.errorCode } : {}),
-              ...(toTurnUsage(event.usage) ? { usage: toTurnUsage(event.usage)! } : {}),
-            },
-          });
+            payload,
+          };
+
+          if (turn.changeId) input = { ...input, changeId: turn.changeId };
+
+          if (roleRunId) input = { ...input, roleRunId };
+
+          if (cause) input = { ...input, causationId: cause.id };
+          this.core.lifecycle.append(input);
         }
       }
 

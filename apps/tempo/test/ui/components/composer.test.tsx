@@ -7,7 +7,7 @@ const call = environment.request;
 import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { TempoError, type CredentialStatus } from "@tempo/protocol";
+import { TempoError, type RoleInfo, type CredentialStatus } from "@tempo/protocol";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
@@ -233,22 +233,22 @@ describe("composer delivery and draft recovery", () => {
       requestable: true,
       on: [],
       limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
-    };
+    } satisfies RoleInfo;
 
-    vi.mocked(call).mockImplementation(async (name) =>
-      name === "listRoles"
-        ? ([role] as never)
-        : name === "listFiles"
-          ? ({ paths: [] } as never)
-          : name === "requestRole"
-            ? ({ changeId: "change", roleRunId: "run" } as never)
-            : (credentials as never),
-    );
+    call.mockImplementation(async (name) => {
+      if (name === "listRoles") return [role];
+
+      if (name === "listFiles") return { paths: [] };
+
+      if (name === "requestRole") return { changeId: "change", roleRunId: "run" };
+
+      return credentials;
+    });
     show();
     type("@reviewer");
     await screen.findByRole("option");
     enter();
-    await waitFor(() => expect((message() as HTMLTextAreaElement).value).toBe("/role reviewer "));
+    await waitFor(() => expect(elementOf(message(), HTMLTextAreaElement).value).toBe("/role reviewer "));
     type("/role reviewer focus on auth");
     enter();
     await waitFor(() =>

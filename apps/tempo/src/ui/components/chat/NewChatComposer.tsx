@@ -46,14 +46,12 @@ export function NewChatComposer({
     submitting.current = true;
 
     try {
-      const session =
-        created ??
-        (await create.mutateAsync({
-          workspaceId,
-          agent,
-          ...(model ? { model } : {}),
-          ...(customAgentId ? { customAgentId } : {}),
-        }));
+      let input: import("@tempo/protocol").FnInput<"createSession"> = { workspaceId, agent };
+
+      if (model) input = { ...input, model };
+
+      if (customAgentId) input = { ...input, customAgentId };
+      const session = created ?? (await create.mutateAsync(input));
 
       setCreated(session);
 

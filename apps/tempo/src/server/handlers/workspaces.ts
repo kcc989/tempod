@@ -218,7 +218,8 @@ export const viaWorkspace =
   async ({ env, user }, input) => {
     const { workspaceId, ...rest } = input;
 
-    if (!(await getOwnedWorkspace(env, user.id, workspaceId))) throw new TempoError("NOT_FOUND");
+    if (!workspaceId || !(await getOwnedWorkspace(env, user.id, workspaceId)))
+      throw new TempoError("NOT_FOUND");
     const stub = workspaceStub(env.WORKSPACE, workspaceId);
 
     // SAFETY: name indexes the generated RPC method and its matching MethodInput<K>/FnOutput<K> contract.

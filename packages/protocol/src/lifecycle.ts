@@ -215,6 +215,8 @@ export type LifecycleEvent = typeof LifecycleEvent.Type;
 
 export const LifecycleLogEvent = Schema.Struct({ seq: Int, event: LifecycleEvent });
 
+export type LifecycleLogEvent = typeof LifecycleLogEvent.Type;
+
 export const LifecyclePage = Schema.Struct({
   events: Schema.Array(LifecycleLogEvent),
   nextBeforeSeq: Schema.NullOr(Int),

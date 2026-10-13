@@ -487,7 +487,7 @@ export class OpRunner {
       this.save(op, { status: "done" }, state);
 
       if (op.kind === "commit_push") {
-        const result = state["result"] as { commitSha?: string } | undefined;
+        const result = state.result;
 
         if (result?.commitSha)
           this.core.lifecycle.recordCause({

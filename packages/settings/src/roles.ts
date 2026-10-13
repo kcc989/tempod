@@ -12,7 +12,7 @@ export const ROLE_DEFAULTS = {
   limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
 } as const;
 
-export const parseRoleFile = (name: string, text: string): { file: RoleFile; body: string } => {
+export const parseRoleFile = (name: string, text: string) => {
   try {
     Schema.decodeUnknownSync(RoleName)(name);
 
@@ -23,17 +23,17 @@ export const parseRoleFile = (name: string, text: string): { file: RoleFile; bod
     const doc = parseDocument(match[1]!, { version: "1.2", uniqueKeys: true });
 
     if (doc.errors.length) throw new Error("invalid YAML front matter");
-    const raw = doc.toJS({ maxAliasCount: 50 });
+    const raw = Schema.decodeUnknownSync(Schema.JsonObject)(doc.toJS({ maxAliasCount: 50 }));
 
-    if (!raw || typeof raw !== "object" || Array.isArray(raw))
-      throw new Error("front matter must be a mapping");
-
-    if (
-      raw.limits !== undefined &&
-      (!raw.limits || typeof raw.limits !== "object" || Array.isArray(raw.limits))
-    )
+    if (raw.limits !== undefined && !Schema.is(Schema.JsonObject)(raw.limits))
       throw new Error("limits must be a mapping");
-    const value = { ...ROLE_DEFAULTS, ...raw, limits: { ...ROLE_DEFAULTS.limits, ...raw.limits } };
+
+    const value = {
+      ...ROLE_DEFAULTS,
+      ...raw,
+      limits: { ...ROLE_DEFAULTS.limits, ...Schema.decodeUnknownSync(Schema.JsonObject)(raw.limits ?? {}) },
+    };
+
     const file = Schema.decodeUnknownSync(RoleFile, { onExcessProperty: "error" })(value);
 
     return { file, body: match[2]! };

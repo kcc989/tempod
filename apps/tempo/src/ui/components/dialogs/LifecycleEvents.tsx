@@ -8,11 +8,10 @@ export function LifecycleEvents({ workspaceId }: { workspaceId: string }) {
   const [changeId, setChangeId] = useState("");
   const [eventId, setEventId] = useState("");
 
-  const events = useCallQuery("listLifecycleEvents", {
-    workspaceId,
-    limit: 500,
-    ...(changeId.trim() ? { changeId: changeId.trim() } : {}),
-  });
+  let input: import("@tempo/protocol").FnInput<"listLifecycleEvents"> = { workspaceId, limit: 500 };
+
+  if (changeId.trim()) input = { ...input, changeId: changeId.trim() };
+  const events = useCallQuery("listLifecycleEvents", input);
 
   const trace = useCallQuery("getTrace", { workspaceId, eventId }, { enabled: !!eventId });
   const roles = useCallQuery("listRoles", { workspaceId });

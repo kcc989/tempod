@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
 
 export const lifecycleRedactor = async (core: WorkspaceCore): Promise<(text: string) => string> => {
@@ -5,10 +6,10 @@ export const lifecycleRedactor = async (core: WorkspaceCore): Promise<(text: str
   const status = await credentials.status();
   const values = new Set<string>();
 
-  const collect = (value: unknown): void => {
-    if (typeof value === "string" && value) values.add(value);
+  const collect = (value: Schema.Json): void => {
+    if (Schema.is(Schema.String)(value) && value) values.add(value);
     else if (Array.isArray(value)) value.forEach(collect);
-    else if (value && typeof value === "object") Object.values(value).forEach(collect);
+    else if (Schema.is(Schema.JsonObject)(value)) Object.values(value).forEach(collect);
   };
 
   for (const entry of status) {
@@ -19,9 +20,11 @@ export const lifecycleRedactor = async (core: WorkspaceCore): Promise<(text: str
 
     if (entry.key === "codex.auth_json") {
       try {
-        const auth = JSON.parse(secret);
-        collect(auth.tokens);
-        collect(auth.OPENAI_API_KEY);
+        const auth = Schema.decodeUnknownSync(Schema.JsonObject)(JSON.parse(secret));
+
+        if (auth.tokens !== undefined) collect(auth.tokens);
+
+        if (auth.OPENAI_API_KEY !== undefined) collect(auth.OPENAI_API_KEY);
       } catch {
         /* The whole value is still masked. */
       }
