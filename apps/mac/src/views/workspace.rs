@@ -2536,19 +2536,7 @@ impl WorkspaceView {
                 agent,
                 move |session, window, cx| {
                     let _ = weak.update(cx, |this, cx| {
-                        this.active = Some(session.id.clone());
-                        this.store.update(cx, |store, cx| {
-                            store
-                                .state
-                                .apply(p::WorkspaceServerMessage::Session(p::WsSession {
-                                    type_: p::WsSessionType::Session,
-                                    session,
-                                }));
-                            cx.notify();
-                        });
-                        this.sync(window, cx);
-                        this.focus_composer(window, cx);
-                        cx.notify();
+                        this.activate_created_chat(session, window, cx)
                     });
                 },
                 window,
@@ -2556,6 +2544,29 @@ impl WorkspaceView {
             )
         });
         self.new_chat_dialog = Some(dialogs);
+        cx.notify();
+    }
+
+    fn activate_created_chat(
+        &mut self,
+        session: p::Session,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.active = Some(session.id.clone());
+        self.store.update(cx, |store, cx| {
+            if !store.state.sessions.contains_key(&session.id) {
+                store
+                    .state
+                    .apply(p::WorkspaceServerMessage::Session(p::WsSession {
+                        type_: p::WsSessionType::Session,
+                        session,
+                    }));
+            }
+            cx.notify();
+        });
+        self.sync(window, cx);
+        self.focus_composer(window, cx);
         cx.notify();
     }
 
@@ -3868,6 +3879,31 @@ mod tests {
                 view.store.read(cx).state.sessions[&id].status,
                 p::SessionStatus::Closed
             )
+        });
+    }
+
+    #[gpui_kit::test]
+    fn created_chat_response_keeps_newer_streamed_session_metadata(cx: &mut TestAppContext) {
+        let state = fixture();
+        let latest = state.sessions.values().next().unwrap().clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let mut response = latest.clone();
+        response.title = "Older creation response".into();
+        response.config_options.clear();
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.activate_created_chat(response, window, cx)
+            });
+        })
+        .unwrap();
+        view.read_with(cx, |view, cx| {
+            assert_eq!(view.store.read(cx).state.sessions[&latest.id], latest);
         });
     }
 
