@@ -156,7 +156,7 @@ Add project includes the focused `Search repos` input and local owner/name filte
 
 | Region (04) | GPUI Kit components |
 | --- | --- |
-| Window frame | `Root`, `TitleBar` with the native traffic lights |
+| Window frame | `Root`, `TitleBar` with the native traffic lights; the native window name is `Tempo` |
 | Panes | `Resizable` for sidebar, center and right side; sizes saved in `state.json` |
 | Sidebar | `Sidebar`; rows are custom; `HoverCard`; `Menu` for the right-click menu; `Badge` for the PR; `Spinner` |
 | Top bar | `Toolbar`; `Button` for the primary action; `DropdownButton` and `Menu` for the overflow menu; `Badge`; `Tooltip` |

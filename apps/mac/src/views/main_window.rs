@@ -92,6 +92,7 @@ pub struct MainWindow {
 
 impl MainWindow {
     pub fn new(content: MainWindowContent, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        window.set_window_title(crate::APP_NAME);
         let (top_bar, tabs, rows) = match content.workspace {
             Some(w) => (Some(w.top_bar), w.tabs, w.rows),
             None => (None, Vec::new(), Vec::new()),
