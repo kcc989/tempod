@@ -6,10 +6,11 @@ const environment = createUiEnvironment();
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Schema } from "effect";
-import { Run } from "@tempo/protocol";
+import { Item, Run } from "@tempo/protocol";
 import runFixture from "../../../../../packages/protocol/fixtures/types/Run.jsonl?raw";
 import { createElement } from "react";
 import { beforeEach, expect, it } from "vitest";
+import { ItemView } from "../../../src/ui/components/chat/TranscriptItems";
 import { RunCard } from "../../../src/ui/components/chat/RunCard";
 import { openSessionIds, closedSessions } from "../../../src/ui/components/chat/chat-tabs-model";
 import { emptyWorkspaceState } from "../../../src/ui/stores/workspace-state";
@@ -82,4 +83,54 @@ it("renders plan approval, a tree warning and its pin revert, and keeps run sess
   expect(closedSessions({ "old-run": closedRun })).toEqual([]);
   fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
   expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+});
+
+it("requests the failed decision's agent from its origin chat with Run anyway", async () => {
+  environment.request.mockResolvedValue({});
+
+  const item = Schema.decodeUnknownSync(Item)({
+    id: source.id,
+    sessionId: source.originSessionId,
+    turnId: null,
+    seq: 1,
+    agent: null,
+    kind: "notice",
+    status: "completed",
+    rev: 1,
+    updatedAt: 1,
+    createdAt: 1,
+    content: {
+      level: "warning",
+      text: "Auth reviewer was not checked because the decision model did not answer.",
+      agentId: source.agentId,
+    },
+  });
+
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  render(
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(ItemView, {
+        ctx: {
+          workspaceId: "card-w",
+          sessionId: source.originSessionId!,
+          agent: "claude",
+          writable: true,
+          canRevert: true,
+        },
+        item,
+        turn: undefined,
+      }),
+    ),
+    { wrapper: environment.Provider },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Run anyway" }));
+  await waitFor(() =>
+    expect(environment.request).toHaveBeenCalledWith("requestAgent", {
+      workspaceId: "card-w",
+      sessionId: source.originSessionId,
+      agentId: source.agentId,
+    }),
+  );
 });

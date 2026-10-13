@@ -554,6 +554,7 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
 function Notice({ item, ctx }: { item: ItemOf<"notice">; ctx: ItemContext }) {
   const revert = useCallMutation("revertToCheckpoint");
   const { level, text } = item.content;
+  const request = useCallMutation("requestAgent", { invalidates: ["listRuns", "listLifecycleEvents"] });
 
   return (
     <p
@@ -566,6 +567,22 @@ function Notice({ item, ctx }: { item: ItemOf<"notice">; ctx: ItemContext }) {
       )}
     >
       {text}
+      {item.content.agentId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!ctx.writable || request.isPending}
+          onClick={() =>
+            request.mutate({
+              workspaceId: ctx.workspaceId,
+              sessionId: ctx.sessionId,
+              agentId: item.content.agentId!,
+            })
+          }
+        >
+          Run anyway
+        </Button>
+      )}
       {item.content.checkpointId && (
         <Button
           variant="ghost"

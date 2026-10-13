@@ -39,3 +39,5 @@ export * from "./json-data.ts";
 export * from "./credentials.ts";
 
 export * from "./github.ts";
+
+export * from "./decisions.ts";

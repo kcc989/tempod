@@ -258,6 +258,7 @@ pub struct EventsView {
     workspace_id: String,
     change: Entity<InputState>,
     events: Vec<p::LifecycleLogEvent>,
+    attachments: Vec<p::AgentAttachment>,
     trace: String,
     error: Option<String>,
 }
@@ -273,6 +274,7 @@ impl EventsView {
             workspace_id,
             change: cx.new(|cx| InputState::new(window, cx).placeholder("Change ID")),
             events: vec![],
+            attachments: vec![],
             trace: String::new(),
             error: None,
         }
@@ -312,18 +314,26 @@ impl EventsView {
                     event_id: id,
                 })
                 .await;
-            let roles = client
-                .call::<api::ListRoles>(p::ListRolesIn {
-                    workspace_id: Some(workspace_id),
-                })
-                .await;
+            let attachments = match client
+                .call::<api::GetWorkspace>(p::GetWorkspaceIn { workspace_id })
+                .await
+            {
+                Ok(w) => client
+                    .call::<api::ListProjectAgents>(p::ListProjectAgentsIn {
+                        project_id: w.project_id,
+                    })
+                    .await
+                    .unwrap_or_default(),
+                Err(_) => vec![],
+            };
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(trace) => {
+                        this.attachments = attachments.clone();
                         this.trace = format!(
-                            "Trace\n{}\nRole filters\n{}",
+                            "Trace\n{}\nAgent hooks\n{}",
                             serde_json::to_string_pretty(&trace).unwrap_or_default(),
-                            serde_json::to_string_pretty(&roles.ok()).unwrap_or_default()
+                            serde_json::to_string_pretty(&attachments).unwrap_or_default()
                         )
                     }
                     Err(e) => this.error = Some(e.to_string()),
@@ -356,12 +366,45 @@ impl Render for EventsView {
                     .map(|(i, event)| {
                         let value = serde_json::to_value(&event.event).unwrap_or_default();
                         let id = value["id"].as_str().unwrap_or_default().to_string();
-                        let label = format!(
+                        let mut label = format!(
                             "{} · {} · {}",
                             event.seq,
                             value["type"].as_str().unwrap_or_default(),
                             value["changeId"].as_str().unwrap_or("No change")
                         );
+                        if value["type"] == "run.decided" {
+                            let payload = &value["payload"];
+                            let question = self
+                                .attachments
+                                .iter()
+                                .find(|a| Some(a.id.as_str()) == payload["attachmentId"].as_str())
+                                .and_then(|a| {
+                                    a.hooks
+                                        .get(payload["hookIndex"].as_u64().unwrap_or_default()
+                                            as usize)
+                                })
+                                .and_then(|h| h.when.as_ref().map(|q| q.as_str()))
+                                .unwrap_or("Always / hook removed");
+                            let probability = payload["p"]
+                                .as_f64()
+                                .map(|p| format!("{:.0}%", p * 100.0))
+                                .unwrap_or_else(|| {
+                                    if payload["outcome"] == "error" {
+                                        "No answer"
+                                    } else {
+                                        "Always"
+                                    }
+                                    .into()
+                                });
+                            label.push_str(&format!(
+                                " · {} · {} · {} · threshold {} · {}",
+                                payload["handle"].as_str().unwrap_or_default(),
+                                payload["outcome"].as_str().unwrap_or_default(),
+                                probability,
+                                payload["threshold"],
+                                question
+                            ));
+                        }
                         Button::new(("event", i)).ghost().label(label).on_click(
                             cx.listener(move |this, _, _, cx| this.select(id.clone(), cx)),
                         )

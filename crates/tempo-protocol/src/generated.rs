@@ -5662,10 +5662,20 @@ impl<'de> ::serde::Deserialize<'de> for NoteReportSummary {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct NoticeContent {
     #[serde(
+        rename = "agentId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub agent_id: ::std::option::Option<::std::string::String>,
+    #[serde(
         rename = "checkpointId",
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub checkpoint_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "eventId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub event_id: ::std::option::Option<::std::string::String>,
     pub level: NoticeLevel,
     pub text: ::std::string::String,
 }

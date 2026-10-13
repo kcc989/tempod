@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { useCallQuery } from "~/ui/hooks/useCall";
 import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
@@ -14,7 +15,13 @@ export function LifecycleEvents({ workspaceId }: { workspaceId: string }) {
   const events = useCallQuery("listLifecycleEvents", input);
 
   const trace = useCallQuery("getTrace", { workspaceId, eventId }, { enabled: !!eventId });
-  const roles = useCallQuery("listRoles", { workspaceId });
+  const projectId = useWorkspaceSelector(workspaceId, (s) => s.workspace?.projectId);
+
+  const attachments = useCallQuery(
+    "listProjectAgents",
+    { projectId: projectId ?? "" },
+    { enabled: !!projectId },
+  );
 
   return (
     <div className="min-h-0 space-y-2 overflow-auto">
@@ -43,6 +50,20 @@ export function LifecycleEvents({ workspaceId }: { workspaceId: string }) {
                 onClick={() => setEventId(event.id)}
               >
                 {seq} · {event.type} · {event.agent ?? event.source} · {event.changeId ?? "No change"}
+                {event.type === "run.decided" && (
+                  <span className="ml-2">
+                    {event.payload.handle} · {event.payload.outcome} ·{" "}
+                    {event.payload.p === undefined
+                      ? event.payload.outcome === "error"
+                        ? "No answer"
+                        : "Always"
+                      : `${Math.round(event.payload.p * 100)}%`}{" "}
+                    · threshold {event.payload.threshold} ·{" "}
+                    {attachments.data?.find((a) => a.id === event.payload.attachmentId)?.hooks[
+                      event.payload.hookIndex
+                    ]?.when ?? "Always / hook removed"}
+                  </span>
+                )}
               </Button>
             </li>
           ))}
@@ -58,20 +79,8 @@ export function LifecycleEvents({ workspaceId }: { workspaceId: string }) {
               {JSON.stringify(trace.data, null, 2)}
             </pre>
           )}
-          <h3 className="font-medium">Role filters</h3>
-          <pre className="text-xs whitespace-pre-wrap">
-            {JSON.stringify(
-              roles.data?.map((r) => ({
-                name: r.name,
-                scope: r.scope,
-                on: r.on,
-                error: r.error,
-                shadowedBy: r.shadowedBy,
-              })),
-              null,
-              2,
-            )}
-          </pre>
+          <h3 className="font-medium">Agent hooks</h3>
+          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(attachments.data, null, 2)}</pre>
         </section>
       )}
     </div>

@@ -52,6 +52,7 @@
   ],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }],
   "browser": { "binding": "BROWSER" },
+  "ai": { "binding": "AI" },
   "worker_loaders": [{ "binding": "LOADER" }],
   "artifacts": [{ "binding": "AGENTS", "namespace": "tempo-agents" }],
 }
