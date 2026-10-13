@@ -133,7 +133,7 @@
     "relaunched": false,
     "capturePendingReason": "Mac locked"
   },
-  "lastGoalTurn": "progress: saved creation-composer prerequisite a7fb6ba and focus candidate 7ed0178; Mac build, application typecheck and changed-file lint passed; installed signing verified. Native capture remains blocked by Mac lock.",
+  "lastGoalTurn": "No progress: desktop access revalidated and still reports Mac locked. The same condition recurred across three consecutive turns. Installed binary still matches its receipt. No new capture, review, test or product change.",
   "nextVerifiedIssue": {
     "area": "usability",
     "screen": "New workspace options",
@@ -146,5 +146,15 @@
     "selectionEvidence": "Branch rows do not call selected or expose a persistent checkmark; picked.jpg only proves nearby draft value changes.",
     "candidateCommit": "7ed0178",
     "verification": "pending: fresh native open and Tab captures plus original interaction questions"
+  },
+  "blockedAudit": {
+    "sameConditionConsecutiveTurns": 3,
+    "condition": "Mac locked; desktop control cannot open Tempo for native interaction and capture",
+    "authoritativeObservation": "cua.getApp(/Applications/Tempo.app): Mac is locked and automatic unlock could not unlock it",
+    "previousTurnClassification": "progress: creation-composer prerequisite and focus candidate committed, built and installed",
+    "currentTurnClassification": "no progress; blocker revalidated",
+    "nextActionAfterUnlock": "Open installed Tempo; verify Info and Guides; capture workspace options opening and Tab; submit fresh separate stateless area and interaction reviews",
+    "completionClaim": false,
+    "originalScopePreserved": true
   }
 }
