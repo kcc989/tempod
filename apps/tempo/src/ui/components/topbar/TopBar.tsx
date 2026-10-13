@@ -14,6 +14,7 @@ import { cn } from "~/ui/lib/utils";
 import { toggleRight } from "~/ui/state/workspace-ui";
 import { BaseBranchPicker } from "./BaseBranchPicker";
 import { requestCommit } from "./commit-request";
+import { EditableBranch } from "./EditableBranch";
 import { InlineEdit } from "./InlineEdit";
 import { OverflowMenu } from "./OverflowMenu";
 import { PortLinks } from "./PortLinks";
@@ -80,9 +81,7 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
         <EditableTitle title={w.title} onSave={actions.rename} />
         <span className="flex min-w-0 items-center gap-0.5 font-mono text-xs text-muted-foreground">
           <GitBranchIcon aria-hidden className="size-3 shrink-0" />
-          <span className="truncate" title={w.branch}>
-            {w.branch}
-          </span>
+          <EditableBranch view={view} onSave={actions.renameBranch} />
           <Button
             variant="ghost"
             size="icon-sm"
@@ -148,9 +147,10 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
       <StatusIcon workspace={w} op={d?.op ?? null} />
       <div className="flex min-w-0 flex-1 flex-col">
         <EditableTitle title={w.title} onSave={actions.rename} />
-        <span className="truncate px-1 font-mono text-xs text-muted-foreground">
-          {w.branch} → {w.baseBranch}
-        </span>
+        <div className="flex min-w-0 items-center font-mono text-xs text-muted-foreground">
+          <EditableBranch view={view} onSave={actions.renameBranch} />
+          <span className="truncate"> → {w.baseBranch}</span>
+        </div>
       </div>
       <ContainerPill
         pill={pillFor(view)}

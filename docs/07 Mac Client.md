@@ -424,3 +424,6 @@ Pages read on 2026-10-11.
 - [Effect v4: Schema to JSON Schema](https://effect.website/docs/v4/schema/json-schema)
 - [RFC 8628: OAuth 2.0 Device Authorization Grant](https://www.rfc-editor.org/rfc/rfc8628)
 - [Apple: Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+
+## Branch naming
+New workspaces use animal slugs and receive a branch name from the first accepted prompt as in 03. The workspace header offers Rename branch with Save branch and Cancel. It calls `renameBranch` and preserves server error messages; enable it only for ready, working or sleeping workspaces with an unpushed branch. A manual save overrides automatic naming.
