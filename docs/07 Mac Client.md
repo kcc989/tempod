@@ -32,7 +32,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | --- | --- | --- |
 | Sidebar, hover card, right-click menu, History | Same |  |
 | Saved conversations | Default browser | Opens the owner’s Tempo `/history` to read project-scoped saved conversations; browser sign-in may be required |
-| New workspace dialog | Same | Enter in the focused prompt creates; ⇧Enter adds a line. Blank creation works while model discovery loads. Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
+| New workspace dialog | Same | Enter in the focused prompt creates; ⇧Enter adds a line. Blank creation works while model discovery loads. Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. Branch option rows fill the menu width, align names left, use monospace and truncate with an ellipsis while keeping full accessible names. |
 | Top bar branch editing | Same | Double-click the branch name to edit inline; Enter or blur saves and Escape cancels. Copy uses a separate icon. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |

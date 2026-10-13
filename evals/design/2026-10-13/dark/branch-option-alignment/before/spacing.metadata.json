@@ -1,0 +1,12 @@
+{
+  "area": "spacing",
+  "version": "2.1-draft",
+  "calibrated": false,
+  "requestSha256": "31317075ae5614871537d381e95604b532cf2c241c713a5366be5a75d1f1b34d",
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-13T22:47:22Z",
+  "stateless": true,
+  "priorResultsIncluded": false
+}

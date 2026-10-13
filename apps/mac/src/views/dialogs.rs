@@ -845,10 +845,21 @@ impl Render for Dialogs {
                         )
                         .child(Input::new(&self.branch))
                         .children((self.source != 2).then(|| {
-                            h_flex().gap_1().children(self.branches.iter().map(|b| {
+                            v_flex().gap_1().children(self.branches.iter().map(|b| {
                                 let name = b.name.clone();
                                 Button::new(SharedString::from(format!("branch-{name}")))
-                                    .label(name.clone())
+                                    .ghost()
+                                    .w_full()
+                                    .accessibility_label(name.clone())
+                                    .child(
+                                        div()
+                                            .w_full()
+                                            .min_w_0()
+                                            .text_left()
+                                            .truncate()
+                                            .font_family("monospace")
+                                            .child(name.clone()),
+                                    )
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.branch.update(cx, |i, cx| {
                                             i.set_value(name.clone(), window, cx)
