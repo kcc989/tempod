@@ -689,6 +689,11 @@ impl Render for WorkspaceView {
             .connection
             .shows_reconnecting_bar(std::time::Instant::now());
         let error = self.error.clone().or_else(|| store.error.clone());
+        let progress = store
+            .state
+            .workspace
+            .as_ref()
+            .and_then(chat_model::workspace_progress);
         let heading = store
             .state
             .workspace
@@ -882,6 +887,14 @@ impl Render for WorkspaceView {
                     .py_2()
                     .text_color(color(Token::Warning, cx))
                     .child("Reconnecting…")
+            }))
+            .children(progress.map(|status| {
+                h_flex()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .child(gpui_kit::component::spinner::Spinner::new())
+                    .child(status)
             }))
             .children(error.map(|error| {
                 div()

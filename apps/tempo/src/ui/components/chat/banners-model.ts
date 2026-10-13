@@ -1,5 +1,4 @@
-import { errorMessage, type ErrorCode, type OpProgress, type WorkspaceDetail } from "@tempo/protocol";
-import { formatDuration } from "~/ui/lib/format";
+import { errorMessage, type ErrorCode, type WorkspaceDetail } from "@tempo/protocol";
 import { stepLabel } from "~/ui/lib/indicators";
 import { isKnownErrorCode } from "./transcript-model";
 
@@ -9,7 +8,6 @@ export type WorkspaceBanner =
   | {
       readonly kind: "progress";
       readonly title: string;
-      readonly steps: ReadonlyArray<StepRow>;
       /** setting_up: offer the Setup tab. */
       readonly setup: boolean;
     }
@@ -21,22 +19,6 @@ export type WorkspaceBanner =
     }
   | { readonly kind: "setupFailed" }
   | { readonly kind: "sleeping" };
-
-export interface StepRow {
-  readonly key: string;
-  readonly label: string;
-  readonly status: OpProgress["steps"][number]["status"];
-  /** For example `4 s`; null while the step has not finished. */
-  readonly time: string | null;
-}
-
-export const stepRows = (op: OpProgress): StepRow[] =>
-  op.steps.map((s, i) => ({
-    key: `${i}:${s.name}`,
-    label: stepLabel(s.name),
-    status: s.status,
-    time: s.ms !== null && (s.status === "done" || s.status === "failed") ? formatDuration(s.ms) : null,
-  }));
 
 const PROGRESS_TITLE: Partial<Record<WorkspaceDetail["state"], string>> = {
   creating: "Creating the workspace",
@@ -56,8 +38,7 @@ export const workspaceBanners = (
   if (title) {
     out.push({
       kind: "progress",
-      title,
-      steps: ws.op ? stepRows(ws.op) : [],
+      title: ws.op?.step ? stepLabel(ws.op.step) : title,
       setup: ws.state === "setting_up",
     });
   }

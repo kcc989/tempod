@@ -33,6 +33,33 @@ pub fn session_title(session: &Session) -> String {
         session.title.clone()
     }
 }
+pub fn workspace_progress(workspace: &tempo_protocol::WorkspaceDetail) -> Option<String> {
+    let fallback = match workspace.state {
+        tempo_protocol::WorkspaceState::Creating => "Creating the workspace",
+        tempo_protocol::WorkspaceState::Starting => "Starting the workspace",
+        tempo_protocol::WorkspaceState::SettingUp => "Running setup",
+        _ => return None,
+    };
+    let step = workspace
+        .op
+        .as_ref()
+        .map(|op| op.step.as_str())
+        .unwrap_or("");
+    let label = match step {
+        "" => fallback,
+        "container.start" => "Starting container",
+        "tempod.connect" => "Connecting",
+        "repo.clone" => "Cloning repo",
+        "repo.applyCheckpoint" => "Restoring checkpoint",
+        "home.restore" => "Restoring home",
+        "settings.read" => "Reading settings",
+        "setup.run" => "Running setup",
+        "sessions.markReload" => "Reloading sessions",
+        _ => step,
+    };
+    Some(label.into())
+}
+
 pub fn sessions(state: &WorkspaceState, closed: bool) -> Vec<&Session> {
     let mut sessions: Vec<_> = state
         .sessions

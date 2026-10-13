@@ -40,6 +40,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode |
 | Checks | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
+| Workspace startup status | Same | Compact spinner and current op step; fall back to the workspace status before a step is available. No step list, timings or queue explanation. |
 | Previews | Different | Open in the default browser; no Browser tab |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bannerCodes, stepRows, workspaceBanners } from "~/ui/components/chat/banners-model";
+import { bannerCodes, workspaceBanners } from "~/ui/components/chat/banners-model";
 import { detail } from "../fixtures";
 
 const op = {
@@ -14,25 +14,20 @@ const op = {
 };
 
 describe("workspace banners", () => {
-  it("shows the op's steps with their times while starting", () => {
+  it("shows only the current status while starting", () => {
     const banners = workspaceBanners(detail({ state: "starting", op }));
     expect(banners).toEqual([
       {
         kind: "progress",
-        title: "Starting the workspace",
+        title: "Cloning repo",
         setup: false,
-        steps: [
-          { key: "0:container.start", label: "Starting container", status: "done", time: "4 s" },
-          { key: "1:repo.clone", label: "Cloning repo", status: "running", time: null },
-          { key: "2:settings.read", label: "Reading settings", status: "pending", time: null },
-        ],
       },
     ]);
   });
 
   it("offers the Setup tab while setting up", () => {
     expect(workspaceBanners(detail({ state: "setting_up", op: null }))).toEqual([
-      { kind: "progress", title: "Running setup", setup: true, steps: [] },
+      { kind: "progress", title: "Running setup", setup: true },
     ]);
   });
 
@@ -73,12 +68,12 @@ describe("workspace banners", () => {
     expect(bannerCodes(workspaceBanners(detail({ setupStatus: "failed" })))).toEqual(["SETUP_FAILED"]);
   });
 
-  it("formats failed step times too", () => {
-    expect(stepRows({ ...op, steps: [{ name: "x.y", status: "failed", ms: 61_000 }] })[0]).toEqual({
-      key: "0:x.y",
-      label: "X y",
-      status: "failed",
-      time: "1 min 1 s",
-    });
+  it("falls back to the workspace status before a step is available", () => {
+    expect(workspaceBanners(detail({ state: "starting", op: null }))).toEqual([
+      { kind: "progress", title: "Starting the workspace", setup: false },
+    ]);
+    expect(workspaceBanners(detail({ state: "creating", op: { ...op, step: "" } }))).toEqual([
+      { kind: "progress", title: "Creating the workspace", setup: false },
+    ]);
   });
 });
