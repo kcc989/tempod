@@ -47,7 +47,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
 | Environment… dialog and environment proposal review | Same |  |
-| Settings: General, Logins, Agents, Environments, MCP servers, Project, Appearance, Shortcuts | Same | Codex uses the same start/poll/cancel device-login RPCs and opens the verification page in the default browser. Notifications are macOS notifications |
+| Settings: General, Logins, Agents, Environments, MCP servers, Project, Appearance, Shortcuts | Same | Codex requests and polls device sign-in directly from OpenAI on the tokio runtime and opens the verification page in the default browser. On approval it uploads the completed auth.json through `setCodexAuth`; CredentialDO encrypts and distributes it. Cancel drops the local task, including an in-flight OpenAI exchange. Attempts expire after 15 minutes. Safe sign-in errors retain the failed stage and HTTP status. Notifications are macOS notifications |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |
@@ -59,7 +59,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 
 ## Architecture
 
-The Mac app is one Rust binary. It talks only to the Tempo Worker, over HTTPS and WebSockets, with the same contracts as the web UI.
+The Mac app is one Rust binary. It talks to the Tempo Worker, over HTTPS and WebSockets, with the same contracts as the web UI. Codex device sign-in is the one networking exception: the Mac contacts `https://auth.openai.com` directly without sending its Tempo bearer token. Tokens stay in memory until `setCodexAuth` sends them to CredentialDO for encrypted storage. It uses a separate HTTP client with platform TLS verification, no redirects and a 15-second request timeout.
 
 ```text
 apps/mac/                   crate tempo-mac, binary "Tempo"
