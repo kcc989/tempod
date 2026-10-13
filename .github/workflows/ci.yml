@@ -45,8 +45,12 @@ jobs:
       - name: Install dependencies
         id: install
         run: |
-          bun install --frozen-lockfile
-          bun -e 'console.log("playwright_version=" + (await Bun.file("tests/e2e/node_modules/@playwright/test/package.json").json()).version)' >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.changes.outputs.docs_only }}" = "true" ]; then
+            bun install --frozen-lockfile --filter tempo
+          else
+            bun install --frozen-lockfile
+            bun -e 'console.log("playwright_version=" + (await Bun.file("tests/e2e/node_modules/@playwright/test/package.json").json()).version)' >> "$GITHUB_OUTPUT"
+          fi
       - name: Restore Chromium
         if: steps.changes.outputs.docs_only != 'true'
         id: chromium
