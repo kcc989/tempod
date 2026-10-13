@@ -12,7 +12,7 @@ import {
 } from "@tempo/protocol";
 import { Schema, Option } from "effect";
 
-/** Settings → Agents (04): the custom agent form. Pure, so it is unit-tested. */
+/** Settings → Agents (04): the saved agent form. Pure, so it is unit-tested. */
 
 export interface ServerForm {
   readonly key: string;
@@ -97,7 +97,7 @@ export const formFromAgent = (a: Agent): AgentForm => ({
   })),
 });
 
-/** What each base agent ignores (01, Custom agents table), shown below Base agent. */
+/** What each base agent ignores (01, Saved agents table), shown below Base agent. */
 export const UNSUPPORTED_NOTE: Record<typeof AgentBase.Type, string | null> = {
   auto: null,
   claude: null,

@@ -1,5 +1,5 @@
 import { decisionState, decideHooks, type HookDecision, type MatchedHook } from "../../agents/decisions.ts";
-import { lifecycleRedactor } from "../../roles/secrets.ts";
+import { lifecycleRedactor } from "../../agents/secrets.ts";
 import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { Schema } from "effect";
 import {
@@ -37,7 +37,7 @@ export class Lifecycle {
     this.runs = new Runs(this);
   }
 
-  async load(_repo = false): Promise<void> {
+  async load(): Promise<void> {
     if (this.loading) await this.loading;
     this.loading = (async () => {
       const ws = this.core.ws();
@@ -64,12 +64,6 @@ export class Lifecycle {
     } finally {
       this.loading = null;
     }
-  }
-  async list(): Promise<FnOutput<"listRoles">> {
-    return [];
-  }
-  async text(_name: string, _scope: string): Promise<{ text: string }> {
-    throw new TempoError("NOT_FOUND");
   }
   matches(
     attachment: AgentAttachment,

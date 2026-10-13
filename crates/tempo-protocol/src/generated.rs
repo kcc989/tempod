@@ -1944,11 +1944,6 @@ pub struct CreateSessionIn {
     )]
     pub agent_id: ::std::option::Option<::std::string::String>,
     #[serde(
-        rename = "customAgentId",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub custom_agent_id: ::std::option::Option<::std::string::String>,
-    #[serde(
         rename = "modeId",
         skip_serializing_if = "::std::option::Option::is_none"
     )]
@@ -1968,11 +1963,6 @@ pub struct CreateWorkspaceIn {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub agent_id: ::std::option::Option<::std::string::String>,
-    #[serde(
-        rename = "customAgentId",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub custom_agent_id: ::std::option::Option<::std::string::String>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub model: ::std::option::Option<::std::string::String>,
     #[serde(rename = "projectId")]
@@ -2133,382 +2123,6 @@ pub struct CredentialStatusCodex {
     )]
     pub updated_at: ::std::option::Option<f64>,
 }
-///`CustomAgent`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CustomAgent {
-    #[serde(rename = "baseAgent")]
-    pub base_agent: AgentId,
-    #[serde(rename = "commitSha")]
-    pub commit_sha: ::std::string::String,
-    pub description: CustomAgentDescription,
-    pub id: ::std::string::String,
-    pub mcp: CustomAgentMcp,
-    pub model: ::std::string::String,
-    pub name: CustomAgentName,
-    #[serde(rename = "systemPrompt")]
-    pub system_prompt: CustomAgentSystemPrompt,
-    #[serde(rename = "thoughtLevel")]
-    pub thought_level: ::std::string::String,
-    pub tools: CustomAgentTools,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: f64,
-}
-///`CustomAgentDefinition`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CustomAgentDefinition {
-    #[serde(rename = "baseAgent")]
-    pub base_agent: AgentId,
-    pub description: CustomAgentDefinitionDescription,
-    pub mcp: CustomAgentDefinitionMcp,
-    pub model: ::std::string::String,
-    pub name: CustomAgentDefinitionName,
-    #[serde(rename = "systemPrompt")]
-    pub system_prompt: CustomAgentDefinitionSystemPrompt,
-    #[serde(rename = "thoughtLevel")]
-    pub thought_level: ::std::string::String,
-    pub tools: CustomAgentDefinitionTools,
-}
-///`CustomAgentDefinitionDescription`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct CustomAgentDefinitionDescription(::std::string::String);
-impl ::std::ops::Deref for CustomAgentDefinitionDescription {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<CustomAgentDefinitionDescription> for ::std::string::String {
-    fn from(value: CustomAgentDefinitionDescription) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for CustomAgentDefinitionDescription {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 200usize {
-            return Err("longer than 200 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for CustomAgentDefinitionDescription {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDefinitionDescription {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for CustomAgentDefinitionDescription {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`CustomAgentDefinitionMcp`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CustomAgentDefinitionMcp {
-    pub playwright: bool,
-    pub servers: ::std::vec::Vec<McpServerDef>,
-}
-///`CustomAgentDefinitionName`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct CustomAgentDefinitionName(::std::string::String);
-impl ::std::ops::Deref for CustomAgentDefinitionName {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<CustomAgentDefinitionName> for ::std::string::String {
-    fn from(value: CustomAgentDefinitionName) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for CustomAgentDefinitionName {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 60usize {
-            return Err("longer than 60 characters".into());
-        }
-        if value.chars().count() < 1usize {
-            return Err("shorter than 1 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for CustomAgentDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDefinitionName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for CustomAgentDefinitionName {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`CustomAgentDefinitionSystemPrompt`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct CustomAgentDefinitionSystemPrompt(::std::string::String);
-impl ::std::ops::Deref for CustomAgentDefinitionSystemPrompt {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<CustomAgentDefinitionSystemPrompt> for ::std::string::String {
-    fn from(value: CustomAgentDefinitionSystemPrompt) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for CustomAgentDefinitionSystemPrompt {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 32000usize {
-            return Err("longer than 32000 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for CustomAgentDefinitionSystemPrompt {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDefinitionSystemPrompt {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for CustomAgentDefinitionSystemPrompt {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`CustomAgentDefinitionTools`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CustomAgentDefinitionTools {
-    pub allow: ::std::vec::Vec<::std::string::String>,
-    pub deny: ::std::vec::Vec<::std::string::String>,
-}
-///`CustomAgentDescription`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct CustomAgentDescription(::std::string::String);
-impl ::std::ops::Deref for CustomAgentDescription {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<CustomAgentDescription> for ::std::string::String {
-    fn from(value: CustomAgentDescription) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for CustomAgentDescription {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 200usize {
-            return Err("longer than 200 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for CustomAgentDescription {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for CustomAgentDescription {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for CustomAgentDescription {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`CustomAgentMcp`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CustomAgentMcp {
-    pub playwright: bool,
-    pub servers: ::std::vec::Vec<McpServerDef>,
-}
-///`CustomAgentName`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct CustomAgentName(::std::string::String);
-impl ::std::ops::Deref for CustomAgentName {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<CustomAgentName> for ::std::string::String {
-    fn from(value: CustomAgentName) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for CustomAgentName {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 60usize {
-            return Err("longer than 60 characters".into());
-        }
-        if value.chars().count() < 1usize {
-            return Err("shorter than 1 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for CustomAgentName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for CustomAgentName {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for CustomAgentName {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`CustomAgentSummary`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CustomAgentSummary {
-    #[serde(rename = "baseAgent")]
-    pub base_agent: AgentId,
-    pub description: ::std::string::String,
-    pub id: ::std::string::String,
-    pub name: ::std::string::String,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: f64,
-}
-///`CustomAgentSystemPrompt`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct CustomAgentSystemPrompt(::std::string::String);
-impl ::std::ops::Deref for CustomAgentSystemPrompt {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<CustomAgentSystemPrompt> for ::std::string::String {
-    fn from(value: CustomAgentSystemPrompt) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for CustomAgentSystemPrompt {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 32000usize {
-            return Err("longer than 32000 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for CustomAgentSystemPrompt {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for CustomAgentSystemPrompt {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for CustomAgentSystemPrompt {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`CustomAgentTools`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct CustomAgentTools {
-    pub allow: ::std::vec::Vec<::std::string::String>,
-    pub deny: ::std::vec::Vec<::std::string::String>,
-}
 ///`CustomInstance`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CustomInstance {
@@ -2528,12 +2142,6 @@ pub struct DeleteAgentIn {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeleteCredentialIn {
     pub key: ::std::string::String,
-}
-///`DeleteCustomAgentIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct DeleteCustomAgentIn {
-    #[serde(rename = "customAgentId")]
-    pub custom_agent_id: ::std::string::String,
 }
 ///`DeleteEnvironmentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -2633,11 +2241,6 @@ pub struct DeleteReviewCommentIn {
     pub comment_id: ::std::string::String,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
-}
-///`DeleteUserRoleIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct DeleteUserRoleIn {
-    pub name: RoleName,
 }
 ///`DeleteWorkspaceIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3131,12 +2734,6 @@ pub enum ErrorCode {
     EnvironmentExists,
     #[serde(rename = "EGRESS_BLOCKED")]
     EgressBlocked,
-    #[serde(rename = "CUSTOM_AGENT_EXISTS")]
-    CustomAgentExists,
-    #[serde(rename = "CUSTOM_AGENT_LIMIT")]
-    CustomAgentLimit,
-    #[serde(rename = "ARTIFACTS_ERROR")]
-    ArtifactsError,
     #[serde(rename = "EVENT_INVALID")]
     EventInvalid,
     #[serde(rename = "RUN_LIMIT")]
@@ -3159,26 +2756,6 @@ pub enum ErrorCode {
     RunAlreadySent,
     #[serde(rename = "RUN_NO_CHAT")]
     RunNoChat,
-    #[serde(rename = "ROLE_NOT_FOUND")]
-    RoleNotFound,
-    #[serde(rename = "ROLE_NOT_REQUESTABLE")]
-    RoleNotRequestable,
-    #[serde(rename = "ROLE_INVALID")]
-    RoleInvalid,
-    #[serde(rename = "ROLE_LIMIT")]
-    RoleLimit,
-    #[serde(rename = "ROLE_NO_AGENT")]
-    RoleNoAgent,
-    #[serde(rename = "ROLE_TURN_FAILED")]
-    RoleTurnFailed,
-    #[serde(rename = "ROLE_RESULT_MISSING")]
-    RoleResultMissing,
-    #[serde(rename = "ROLE_RESULT_INVALID")]
-    RoleResultInvalid,
-    #[serde(rename = "ROLE_ACCESS_VIOLATION")]
-    RoleAccessViolation,
-    #[serde(rename = "ROLE_TIMED_OUT")]
-    RoleTimedOut,
     #[serde(rename = "INTERNAL")]
     Internal,
 }
@@ -3230,9 +2807,6 @@ impl ::std::fmt::Display for ErrorCode {
             Self::SettingsInvalid => f.write_str("SETTINGS_INVALID"),
             Self::EnvironmentExists => f.write_str("ENVIRONMENT_EXISTS"),
             Self::EgressBlocked => f.write_str("EGRESS_BLOCKED"),
-            Self::CustomAgentExists => f.write_str("CUSTOM_AGENT_EXISTS"),
-            Self::CustomAgentLimit => f.write_str("CUSTOM_AGENT_LIMIT"),
-            Self::ArtifactsError => f.write_str("ARTIFACTS_ERROR"),
             Self::EventInvalid => f.write_str("EVENT_INVALID"),
             Self::RunLimit => f.write_str("RUN_LIMIT"),
             Self::RunNoAgent => f.write_str("RUN_NO_AGENT"),
@@ -3244,16 +2818,6 @@ impl ::std::fmt::Display for ErrorCode {
             Self::RunNotCompleted => f.write_str("RUN_NOT_COMPLETED"),
             Self::RunAlreadySent => f.write_str("RUN_ALREADY_SENT"),
             Self::RunNoChat => f.write_str("RUN_NO_CHAT"),
-            Self::RoleNotFound => f.write_str("ROLE_NOT_FOUND"),
-            Self::RoleNotRequestable => f.write_str("ROLE_NOT_REQUESTABLE"),
-            Self::RoleInvalid => f.write_str("ROLE_INVALID"),
-            Self::RoleLimit => f.write_str("ROLE_LIMIT"),
-            Self::RoleNoAgent => f.write_str("ROLE_NO_AGENT"),
-            Self::RoleTurnFailed => f.write_str("ROLE_TURN_FAILED"),
-            Self::RoleResultMissing => f.write_str("ROLE_RESULT_MISSING"),
-            Self::RoleResultInvalid => f.write_str("ROLE_RESULT_INVALID"),
-            Self::RoleAccessViolation => f.write_str("ROLE_ACCESS_VIOLATION"),
-            Self::RoleTimedOut => f.write_str("ROLE_TIMED_OUT"),
             Self::Internal => f.write_str("INTERNAL"),
         }
     }
@@ -3307,9 +2871,6 @@ impl ::std::str::FromStr for ErrorCode {
             "SETTINGS_INVALID" => Ok(Self::SettingsInvalid),
             "ENVIRONMENT_EXISTS" => Ok(Self::EnvironmentExists),
             "EGRESS_BLOCKED" => Ok(Self::EgressBlocked),
-            "CUSTOM_AGENT_EXISTS" => Ok(Self::CustomAgentExists),
-            "CUSTOM_AGENT_LIMIT" => Ok(Self::CustomAgentLimit),
-            "ARTIFACTS_ERROR" => Ok(Self::ArtifactsError),
             "EVENT_INVALID" => Ok(Self::EventInvalid),
             "RUN_LIMIT" => Ok(Self::RunLimit),
             "RUN_NO_AGENT" => Ok(Self::RunNoAgent),
@@ -3321,16 +2882,6 @@ impl ::std::str::FromStr for ErrorCode {
             "RUN_NOT_COMPLETED" => Ok(Self::RunNotCompleted),
             "RUN_ALREADY_SENT" => Ok(Self::RunAlreadySent),
             "RUN_NO_CHAT" => Ok(Self::RunNoChat),
-            "ROLE_NOT_FOUND" => Ok(Self::RoleNotFound),
-            "ROLE_NOT_REQUESTABLE" => Ok(Self::RoleNotRequestable),
-            "ROLE_INVALID" => Ok(Self::RoleInvalid),
-            "ROLE_LIMIT" => Ok(Self::RoleLimit),
-            "ROLE_NO_AGENT" => Ok(Self::RoleNoAgent),
-            "ROLE_TURN_FAILED" => Ok(Self::RoleTurnFailed),
-            "ROLE_RESULT_MISSING" => Ok(Self::RoleResultMissing),
-            "ROLE_RESULT_INVALID" => Ok(Self::RoleResultInvalid),
-            "ROLE_ACCESS_VIOLATION" => Ok(Self::RoleAccessViolation),
-            "ROLE_TIMED_OUT" => Ok(Self::RoleTimedOut),
             "INTERNAL" => Ok(Self::Internal),
             _ => Err("invalid value".into()),
         }
@@ -3391,12 +2942,6 @@ pub struct GetChangesOut {
     #[serde(rename = "headSha")]
     pub head_sha: ::std::string::String,
 }
-///`GetCustomAgentIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct GetCustomAgentIn {
-    #[serde(rename = "customAgentId")]
-    pub custom_agent_id: ::std::string::String,
-}
 ///`GetDiagnosticsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetDiagnosticsIn {
@@ -3433,22 +2978,6 @@ pub struct GetProjectConversationIn {
     pub conversation_id: ::std::string::String,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
-}
-///`GetRoleTextIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct GetRoleTextIn {
-    pub name: RoleName,
-    pub scope: RoleScope,
-    #[serde(
-        rename = "workspaceId",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub workspace_id: ::std::option::Option<::std::string::String>,
-}
-///`GetRoleTextOut`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct GetRoleTextOut {
-    pub text: ::std::string::String,
 }
 ///`GetTraceIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -5158,15 +4687,6 @@ pub struct ListReviewCommentsIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
-///`ListRolesIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
-pub struct ListRolesIn {
-    #[serde(
-        rename = "workspaceId",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub workspace_id: ::std::option::Option<::std::string::String>,
-}
 ///`ListRunsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ListRunsIn {
@@ -6864,12 +6384,6 @@ impl<'de> ::serde::Deserialize<'de> for PutProjectAgentInHooksItemWhen {
             })
     }
 }
-///`PutUserRoleIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct PutUserRoleIn {
-    pub name: ::std::string::String,
-    pub text: ::std::string::String,
-}
 ///`ReadFileAtIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ReadFileAtIn {
@@ -7080,12 +6594,6 @@ pub struct RefreshPullRequestOut {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub pr_title: ::std::option::Option<::std::string::String>,
-}
-///`ReloadRolesIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct ReloadRolesIn {
-    #[serde(rename = "workspaceId")]
-    pub workspace_id: ::std::string::String,
 }
 ///`RenameBranchIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -7539,578 +7047,6 @@ impl ::std::convert::TryFrom<::std::string::String> for ReviewStatus {
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
-}
-///`RoleAccess`
-#[derive(
-    ::serde::Deserialize,
-    ::serde::Serialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-)]
-pub enum RoleAccess {
-    #[serde(rename = "read-only")]
-    ReadOnly,
-    #[serde(rename = "write")]
-    Write,
-}
-impl ::std::fmt::Display for RoleAccess {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        match *self {
-            Self::ReadOnly => f.write_str("read-only"),
-            Self::Write => f.write_str("write"),
-        }
-    }
-}
-impl ::std::str::FromStr for RoleAccess {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        match value {
-            "read-only" => Ok(Self::ReadOnly),
-            "write" => Ok(Self::Write),
-            _ => Err("invalid value".into()),
-        }
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleAccess {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleAccess {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-///`RoleAgent`
-#[derive(
-    ::serde::Deserialize,
-    ::serde::Serialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-)]
-pub enum RoleAgent {
-    #[serde(rename = "claude")]
-    Claude,
-    #[serde(rename = "codex")]
-    Codex,
-    #[serde(rename = "opencode")]
-    Opencode,
-    #[serde(rename = "pi")]
-    Pi,
-    #[serde(rename = "auto")]
-    Auto,
-    #[serde(rename = "other")]
-    Other,
-}
-impl ::std::fmt::Display for RoleAgent {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        match *self {
-            Self::Claude => f.write_str("claude"),
-            Self::Codex => f.write_str("codex"),
-            Self::Opencode => f.write_str("opencode"),
-            Self::Pi => f.write_str("pi"),
-            Self::Auto => f.write_str("auto"),
-            Self::Other => f.write_str("other"),
-        }
-    }
-}
-impl ::std::str::FromStr for RoleAgent {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        match value {
-            "claude" => Ok(Self::Claude),
-            "codex" => Ok(Self::Codex),
-            "opencode" => Ok(Self::Opencode),
-            "pi" => Ok(Self::Pi),
-            "auto" => Ok(Self::Auto),
-            "other" => Ok(Self::Other),
-            _ => Err("invalid value".into()),
-        }
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleAgent {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleAgent {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-///`RoleFile`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RoleFile {
-    pub access: RoleAccess,
-    pub agent: RoleAgent,
-    pub description: RoleFileDescription,
-    pub inputs: ::std::vec::Vec<::std::string::String>,
-    pub limits: RoleLimits,
-    pub model: ::std::string::String,
-    pub on: ::std::vec::Vec<RoleTrigger>,
-    pub requestable: bool,
-}
-///`RoleFileDescription`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct RoleFileDescription(::std::string::String);
-impl ::std::ops::Deref for RoleFileDescription {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<RoleFileDescription> for ::std::string::String {
-    fn from(value: RoleFileDescription) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for RoleFileDescription {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 500usize {
-            return Err("longer than 500 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleFileDescription {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleFileDescription {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for RoleFileDescription {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`RoleFinding`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RoleFinding {
-    pub blocking: bool,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub line: ::std::option::Option<::std::num::NonZeroU64>,
-    pub path: ::std::string::String,
-    pub text: ::std::string::String,
-}
-///`RoleInfo`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RoleInfo {
-    pub access: RoleAccess,
-    pub agent: RoleAgent,
-    pub description: ::std::string::String,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub error: ::std::option::Option<::std::string::String>,
-    pub limits: RoleLimits,
-    pub name: ::std::string::String,
-    pub on: ::std::vec::Vec<RoleTrigger>,
-    pub requestable: bool,
-    pub scope: RoleScope,
-    pub sha: ::std::string::String,
-    #[serde(
-        rename = "shadowedBy",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub shadowed_by: ::std::option::Option<RoleScope>,
-}
-///`RoleLimits`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RoleLimits {
-    pub continues: i64,
-    pub rounds: ::std::num::NonZeroU64,
-    pub timeout: ::std::string::String,
-    pub tokens: i64,
-}
-///`RoleName`
-#[derive(
-    ::serde::Deserialize, ::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd,
-)]
-#[serde(transparent)]
-pub struct RoleName(pub ::std::string::String);
-impl ::std::ops::Deref for RoleName {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<RoleName> for ::std::string::String {
-    fn from(value: RoleName) -> Self {
-        value.0
-    }
-}
-impl ::std::convert::From<::std::string::String> for RoleName {
-    fn from(value: ::std::string::String) -> Self {
-        Self(value)
-    }
-}
-impl ::std::fmt::Display for RoleName {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-impl ::std::str::FromStr for RoleName {
-    type Err = ::std::convert::Infallible;
-    fn from_str(value: &str) -> ::std::result::Result<Self, Self::Err> {
-        Ok(Self(value.to_string()))
-    }
-}
-///`RoleResult`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RoleResult {
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub findings: ::std::option::Option<::std::vec::Vec<RoleFinding>>,
-    pub status: RoleResultStatus,
-    pub summary: RoleResultSummary,
-}
-///`RoleResultStatus`
-#[derive(
-    ::serde::Deserialize,
-    ::serde::Serialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-)]
-pub enum RoleResultStatus {
-    #[serde(rename = "done")]
-    Done,
-    #[serde(rename = "pass")]
-    Pass,
-    #[serde(rename = "fail")]
-    Fail,
-    #[serde(rename = "blocked")]
-    Blocked,
-}
-impl ::std::fmt::Display for RoleResultStatus {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        match *self {
-            Self::Done => f.write_str("done"),
-            Self::Pass => f.write_str("pass"),
-            Self::Fail => f.write_str("fail"),
-            Self::Blocked => f.write_str("blocked"),
-        }
-    }
-}
-impl ::std::str::FromStr for RoleResultStatus {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        match value {
-            "done" => Ok(Self::Done),
-            "pass" => Ok(Self::Pass),
-            "fail" => Ok(Self::Fail),
-            "blocked" => Ok(Self::Blocked),
-            _ => Err("invalid value".into()),
-        }
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleResultStatus {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleResultStatus {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-///`RoleResultSummary`
-#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[serde(transparent)]
-pub struct RoleResultSummary(::std::string::String);
-impl ::std::ops::Deref for RoleResultSummary {
-    type Target = ::std::string::String;
-    fn deref(&self) -> &::std::string::String {
-        &self.0
-    }
-}
-impl ::std::convert::From<RoleResultSummary> for ::std::string::String {
-    fn from(value: RoleResultSummary) -> Self {
-        value.0
-    }
-}
-impl ::std::str::FromStr for RoleResultSummary {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        if value.chars().count() > 4000usize {
-            return Err("longer than 4000 characters".into());
-        }
-        Ok(Self(value.to_string()))
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleResultSummary {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleResultSummary {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl<'de> ::serde::Deserialize<'de> for RoleResultSummary {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        ::std::string::String::deserialize(deserializer)?
-            .parse()
-            .map_err(|e: self::error::ConversionError| {
-                <D::Error as ::serde::de::Error>::custom(e.to_string())
-            })
-    }
-}
-///`RoleScope`
-#[derive(
-    ::serde::Deserialize,
-    ::serde::Serialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-)]
-pub enum RoleScope {
-    #[serde(rename = "builtin")]
-    Builtin,
-    #[serde(rename = "user")]
-    User,
-    #[serde(rename = "repo")]
-    Repo,
-}
-impl ::std::fmt::Display for RoleScope {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        match *self {
-            Self::Builtin => f.write_str("builtin"),
-            Self::User => f.write_str("user"),
-            Self::Repo => f.write_str("repo"),
-        }
-    }
-}
-impl ::std::str::FromStr for RoleScope {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        match value {
-            "builtin" => Ok(Self::Builtin),
-            "user" => Ok(Self::User),
-            "repo" => Ok(Self::Repo),
-            _ => Err("invalid value".into()),
-        }
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleScope {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleScope {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-///`RoleTrigger`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-#[serde(tag = "event")]
-pub enum RoleTrigger {
-    #[serde(rename = "role.run.completed")]
-    RoleRunCompleted {
-        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-        role: ::std::option::Option<RoleName>,
-        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-        status: ::std::option::Option<RoleResultStatus>,
-    },
-    #[serde(rename = "role.run.failed")]
-    RoleRunFailed {
-        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-        role: ::std::option::Option<RoleName>,
-    },
-    #[serde(rename = "agent.turn.ended")]
-    AgentTurnEnded {
-        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-        session: ::std::option::Option<RoleTriggerSession>,
-        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-        status: ::std::option::Option<RoleTriggerStatus>,
-    },
-    #[serde(rename = "tempo.branch.pushed")]
-    TempoBranchPushed,
-    #[serde(rename = "tempo.check.passed")]
-    TempoCheckPassed,
-    #[serde(rename = "tempo.check.failed")]
-    TempoCheckFailed,
-    #[serde(rename = "tempo.change.created")]
-    TempoChangeCreated,
-}
-///`RoleTriggerSession`
-#[derive(
-    ::serde::Deserialize,
-    ::serde::Serialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-)]
-pub enum RoleTriggerSession {
-    #[serde(rename = "user")]
-    User,
-    #[serde(rename = "role")]
-    Role,
-}
-impl ::std::fmt::Display for RoleTriggerSession {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        match *self {
-            Self::User => f.write_str("user"),
-            Self::Role => f.write_str("role"),
-        }
-    }
-}
-impl ::std::str::FromStr for RoleTriggerSession {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        match value {
-            "user" => Ok(Self::User),
-            "role" => Ok(Self::Role),
-            _ => Err("invalid value".into()),
-        }
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleTriggerSession {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleTriggerSession {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-///`RoleTriggerStatus`
-#[derive(
-    ::serde::Deserialize,
-    ::serde::Serialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-)]
-pub enum RoleTriggerStatus {
-    #[serde(rename = "completed")]
-    Completed,
-    #[serde(rename = "cancelled")]
-    Cancelled,
-    #[serde(rename = "failed")]
-    Failed,
-    #[serde(rename = "interrupted")]
-    Interrupted,
-}
-impl ::std::fmt::Display for RoleTriggerStatus {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        match *self {
-            Self::Completed => f.write_str("completed"),
-            Self::Cancelled => f.write_str("cancelled"),
-            Self::Failed => f.write_str("failed"),
-            Self::Interrupted => f.write_str("interrupted"),
-        }
-    }
-}
-impl ::std::str::FromStr for RoleTriggerStatus {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        match value {
-            "completed" => Ok(Self::Completed),
-            "cancelled" => Ok(Self::Cancelled),
-            "failed" => Ok(Self::Failed),
-            "interrupted" => Ok(Self::Interrupted),
-            _ => Err("invalid value".into()),
-        }
-    }
-}
-impl ::std::convert::TryFrom<&str> for RoleTriggerStatus {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-impl ::std::convert::TryFrom<::std::string::String> for RoleTriggerStatus {
-    type Error = self::error::ConversionError;
-    fn try_from(
-        value: ::std::string::String,
-    ) -> ::std::result::Result<Self, self::error::ConversionError> {
-        value.parse()
-    }
-}
-///`RolesSettings`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct RolesSettings {
-    pub enabled: bool,
-    pub max_chain_depth: ::std::num::NonZeroU64,
-    pub max_runs_per_change: ::std::num::NonZeroU64,
-    pub max_tokens_per_change: i64,
 }
 ///`RotatePreviewKeyIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -8599,16 +7535,6 @@ pub struct SaveAgentIn {
     pub agent_id: ::std::option::Option<::std::string::String>,
     pub definition: AgentDefinition,
 }
-///`SaveCustomAgentIn`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct SaveCustomAgentIn {
-    #[serde(
-        rename = "customAgentId",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub custom_agent_id: ::std::option::Option<::std::string::String>,
-    pub definition: CustomAgentDefinition,
-}
 ///`ScriptKind`
 #[derive(
     ::serde::Deserialize,
@@ -8940,15 +7866,30 @@ pub struct SendRunToChatOut {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Session {
     pub agent: AgentId,
+    #[serde(
+        rename = "agentId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub agent_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "agentName",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub agent_name: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "agentSha",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub agent_sha: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "agentVersion",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub agent_version: ::std::option::Option<::std::num::NonZeroU64>,
     pub commands: ::std::vec::Vec<AvailableCommand>,
     pub config: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
     #[serde(rename = "configOptions")]
     pub config_options: ::std::vec::Vec<ConfigOption>,
-    #[serde(
-        rename = "customAgent",
-        skip_serializing_if = "::std::option::Option::is_none"
-    )]
-    pub custom_agent: ::std::option::Option<SessionCustomAgent>,
     pub id: ::std::string::String,
     #[serde(
         rename = "modeId",
@@ -8973,14 +7914,6 @@ pub struct Session {
     pub steering: ::std::option::Option<bool>,
     pub title: ::std::string::String,
     pub usage: Usage,
-}
-///`SessionCustomAgent`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
-pub struct SessionCustomAgent {
-    #[serde(rename = "commitSha")]
-    pub commit_sha: ::std::string::String,
-    pub id: ::std::string::String,
-    pub name: ::std::string::String,
 }
 ///`SessionMode`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -9374,8 +8307,6 @@ pub struct Settings {
         ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
     pub git: SettingsGit,
     pub prompts: SettingsPrompts,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub roles: ::std::option::Option<RolesSettings>,
     pub scripts: SettingsScripts,
 }
 ///`SettingsAgent`
@@ -9446,8 +8377,6 @@ pub struct SettingsLayer {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub prompts: ::std::option::Option<SettingsLayerPrompts>,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub roles: ::std::option::Option<SettingsLayerRoles>,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub scripts: ::std::option::Option<SettingsLayerScripts>,
 }
 ///`SettingsLayerAgent`
@@ -9503,18 +8432,6 @@ pub struct SettingsLayerGit {
 pub struct SettingsLayerPrompts {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub general: ::std::option::Option<::std::string::String>,
-}
-///`SettingsLayerRoles`
-#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
-pub struct SettingsLayerRoles {
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub enabled: ::std::option::Option<bool>,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub max_chain_depth: ::std::option::Option<::std::num::NonZeroU64>,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub max_runs_per_change: ::std::option::Option<::std::num::NonZeroU64>,
-    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
-    pub max_tokens_per_change: ::std::option::Option<i64>,
 }
 ///`SettingsLayerScripts`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
@@ -11623,15 +10540,6 @@ pub mod api {
         type Input = crate::DeleteCredentialIn;
         type Output = crate::Empty;
     }
-    /// `deleteCustomAgent`
-    #[derive(Clone, Copy, Debug)]
-    pub struct DeleteCustomAgent;
-    impl crate::Function for DeleteCustomAgent {
-        const NAME: &'static str = "deleteCustomAgent";
-        const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::DeleteCustomAgentIn;
-        type Output = crate::Empty;
-    }
     /// `deleteEnvironment`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteEnvironment;
@@ -11695,15 +10603,6 @@ pub mod api {
         type Input = crate::DeleteReviewCommentIn;
         type Output = crate::Empty;
     }
-    /// `deleteUserRole`
-    #[derive(Clone, Copy, Debug)]
-    pub struct DeleteUserRole;
-    impl crate::Function for DeleteUserRole {
-        const NAME: &'static str = "deleteUserRole";
-        const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::DeleteUserRoleIn;
-        type Output = crate::Empty;
-    }
     /// `deleteWorkspace`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteWorkspace;
@@ -11758,15 +10657,6 @@ pub mod api {
         type Input = crate::Empty;
         type Output = crate::CredentialStatus;
     }
-    /// `getCustomAgent`
-    #[derive(Clone, Copy, Debug)]
-    pub struct GetCustomAgent;
-    impl crate::Function for GetCustomAgent {
-        const NAME: &'static str = "getCustomAgent";
-        const METHOD: crate::Method = crate::Method::Get;
-        type Input = crate::GetCustomAgentIn;
-        type Output = crate::CustomAgent;
-    }
     /// `getDiagnostics`
     #[derive(Clone, Copy, Debug)]
     pub struct GetDiagnostics;
@@ -11793,15 +10683,6 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::GetProjectConversationIn;
         type Output = crate::ConversationArtifact;
-    }
-    /// `getRoleText`
-    #[derive(Clone, Copy, Debug)]
-    pub struct GetRoleText;
-    impl crate::Function for GetRoleText {
-        const NAME: &'static str = "getRoleText";
-        const METHOD: crate::Method = crate::Method::Get;
-        type Input = crate::GetRoleTextIn;
-        type Output = crate::GetRoleTextOut;
     }
     /// `getTrace`
     #[derive(Clone, Copy, Debug)]
@@ -11874,15 +10755,6 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListCheckpointsIn;
         type Output = ::std::vec::Vec<crate::CheckpointInfo>;
-    }
-    /// `listCustomAgents`
-    #[derive(Clone, Copy, Debug)]
-    pub struct ListCustomAgents;
-    impl crate::Function for ListCustomAgents {
-        const NAME: &'static str = "listCustomAgents";
-        const METHOD: crate::Method = crate::Method::Get;
-        type Input = crate::Empty;
-        type Output = ::std::vec::Vec<crate::CustomAgentSummary>;
     }
     /// `listEnvironments`
     #[derive(Clone, Copy, Debug)]
@@ -12001,15 +10873,6 @@ pub mod api {
         type Input = crate::ListReviewCommentsIn;
         type Output = ::std::vec::Vec<crate::ReviewComment>;
     }
-    /// `listRoles`
-    #[derive(Clone, Copy, Debug)]
-    pub struct ListRoles;
-    impl crate::Function for ListRoles {
-        const NAME: &'static str = "listRoles";
-        const METHOD: crate::Method = crate::Method::Get;
-        type Input = crate::ListRolesIn;
-        type Output = ::std::vec::Vec<crate::RoleInfo>;
-    }
     /// `listRuns`
     #[derive(Clone, Copy, Debug)]
     pub struct ListRuns;
@@ -12100,15 +10963,6 @@ pub mod api {
         type Input = crate::PutProjectAgentIn;
         type Output = crate::AgentAttachment;
     }
-    /// `putUserRole`
-    #[derive(Clone, Copy, Debug)]
-    pub struct PutUserRole;
-    impl crate::Function for PutUserRole {
-        const NAME: &'static str = "putUserRole";
-        const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::PutUserRoleIn;
-        type Output = crate::RoleInfo;
-    }
     /// `readFile`
     #[derive(Clone, Copy, Debug)]
     pub struct ReadFile;
@@ -12135,15 +10989,6 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::RefreshPullRequestIn;
         type Output = crate::RefreshPullRequestOut;
-    }
-    /// `reloadRoles`
-    #[derive(Clone, Copy, Debug)]
-    pub struct ReloadRoles;
-    impl crate::Function for ReloadRoles {
-        const NAME: &'static str = "reloadRoles";
-        const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::ReloadRolesIn;
-        type Output = ::std::vec::Vec<crate::RoleInfo>;
     }
     /// `renameBranch`
     #[derive(Clone, Copy, Debug)]
@@ -12270,15 +11115,6 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::SaveAgentIn;
         type Output = crate::Agent;
-    }
-    /// `saveCustomAgent`
-    #[derive(Clone, Copy, Debug)]
-    pub struct SaveCustomAgent;
-    impl crate::Function for SaveCustomAgent {
-        const NAME: &'static str = "saveCustomAgent";
-        const METHOD: crate::Method = crate::Method::Post;
-        type Input = crate::SaveCustomAgentIn;
-        type Output = crate::CustomAgent;
     }
     /// `saveMcpServer`
     #[derive(Clone, Copy, Debug)]
@@ -12494,7 +11330,6 @@ pub mod api {
         ("createWorkspace", crate::Method::Post),
         ("deleteAgent", crate::Method::Post),
         ("deleteCredential", crate::Method::Post),
-        ("deleteCustomAgent", crate::Method::Post),
         ("deleteEnvironment", crate::Method::Post),
         ("deleteEnvironmentSecret", crate::Method::Post),
         ("deleteMcpServer", crate::Method::Post),
@@ -12502,18 +11337,15 @@ pub mod api {
         ("deleteProjectSecret", crate::Method::Post),
         ("deleteQueuedTurn", crate::Method::Post),
         ("deleteReviewComment", crate::Method::Post),
-        ("deleteUserRole", crate::Method::Post),
         ("deleteWorkspace", crate::Method::Post),
         ("editQueuedTurn", crate::Method::Post),
         ("getAgent", crate::Method::Get),
         ("getBrowserLiveView", crate::Method::Post),
         ("getChanges", crate::Method::Get),
         ("getCredentialStatus", crate::Method::Get),
-        ("getCustomAgent", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
-        ("getRoleText", crate::Method::Get),
         ("getTrace", crate::Method::Get),
         ("getWorkspace", crate::Method::Get),
         ("linkProject", crate::Method::Post),
@@ -12522,7 +11354,6 @@ pub mod api {
         ("listBranches", crate::Method::Get),
         ("listCheckRuns", crate::Method::Get),
         ("listCheckpoints", crate::Method::Get),
-        ("listCustomAgents", crate::Method::Get),
         ("listEnvironments", crate::Method::Get),
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
@@ -12536,7 +11367,6 @@ pub mod api {
         ("listProjectSecretNames", crate::Method::Get),
         ("listProjects", crate::Method::Get),
         ("listReviewComments", crate::Method::Get),
-        ("listRoles", crate::Method::Get),
         ("listRuns", crate::Method::Get),
         ("listScriptRuns", crate::Method::Get),
         ("listTerminals", crate::Method::Get),
@@ -12547,11 +11377,9 @@ pub mod api {
         ("openPreview", crate::Method::Post),
         ("pollCodexLogin", crate::Method::Post),
         ("putProjectAgent", crate::Method::Post),
-        ("putUserRole", crate::Method::Post),
         ("readFile", crate::Method::Get),
         ("readFileAt", crate::Method::Get),
         ("refreshPullRequest", crate::Method::Post),
-        ("reloadRoles", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
         ("renameSession", crate::Method::Post),
         ("renameWorkspace", crate::Method::Post),
@@ -12566,7 +11394,6 @@ pub mod api {
         ("rotatePreviewKey", crate::Method::Post),
         ("runScript", crate::Method::Post),
         ("saveAgent", crate::Method::Post),
-        ("saveCustomAgent", crate::Method::Post),
         ("saveMcpServer", crate::Method::Post),
         ("searchFiles", crate::Method::Get),
         ("sendPrompt", crate::Method::Post),
@@ -12653,13 +11480,9 @@ pub mod wire {
         "CredentialProvider",
         "CredentialState",
         "CredentialStatus",
-        "CustomAgent",
-        "CustomAgentDefinition",
-        "CustomAgentSummary",
         "CustomInstance",
         "DeleteAgentIn",
         "DeleteCredentialIn",
-        "DeleteCustomAgentIn",
         "DeleteEnvironmentIn",
         "DeleteEnvironmentSecretIn",
         "DeleteMcpServerIn",
@@ -12667,7 +11490,6 @@ pub mod wire {
         "DeleteProjectSecretIn",
         "DeleteQueuedTurnIn",
         "DeleteReviewCommentIn",
-        "DeleteUserRoleIn",
         "DeleteWorkspaceIn",
         "Diagnostics",
         "DiffScope",
@@ -12686,13 +11508,10 @@ pub mod wire {
         "GetBrowserLiveViewOut",
         "GetChangesIn",
         "GetChangesOut",
-        "GetCustomAgentIn",
         "GetDiagnosticsIn",
         "GetFileDiffIn",
         "GetFileDiffOut",
         "GetProjectConversationIn",
-        "GetRoleTextIn",
-        "GetRoleTextOut",
         "GetTraceIn",
         "GetWorkspaceIn",
         "HandoffContent",
@@ -12744,7 +11563,6 @@ pub mod wire {
         "ListProjectSecretNamesIn",
         "ListProjectSecretNamesOut",
         "ListReviewCommentsIn",
-        "ListRolesIn",
         "ListRunsIn",
         "ListScriptRunsIn",
         "ListTerminalsIn",
@@ -12791,14 +11609,12 @@ pub mod wire {
         "ProfileIssue",
         "Project",
         "PutProjectAgentIn",
-        "PutUserRoleIn",
         "ReadFileAtIn",
         "ReadFileAtOut",
         "ReadFileIn",
         "ReadFileOut",
         "RefreshPullRequestIn",
         "RefreshPullRequestOut",
-        "ReloadRolesIn",
         "RenameBranchIn",
         "RenameSessionIn",
         "RenameWorkspaceIn",
@@ -12816,18 +11632,6 @@ pub mod wire {
         "ReviewReport",
         "ReviewSide",
         "ReviewStatus",
-        "RoleAccess",
-        "RoleAgent",
-        "RoleFile",
-        "RoleFinding",
-        "RoleInfo",
-        "RoleLimits",
-        "RoleName",
-        "RoleResult",
-        "RoleResultStatus",
-        "RoleScope",
-        "RoleTrigger",
-        "RolesSettings",
         "RotatePreviewKeyIn",
         "Run",
         "RunContent",
@@ -12838,7 +11642,6 @@ pub mod wire {
         "RunScriptIn",
         "RunStatus",
         "SaveAgentIn",
-        "SaveCustomAgentIn",
         "ScriptKind",
         "ScriptRun",
         "ScriptRunStatus",
@@ -12850,7 +11653,6 @@ pub mod wire {
         "SendRunToChatIn",
         "SendRunToChatOut",
         "Session",
-        "SessionCustomAgent",
         "SessionMode",
         "SessionStatus",
         "SetApiKeyIn",
@@ -12973,13 +11775,9 @@ pub mod wire {
             "CredentialProvider" => crate::roundtrip::<crate::CredentialProvider>(text),
             "CredentialState" => crate::roundtrip::<crate::CredentialState>(text),
             "CredentialStatus" => crate::roundtrip::<crate::CredentialStatus>(text),
-            "CustomAgent" => crate::roundtrip::<crate::CustomAgent>(text),
-            "CustomAgentDefinition" => crate::roundtrip::<crate::CustomAgentDefinition>(text),
-            "CustomAgentSummary" => crate::roundtrip::<crate::CustomAgentSummary>(text),
             "CustomInstance" => crate::roundtrip::<crate::CustomInstance>(text),
             "DeleteAgentIn" => crate::roundtrip::<crate::DeleteAgentIn>(text),
             "DeleteCredentialIn" => crate::roundtrip::<crate::DeleteCredentialIn>(text),
-            "DeleteCustomAgentIn" => crate::roundtrip::<crate::DeleteCustomAgentIn>(text),
             "DeleteEnvironmentIn" => crate::roundtrip::<crate::DeleteEnvironmentIn>(text),
             "DeleteEnvironmentSecretIn" => {
                 crate::roundtrip::<crate::DeleteEnvironmentSecretIn>(text)
@@ -12989,7 +11787,6 @@ pub mod wire {
             "DeleteProjectSecretIn" => crate::roundtrip::<crate::DeleteProjectSecretIn>(text),
             "DeleteQueuedTurnIn" => crate::roundtrip::<crate::DeleteQueuedTurnIn>(text),
             "DeleteReviewCommentIn" => crate::roundtrip::<crate::DeleteReviewCommentIn>(text),
-            "DeleteUserRoleIn" => crate::roundtrip::<crate::DeleteUserRoleIn>(text),
             "DeleteWorkspaceIn" => crate::roundtrip::<crate::DeleteWorkspaceIn>(text),
             "Diagnostics" => crate::roundtrip::<crate::Diagnostics>(text),
             "DiffScope" => crate::roundtrip::<crate::DiffScope>(text),
@@ -13008,13 +11805,10 @@ pub mod wire {
             "GetBrowserLiveViewOut" => crate::roundtrip::<crate::GetBrowserLiveViewOut>(text),
             "GetChangesIn" => crate::roundtrip::<crate::GetChangesIn>(text),
             "GetChangesOut" => crate::roundtrip::<crate::GetChangesOut>(text),
-            "GetCustomAgentIn" => crate::roundtrip::<crate::GetCustomAgentIn>(text),
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
             "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
-            "GetRoleTextIn" => crate::roundtrip::<crate::GetRoleTextIn>(text),
-            "GetRoleTextOut" => crate::roundtrip::<crate::GetRoleTextOut>(text),
             "GetTraceIn" => crate::roundtrip::<crate::GetTraceIn>(text),
             "GetWorkspaceIn" => crate::roundtrip::<crate::GetWorkspaceIn>(text),
             "HandoffContent" => crate::roundtrip::<crate::HandoffContent>(text),
@@ -13090,7 +11884,6 @@ pub mod wire {
                 crate::roundtrip::<crate::ListProjectSecretNamesOut>(text)
             }
             "ListReviewCommentsIn" => crate::roundtrip::<crate::ListReviewCommentsIn>(text),
-            "ListRolesIn" => crate::roundtrip::<crate::ListRolesIn>(text),
             "ListRunsIn" => crate::roundtrip::<crate::ListRunsIn>(text),
             "ListScriptRunsIn" => crate::roundtrip::<crate::ListScriptRunsIn>(text),
             "ListTerminalsIn" => crate::roundtrip::<crate::ListTerminalsIn>(text),
@@ -13139,14 +11932,12 @@ pub mod wire {
             "ProfileIssue" => crate::roundtrip::<crate::ProfileIssue>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
             "PutProjectAgentIn" => crate::roundtrip::<crate::PutProjectAgentIn>(text),
-            "PutUserRoleIn" => crate::roundtrip::<crate::PutUserRoleIn>(text),
             "ReadFileAtIn" => crate::roundtrip::<crate::ReadFileAtIn>(text),
             "ReadFileAtOut" => crate::roundtrip::<crate::ReadFileAtOut>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
             "ReadFileOut" => crate::roundtrip::<crate::ReadFileOut>(text),
             "RefreshPullRequestIn" => crate::roundtrip::<crate::RefreshPullRequestIn>(text),
             "RefreshPullRequestOut" => crate::roundtrip::<crate::RefreshPullRequestOut>(text),
-            "ReloadRolesIn" => crate::roundtrip::<crate::ReloadRolesIn>(text),
             "RenameBranchIn" => crate::roundtrip::<crate::RenameBranchIn>(text),
             "RenameSessionIn" => crate::roundtrip::<crate::RenameSessionIn>(text),
             "RenameWorkspaceIn" => crate::roundtrip::<crate::RenameWorkspaceIn>(text),
@@ -13166,18 +11957,6 @@ pub mod wire {
             "ReviewReport" => crate::roundtrip::<crate::ReviewReport>(text),
             "ReviewSide" => crate::roundtrip::<crate::ReviewSide>(text),
             "ReviewStatus" => crate::roundtrip::<crate::ReviewStatus>(text),
-            "RoleAccess" => crate::roundtrip::<crate::RoleAccess>(text),
-            "RoleAgent" => crate::roundtrip::<crate::RoleAgent>(text),
-            "RoleFile" => crate::roundtrip::<crate::RoleFile>(text),
-            "RoleFinding" => crate::roundtrip::<crate::RoleFinding>(text),
-            "RoleInfo" => crate::roundtrip::<crate::RoleInfo>(text),
-            "RoleLimits" => crate::roundtrip::<crate::RoleLimits>(text),
-            "RoleName" => crate::roundtrip::<crate::RoleName>(text),
-            "RoleResult" => crate::roundtrip::<crate::RoleResult>(text),
-            "RoleResultStatus" => crate::roundtrip::<crate::RoleResultStatus>(text),
-            "RoleScope" => crate::roundtrip::<crate::RoleScope>(text),
-            "RoleTrigger" => crate::roundtrip::<crate::RoleTrigger>(text),
-            "RolesSettings" => crate::roundtrip::<crate::RolesSettings>(text),
             "RotatePreviewKeyIn" => crate::roundtrip::<crate::RotatePreviewKeyIn>(text),
             "Run" => crate::roundtrip::<crate::Run>(text),
             "RunContent" => crate::roundtrip::<crate::RunContent>(text),
@@ -13188,7 +11967,6 @@ pub mod wire {
             "RunScriptIn" => crate::roundtrip::<crate::RunScriptIn>(text),
             "RunStatus" => crate::roundtrip::<crate::RunStatus>(text),
             "SaveAgentIn" => crate::roundtrip::<crate::SaveAgentIn>(text),
-            "SaveCustomAgentIn" => crate::roundtrip::<crate::SaveCustomAgentIn>(text),
             "ScriptKind" => crate::roundtrip::<crate::ScriptKind>(text),
             "ScriptRun" => crate::roundtrip::<crate::ScriptRun>(text),
             "ScriptRunStatus" => crate::roundtrip::<crate::ScriptRunStatus>(text),
@@ -13200,7 +11978,6 @@ pub mod wire {
             "SendRunToChatIn" => crate::roundtrip::<crate::SendRunToChatIn>(text),
             "SendRunToChatOut" => crate::roundtrip::<crate::SendRunToChatOut>(text),
             "Session" => crate::roundtrip::<crate::Session>(text),
-            "SessionCustomAgent" => crate::roundtrip::<crate::SessionCustomAgent>(text),
             "SessionMode" => crate::roundtrip::<crate::SessionMode>(text),
             "SessionStatus" => crate::roundtrip::<crate::SessionStatus>(text),
             "SetApiKeyIn" => crate::roundtrip::<crate::SetApiKeyIn>(text),

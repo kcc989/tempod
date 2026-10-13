@@ -111,7 +111,7 @@ describe("New chat model choices (04, Tabs)", () => {
     expect(screen.getByRole("option", { name: /Pi test/ })).toBeDefined();
     await waitFor(() => expect(screen.getByRole("option", { name: /Reviewer/ })).toBeDefined());
   });
-  it("hides models and custom agents without a confirmed login", async () => {
+  it("hides models and saved agents without a confirmed login", async () => {
     show(DEFAULT_SETTINGS, { ...credentials, openrouter: { set: false, updatedAt: null } });
     await waitFor(() =>
       expect(screen.getByRole("combobox", { name: "Model" }).textContent).toContain("Sonnet"),

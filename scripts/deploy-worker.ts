@@ -161,7 +161,6 @@ const config = {
   browser: { binding: "BROWSER" },
   worker_loaders: [{ binding: "LOADER" }],
   ai: { binding: "AI" },
-  artifacts: [{ binding: "AGENTS", namespace: "tempo-agents" }],
   routes: [
     { pattern: env("APP_HOST"), custom_domain: true },
     { pattern: `*.${env("PREVIEW_DOMAIN")}/*`, zone_name: env("PREVIEW_DOMAIN") },

@@ -17,7 +17,7 @@ use gpui_kit::{
     div, px,
 };
 
-pub const TABS: [&str; 9] = [
+pub const TABS: [&str; 8] = [
     "Logins",
     "Project",
     "Appearance",
@@ -26,7 +26,6 @@ pub const TABS: [&str; 9] = [
     "Environments",
     "MCP servers",
     "Agents",
-    "Roles",
 ];
 
 /// The shortcut table of 04 with its Mac column, read-only.
@@ -70,7 +69,6 @@ pub struct SettingsView {
     pub(crate) focus: FocusHandle,
     environments: Entity<EnvironmentsPage>,
     agents: Entity<AgentsSettings>,
-    roles: Entity<super::roles::RolesSettings>,
 }
 
 impl SettingsView {
@@ -89,7 +87,6 @@ impl SettingsView {
             form,
             focus: cx.focus_handle(),
             environments: cx.new(|cx| EnvironmentsPage::new(window, cx)),
-            roles: cx.new(|cx| super::roles::RolesSettings::new(window, cx)),
             agents: cx.new(|cx| AgentsSettings::new(window, cx)),
         }
     }
@@ -118,8 +115,6 @@ impl Render for SettingsView {
                 .into_any_element()
         } else if tab == TAB_ENVIRONMENTS {
             self.environments.clone().into_any_element()
-        } else if tab == 8 {
-            self.roles.clone().into_any_element()
         } else if tab == TAB_AGENTS {
             self.agents.clone().into_any_element()
         } else {
@@ -151,7 +146,6 @@ impl Render for SettingsView {
                     TAB_GENERAL,
                     TAB_LOGINS,
                     TAB_AGENTS,
-                    8,
                     TAB_ENVIRONMENTS,
                     TAB_MCP,
                     2,

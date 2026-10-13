@@ -228,13 +228,13 @@ const ISSUE_LABELS: Record<ProfileIssue, string> = {
 
 /** The profile-issues notice (04, Composer): null when there is nothing to show. */
 export const profileIssuesText = (
-  session: Pick<Session, "agent" | "customAgent" | "profileIssues">,
+  session: Pick<Session, "agent" | "agentName" | "profileIssues">,
 ): string | null => {
   const issues = session.profileIssues ?? [];
 
-  if (!session.customAgent || issues.length === 0) return null;
+  if (!session.agentName || issues.length === 0) return null;
 
-  return `${agentLabel(session.agent)} ignored some settings of ${session.customAgent.name}: ${issues
+  return `${agentLabel(session.agent)} ignored some settings of ${session.agentName}: ${issues
     .map((i) => ISSUE_LABELS[i])
     .join(", ")}`;
 };

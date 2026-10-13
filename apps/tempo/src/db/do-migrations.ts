@@ -568,6 +568,16 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       `CREATE TABLE agent_proposals (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id), created_at INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending','applied','rejected')), proposal_json TEXT NOT NULL)`,
     ],
   },
+  {
+    tag: "0012_session_agents",
+    when: 1792699200000,
+    statements: [
+      "ALTER TABLE sessions RENAME COLUMN custom_agent_id TO agent_id",
+      "ALTER TABLE sessions RENAME COLUMN custom_agent_name TO agent_name",
+      "ALTER TABLE sessions RENAME COLUMN custom_agent_commit TO agent_sha",
+      "ALTER TABLE sessions ADD COLUMN agent_version INTEGER",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

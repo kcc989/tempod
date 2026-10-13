@@ -153,16 +153,6 @@ export const FIELDS = [
     kind: "multiline",
     hint: "Added to the first prompt of every session.",
   },
-  { path: "roles.enabled", section: "Roles", label: "Enable role triggers and requests", kind: "bool" },
-  { path: "roles.max_chain_depth", section: "Roles", label: "Maximum chain depth", kind: "number" },
-  { path: "roles.max_runs_per_change", section: "Roles", label: "Maximum runs per change", kind: "number" },
-  {
-    path: "roles.max_tokens_per_change",
-    section: "Roles",
-    label: "Maximum tokens per change",
-    kind: "number",
-    hint: "0 means no cap.",
-  },
 ] as const satisfies ReadonlyArray<FieldDef>;
 
 export type FieldPath = (typeof FIELDS)[number]["path"];
@@ -317,14 +307,6 @@ export const fromEdit = (def: FieldDef, edit: EditValue): Parsed => {
       if (def.kind === "number") {
         const t = edit.text.trim();
         const n = Number(t);
-
-        if (def.path.startsWith("roles.")) {
-          const min = def.path === "roles.max_tokens_per_change" ? 0 : 1;
-
-          return WHOLE.test(t) && Number.isSafeInteger(n) && n >= min
-            ? { ok: true, value: n }
-            : { ok: false, error: `Use a whole number of at least ${min}.` };
-        }
 
         return WHOLE.test(t) && n >= 5 && n <= 240
           ? { ok: true, value: n }

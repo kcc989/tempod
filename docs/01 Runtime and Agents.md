@@ -313,7 +313,7 @@ The bridge is `tempod` itself: `command` is `/usr/local/bin/tempod`, `args` are 
 
 Agents are definitions in the user's D1 library, with project attachments, hooks, runs and proposals defined in [08 Events and Agents](08%20Events%20and%20Agents.md). Definitions are JSON data, not repository or Artifacts files. MCP `env` and `headers` accept only `${NAME}` references. A missing variable omits the server and reports `mcpServers`; expansion stays in memory.
 
-When a session starts from an agent, the Worker reads its D1 definition and passes an `AgentProfile` to the WorkspaceDO. The session stores the profile at start. Edits and deletion do not change existing sessions, reloads or handoffs. Migration preserves already-stored profiles.
+When a session starts from an agent, the Worker reads its D1 definition and passes an `AgentProfile` to the WorkspaceDO. The session stores the profile at start. Edits and deletion do not change existing sessions, reloads or handoffs. Migration preserves already-stored profiles and commit SHAs. New library chats and runs freeze the library version and hash in flat Session fields. Their empty model means the adapter default where supported (OpenCode and Pi still require a selected model); an explicitly selected model, including an empty one, overrides the saved model. Existing chats retain their previous project-model fallback.
 
 **How `tempod` applies a profile.** ACP v1 has no standard field for a system prompt or a tool list. `tempod` uses each adapter's own extension or the agent's own config. Where an agent has none, the field is reported as unsupported and the session still starts.
 
@@ -410,7 +410,7 @@ CredentialDO holds one login attempt in memory per owner; a repeated start retur
 
 **Codex `auth.json` sync**
 
-Credential synchronization runs only while no turn is running or being checked. WorkspaceDO holds incoming offers and pushes in memory until those checks finish, then applies them before the next turn. It does not perform a remote auth refresh during a turn. Role runs treat any login-file change as an access violation (08).
+Credential synchronization runs only while no turn is running or being checked. WorkspaceDO holds incoming offers and pushes in memory until those checks finish, then applies them before the next turn. It does not perform a remote auth refresh during a turn. Runs treat any login-file change as an access violation (08).
 
 Codex rewrites `auth.json` when its token is about 8 days old or a request returns 401. Parallel containers each hold a copy, so Tempo keeps one newest version and pushes it everywhere.
 
@@ -431,7 +431,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Start a session**
 
 1. The WorkspaceDO inserts the session row with status `starting`.
-2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, profile, browser, acpSessionId: null}`. `profile` is the session's `AgentProfile` from a agent, or absent (Agents). `model` is the model chosen for this session (`createSession` or the composer's model picker), else `agent.models.<agent>` from the effective settings, or absent when both are empty. For `opencode` and `pi` with no model, nothing is sent: the session stays `idle` and the turn that waited for it fails with `MODEL_REQUIRED`. `browser` is `"run"` when `browser.run` is true and the egress policy is `open` (Browser Run), else `"local"`.
+2. It makes sure the container is `ready` (03), then sends `session.start {sessionId, agent, env, modeId, model, profile, browser, acpSessionId: null}`. `profile` is the session's `AgentProfile` from a library agent, or absent (Agents). `model` is the model chosen for this session (`createSession` or the composer's model picker), else `agent.models.<agent>` from the effective settings, or absent when both are empty. For `opencode` and `pi` with no model, nothing is sent: the session stays `idle` and the turn that waited for it fails with `MODEL_REQUIRED`. `browser` is `"run"` when `browser.run` is true and the egress policy is `open` (Browser Run), else `"local"`.
 3. `tempod` spawns the adapter as user `tempo` with cwd `/workspace` and the given env.
 4. `tempod` sends `initialize`. It checks `agentCapabilities` and stores them. It also reads top-level `_meta.steering.supported`, normalizes it to the boolean `capabilities.steering`, and exposes that flag as `Session.steering`. Missing support means false. Steering uses the ACP v1 `_session/steering` extension, not a concurrent `session/prompt`.
 5. `tempod` sends `session/new {cwd: "/workspace", mcpServers: [playwright, tempo, ...userServers]}` and stores the returned ACP session id, modes and config options. With a profile, `_meta` and extra MCP servers follow Agents.

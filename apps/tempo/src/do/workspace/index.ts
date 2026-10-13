@@ -51,7 +51,7 @@ import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
 import {
   applyPromptBranch,
   rememberFirstPrompt,
-  customSessionColumns,
+  agentSessionColumns,
   workspaceMethods,
   type MethodInput,
   type Methods,
@@ -91,8 +91,8 @@ export interface InitInput {
   readonly prompt: { readonly text: string } | null;
   /** For `source.kind = "pr"`: the PR as createWorkspace read it (03, Create a workspace). */
   readonly pr?: { readonly number: number; readonly state: PrState; readonly title: string } | null;
-  /** The first session starts from this custom agent (02, createWorkspace). */
-  readonly custom?: SessionAgentProfile | null;
+  /** The first session starts from this library agent (02, createWorkspace). */
+  readonly savedProfile?: SessionAgentProfile | null;
   readonly author: Author;
   readonly createdAt: number;
 }
@@ -234,7 +234,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               status: input.prompt ? "starting" : "idle",
               modeId: null,
               configJson: json.config.write(
-                input.model || input.custom?.model ? { model: input.model || input.custom!.model } : {},
+                input.savedProfile || input.model
+                  ? { model: input.model ?? input.savedProfile?.model ?? "" }
+                  : {},
               ),
               modesJson: "[]",
               configOptionsJson: "[]",
@@ -244,7 +246,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
               handoffPending: 0,
               pendingNote: null,
               generalPromptSent: 0,
-              ...customSessionColumns(input.custom),
+              ...agentSessionColumns(input.savedProfile),
               sortOrder: 1,
               createdAt: now,
               updatedAt: now,
@@ -329,17 +331,6 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   }
 
   async agentsChanged(): Promise<Result<{}>> {
-    return capture(async () => {
-      if (this.core.wsOrNull()) {
-        await this.core.lifecycle.load();
-        this.core.lifecycle.kick();
-      }
-
-      return {};
-    });
-  }
-
-  async rolesChanged(): Promise<Result<{}>> {
     return capture(async () => {
       if (this.core.wsOrNull()) {
         await this.core.lifecycle.load();

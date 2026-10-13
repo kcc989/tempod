@@ -514,7 +514,7 @@ export class AgentSession {
       }
     }
 
-    // The reasoning level comes after the model: the levels on offer can depend on it (01, Custom agents).
+    // The reasoning level comes after the model: the levels on offer can depend on it (01, Agent profiles).
     const level = p.profile?.thoughtLevel;
 
     if (level) {

@@ -4,29 +4,6 @@ import * as w from "./world.ts";
 
 const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 
-const ROLE_FILE = {
-  description: "Review the change",
-  agent: "other",
-  model: "default",
-  access: "read-only",
-  inputs: ["diff"],
-  requestable: true,
-  on: [],
-  limits: { rounds: 1, continues: 2, timeout: "20m", tokens: 0 },
-} as const;
-
-const ROLE_INFO = {
-  name: "reviewer",
-  scope: "builtin",
-  sha: "a".repeat(64),
-  description: ROLE_FILE.description,
-  agent: ROLE_FILE.agent,
-  access: ROLE_FILE.access,
-  requestable: true,
-  on: [],
-  limits: ROLE_FILE.limits,
-} as const;
-
 const RUN = {
   id: uid(920),
   changeId: uid(921),
@@ -226,16 +203,6 @@ export const SHARED_SAMPLES = {
       items: [],
     },
   ],
-  RoleName: ["reviewer"],
-  RoleFinding: [{ path: "src/auth.ts", line: 1, text: "Check auth", blocking: true }],
-  RoleResult: [{ status: "pass", summary: "No blocking findings." }],
-  RoleLimits: [ROLE_FILE.limits],
-  RoleTrigger: [
-    { event: "role.run.completed", role: "coder", status: "done" },
-    { event: "agent.turn.ended", session: "user", status: "completed" },
-  ],
-  RoleFile: [ROLE_FILE],
-  RoleInfo: [ROLE_INFO],
   Run: [RUN],
   RunResult: [RUN_COMPLETED.result],
   RunFinding: [{ path: "src/auth.ts", line: 1, text: "Check auth", blocking: true }],
@@ -293,7 +260,6 @@ export const SHARED_SAMPLES = {
   LifecycleLogEvent: [LIFE_LOG],
   LifecyclePage: [{ events: [LIFE_LOG], nextBeforeSeq: null }],
   LifecycleTrace: [{ chain: [LIFE_LOG], children: [], runs: [RUN] }],
-  RolesSettings: [DEFAULT_SETTINGS.roles],
   TurnUsage: [{ totalTokens: 0, inputTokens: 0, outputTokens: 0 }],
 
   AgentModelOptions: [
@@ -330,30 +296,6 @@ export const SHARED_SAMPLES = {
     w.reviewerDefinition.mcp.servers[1],
     { name: "events", type: "sse", url: "https://mcp.example.com/sse", headers: {} },
   ],
-  CustomAgentDefinition: [
-    w.reviewerDefinition,
-    {
-      name: "Pi tester",
-      description: "",
-      baseAgent: "pi",
-      model: "",
-      thoughtLevel: "",
-      systemPrompt: "",
-      tools: { allow: ["read", "bash", "mcp__docs__*"], deny: [] },
-      mcp: { playwright: true, servers: [] },
-    },
-  ],
-  CustomAgent: [w.reviewerAgent],
-  CustomAgentSummary: [
-    {
-      id: w.CUSTOM_AGENT_ID,
-      name: "Reviewer",
-      description: "Reviews code without editing it",
-      baseAgent: "claude",
-      updatedAt: 1_791_000_000_000,
-    },
-  ],
-  SessionCustomAgent: [w.reviewerSession.customAgent],
   ContentBlock: [
     { type: "text", text: "Done." },
     { type: "image", mimeType: "image/png", data: "iVBORw0KGgo=" },
@@ -681,11 +623,6 @@ export const INPUT_SAMPLES = {
     },
   ],
   deleteProjectAgent: [{ projectId: PROJECT_ID, agentId: LIBRARY_AGENT.id }],
-  listRoles: [{}, { workspaceId: W1 }],
-  getRoleText: [{ name: "reviewer", scope: "builtin" }],
-  putUserRole: [{ name: "reviewer", text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],
-  deleteUserRole: [{ name: "reviewer" }],
-  reloadRoles: [{ workspaceId: W1 }],
   requestAgent: [{ workspaceId: W1, agentId: uid(923), text: "Review auth", sessionId: S1 }],
   cancelRun: [{ workspaceId: W1, runId: uid(920) }],
   listRuns: [{ workspaceId: W1 }],
@@ -733,7 +670,7 @@ export const INPUT_SAMPLES = {
     {
       projectId: PROJECT_ID,
       source: { kind: "branch", branch: "review/auth" },
-      customAgentId: w.CUSTOM_AGENT_ID,
+      agentId: w.LIBRARY_AGENT_ID,
     },
   ],
   listProjectConversations: [{ projectId: PROJECT_ID }],
@@ -757,7 +694,7 @@ export const INPUT_SAMPLES = {
   createSession: [
     { ...ws, agent: "codex" },
     { ...ws, agent: "claude", model: "opus", modeId: "plan" },
-    { ...ws, agent: "claude", customAgentId: w.CUSTOM_AGENT_ID },
+    { ...ws, agent: "claude", agentId: w.LIBRARY_AGENT_ID },
   ],
   closeSession: [{ ...ws, sessionId: S2 }],
   renameSession: [{ ...ws, sessionId: S1, title: "Reviewer" }],
@@ -858,13 +795,6 @@ export const INPUT_SAMPLES = {
     },
   ],
   deleteMcpServer: [{ id: "01jmcp0000000000000000000b" }],
-  listCustomAgents: [{}],
-  getCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
-  saveCustomAgent: [
-    { definition: w.reviewerDefinition },
-    { customAgentId: w.CUSTOM_AGENT_ID, definition: { ...w.reviewerDefinition, thoughtLevel: "" } },
-  ],
-  deleteCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
 } satisfies { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> };
 
 /** Outputs that are not shared types, by their wire type name. */
@@ -883,7 +813,6 @@ export const OUTPUT_SAMPLES = {
       cursor: null,
     },
   ],
-  GetRoleTextOut: [{ text: "---\ndescription: Review\nrequestable: true\n---\nReview." }],
   SendRunToChatOut: [{ turnId: uid(926) }],
   RequestAgentOut: [{ changeId: uid(921), runId: uid(920) }],
 

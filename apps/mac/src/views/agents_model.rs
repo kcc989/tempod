@@ -1,10 +1,10 @@
-//! Custom agents (01, Custom agents; 04, Settings → Agents): the form, menu entries and the
+//! Agent profiles (01, Agent profiles; 04, Settings → Agents): the form, menu entries and the
 //! profile-issues notice, matching the web's agents-model.ts and chat-tabs-model.ts.
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use tempo_protocol::{self as p, AgentId};
 
-use super::chat_model::{agent_label, has_login};
+use super::chat_model::agent_label;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ServerForm {
@@ -51,7 +51,7 @@ impl Default for AgentForm {
     }
 }
 
-/// What each base agent ignores, shown below Base agent (01, Custom agents table).
+/// What each base agent ignores, shown below Base agent (01, Agent profiles table).
 pub fn unsupported_note(agent: AgentId) -> Option<&'static str> {
     match agent {
         AgentId::Codex => Some("Tool limits are not supported."),
@@ -126,86 +126,6 @@ fn tool_error(list: &[String]) -> Option<String> {
 }
 
 /// Field errors keyed like the web (`name`, `allow`, `server.<index>.url`), or the definition.
-pub fn validate(form: &AgentForm) -> Result<p::CustomAgentDefinition, BTreeMap<String, String>> {
-    let mut errors = BTreeMap::new();
-    let name = form.name.trim();
-    if name.is_empty() {
-        errors.insert("name".into(), "Enter a name.".into());
-    } else if name.chars().count() > 60 {
-        errors.insert("name".into(), "At most 60 characters.".into());
-    }
-    if form.description.chars().count() > 200 {
-        errors.insert("description".into(), "At most 200 characters.".into());
-    }
-    if form.system_prompt.chars().count() > 32_000 {
-        errors.insert("systemPrompt".into(), "At most 32,000 characters.".into());
-    }
-    let allow = split_tags(&form.allow);
-    let deny = split_tags(&form.deny);
-    if let Some(e) = tool_error(&allow) {
-        errors.insert("allow".into(), e);
-    }
-    if let Some(e) = tool_error(&deny) {
-        errors.insert("deny".into(), e);
-    }
-    if form.servers.len() > 10 {
-        errors.insert("servers".into(), "At most 10 MCP servers.".into());
-    }
-    let mut seen: Vec<&str> = vec![];
-    let mut servers = vec![];
-    for (i, s) in form.servers.iter().enumerate() {
-        let at = |f: &str| format!("server.{i}.{f}");
-        let s_name = s.name.trim();
-        if !is_server_name(s_name) {
-            errors.insert(at("name"), "Use 1 to 32 of a-z, 0-9, - and _.".into());
-        } else if s_name == "playwright" {
-            errors.insert(
-                at("name"),
-                "playwright is reserved. Use the Playwright switch.".into(),
-            );
-        } else if seen.contains(&s_name) {
-            errors.insert(at("name"), "Each server needs its own name.".into());
-        }
-        seen.push(s_name);
-        let vars = parse_vars(&s.vars).unwrap_or_else(|e| {
-            errors.insert(at("vars"), e);
-            Map::new()
-        });
-        if s.kind == "stdio" {
-            if s.command.trim().is_empty() {
-                errors.insert(at("command"), "Enter the command.".into());
-            }
-            let args: Vec<&str> = s
-                .args
-                .lines()
-                .map(str::trim)
-                .filter(|a| !a.is_empty())
-                .collect();
-            servers.push(json!({"name": s_name, "type": "stdio", "command": s.command.trim(), "args": args, "env": vars}));
-        } else {
-            let url = s.url.trim();
-            if !url.starts_with("https://") || url.len() <= 8 || url.contains(char::is_whitespace) {
-                errors.insert(at("url"), "Enter an https:// URL.".into());
-            }
-            servers.push(json!({"name": s_name, "type": s.kind, "url": url, "headers": vars}));
-        }
-    }
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-    serde_json::from_value(json!({
-        "name": name,
-        "description": form.description,
-        "baseAgent": form.base_agent,
-        "model": form.model.trim(),
-        "thoughtLevel": form.thought_level.trim(),
-        "systemPrompt": form.system_prompt,
-        "tools": {"allow": allow, "deny": deny},
-        "mcp": {"playwright": form.playwright, "servers": servers},
-    }))
-    .map_err(|e| BTreeMap::from([("form".to_string(), format!("Check the fields: {e}"))]))
-}
-
 fn vars_text(m: &Map<String, Value>) -> String {
     m.iter()
         .map(|(k, v)| format!("{k}={}", v.as_str().unwrap_or_default()))
@@ -226,43 +146,6 @@ pub fn form_from_library_agent(a: &p::Agent) -> AgentForm {
         model: a.model.clone(),
         thought_level: a.thought_level.clone(),
         system_prompt: a.prompt.to_string(),
-        allow: a.tools.allow.join(", "),
-        deny: a.tools.deny.join(", "),
-        playwright: a.mcp.playwright,
-        servers: a
-            .mcp
-            .servers
-            .iter()
-            .map(|s| match s {
-                p::McpServerDef::StdioServer(s) => ServerForm {
-                    name: s.name.clone(),
-                    kind: "stdio".into(),
-                    command: s.command.to_string(),
-                    args: s.args.join("\n"),
-                    url: String::new(),
-                    vars: vars_text(&s.env),
-                },
-                p::McpServerDef::RemoteServer(s) => ServerForm {
-                    name: s.name.clone(),
-                    kind: s.type_.to_string(),
-                    command: String::new(),
-                    args: String::new(),
-                    url: s.url.clone(),
-                    vars: vars_text(&s.headers),
-                },
-            })
-            .collect(),
-    }
-}
-
-pub fn form_from_agent(a: &p::CustomAgent) -> AgentForm {
-    AgentForm {
-        name: a.name.to_string(),
-        description: a.description.to_string(),
-        base_agent: a.base_agent,
-        model: a.model.clone(),
-        thought_level: a.thought_level.clone(),
-        system_prompt: a.system_prompt.to_string(),
         allow: a.tools.allow.join(", "),
         deny: a.tools.deny.join(", "),
         playwright: a.mcp.playwright,
@@ -400,31 +283,6 @@ pub fn validate_library(
         .map_err(|e| BTreeMap::from([("form".to_string(), format!("Check the fields: {e}"))]))
 }
 
-/// A New chat entry for a custom agent (04, Tabs).
-#[derive(Clone, Debug, PartialEq)]
-pub struct CustomAgentEntry {
-    pub id: String,
-    pub agent: AgentId,
-    pub label: String,
-    pub enabled: bool,
-}
-
-pub fn menu_entries(
-    agents: &[p::CustomAgentSummary],
-    credentials: Option<&p::CredentialStatus>,
-) -> Vec<CustomAgentEntry> {
-    agents
-        .iter()
-        .filter(|a| credentials.is_some_and(|c| has_login(a.base_agent, c)))
-        .map(|a| CustomAgentEntry {
-            id: a.id.clone(),
-            agent: a.base_agent,
-            label: format!("{} · {}", a.name.as_str(), agent_label(a.base_agent)),
-            enabled: true,
-        })
-        .collect()
-}
-
 fn issue_label(issue: p::ProfileIssue) -> &'static str {
     match issue {
         p::ProfileIssue::SystemPrompt => "system prompt",
@@ -438,7 +296,7 @@ fn issue_label(issue: p::ProfileIssue) -> &'static str {
 
 /// The notice above the composer (04): None when there is nothing to show.
 pub fn profile_issues_text(session: &p::Session) -> Option<String> {
-    let custom = session.custom_agent.as_ref()?;
+    let name = session.agent_name.as_ref()?;
     let issues = session.profile_issues.as_deref().unwrap_or_default();
     if issues.is_empty() {
         return None;
@@ -447,7 +305,7 @@ pub fn profile_issues_text(session: &p::Session) -> Option<String> {
     Some(format!(
         "{} ignored some settings of {}: {}",
         agent_label(session.agent),
-        custom.name,
+        name,
         issues.join(", ")
     ))
 }
@@ -476,10 +334,17 @@ mod tests {
             servers: vec![server("docs")],
             ..Default::default()
         };
-        let def = validate(&form).expect("valid");
+        let def = validate_library(
+            &form,
+            "reviewer",
+            p::AgentAccess::ReadOnly,
+            p::OutputKind::Review,
+            false,
+        )
+        .expect("valid");
         assert_eq!(def.name.as_str(), "Reviewer");
-        assert_eq!(def.tools.deny, vec!["Edit", "Write"]);
-        assert_eq!(def.thought_level, "high");
+        assert_eq!(def.tools.as_ref().unwrap().deny, vec!["Edit", "Write"]);
+        assert_eq!(def.thought_level.as_deref(), Some("high"));
         let json = serde_json::to_value(&def).unwrap();
         assert_eq!(json["mcp"]["servers"][0]["env"]["TOKEN"], "${DOCS_TOKEN}");
         assert_eq!(json["mcp"]["servers"][0]["args"], json!(["--stdio"]));
@@ -500,7 +365,14 @@ mod tests {
             servers: vec![bad, remote],
             ..Default::default()
         };
-        let errors = validate(&form).unwrap_err();
+        let errors = validate_library(
+            &form,
+            "reviewer",
+            p::AgentAccess::ReadOnly,
+            p::OutputKind::Review,
+            false,
+        )
+        .unwrap_err();
         assert_eq!(errors["name"], "Enter a name.");
         assert_eq!(errors["allow"], "Not a valid tool name: a/b");
         assert!(errors["server.0.name"].contains("reserved"));
@@ -510,50 +382,37 @@ mod tests {
 
     #[test]
     fn a_saved_agent_round_trips_through_the_form() {
-        let agent: p::CustomAgent = serde_json::from_value(json!({
-            "id": "a1", "commitSha": "c", "updatedAt": 1.0, "name": "R", "description": "",
-            "baseAgent": "pi", "model": "", "thoughtLevel": "", "systemPrompt": "",
+        let agent: p::Agent = serde_json::from_value(json!({
+            "id": "a1", "handle": "reviewer", "access": "read-only", "outputKind": "review", "version": 1, "sha": "c", "starter": null, "createdAt": 1.0, "updatedAt": 1.0, "name": "R", "description": "",
+            "baseAgent": "pi", "model": "", "thoughtLevel": "", "prompt": "",
             "tools": {"allow": ["read"], "deny": []},
             "mcp": {"playwright": true, "servers": [
                 {"name": "s", "type": "http", "url": "https://x.dev", "headers": {"A": "${B}"}}
             ]}
         }))
         .unwrap();
-        let form = form_from_agent(&agent);
+        let form = form_from_library_agent(&agent);
         assert_eq!(form.servers[0].vars, "A=${B}");
-        let def = validate(&form).unwrap();
+        let def = validate_library(
+            &form,
+            "reviewer",
+            p::AgentAccess::ReadOnly,
+            p::OutputKind::Review,
+            false,
+        )
+        .unwrap();
         assert_eq!(
-            serde_json::to_value(&def.mcp.servers).unwrap(),
+            serde_json::to_value(&def.mcp.as_ref().unwrap().servers).unwrap(),
             json!([{"name": "s", "type": "http", "url": "https://x.dev", "headers": {"A": "${B}"}}])
         );
     }
 
     #[test]
-    fn menu_entries_and_notice_match_the_web() {
-        let agents: Vec<p::CustomAgentSummary> = serde_json::from_value(json!([
-            {"id": "a1", "name": "Reviewer", "description": "", "baseAgent": "codex", "updatedAt": 1.0}
-        ]))
-        .unwrap();
-        let no_login: p::CredentialStatus = serde_json::from_value(json!({
-            "claude": {"set": false, "updatedAt": null}, "codex": {"set": false, "updatedAt": null, "lastRefresh": null},
-            "openrouter": {"set": false, "updatedAt": null}, "anthropic": {"set": false, "updatedAt": null},
-            "openai": {"set": false, "updatedAt": null}
-        }))
-        .unwrap();
-        assert!(menu_entries(&agents, None).is_empty());
-        let mut codex = no_login.clone();
-        codex.codex.set = true;
-        assert_eq!(
-            menu_entries(&agents, Some(&codex))[0].label,
-            "Reviewer · Codex"
-        );
-        assert!(menu_entries(&agents, Some(&codex))[0].enabled);
-        assert!(menu_entries(&agents, Some(&no_login)).is_empty());
-
+    fn frozen_profile_notice_matches_the_web() {
         let session: p::Session = serde_json::from_value(json!({
             "id": "s", "agent": "codex", "title": "", "status": "idle", "modeId": null, "modes": [],
             "configOptions": [], "config": {}, "commands": [], "usage": {}, "sortOrder": 1.0,
-            "customAgent": {"id": "a1", "name": "Reviewer", "commitSha": "c"},
+            "agentId": "a1", "agentName": "Reviewer", "agentSha": "c",
             "profileIssues": ["tools", "thoughtLevel"]
         }))
         .unwrap();

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { AgentDefinition, TempoError } from "@tempo/protocol";
-import { parseRoleFile } from "@tempo/settings";
+import { parseRoleFile } from "@tempo/settings/migrations/roles";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
 import type { RunRow } from "../db/workspace-do.ts";
 

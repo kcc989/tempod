@@ -54,5 +54,4 @@
   "browser": { "binding": "BROWSER" },
   "ai": { "binding": "AI" },
   "worker_loaders": [{ "binding": "LOADER" }],
-  "artifacts": [{ "binding": "AGENTS", "namespace": "tempo-agents" }],
 }

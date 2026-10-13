@@ -38,7 +38,7 @@ the installed Playwright version rather than unrelated package script changes.
 The daemon build and production app CI build are cached. `build:ci` fixes the app's
 Wrangler configuration to the checked-in default and restores both `dist` and the
 Wrangler deployment pointer. Its inputs include transitive workspace sources,
-built-in roles, container configuration, local environment files and build-time
+starter definitions, container configuration, local environment files and build-time
 environment values. Generated Wrangler metadata contains absolute paths, so the
 checkout directory is part of this task's hash. The general app `build` remains
 uncached because it permits arbitrary external Wrangler configuration paths.

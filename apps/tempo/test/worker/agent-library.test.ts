@@ -3,11 +3,20 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { Schema } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentDefinition, newId, type JsonData, type FnName, type Result } from "@tempo/protocol";
-import { stringifyAgentFile } from "@tempo/settings";
-import { agentStore } from "../../src/agents/store.ts";
 import { runFn } from "../../src/server/run.ts";
-import { seedProject, seedCredentials, seedWorkspace, driveToState, internals, waitFor } from "./fakes.ts";
-import { sessions } from "../../src/db/workspace-do.ts";
+import {
+  seedProject,
+  seedCredentials,
+  seedWorkspace,
+  driveToState,
+  internals,
+  waitFor,
+  DEFAULT_EFFECTIVE,
+  sqlRows,
+} from "./fakes.ts";
+import { toLibraryProfile } from "../../src/agents/library.ts";
+import { sessionModel } from "../../src/do/workspace/queue.ts";
+import { sessions, workspace } from "../../src/db/workspace-do.ts";
 
 const def = Schema.decodeUnknownSync(AgentDefinition)({
   handle: "auth-checker",
@@ -185,16 +194,50 @@ describe("agent library", () => {
   it("starts a library session and keeps its profile through edit and deletion", async () => {
     const o = await owner();
     await seedCredentials(o.userId, ["claude"]);
-    const w = await seedWorkspace(o);
+    const saved = value(await call("saveAgent", o, { definition: { ...def, model: "opus" } }));
+
+    const w = await seedWorkspace(o, {
+      savedProfile: {
+        agentId: saved.id,
+        agentName: saved.name,
+        agentVersion: saved.version,
+        agentSha: saved.sha,
+        profile: toLibraryProfile(saved),
+        model: saved.model,
+      },
+    });
+
     await driveToState(w.stub, ["ready"]);
 
-    const saved = value(await call("saveAgent", o, { definition: { ...def, model: "opus" } }));
+    const initial = await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+
+      return core.sessionToWire(core.db.select().from(sessions).get()!);
+    });
+
+    expect(initial).toMatchObject({
+      agentId: saved.id,
+      agentName: saved.name,
+      agentVersion: saved.version,
+      agentSha: saved.sha,
+      config: { model: "opus" },
+    });
+    expect(await sqlRows(w.stub, "SELECT id FROM turns")).toEqual([]);
+    expect(
+      await call("createSession", o, { workspaceId: w.workspaceId, agent: "codex", agentId: saved.id }),
+    ).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
 
     const session = value(
       await call("createSession", o, { workspaceId: w.workspaceId, agent: "claude", agentId: saved.id }),
     );
 
     expect(session.config).toEqual({ model: "opus" });
+    expect(session).toMatchObject({
+      agentId: saved.id,
+      agentName: saved.name,
+      agentVersion: saved.version,
+      agentSha: saved.sha,
+    });
     await waitFor(
       () => w.tempod.requestsOf("session.start").some((r) => r.sessionId === session.id),
       5000,
@@ -205,6 +248,9 @@ describe("agent library", () => {
     expect(start.profile.systemPrompt).toBe(def.prompt);
     value(await call("saveAgent", o, { agentId: saved.id, definition: { ...def, prompt: "New prompt" } }));
     value(await call("deleteAgent", o, { agentId: saved.id }));
+    expect(
+      await call("createSession", o, { workspaceId: w.workspaceId, agent: "claude", agentId: saved.id }),
+    ).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
 
     const rows = await runInDurableObject(w.stub, (instance: WorkspaceDO) =>
       internals(instance).core.db.select().from(sessions).all(),
@@ -213,31 +259,53 @@ describe("agent library", () => {
     const stored = rows.find((r) => r.id === session.id)!;
 
     expect(JSON.parse(stored.profileJson!).systemPrompt).toBe(def.prompt);
-    expect(stored.customAgentCommit).toBe(saved.sha);
+    expect(stored.agentSha).toBe(saved.sha);
+
+    const settings = {
+      ...DEFAULT_EFFECTIVE,
+      agent: {
+        ...DEFAULT_EFFECTIVE.agent,
+        models: { ...DEFAULT_EFFECTIVE.agent.models, claude: "project-model" },
+      },
+    };
+
+    await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      core.db
+        .update(workspace)
+        .set({ settingsJson: JSON.stringify(settings) })
+        .run();
+    });
+
+    const blankAgent = value(
+      await call("saveAgent", o, {
+        definition: { ...def, handle: "blank-model", name: "Blank model", model: "opus" },
+      }),
+    );
+
+    const blank = value(
+      await call("createSession", o, {
+        workspaceId: w.workspaceId,
+        agent: "claude",
+        agentId: blankAgent.id,
+        model: "",
+      }),
+    );
+
+    expect(blank.config).toEqual({ model: "" });
+    await waitFor(
+      () => w.tempod.requestsOf("session.start").some((r) => r.sessionId === blank.id),
+      5000,
+      "adapter default model",
+    );
+    expect(w.tempod.requestsOf("session.start").find((r) => r.sessionId === blank.id)!.model).toBeUndefined();
+    expect(sessionModel("claude", {}, settings)).toBe("project-model");
   });
 
-  it("reads old definitions at their commit and imports them once", async () => {
+  it("imports stored definitions once while leaving waived file definitions untouched", async () => {
     const o = await owner();
     const id = newId();
 
-    const old = {
-      name: "123",
-      description: "",
-      baseAgent: "claude" as const,
-      model: "opus",
-      thoughtLevel: "high",
-      systemPrompt: "Keep this prompt.",
-      tools: { allow: [], deny: [] },
-      mcp: { playwright: true, servers: [] },
-    };
-
-    const read = vi.fn(async () => stringifyAgentFile(old));
-    vi.spyOn(agentStore, "forEnv").mockReturnValue({
-      read,
-      write: async () => {
-        throw new Error("Migration must never write files");
-      },
-    });
     await env.DB.prepare(
       "INSERT INTO custom_agents (id,user_id,name,description,base_agent,repo,path,commit_sha,created_at,updated_at) VALUES (?,?,?,'','claude','old-repo','old-path','old-commit',0,0)",
     )
@@ -250,10 +318,11 @@ describe("agent library", () => {
       .bind(o.userId, "invalid", "invalid")
       .run();
     const list = value(await call("listAgents", o));
-    expect(list.map((a) => a.handle).sort()).toEqual(["agent-123", "check-fixer", "planner", "reviewer"]);
-    const migrated = value(await call("getAgent", o, { agentId: id }));
-    expect(migrated.prompt).toBe(old.systemPrompt);
-    expect(migrated.model).toBe("opus");
+    expect(list.map((a) => a.handle).sort()).toEqual(["check-fixer", "planner", "reviewer"]);
+    expect(await call("getAgent", o, { agentId: id })).toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
     const planner = list.find((a) => a.handle === "planner")!;
     expect(value(await call("getAgent", o, { agentId: planner.id })).prompt).toBe("P".repeat(32000));
 
@@ -265,7 +334,9 @@ describe("agent library", () => {
 
     expect(original!.text.endsWith("P".repeat(33000))).toBe(true);
     value(await call("listAgents", o));
-    expect(read).toHaveBeenCalledTimes(1);
-    expect(read).toHaveBeenCalledWith("old-repo", "old-commit", "old-path");
+    expect(value(await call("listAgents", o))).toHaveLength(3);
+    expect(await env.DB.prepare("SELECT name FROM custom_agents WHERE id = ?").bind(id).first()).toEqual({
+      name: "123",
+    });
   });
 });

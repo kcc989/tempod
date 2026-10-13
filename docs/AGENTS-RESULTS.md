@@ -1,46 +1,54 @@
 # Agents as data results
 
-Starting SHA: [3edf1f6](https://github.com/kcc989/tempod/commit/3edf1f6fd8422b6d6aa4bac7f539c8920cb520ff). Final SHA: pending implementation milestones.
+Starting SHA: [3edf1f6fd8422b6d6aa4bac7f539c8920cb520ff](https://github.com/kcc989/tempod/commit/3edf1f6fd8422b6d6aa4bac7f539c8920cb520ff). Final implementation SHA will be recorded after M6 merges. All six implementation milestones have passed local verification; final hosted checks and merges are in progress.
 
-Merged milestones: [M1 #41](https://github.com/kcc989/tempod/pull/41), [M2 #42](https://github.com/kcc989/tempod/pull/42). M2 merged at [5eba4fb](https://github.com/kcc989/tempod/commit/5eba4fbe57d9a0236fe4884b6932615b33fc2edc).
+## Milestones
 
-S22 passed: 50 valid deployed Worker binding calls, 4 KiB state/four questions, p95 878 ms. [Evidence](../spikes/S22.md) includes the earlier incomplete batch and confirmed request/response fields. All temporary Workers were deleted.
+| Milestone | Pull request | Result |
+| --- | --- | --- |
+| M1 Contracts | [#41](https://github.com/kcc989/tempod/pull/41) | Merged: tabs 00–08 define the library, hooks, decisions, runs and proposals. |
+| M2 Library | [#42](https://github.com/kcc989/tempod/pull/42) | Merged at [5eba4fb](https://github.com/kcc989/tempod/commit/5eba4fbe57d9a0236fe4884b6932615b33fc2edc): D1 library/attachments, starters, CRUD, both settings clients and frozen chat profiles. |
+| M3 Runs | [#46](https://github.com/kcc989/tempod/pull/46) | Merged at [893f3a2](https://github.com/kcc989/tempod/commit/893f3a21e68bfe0f6632565a5b4cb84407e0a98f): typed MCP reports, one follow-up, hidden run sessions, cards, warning/Revert, protected files, timeout/cancel/recovery and shared budgets. |
+| M4 Decisions | [#47](https://github.com/kcc989/tempod/pull/47) | Merged at [aea92b1](https://github.com/kcc989/tempod/commit/aea92b161c83930943f30bc2482ff944352b0b3b): confirmed Clef binding, 64-question batches, thresholds, bounded/redacted state, retry/deadline, durable decisions, Diagnostics and Run anyway in both clients. |
+| M5 Proposals | [#48](https://github.com/kcc989/tempod/pull/48) | Owner-applied full-change cards, strict/redacted tools, atomic D1 receipts, rejection, rollback and notification recovery. Hosted final checks pending. |
+| M6 Remove | Final cleanup PR pending | Removes old editors, APIs, wire schemas, file stores, built-ins and settings. Flat Session metadata preserves old profiles and commit SHAs. |
 
-Owner clarifications on 2026-10-13: Clef question IDs use a dot instead of a colon; access prompts say agent and explain the files-changed warning, preserving A1 and A9. The task contract records both corrections.
+## Contract clarifications
 
-M1 updates tabs 00–08 for D1 agent libraries, attachments/hooks, frozen run definitions, typed MCP reports, run cards, proposals and decision privacy. Owner decisions A1–A12 remain fixed. Published chat profiles survive the migration. Legacy storage remains read-only until Gate I passes.
+The owner approved these changes on 2026-10-13, recorded in [the task contract](https://github.com/kcc989/tempod/blob/main/docs/tasks/04-AGENTS-AS-DATA.md) and [implementation notes](https://github.com/kcc989/tempod/blob/main/docs/IMPLEMENTATION_NOTES.md):
 
-Implementation, S20's read-only adapter spike, S23, Gate I, final commands and milestone PR links remain pending. No real-agent or native-rendering acceptance is claimed by S22 or local fake-adapter tests.
+- Clef question IDs use `<attachmentId>.<hookIndex>` because the API rejects colons. Decision dedupe keys retain colons.
+- Access prompts say agent and describe a file-change warning. Daemon MCP tools use request/response frames on the existing socket, outside raw event storage.
+- `AgentAttachment` names project wiring; `Attachment` continues to name uploaded files.
+- Invalid imported handles use an `agent-` prefix/fallback, duplicate names gain suffixes, and imports may exceed 50 while new creates remain blocked. Copied prompts fit 32,000 characters/64 KiB, with originals preserved and name-only logs.
+- The sole owner waived importing legacy Artifacts files. The binding and reader are removed completely; stored D1 definitions still import once, and old pointer tables remain read-only until Gate I.
+- Session metadata uses optional flat `agentId`, `agentName`, `agentVersion` and `agentSha`. SQLite migration `0012_session_agents` preserves profile JSON and old commit SHAs; old sessions omit the new version. New library chats and runs use the adapter default for an empty model; existing chats retain their project-model fallback.
+- Send to chat, including auto-send, keeps the original change and its `max_runs` budget.
+- Clef may receive redacted typed results containing file-derived text. The existing report schemas have no `snippet` field; unknown report fields remain errors. Decision state reads changed paths rather than raw files and excludes env values/secrets.
 
-M1 validation: `bun install --frozen-lockfile` passed. `bun run ci --docs-only` passed in 3.7 seconds (lint 2.7 s, formatting 1.0 s). Baseline full CI passed typecheck, lint, formatting, version checks, both builds and non-browser tests; its browser stage failed because Chromium was absent. Chromium installation is in progress before subsequent code verification.
+## Spikes and acceptance
 
+[S22](https://github.com/kcc989/tempod/blob/main/spikes/S22.md) passed before decision implementation: 50 valid calls from a deployed Worker binding, 4 KiB state/four questions, p95 **878 ms** (minimum 353 ms, median 411 ms, maximum 984 ms). It records the initial incomplete attempt and confirmed direct request/response fields. Temporary Workers were deleted.
 
-## M2 Library implementation
+[S20](https://github.com/kcc989/tempod/blob/main/spikes/S20.md) records implemented advertised-mode selection and Pi edit-tool denial, with real edit/shell challenges open. [S23](https://github.com/kcc989/tempod/blob/main/spikes/S23.md) records the twelve real-agent/output-kind cases still required. S21's result-file contract is retired. No agent login or hosted browser authentication state is configured in this environment; skipped suites are not counted as passes.
 
-D1 migration `0005_agents` adds the library, project attachments and migration sentinel. Agent saves use canonical JSON, SHA-256 and incrementing versions. Imports and their sentinel commit atomically and prevent duplicate work across isolates; starters are copied once and never attached automatically. The owner approved invalid-handle normalization, duplicate-name suffixes, preservation of imports above the limit, and the `AgentAttachment` wire name. New creates enforce the 50-agent limit atomically.
+All nine deployed Gate I scenarios remain open until real logins are available and three consecutive runs establish them. Deterministic Worker/daemon/client tests cover their storage, RPC, queue and UI behavior; they do not establish real-model compliance, deployed recovery or a deployed credential grep. Linux native tests also do not establish macOS visual acceptance.
 
-Both settings clients expose the definition fields, Duplicate/Delete, a read-only JSON view, and structured project attachment/hook controls. New chats and workspaces read the library; saved session profiles stay frozen through edits and deletion. Deleted agents retain their attachment rows with Remove.
+## Validation
 
-`bun run ci` passed in 54.9 seconds with restored task results: typecheck 7.3 s, non-Worker tests 23.1 s and browser suites 29.4 s. The new Worker suite has eight cases, including a real DO session with frozen profile data. `cargo check -p tempo-mac` passed; `cargo test -p tempo-mac` passed all 264 native tests. Native compilation also required correcting four pre-existing chat accesses from the old tuple-shaped `ContentBlock` to the current named fields. This Linux verification does not establish macOS rendering or real-agent acceptance.
+Commands: `bun install --frozen-lockfile`, `bun run ci`, complete forced-task `TURBO_FORCE=true bun run ci`, focused Worker/UI/MCP tests, `cargo check --workspace --all-targets`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`. CI includes typecheck, strict lint, formatting, version consistency, all local tests, daemon/app/fixture builds and all 28 browser cases. No concurrency or deadlines were increased.
 
-The owner approved truncating copied legacy prompts to the new character/JSON limits while preserving original legacy storage and logging affected names only; the migration regression verifies preservation. M3–M6, S20/S23 and Gate I remain pending; hook execution is not provided by M2 alone.
+| Stage | Evidence |
+| --- | --- |
+| M2 full forced local CI | 92.6 s; Worker 90.5 s, other tests 48.9 s, browsers 40.0 s. [Hosted follow-up](https://github.com/kcc989/tempod/pull/42/checks) passed in 230.6 s including setup. |
+| M3 full forced local CI | 90.4 s; Worker 88.2 s, other tests 46.1 s, browsers 37.8 s, typecheck 11.5 s, app build 13.1 s. |
+| M3 hosted CI | [Run 38474358376](https://github.com/kcc989/tempod/actions/runs/38474358376): 295.9 s including setup, 309 s with cleanup; Worker 234.7 s, browsers 100.6 s. |
+| Production image and daemon container | [Run 38475225303](https://github.com/kcc989/tempod/actions/runs/38475225303) passed M3's full image/container suite. Final cleanup image check pending. |
+| M4 full local CI | 76.1 s after ready-fixture optimization, Worker 73.9 s, browsers 36.9 s. |
+| M4 hosted CI | [Run 38477146737](https://github.com/kcc989/tempod/actions/runs/38477146737): 207.7 s including setup, 220 s with cleanup; Worker 150.5 s, browsers 80.4 s. |
+| M5 full local CI | 90.3 s with notification recovery; Worker 87.9 s, other tests 24.7 s, browsers 42.2 s, app build 11.7 s. |
+| M6 focused migration/library | 13 cases passed in 14.3 s, including preserved profile/SHA, one-time D1 imports without Artifacts access, explicit empty model and existing-chat fallback. Typecheck passed in 7.3 s. |
+| M6 full forced local CI | 99.4 s with all 28 browsers; Worker 96.6 s, other tests 52.1 s, browsers 43.8 s, typecheck 16.0 s, app build 15.7 s. |
+| M6 native workspace | All workspace suites passed, including 264 Mac tests; all-target check and formatting passed. Strict Clippy and final forced-task CI passed. |
 
-M2 follow-up hosted CI passed in 230.6 seconds including setup (Worker 178.2 s, other tests 61.4 s, browsers 91.1 s). The earlier cold hosted run hit the 300-second deadline; no limits changed. A complete local forced-task benchmark passed in 92.6 seconds (Worker 90.5 s, other tests 48.9 s, browsers 40.0 s).
-
-## M3 Runs
-
-The replacement engine freezes definitions/options, takes one pin, accepts typed MCP reports through request/response frames, provides one follow-up, warns on tree changes and fails protected-file edits. Send to chat and auto-send retain the change and its run budget, as the owner approved. Both clients have run cards, hidden run sessions, transcript side panels, activity lists and `/agent`/`@handle` requests. The SQLite rebuild preserves history, profiles, sequence numbers and dedupe keys.
-
-S20 real-adapter checks, S23 and Gate I remain open; local fake-adapter tests and Linux native checks are not deployed/macOS acceptance. M4–M6 remain pending.
-
-M3 validation: `bun run ci` passed in 92.0 seconds with cache reuse (Worker 89.7 s, non-Worker 26.9 s, browser 44.8 s, typecheck 5.9 s, app build 12.1 s). The focused run suite passed 15 cases; all five migration cases, the run-card interaction, 28 ACP cases and 17 MCP/mapper cases passed. Native tests passed 264/264 and strict Clippy passed. Browser fixtures now implement the new attachment/activity APIs, and the legacy startup fixture waits for readiness before teardown.
-
-The run PR rebases onto workspace tools (#44) and deterministic reconnect coverage (#45). Both clients place Activity and hidden run transcripts in the tool area beside the chat. Hosted cold checks hit the 300-second deadline; catalog loading now batches reads, reuses loaded agent rows and leaves one-time imports to the specified library access paths. A regression verifies that workspace startup does not import a library.
-
-The complete post-optimization forced-task benchmark passed in 90.4 seconds: Worker 88.2 s, other tests 46.1 s, typecheck 11.5 s, app build 13.1 s and all 28 browsers 37.8 s. No CI limits or concurrency changed.
-
-M3 merged as [#46](https://github.com/kcc989/tempod/pull/46) at [893f3a2](https://github.com/kcc989/tempod/commit/893f3a2). Hosted [checks](https://github.com/kcc989/tempod/actions/runs/38474358376) passed in 295.9 seconds including setup (309 seconds including cleanup): Worker 234.7 s, other tests 67.5 s, browsers 100.6 s, typecheck 18.8 s and app build 45.5 s.
-
-## M4 Decisions
-
-[M4 #47](https://github.com/kcc989/tempod/pull/47) adds the confirmed Worker AI binding, batches at 64, bounded/redacted state, threshold decisions, three-second deadlines and one retry. Decisions and runs commit atomically; replay deduplicates. Both clients show joined diagnostics, skip lines and Run anyway. Seven focused Worker cases and the card/trace interactions pass. Full local CI passed in 59.6 s with reuse (Worker 0.2 s cached, other tests 23.5 s, browsers 31.2 s, typecheck 8.6 s). The preceding uncached Worker stage passed in 77.1 s. Native tests passed 264 tests; native check and strict Clippy pass. Snippet privacy clarification and hosted checks remain pending before merge.
+Early cold hosted attempts hit the 300-second command deadline. Catalog batching and ready-workspace fixtures resolved those bottlenecks without changing budgets or coverage. M5's prior hosted run passed in 303.3 s including setup (311 s with cleanup), slightly above the five-minute target; the next cold hosted check hit the deadline at 337.2 s including setup (Worker 293.6 s). Loading the transitional Git writer only during old writes now avoids its initialization on D1 requests; complete forced local CI passed in 97.4 s (Worker 95.0 s, other tests 50.1 s, browsers 40.4 s, typecheck 11.2 s, app build 14.5 s). Final hosted measurements will be recorded here. Stage durations overlap and must not be added together.

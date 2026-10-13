@@ -80,8 +80,8 @@ pub struct WorkspaceView {
     viewing_closed: Vec<String>,
     chats: HashMap<String, Chat>,
     credentials: Option<p::CredentialStatus>,
-    custom_agents: Vec<p::AgentSummary>,
-    custom_agents_rev: u64,
+    library_agents: Vec<p::AgentSummary>,
+    agent_library_rev: u64,
     credentials_rev: u64,
     credential_generation: u64,
     _credentials_changed: Option<Subscription>,
@@ -209,10 +209,10 @@ impl WorkspaceView {
             .unwrap_or(0);
         let credential_changed = app.map(|app| {
             cx.observe_in(&app, window, |this, app, window, cx| {
-                let agents_rev = app.read(cx).custom_agents_rev;
-                if agents_rev != this.custom_agents_rev {
-                    this.custom_agents_rev = agents_rev;
-                    this.load_custom_agents(window, cx);
+                let agents_rev = app.read(cx).agent_library_rev;
+                if agents_rev != this.agent_library_rev {
+                    this.agent_library_rev = agents_rev;
+                    this.load_library_agents(window, cx);
                 }
                 let app = app.read(cx);
                 if app.credentials_rev != this.credentials_rev
@@ -247,8 +247,8 @@ impl WorkspaceView {
             viewing_closed: Vec::new(),
             chats: HashMap::new(),
             credentials: None,
-            custom_agents: vec![],
-            custom_agents_rev: 0,
+            library_agents: vec![],
+            agent_library_rev: 0,
             credentials_rev,
             credential_generation: 0,
             _credentials_changed: credential_changed,
@@ -282,7 +282,7 @@ impl WorkspaceView {
             _store_changed: changed,
         };
         view.sync(window, cx);
-        view.load_custom_agents(window, cx);
+        view.load_library_agents(window, cx);
         view
     }
 
@@ -343,12 +343,12 @@ impl WorkspaceView {
         .detach();
     }
 
-    fn load_custom_agents(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn load_library_agents(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let request = self.client.call::<api::ListAgents>(p::Empty {});
         cx.spawn_in(window, async move |this, cx| {
             if let Ok(agents) = request.await {
                 let _ = this.update_in(cx, |this, _window, cx| {
-                    this.custom_agents = agents;
+                    this.library_agents = agents;
                     cx.notify();
                 });
             }
@@ -2123,7 +2123,7 @@ impl WorkspaceView {
                 return;
             }
             let Some(agent_id) = self
-                .custom_agents
+                .library_agents
                 .iter()
                 .find(|a| a.handle.0 == name)
                 .map(|a| a.id.clone())

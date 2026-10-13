@@ -327,7 +327,6 @@ export class FakeTempod {
 }
 
 export const DEFAULT_EFFECTIVE = {
-  roles: { enabled: true, max_chain_depth: 10, max_runs_per_change: 20, max_tokens_per_change: 0 },
   agent: { default: "claude", models: { claude: "", codex: "", opencode: "", pi: "" } },
   browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
@@ -549,7 +548,7 @@ export const seedWorkspace = async (
     branch?: string;
     agent?: "claude" | "codex" | "opencode" | "pi";
     source?: Source;
-    custom?: SessionAgentProfile;
+    savedProfile?: SessionAgentProfile;
   } = {},
 ) => {
   const workspaceId = newId();
@@ -579,7 +578,7 @@ export const seedWorkspace = async (
     createdAt: now,
   };
 
-  const res = await stub.init(opts.custom ? { ...init, custom: opts.custom } : init);
+  const res = await stub.init(opts.savedProfile ? { ...init, savedProfile: opts.savedProfile } : init);
 
   if (!res.ok) throw new Error(`init failed: ${res.error.code}`);
 

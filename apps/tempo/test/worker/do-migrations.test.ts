@@ -37,6 +37,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0009_lifecycle",
       "0010_agents",
       "0011_agent_proposals",
+      "0012_session_agents",
     ]);
   });
 });
@@ -186,6 +187,7 @@ describe("deployed workspace upgrade", () => {
                     "0009_lifecycle",
                     "0010_agents",
                     "0011_agent_proposals",
+                    "0012_session_agents",
                   ].includes(m.tag),
               )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
@@ -279,7 +281,25 @@ describe("DO migration 0010_agents", () => {
       sql.exec(
         "INSERT INTO checkpoints(id,reason,commit_sha,tree_sha,parent_sha,base_sha,created_at) VALUES ('pin','role_pin','a','b','c','d',5)",
       );
+      sql.exec(
+        "UPDATE sessions SET custom_agent_id = ?, custom_agent_name = ?, custom_agent_commit = ? WHERE id = ?",
+        "old-agent",
+        "Frozen reviewer",
+        "a".repeat(40),
+        sessionId,
+      );
       await runMigrations(db, WORKSPACE_MIGRATIONS);
+      expect(
+        sql.exec("SELECT agent_id,agent_name,agent_sha,agent_version,profile_json FROM sessions").toArray(),
+      ).toEqual([
+        {
+          agent_id: "old-agent",
+          agent_name: "Frozen reviewer",
+          agent_sha: "a".repeat(40),
+          agent_version: null,
+          profile_json: JSON.stringify({ systemPrompt: "Frozen original" }),
+        },
+      ]);
       expect(
         sql
           .exec("SELECT handle,agent_sha,output_kind,status,follow_up_sent,tokens,deadline_at FROM runs")

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseRoleFile, parseRoleResult, resolveSettings } from "../src/index.ts";
+import { parseRoleFile } from "../../src/migrations/roles.ts";
 
 const role = (front: string, body = "Body\n") => `---\ndescription: Job\n${front}\n---\n${body}`;
 
-describe("role files", () => {
+describe("legacy role migration files", () => {
   it("uses YAML 1.2, applies defaults and preserves the body", () => {
     const parsed = parseRoleFile("reviewer", role("on:\n  - event: agent.turn.ended"));
     expect(parsed.body).toBe("Body\n");
@@ -34,28 +34,5 @@ describe("role files", () => {
   it("rejects names and oversized files", () => {
     expect(() => parseRoleFile("../role", role("requestable: true"))).toThrow();
     expect(() => parseRoleFile("reviewer", role("requestable: true", "é".repeat(33000)))).toThrow();
-  });
-  it("validates bounded result JSON without echoing its contents", () => {
-    expect(parseRoleResult('{"status":"pass","summary":"okay"}').status).toBe("pass");
-
-    for (const invalid of [
-      '{"status":"unknown","summary":"secret-value"}',
-      JSON.stringify({ status: "done", summary: "x".repeat(4001) }),
-      JSON.stringify({
-        status: "done",
-        summary: "fine",
-        findings: Array(201).fill({ path: "a", text: "x", blocking: true }),
-      }),
-      '{"status":"done","summary":"fine","extra":true}',
-    ])
-      expect(() => parseRoleResult(invalid)).toThrow("The role's result was not valid.");
-  });
-  it("merges each roles setting independently", () => {
-    expect(
-      resolveSettings(
-        { roles: { max_chain_depth: 3 } },
-        { tempoYaml: "roles:\n  enabled: false\n  max_runs_per_change: 5\n" },
-      ).effective.roles,
-    ).toEqual({ enabled: false, max_chain_depth: 3, max_runs_per_change: 5, max_tokens_per_change: 0 });
   });
 });

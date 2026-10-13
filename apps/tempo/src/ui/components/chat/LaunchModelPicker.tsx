@@ -16,9 +16,9 @@ import { agentLabel } from "~/ui/lib/agents";
 import { openDialog } from "~/ui/state/workspace-ui";
 import {
   agentsWithLogin,
-  customAgentOf,
-  customAgentValue,
-  customAgentsWithLogin,
+  libraryAgentOf,
+  libraryAgentValue,
+  libraryAgentsWithLogin,
   initialAgent,
   initialModel,
   modelChoices,
@@ -29,13 +29,13 @@ export function useLaunchModels(settings: Project["settings"]) {
   const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
   const available = agentsWithLogin(credentials.data);
   const choices = modelChoices(available, models.data ?? []);
-  const custom = customAgentsWithLogin(useAgentChoices(settings.agent?.default ?? "claude").data, available);
+  const custom = libraryAgentsWithLogin(useAgentChoices(settings.agent?.default ?? "claude").data, available);
   const [picked, setPicked] = useState<string | null>(null);
 
   const selected =
     choices.find((choice) => choice.key === picked) ?? initialModel(choices, models.data ?? [], { settings });
 
-  const pickedCustom = customAgentOf(picked, custom);
+  const pickedAgent = libraryAgentOf(picked, custom);
 
   return {
     credentials,
@@ -44,7 +44,7 @@ export function useLaunchModels(settings: Project["settings"]) {
     choices,
     custom,
     selected,
-    pickedCustom,
+    pickedAgent,
     setPicked,
     fallbackAgent: initialAgent(available, { settings }),
   };
@@ -59,12 +59,12 @@ export function LaunchModelPicker({
   disabled: boolean;
   onClosed: () => void;
 }) {
-  const { credentials, models, choices, custom, selected, pickedCustom, setPicked } = selection;
+  const { credentials, models, choices, custom, selected, pickedAgent, setPicked } = selection;
 
   return (
     <div className="min-w-0">
       <Select
-        value={pickedCustom ? customAgentValue(pickedCustom.id) : (selected?.key ?? "")}
+        value={pickedAgent ? libraryAgentValue(pickedAgent.id) : (selected?.key ?? "")}
         onValueChange={(value) => {
           if (value === "manage-agents") openDialog({ kind: "settings", tab: "agents" });
           else setPicked(value);
@@ -89,7 +89,7 @@ export function LaunchModelPicker({
           ))}
           {custom.length > 0 && choices.length > 0 && <SelectSeparator />}
           {custom.map((agent) => (
-            <SelectItem key={agent.id} value={customAgentValue(agent.id)}>
+            <SelectItem key={agent.id} value={libraryAgentValue(agent.id)}>
               {agent.name} <span className="text-muted-foreground">· {agentLabel(agent.baseAgent)}</span>
             </SelectItem>
           ))}

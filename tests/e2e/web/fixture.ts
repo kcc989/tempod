@@ -211,8 +211,7 @@ export class WebFixture {
         return {
           diff: "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old README\n+new README\n",
         };
-      case "listRoles":
-        return [];
+
       case "getBrowserLiveView":
         return { url: this.liveViewUrl };
       case "listFiles":
@@ -260,7 +259,6 @@ export class WebFixture {
       case "listRuns":
       case "listProjectAgents":
       case "listAgents":
-      case "listCustomAgents":
         return [];
       case "refreshPullRequest":
         return {

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./migrations/*": "./src/migrations/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --checkers 2 -p tsconfig.json",

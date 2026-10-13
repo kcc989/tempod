@@ -5,14 +5,14 @@ import {
   emptyServer,
   formFromAgent,
   validateForm,
-} from "../../src/ui/components/dialogs/settings/agents-model";
-import { customAgentMenu, sessionTitle, sessionTooltip } from "../../src/ui/components/chat/chat-tabs-model";
+} from "../../src/ui/components/dialogs/settings/library-model";
+import { libraryAgentMenu, sessionTitle, sessionTooltip } from "../../src/ui/components/chat/chat-tabs-model";
 import { profileIssuesText } from "../../src/ui/components/chat/composer-model";
 import {
-  customAgentOf,
+  libraryAgentOf,
   createInput,
-  customAgentValue,
-  customAgentsWithLogin,
+  libraryAgentValue,
+  libraryAgentsWithLogin,
   emptySource,
 } from "../../src/ui/components/dialogs/new-workspace-model";
 
@@ -31,6 +31,7 @@ describe("agent form (04, Settings → Agents)", () => {
     const { errors, definition } = validateForm({
       ...emptyForm(),
       name: " Tester ",
+      handle: "tester",
       model: " opus ",
       servers: [server],
     });
@@ -70,14 +71,20 @@ describe("agent form (04, Settings → Agents)", () => {
   it("round-trips a saved agent into the form", () => {
     const form = formFromAgent({
       id: "x",
-      commitSha: "c",
+      handle: "reviewer",
+      access: "read-only",
+      outputKind: "review",
+      version: 1,
+      sha: "c",
+      starter: null,
+      createdAt: 1,
       updatedAt: 1,
       name: "R",
       description: "",
       baseAgent: "pi",
       model: "",
       thoughtLevel: "",
-      systemPrompt: "",
+      prompt: "",
       tools: { allow: ["read"], deny: [] },
       mcp: {
         playwright: true,
@@ -99,49 +106,51 @@ describe("agent form (04, Settings → Agents)", () => {
   });
 });
 
-describe("custom agents in New chat and New workspace (04)", () => {
+describe("saved agents in New chat and New workspace (04)", () => {
   const agents = [
     { id: "a1", name: "Reviewer", description: "", baseAgent: "codex" as const, updatedAt: 1 },
     { id: "a2", name: "Pi tester", description: "", baseAgent: "pi" as const, updatedAt: 1 },
   ];
 
   it("menu entries name the base agent and hide agents without its login", () => {
-    expect(customAgentMenu(agents, creds(["codex"]))).toEqual([
+    expect(libraryAgentMenu(agents, creds(["codex"]))).toEqual([
       {
         agent: "codex",
-        customAgentId: "a1",
+        agentId: "a1",
         label: "Reviewer",
         baseLabel: "Codex",
         enabled: true,
         hint: null,
       },
     ]);
-    expect(customAgentMenu(undefined, undefined)).toEqual([]);
-    expect(customAgentMenu(agents, undefined)).toEqual([]);
-    expect(customAgentMenu(agents, creds([]))).toEqual([]);
+    expect(libraryAgentMenu(undefined, undefined)).toEqual([]);
+    expect(libraryAgentMenu(agents, undefined)).toEqual([]);
+    expect(libraryAgentMenu(agents, creds([]))).toEqual([]);
   });
 
-  it("the New workspace select maps custom values back to the agent and sends customAgentId", () => {
-    const custom = customAgentsWithLogin(agents, ["claude", "codex"]);
+  it("the New workspace select maps saved values back to the agent and sends agentId", () => {
+    const custom = libraryAgentsWithLogin(agents, ["claude", "codex"]);
     expect(custom.map((a) => a.id)).toEqual(["a1"]);
-    expect(customAgentOf(customAgentValue("a1"), custom)?.baseAgent).toBe("codex");
-    expect(customAgentOf(customAgentValue("a2"), custom)).toBeNull();
-    expect(customAgentOf('["claude","opus"]', custom)).toBeNull();
+    expect(libraryAgentOf(libraryAgentValue("a1"), custom)?.baseAgent).toBe("codex");
+    expect(libraryAgentOf(libraryAgentValue("a2"), custom)).toBeNull();
+    expect(libraryAgentOf('["claude","opus"]', custom)).toBeNull();
     expect(
       createInput({ id: "p", defaultBranch: "main" }, emptySource(), "codex", "", undefined, "a1"),
     ).toEqual({
       projectId: "p",
       source: { kind: "new", baseBranch: "main" },
       agent: "codex",
-      customAgentId: "a1",
+      agentId: "a1",
     });
   });
 
-  it("tabs show the custom agent's name and the base agent in the tooltip", () => {
+  it("tabs show the saved agent's name and the base agent in the tooltip", () => {
     const s = {
       title: "",
       agent: "codex" as const,
-      customAgent: { id: "a1", name: "Reviewer", commitSha: "c" },
+      agentId: "a1",
+      agentName: "Reviewer",
+      agentSha: "c",
     };
 
     expect(sessionTitle(s)).toBe("Reviewer");
@@ -152,7 +161,9 @@ describe("custom agents in New chat and New workspace (04)", () => {
   it("the notice lists what the base agent ignored", () => {
     const s = {
       agent: "codex" as const,
-      customAgent: { id: "a1", name: "Reviewer", commitSha: "c" },
+      agentId: "a1",
+      agentName: "Reviewer",
+      agentSha: "c",
       profileIssues: ["tools", "thoughtLevel"] as const,
     };
 

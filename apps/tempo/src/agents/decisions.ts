@@ -7,7 +7,7 @@ import {
   type AttachmentHook,
   type LifecycleEvent,
 } from "@tempo/protocol";
-import { lifecycleRedactor } from "../roles/secrets.ts";
+import { lifecycleRedactor } from "../agents/secrets.ts";
 import { changeText, cutInput } from "./run-inputs.ts";
 import { requireTempod } from "../do/workspace/container.ts";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
