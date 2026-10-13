@@ -17,8 +17,10 @@ pub struct AppState {
     /// Collapsed sidebar sections: `pinned` or a project id.
     pub collapsed_sections: std::collections::BTreeSet<String>,
     pub credentials_rev: u64,
+    /// Bumped when Settings → Agents saves or deletes, so New chat menus reload (01, Custom agents).
+    pub custom_agents_rev: u64,
     pub credential_changed: Option<tempo_protocol::CredentialProvider>,
-    pub settings_window: Option<gpui_kit::AnyWindowHandle>,
+    pub settings_open: bool,
     pub auth: AuthState,
     pub hub: Entity<HubStore>,
     /// Open workspace stores, the one shown most recently first.
@@ -52,8 +54,9 @@ impl AppState {
             workspace_focused: false,
             collapsed_sections: Default::default(),
             credentials_rev: 0,
+            custom_agents_rev: 0,
             credential_changed: None,
-            settings_window: None,
+            settings_open: false,
             server_url: url.clone(),
             auth: AuthState::Connect { url, error: None },
             hub: cx.new(|_| HubStore::new()),
@@ -500,12 +503,8 @@ impl AppState {
             });
         }
     }
-    fn close_settings(&mut self, cx: &mut Context<Self>) {
-        if let Some(handle) = self.settings_window.take() {
-            cx.defer(move |cx| {
-                let _ = handle.update(cx, |_, window, _| window.remove_window());
-            });
-        }
+    fn close_settings(&mut self, _: &mut Context<Self>) {
+        self.settings_open = false;
     }
     fn stop_for_update(&mut self, cx: &mut Context<Self>) {
         self.close_settings(cx);
@@ -628,12 +627,10 @@ pub fn init(runtime: ClientRuntime, urls: async_channel::Receiver<Vec<String>>, 
             app.update(cx, |a, cx| {
                 if a.main_window.is_some_and(|w| w.window_id() == id) {
                     a.main_window = None;
+                    a.settings_open = false;
                     for store in &a.workspaces {
                         store.update(cx, |s, cx| s.hide(cx));
                     }
-                }
-                if a.settings_window.is_some_and(|w| w.window_id() == id) {
-                    a.settings_window = None;
                 }
             });
         }

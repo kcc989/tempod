@@ -1,16 +1,22 @@
-//! Settings pages (04, Settings): General, Logins, Project and Appearance. Server data changes
-//! with the same functions as the web (07, Local storage and settings).
+//! Settings pages (04, Settings): General, Logins, Environments, MCP servers, Project and
+//! Appearance. Server data changes with the same functions as the web (07, Local storage and
+//! settings).
+use super::environments::{self, EnvironmentSelect};
+use super::environments_model as env_model;
+use super::mcp_model::{self, McpForm};
 use super::settings_model::{self as model, EditValue, FieldState, Kind};
 use super::tokens::{Token, color};
 use crate::platform::Permission;
 use crate::storage::{Local, Theme as SavedTheme, TranscriptDetail};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
+use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    Disableable as _, IconName, Selectable as _, Sizable as _, Theme, ThemeMode, h_flex, v_flex,
+    Disableable as _, IconName, Selectable as _, Sizable as _, Theme, ThemeMode, WindowExt as _,
+    h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -18,13 +24,16 @@ use gpui_kit::{
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
     Window, div, px,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use tempo_protocol::{self as p, api};
 
 pub const TAB_LOGINS: usize = 0;
 pub const TAB_PROJECT: usize = 1;
 pub const TAB_GENERAL: usize = 3;
+pub const TAB_ENVIRONMENTS: usize = 5;
+pub const TAB_MCP: usize = 6;
+pub const TAB_AGENTS: usize = 7;
 
 /// The pages of a project (04), each with the field sections of [`model::SECTIONS`] it shows.
 pub const PROJECT_PAGES: [(&str, &[&str]); 7] = [
@@ -36,6 +45,7 @@ pub const PROJECT_PAGES: [(&str, &[&str]); 7] = [
     ("Secrets", &[]),
     ("General", &[]),
 ];
+const PAGE_ENVIRONMENT: usize = 2;
 const PAGE_SECRETS: usize = 5;
 
 struct RunEditor {
@@ -73,6 +83,27 @@ struct Field {
 
 fn text(input: &Entity<InputState>, cx: &App) -> String {
     input.read(cx).value().to_string()
+}
+
+impl Editor {
+    fn contains_input(&self, id: gpui_kit::EntityId) -> bool {
+        match self {
+            Self::Line(v) => v.entity_id() == id,
+            Self::Area(v) => v.entity_id() == id,
+            Self::Instance {
+                vcpu, memory, disk, ..
+            } => [vcpu, memory, disk].iter().any(|v| v.entity_id() == id),
+            Self::Run(rows) => rows.iter().any(|r| {
+                [&r.id, &r.command, &r.cwd]
+                    .iter()
+                    .any(|v| v.entity_id() == id)
+            }),
+            Self::Env(rows) => rows
+                .iter()
+                .any(|r| [&r.name, &r.value].iter().any(|v| v.entity_id() == id)),
+            _ => false,
+        }
+    }
 }
 
 impl Field {
@@ -126,11 +157,18 @@ fn line(
     cx: &mut Context<SettingsForm>,
 ) -> Entity<InputState> {
     let (value, placeholder) = (value.to_string(), placeholder.to_string());
-    cx.new(|cx| {
+    let input = cx.new(|cx| {
         InputState::new(window, cx)
             .placeholder(placeholder)
             .default_value(value)
+    });
+    cx.subscribe_in(&input, window, |this, input, event: &InputEvent, _, cx| {
+        if matches!(event, InputEvent::Change) {
+            this.changed_input(input.entity_id(), cx);
+        }
     })
+    .detach();
+    input
 }
 
 fn run_editor(
@@ -157,6 +195,119 @@ fn env_editor(
     }
 }
 
+struct McpRow {
+    name: Entity<InputState>,
+    value: Entity<InputState>,
+    secret: bool,
+}
+
+/// The add or edit form of Settings → MCP servers.
+struct McpEditor {
+    server: Option<p::McpServer>,
+    stored: BTreeSet<String>,
+    name: Entity<InputState>,
+    enabled: bool,
+    transport: p::McpTransport,
+    command: Entity<InputState>,
+    args: Entity<TextareaState>,
+    env: Vec<McpRow>,
+    url: Entity<InputState>,
+    headers: Vec<McpRow>,
+    error: Option<String>,
+}
+
+fn header_placeholder(secret: bool, name: &str, stored: &BTreeSet<String>) -> &'static str {
+    if secret && stored.contains(&name.trim().to_lowercase()) {
+        "Saved — leave empty to keep"
+    } else {
+        "Value"
+    }
+}
+
+fn mcp_row(
+    row: &mcp_model::Row,
+    name_placeholder: &str,
+    value_placeholder: &str,
+    window: &mut Window,
+    cx: &mut Context<SettingsForm>,
+) -> McpRow {
+    let value = line(&row.value, value_placeholder, window, cx);
+    if row.secret {
+        value.update(cx, |i, cx| i.set_masked(true, window, cx));
+    }
+    McpRow {
+        name: line(&row.name, name_placeholder, window, cx),
+        value,
+        secret: row.secret,
+    }
+}
+
+impl McpEditor {
+    fn new(
+        server: Option<p::McpServer>,
+        window: &mut Window,
+        cx: &mut Context<SettingsForm>,
+    ) -> Self {
+        let form = server.as_ref().map(McpForm::of).unwrap_or_default();
+        let stored = mcp_model::stored_secrets(server.as_ref());
+        let env = form
+            .env
+            .iter()
+            .map(|r| mcp_row(r, "LOG_LEVEL", "Value", window, cx))
+            .collect();
+        let headers = form
+            .headers
+            .iter()
+            .map(|r| {
+                let placeholder = header_placeholder(r.secret, &r.name, &stored);
+                mcp_row(r, "Authorization", placeholder, window, cx)
+            })
+            .collect();
+        let args = form.args.clone();
+        Self {
+            name: line(&form.name, "github", window, cx),
+            enabled: form.enabled,
+            transport: form.transport,
+            command: line(&form.command, "npx", window, cx),
+            args: cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .auto_grow(2, 12)
+                    .placeholder("-y\n@modelcontextprotocol/server-everything")
+                    .default_value(args)
+            }),
+            env,
+            url: line(&form.url, "https://mcp.example.com/mcp", window, cx),
+            headers,
+            error: None,
+            server,
+            stored,
+        }
+    }
+
+    fn form(&self, cx: &App) -> McpForm {
+        let rows = |rows: &[McpRow]| {
+            rows.iter()
+                .map(|r| mcp_model::Row {
+                    name: text(&r.name, cx),
+                    value: text(&r.value, cx),
+                    secret: r.secret,
+                })
+                .collect()
+        };
+        McpForm {
+            id: self.server.as_ref().map(|s| s.id.clone()),
+            name: text(&self.name, cx),
+            enabled: self.enabled,
+            transport: self.transport,
+            command: text(&self.command, cx),
+            args: self.args.read(cx).value().to_string(),
+            env: rows(&self.env),
+            url: text(&self.url, cx),
+            headers: rows(&self.headers),
+        }
+    }
+}
+
 fn field_editor(
     def: &model::FieldDef,
     state: &FieldState,
@@ -167,7 +318,7 @@ fn field_editor(
         (EditValue::Text(value), Kind::Select) => Editor::Choice(value.clone()),
         (EditValue::Text(value), Kind::Multiline | Kind::Hosts) => {
             let (value, hosts) = (value.clone(), def.kind == Kind::Hosts);
-            Editor::Area(cx.new(|cx| {
+            let input = cx.new(|cx| {
                 let area = TextareaState::new(window, cx).auto_grow(2, 12);
                 let area = if hosts {
                     area.placeholder("example.com\n*.example.com")
@@ -175,7 +326,14 @@ fn field_editor(
                     area
                 };
                 area.default_value(value)
-            }))
+            });
+            cx.subscribe_in(&input, window, |this, input, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.changed_input(input.entity_id(), cx);
+                }
+            })
+            .detach();
+            Editor::Area(input)
         }
         (EditValue::Text(value), _) => Editor::Line(line(value, "", window, cx)),
         (EditValue::Bool(on), _) => Editor::Toggle(*on),
@@ -203,6 +361,12 @@ pub struct SettingsForm {
     pub section: usize,
     client: Option<tempo_client::Client>,
     credentials: Option<p::CredentialStatus>,
+    models: Option<Vec<p::AgentModelOptions>>,
+    models_loading: bool,
+    models_error: Option<String>,
+    models_advanced: bool,
+    default_model_reset: Option<Vec<(usize, FieldState)>>,
+    credentials_rev: u64,
     secret_inputs: BTreeMap<String, Entity<InputState>>,
     project: Option<p::Project>,
     workspace: Option<p::WorkspaceDetail>,
@@ -223,6 +387,12 @@ pub struct SettingsForm {
     codex_busy: bool,
     codex_login_task: Option<Task<()>>,
     codex_upload: bool,
+    environments: Option<Vec<p::Environment>>,
+    environment_select: Entity<EnvironmentSelect>,
+    environment_pending: bool,
+    _environment_selected: gpui_kit::Subscription,
+    mcp_servers: Option<Vec<p::McpServer>>,
+    mcp_editor: Option<McpEditor>,
 }
 
 impl SettingsForm {
@@ -250,15 +420,43 @@ impl SettingsForm {
             .map(|name| {
                 (
                     name.into(),
-                    cx.new(|cx| InputState::new(window, cx).masked(true)),
+                    cx.new(|cx| {
+                        InputState::new(window, cx)
+                            .masked(true)
+                            .placeholder("Paste a token or key")
+                    }),
                 )
             })
             .collect();
+        let environment_select =
+            cx.new(|cx| gpui_kit::component::select::SelectState::new(vec![], None, window, cx));
+        let environment_selected = cx.subscribe_in(
+            &environment_select,
+            window,
+            |this,
+             _,
+             event: &gpui_kit::component::select::SelectEvent<Vec<environments::Choice>>,
+             window,
+             cx| {
+                if let gpui_kit::component::select::SelectEvent::Confirm(Some(value)) = event {
+                    this.set_project_environment(env_model::selected_id(value), window, cx);
+                }
+            },
+        );
         let mut this = Self {
             tab: 0,
             section: 0,
             client,
             credentials: None,
+            models: None,
+            models_loading: false,
+            models_error: None,
+            models_advanced: false,
+            default_model_reset: None,
+            credentials_rev: app
+                .as_ref()
+                .map(|a| a.read(cx).credentials_rev)
+                .unwrap_or(0),
             secret_inputs,
             project: None,
             workspace: None,
@@ -283,13 +481,153 @@ impl SettingsForm {
             codex_busy: false,
             codex_login_task: None,
             codex_upload: false,
+            environments: None,
+            environment_select,
+            environment_pending: false,
+            _environment_selected: environment_selected,
+            mcp_servers: None,
+            mcp_editor: None,
         };
         if let Some(project) = project {
             this.load_project(project, window, cx);
         }
+        if let Some(app) = &app {
+            cx.observe(app, |this, app, cx| {
+                let rev = app.read(cx).credentials_rev;
+                if rev != this.credentials_rev {
+                    this.credentials_rev = rev;
+                    this.models = None;
+                    this.models_loading = false;
+                    this.refresh(cx);
+                }
+            })
+            .detach();
+        }
         this.refresh(cx);
+        this.load_environments(window, cx);
         this.refresh_permission(cx);
         this
+    }
+
+    fn load_environments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(client) = &self.client else {
+            return;
+        };
+        let request = client.call::<api::ListEnvironments>(p::Empty {});
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                match result {
+                    Ok(list) => {
+                        this.environments = Some(list);
+                        this.sync_environment_select(window, cx);
+                    }
+                    Err(e) => this.load_error = Some(super::toast::error_text(&e, None)),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn sync_environment_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(list) = &self.environments else {
+            return;
+        };
+        let current = self.project.as_ref().and_then(|p| p.environment_id.clone());
+        environments::sync_select(
+            &self.environment_select,
+            "None".into(),
+            list,
+            current.as_deref(),
+            window,
+            cx,
+        );
+    }
+
+    /// The environment selected for the project, if it still exists.
+    fn project_environment(&self) -> Option<&p::Environment> {
+        env_model::find(
+            self.environments.as_deref()?,
+            self.project.as_ref()?.environment_id.as_deref(),
+        )
+    }
+
+    /// `setProjectEnvironment`, saved at once and not with the Save bar (04). Unsaved field
+    /// edits stay.
+    fn set_project_environment(
+        &mut self,
+        environment_id: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(client), Some(project)) = (&self.client, &self.project) else {
+            return;
+        };
+        if self.environment_pending || project.environment_id == environment_id {
+            return;
+        }
+        self.environment_pending = true;
+        let request = client.call::<api::SetProjectEnvironment>(p::SetProjectEnvironmentIn {
+            project_id: project.id.clone(),
+            environment_id,
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.environment_pending = false;
+                match result {
+                    Ok(project) => {
+                        if let Some(current) = this.project.as_mut().filter(|p| p.id == project.id)
+                        {
+                            current.environment_id = project.environment_id.clone();
+                        }
+                        environments::store_project(project, cx);
+                    }
+                    Err(e) => super::toast::error(&e, None, window, cx),
+                }
+                this.sync_environment_select(window, cx);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn changed_input(&mut self, id: gpui_kit::EntityId, cx: &mut Context<Self>) {
+        if let Some(ix) = self.fields.iter().position(|f| f.editor.contains_input(id)) {
+            self.fields[ix].set = true;
+            self.field_errors.remove(model::FIELDS[ix].path);
+            cx.notify();
+        }
+    }
+
+    pub fn selected_project(&self) -> Option<&p::Project> {
+        self.project.as_ref()
+    }
+
+    pub fn show_project(
+        &mut self,
+        project: p::Project,
+        section: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.pending {
+            return;
+        }
+        if self.project.as_ref().map(|p| &p.id) != Some(&project.id) {
+            self.select_project(project, window, cx);
+        }
+        self.show_project_page(section, cx);
+    }
+
+    fn reset_field(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.fields[ix].set = false;
+        if !self.initial[ix].set {
+            self.fields[ix] = field_editor(&model::FIELDS[ix], &self.initial[ix], window, cx);
+        }
+        self.field_errors.remove(model::FIELDS[ix].path);
+        cx.notify();
     }
 
     /// Selects a settings tab; the General tab reads the macOS permission again.
@@ -305,6 +643,9 @@ impl SettingsForm {
     pub fn show_project_page(&mut self, section: usize, cx: &mut Context<Self>) {
         self.tab = TAB_PROJECT;
         self.section = section;
+        if section == 0 {
+            self.load_models(cx);
+        }
         cx.notify();
     }
 
@@ -370,6 +711,7 @@ impl SettingsForm {
             self.secret_error = None;
         }
         self.initial = initial;
+        self.default_model_reset = None;
         self.field_errors.clear();
         self.problem = None;
         self.project = Some(project);
@@ -382,11 +724,263 @@ impl SettingsForm {
             return;
         }
         self.load_project(project, window, cx);
+        self.sync_environment_select(window, cx);
         self.refresh(cx);
     }
 
     fn form(&self, cx: &App) -> Vec<FieldState> {
         self.fields.iter().map(|f| f.state(cx)).collect()
+    }
+
+    fn load_models(&mut self, cx: &mut Context<Self>) {
+        if self.models_loading || self.models.is_some() || self.credentials.is_none() {
+            return;
+        }
+        let Some(client) = &self.client else {
+            return;
+        };
+        if self.connected_agents().is_empty() {
+            self.models = Some(vec![]);
+            return;
+        }
+        self.models_loading = true;
+        self.models_error = None;
+        let rev = self.credentials_rev;
+        let request = client.call::<api::ListModels>(Default::default());
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                if this.credentials_rev != rev {
+                    return;
+                }
+                this.models_loading = false;
+                match result {
+                    Ok(models) => this.models = Some(models),
+                    Err(e) => this.models_error = Some(super::toast::error_text(&e, None)),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn connected_agents(&self) -> Vec<p::AgentId> {
+        [
+            p::AgentId::Claude,
+            p::AgentId::Codex,
+            p::AgentId::Opencode,
+            p::AgentId::Pi,
+        ]
+        .into_iter()
+        .filter(|a| {
+            self.credentials
+                .as_ref()
+                .is_some_and(|c| super::chat_model::has_login(*a, c))
+        })
+        .collect()
+    }
+
+    fn default_agent(&self) -> p::AgentId {
+        let ix = model::FIELDS
+            .iter()
+            .position(|f| f.path == "agent.default")
+            .unwrap();
+        match &self.fields[ix].editor {
+            Editor::Choice(v) => v.parse().unwrap_or(p::AgentId::Claude),
+            _ => p::AgentId::Claude,
+        }
+    }
+
+    fn model_agent_label(agent: p::AgentId) -> &'static str {
+        match agent {
+            p::AgentId::Claude => "Claude",
+            _ => super::chat_model::agent_label(agent),
+        }
+    }
+
+    fn model_index(agent: p::AgentId) -> usize {
+        let path = format!("agent.models.{agent}");
+        model::FIELDS.iter().position(|f| f.path == path).unwrap()
+    }
+
+    fn pick_model(
+        &mut self,
+        agent: p::AgentId,
+        value: &str,
+        primary: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.pending {
+            return;
+        }
+        if !self.connected_agents().contains(&agent)
+            || !(self
+                .models
+                .iter()
+                .flatten()
+                .any(|m| m.agent == agent && m.options.iter().any(|o| o.value == value))
+                || (!primary
+                    && value.is_empty()
+                    && matches!(agent, p::AgentId::Claude | p::AgentId::Codex)))
+        {
+            return;
+        }
+        let ix = Self::model_index(agent);
+        if let Editor::Line(input) = &self.fields[ix].editor {
+            input.update(cx, |i, cx| i.set_value(value, window, cx));
+        }
+        self.fields[ix].set = true;
+        self.field_errors.remove(model::FIELDS[ix].path);
+        if primary {
+            let default = model::FIELDS
+                .iter()
+                .position(|f| f.path == "agent.default")
+                .unwrap();
+            self.fields[default].set = true;
+            self.fields[default].editor = Editor::Choice(agent.to_string());
+            self.field_errors.remove("agent.default");
+            self.default_model_reset = None;
+        }
+        cx.notify();
+    }
+
+    fn model_choices(&self, only: Option<p::AgentId>) -> Vec<(p::AgentId, String, String)> {
+        let available = self.connected_agents();
+        self.models
+            .iter()
+            .flatten()
+            .filter(|entry| {
+                available.contains(&entry.agent) && only.is_none_or(|a| a == entry.agent)
+            })
+            .flat_map(|entry| {
+                entry.options.iter().map(|o| {
+                    (
+                        entry.agent,
+                        o.value.clone(),
+                        format!("{} · {}", o.name, Self::model_agent_label(entry.agent)),
+                    )
+                })
+            })
+            .collect()
+    }
+
+    fn model_picker(&self, only: Option<p::AgentId>, cx: &mut Context<Self>) -> AnyElement {
+        let available = self.connected_agents();
+        let choices = self.model_choices(only);
+        let agent = only.unwrap_or_else(|| self.default_agent());
+        let ix = Self::model_index(agent);
+        let configured = match &self.fields[ix].editor {
+            Editor::Line(input) => text(input, cx),
+            _ => String::new(),
+        };
+        let current = self
+            .models
+            .iter()
+            .flatten()
+            .find(|m| m.agent == agent)
+            .map(|m| m.current_value.as_str())
+            .unwrap_or("");
+        let selected = choices.iter().find(|(a, v, _)| {
+            *a == agent
+                && v == if configured.is_empty() {
+                    current
+                } else {
+                    &configured
+                }
+        });
+        let label = if self.models_loading || self.credentials.is_none() {
+            "Loading models…".into()
+        } else if only.is_some()
+            && configured.is_empty()
+            && matches!(agent, p::AgentId::Claude | p::AgentId::Codex)
+        {
+            "Use agent default".into()
+        } else {
+            selected
+                .map(|(_, _, label)| label.clone())
+                .unwrap_or_else(|| "Choose a model".into())
+        };
+        let unavailable = selected.is_none();
+        let weak = cx.weak_entity();
+        let primary = only.is_none();
+        let id = only
+            .map(|a| format!("project-model-{a}"))
+            .unwrap_or_else(|| "project-default-model".into());
+        v_flex().gap_2()
+            .child(Button::new(SharedString::from(id)).label(label).icon(IconName::ChevronDown)
+                .accessibility_label(if primary { "Default model".into() } else { format!("{} default model", Self::model_agent_label(agent)) })
+                .self_start().min_w(px(240.)).max_w(px(448.))
+                .disabled(self.pending || self.models_loading || self.credentials.is_none() || self.models_error.is_some() || choices.is_empty())
+                .dropdown_menu(move |menu, _, _| {
+                    let menu = if !primary && matches!(agent, p::AgentId::Claude | p::AgentId::Codex) {
+                        let weak = weak.clone();
+                        menu.item(PopupMenuItem::new("Use agent default").on_click(move |_, window, cx| {
+                            let _ = weak.update(cx, |this, cx| this.pick_model(agent, "", false, window, cx));
+                        }))
+                    } else { menu };
+                    choices.iter().fold(menu, |menu, (a, value, label)| {
+                        let weak = weak.clone(); let a = *a; let value = value.clone();
+                        menu.item(PopupMenuItem::new(label.clone()).on_click(move |_, window, cx| {
+                            let _ = weak.update(cx, |this, cx| this.pick_model(a, &value, primary, window, cx));
+                        }))
+                    })
+                }))
+            .children((unavailable && !self.models_loading && self.credentials.is_some() && self.models_error.is_none()).then(||
+                div().text_xs().text_color(color(Token::MutedForeground, cx)).child(if available.is_empty() {
+                    "Connect an agent to choose a model.".into()
+                } else if configured.is_empty() && only.is_some() { "Uses the agent's own default.".into() }
+                else { format!("Configured default: {} · {}. It is not in the available model list. Saved value is unchanged.", Self::model_agent_label(agent), if configured.is_empty() { "agent default" } else { &configured }) })))
+            .into_any_element()
+    }
+
+    fn render_project_models(
+        &self,
+        ctx: &model::EffectiveContext,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let agent = self.default_agent();
+        let model_ix = Self::model_index(agent);
+        let default_ix = model::FIELDS
+            .iter()
+            .position(|f| f.path == "agent.default")
+            .unwrap();
+        let own = self.fields[default_ix].set || self.fields[model_ix].set;
+        let available = self.connected_agents();
+        v_flex().gap_3().py_3()
+            .child(h_flex().justify_between().child("Default model").child(self.source_tag(if own { p::SettingsSource::Tempo } else { model::effective_leaf(&model::FIELDS[model_ix], ctx).1 }, cx)))
+            .child(div().text_xs().text_color(color(Token::MutedForeground, cx)).child("Used for new workspaces and chats. Choosing a model also selects its agent."))
+            .child(if self.default_model_reset.is_some() {
+                h_flex().gap_2().child("Save to restore the repository or default value.")
+                    .child(Button::new("undo-default-model-reset").ghost().small().label("Undo reset")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if let Some(snapshot) = this.default_model_reset.take() {
+                                for (ix, state) in snapshot { this.fields[ix] = field_editor(&model::FIELDS[ix], &state, window, cx); }
+                            }
+                            cx.notify();
+                        }))).into_any_element()
+            } else { self.model_picker(None, cx) })
+            .children(self.models_error.clone().map(|error| h_flex().gap_2().child(error)
+                .child(Button::new("retry-project-models").ghost().small().label("Retry loading models")
+                    .on_click(cx.listener(|this, _, _, cx| this.load_models(cx))))))
+            .child(h_flex().gap_2()
+                .child(Button::new("connect-project-agent").ghost().small().label("Connect another agent")
+                    .on_click(|_, _, cx| super::settings::open_logins(cx)))
+                .children((own && self.default_model_reset.is_none()).then(|| Button::new("reset-default-model").ghost().small().label("Reset default model to inherited")
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        let snapshot = [default_ix, model_ix].map(|ix| (ix, this.fields[ix].state(cx))).to_vec();
+                        let unknown = [default_ix, model_ix].iter().any(|ix| this.initial[*ix].set);
+                        this.reset_field(default_ix, window, cx); this.reset_field(model_ix, window, cx);
+                        this.default_model_reset = unknown.then_some(snapshot);
+                    })))))
+            .children(available.iter().any(|a| *a != agent).then(|| v_flex().gap_2().pt_3().border_t_1().border_color(color(Token::Border, cx))
+                .child(Button::new("advanced-agent-models").ghost().self_start().label("Advanced")
+                    .icon(if self.models_advanced { IconName::ChevronDown } else { IconName::ChevronRight })
+                    .on_click(cx.listener(|this, _, _, cx| { this.models_advanced = !this.models_advanced; cx.notify(); })))
+                .children(self.models_advanced.then(|| v_flex().gap_3()
+                    .child(div().text_xs().text_color(color(Token::MutedForeground, cx)).child("Defaults for other connected agents. These do not change the project's Default model."))
+                    .children(available.iter().filter(|a| **a != agent).map(|a| self.render_field(Self::model_index(*a), ctx, cx)))))))
+            .into_any_element()
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
@@ -401,7 +995,22 @@ impl SettingsForm {
                     Ok(status) => {
                         this.credentials = Some(status);
                         this.load_error = None;
+                        if this.tab == TAB_PROJECT && this.section == 0 {
+                            this.load_models(cx);
+                        }
                     }
+                    Err(e) => this.load_error = Some(super::toast::error_text(&e, None)),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        let request = client.call::<api::ListMcpServers>(p::Empty {});
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(servers) => this.mcp_servers = Some(servers),
                     Err(e) => this.load_error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();
@@ -750,7 +1359,7 @@ impl SettingsForm {
         let muted = color(Token::MutedForeground, cx);
         let busy = self.codex_busy || self.pending;
         let mut card = v_flex()
-            .gap_1()
+            .p_3().gap_2().border_1().border_color(color(Token::Border, cx)).rounded_md().bg(color(Token::Panel, cx))
             .child(format!("Codex · {}", if set { "Set" } else { "Not set" }))
             .children(updated.filter(|at| at.is_finite() && *at >= 0.).map(|at| {
                 div().text_sm().text_color(muted).child(format!(
@@ -794,6 +1403,7 @@ impl SettingsForm {
         } else {
             card = card.child(
                 Button::new("codex-connect")
+                    .self_start()
                     .primary()
                     .disabled(busy)
                     .label(if busy {
@@ -808,6 +1418,7 @@ impl SettingsForm {
         }
         card = card.child(
             Button::new("codex-upload-toggle")
+                .self_start()
                 .ghost()
                 .disabled(busy)
                 .label("Use auth.json instead")
@@ -847,6 +1458,7 @@ impl SettingsForm {
         }
         card.child(
             Button::new("delete-Codex")
+                .self_start()
                 .label("Remove")
                 .disabled(!set || busy)
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -940,6 +1552,467 @@ impl SettingsForm {
         );
     }
 
+    fn edit_mcp(
+        &mut self,
+        server: Option<p::McpServer>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.mcp_editor = Some(McpEditor::new(server, window, cx));
+        cx.notify();
+    }
+
+    fn save_mcp(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = &mut self.mcp_editor else {
+            return;
+        };
+        let input = editor.form(cx).input();
+        editor.error = mcp_model::input_problem(&input, &editor.stored);
+        if editor.error.is_none() {
+            self.send_mcp(input, true, window, cx);
+        }
+        cx.notify();
+    }
+
+    /// Saves a server from the form, or its Enabled switch with secret values left out.
+    fn send_mcp(
+        &mut self,
+        input: p::McpServerInput,
+        from_editor: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.pending {
+            return;
+        }
+        let Some(client) = &self.client else {
+            return;
+        };
+        self.pending = true;
+        let request = client.call::<api::SaveMcpServer>(input);
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.pending = false;
+                match result {
+                    Ok(server) => {
+                        if from_editor {
+                            this.mcp_editor = None;
+                            super::toast::success(format!("{} saved", server.name), window, cx);
+                        }
+                        this.refresh(cx);
+                    }
+                    Err(e)
+                        if from_editor
+                            && super::toast::error_code(&e) == "VALIDATION_FAILED"
+                            && this.mcp_editor.is_some() =>
+                    {
+                        let detail = match &e {
+                            tempo_client::ApiError::Server { error, .. } => error.detail.clone(),
+                            _ => None,
+                        };
+                        let text = super::toast::error_text(&e, None);
+                        if let Some(editor) = &mut this.mcp_editor {
+                            editor.error = Some(match detail {
+                                Some(detail) => format!("{text} {detail}"),
+                                None => text,
+                            });
+                        }
+                    }
+                    Err(e) => super::toast::error(&e, None, window, cx),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn delete_mcp(&mut self, server: &p::McpServer, window: &mut Window, cx: &mut Context<Self>) {
+        let Ok(id) = p::DeleteMcpServerInId::try_from(server.id.clone()) else {
+            return;
+        };
+        let weak = cx.weak_entity();
+        let title = format!("Delete {}?", server.name);
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let weak = weak.clone();
+            let id = id.clone();
+            alert
+                .title(title.clone())
+                .description(
+                    "New sessions no longer get this server. Its secret headers are deleted.",
+                )
+                .confirm()
+                .ok_text("Delete")
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let _ = weak.update(cx, |this, cx| {
+                        if this
+                            .mcp_editor
+                            .as_ref()
+                            .and_then(|e| e.server.as_ref())
+                            .is_some_and(|s| s.id == *id)
+                        {
+                            this.mcp_editor = None;
+                        }
+                        this.mutate::<api::DeleteMcpServer>(
+                            p::DeleteMcpServerIn { id: id.clone() },
+                            None,
+                            Some("MCP server deleted".into()),
+                            window,
+                            cx,
+                        );
+                    });
+                    true
+                })
+        });
+    }
+
+    fn render_mcp(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let muted = color(Token::MutedForeground, cx);
+        let mut page =
+            v_flex()
+                .gap_3()
+                .child(div().text_xs().text_color(muted).child(
+                    "Agents get these servers in every project. Changes apply to new sessions.",
+                ));
+        page = match &self.mcp_editor {
+            Some(editor) => page.child(self.render_mcp_editor(editor, cx)),
+            None => page.child(
+                Button::new("mcp-add")
+                    .small()
+                    .icon(IconName::Plus)
+                    .label("Add server")
+                    .on_click(cx.listener(|this, _, window, cx| this.edit_mcp(None, window, cx))),
+            ),
+        };
+        let Some(servers) = &self.mcp_servers else {
+            return page.child(super::skeleton_rows(3)).into_any_element();
+        };
+        if servers.is_empty() {
+            return page
+                .child(div().text_sm().text_color(muted).child("No MCP servers."))
+                .into_any_element();
+        }
+        page.child(
+            v_flex()
+                .id("mcp-servers")
+                .role(gpui_kit::Role::List)
+                .aria_label("MCP servers")
+                .rounded_lg()
+                .border_1()
+                .border_color(color(Token::Border, cx))
+                .children(servers.iter().enumerate().map(|(ix, s)| {
+                    let (toggle, edit, delete) = (s.clone(), s.clone(), s.clone());
+                    h_flex()
+                        .id(SharedString::from(format!("mcp-server-{ix}")))
+                        .role(gpui_kit::Role::ListItem)
+                        .aria_label(s.name.clone())
+                        .gap_3()
+                        .px_3()
+                        .py_2()
+                        .when(ix > 0, |row| {
+                            row.border_t_1().border_color(color(Token::Border, cx))
+                        })
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .child(
+                                    h_flex()
+                                        .gap_2()
+                                        .text_sm()
+                                        .child(
+                                            div()
+                                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                                .truncate()
+                                                .child(s.name.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(muted)
+                                                .child(s.transport.to_string()),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_family("monospace")
+                                        .text_color(muted)
+                                        .truncate()
+                                        .child(mcp_model::target(s)),
+                                ),
+                        )
+                        .child(
+                            Switch::new(SharedString::from(format!("mcp-enabled-{ix}")))
+                                .checked(s.enabled)
+                                .accessibility_label(format!("Enable {}", s.name))
+                                .disabled(self.pending)
+                                .on_click(cx.listener(move |this, on: &bool, window, cx| {
+                                    let mut form = McpForm::of(&toggle);
+                                    form.enabled = *on;
+                                    this.send_mcp(form.input(), false, window, cx);
+                                })),
+                        )
+                        .child(
+                            Button::new(SharedString::from(format!("mcp-edit-{ix}")))
+                                .ghost()
+                                .small()
+                                .label("Edit")
+                                .accessibility_label(format!("Edit {}", s.name))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.edit_mcp(Some(edit.clone()), window, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new(SharedString::from(format!("mcp-delete-{ix}")))
+                                .ghost()
+                                .small()
+                                .icon(IconName::Delete)
+                                .label("Delete")
+                                .accessibility_label(format!("Delete {}", s.name))
+                                .disabled(self.pending)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.delete_mcp(&delete, window, cx)
+                                })),
+                        )
+                })),
+        )
+        .into_any_element()
+    }
+
+    fn render_mcp_editor(&self, e: &McpEditor, cx: &mut Context<Self>) -> AnyElement {
+        let muted = color(Token::MutedForeground, cx);
+        let label = |text: &'static str| {
+            div()
+                .text_sm()
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                .child(text)
+        };
+        let hint = |text: &'static str| div().text_xs().text_color(muted).child(text);
+        let remove = |id: String, label: String| {
+            Button::new(SharedString::from(id))
+                .ghost()
+                .small()
+                .icon(IconName::Close)
+                .accessibility_label(label)
+        };
+        let mut form = v_flex()
+            .id("mcp-form")
+            .role(gpui_kit::Role::Form)
+            .aria_label(match &e.server {
+                Some(s) => format!("Edit {}", s.name),
+                None => "Add MCP server".into(),
+            })
+            .gap_2()
+            .p_4()
+            .rounded_lg()
+            .border_1()
+            .border_color(color(Token::Border, cx))
+            .child(label("Name"))
+            .child(Input::new(&e.name).id("mcp-name").aria_label("Name"))
+            .child(label("Transport"))
+            .child(h_flex().gap_1().children(mcp_model::TRANSPORTS.map(|t| {
+                Button::new(SharedString::from(format!("mcp-transport-{t}")))
+                    .small()
+                    .outline()
+                    .label(t.to_string())
+                    .selected(e.transport == t)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(e) = &mut this.mcp_editor {
+                            e.transport = t;
+                        }
+                        cx.notify();
+                    }))
+            })));
+        if e.transport == p::McpTransport::Stdio {
+            form = form
+                .child(label("Command"))
+                .child(
+                    Input::new(&e.command)
+                        .id("mcp-command")
+                        .aria_label("Command"),
+                )
+                .child(label("Arguments"))
+                .child(hint("One per line."))
+                .child(Textarea::new(&e.args).aria_label("Arguments"))
+                .child(label("Env vars"))
+                .child(hint("Stored as plain text, not as secrets."))
+                .children(e.env.iter().enumerate().map(|(ix, r)| {
+                    h_flex()
+                        .gap_1p5()
+                        .child(div().w(px(160.)).child(
+                            Input::new(&r.name).aria_label(format!("Env var {} name", ix + 1)),
+                        ))
+                        .child(div().flex_1().child(
+                            Input::new(&r.value).aria_label(format!("Env var {} value", ix + 1)),
+                        ))
+                        .child(
+                            remove(
+                                format!("mcp-env-remove-{ix}"),
+                                format!("Remove env var {}", ix + 1),
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    if let Some(e) = &mut this.mcp_editor {
+                                        e.env.remove(ix);
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                }))
+                .child(
+                    Button::new("mcp-env-add")
+                        .small()
+                        .outline()
+                        .icon(IconName::Plus)
+                        .label("Add env var")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let row = mcp_row(
+                                &mcp_model::Row::default(),
+                                "LOG_LEVEL",
+                                "Value",
+                                window,
+                                cx,
+                            );
+                            if let Some(e) = &mut this.mcp_editor {
+                                e.env.push(row);
+                            }
+                            cx.notify();
+                        })),
+                );
+        } else {
+            form = form
+                .child(label("URL"))
+                .child(Input::new(&e.url).id("mcp-url").aria_label("URL"))
+                .child(label("Headers"))
+                .child(hint("Secret values are never shown again."))
+                .children(e.headers.iter().enumerate().map(|(ix, r)| {
+                    h_flex()
+                        .gap_1p5()
+                        .child(div().w(px(160.)).child(
+                            Input::new(&r.name).aria_label(format!("Header {} name", ix + 1)),
+                        ))
+                        .child(div().flex_1().child(
+                            Input::new(&r.value).aria_label(format!("Header {} value", ix + 1)),
+                        ))
+                        .child(
+                            Switch::new(SharedString::from(format!("mcp-header-secret-{ix}")))
+                                .checked(r.secret)
+                                .label("Secret")
+                                .accessibility_label(format!("Header {} secret", ix + 1))
+                                .on_click(cx.listener(move |this, secret: &bool, window, cx| {
+                                    let Some(e) = &mut this.mcp_editor else {
+                                        return;
+                                    };
+                                    let Some(row) = e.headers.get_mut(ix) else {
+                                        return;
+                                    };
+                                    row.secret = *secret;
+                                    let name = text(&row.name, cx);
+                                    let placeholder = header_placeholder(*secret, &name, &e.stored);
+                                    row.value.update(cx, |i, cx| {
+                                        i.set_masked(*secret, window, cx);
+                                        i.set_placeholder(placeholder, window, cx);
+                                    });
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            remove(
+                                format!("mcp-header-remove-{ix}"),
+                                format!("Remove header {}", ix + 1),
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    if let Some(e) = &mut this.mcp_editor {
+                                        e.headers.remove(ix);
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                }))
+                .child(
+                    Button::new("mcp-header-add")
+                        .small()
+                        .outline()
+                        .icon(IconName::Plus)
+                        .label("Add header")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let row = mcp_row(
+                                &mcp_model::Row {
+                                    secret: true,
+                                    ..Default::default()
+                                },
+                                "Authorization",
+                                "Value",
+                                window,
+                                cx,
+                            );
+                            if let Some(e) = &mut this.mcp_editor {
+                                e.headers.push(row);
+                            }
+                            cx.notify();
+                        })),
+                );
+        }
+        form.child(
+            Switch::new("mcp-form-enabled")
+                .checked(e.enabled)
+                .label("Enabled")
+                .on_click(cx.listener(|this, on: &bool, _, cx| {
+                    if let Some(e) = &mut this.mcp_editor {
+                        e.enabled = *on;
+                    }
+                    cx.notify();
+                })),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .py_2()
+                .children(e.error.clone().map(|error| {
+                    div()
+                        .id("mcp-error")
+                        .role(gpui_kit::Role::Alert)
+                        .aria_label(error.clone())
+                        .text_xs()
+                        .text_color(color(Token::Destructive, cx))
+                        .child(error)
+                }))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_xs()
+                        .text_color(muted)
+                        .text_right()
+                        .child("Changes apply to new sessions."),
+                )
+                .child(
+                    Button::new("mcp-cancel")
+                        .ghost()
+                        .small()
+                        .label("Cancel")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.mcp_editor = None;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    Button::new("mcp-save")
+                        .primary()
+                        .small()
+                        .disabled(self.pending)
+                        .label(if self.pending { "Saving…" } else { "Save" })
+                        .on_click(cx.listener(|this, _, window, cx| this.save_mcp(window, cx))),
+                ),
+        )
+        .into_any_element()
+    }
+
     fn render_logins(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let muted = color(Token::MutedForeground, cx);
         v_flex()
@@ -966,8 +2039,26 @@ impl SettingsForm {
                             return self.codex_card(set, updated, cx);
                         }
                         v_flex()
-                            .gap_1()
-                            .child(format!("{name} · {}", if set { "Set" } else { "Not set" }))
+                            .p_3()
+                            .gap_2()
+                            .border_1()
+                            .border_color(color(Token::Border, cx))
+                            .rounded_md()
+                            .bg(color(Token::Panel, cx))
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                            .child(name),
+                                    )
+                                    .child(div().text_xs().text_color(muted).child(if set {
+                                        "Set"
+                                    } else {
+                                        "Not set"
+                                    })),
+                            )
                             .children(updated.filter(|at| at.is_finite() && *at >= 0.).map(|at| {
                                 div().text_sm().text_color(muted).child(format!(
                                     "Last updated {}",
@@ -980,13 +2071,17 @@ impl SettingsForm {
                             .children((name == "Claude").then(|| {
                                 div().child("Run claude setup-token, then paste the token.")
                             }))
-                            .child(Input::new(&self.secret_inputs[name]))
+                            .child(
+                                Input::new(&self.secret_inputs[name])
+                                    .aria_label(format!("{name} credential")),
+                            )
                             .child(
                                 h_flex()
                                     .gap_2()
                                     .child(
                                         Button::new(SharedString::from(format!("save-{name}")))
-                                            .label("Save")
+                                            .primary()
+                                            .label(if set { "Replace" } else { "Save" })
                                             .disabled(self.pending)
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 this.save_login(name, window, cx)
@@ -1045,104 +2140,85 @@ impl SettingsForm {
         let field = &self.fields[ix];
         let muted = color(Token::MutedForeground, cx);
         let id = def.path.replace('.', "-");
-        let effective = if matches!(def.kind, Kind::Run | Kind::Env) {
-            let entries = model::effective_entries(def, ctx);
-            if entries.is_empty() {
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child("In effect: none. Entries set in Tempo are added to the ones in repo files.")
-                    .into_any_element()
+        if let Some(env) = env_model::is_egress_setting(def.path)
+            .then(|| self.project_environment())
+            .flatten()
+        {
+            let value = if def.path == "environment.egress_policy" {
+                env.egress_policy.to_string()
             } else {
-                v_flex()
-                    .gap_0p5()
-                    .text_xs()
-                    .children(entries.into_iter().map(|e| {
-                        h_flex()
-                            .gap_2()
-                            .when(def.kind == Kind::Run, |row| {
-                                row.child(
-                                    div()
-                                        .font_weight(gpui_kit::FontWeight::MEDIUM)
-                                        .child(e.key.clone()),
-                                )
-                            })
-                            .child(div().flex_1().min_w_0().truncate().child(e.text))
-                            .child(self.source_tag(e.source, cx))
-                    }))
-                    .into_any_element()
-            }
-        } else {
-            let (value, source) = model::effective_leaf(def, ctx);
-            h_flex()
+                env.egress_allowlist.join(", ")
+            };
+            return v_flex()
+                .id(SharedString::from(format!("field-{id}")))
+                .role(gpui_kit::Role::Group)
+                .aria_label(def.label)
                 .gap_2()
-                .text_xs()
-                .child(div().text_color(muted).child("In effect"))
-                .child(div().flex_1().min_w_0().child(value))
-                .child(self.source_tag(source, cx))
-                .into_any_element()
-        };
-        let error = self.field_errors.get(def.path).cloned();
-        v_flex()
-            .id(SharedString::from(format!("setting-{id}")))
-            .role(gpui_kit::Role::Group)
-            .aria_label(def.label)
-            .gap_1p5()
-            .py_2p5()
-            .border_b_1()
-            .border_color(color(Token::Border, cx))
-            .child(
-                h_flex()
-                    .gap_3()
-                    .items_start()
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(gpui_kit::FontWeight::MEDIUM)
-                                    .child(def.label),
-                            )
-                            .children(def.hint.map(|h| div().text_xs().text_color(muted).child(h))),
-                    )
-                    .child(
-                        Switch::new(SharedString::from(format!("{id}-set")))
-                            .checked(field.set)
-                            .label("Set in Tempo")
-                            .accessibility_label(format!("Set {} in Tempo", def.label))
-                            .disabled(self.pending)
-                            .on_click(cx.listener(move |this, on: &bool, _, cx| {
-                                this.fields[ix].set = *on;
-                                this.field_errors.remove(model::FIELDS[ix].path);
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(effective)
-            .when(field.set, |row| {
-                row.child(
+                .py_3()
+                .border_b_1()
+                .border_color(color(Token::Border, cx))
+                .child(div().text_sm().child(def.label))
+                .child(div().text_sm().child(value))
+                .child(
                     div()
-                        .p_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_dashed()
-                        .border_color(color(Token::Border, cx))
-                        .child(self.render_editor(ix, &id, cx)),
+                        .id(SharedString::from(format!("{id}-set-by")))
+                        .role(gpui_kit::Role::Status)
+                        .aria_label(env_model::set_by(&env.name))
+                        .text_xs()
+                        .text_color(muted)
+                        .child(env_model::set_by(&env.name)),
                 )
-            })
-            .children(error.map(|e| {
-                div()
-                    .text_xs()
-                    .text_color(color(Token::Destructive, cx))
-                    .child(e)
+                .into_any_element();
+        }
+        let record = matches!(def.kind, Kind::Run | Kind::Env);
+        let reset_pending = !field.set && self.initial[ix].set;
+        let error = self.field_errors.get(def.path).cloned();
+        v_flex().id(SharedString::from(format!("field-{id}")))
+            .role(gpui_kit::Role::Group).aria_label(def.label)
+            .gap_2().py_3().border_b_1().border_color(color(Token::Border, cx))
+            .child(h_flex().gap_3().items_start()
+                .child(v_flex().flex_1().gap_1()
+                    .child(div().text_sm().font_weight(gpui_kit::FontWeight::MEDIUM).child(def.label))
+                    .children(def.hint.map(|h| div().text_xs().text_color(muted).child(h))))
+                .children((!reset_pending && (!record || field.set)).then(|| self.source_tag(
+                    if field.set { p::SettingsSource::Tempo } else { model::effective_leaf(def, ctx).1 }, cx)))
+                .children(field.set.then(|| Button::new(SharedString::from(format!("{id}-reset")))
+                    .ghost().small().label("Reset to inherited")
+                    .accessibility_label(format!("Reset {} to repository or default value", def.label))
+                    .disabled(self.pending)
+                    .on_click(cx.listener(move |this, _, window, cx| this.reset_field(ix, window, cx))))))
+            .children(record.then(|| {
+                let entries = model::effective_entries(def, ctx);
+                v_flex().gap_1().text_xs()
+                    .children(entries.is_empty().then(|| div().text_color(muted)
+                        .child("No entries in effect. Tempo entries merge with repository entries; matching names override them.")))
+                    .children(entries.into_iter().map(|e| h_flex().gap_2()
+                        .child(div().font_weight(gpui_kit::FontWeight::MEDIUM).child(e.key))
+                        .child(div().flex_1().min_w_0().child(e.text))
+                        .child(self.source_tag(e.source, cx))))
             }))
+            .child(if reset_pending {
+                h_flex().gap_2()
+                    .child(div().text_xs().text_color(muted).child("Save to restore the repository or default value."))
+                    .child(Button::new(SharedString::from(format!("{id}-undo-reset")))
+                        .ghost().small().label("Undo reset")
+                        .on_click(cx.listener(move |this, _, _, cx| { this.fields[ix].set = true; cx.notify(); })))
+                    .into_any_element()
+            } else { self.render_editor(ix, &id, cx) })
+            .children(error.map(|e| div().text_xs().text_color(color(Token::Destructive, cx)).child(e)))
             .into_any_element()
     }
 
     fn render_editor(&self, ix: usize, id: &str, cx: &mut Context<Self>) -> AnyElement {
         let def = &model::FIELDS[ix];
         let muted = color(Token::MutedForeground, cx);
+        if let Some(agent) = def
+            .path
+            .strip_prefix("agent.models.")
+            .and_then(|a| a.parse().ok())
+        {
+            return self.model_picker(Some(agent), cx);
+        }
         match &self.fields[ix].editor {
             Editor::Line(input) => Input::new(input).into_any_element(),
             Editor::Area(input) => Textarea::new(input).into_any_element(),
@@ -1156,7 +2232,8 @@ impl SettingsForm {
                         .label(*label)
                         .selected(*value == option)
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.fields[ix].editor = Editor::Choice(option.clone());
+                            this.fields[ix].set = true;
+                    this.fields[ix].editor = Editor::Choice(option.clone());
                             cx.notify();
                         }))
                 }))
@@ -1166,6 +2243,7 @@ impl SettingsForm {
                 .label(if *on { "On" } else { "Off" })
                 .accessibility_label(format!("{}, set in Tempo", def.label))
                 .on_click(cx.listener(move |this, on: &bool, _, cx| {
+                    this.fields[ix].set = true;
                     this.fields[ix].editor = Editor::Toggle(*on);
                     cx.notify();
                 }))
@@ -1194,6 +2272,7 @@ impl SettingsForm {
                                     })
                                     .selected(preset == option)
                                     .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.fields[ix].set = true;
                                         if let Editor::Instance { preset, .. } =
                                             &mut this.fields[ix].editor
                                         {
@@ -1245,7 +2324,8 @@ impl SettingsForm {
                                         .icon(IconName::Close)
                                         .accessibility_label(format!("Remove run script {}", row + 1))
                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                            if let Editor::Run(rows) = &mut this.fields[ix].editor {
+                                            this.fields[ix].set = true;
+                            if let Editor::Run(rows) = &mut this.fields[ix].editor {
                                                 rows.remove(row);
                                             }
                                             cx.notify();
@@ -1258,7 +2338,8 @@ impl SettingsForm {
                                 .checked(r.is_default)
                                 .label("Default")
                                 .on_click(cx.listener(move |this, on: &bool, _, cx| {
-                                    if let Editor::Run(rows) = &mut this.fields[ix].editor {
+                                    this.fields[ix].set = true;
+                            if let Editor::Run(rows) = &mut this.fields[ix].editor {
                                         for (i, r) in rows.iter_mut().enumerate() {
                                             r.is_default = if i == row { *on } else { r.is_default && !*on };
                                         }
@@ -1272,7 +2353,7 @@ impl SettingsForm {
                         .small()
                         .outline()
                         .icon(IconName::Plus)
-                        .label("Add run script")
+                        .self_start().label("Add run script")
                         .on_click(cx.listener(move |this, _, window, cx| {
                             let first = matches!(&this.fields[ix].editor, Editor::Run(rows) if rows.is_empty());
                             let editor = run_editor(
@@ -1285,6 +2366,7 @@ impl SettingsForm {
                                 window,
                                 cx,
                             );
+                            this.fields[ix].set = true;
                             if let Editor::Run(rows) = &mut this.fields[ix].editor {
                                 rows.push(editor);
                             }
@@ -1312,7 +2394,8 @@ impl SettingsForm {
                                 .icon(IconName::Close)
                                 .accessibility_label(format!("Remove variable {}", row + 1))
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Editor::Env(rows) = &mut this.fields[ix].editor {
+                                    this.fields[ix].set = true;
+                            if let Editor::Env(rows) = &mut this.fields[ix].editor {
                                         rows.remove(row);
                                     }
                                     cx.notify();
@@ -1324,7 +2407,7 @@ impl SettingsForm {
                         .small()
                         .outline()
                         .icon(IconName::Plus)
-                        .label("Add variable")
+                        .self_start().label("Add variable")
                         .on_click(cx.listener(move |this, _, window, cx| {
                             let editor = env_editor(
                                 &model::EnvRow {
@@ -1334,6 +2417,7 @@ impl SettingsForm {
                                 window,
                                 cx,
                             );
+                            this.fields[ix].set = true;
                             if let Editor::Env(rows) = &mut this.fields[ix].editor {
                                 rows.push(editor);
                             }
@@ -1346,9 +2430,6 @@ impl SettingsForm {
 
     fn render_project(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let muted = color(Token::MutedForeground, cx);
-        let projects = crate::app::AppState::try_global(cx)
-            .map(|a| a.read(cx).hub.read(cx).projects.clone())
-            .unwrap_or_default();
         let Some(project) = self.project.clone() else {
             return v_flex()
                 .gap_3()
@@ -1395,11 +2476,12 @@ impl SettingsForm {
                             .text_color(muted)
                             .child(section.to_uppercase()),
                     )
+                    .children((section == "Agent").then(|| self.render_project_models(&ctx, cx)))
                     .children(
                         model::FIELDS
                             .iter()
                             .enumerate()
-                            .filter(|(_, f)| f.section == section)
+                            .filter(|(_, f)| f.section == section && section != "Agent")
                             .map(|(ix, _)| self.render_field(ix, &ctx, cx))
                             .collect::<Vec<_>>(),
                     )
@@ -1414,7 +2496,7 @@ impl SettingsForm {
                 .gap_2()
                 .child(div().text_xs().text_color(muted).child(match &self.workspace {
                     Some(w) => format!(
-                        "Values in effect for {}. Set a key in Tempo to override the repo files.",
+                        "Values in effect for {}. Edit a value to override the repo files when you save.",
                         w.title
                     ),
                     None => "Open a workspace of this project to see values from its repo files. Set a key in Tempo to override them.".into(),
@@ -1531,23 +2613,29 @@ impl SettingsForm {
         });
         v_flex()
             .gap_2()
-            .when(projects.len() > 1, |col| {
+            .when(self.section == PAGE_ENVIRONMENT, |col| {
                 col.child(
-                    h_flex()
+                    v_flex()
+                        .id("project-environment")
+                        .role(gpui_kit::Role::Group)
+                        .aria_label("Environment")
                         .gap_1()
-                        .flex_wrap()
-                        .children(projects.into_iter().map(|p| {
-                            let selected = p.id == project.id;
-                            Button::new(SharedString::from(format!("project-settings-{}", p.id)))
-                                .small()
-                                .outline()
-                                .label(format!("{}/{}", p.owner, p.name))
-                                .selected(selected)
-                                .disabled(self.pending)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.select_project(p.clone(), window, cx)
-                                }))
-                        })),
+                        .pb_2()
+                        .border_b_1()
+                        .border_color(color(Token::Border, cx))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                .child("Environment"),
+                        )
+                        .child(
+                            gpui_kit::component::select::Select::new(&self.environment_select)
+                                .id("project-environment-select")
+                                .accessibility_label("Environment")
+                                .placeholder("None")
+                                .disabled(self.environments.is_none() || self.environment_pending),
+                        ),
                 )
             })
             .when(self.section == PROJECT_PAGES.len() - 1, |col| {
@@ -1566,68 +2654,36 @@ impl SettingsForm {
             Some(Permission::Denied | Permission::Unsupported)
         );
         let muted = color(Token::MutedForeground, cx);
-        v_flex()
-            .gap_4()
-            .child(
-                v_flex()
-                    .gap_1p5()
-                    .child(
-                        Switch::new("notifications")
-                            .checked(config.notifications && !blocked)
-                            .label("macOS notifications")
-                            .disabled(permission == Some(Permission::Unsupported))
-                            .on_click(cx.listener(move |this, on: &bool, _, cx| {
-                                let on = *on;
-                                cx.global_mut::<Local>()
-                                    .update_config(|c| c.notifications = on);
-                                if on && this.permission != Some(Permission::Granted) {
-                                    this.ask_permission(cx);
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(div().text_xs().text_color(muted).child(
-                        "When a turn ends, or a workspace waits for you or needs attention, while Tempo is in the background.",
-                    ))
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .id("notification-permission")
-                                    .role(gpui_kit::Role::Status)
-                                    .aria_label(permission_text(permission))
-                                    .text_xs()
-                                    .text_color(if permission == Some(Permission::Denied) {
-                                        color(Token::Destructive, cx)
-                                    } else {
-                                        muted
-                                    })
-                                    .child(permission_text(permission)),
-                            )
-                            .when(permission == Some(Permission::Default), |row| {
-                                row.child(
-                                    Button::new("allow-notifications")
-                                        .small()
-                                        .outline()
-                                        .label("Allow notifications")
-                                        .on_click(
-                                            cx.listener(|this, _, _, cx| this.ask_permission(cx)),
-                                        ),
-                                )
-                            }),
-                    ),
-            )
-            .child(
-                Switch::new("notification-sound")
-                    .checked(config.sound)
-                    .label("Sound")
-                    .disabled(!config.notifications || blocked)
-                    .on_click(|on: &bool, _, cx| {
-                        let on = *on;
-                        cx.global_mut::<Local>().update_config(|c| c.sound = on)
-                    }),
-            )
+        v_flex().gap_6()
+            .child(v_flex().gap_3().pt_4().border_t_1().border_color(color(Token::Border, cx))
+                .child(h_flex().justify_between()
+                    .child("macOS notifications")
+                    .child(Switch::new("notifications")
+                        .checked(config.notifications && !blocked)
+                        .accessibility_label("macOS notifications")
+                        .disabled(permission == Some(Permission::Unsupported))
+                        .on_click(cx.listener(move |this, on: &bool, _, cx| {
+                            let on = *on;
+                            cx.global_mut::<Local>().update_config(|c| c.notifications = on);
+                            if on && this.permission != Some(Permission::Granted) { this.ask_permission(cx); }
+                            cx.notify();
+                        }))))
+                .child(div().text_sm().text_color(muted).child("When a turn ends, or a workspace waits for you or needs attention, while Tempo is in the background."))
+                .child(h_flex().gap_2()
+                    .child(div().id("notification-permission").role(gpui_kit::Role::Status)
+                        .aria_label(permission_text(permission)).text_xs()
+                        .text_color(if permission == Some(Permission::Denied) { color(Token::Destructive, cx) } else { muted })
+                        .child(permission_text(permission)))
+                    .when(permission == Some(Permission::Default), |row| row.child(Button::new("allow-notifications").small()
+                        .label("Allow notifications").on_click(cx.listener(|this, _, _, cx| this.ask_permission(cx)))))))
+            .child(v_flex().gap_2().pt_4().border_t_1().border_color(color(Token::Border, cx))
+                .child(h_flex().justify_between().child("Sound")
+                    .child(Switch::new("notification-sound").checked(config.sound).accessibility_label("Sound")
+                        .disabled(!config.notifications || blocked).on_click(|on: &bool, _, cx| {
+                            let on = *on;
+                            cx.global_mut::<Local>().update_config(|c| c.sound = on)
+                        })))
+                .child(div().text_sm().text_color(muted).child("Play a sound with macOS notifications.")))
             .into_any_element()
     }
 }
@@ -1648,7 +2704,8 @@ pub fn permission_text(permission: Option<Permission>) -> &'static str {
 impl Render for SettingsForm {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = match self.tab {
-            0 => self.render_logins(cx),
+            TAB_LOGINS => self.render_logins(cx),
+            TAB_MCP => self.render_mcp(cx),
             TAB_PROJECT => self.render_project(cx),
             2 => {
                 let current = cx.global::<Local>().config().theme;
@@ -1789,25 +2846,30 @@ mod tests {
             for id in [
                 "agent-models-claude-set",
                 "agent-models-codex-set",
-                "agent-models-opencode-set",
-                "agent-models-pi-set",
                 "browser-run-set",
             ] {
-                assert_eq!(window.find(id).checked(), Some(false), "{id}");
+                assert!(window.try_find(id).is_none(), "{id}");
             }
-            assert!(window.try_find("git-branch_prefix-set").is_none());
+            assert_eq!(window.find("browser-run-value").checked(), Some(false));
         })
         .unwrap();
         form.update(cx, |f, cx| f.show_project_page(3, cx));
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            assert_eq!(window.find("git-branch_prefix-set").checked(), Some(true));
+            assert!(window.try_find("git-branch_prefix-reset").is_some());
         })
         .unwrap();
         form.update(cx, |f, cx| f.show_project_page(2, cx));
         cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            window.click("environment-sleep_after_idle_minutes-set", cx);
+            form.update(cx, |f, cx| {
+                let Editor::Line(input) = &f.fields[sleep].editor else {
+                    panic!("number editor");
+                };
+                input.update(cx, |i, cx| {
+                    i.set_value("30", window, cx);
+                    cx.emit(InputEvent::Change);
+                });
+            });
         })
         .unwrap();
         cx.run_until_parked();
@@ -1819,7 +2881,7 @@ mod tests {
                 let Editor::Line(input) = &f.fields[sleep].editor else {
                     panic!("a number is one line");
                 };
-                assert_eq!(input.read(cx).value().as_ref(), "15");
+                assert_eq!(input.read(cx).value().as_ref(), "30");
                 input.update(cx, |i, cx| i.set_value("3", window, cx));
                 f.save_project(window, cx);
                 assert_eq!(
@@ -1847,6 +2909,214 @@ mod tests {
             });
         })
         .unwrap();
+    }
+
+    #[gpui_kit::test]
+    fn direct_edits_keep_empty_and_off_overrides_and_reset_saved_values(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use gpui_kit::test::TestWindowExt as _;
+        cx.background_executor.allow_parking();
+        let (handle, form) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_global(crate::storage::Local::load(None));
+            let runtime = crate::client::ClientRuntime::start().unwrap();
+            let state = cx.new(|cx| crate::app::AppState::new(runtime, cx));
+            state.update(cx, |s, cx| {
+                s.hub.update(cx, |h, _| h.projects = vec![project()])
+            });
+            crate::app::set_global_for_test(state, cx);
+            gpui_kit::open_window(Default::default(), cx, |window, cx| {
+                cx.new(|cx| SettingsForm::new(window, cx))
+            })
+            .unwrap()
+        });
+        let models = model::FIELDS
+            .iter()
+            .position(|f| f.path == "agent.models.claude")
+            .unwrap();
+        form.update(cx, |f, cx| f.show_project_page(0, cx));
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |f, cx| {
+                let Editor::Line(input) = &f.fields[models].editor else {
+                    panic!("model input");
+                };
+                input.update(cx, |i, cx| {
+                    i.set_value("example", window, cx);
+                    cx.emit(InputEvent::Change);
+                });
+                input.update(cx, |i, cx| {
+                    i.set_value("", window, cx);
+                    cx.emit(InputEvent::Change);
+                });
+            });
+            window.render_frame(cx);
+            window.click("browser-run-value", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("browser-run-value", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        form.read_with(cx, |f, cx| {
+            let (layer, errors) = model::layer_from_form(&f.form(cx));
+            assert!(errors.is_empty());
+            assert_eq!(layer["agent"]["models"]["claude"], "");
+            assert_eq!(layer["browser"]["run"], false);
+            assert_eq!(layer["git"]["branch_prefix"], "me/");
+            assert!(layer.get("scripts").is_none());
+        });
+        form.update(cx, |f, cx| f.show_project_page(3, cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("git-branch_prefix-reset", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        form.read_with(cx, |f, cx| {
+            assert!(model::layer_from_form(&f.form(cx)).0.get("git").is_none())
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("git-branch_prefix-undo-reset", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        form.read_with(cx, |f, cx| {
+            assert_eq!(
+                model::layer_from_form(&f.form(cx)).0["git"]["branch_prefix"],
+                "me/"
+            )
+        });
+    }
+
+    #[gpui_kit::test]
+    fn model_picker_routes_default_and_preserves_other_agent_defaults(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use gpui_kit::test::TestWindowExt as _;
+        cx.background_executor.allow_parking();
+        let (handle, form) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_global(crate::storage::Local::load(None));
+            gpui_kit::open_window(Default::default(), cx, |window, cx| cx.new(|cx| {
+                let mut f = SettingsForm::new(window, cx);
+                let mut p = project();
+                p.settings = serde_json::from_value(serde_json::json!({"agent":{"models":{"pi":"hidden-saved"}}})).unwrap();
+                f.load_project(p, window, cx);
+                f.credentials = Some(serde_json::from_value(serde_json::json!({
+                    "claude":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null},
+                    "anthropic":{"set":false,"updatedAt":null},"openai":{"set":false,"updatedAt":null},"openrouter":{"set":false,"updatedAt":null}
+                })).unwrap());
+                f.models = Some(serde_json::from_value(serde_json::json!([
+                    {"agent":"claude","currentValue":"model-a","options":[{"value":"model-a","name":"Model A"}]},
+                    {"agent":"codex","currentValue":"model-b","options":[{"value":"model-b","name":"Model B"}]},
+                    {"agent":"pi","currentValue":"model-c","options":[{"value":"model-c","name":"Model C"}]}
+                ])).unwrap());
+                f.tab = TAB_PROJECT;
+                f
+            })).unwrap()
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("project-default-model").is_some());
+            assert!(window.try_find("project-model-codex").is_none());
+            window.click("advanced-agent-models", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("project-model-codex").is_some());
+            assert!(window.try_find("project-model-pi").is_none());
+            form.update(cx, |f, cx| {
+                assert_eq!(f.model_choices(None).len(), 2);
+                assert_eq!(model::layer_from_form(&f.form(cx)).0, serde_json::json!({"agent":{"models":{"pi":"hidden-saved"}}}));
+                f.pick_model(p::AgentId::Codex, "model-b", true, window, cx);
+                f.pick_model(p::AgentId::Claude, "model-a", false, window, cx);
+                let (layer, errors) = model::layer_from_form(&f.form(cx));
+                assert!(errors.is_empty());
+                assert_eq!(layer, serde_json::json!({"agent":{"default":"codex","models":{"claude":"model-a","codex":"model-b","pi":"hidden-saved"}}}));
+                f.pick_model(p::AgentId::Pi, "model-c", true, window, cx);
+                assert_eq!(f.default_agent(), p::AgentId::Codex);
+            });
+        }).unwrap();
+    }
+
+    #[gpui_kit::test]
+    fn mcp_servers_list_and_form_validate_locally(cx: &mut gpui_kit::TestAppContext) {
+        use gpui_kit::test::TestWindowExt as _;
+        cx.background_executor.allow_parking();
+        let (handle, form) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_global(crate::storage::Local::load(None));
+            let runtime = crate::client::ClientRuntime::start().unwrap();
+            let state = cx.new(|cx| crate::app::AppState::new(runtime, cx));
+            crate::app::set_global_for_test(state, cx);
+            gpui_kit::open_window(Default::default(), cx, |window, cx| {
+                cx.new(|cx| SettingsForm::new(window, cx))
+            })
+            .unwrap()
+        });
+        let server: p::McpServer = serde_json::from_value(serde_json::json!({
+            "id": "mcp_1", "name": "linear", "enabled": true, "transport": "http",
+            "command": null, "args": [], "env": [], "url": "https://mcp.linear.app/mcp",
+            "headers": [{"name": "Authorization", "secret": true, "value": null, "set": true}],
+            "createdAt": 1, "updatedAt": 2
+        }))
+        .unwrap();
+        form.update(cx, |f, cx| {
+            f.mcp_servers = Some(vec![server]);
+            f.show_tab(TAB_MCP, cx);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(window.find("mcp-enabled-0").checked(), Some(true));
+            assert!(window.try_find("mcp-delete-0").is_some());
+            assert!(window.try_find("mcp-form").is_none());
+            window.click("mcp-edit-0", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("mcp-url").is_some());
+            assert!(window.try_find("mcp-command").is_none());
+            form.update(cx, |f, cx| {
+                let e = f.mcp_editor.as_ref().unwrap();
+                assert_eq!(e.stored, BTreeSet::from(["authorization".to_string()]));
+                assert_eq!(
+                    header_placeholder(e.headers[0].secret, "Authorization", &e.stored),
+                    "Saved — leave empty to keep"
+                );
+                assert_eq!(header_placeholder(true, "X-New", &e.stored), "Value");
+                let input = e.form(cx).input();
+                assert_eq!(input.headers.unwrap()[0].value, None);
+                e.url
+                    .update(cx, |i, cx| i.set_value("http://x", window, cx));
+                f.save_mcp(window, cx);
+                assert_eq!(
+                    f.mcp_editor.as_ref().unwrap().error.as_deref(),
+                    Some("The URL must start with https://.")
+                );
+                assert!(!f.pending);
+            });
+            window.click("mcp-transport-stdio", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("mcp-command").is_some());
+            assert!(window.try_find("mcp-url").is_none());
+            window.click("mcp-cancel", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        form.update(cx, |f, _| assert!(f.mcp_editor.is_none()));
     }
 
     #[gpui_kit::test]

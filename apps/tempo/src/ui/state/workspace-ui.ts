@@ -461,6 +461,9 @@ export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePan
 export type SettingsTab =
   | "general"
   | "logins"
+  | "agents"
+  | "environments"
+  | "mcp"
   | "project"
   | "appearance"
   | "notifications"
@@ -472,6 +475,7 @@ export type DialogState =
   | { readonly kind: "addProject" }
   | { readonly kind: "settings"; readonly tab?: SettingsTab; readonly projectId?: string }
   | { readonly kind: "diagnostics"; readonly workspaceId: string }
+  | { readonly kind: "environment"; readonly workspaceId: string }
   | { readonly kind: "palette" }
   | { readonly kind: "openFile"; readonly workspaceId: string }
   | { readonly kind: "searchFiles"; readonly workspaceId: string };
@@ -565,6 +569,11 @@ export const CONFIRM_TEXT = {
     confirmLabel: "Delete",
     destructive: true,
     typeToConfirm: slug,
+  }),
+  deleteCustomAgent: (name: string): ConfirmOptions => ({
+    title: `Delete ${name}? Open chats keep using it.`,
+    confirmLabel: "Delete",
+    destructive: true,
   }),
 } as const;
 

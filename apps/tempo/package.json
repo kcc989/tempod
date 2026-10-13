@@ -32,6 +32,7 @@
     "cmdk": "1.1.1",
     "drizzle-orm": "0.45.4",
     "effect": "4.0.3",
+    "isomorphic-git": "1.44.1",
     "lucide-react": "1.55.0",
     "radix-ui": "1.7.0",
     "react": "19.3.0",

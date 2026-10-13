@@ -38,12 +38,78 @@ The owner answered Q-4 to Q-10. The spec now says:
 | Q-8 Unused statuses | Session `broken` and review-comment `resolved` are removed. | 02 |
 | Q-9 Egress rows | Store 10,000; Diagnostics shows the newest 500 matches, filtered on the server. | 02 `getDiagnostics`, 05 |
 | Q-10 Previews | Owner-only: no secret in the hostname; a one-time link from `openPreview` sets a `__Host-tempo_preview` cookie. Protected Quick Tunnels were rejected: containers can reach only ports 80 and 443 through `TempoOutbound`, and the tunnel needs port 7844. | 01, 02, 03, 04, 05, 06, 07 |
-| Q-11 TOML (2026-10-12) | Tempo uses no TOML of its own. `.tempo/settings.toml` becomes `.tempo/settings.yaml`, parsed with `yaml` 2.9.1. Tempo no longer reads `.conductor/settings.toml` (see Q-12). The Mac client keeps `config.yaml`, parsed with `serde_yaml_ng` 0.10.0; an existing `config.toml` is not read, so the app starts with default settings once. Codex `config.toml`, `Cargo.toml` and `rust-toolchain.toml` stay, because those tools read only TOML. | 01, 04, 06, 07, 08 |
+| Q-11 TOML (2026-10-12) | Tempo uses no TOML of its own. `.tempo/settings.toml` becomes `.tempo/settings.yaml`, parsed with `yaml` 2.9.1. Custom agent files become `agents/<id>.yaml` in Artifacts; files saved as `agents/<id>.toml` before this change are not read. Tempo no longer reads `.conductor/settings.toml` (see Q-12). The Mac client keeps `config.yaml`, parsed with `serde_yaml_ng` 0.10.0; an existing `config.toml` is not read, so the app starts with default settings once. Codex `config.toml`, `Cargo.toml` and `rust-toolchain.toml` stay, because those tools read only TOML. | 01, 04, 06, 07, 08 |
 | Q-12 Conductor files (2026-10-12) | Tempo reads no Conductor files: `conductor.json` and `.conductor/settings.toml` are not read, and scripts get no `CONDUCTOR_*` env vars. `.tempo/settings.yaml` is the only repo settings file. The code names Conductor nowhere: the `.conductor` and `conductor.json` settings sources are removed from the protocol enum (an owner-approved exception to additive-only protocol changes in 05; the server never sent them), and the shortcut table's third column is named `Mac`. The spec keeps Conductor only as a design reference. | 00, 01, 04, 06, 07 |
+
+## Artifacts (owner decisions 2026-10-12)
+
+The owner asked for agent artifacts: images, documents, HTML and mini apps, to understand plans and review PRs. Spec only; no code yet. It is phase 5 with gate F and spike S18.
+
+| Question | Decision | Spec |
+| --- | --- | --- |
+| How agents publish | An MCP tool, `publish_artifact`, added to the `tempo` MCP server of Environments (`tempod mcp`) | 01 Artifacts |
+| Where artifacts live | R2, every version, until the workspace is deleted; readable while sleeping and archived | 01, 02 R2 layout, 03 |
+| Network for HTML | None: offline only, enforced by CSP on a separate host per artifact | 05 Artifact access |
+| New libraries | Approved: `mermaid` 12.1.0 (web), `resvg` 0.48.1 (Mac). No MCP SDK: the `tempo` server stays a hand-written loop, as Environments made it. | 04, 07 |
+
+The owner also confirmed these choices: a 25 MiB limit per version; no version pruning; the allowed file types in 01; one self-contained HTML file per artifact (no folders); the Mac app shows Mermaid as code and opens HTML and PDF in the browser.
+
+## Named environments (2026-10-12)
+
+The owner asked for reusable named environments, proxied secrets, Dynamic Worker injectors, a workspace override, and agent-assisted setup. 01 (Environments; Credentials and egress), 02, 04, 05 and 07 are updated in the same change. Choices the request left open:
+
+| Choice | What the spec now says |
+| --- | --- |
+| Placeholder form | `tempo-secret-<NAME>`: only URL-safe characters, so SDKs and URL encoding keep it intact. |
+| Swap locations | URL and header values, including inside `Authorization: Basic`. Never the body, because bodies stream. |
+| Rule numbers | New rules are 13 (injector) and 14 (secret swap). They run after rule 12 (MCP secret headers) and before rule 7, so existing `egress_log` rule numbers keep their meaning. Rule 11 is Browser Run. |
+| No environment | The project's Tempo egress overrides still apply, so existing projects keep working. |
+| Injector secrets | Injectors get HMACs through `env.SECRETS.hmac`, and placeholders that rule 14 swaps on their subrequests; never raw values. |
+| Agent setup | A `tempo` MCP server in `tempod` with two tools. Proposals only add or replace; the owner applies them in the UI and types secret values there. |
+| Dependencies | No new library. The MCP server is a small hand-written JSON-RPC loop. Dynamic Workers use the built-in `worker_loaders` binding, which the owner approved. |
 
 ## ACP mode contract (resolved 2026-10-11)
 
 The owner approved using ACP v1’s advertised mode config option directly. OpenCode 1.18.35 and the evaluated experimental `0.0.0-tui-v2-202606261840` snapshot both expose category `mode` through `configOptions`. Tempo derives its session `modes`/`modeId` from that option and uses `session/set_config_option`; agents exposing session modes use their advertised `session/set_mode` interface. Config updates and reloads refresh the normalized fields. The experimental snapshot provided no protocol advantage and was not adopted. No deployed-client compatibility shim or new dependency was introduced.
+
+## Custom agents (2026-10-12)
+
+The owner asked for custom agents: a saved system prompt, tool limits, MCP servers, default model and default reasoning level on top of a base agent. The spec was silent, so the owner decided:
+
+- **Owner:** the user. Custom agents work in every project.
+- **Storage:** Cloudflare Artifacts, one repo per user, one file per agent; D1 `custom_agents` holds the pointer (`commit_sha`).
+- **Write path:** pinned `isomorphic-git` in the Worker (new dependency, approved). The Artifacts binding can read files but cannot write them; writes need the Git protocol.
+- **Base agents:** all four, best effort. Fields an adapter cannot apply are reported in `profileIssues`, not refused.
+- **Tools:** built-in allowlist and denylist, plus MCP servers.
+- **Prompt and level:** appended to the agent's system prompt where the adapter allows it; reasoning level set through the ACP config option with category `thought_level`.
+- **Composer:** a reasoning-level picker (from the `thought_level` config option) is added for every chat, not only custom agents, so the default can be changed live.
+- **Scope:** the spec came first; the owner then asked to continue with the build on the same branch, with tool limits enforced by agent extensions where needed.
+
+Specs 00, 01, 02, 04, 05, 06 and 07 are updated. Findings from the pinned adapters that shaped the spec:
+
+- `claude-agent-acp` 0.89.1 reads `_meta.systemPrompt` (object form keeps the `claude_code` preset and forwards `append`) and `_meta.claudeCode.options`. In the Claude Agent SDK, `allowedTools` only skips permission prompts; `tools` limits the built-in set, and `tools: []` turns every built-in tool off. The spec uses `tools` and omits it for an empty allowlist. Its effort option has id `effort`, category `thought_level`.
+- `codex-acp` 2.2.2 maps `_meta.jetbrains.air.customInstructions` to Codex developer instructions. It has no built-in tool filter over ACP. Its effort option has id `reasoning_effort`, category `thought_level`.
+- Pi 1.1.0 (already pinned) has `--append-system-prompt`, `--tools`, `--exclude-tools`, `-e <extension>` and MCP (stdio and streamable HTTP, no SSE). `pi-acp` 0.0.34 spawns `pi --mode rpc` with fixed arguments but honours `PI_ACP_PI_COMMAND`, so `tempod` points it at a per-session wrapper script that adds the flags. `pi-acp` stores ACP `mcpServers` but does not pass them to pi, so a small Tempo pi extension registers MCP servers with `pi.registerMcpServer`. It reports a `thought_level` option.
+- Pi 1.0 codemode (announced 2026-10-01): built-in tools have `direct` exposure and are callable only while active, so `--tools` and `--exclude-tools` block them. MCP tools default to `codemode` exposure, which is callable from scripts whenever registered. A denied MCP tool could therefore still run from a codemode script. The Tempo pi extension adds a `tool_call` guard, which nested codemode calls also pass through. Deferred tool loading, virtual models and mid-conversation system messages need no spec change: models still come from the agent's config options.
+- OpenCode 1.18.35 (binary inspected) reads `OPENCODE_CONFIG_CONTENT`, forwards ACP `mcpServers`, maps agents to modes, and reports an `effort` option with category `thought_level` when the model has variants. Its config has top-level `instructions` (files appended to the system prompt) and `permission` rules (`allow`, `deny`, `ask` per tool). Per-agent `tools` is deprecated in favour of `permission`. Top-level settings are used so that plan mode keeps the limits.
+- Owner follow-up (2026-10-12): with these paths, `opencode` and `pi` now get the system prompt, tool limits and MCP natively. The first-prompt text block was removed from the spec. Only `codex` lacks tool limits: Codex has no built-in tool filter over ACP or config (only per-MCP-server tool lists and sandbox modes).
+
+**Build status**
+
+| Area | What is built | Not proven here |
+| --- | --- | --- |
+| Protocol | Types, functions, error codes, `session.start` fields; regenerated schema, fixtures and Rust types | — |
+| Worker | D1 `custom_agents` (migration `0003_custom_agents`); Artifacts store (binding reads, `isomorphic-git` 1.44.1 push with an in-memory file system, 300 s write token revoked in `finally`, 3 push attempts); the four functions; `createSession` and `createWorkspace` resolve the custom agent in the Worker | S19: a real Artifacts repo. Tests replace the store; the empty-repo first push and the error codes of `isomorphic-git` against Artifacts are unverified. |
+| WorkspaceDO | Session columns (migration `0007_custom_agents`); profile stored and sent on every start and reload; `profileIssues` stored | — |
+| tempod | Per-agent mapping from 01; profile files under `.tempod/profiles/<sessionId>`; MCP `${NAME}` expanded in memory; model then reasoning level; issues | S20: real adapters. Tests use the fake ACP agent. |
+| Container | `container/pi/tempo-profile.ts` copied to `/opt/tempo/pi/` | The image was not built here. |
+| Web | Settings → Agents, New chat and New workspace entries, reasoning-level picker, notice, tab label | — |
+| Mac | Same features; Settings → Agents page; `Manage agents…` opens it | Native rendering and interaction need the local Mac check. |
+
+- **Mac tab tooltip.** GPUI Kit 0.7.1 `Tab` has no tooltip method of its own, but it implements GPUI's `StatefulInteractiveElement`. The Mac app sets its `tooltip` with GPUI Kit's `Tooltip` view to `<custom agent> · <base agent>`, and the same text as the accessibility label. The rendered tooltip still needs the local Mac check.
+- **Alchemy and the `artifacts` binding.** The deploy path writes the binding through the wrangler config (`scripts/deploy-worker.ts`, S-1). `alchemy.run.ts` is unchanged.
+- **Merged with main (2026-10-12).** Main added user MCP servers (with a bridge for transports an agent lacks), `~/.pi/agent/mcp.json` for pi, per-agent models and a prompt-first New workspace dialog. Custom agents now build on them: a custom agent's MCP servers join the user's servers and use the same bridge; pi gets Playwright, `tempo` and user servers from `mcp.json`, so the plain-pi profile wrapper was dropped (the owner's decision that every pi session gets Playwright is met by main's `mcp.json`); New workspace lists custom agents in its model picker; a custom agent's `model` counts for `agent.models.<agent>`. Spike and test numbers moved to S19, S20 and AT-48 to AT-52 because main took S17 and AT-38 to AT-40.
+- **Reasoning-level picker.** The composer now shows the agent's `thought_level` option as its own picker for every chat; it no longer appears under the other options menu.
 
 ## Additive protocol changes
 
@@ -63,6 +129,19 @@ Protocol version 1 allows additive changes only (05). All of these are optional 
 | `agent.exited` | `reason`: `crashed`, `evicted` (LRU close) or `cancelled` (killed after a cancel timeout) | 01 sends `agent.exited` only for an unexpected exit, but the DO must still learn that a planned exit ended the process, so the next prompt reloads the session. Only `crashed` makes a crash notice. |
 | `repo.clone` params | `mode`: `create` or `wake` | On create, 03's checkout per source applies (`new` always branches from `origin/<baseBranch>`; a `branch` or `pr` source missing on origin fails with `CLONE_FAILED`). On a fresh-disk wake, the branch is tracked from origin when it exists, else it branches from the base. A `repo.clone` with no `mode` behaves like `wake`. |
 | tempod | Full script logs at `$HOME/.tempod/logs/<runId>.log` | 01 says the DO writes the full log (up to 50 MiB) to R2 at exit. The DO reads this file with `Files` after `script.exited`. |
+
+## User MCP servers (owner request, 2026-10-12)
+
+The owner asked for MCP servers that work with every agent and with remote servers. The owner chose: servers per user, stdio plus remote `http` and `sse`, a tempod bridge for agents that lack a transport, and secret headers swapped at egress. 00, 01, 02, 04, 05 and 07 now describe it (01, User MCP servers; 02, `mcp_servers` and MCP servers functions; `TempoOutbound` rule 12).
+
+| # | Topic | Finding | What the code does |
+| --- | --- | --- | --- |
+| MCP-1 | 01 Pi | `pi-acp` 0.0.34 accepts `mcpServers` but does not pass them to pi (its README says so). So Pi had no Playwright MCP before this change. Pi 1.1.0 has its own MCP client that reads `~/.pi/agent/mcp.json` (stdio and streamable HTTP, no SSE). | `tempod` writes that file before each Pi session start, with Playwright and the user servers; `sse` servers use the bridge. No new dependency. |
+| MCP-2 | 01 Agents | Reported `mcpCapabilities`: Claude and OpenCode `http` and `sse`; Codex `http` only; Pi neither. | `tempod` maps each server from the agent's `initialize` result. Codex gets `sse` servers through the bridge. |
+| MCP-3 | 01 Bridge | The bridge is `tempod mcp-bridge`, so no MCP SDK is added. It implements the client half of streamable HTTP (POST, `Mcp-Session-Id`, `MCP-Protocol-Version`, JSON or SSE replies, optional GET stream, DELETE on exit) and of the SSE transport. | `packages/tempod/src/mcp-bridge.ts`; tests in `packages/tempod/test/mcp.test.ts`. |
+| MCP-4 | 02 `mcp_servers` | Rule 9 (no secrets in D1) means stdio `env` values must not be secret. A stdio server that needs a key cannot get one from Tempo yet. | The form says env values are not secret. Remote servers take secret headers. |
+| MCP-5 | 01 Pi | Pi expands `${VAR}` and runs a value that starts with `!` as a command in `env` and `headers` values. | Values are the owner's own, inside the owner's container, so this adds no access. Not escaped. |
+| MCP-6 | OAuth | MCP servers that need an OAuth sign-in are not supported; a bearer token in a secret header works. | Not built. |
 
 ## Choices where the spec is silent
 
@@ -154,8 +233,8 @@ The test agents found these. The code makes the choice shown; none contradicts a
 | Item | Status |
 | --- | --- |
 | Tempo for Mac (07, Rust on GPUI Kit) | In scope (the owner approved it on 2026-10-11). Built after the server side of M0 in its own build loop: `crates/tempo-protocol`, `crates/tempo-client`, `crates/tempo-terminal`, `crates/protocol-gen`, `apps/mac`. The build machine runs Linux, so macOS-only parts (Keychain, notifications, Dock badge, URL scheme, signing, notarization) sit behind `cfg(target_os = "macos")` and cannot be run here; everything else compiles and is tested here. Rust is pinned to 1.97.0 in `rust-toolchain.toml`. |
-| Spikes S1 to S17 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
-| Acceptance tests AT-1 to AT-40 | Not run, for the same reason. `tests/e2e` holds the plan. |
+| Spikes S1 to S20 (06, 07) | Not run. They need a Cloudflare account on Workers Paid and real Claude and Codex logins. Gate A is open. |
+| Acceptance tests AT-1 to AT-52 | Not run, for the same reason. `tests/e2e` holds the plan. |
 | Adapter conformance tests | `tests/conformance` holds the plan; they run inside the image. |
 | tempod tests in the image | Rule 14 says tempod tests run inside the container image. The build machine has no Docker, so `packages/tempod` tests run on the host; they need only the image's tools (git, rg, tmux, bash, coreutils). |
 | Browser checks of the web UI | 04 asks for every shortcut to be tested in Chrome, Safari and Firefox on macOS. There is no browser on the build machine. |
@@ -252,6 +331,28 @@ Validation and the per-acceptance local checklist accompany the implementation. 
 
 The current follow-up adds `WorkspaceDetail.prTitle` and `refreshPullRequest.prTitle`, persisted by the WorkspaceDO for any PR state, and owner-authenticated attachment reads at the route documented in 02. `Attachment` metadata is shared in TypeScript/Rust and fixtures. Active formats download as binary; raster previews use private/no-store responses. ACP v1 and OpenCode 1.18.35 stay pinned. Turn token accounting now uses ACP v1 `PromptResponse.usage` per turn (`Turn.usage`, 02); the session context ring remains unchanged.
 
-Alchemy beta.81 imports its optional `@effect/platform-node` peer while loading Cloudflare providers; the existing Effect stack now pins that peer at 4.0.3. A preflight wrapper prevents unavailable existing state-store probes from entering automatic bootstrap. See the deployment guide and CORE-RESULTS.md for the actual failed attempt and state-store recovery requirement.
+Alchemy beta.81 imports its optional `@effect/platform-node` peer while loading Cloudflare providers; the existing Effect stack now pins that peer at 4.0.3. A preflight wrapper prevents unavailable existing state-store probes from entering automatic bootstrap. See the deployment guide and CORE-RESULTS.md for the historical failed attempt. The dedicated Tempo store is isolated by a pinned Bun SDK patch; unrelated store recovery is separate from Tempo deployment.
 
 The native PR imports this core follow-up for compatibility. Both clients now consume the attachment-read route and `prTitle`.
+
+## Dedicated Tempo deployment tooling
+
+Alchemy 2.0.0-beta.81 is patched reproducibly through Bun's pinned `patchedDependencies` for Tempo's Worker/DO, bootstrap stack, auth/encryption secret names and credential cache. All deployment runs use stage `production` and profile `tempo`. Unrelated state-store recovery is separate. Preflight refuses unavailable existing Tempo state, unfinished bootstrap, or orphaned dedicated secrets; it never treats an unreachable store as absent.
+
+Wrangler's pinned builder cannot pass a BuildKit CA secret. `TEMPO_BUILD_CA` selects an explicit full-image build with the existing temporary trust mount and an image digest tag, followed by Wrangler registry push and Worker deployment. Deployment disables command memoization so fresh ephemeral VMs recreate the private mode-0600 setup-link file from the unchanged remote token. Workers invocation logs redact URL query strings. These deployment changes do not change the shared wire contracts, ACP v1, OpenCode 1.18.35 or turn-token semantics.
+
+
+The managed credential proxy accepted a small authenticated Worker upload but rejected a 12 MiB multipart probe with an integration-authentication error. Explicit Vite Oxc minification plus excluding browser-only Shiki grammars from SSR reduced the Worker from 355 modules / 15,484 KiB to 46 modules / 2,185 KiB, after which deployment succeeded. The exact proxy size limit is not inferred. The browser still loads the same grammars lazily in its existing effects; native rendering and shared contracts do not change. Cloudflare list APIs are paginated during preflight so surviving dedicated secrets on later pages also block bootstrap.
+
+
+The web-only first-run message now directs the owner to the private setup link instead of obsolete printed output. Per 07's feature table, GitHub App first-run setup is web-only; the native client connects after this step and needs no corresponding setup flow.
+
+
+## GitHub App private-email sign-in
+
+An owner sign-in returned `email_not_found` after OAuth. The configured App exists and sign-in initiation returns 200, but the owner has no public GitHub email. Better Auth 1.7.7 reads `/user/emails` and requires an email for its callback; the original manifest omitted the GitHub App account permission needed by that endpoint. The manifest and 05 now request `email_addresses: read`, covered by the manifest-form Worker regression. Existing Apps need the same permission enabled in GitHub settings and renewed user consent if prompted. No identity fallback, synthetic email, public-email requirement, owner-check change or credential rotation was added.
+
+
+## Existing workspace migration ordering
+
+The first hosted existing-workspace check exposed `DrizzleError: Rollback` on workspace reads and WebSocket upgrades. The file-cache release already recorded migration timestamp 1791849600000, while merged turn usage had been inserted before it at 1791835200000. Drizzle uses the latest timestamp, so it skipped adding `turns.usage_json`; the later status-table rebuild then rolled back. The turn-usage entry now follows the existing file-cache timestamp, before its consumers. Already-upgraded workspaces have later journal entries and do not reapply it. Regression tests reproduce both released schemas, preserve sessions/turns/cached files and verify a second migration run. No workspace state is deleted or manually rewritten, and this fix does not change token accounting semantics.

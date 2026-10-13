@@ -39,7 +39,11 @@ export const ERROR_MESSAGES = {
   CHECKPOINT_NOT_FOUND: "That checkpoint no longer exists.",
   MODEL_REQUIRED: "Set a default model for this agent in Settings → Project.",
   SETTINGS_INVALID: "Settings are not valid.",
+  ENVIRONMENT_EXISTS: "An environment with this name already exists.",
   EGRESS_BLOCKED: "(Shown only in the egress log.)",
+  CUSTOM_AGENT_EXISTS: "You already have an agent with this name.",
+  CUSTOM_AGENT_LIMIT: "You have the most custom agents allowed. Delete one first.",
+  ARTIFACTS_ERROR: "Could not reach agent storage. Try again.",
   INTERNAL: "Something went wrong.",
 } as const;
 

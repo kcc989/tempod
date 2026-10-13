@@ -6,12 +6,12 @@ use super::chat_model::{self, RowContent, WorkType};
 use super::tokens::{Token, color};
 use crate::image_policy::LocalImageCache;
 use crate::links::{self, LinkTarget};
-use crate::markdown::escape_raw_html;
+use crate::markdown::{escape_raw_html, tool_text};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::text::TextView;
+use gpui_kit::component::text::{TextView, TextViewStyle};
 use gpui_kit::component::{Disableable as _, h_flex, v_flex};
 use gpui_kit::{
     Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
@@ -417,15 +417,18 @@ impl Render for TranscriptView {
                 .and_then(|v| v.read(cx).rows.get(ix).cloned());
             // GPUI lays out list rows during prepaint, where an outer `image_cache` element is not
             // on the stack; wrapping each row puts the cache in scope for its images.
-            image_cache(images.clone())
-                .w_full()
-                .children(row.map(|row| {
-                    if row.native.is_some() {
-                        render_native_row(row, ix, view.clone(), cx)
-                    } else {
-                        render_row(row.id, row.rendered).into_any_element()
-                    }
-                }))
+            div().w_full().flex().justify_center().child(
+                image_cache(images.clone())
+                    .w_full()
+                    .max_w(gpui_kit::px(768.))
+                    .children(row.map(|row| {
+                        if row.native.is_some() {
+                            render_native_row(row, ix, view.clone(), cx)
+                        } else {
+                            render_row(row.id, row.rendered).into_any_element()
+                        }
+                    })),
+            )
         })
         .with_jump_button_transition(std::time::Duration::ZERO)
         .with_jump_button_renderer(move |button| {
@@ -468,6 +471,17 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         .py_2()
         .child(
             TextView::markdown(id, text)
+                .style(TextViewStyle {
+                    heading_font_size: Some(std::sync::Arc::new(|level, _| {
+                        px(match level {
+                            1 => 20.,
+                            2 => 16.,
+                            3 => 14.,
+                            _ => 13.,
+                        })
+                    })),
+                    ..Default::default()
+                })
                 .code_block_actions(|block, _, _| {
                     let code = block.code();
                     Button::new("copy-code")
@@ -680,7 +694,13 @@ fn render_native_row(
                         } else {
                             &value
                         };
-                        markdown(key, inner["text"].as_str().unwrap_or("Inline media"))
+                        markdown(
+                            key,
+                            &tool_text(
+                                inner["text"].as_str().unwrap_or("Inline media"),
+                                c.tool_kind.as_deref() == Some("execute"),
+                            ),
+                        )
                     });
                     let details = v_flex()
                         .children(blocks)

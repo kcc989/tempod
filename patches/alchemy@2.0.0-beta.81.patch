@@ -1,0 +1,318 @@
+diff --git a/node_modules/alchemy/.bun-tag-fb93585a88b63a11 b/.bun-tag-fb93585a88b63a11
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/lib/Cloudflare/StateStore/Api.d.ts b/lib/Cloudflare/StateStore/Api.d.ts
+index 1781bb46ebe504d6689043d4b67e6f615bd2ac05..a3d1de93658de71d40c96686abf538854a1c534b 100644
+--- a/lib/Cloudflare/StateStore/Api.d.ts
++++ b/lib/Cloudflare/StateStore/Api.d.ts
+@@ -1,6 +1,6 @@
+ import * as Effect from "effect/Effect";
+ import { RuntimeContext } from "../../RuntimeContext.ts";
+-export declare const STATE_STORE_SCRIPT_NAME: "alchemy-state-store";
++export declare const STATE_STORE_SCRIPT_NAME: "tempo-state-store";
+ /**
+  * Version of the deployed Cloudflare State Store worker contract.
+  *
+diff --git a/lib/Cloudflare/StateStore/Api.js b/lib/Cloudflare/StateStore/Api.js
+index 52f666cb74bbfaf053d4a588d8a7eef89a18447d..2a3664eb9d9b4abf57550142ec9f9e731e16e003 100644
+--- a/lib/Cloudflare/StateStore/Api.js
++++ b/lib/Cloudflare/StateStore/Api.js
+@@ -16,7 +16,7 @@ import { ReadSecretBinding } from "../SecretsStore/ReadSecretBinding.js";
+ import { Worker } from "../Workers/Worker.js";
+ import Store from "./Store.js";
+ import { AuthToken } from "./Token.js";
+-export const STATE_STORE_SCRIPT_NAME = "alchemy-state-store";
++export const STATE_STORE_SCRIPT_NAME = "tempo-state-store";
+ /**
+  * Version of the deployed Cloudflare State Store worker contract.
+  *
+diff --git a/lib/Cloudflare/StateStore/CredentialsFile.d.ts b/lib/Cloudflare/StateStore/CredentialsFile.d.ts
+index 0d8fce1052427e81b22fe6b8d15560af7bc1ce8c..d2983d8927ba9cfc00b9935701f593aa4e21b608 100644
+--- a/lib/Cloudflare/StateStore/CredentialsFile.d.ts
++++ b/lib/Cloudflare/StateStore/CredentialsFile.d.ts
+@@ -9,7 +9,7 @@ import * as Schema from "effect/Schema";
+  * module and creating an import cycle
+  * (`StateStore/State.ts` -> `Providers.ts` -> `Auth/AuthProvider.ts`).
+  */
+-export declare const CREDENTIALS_FILE = "cloudflare-state-store";
++export declare const CREDENTIALS_FILE = "tempo-state-store-credentials";
+ /**
+  * On-disk shape of the cached Cloudflare state-store credentials.
+  *
+diff --git a/lib/Cloudflare/StateStore/CredentialsFile.js b/lib/Cloudflare/StateStore/CredentialsFile.js
+index 7f0f9c892fd52dd1a332b8da6101f65c92bad78b..8262208b595ab60621ee132757abfabcc55565bb 100644
+--- a/lib/Cloudflare/StateStore/CredentialsFile.js
++++ b/lib/Cloudflare/StateStore/CredentialsFile.js
+@@ -9,7 +9,7 @@ import * as Schema from "effect/Schema";
+  * module and creating an import cycle
+  * (`StateStore/State.ts` -> `Providers.ts` -> `Auth/AuthProvider.ts`).
+  */
+-export const CREDENTIALS_FILE = "cloudflare-state-store";
++export const CREDENTIALS_FILE = "tempo-state-store-credentials";
+ /**
+  * On-disk shape of the cached Cloudflare state-store credentials.
+  *
+diff --git a/lib/Cloudflare/StateStore/State.d.ts b/lib/Cloudflare/StateStore/State.d.ts
+index 89e21f61d485272826aabd5c636ede15f442ab5c..4f811f075058568ce2ed3c909007714fea9fb2a3 100644
+--- a/lib/Cloudflare/StateStore/State.d.ts
++++ b/lib/Cloudflare/StateStore/State.d.ts
+@@ -14,7 +14,7 @@ import * as Access from "../Access.ts";
+ import * as CloudflareEnvironment from "../CloudflareEnvironment.ts";
+ export declare const state: () => Layer.Layer<State, never, AlchemyContext | import("../../Artifacts.ts").ArtifactStore | import("../../index.ts").AuthProviders | import("effect/process/ChildProcessSpawner").ChildProcessSpawner | import("effect/Crypto").Crypto | import("effect/FileSystem").FileSystem | HttpClient.HttpClient | Interaction.Interaction | import("effect/Path").Path>;
+ export interface BootstrapOptions {
+-    /** @default "alchemy-state-store" */
++    /** @default "tempo-state-store" */
+     workerName?: string;
+     /** @default false */
+     force?: boolean;
+@@ -23,7 +23,7 @@ export interface BootstrapOptions {
+ }
+ export declare const bootstrap: (options?: BootstrapOptions) => Effect.Effect<StateService, Access.AccessError | AuthError | import("@distilled.cloud/acme").BadGateway | import("@distilled.cloud/cloudflare/Errors").CloudflareError | import("@distilled.cloud/cloudflare/Errors").CloudflareHttpError | import("@distilled.cloud/cloudflare/Errors").CloudflareParseError | import("@distilled.cloud/cloudflare/Errors").CloudflareRateLimited | Config.ConfigError | import("@distilled.cloud/acme").ConfigError | import("../../Auth/Demand.ts").CredentialsRequired | import("../../Apply.ts").DestroyError | workers.Forbidden | import("@distilled.cloud/acme").GatewayTimeout | import("effect/http/HttpClientError").HttpClientError | import("@distilled.cloud/acme").InternalServerError | SecretsStore.InvalidAccountId | Output.InvalidReferenceError | import("@distilled.cloud/cloudflare/Errors").InvalidRoute | workers.InvalidRoute | Output.MissingSourceError | import("../../Auth/AuthProvider.ts").NeedsReauth | import("@distilled.cloud/cloudflare/Credentials").OAuthRefreshError | import("effect/PlatformError").PlatformError | import("../../Auth/Profile.ts").ProfileError | import("@distilled.cloud/acme").ServiceUnavailable | StateStoreError | StateStoreVersionNotReady | workers.SubdomainNotFound | import("@distilled.cloud/acme").TooManyRequests | import("@distilled.cloud/acme").Unauthorized | import("@distilled.cloud/cloudflare/Errors").UnknownCloudflareError, Access.Access | AlchemyContext | import("../../Artifacts.ts").ArtifactStore | CloudflareEnvironment.CloudflareEnvironment | CredentialsStore | import("effect/FileSystem").FileSystem | Interaction.Interaction | import("effect/Path").Path | import("../../Auth/Profile.ts").ProfileStore | SecretsStore.CloudflareOpContext>;
+ export interface TeardownOptions {
+-    /** @default "alchemy-state-store" */
++    /** @default "tempo-state-store" */
+     workerName?: string;
+     /** @default "default" */
+     profile?: string;
+diff --git a/lib/Cloudflare/StateStore/State.js b/lib/Cloudflare/StateStore/State.js
+index 281fc27c2f4a96aeddf07d812bdbb58ff6781c92..7c119eb401a254ea378818b8135b31c2387499a1 100644
+--- a/lib/Cloudflare/StateStore/State.js
++++ b/lib/Cloudflare/StateStore/State.js
+@@ -47,2 +47,2 @@
+-    const autoUpdateStateStore = Option.getOrUndefined(yield* Effect.serviceOption(AlchemyContext))?.updateStateStore ??
+-        false;
++    const autoUpdateStateStore = (Option.getOrUndefined(yield* Effect.serviceOption(AlchemyContext))?.updateStateStore ??
++        false) && process.env.TEMPO_STATE_BOOTSTRAP_ALLOWED === "1";
+@@ -352,7 +352,7 @@ const deployStateStore = ({ stage, state, force, }) => Effect.gen(function* () {
+         // use the script name as the stage name (so the user can have multiple state stores)
+         stage,
+         force,
+-        stack: Alchemy.Stack("CloudflareStateStore", {
++        stack: Alchemy.Stack("TempoStateStore", {
+             providers: Layer.mergeAll(Cloudflare.providers(), RandomProvider()),
+             state: stateLayer,
+         }, Effect.gen(function* () {
+@@ -415,7 +415,7 @@ const deployWithLocalState = ({ scriptName, isCI, force, profileName, }) => Effe
+         },
+     });
+     yield* localState.deleteStack({
+-        stack: "CloudflareStateStore",
++        stack: "TempoStateStore",
+         stage: localStage,
+     });
+     return httpState;
+@@ -448,7 +448,7 @@ export const isTransientBootstrapWriteError = (error) => {
+ // check if there's a local stack that wasn't properly hoisted
+ const hasLocalStack = (stage) => Effect.gen(function* () {
+     const localState = yield* makeLocalState();
+-    return yield* Effect.map(localState.listStages("CloudflareStateStore"), 
++    return yield* Effect.map(localState.listStages("TempoStateStore"), 
+     // key off the profile name to avoid conflicts with other profiles
+     (stages) => stages.includes(stage));
+ });
+@@ -463,7 +463,7 @@ const hasLocalStack = (stage) => Effect.gen(function* () {
+  * be catastrophic.
+  */
+ const hoistBootstrapStack = Effect.fn(function* ({ source, destination, }) {
+-    const stack = "CloudflareStateStore";
++    const stack = "TempoStateStore";
+     const fqns = yield* source.state.list({ stack, stage: source.stage });
+     yield* Effect.annotateCurrentSpan({
+         "alchemy.state_store.stack": stack,
+@@ -577,7 +577,7 @@ export const loginWithCloudflare = (profileName, force) => Effect.gen(function*
+         "alchemy.state_store.script_name": STATE_STORE_SCRIPT_NAME,
+     },
+ }));
+-const isStateStoreAvailable = (scriptName = "alchemy-state-store") => Effect.gen(function* () {
++const isStateStoreAvailable = (scriptName = "tempo-state-store") => Effect.gen(function* () {
+     // otherwise, the remote one might exist
+     const { accountId } = yield* yield* CloudflareEnvironment.CloudflareEnvironment;
+     return yield* workers.getScriptSetting({ accountId, scriptName }).pipe(Effect.map((setting) => setting !== undefined), Effect.catchTag("WorkerNotFound", () => Effect.succeed(false)), Effect.catchTag("InvalidRoute", () => Effect.succeed(false)), 
+@@ -605,7 +605,7 @@ const makeCloudflareStateStore = Effect.fn(function* ({ url, authToken, }) {
+         url,
+         authToken,
+         transformClient: HttpClientRequest.setHeaders(accessHeaders),
+-        id: "cloudflare-http",
++        id: "tempo-cloudflare-http",
+     });
+ });
+ class StateStoreVersionNotReady extends Error {
+diff --git a/lib/Cloudflare/StateStore/Token.d.ts b/lib/Cloudflare/StateStore/Token.d.ts
+index 3a2bb059d6f7409c3e5e97691883a2eef6961e46..09a34a1279c124394b1604979f62dc579c1304e5 100644
+--- a/lib/Cloudflare/StateStore/Token.d.ts
++++ b/lib/Cloudflare/StateStore/Token.d.ts
+@@ -17,7 +17,7 @@ export declare const TokenValue: Effect.Effect<Random, never, import("../../Prov
+ /**
+  * The name of the secret in the Cloudflare Secrets Store that contains the bearer token.
+  */
+-export declare const AuthTokenSecretName: "AlchemyStateStoreToken";
++export declare const AuthTokenSecretName: "TempoStateStoreToken";
+ /**
+  * The bearer token used to authenticate every request to the state
+  * store worker. The value comes from {@link TokenValue} and lives in
+@@ -32,7 +32,7 @@ export declare const AuthToken: Effect.Effect<Secret.Secret, never, import("../.
+  * always be decrypted by subsequent worker boots.
+  */
+ export declare const EncryptionKeyValue: Effect.Effect<Random, never, import("../../Provider.ts").Provider<Random>>;
+-export declare const EncryptionKeySecretName: "AlchemyStateStoreEncryptionKey";
++export declare const EncryptionKeySecretName: "TempoStateStoreEncryptionKey";
+ /**
+  * The encryption key secret. The raw hex-encoded bytes live inside
+  * Cloudflare's Secrets Store; the Durable Object binds to it at
+diff --git a/lib/Cloudflare/StateStore/Token.js b/lib/Cloudflare/StateStore/Token.js
+index 7d83e9dc6679618d1c65131c359c9d902f8fe679..7ca848a033e69da282eca6973b2f878062f21716 100644
+--- a/lib/Cloudflare/StateStore/Token.js
++++ b/lib/Cloudflare/StateStore/Token.js
+@@ -17,7 +17,7 @@ export const TokenValue = Random("StateStoreAuthTokenValue");
+ /**
+  * The name of the secret in the Cloudflare Secrets Store that contains the bearer token.
+  */
+-export const AuthTokenSecretName = "AlchemyStateStoreToken";
++export const AuthTokenSecretName = "TempoStateStoreToken";
+ /**
+  * The bearer token used to authenticate every request to the state
+  * store worker. The value comes from {@link TokenValue} and lives in
+@@ -42,7 +42,7 @@ export const AuthToken = Effect.gen(function* () {
+ export const EncryptionKeyValue = Random("StateStoreEncryptionKeyValue", {
+     bytes: 32,
+ });
+-export const EncryptionKeySecretName = "AlchemyStateStoreEncryptionKey";
++export const EncryptionKeySecretName = "TempoStateStoreEncryptionKey";
+ /**
+  * The encryption key secret. The raw hex-encoded bytes live inside
+  * Cloudflare's Secrets Store; the Durable Object binds to it at
+diff --git a/src/Cloudflare/StateStore/Api.ts b/src/Cloudflare/StateStore/Api.ts
+index 81637ad5c31635f605b949f3f080d8bda2b38850..0b98053543ebcc42900770c0401fa6aca6893a14 100644
+--- a/src/Cloudflare/StateStore/Api.ts
++++ b/src/Cloudflare/StateStore/Api.ts
+@@ -17,7 +17,7 @@ import { Worker } from "../Workers/Worker.ts";
+ import Store from "./Store.ts";
+ import { AuthToken } from "./Token.ts";
+ 
+-export const STATE_STORE_SCRIPT_NAME = "alchemy-state-store" as const;
++export const STATE_STORE_SCRIPT_NAME = "tempo-state-store" as const;
+ 
+ /**
+  * Version of the deployed Cloudflare State Store worker contract.
+diff --git a/src/Cloudflare/StateStore/CredentialsFile.ts b/src/Cloudflare/StateStore/CredentialsFile.ts
+index a25303e5b10efc224709f057086410cf9afbbacd..06661b3712b6efb0faadbe397fd6119798d41664 100644
+--- a/src/Cloudflare/StateStore/CredentialsFile.ts
++++ b/src/Cloudflare/StateStore/CredentialsFile.ts
+@@ -10,7 +10,7 @@ import * as Schema from "effect/Schema";
+  * module and creating an import cycle
+  * (`StateStore/State.ts` -> `Providers.ts` -> `Auth/AuthProvider.ts`).
+  */
+-export const CREDENTIALS_FILE = "cloudflare-state-store";
++export const CREDENTIALS_FILE = "tempo-state-store-credentials";
+ 
+ /**
+  * On-disk shape of the cached Cloudflare state-store credentials.
+diff --git a/src/Cloudflare/StateStore/State.ts b/src/Cloudflare/StateStore/State.ts
+index 78ff5f2abffab84555045896eff4c1b543501a68..26a21459b343613f201a49753c976e1c5fbc6f73 100644
+--- a/src/Cloudflare/StateStore/State.ts
++++ b/src/Cloudflare/StateStore/State.ts
+@@ -58,8 +58,8 @@ export const state = () =>
+       // auto-accept an out-of-date state store upgrade instead of prompting.
+       // Optional so callers that don't provide AlchemyContext keep the prompt.
+       const autoUpdateStateStore =
+-        Option.getOrUndefined(yield* Effect.serviceOption(AlchemyContext))?.updateStateStore ??
+-        false;
++        (Option.getOrUndefined(yield* Effect.serviceOption(AlchemyContext))?.updateStateStore ??
++        false) && process.env.TEMPO_STATE_BOOTSTRAP_ALLOWED === "1";
+       const context = yield* Effect.context<Effect.Services<typeof init>>();
+ 
+       const init = Effect.gen(function* () {
+@@ -241,7 +241,7 @@ export const state = () =>
+   );
+ 
+ export interface BootstrapOptions {
+-  /** @default "alchemy-state-store" */
++  /** @default "tempo-state-store" */
+   workerName?: string;
+   /** @default false */
+   force?: boolean;
+@@ -363,7 +363,7 @@ export const bootstrap = (options: BootstrapOptions = {}) =>
+   );
+ 
+ export interface TeardownOptions {
+-  /** @default "alchemy-state-store" */
++  /** @default "tempo-state-store" */
+   workerName?: string;
+   /** @default "default" */
+   profile?: string;
+@@ -493,7 +493,7 @@ const deployStateStore = ({
+       stage,
+       force,
+       stack: Alchemy.Stack(
+-        "CloudflareStateStore",
++        "TempoStateStore",
+         {
+           providers: Layer.mergeAll(Cloudflare.providers(), RandomProvider()),
+           state: stateLayer,
+@@ -581,7 +581,7 @@ const deployWithLocalState = ({
+     });
+ 
+     yield* localState.deleteStack({
+-      stack: "CloudflareStateStore",
++      stack: "TempoStateStore",
+       stage: localStage,
+     });
+ 
+@@ -620,7 +620,7 @@ const hasLocalStack = (stage: string) =>
+   Effect.gen(function* () {
+     const localState = yield* makeLocalState();
+     return yield* Effect.map(
+-      localState.listStages("CloudflareStateStore"),
++      localState.listStages("TempoStateStore"),
+       // key off the profile name to avoid conflicts with other profiles
+       (stages) => stages.includes(stage),
+     );
+@@ -649,7 +649,7 @@ const hoistBootstrapStack = Effect.fn(function* ({
+     stage: string;
+   };
+ }) {
+-  const stack = "CloudflareStateStore";
++  const stack = "TempoStateStore";
+   const fqns = yield* source.state.list({ stack, stage: source.stage });
+   yield* Effect.annotateCurrentSpan({
+     "alchemy.state_store.stack": stack,
+@@ -805,7 +805,7 @@ export const loginWithCloudflare = (profileName: string, force: boolean) =>
+     }),
+   );
+ 
+-const isStateStoreAvailable = (scriptName: string = "alchemy-state-store") =>
++const isStateStoreAvailable = (scriptName: string = "tempo-state-store") =>
+   Effect.gen(function* () {
+     // otherwise, the remote one might exist
+     const { accountId } = yield* yield* CloudflareEnvironment.CloudflareEnvironment;
+@@ -851,7 +851,7 @@ const makeCloudflareStateStore = Effect.fn(function* ({
+     url,
+     authToken,
+     transformClient: HttpClientRequest.setHeaders(accessHeaders),
+-    id: "cloudflare-http",
++    id: "tempo-cloudflare-http",
+   });
+ });
+ 
+diff --git a/src/Cloudflare/StateStore/Token.ts b/src/Cloudflare/StateStore/Token.ts
+index cd3ed65e22f252c8fcdd91fdc6bef619df379e5a..8b501972b6a156a0a3222c1cfb5fadddbef7def6 100644
+--- a/src/Cloudflare/StateStore/Token.ts
++++ b/src/Cloudflare/StateStore/Token.ts
+@@ -20,7 +20,7 @@ export const TokenValue = Random("StateStoreAuthTokenValue");
+ /**
+  * The name of the secret in the Cloudflare Secrets Store that contains the bearer token.
+  */
+-export const AuthTokenSecretName = "AlchemyStateStoreToken" as const;
++export const AuthTokenSecretName = "TempoStateStoreToken" as const;
+ 
+ /**
+  * The bearer token used to authenticate every request to the state
+@@ -48,7 +48,7 @@ export const EncryptionKeyValue = Random("StateStoreEncryptionKeyValue", {
+   bytes: 32,
+ });
+ 
+-export const EncryptionKeySecretName = "AlchemyStateStoreEncryptionKey" as const;
++export const EncryptionKeySecretName = "TempoStateStoreEncryptionKey" as const;
+ 
+ /**
+  * The encryption key secret. The raw hex-encoded bytes live inside

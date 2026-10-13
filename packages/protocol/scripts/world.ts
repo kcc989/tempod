@@ -237,6 +237,52 @@ export const codexSession: P.Session = {
   sortOrder: 1,
 };
 
+export const reviewerDefinition: P.CustomAgentDefinition = {
+  name: "Reviewer",
+  description: "Reviews code without editing it",
+  baseAgent: "claude",
+  model: "opus",
+  thoughtLevel: "high",
+  systemPrompt: "You review code. You do not edit files.",
+  tools: { allow: [], deny: ["Edit", "Write"] },
+  mcp: {
+    playwright: false,
+    servers: [
+      {
+        name: "docs",
+        type: "stdio",
+        command: "docs-mcp",
+        args: ["--stdio"],
+        env: { DOCS_TOKEN: "${DOCS_TOKEN}" },
+      },
+      {
+        name: "search",
+        type: "http",
+        url: "https://mcp.example.com/mcp",
+        headers: { Authorization: "${SEARCH_AUTH}" },
+      },
+    ],
+  },
+};
+
+export const CUSTOM_AGENT_ID = uid(601);
+
+export const reviewerAgent: P.CustomAgent = {
+  ...reviewerDefinition,
+  id: CUSTOM_AGENT_ID,
+  commitSha: "3c1f0e9d8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d",
+  updatedAt: 1_791_000_000_000,
+};
+
+export const reviewerSession: P.Session = {
+  ...claudeSession,
+  id: uid(602),
+  title: "Reviewer",
+  sortOrder: 2,
+  customAgent: { id: CUSTOM_AGENT_ID, name: "Reviewer", commitSha: reviewerAgent.commitSha },
+  profileIssues: ["thoughtLevel"],
+};
+
 export const turn = (n: number, overrides: Partial<P.Turn> = {}): P.Turn => ({
   id: uid(100 + n),
   sessionId: S1,

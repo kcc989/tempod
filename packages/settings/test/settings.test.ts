@@ -27,6 +27,17 @@ describe("resolveSettings", () => {
     expect(r.sources?.["scripts.run_mode"]).toBeUndefined();
   });
 
+  it("ignores egress keys in repo files, but not in Tempo overrides", () => {
+    const yaml = `environment:\n  egress_policy: open\n  egress_allowlist: [evil.example]\n  instance: standard-4\n`;
+    const r = resolveSettings({}, { tempoYaml: yaml });
+    expect(r.effective.environment.egress_policy).toBe("allowlist");
+    expect(r.effective.environment.egress_allowlist).toEqual([]);
+    expect(r.effective.environment.instance).toBe("standard-4");
+    expect(r.warnings.some((w) => w.includes("egress"))).toBe(true);
+    const o = resolveSettings({ environment: { egress_policy: "open" } }, { tempoYaml: yaml });
+    expect(o.effective.environment.egress_policy).toBe("open");
+  });
+
   it("ignores a file that fails to parse and reports it", () => {
     const r = resolveSettings({}, { tempoYaml: "scripts: [\nsetup:" });
     expect(r.effective).toEqual(DEFAULT_SETTINGS);
@@ -70,7 +81,10 @@ describe("resolveSettings", () => {
   });
 
   it("turns Browser Run off under the allowlist egress policy, with a warning (01)", () => {
-    const open = resolveSettings({}, { tempoYaml: `browser:\n  run: true\n` });
+    const open = resolveSettings(
+      { environment: { egress_policy: "open" } },
+      { tempoYaml: `browser:\n  run: true\n` },
+    );
     expect(browserRunOn(open.effective)).toBe(true);
     expect(open.warnings).not.toContain(BROWSER_RUN_ALLOWLIST_WARNING);
     const allow = resolveSettings(

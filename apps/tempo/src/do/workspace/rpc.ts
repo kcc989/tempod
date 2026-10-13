@@ -15,13 +15,16 @@ import {
   type Session,
   type Turn,
   type WorkspaceFnName,
+  type AgentProfile,
+  type SessionCustomAgent,
 } from "@tempo/protocol";
-import { workspaces } from "../../db/d1.ts";
+import { environments, workspaces } from "../../db/d1.ts";
 import { EMPTY_PROMPT, json, readItemContent } from "../../db/json.ts";
 import {
   attachments,
   checkpoints,
   egressLog,
+  environmentProposals,
   events,
   items,
   permissions,
@@ -52,8 +55,30 @@ import { openPreview, rotatePreviewKey } from "./preview.ts";
 import type { OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
 
-/** The method input: the server function's input minus workspaceId (02, WorkspaceDO RPC). */
-export type MethodInput<K extends WorkspaceFnName> = Omit<FnInput<K>, "workspaceId">;
+/** Session columns for a custom agent (02, sessions). */
+export const customSessionColumns = (custom: SessionAgentProfile | null | undefined) =>
+  custom
+    ? {
+        customAgentId: custom.customAgent.id,
+        customAgentName: custom.customAgent.name,
+        customAgentCommit: custom.customAgent.commitSha,
+        profileJson: JSON.stringify(custom.profile),
+      }
+    : {};
+
+/** A custom agent resolved by the Worker (01, Custom agents): what the session row stores. */
+export interface SessionAgentProfile {
+  readonly customAgent: SessionCustomAgent;
+  readonly profile: AgentProfile;
+  readonly model: string;
+}
+
+/**
+ * The method input: the server function's input minus workspaceId (02, WorkspaceDO RPC).
+ * createSession also takes the custom agent the Worker resolved from `customAgentId`.
+ */
+export type MethodInput<K extends WorkspaceFnName> = Omit<FnInput<K>, "workspaceId"> &
+  (K extends "createSession" ? { readonly custom?: SessionAgentProfile } : unknown);
 export type Methods = { [K in WorkspaceFnName]: (input: MethodInput<K>) => Promise<FnOutput<K>> };
 
 export interface RpcRuntime {
@@ -164,6 +189,37 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       core.updateWs({ branch: next });
       core.publish();
       await rt.resendHello();
+      return {};
+    },
+
+    setWorkspaceEnvironment: async ({ environmentId }) => {
+      if (environmentId !== null) {
+        const found = await drizzleD1(core.env.DB)
+          .select({ id: environments.id })
+          .from(environments)
+          .where(and(eq(environments.id, environmentId), eq(environments.userId, core.ws().userId)))
+          .get();
+        if (!found) throw new TempoError("NOT_FOUND", undefined, "environment not found");
+      }
+      core.updateWs({ environmentId });
+      core.publish();
+      core.ctx.waitUntil(sendEnv(core));
+      return {};
+    },
+
+    resolveEnvironmentProposal: async ({ proposalId, status }) => {
+      const row = core.db
+        .select({ id: environmentProposals.id })
+        .from(environmentProposals)
+        .where(and(eq(environmentProposals.id, proposalId), eq(environmentProposals.status, "pending")))
+        .get();
+      if (!row) throw new TempoError("NOT_FOUND", undefined, "no pending proposal with that id");
+      core.db
+        .update(environmentProposals)
+        .set({ status })
+        .where(eq(environmentProposals.id, proposalId))
+        .run();
+      core.broadcastDetailSoon();
       return {};
     },
 
@@ -343,9 +399,10 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       };
     },
 
-    createSession: async ({ agent, model, modeId }): Promise<Session> => {
+    createSession: async ({ agent, model, modeId, custom }): Promise<Session> => {
       notArchived(core);
       await requireCredential(core, agent);
+      const chosenModel = model || custom?.model || "";
       const now = Date.now();
       const id = newId();
       const order =
@@ -360,7 +417,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           acpSessionId: null,
           status: "starting",
           modeId: modeId ?? null,
-          configJson: json.config.write(model ? { model } : {}),
+          configJson: json.config.write(chosenModel ? { model: chosenModel } : {}),
           modesJson: "[]",
           configOptionsJson: "[]",
           commandsJson: "[]",
@@ -369,6 +426,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           handoffPending: 0,
           pendingNote: null,
           generalPromptSent: 0,
+          ...customSessionColumns(custom),
           sortOrder: order + 1,
           createdAt: now,
           updatedAt: now,

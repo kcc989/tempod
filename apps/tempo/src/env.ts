@@ -5,9 +5,12 @@ import type { WorkspaceDO } from "./do/workspace/index.ts";
 interface TempoEnv {
   readonly DB: D1Database;
   readonly DATA: R2Bucket;
+  readonly AGENTS: Artifacts;
   readonly WORKSPACE: DurableObjectNamespace<WorkspaceDO>;
   readonly USER_HUB: DurableObjectNamespace<UserHubDO>;
   readonly CREDENTIALS: DurableObjectNamespace<CredentialDO>;
+  /** Worker Loader for injectors (01, Environments). */
+  readonly LOADER: WorkerLoader;
   readonly APP_HOST: string;
   readonly PREVIEW_DOMAIN: string;
   readonly TEMPO_OWNER_GITHUB_ID: string;

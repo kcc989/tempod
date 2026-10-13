@@ -416,7 +416,7 @@ These join the table in 02.
 | `apps/tempo/src/do/workspace/role-runs.ts` | Run lifecycle, write lock, read-only check, result check |
 | `apps/tempo/src/server/handlers/roles.ts` | Role server functions |
 | `apps/tempo/src/db/` | D1 migration `0001_user_roles`, DO migration `0006_lifecycle` |
-| `spikes/S18.md` | Spike result |
+| `spikes/S21.md` | Spike result |
 
 No new dependencies.
 
@@ -424,11 +424,11 @@ No new dependencies.
 
 | ID | Question | Pass criteria |
 | --- | --- | --- |
-| S18 | Does a follow-up prompt continue the same context, and does each agent write the result file? Needs real logins. | For each of the four agents: after a turn ends with `end_turn`, a second `session/prompt` that refers to the first turn gets an answer that uses it. A role prompt with the fixed texts produces a valid `result.json` in at most one continue. Record how often a read-only role changes files. |
+| S21 | Does a follow-up prompt continue the same context, and does each agent write the result file? Needs real logins. | For each of the four agents: after a turn ends with `end_turn`, a second `session/prompt` that refers to the first turn gets an answer that uses it. A role prompt with the fixed texts produces a valid `result.json` in at most one continue. Record how often a read-only role changes files. |
 
-## Phase 5 and gate F
+## Phase 6 and gate H
 
-Phase 5 adds this tab. It MAY run in parallel with phases 2 to 4. This doc change merges first. Each milestone merges when its own tests pass. Gate F needs gate B.
+Phase 6 adds this tab. It MAY run in parallel with phases 2 to 5. This doc change merges first. Each milestone merges when its own tests pass. Gate H needs gate B.
 
 | Milestone | Content | Demo |
 | --- | --- | --- |
@@ -438,7 +438,7 @@ Phase 5 adds this tab. It MAY run in parallel with phases 2 to 4. This doc chang
 
 Build M1 against recorded `tempod` fixtures. Record real fixtures after S1 passes.
 
-**Gate F** (06 rules: deployed, real logins, 3 runs in a row)
+**Gate H** (06 rules: deployed, real logins, 3 runs in a row)
 
 1. A user prompt makes `tempo.change.created`, and its `agent.turn.ended` shows in `getTrace`.
 2. A user role saved in Settings runs in a workspace with no redeploy. A repo role with the same name shadows it.

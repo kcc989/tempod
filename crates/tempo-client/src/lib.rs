@@ -2,6 +2,7 @@
 //! and the store logic shared with the app. It has no GPUI dependency.
 
 mod channel;
+mod environments;
 mod error;
 mod prng;
 mod runtime;
@@ -16,6 +17,9 @@ pub use channel::{
     HubChannelEvent, InvalidTerminalId, PING_EVERY, PONG_TIMEOUT, Status, TERMINAL_IDS,
     TerminalChannelEvent, TerminalFrame, TerminalHandle, TerminalInput, WorkspaceChannelEvent,
     WorkspaceHandle, reconnect_delay,
+};
+pub use environments::{
+    ENVIRONMENT_NAME_MAX, ProposalApplied, ProposalApply, merge_proposal, unique_name,
 };
 pub use error::{ApiError, DENIED_MESSAGE, NOT_TEMPO_MESSAGE, SignInError};
 pub use runtime::{Runtime, RuntimeHandle, Signal};

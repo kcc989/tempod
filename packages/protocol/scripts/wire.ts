@@ -49,6 +49,12 @@ export const SHARED = {
   Usage: P.Usage,
   Attachment: P.Attachment,
   Capabilities: P.Capabilities,
+  McpTransport: P.McpTransport,
+  McpEnvVar: P.McpEnvVar,
+  McpHeader: P.McpHeader,
+  McpServer: P.McpServer,
+  McpHeaderInput: P.McpHeaderInput,
+  McpServerInput: P.McpServerInput,
 
   RunScript: P.RunScript,
   CustomInstance: P.CustomInstance,
@@ -57,6 +63,15 @@ export const SHARED = {
   SettingsLayer: P.SettingsLayer,
   SettingsSource: P.SettingsSource,
   SettingsReadResult: P.SettingsReadResult,
+
+  McpStdioServer: P.McpStdioServer,
+  McpRemoteServer: P.McpRemoteServer,
+  McpServerDef: P.McpServerDef,
+  CustomAgentDefinition: P.CustomAgentDefinition,
+  CustomAgent: P.CustomAgent,
+  CustomAgentSummary: P.CustomAgentSummary,
+  ProfileIssue: P.ProfileIssue,
+  SessionCustomAgent: P.SessionCustomAgent,
 
   Project: P.Project,
   WorkspaceSummary: P.WorkspaceSummary,
@@ -92,6 +107,13 @@ export const SHARED = {
   NewSource: P.NewSource,
   ApiMeta: P.ApiMeta,
   AppSetupStatus: P.AppSetupStatus,
+  SecretBinding: P.SecretBinding,
+  InjectorInput: P.InjectorInput,
+  Injector: P.Injector,
+  EnvironmentSecret: P.EnvironmentSecret,
+  Environment: P.Environment,
+  EnvironmentProposal: P.EnvironmentProposal,
+  PendingEnvironmentProposal: P.PendingEnvironmentProposal,
 } as const satisfies Record<string, Schema.Top>;
 
 export const WORKSPACE_CHANNEL = {

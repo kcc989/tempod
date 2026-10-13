@@ -26,6 +26,7 @@ import {
 import { SECRET_KEYS } from "../credential.ts";
 import { errorText, log } from "../../log.ts";
 import { bytesToBase64 } from "../../lib/crypto.ts";
+import { mcpToSpec } from "../../lib/mcp.ts";
 import { browserRunEnabled } from "./browser.ts";
 import { requireTempod } from "./container.ts";
 import type { WorkspaceCore } from "./core.ts";
@@ -154,8 +155,10 @@ export const ensureSessionLive = async (
       env,
       modeId: session.modeId ?? DEFAULT_MODE[agent],
       ...(model ? { model } : {}),
+      ...(session.profileJson ? { profile: json.profile.read(session.profileJson, undefined) } : {}),
       browser: browserRunEnabled(core) ? "run" : "local",
       acpSessionId: session.acpSessionId,
+      mcpServers: (await core.mcpServers()).map(mcpToSpec),
     },
     opts,
   );
@@ -168,6 +171,7 @@ export const ensureSessionLive = async (
     configOptionsJson: json.configOptions.write(res.configOptions),
     commandsJson: json.commands.write(res.availableCommands),
     capabilitiesJson: json.capabilities.write(res.capabilities),
+    profileIssuesJson: json.profileIssues.write(res.profileIssues ?? []),
     ...(res.handoff ? { handoffPending: 1 } : {}),
   });
   for (const [configId, value] of Object.entries(config)) {

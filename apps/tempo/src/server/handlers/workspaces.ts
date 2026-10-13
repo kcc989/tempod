@@ -3,6 +3,7 @@ import { pickSlug } from "@tempo/cities";
 import {
   TempoError,
   newId,
+  toAgentProfile,
   unwrap,
   type AgentId,
   type FnInput,
@@ -17,7 +18,8 @@ import { github, prStateOf } from "../../github/provider.ts";
 import { getOwnedWorkspace } from "../../http/common.ts";
 import { summaryFromD1Row } from "../../lib/summary.ts";
 import type { InitInput } from "../../do/workspace/index.ts";
-import { isValidBranch } from "../../do/workspace/rpc.ts";
+import { isValidBranch, type SessionAgentProfile } from "../../do/workspace/rpc.ts";
+import { resolveCustomAgent } from "./agents.ts";
 import type { Handler, HandlerCtx } from "../run.ts";
 import { d1, projectToWire, projectToken, repoOf, requireProject } from "./common.ts";
 
@@ -47,9 +49,10 @@ const isUniqueViolation = (e: unknown, column: "branch" | "slug") => {
 /** 03, Create a workspace: checks and the D1 insert here; everything after in WorkspaceDO.init. */
 export const createWorkspace = async (
   { env, user }: HandlerCtx,
-  { projectId, source, agent, model, prompt }: FnInput<"createWorkspace">,
+  { projectId, source, agent, model, customAgentId, prompt }: FnInput<"createWorkspace">,
 ): Promise<FnOutput<"createWorkspace">> => {
   const p = await requireProject(env, user.id, projectId);
+  const custom = customAgentId ? await resolveProfile(env, user.id, customAgentId, agent) : undefined;
   const project = projectToWire(p);
   const defaults = resolveSettings(project.settings, {}).effective;
   const token = await projectToken(env, p);
@@ -82,7 +85,7 @@ export const createWorkspace = async (
 
   const db = d1(env);
   const author = await authorFor(env, token, user.name);
-  const defaultAgent: AgentId = agent ?? defaults.agent.default;
+  const defaultAgent: AgentId = custom?.agent ?? agent ?? defaults.agent.default;
   const now = Date.now();
   const id = newId();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -134,6 +137,7 @@ export const createWorkspace = async (
       model,
       prompt: prompt ? { text: prompt.text } : null,
       pr,
+      custom: custom?.custom ?? null,
       author,
       createdAt: now,
     });
@@ -144,6 +148,31 @@ export const createWorkspace = async (
 
 export const listModels = async ({ env, user }: HandlerCtx): Promise<FnOutput<"listModels">> => {
   return unwrap(await env.WORKSPACE.getByName(`models:${user.id}`).discoverModels(user.id));
+};
+
+const resolveProfile = async (
+  env: HandlerCtx["env"],
+  userId: string,
+  customAgentId: string,
+  agent: AgentId | undefined,
+): Promise<{ agent: AgentId; custom: SessionAgentProfile }> => {
+  const { customAgent, definition } = await resolveCustomAgent(env, userId, customAgentId, agent);
+  return {
+    agent: definition.baseAgent,
+    custom: { customAgent, profile: toAgentProfile(definition), model: definition.model },
+  };
+};
+
+/** createSession resolves a custom agent here: the WorkspaceDO never reads D1 or Artifacts for it. */
+export const createSession: Handler<"createSession"> = async ({ env, user }, input) => {
+  const { workspaceId, customAgentId, ...rest } = input;
+  if (!(await getOwnedWorkspace(env, user.id, workspaceId))) throw new TempoError("NOT_FOUND");
+  const custom = customAgentId
+    ? (await resolveProfile(env, user.id, customAgentId, rest.agent)).custom
+    : undefined;
+  return unwrap(
+    await env.WORKSPACE.getByName(workspaceId).createSession(custom ? { ...rest, custom } : rest),
+  );
 };
 
 export const listWorkspaces = async (

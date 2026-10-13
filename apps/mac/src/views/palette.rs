@@ -141,6 +141,9 @@ impl CommandPalette {
             .then(|| self.shown_actions.get(index.row).map(|a| a.boxed_clone()))
             .flatten();
         window.close_dialog(cx);
+        if workspace.is_some() || action.is_some() {
+            crate::views::settings::close(cx);
+        }
         if let Some(id) = workspace {
             crate::app::AppState::global(cx).update(cx, |a, cx| {
                 a.show_workspace(&id, cx);

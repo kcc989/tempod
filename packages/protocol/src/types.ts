@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import {
   AvailableCommand,
   Capabilities,
@@ -31,8 +31,10 @@ import {
   TurnStatus,
   WorkspaceState,
 } from "./enums.ts";
+import { ProfileIssue, SessionCustomAgent } from "./agents.ts";
 import { ErrorCodeSchema } from "./errors.ts";
 import { Settings, SettingsLayer, SettingsSource } from "./settings.ts";
+import { PendingEnvironmentProposal } from "./environments.ts";
 
 const N = Schema.NullOr;
 const Ms = Schema.Number;
@@ -46,6 +48,7 @@ export const Project = Schema.Struct({
   defaultBranch: Schema.String,
   settings: SettingsLayer,
   sortOrder: Schema.Number,
+  environmentId: Schema.optional(N(Schema.String)),
 });
 export type Project = typeof Project.Type;
 
@@ -109,7 +112,9 @@ export const WorkspaceDetail = Schema.Struct({
   prTitle: Schema.optional(N(Schema.String)),
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
   /** A Browser Run session is open (01, Browser Run). */
-  browserActive: Schema.Boolean,
+  browserActive: Schema.Boolean.annotate({ default: false }).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(false)),
+  ),
   settings: Settings,
   runningTurnId: N(Schema.String),
   queue: Schema.Array(Schema.String),
@@ -121,6 +126,8 @@ export const WorkspaceDetail = Schema.Struct({
   settingsSources: Schema.optional(Schema.Record(Schema.String, SettingsSource)),
   changes: Schema.optional(N(ChangesSummary)),
   hasUnpushedCommits: Schema.optional(Schema.Boolean),
+  environmentId: Schema.optional(N(Schema.String)),
+  environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
 });
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
 
@@ -137,6 +144,8 @@ export const Session = Schema.Struct({
   usage: Usage,
   sortOrder: Schema.Number,
   steering: Schema.optional(Schema.Boolean),
+  customAgent: Schema.optional(SessionCustomAgent),
+  profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
 });
 export type Session = typeof Session.Type;
 

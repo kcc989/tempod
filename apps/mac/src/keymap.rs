@@ -2,6 +2,7 @@
 use crate::actions::*;
 use gpui_kit::{App, KeyBinding, NoAction};
 
+pub const SETTINGS: &str = "Settings";
 pub const WORKSPACE: &str = "Workspace";
 pub const COMPOSER: &str = "Composer";
 pub const DIFF: &str = "Diff";
@@ -21,6 +22,10 @@ pub fn bindings() -> Vec<KeyBinding> {
     let ws = Some(WORKSPACE);
     let mut out = vec![
         KeyBinding::new("cmd-,", OpenSettings, None),
+        KeyBinding::new("escape", BackFromSettings, Some(SETTINGS)),
+        KeyBinding::new("escape", BackFromSettings, Some("Settings > Input")),
+        KeyBinding::new("cmd-w", BackFromSettings, Some(SETTINGS)),
+        KeyBinding::new("cmd-k", CommandPalette, Some(SETTINGS)),
         KeyBinding::new("cmd-h", HideApp, None),
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-m", Minimize, None),
@@ -185,6 +190,8 @@ mod tests {
         let allowed = [
             "",
             WORKSPACE,
+            SETTINGS,
+            "Settings > Input",
             DIFF,
             TERMINAL,
             "Composer > Input",

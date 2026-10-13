@@ -1,26 +1,29 @@
-//! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 1 to 12 rows, in the
+//! Composer (04, Composer; 07): a GPUI Kit `Textarea` that grows from 2 to 12 rows, in the
 //! `Composer` key context. Enter sends, ⇧Enter adds a line (the text field's own binding), Esc
 //! stops the turn, ⇧Tab toggles plan mode. Pickers use agent-reported modes and models.
 use super::composer_model::{self, SlashEntry};
 use super::file_picker::{FilePicker, MentionTrigger};
+use super::tokens::{Token, color};
 use crate::actions::{
     DismissComposerChoice, NextComposerChoice, PreviousComposerChoice, Send, StopTurn,
     TogglePlanMode,
 };
 use crate::keymap::COMPOSER;
-use gpui_kit::component::IndexPath;
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
 use gpui_kit::component::list::{List, ListEvent, ListState};
 use gpui_kit::component::popover::Popover;
+use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::v_flex;
-use gpui_kit::component::{Disableable as _, h_flex};
+use gpui_kit::component::{Disableable as _, Sizable as _, h_flex};
+use gpui_kit::component::{Icon, IndexPath};
 use gpui_kit::{
     AppContext as _, Context, Entity, EventEmitter, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, div,
+    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    px,
 };
 use tempo_protocol as p;
 
@@ -34,11 +37,37 @@ impl SelectItem for Choice {
     fn title(&self) -> SharedString {
         self.label.clone()
     }
+    fn render(&self, _: &mut Window, _: &mut gpui_kit::App) -> impl IntoElement {
+        div().py_1().child(self.label.clone())
+    }
     fn value(&self) -> &String {
         &self.value
     }
 }
 type Picker = SelectState<Vec<Choice>>;
+
+/// A select option's values, with group names kept in the labels.
+fn select_choices(config: Option<&p::ConfigOption>) -> Vec<Choice> {
+    config
+        .and_then(|c| c.options.as_ref())
+        .into_iter()
+        .flatten()
+        .flat_map(|option| match option {
+            p::ConfigOptionOptionsItem::Option(option) => vec![Choice {
+                value: option.value.clone(),
+                label: option.name.clone().into(),
+            }],
+            p::ConfigOptionOptionsItem::Group(group) => group
+                .options
+                .iter()
+                .map(|option| Choice {
+                    value: option.value.clone(),
+                    label: format!("{} · {}", group.name, option.name).into(),
+                })
+                .collect(),
+        })
+        .collect()
+}
 
 pub enum ComposerEvent {
     Send(String),
@@ -83,7 +112,14 @@ pub struct Composer {
     mode: Entity<Picker>,
     model_config: Option<String>,
     model_choices: Vec<Choice>,
+    /// The reasoning level: the agent's `thought_level` option (04, Composer).
+    level: Entity<Picker>,
+    level_config: Option<String>,
+    level_choices: Vec<Choice>,
     mode_choices: Vec<Choice>,
+    /// The profile-issues notice (04) and whether it was dismissed for this session.
+    profile_notice: Option<String>,
+    notice_dismissed: bool,
     pub configuring: bool,
     _picker_events: Vec<Subscription>,
     _input_changed: Subscription,
@@ -93,7 +129,7 @@ impl EventEmitter<ComposerEvent> for Composer {}
 
 impl Composer {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 12));
+        let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 12));
         let changed = cx.subscribe(&input, |_, input, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 cx.emit(ComposerEvent::Change(input.read(cx).value().to_string()));
@@ -119,6 +155,20 @@ impl Composer {
         let model =
             cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx).searchable(true));
         let mode = cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx));
+        let level = cx.new(|cx| SelectState::new(Vec::<Choice>::new(), None, window, cx));
+        let level_events = cx.subscribe(&level, |this, _, event: &SelectEvent<Vec<Choice>>, cx| {
+            if this.read_only || this.working || this.starting || this.configuring {
+                return;
+            }
+            if let (SelectEvent::Confirm(Some(value)), Some(config_id)) =
+                (event, &this.level_config)
+            {
+                cx.emit(ComposerEvent::SetModel {
+                    config_id: config_id.clone(),
+                    value: value.clone(),
+                });
+            }
+        });
         let model_events = cx.subscribe(&model, |this, _, event: &SelectEvent<Vec<Choice>>, cx| {
             if this.read_only || this.working || this.starting || this.configuring {
                 return;
@@ -169,9 +219,14 @@ impl Composer {
             mode,
             model_config: None,
             model_choices: vec![],
+            level,
+            level_config: None,
+            level_choices: vec![],
             mode_choices: vec![],
+            profile_notice: None,
+            notice_dismissed: false,
             configuring: false,
-            _picker_events: vec![model_events, mode_events],
+            _picker_events: vec![model_events, mode_events, level_events],
             _input_changed: changed,
         }
     }
@@ -208,25 +263,7 @@ impl Composer {
             .iter()
             .find(|c| c.category.as_deref() == Some("model") && c.type_ == "select");
         self.model_config = config.map(|c| c.id.clone());
-        let choices: Vec<_> = config
-            .and_then(|c| c.options.as_ref())
-            .into_iter()
-            .flatten()
-            .flat_map(|option| match option {
-                p::ConfigOptionOptionsItem::Option(option) => vec![Choice {
-                    value: option.value.clone(),
-                    label: option.name.clone().into(),
-                }],
-                p::ConfigOptionOptionsItem::Group(group) => group
-                    .options
-                    .iter()
-                    .map(|option| Choice {
-                        value: option.value.clone(),
-                        label: format!("{} · {}", group.name, option.name).into(),
-                    })
-                    .collect(),
-            })
-            .collect();
+        let choices = select_choices(config);
         if self.model_choices != choices {
             self.model_choices = choices.clone();
             self.model
@@ -242,6 +279,28 @@ impl Composer {
                 }
             });
         }
+        let level = session
+            .config_options
+            .iter()
+            .find(|c| c.category.as_deref() == Some("thought_level") && c.type_ == "select");
+        self.level_config = level.map(|c| c.id.clone());
+        let choices = select_choices(level);
+        if self.level_choices != choices {
+            self.level_choices = choices.clone();
+            self.level
+                .update(cx, |state, cx| state.set_items(choices, window, cx));
+        }
+        if !self.configuring
+            && let Some(p::ConfigOptionCurrentValue::String(value)) =
+                level.map(|c| &c.current_value)
+        {
+            self.level.update(cx, |state, cx| {
+                if state.selected_value() != Some(value) {
+                    state.set_selected_value(value, window, cx);
+                }
+            });
+        }
+        self.profile_notice = super::agents_model::profile_issues_text(session);
         let choices: Vec<_> = session
             .modes
             .iter()
@@ -552,6 +611,8 @@ impl Render for Composer {
                     }
                 })
                 .aria_label("Message")
+                .appearance(false)
+                .bordered(false)
                 .disabled(self.read_only || self.sending),
         );
         let list = self.file_menu.clone();
@@ -650,7 +711,36 @@ impl Render for Composer {
             .on_action(
                 cx.listener(|_, _: &TogglePlanMode, _, cx| cx.emit(ComposerEvent::TogglePlanMode)),
             )
+            .w_full()
+            .max_w(px(792.))
+            .mx_auto()
+            .mb_4()
+            .flex_shrink_0()
             .p_3()
+            .gap_2()
+            .rounded(px(16.))
+            .shadow_md()
+            .border_1()
+            .border_color(color(Token::Border, cx))
+            .bg(color(Token::Muted, cx))
+            .children(
+                self.profile_notice
+                    .clone()
+                    .filter(|_| !self.notice_dismissed)
+                    .map(|text| {
+                        h_flex()
+                            .gap_2()
+                            .child(div().flex_1().text_sm().child(text))
+                            .child(
+                                Button::new("dismiss-profile-notice")
+                                    .label("Dismiss")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.notice_dismissed = true;
+                                        cx.notify();
+                                    })),
+                            )
+                    }),
+            )
             .children(self.attachments.iter().enumerate().map(|(ix, (id, name))| {
                 let id = id.clone();
                 Button::new(("attachment", ix))
@@ -674,14 +764,8 @@ impl Render for Composer {
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::ClearReview)))
             }))
             .children(self.uploading.then(|| div().child("Uploading attachment…")))
-            .child(
-                Button::new("attach-file")
-                    .label("Attach file")
-                    .disabled(self.read_only || self.uploading || self.sending)
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![])))),
-            )
             .children(menu)
-            .child(
+            .children((!self.mentions.is_empty()).then(|| {
                 h_flex()
                     .flex_wrap()
                     .gap_2()
@@ -695,44 +779,145 @@ impl Render for Composer {
                                 this.mentions.retain(|m| m.path != path);
                                 cx.notify();
                             }))
-                    })),
-            )
-            .children(self.usage.map(|(used, size)| {
-                let label = format!(
-                    "{used:.0} / {size:.0} tokens · {:.0}% context",
-                    (used / size).min(1.) * 100.
-                );
-                div()
-                    .id("context-usage")
-                    .role(Role::Status)
-                    .aria_label(label.clone())
-                    .text_sm()
-                    .child(format!("◔ {label}"))
+                    }))
             }))
             .child(field)
             .child(
                 h_flex()
                     .gap_2()
                     .children((!self.model_choices.is_empty()).then(|| {
-                        Select::new(&self.model)
-                            .accessibility_label("Model")
-                            .placeholder("Model")
-                            .disabled(
-                                self.read_only || self.working || self.starting || self.configuring,
+                        div()
+                            .w(px(self
+                                .model_choices
+                                .iter()
+                                .find(|choice| {
+                                    self.model.read(cx).selected_value() == Some(&choice.value)
+                                })
+                                .map(|choice| {
+                                    (choice.label.chars().count() as f32 * 7. + 34.)
+                                        .clamp(64., 220.)
+                                })
+                                .unwrap_or(90.)))
+                            .flex_shrink_0()
+                            .child(
+                                Select::new(&self.model)
+                                    .menu_width(px(320.))
+                                    .search_placeholder("Search models")
+                                    .icon(
+                                        Icon::new(IconName::ChevronDown)
+                                            .size(px(12.))
+                                            .text_color(color(Token::MutedForeground, cx)),
+                                    )
+                                    .w_full()
+                                    .large()
+                                    .h(px(28.))
+                                    .py_0()
+                                    .text_sm()
+                                    .appearance(false)
+                                    .accessibility_label("Model")
+                                    .placeholder("Model")
+                                    .disabled(
+                                        self.read_only
+                                            || self.working
+                                            || self.starting
+                                            || self.configuring,
+                                    ),
                             )
                     }))
+                    .children((!self.level_choices.is_empty()).then(|| {
+                        div().w(px(120.)).flex_shrink_0().child(
+                            Select::new(&self.level)
+                                .menu_width(px(320.))
+                                .icon(
+                                    Icon::new(IconName::ChevronDown)
+                                        .size(px(12.))
+                                        .text_color(color(Token::MutedForeground, cx)),
+                                )
+                                .w_full()
+                                .small()
+                                .appearance(false)
+                                .accessibility_label("Reasoning level")
+                                .placeholder("Reasoning level")
+                                .disabled(
+                                    self.read_only
+                                        || self.working
+                                        || self.starting
+                                        || self.configuring,
+                                ),
+                        )
+                    }))
                     .children((!self.mode_choices.is_empty()).then(|| {
-                        Select::new(&self.mode)
-                            .accessibility_label("Mode")
-                            .placeholder("Mode")
-                            .disabled(
-                                self.read_only || self.working || self.starting || self.configuring,
+                        div()
+                            .w(px(self
+                                .mode_choices
+                                .iter()
+                                .find(|choice| {
+                                    self.mode.read(cx).selected_value() == Some(&choice.value)
+                                })
+                                .map(|choice| {
+                                    (choice.label.chars().count() as f32 * 7. + 34.)
+                                        .clamp(64., 220.)
+                                })
+                                .unwrap_or(90.)))
+                            .flex_shrink_0()
+                            .child(
+                                Select::new(&self.mode)
+                                    .menu_width(px(320.))
+                                    .icon(
+                                        Icon::new(IconName::ChevronDown)
+                                            .size(px(12.))
+                                            .text_color(color(Token::MutedForeground, cx)),
+                                    )
+                                    .w_full()
+                                    .small()
+                                    .appearance(false)
+                                    .accessibility_label("Mode")
+                                    .placeholder("Mode")
+                                    .disabled(
+                                        self.read_only
+                                            || self.working
+                                            || self.starting
+                                            || self.configuring,
+                                    ),
+                            )
+                    }))
+                    .child(div().flex_1())
+                    .children(self.usage.map(|(used, size)| {
+                        let percent = (used / size).min(1.) * 100.;
+                        let label = format!("{used:.0} / {size:.0} tokens · {percent:.0}% context");
+                        Button::new("context-usage")
+                            .ghost()
+                            .small()
+                            .accessibility_label(label.clone())
+                            .tooltip(label.clone())
+                            .child(
+                                ProgressCircle::new("context-ring")
+                                    .value(percent as f32)
+                                    .size(px(14.))
+                                    .color(color(Token::MutedForeground, cx))
+                                    .accessibility_label(label),
                             )
                     }))
                     .child(
+                        Button::new("attach-file")
+                            .ghost()
+                            .small()
+                            .icon(IconName::Plus)
+                            .accessibility_label("Attach file")
+                            .tooltip("Attach file (⌘U)")
+                            .disabled(self.read_only || self.uploading || self.sending)
+                            .on_click(
+                                cx.listener(|_, _, _, cx| cx.emit(ComposerEvent::Attach(vec![]))),
+                            ),
+                    )
+                    .child(
                         Button::new("send-prompt")
                             .primary()
-                            .label(if self.working { "Queue" } else { "Send" })
+                            .icon(IconName::ArrowUp)
+                            .small()
+                            .accessibility_label(if self.working { "Queue" } else { "Send" })
+                            .w(px(28.))
+                            .rounded(px(8.))
                             .disabled(
                                 self.read_only
                                     || self.sending

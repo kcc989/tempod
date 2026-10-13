@@ -190,7 +190,8 @@
       }
     },
     "browserActive": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     },
     "settings": {
       "$ref": "Settings.json"
@@ -296,6 +297,36 @@
           "type": "null"
         }
       ]
+    },
+    "environmentId": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "environmentProposals": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "PendingEnvironmentProposal.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
@@ -321,7 +352,6 @@
     "setupStatus",
     "pushed",
     "ports",
-    "browserActive",
     "settings",
     "runningTurnId",
     "queue",

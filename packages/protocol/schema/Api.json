@@ -147,6 +147,121 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "setProjectEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetProjectEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listEnvironments": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "Environment.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "createEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CreateEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Environment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Environment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setEnvironmentSecret": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetEnvironmentSecretIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteEnvironmentSecret": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteEnvironmentSecretIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "createWorkspace": {
       "type": "object",
       "properties": {
@@ -436,6 +551,38 @@
         },
         "output": {
           "$ref": "Diagnostics.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setWorkspaceEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetWorkspaceEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "resolveEnvironmentProposal": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ResolveEnvironmentProposalIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
         }
       },
       "required": ["method", "input", "output"],
@@ -971,6 +1118,73 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "listCustomAgents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "CustomAgentSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getCustomAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCustomAgentIn.json"
+        },
+        "output": {
+          "$ref": "CustomAgent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveCustomAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SaveCustomAgentIn.json"
+        },
+        "output": {
+          "$ref": "CustomAgent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteCustomAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteCustomAgentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "getCredentialStatus": {
       "type": "object",
       "properties": {
@@ -1146,6 +1360,57 @@
       },
       "required": ["method", "input", "output"],
       "additionalProperties": false
+    },
+    "listMcpServers": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "McpServer.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "McpServerInput.json"
+        },
+        "output": {
+          "$ref": "McpServer.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteMcpServerIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
     }
   },
   "required": [
@@ -1157,6 +1422,13 @@
     "unlinkProject",
     "listBranches",
     "listOpenPullRequests",
+    "setProjectEnvironment",
+    "listEnvironments",
+    "createEnvironment",
+    "updateEnvironment",
+    "deleteEnvironment",
+    "setEnvironmentSecret",
+    "deleteEnvironmentSecret",
     "createWorkspace",
     "listModels",
     "listWorkspaces",
@@ -1175,6 +1447,8 @@
     "getBrowserLiveView",
     "setBaseBranch",
     "getDiagnostics",
+    "setWorkspaceEnvironment",
+    "resolveEnvironmentProposal",
     "createSession",
     "closeSession",
     "renameSession",
@@ -1207,6 +1481,10 @@
     "continueAfterSetupFailure",
     "listTerminals",
     "listScriptRuns",
+    "listCustomAgents",
+    "getCustomAgent",
+    "saveCustomAgent",
+    "deleteCustomAgent",
     "getCredentialStatus",
     "setClaudeToken",
     "setCodexAuth",
@@ -1217,7 +1495,10 @@
     "deleteCredential",
     "setProjectSecret",
     "deleteProjectSecret",
-    "listProjectSecretNames"
+    "listProjectSecretNames",
+    "listMcpServers",
+    "saveMcpServer",
+    "deleteMcpServer"
   ],
   "additionalProperties": false
 }

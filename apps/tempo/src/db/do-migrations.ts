@@ -244,11 +244,6 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
     ],
   },
   {
-    tag: "0002_turn_usage",
-    when: 1791835200000,
-    statements: ["ALTER TABLE turns ADD COLUMN usage_json TEXT"],
-  },
-  {
     tag: "0002_file_cache",
     when: 1791849600000,
     statements: [
@@ -259,6 +254,11 @@ export const WORKSPACE_MIGRATIONS: Migrations = [
   updated_at     INTEGER NOT NULL DEFAULT 0
 )`,
     ],
+  },
+  {
+    tag: "0002_turn_usage",
+    when: 1791849600001,
+    statements: ["ALTER TABLE turns ADD COLUMN usage_json TEXT"],
   },
   {
     tag: "0003_preview_access",
@@ -359,6 +359,30 @@ FROM review_comments`,
     tag: "0005_browser_run",
     when: 1792094400000,
     statements: ["ALTER TABLE workspace ADD COLUMN browser_session_id TEXT"],
+  },
+  {
+    tag: "0006_environments",
+    when: 1792180800000,
+    statements: [
+      "ALTER TABLE workspace ADD COLUMN environment_id TEXT",
+      `CREATE TABLE environment_proposals (
+  id             TEXT PRIMARY KEY,
+  created_at     INTEGER NOT NULL,
+  status         TEXT NOT NULL CHECK (status IN ('pending','applied','dismissed')),
+  proposal_json  TEXT NOT NULL
+)`,
+    ],
+  },
+  {
+    tag: "0007_custom_agents",
+    when: 1792267200000,
+    statements: [
+      "ALTER TABLE sessions ADD COLUMN custom_agent_id TEXT",
+      "ALTER TABLE sessions ADD COLUMN custom_agent_name TEXT",
+      "ALTER TABLE sessions ADD COLUMN custom_agent_commit TEXT",
+      "ALTER TABLE sessions ADD COLUMN profile_json TEXT",
+      "ALTER TABLE sessions ADD COLUMN profile_issues_json TEXT NOT NULL DEFAULT '[]'",
+    ],
   },
 ];
 

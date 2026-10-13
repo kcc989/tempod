@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { AgentId, EgressPolicy, InstanceName, RunMode } from "./enums.ts";
 
 export const RunScript = Schema.Struct({
@@ -29,17 +29,24 @@ export const HostPattern = Schema.String.check(
 export const EnvName = Schema.String.check(Schema.isPattern(/^[A-Z_][A-Z0-9_]*$/));
 
 /** Each agent's default model: its `model` config value; "" means the agent's own default. */
+const DEFAULT_AGENT_MODELS = { claude: "", codex: "", opencode: "", pi: "" };
+
 export const AgentModels = Schema.Struct({
   claude: Schema.String,
   codex: Schema.String,
   opencode: Schema.String,
   pi: Schema.String,
-});
+}).annotate({ default: DEFAULT_AGENT_MODELS });
 export type AgentModels = typeof AgentModels.Type;
 
 export const Settings = Schema.Struct({
-  agent: Schema.Struct({ default: AgentId, models: AgentModels }),
-  browser: Schema.Struct({ run: Schema.Boolean }),
+  agent: Schema.Struct({
+    default: AgentId,
+    models: AgentModels.pipe(Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_AGENT_MODELS))),
+  }),
+  browser: Schema.Struct({ run: Schema.Boolean })
+    .annotate({ default: { run: false } })
+    .pipe(Schema.withDecodingDefaultKey(Effect.succeed({ run: false }))),
   scripts: Schema.Struct({
     setup: Schema.String,
     archive: Schema.String,
@@ -64,13 +71,13 @@ export const Settings = Schema.Struct({
 export type Settings = typeof Settings.Type;
 
 export const DEFAULT_SETTINGS: Settings = {
-  agent: { default: "claude", models: { claude: "", codex: "", opencode: "", pi: "" } },
+  agent: { default: "claude", models: DEFAULT_AGENT_MODELS },
   browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
   environment: {
     instance: "standard-3",
     sleep_after_idle_minutes: 15,
-    egress_policy: "open",
+    egress_policy: "allowlist",
     egress_allowlist: [],
   },
   environment_variables: {},

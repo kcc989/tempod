@@ -5,6 +5,29 @@ import * as w from "./world.ts";
 const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
+const ENV_ID = uid(901);
+const INJECTOR_CODE = "export default { async fetch(request, env) { return fetch(request); } };\n";
+const ENVIRONMENT = {
+  id: ENV_ID,
+  name: "Payments",
+  egressPolicy: "allowlist",
+  egressAllowlist: ["pypi.org", "*.stripe.com"],
+  secrets: [
+    { name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: true },
+    { name: "LOCAL_DB_URL", hosts: [], set: false },
+  ],
+  injectors: [
+    { name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE, sha256: "b".repeat(64) },
+  ],
+  createdAt: 1_790_000_000_000,
+  updatedAt: 1_790_000_100_000,
+} as const;
+const PROPOSAL = {
+  note: "The tests call the Stripe API and pip installs from PyPI.",
+  allowlistAdd: ["pypi.org", "files.pythonhosted.org"],
+  secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+} as const;
+
 export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   AgentModelOptions: [
     {
@@ -35,6 +58,35 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   PermissionOption: w.permissionOptions,
   PlanEntry: w.planContent.entries,
   ToolLocation: w.toolCallContent.locations,
+  McpStdioServer: [w.reviewerDefinition.mcp.servers[0]],
+  McpRemoteServer: [
+    w.reviewerDefinition.mcp.servers[1],
+    { name: "events", type: "sse", url: "https://mcp.example.com/sse", headers: {} },
+  ],
+  CustomAgentDefinition: [
+    w.reviewerDefinition,
+    {
+      name: "Pi tester",
+      description: "",
+      baseAgent: "pi",
+      model: "",
+      thoughtLevel: "",
+      systemPrompt: "",
+      tools: { allow: ["read", "bash", "mcp__docs__*"], deny: [] },
+      mcp: { playwright: true, servers: [] },
+    },
+  ],
+  CustomAgent: [w.reviewerAgent],
+  CustomAgentSummary: [
+    {
+      id: w.CUSTOM_AGENT_ID,
+      name: "Reviewer",
+      description: "Reviews code without editing it",
+      baseAgent: "claude",
+      updatedAt: 1_791_000_000_000,
+    },
+  ],
+  SessionCustomAgent: [w.reviewerSession.customAgent],
   ContentBlock: [
     { type: "text", text: "Done." },
     { type: "image", mimeType: "image/png", data: "iVBORw0KGgo=" },
@@ -64,6 +116,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   Project: [
     w.project,
     { ...w.project, id: uid(2), name: "docs", repoId: 812345679, settings: {}, sortOrder: 1 },
+    { ...w.project, id: uid(3), name: "pay", repoId: 812345680, sortOrder: 2, environmentId: ENV_ID },
   ],
   WorkspaceSummary: [w.lisbon, w.oslo, w.kyoto],
   OpProgress: [w.opProgress],
@@ -71,6 +124,11 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ChangesSummary: [w.changesSummary, { files: [], additions: 0, deletions: 0 }],
   WorkspaceDetail: [
     w.lisbonDetail,
+    {
+      ...w.lisbonDetail,
+      environmentId: ENV_ID,
+      environmentProposals: [{ id: uid(903), createdAt: 1_790_000_200_000, proposal: PROPOSAL }],
+    },
     w.detail(w.oslo, { pushed: true, setupStatus: "none", op: w.opProgress, imageRef: null }),
     w.detail(w.kyoto, {
       state: "error",
@@ -80,7 +138,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       changes: null,
     }),
   ],
-  Session: [w.claudeSession, w.codexSession],
+  Session: [w.claudeSession, w.codexSession, w.reviewerSession],
   Mention: [{ path: "src/app.tsx" }],
   TurnPrompt: [
     w.turn(1).prompt,
@@ -171,12 +229,77 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   CredentialState: [w.credentialStatus.claude, w.credentialStatus.openrouter],
   CredentialStatus: [w.credentialStatus],
+  McpEnvVar: [{ name: "ROOT", value: "/workspace" }],
+  McpHeader: [
+    { name: "Authorization", secret: true, value: null, set: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpHeaderInput: [
+    { name: "Authorization", secret: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpServer: [
+    {
+      id: "01jmcp0000000000000000000a",
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      command: null,
+      args: [],
+      env: [],
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: null, set: true }],
+      createdAt: 1760000000000,
+      updatedAt: 1760000000000,
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: false,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+      env: [{ name: "ROOT", value: "/workspace" }],
+      url: null,
+      headers: [],
+      createdAt: 1760000000000,
+      updatedAt: 1760000100000,
+    },
+  ],
   Diagnostics: [w.diagnostics],
   NewSource: [
     { kind: "new", baseBranch: "main" },
     { kind: "branch", branch: "feature/search" },
     { kind: "pr", number: 42 },
   ],
+  SecretBinding: [
+    { name: "STRIPE_KEY", hosts: ["api.stripe.com"] },
+    { name: "LOCAL_DB_URL", hosts: [] },
+  ],
+  InjectorInput: [{ name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE }],
+  Injector: ENVIRONMENT.injectors,
+  EnvironmentSecret: ENVIRONMENT.secrets,
+  Environment: [
+    ENVIRONMENT,
+    {
+      ...ENVIRONMENT,
+      id: uid(902),
+      name: "Open",
+      egressPolicy: "open",
+      egressAllowlist: [],
+      secrets: [],
+      injectors: [],
+    },
+  ],
+  EnvironmentProposal: [
+    PROPOSAL,
+    {
+      note: "Sign S3 requests.",
+      egressPolicy: "allowlist",
+      injectors: [ENVIRONMENT.injectors[0]].map(({ name, hosts, code }) => ({ name, hosts, code })),
+    },
+  ],
+  PendingEnvironmentProposal: [{ id: uid(903), createdAt: 1_790_000_200_000, proposal: PROPOSAL }],
   AppSetupStatus: [
     { configured: false, installUrl: null },
     { configured: true, installUrl: "https://github.com/apps/tempo-example/installations/new" },
@@ -263,6 +386,25 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   unlinkProject: [{ projectId: PROJECT_ID }],
   listBranches: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, query: "feat" }],
   listOpenPullRequests: [{ projectId: PROJECT_ID }],
+  setProjectEnvironment: [
+    { projectId: PROJECT_ID, environmentId: ENV_ID },
+    { projectId: PROJECT_ID, environmentId: null },
+  ],
+  listEnvironments: [{}],
+  createEnvironment: [{ name: "Payments" }],
+  updateEnvironment: [
+    { environmentId: ENV_ID, name: "Payments v2" },
+    {
+      environmentId: ENV_ID,
+      egressPolicy: "allowlist",
+      egressAllowlist: ["pypi.org"],
+      secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+      injectors: [{ name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE }],
+    },
+  ],
+  deleteEnvironment: [{ environmentId: ENV_ID }],
+  setEnvironmentSecret: [{ environmentId: ENV_ID, name: "STRIPE_KEY", value: "fixture-value" }],
+  deleteEnvironmentSecret: [{ environmentId: ENV_ID, name: "STRIPE_KEY" }],
   createWorkspace: [
     { projectId: PROJECT_ID, source: { kind: "new", baseBranch: "main" } },
     {
@@ -271,6 +413,11 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
       agent: "codex",
       model: "reported-model",
       prompt: { text: "Fix the flaky test" },
+    },
+    {
+      projectId: PROJECT_ID,
+      source: { kind: "branch", branch: "review/auth" },
+      customAgentId: w.CUSTOM_AGENT_ID,
     },
   ],
   listWorkspaces: [{}, { includeArchived: true }],
@@ -292,6 +439,7 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   createSession: [
     { ...ws, agent: "codex" },
     { ...ws, agent: "claude", model: "opus", modeId: "plan" },
+    { ...ws, agent: "claude", customAgentId: w.CUSTOM_AGENT_ID },
   ],
   closeSession: [{ ...ws, sessionId: S2 }],
   renameSession: [{ ...ws, sessionId: S1, title: "Reviewer" }],
@@ -361,6 +509,41 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   setProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL", value: "fixture-value" }],
   deleteProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL" }],
   listProjectSecretNames: [{ projectId: PROJECT_ID }],
+  setWorkspaceEnvironment: [
+    { ...ws, environmentId: ENV_ID },
+    { ...ws, environmentId: null },
+  ],
+  resolveEnvironmentProposal: [
+    { ...ws, proposalId: uid(903), status: "applied" },
+    { ...ws, proposalId: uid(903), status: "dismissed" },
+  ],
+  listMcpServers: [{}],
+  saveMcpServer: [
+    {
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: "Bearer lin_api_x" }],
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: true,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem"],
+      env: [],
+    },
+  ],
+  deleteMcpServer: [{ id: "01jmcp0000000000000000000b" }],
+  listCustomAgents: [{}],
+  getCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
+  saveCustomAgent: [
+    { definition: w.reviewerDefinition },
+    { customAgentId: w.CUSTOM_AGENT_ID, definition: { ...w.reviewerDefinition, thoughtLevel: "" } },
+  ],
+  deleteCustomAgent: [{ customAgentId: w.CUSTOM_AGENT_ID }],
 };
 
 /** Outputs that are not shared types, by their wire type name. */

@@ -60,6 +60,71 @@ class ReleaseTests(unittest.TestCase):
             offset += size + 12
         self.assertEqual(len(zlib.decompress(compressed)), 32 * (32 * 4 + 1))
 
+class DevLaunchTests(unittest.TestCase):
+    def run_dev(self, identity=True, mode="--open"):
+        import os
+        import shutil
+        import subprocess
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            scripts = root / "scripts/mac"
+            scripts.mkdir(parents=True)
+            shutil.copyfile(pathlib.Path(__file__).with_name("dev.sh"), scripts / "dev.sh")
+            (scripts / "icon.py").write_text("")
+            resources = root / "apps/mac/resources"
+            resources.mkdir(parents=True)
+            (resources / "Info.plist").write_text("fixture")
+            binary = root / "target/debug"
+            binary.mkdir(parents=True)
+            (binary / "Tempo").write_text("fixture")
+            (binary / "TempoKeychain").write_text("fixture")
+            helper = root / "crates/tempo-keychain/src"
+            helper.mkdir(parents=True)
+            (helper / "main.rs").write_text("fixture")
+            (helper.parent / "Cargo.toml").write_text("fixture")
+            (root / "Cargo.lock").write_text("fixture")
+            commands = root / "bin"
+            commands.mkdir()
+            log = root / "commands.log"
+            stubs = {
+                "pgrep": "exit 1",
+                "uname": 'if [ "$1" = -s ]; then echo Darwin; else echo arm64; fi',
+                "security": 'echo \'1) ABCDEF "Tempo Development"\'' if identity else 'echo "0 valid identities found"',
+                "cargo": 'echo cargo >> "$TEMPO_TEST_COMMANDS"',
+                "iconutil": 'echo iconutil >> "$TEMPO_TEST_COMMANDS"',
+                "codesign": 'echo "codesign $*" >> "$TEMPO_TEST_COMMANDS"',
+                "open": 'echo open >> "$TEMPO_TEST_COMMANDS"',
+            }
+            for name, body in stubs.items():
+                path = commands / name
+                path.write_text("#!/bin/sh\n" + body + "\n")
+                path.chmod(0o700)
+            env = dict(os.environ, PATH=str(commands) + ":" + os.environ["PATH"], TEMPO_TEST_COMMANDS=str(log))
+            env.pop("TEMPO_MAC_SIGN_IDENTITY", None)
+            result = subprocess.run(["bash", str(scripts / "dev.sh"), mode], env=env, capture_output=True, text=True)
+            return result, log.read_text().splitlines() if log.exists() else []
+
+    def test_missing_identity_stops_before_build_or_launch(self):
+        result, commands = self.run_dev(identity=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(commands, [])
+        self.assertIn("setup-dev-signing.sh", result.stderr)
+
+    def test_debug_bundle_is_signed_and_verified_before_launch(self):
+        result, commands = self.run_dev()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        sign = next(i for i, command in enumerate(commands) if "--identifier dev.tempo.mac dist/" in command)
+        verify = next(i for i, command in enumerate(commands) if "--verify --deep --strict" in command)
+        self.assertIn("--sign Tempo Development", commands[sign])
+        self.assertLess(sign, verify)
+        self.assertLess(verify, len(commands) - 1)
+        self.assertEqual(commands[-1], "open")
+
+    def test_build_only_does_not_open_an_app(self):
+        result, commands = self.run_dev(mode="--build-only")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse("open" in commands)
+
 
 if __name__ == "__main__":
     unittest.main()

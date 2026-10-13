@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type Project, type WorkspaceDetail } from "@tempo/protocol";
+import { DEFAULT_SETTINGS, type Environment, type Project, type WorkspaceDetail } from "@tempo/protocol";
 import { FolderGit2Icon, Trash2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { errorCode, errorDetail, errorText, toastError } from "~/ui/lib/toast";
 import { confirm, openDialog } from "~/ui/state/workspace-ui";
+import { findEnvironment, NONE, policyLabel } from "../environments-model";
 import { SubmitKbd } from "../parts";
 import {
   FIELDS,
@@ -26,6 +27,7 @@ import {
   type SettingsForm,
 } from "../settings-model";
 import { FieldRow } from "./ProjectFields";
+import { ProjectModels } from "./ProjectModels";
 import { useOpenWorkspaceDetail } from "./useOpenWorkspace";
 
 /**
@@ -46,6 +48,7 @@ export function ProjectTab({
 }) {
   const projects = useProjects();
   const open = useOpenWorkspaceDetail();
+  const envs = useCallQuery("listEnvironments", {});
 
   if (projects.isPending) return <SkeletonRows rows={8} />;
   if (projects.isError) return <ErrorState error={projects.error} onRetry={() => void projects.refetch()} />;
@@ -62,6 +65,7 @@ export function ProjectTab({
   const project =
     list.find((p) => p.id === projectId) ?? list.find((p) => p.id === open?.projectId) ?? list[0]!;
   const workspace = open?.projectId === project.id ? open : null;
+  const environment = findEnvironment(envs.data, project.environmentId);
 
   return (
     <div className="grid gap-5">
@@ -84,12 +88,21 @@ export function ProjectTab({
           </Select>
         </div>
       )}
+      <div hidden={section !== undefined && section !== "Environment"}>
+        <ProjectEnvironmentSelect
+          project={project}
+          environments={envs.data}
+          environment={environment}
+          loading={envs.isPending}
+        />
+      </div>
       <ProjectSettingsForm
         key={`${project.id}:${JSON.stringify(project.settings)}`}
         project={project}
         workspace={workspace}
         section={section}
         onSectionChange={onSectionChange}
+        environment={environment}
       />
       <div hidden={section !== undefined && section !== "Secrets"}>
         <ProjectSecrets key={project.id} projectId={project.id} />
@@ -106,16 +119,19 @@ function ProjectSettingsForm({
   workspace,
   section,
   onSectionChange,
+  environment,
 }: {
   project: Project;
   workspace: WorkspaceDetail | null;
   section?: string;
   onSectionChange?: (section: string) => void;
+  environment: Environment | null;
 }) {
   const [initial] = useState(() => formFromLayer(project.settings, workspace?.settings ?? DEFAULT_SETTINGS));
   const [form, setForm] = useState<SettingsForm>(initial);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [problem, setProblem] = useState<string | null>(null);
+  const [modelReset, setModelReset] = useState(0);
   const initialSig = useMemo(() => formSignature(initial), [initial]);
   const dirty = formSignature(form) !== initialSig;
 
@@ -179,7 +195,22 @@ function ProjectSettingsForm({
             {group}
           </legend>
           <div className="divide-y">
-            {FIELDS.filter((d) => d.section === group).map((def) => (
+            {group === "Agent" && (
+              <ProjectModels
+                key={`${initialSig}:${modelReset}`}
+                form={form}
+                initial={initial}
+                ctx={ctx}
+                disabled={save.isPending}
+                onChange={(changes) => {
+                  setForm((f) => ({ ...f, ...changes }));
+                  setErrors((current) =>
+                    Object.fromEntries(Object.entries(current).filter(([path]) => !(path in changes))),
+                  );
+                }}
+              />
+            )}
+            {FIELDS.filter((d) => d.section === group && group !== "Agent").map((def) => (
               <FieldRow
                 key={def.path}
                 def={def}
@@ -187,6 +218,7 @@ function ProjectSettingsForm({
                 onChange={(next) => change(def.path, next)}
                 ctx={ctx}
                 error={errors[def.path]}
+                locked={environment ? lockedValue(def.path, environment) : undefined}
               />
             ))}
           </div>
@@ -206,6 +238,7 @@ function ProjectSettingsForm({
             disabled={!dirty || save.isPending}
             onClick={() => {
               setForm(initial);
+              setModelReset((n) => n + 1);
               setErrors({});
               setProblem(null);
             }}
@@ -219,6 +252,69 @@ function ProjectSettingsForm({
         </div>
       </div>
     </form>
+  );
+}
+
+/** 04: egress policy and allowlist come from the project's environment while one is selected. */
+const lockedValue = (path: string, env: Environment): { by: string; text: string } | undefined => {
+  if (path === "environment.egress_policy") return { by: env.name, text: policyLabel(env.egressPolicy) };
+  if (path === "environment.egress_allowlist")
+    return { by: env.name, text: env.egressAllowlist.length > 0 ? env.egressAllowlist.join(", ") : "None" };
+  return undefined;
+};
+
+/** 04, Project → Environment: the Environment select, saved at once with setProjectEnvironment. */
+function ProjectEnvironmentSelect({
+  project,
+  environments,
+  environment,
+  loading,
+}: {
+  project: Project;
+  environments: ReadonlyArray<Environment> | undefined;
+  environment: Environment | null;
+  loading: boolean;
+}) {
+  const set = useCallMutation("setProjectEnvironment", {
+    invalidates: ["listProjects"],
+    onSuccess: (p) => {
+      const name = findEnvironment(environments, p.environmentId)?.name;
+      toast.success(name ? `${project.owner}/${project.name} uses ${name}` : "Environment removed");
+    },
+  });
+  return (
+    <div className="grid gap-1.5">
+      <label htmlFor="ps-environment" className="text-sm font-medium">
+        Environment
+      </label>
+      <Select
+        value={environment?.id ?? NONE}
+        disabled={loading || set.isPending}
+        onValueChange={(v) => set.mutate({ projectId: project.id, environmentId: v === NONE ? null : v })}
+      >
+        <SelectTrigger id="ps-environment" className="w-72 max-w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE}>None</SelectItem>
+          {environments?.map((e) => (
+            <SelectItem key={e.id} value={e.id}>
+              {e.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        Egress rules, secrets and injectors for this project's workspaces. Saved at once.{" "}
+        <button
+          type="button"
+          className="underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          onClick={() => openDialog({ kind: "settings", tab: "environments" })}
+        >
+          Manage environments
+        </button>
+      </p>
+    </div>
   );
 }
 

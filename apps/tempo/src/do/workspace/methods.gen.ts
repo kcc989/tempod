@@ -72,6 +72,18 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("getDiagnostics", input);
   }
 
+  setWorkspaceEnvironment(
+    input: MethodInput<"setWorkspaceEnvironment">,
+  ): Promise<Result<FnOutput<"setWorkspaceEnvironment">>> {
+    return this.rpc("setWorkspaceEnvironment", input);
+  }
+
+  resolveEnvironmentProposal(
+    input: MethodInput<"resolveEnvironmentProposal">,
+  ): Promise<Result<FnOutput<"resolveEnvironmentProposal">>> {
+    return this.rpc("resolveEnvironmentProposal", input);
+  }
+
   createSession(input: MethodInput<"createSession">): Promise<Result<FnOutput<"createSession">>> {
     return this.rpc("createSession", input);
   }

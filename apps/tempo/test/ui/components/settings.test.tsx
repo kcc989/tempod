@@ -5,7 +5,21 @@ import { SettingsPage } from "../../../src/ui/components/settings/SettingsPage";
 import { call } from "../../../src/ui/lib/api";
 import { dialogStore, openDialog, resetUiState, settingsStore } from "../../../src/ui/state/workspace-ui";
 
-vi.mock("~/ui/lib/api", () => ({ call: vi.fn(async () => ({ names: [] })) }));
+vi.mock("~/ui/lib/api", () => ({
+  call: vi.fn(async (name) =>
+    name === "getCredentialStatus"
+      ? {
+          claude: { set: false, updatedAt: null },
+          codex: { set: false, updatedAt: null, lastRefresh: null },
+          anthropic: { set: false, updatedAt: null },
+          openai: { set: false, updatedAt: null },
+          openrouter: { set: false, updatedAt: null },
+        }
+      : name === "listModels" || name === "listEnvironments"
+        ? []
+        : { names: [] },
+  ),
+}));
 vi.mock("~/ui/components/dialogs/settings/useOpenWorkspace", () => ({ useOpenWorkspaceDetail: () => null }));
 const projects = [
   { id: "p1", owner: "tempo", name: "first", settings: {}, sortOrder: 0 },
@@ -33,6 +47,26 @@ describe("settings page", () => {
     openDialog({ kind: "settings" });
     fireEvent.keyDown(screen.getByRole("main"), { code: "Escape" });
     expect(settingsStore.getSnapshot()).toBeNull();
+  });
+  it("lists Environments after Logins in Personal", () => {
+    openDialog({ kind: "settings" });
+    show();
+    const nav = screen.getByRole("navigation", { name: "Settings" });
+    const labels = within(nav)
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels.slice(0, 8)).toEqual([
+      "General",
+      "Logins",
+      "Agents",
+      "Environments",
+      "MCP servers",
+      "Appearance",
+      "Shortcuts",
+      "Devices",
+    ]);
+    fireEvent.click(within(nav).getByRole("button", { name: "Environments" }));
+    expect(screen.getByRole("heading", { name: "Environments" })).toBeTruthy();
   });
   it("filters navigation and focuses search with the find shortcut", () => {
     openDialog({ kind: "settings" });
@@ -63,6 +97,9 @@ describe("settings page", () => {
     ).toEqual([
       "General",
       "Logins",
+      "Agents",
+      "Environments",
+      "MCP servers",
       "Appearance",
       "Shortcuts",
       "Devices",
@@ -77,8 +114,9 @@ describe("settings page", () => {
       "tempo/second",
     ]);
     expect(screen.getByRole("heading", { name: "Agents" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Default model" })).toBeTruthy();
     for (const agent of ["Claude", "Codex", "OpenCode", "Pi"])
-      expect(screen.getByRole("group", { name: `${agent} default model` })).toBeTruthy();
+      expect(screen.queryByRole("group", { name: `${agent} default model` })).toBeNull();
     expect(screen.getByRole("group", { name: "Browser Run" })).toBeTruthy();
     fireEvent.click(within(nav).getByRole("button", { name: "Scripts" }));
     expect(screen.queryByRole("group", { name: "Browser Run" })).toBeNull();

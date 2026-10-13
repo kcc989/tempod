@@ -9,8 +9,11 @@ import {
   TurnUsage,
 } from "./acp.ts";
 import { AgentId, CheckpointReason, DiffScope, ItemKind, ItemStatus, LogLevel, ScriptKind } from "./enums.ts";
+import { McpServerSpec } from "./mcp.ts";
+import { AgentProfile, ProfileIssue } from "./agents.ts";
 import { ChangedFile } from "./types.ts";
 import { Settings, SettingsLayer, SettingsReadResult } from "./settings.ts";
+import { EnvironmentProposal, EnvironmentSummary } from "./environments.ts";
 
 /** tempod protocol (02): envelopes, requests and events between WorkspaceDO and tempod. */
 
@@ -158,6 +161,7 @@ export const TempodEvent = Schema.Union([
   ev("outbox.overflow", { dropped: Schema.Number }),
   ev("tempod.stopping", { reason: Schema.String }),
   ev("log", { level: LogLevel, msg: Schema.String, data: Schema.optional(Schema.Unknown) }),
+  ev("environment.proposed", { proposal: EnvironmentProposal }),
 ]);
 export type TempodEvent = typeof TempodEvent.Type;
 export type TempodEventOf<K extends TempodEvent["kind"]> = Extract<TempodEvent, { kind: K }>;
@@ -212,6 +216,8 @@ export const SessionStartResult = Schema.Struct({
   configOptions: Schema.Array(ConfigOption),
   availableCommands: Schema.Array(AvailableCommand),
   capabilities: Capabilities,
+  /** Fields of the profile tempod could not apply; absent from an older tempod means none. */
+  profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
   reloaded: Schema.Boolean,
   handoff: Schema.Boolean,
 });
@@ -240,6 +246,7 @@ export const TEMPOD_REQUESTS = {
   ),
   "settings.read": req(Schema.Struct({ overrides: SettingsLayer }), SettingsReadResult, 10_000),
   "env.set": req(Schema.Struct({ env: Env }), Empty, 10_000),
+  "environment.set": req(Schema.Struct({ summary: EnvironmentSummary }), Empty, 10_000),
   "script.start": req(
     Schema.Struct({
       runId: Schema.String,
@@ -261,7 +268,9 @@ export const TEMPOD_REQUESTS = {
       modeId: Schema.optional(Schema.NullOr(Schema.String)),
       model: Schema.optional(Schema.NullOr(Schema.String)),
       browser: BrowserMode,
+      profile: Schema.optional(AgentProfile),
       acpSessionId: Schema.optional(Schema.NullOr(Schema.String)),
+      mcpServers: Schema.optional(Schema.Array(McpServerSpec)),
     }),
     SessionStartResult,
     120_000,
@@ -400,3 +409,12 @@ export const BROWSER_RUN_HOST = "browser.tempo.internal";
 export const BROWSER_RUN_CDP_ENDPOINT = `wss://${BROWSER_RUN_HOST}/`;
 
 export const PLACEHOLDER = "tempo-placeholder";
+
+/** The MCP server tempod serves to every agent (01, Environments). */
+export const TEMPO_MCP_SERVER = {
+  name: "tempo",
+  command: "/usr/local/bin/tempod",
+  args: ["mcp"],
+  env: [],
+} as const;
+export const TEMPO_MCP_SOCKET = "/home/tempo/.tempod/mcp.sock";

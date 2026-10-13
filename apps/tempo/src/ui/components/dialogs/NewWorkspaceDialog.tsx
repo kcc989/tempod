@@ -23,11 +23,19 @@ import {
 } from "~/ui/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Label } from "~/ui/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "~/ui/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
 import { Textarea } from "~/ui/components/ui/textarea";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
+import { useCustomAgents } from "~/ui/hooks/useCustomAgents";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
@@ -37,7 +45,10 @@ import { getHubStore } from "~/ui/stores/hub-store";
 import { closeDialog, openDialog, setPhonePane, type DialogOf } from "~/ui/state/workspace-ui";
 import { BranchPicker } from "./BranchPicker";
 import {
+  customAgentOf,
   agentsWithLogin,
+  customAgentValue,
+  customAgentsWithLogin,
   createInput,
   emptySource,
   filterPullRequests,
@@ -103,6 +114,7 @@ function NewWorkspaceForm({
   const [source, setSource] = useState<SourceDraft>(emptySource);
   const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
   const [pickedModel, setPickedModel] = useState<string | null>(null);
+  const customAgents = useCustomAgents();
   const [prompt, setPrompt] = useState(args.prompt ?? "");
   const [keepOpen, setKeepOpen] = useState(false);
   const [tried, setTried] = useState(false);
@@ -112,8 +124,11 @@ function NewWorkspaceForm({
   const choices = modelChoices(available, models.data ?? []);
   const selected =
     choices.find((choice) => choice.key === pickedModel) ?? initialModel(choices, models.data ?? [], project);
-  const input =
-    models.isSuccess && selected
+  const custom = customAgentsWithLogin(customAgents.data, available);
+  const pickedCustom = customAgentOf(pickedModel, custom);
+  const input = pickedCustom
+    ? createInput(project, source, pickedCustom.baseAgent, prompt, undefined, pickedCustom.id)
+    : models.isSuccess && selected
       ? createInput(project, source, selected.agent, prompt, selected.model)
       : null;
 
@@ -269,7 +284,11 @@ function NewWorkspaceForm({
         />
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4">
           <div className="min-w-0 flex-1">
-            <Select value={selected?.key ?? ""} onValueChange={setPickedModel} disabled={!choices.length}>
+            <Select
+              value={pickedCustom ? customAgentValue(pickedCustom.id) : (selected?.key ?? "")}
+              onValueChange={setPickedModel}
+              disabled={!choices.length && !custom.length}
+            >
               <SelectTrigger
                 id="nw-model"
                 aria-label="Model"
@@ -285,6 +304,12 @@ function NewWorkspaceForm({
                 {choices.map((choice) => (
                   <SelectItem key={choice.key} value={choice.key}>
                     {choice.name} <span className="text-muted-foreground">· {agentLabel(choice.agent)}</span>
+                  </SelectItem>
+                ))}
+                {custom.length > 0 && <SelectSeparator />}
+                {custom.map((a) => (
+                  <SelectItem key={a.id} value={customAgentValue(a.id)}>
+                    {a.name} <span className="text-muted-foreground">· {agentLabel(a.baseAgent)}</span>
                   </SelectItem>
                 ))}
               </SelectContent>

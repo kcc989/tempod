@@ -10,6 +10,7 @@ import {
   SlashIcon,
   SlidersHorizontalIcon,
   XIcon,
+  InfoIcon,
 } from "lucide-react";
 import { useState, type ReactNode, type Ref } from "react";
 import { Button } from "~/ui/components/ui/button";
@@ -59,6 +60,19 @@ export function LoginBanner({ text }: { text: string }) {
       <span className="min-w-0 flex-1">{text}</span>
       <Button size="sm" variant="outline" onClick={() => openDialog({ kind: "settings", tab: "logins" })}>
         Add login
+      </Button>
+    </div>
+  );
+}
+
+/** Fields of a custom agent the base agent did not apply; dismissed per session until reload. */
+export function ProfileIssuesNotice({ text, onDismiss }: { text: string; onDismiss: () => void }) {
+  return (
+    <div role="status" className="flex items-center gap-2 border-t bg-muted px-3 py-1.5 text-sm">
+      <InfoIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">{text}</span>
+      <Button size="icon-sm" variant="ghost" aria-label="Dismiss" onClick={onDismiss}>
+        <XIcon />
       </Button>
     </div>
   );
@@ -298,7 +312,7 @@ function SelectOptionItems({ option, onPick }: { option: ConfigOption; onPick: (
 }
 
 const pickerTrigger =
-  "inline-flex h-6 max-w-44 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-7 max-w-36 items-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
 
 /** Model picker (⌘/) from the agent's `model` config option; set with setSessionConfig. */
 export function ModelPicker({
@@ -319,7 +333,7 @@ export function ModelPicker({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
-        className={pickerTrigger}
+        className={cn(pickerTrigger, "text-foreground")}
         disabled={disabled}
         aria-label={`Model: ${currentValueLabel(option)}`}
       >
@@ -339,6 +353,44 @@ export function ModelPicker({
           {option.name || "Model"}
           <ShortcutKbd action="modelPicker" />
         </DropdownMenuLabel>
+        <SelectOptionItems option={option} onPick={onPick} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Reasoning level picker from the agent's `thought_level` config option; hidden when there is none. */
+export function LevelPicker({
+  option,
+  disabled,
+  onPick,
+  onClosed,
+}: {
+  option: ConfigOption;
+  disabled: boolean;
+  onPick: (value: string) => void;
+  onClosed: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={pickerTrigger}
+        disabled={disabled}
+        aria-label={`Reasoning level: ${currentValueLabel(option)}`}
+      >
+        <span className="truncate">{currentValueLabel(option)}</span>
+        <ChevronDownIcon className="size-3 shrink-0" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        className="max-h-80 min-w-40"
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          onClosed();
+        }}
+      >
+        <DropdownMenuLabel>{option.name || "Reasoning level"}</DropdownMenuLabel>
         <SelectOptionItems option={option} onPick={onPick} />
       </DropdownMenuContent>
     </DropdownMenu>

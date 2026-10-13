@@ -45,6 +45,7 @@ export const workspace = sqliteTable("workspace", {
   imageRef: text("image_ref"),
   summaryRev: integer("summary_rev").notNull(),
   itemsRev: integer("items_rev").notNull(),
+  environmentId: text("environment_id"),
 });
 
 export const ops = sqliteTable("ops", {
@@ -78,6 +79,11 @@ export const sessions = sqliteTable("sessions", {
   handoffPending: integer("handoff_pending").notNull(),
   pendingNote: text("pending_note"),
   generalPromptSent: integer("general_prompt_sent").notNull(),
+  customAgentId: text("custom_agent_id"),
+  customAgentName: text("custom_agent_name"),
+  customAgentCommit: text("custom_agent_commit"),
+  profileJson: text("profile_json"),
+  profileIssuesJson: text("profile_issues_json").notNull().default("[]"),
   sortOrder: integer("sort_order").notNull(),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
@@ -233,7 +239,15 @@ export const fileCache = sqliteTable("file_cache", {
   updatedAt: integer("updated_at").notNull().default(0),
 });
 
+export const environmentProposals = sqliteTable("environment_proposals", {
+  id: text("id").primaryKey(),
+  createdAt: integer("created_at").notNull(),
+  status: text("status", { enum: ["pending", "applied", "dismissed"] }).notNull(),
+  proposalJson: text("proposal_json").notNull(),
+});
+
 export const workspaceSchema = {
+  environmentProposals,
   fileCache,
   workspace,
   ops,
