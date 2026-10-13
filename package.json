@@ -15,7 +15,7 @@
     "lint": "oxlint --deny-warnings .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "test": "turbo run test && bun test scripts/*.test.ts",
+    "test": "turbo run test --filter=!@tempo/e2e --filter=!@tempo/conformance && bun test scripts/*.test.ts",
     "test:conformance": "bun run --cwd tests/conformance test",
     "test:e2e": "bun run --cwd tests/e2e test",
     "check:versions": "bun container/check-versions.ts",
@@ -27,7 +27,8 @@
     "mac:test": "cargo test --workspace",
     "mac:release": "bash scripts/mac/release.sh",
     "test:tempod:container": "bun scripts/test-tempod-container.ts",
-    "test:web": "bun run --cwd tests/e2e test:web"
+    "test:web": "bun run --cwd tests/e2e test:web",
+    "ci": "bun scripts/ci.ts"
   },
   "devDependencies": {
     "@effect/platform-bun": "4.0.3",

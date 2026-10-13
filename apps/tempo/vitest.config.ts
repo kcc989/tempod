@@ -22,6 +22,9 @@ export default defineConfig({
   ],
   resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
+    expect: { requireAssertions: true },
+    maxWorkers: 2,
+    silent: "passed-only",
     include: ["test/worker/**/*.test.ts"],
     setupFiles: ["./test/worker/setup.ts"],
   },

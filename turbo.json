@@ -11,7 +11,8 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": ["TEMPO_IMAGE_TEST"]
     },
     "dev": {
       "cache": false,
@@ -20,6 +21,14 @@
     "@tempo/tempod#build": {
       "env": ["TEMPO_BUILD_ID"],
       "outputs": ["$TURBO_ROOT$/dist/tempod"]
+    },
+    "@tempo/e2e#test": {
+      "cache": false
+    },
+    "@tempo/conformance#test": {
+      "cache": false
     }
-  }
+  },
+  "globalDependencies": ["tsconfig*.json", "bunfig.toml", "patches/**"],
+  "globalPassThroughEnv": ["XDG_CONFIG_HOME", "XDG_CACHE_HOME", "WRANGLER_SEND_METRICS"]
 }

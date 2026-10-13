@@ -4,43 +4,47 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
+      - name: Start total CI budget
+        run: echo "CI_STARTED_AT=$(date +%s%3N)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
-      - run: bun install --frozen-lockfile
-      - name: Container versions agree (01, Container image)
-        run: bun run check:versions
-      - run: bun run typecheck
-      - run: bun run lint
-      - run: bun run format:check
-      - run: bun run test
-      - name: Build tempod
-        run: bun run build:tempod
-      - name: Build the app
-        run: bun run --cwd apps/tempo build
-
-  web:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - name: Restore dependency and task caches
+        uses: actions/cache@v4
         with:
-          bun-version: 1.4.2
+          path: |
+            ~/.bun/install/cache
+            .turbo/cache
+          key: ci-v1-${{ runner.os }}-bun-1.4.2-${{ hashFiles('bun.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ci-v1-${{ runner.os }}-bun-1.4.2-${{ hashFiles('bun.lock') }}-
       - run: bun install --frozen-lockfile
-      - name: Install browser engines
-        run: ./tests/e2e/node_modules/.bin/playwright install --with-deps chromium
-      - name: Web client acceptance with local protocol fixtures
-        run: bun run test:web
-      - name: Existing workspace browser regressions
-        run: bun run --cwd tests/e2e test:browser
+      - name: Restore Chromium
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('tests/e2e/package.json') }}
+      - name: Install browser engine
+        if: steps.chromium.outputs.cache-hit != 'true'
+        run: ./tests/e2e/node_modules/.bin/playwright install chromium
+      - name: Checks within the total runtime budget
+        run: bun run ci
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

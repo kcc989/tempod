@@ -87,6 +87,11 @@ const driveUntil = async (
   for (;;) {
     if (await check()) return;
     if (Date.now() > deadline) throw new Error(`timed out driving to ${label}`);
+    // RPC assertions need op outcomes, not production retry delays.
+    await exec(
+      stub,
+      "UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'",
+    );
     await runDurableObjectAlarm(stub);
     await sleep(25);
   }
@@ -105,6 +110,11 @@ const whileDriving = async (stub: Stub, rpc: PromiseLike<unknown>): Promise<Res>
   );
   const deadline = Date.now() + 20_000;
   while (!settled && Date.now() < deadline) {
+    // RPC assertions need op outcomes, not production retry delays.
+    await exec(
+      stub,
+      "UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'",
+    );
     await runDurableObjectAlarm(stub);
     await sleep(25);
   }

@@ -178,6 +178,14 @@ The Tempo Spec (tabs 00 to 06) is the source of truth. Read the tab for the area
 16. If behavior must change, change the spec in the same pull request, and say so in its description.
 ```
 
+## PR CI budget
+
+All local PR checks, builds and browser regressions share one five-minute total
+runner budget. `bun run ci` measures each stage and enforces 270 seconds including
+setup, reserving 30 seconds for cleanup. See `docs/CI.md` for the test audit, suite
+boundaries and rules. Hosted acceptance and installed-agent conformance remain
+explicit gates; skipped tests do not satisfy them.
+
 ## Definition of done
 
 A change is done only when every box below is true.

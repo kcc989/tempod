@@ -7,6 +7,7 @@ export default defineConfig({
     alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   test: {
+    expect: { requireAssertions: true },
     environment: "node",
     include: ["test/ui/**/*.test.ts"],
   },

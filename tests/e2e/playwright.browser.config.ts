@@ -4,7 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./browser-tests",
   retries: 0,
-  workers: 1,
+  fullyParallel: true,
+  workers: 2,
   timeout: 30_000,
   expect: { timeout: 10_000 },
   reporter: "list",
@@ -16,7 +17,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command:
-      "bun run --cwd ../../apps/tempo vite --config test/browser/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort",
+      "bun run --cwd ../../apps/tempo vite build --config test/browser/vite.config.ts && bun run --cwd ../../apps/tempo vite preview --config test/browser/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false,
   },

@@ -12,16 +12,23 @@ export default defineConfig({
   projects: [
     {
       name: "desktop-chromium",
+      grepInvert: /phone navigation/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
       name: "desktop-dark",
+      grep: /theme follows the selected appearance/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, colorScheme: "dark" },
     },
-    { name: "phone-chromium", use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" } },
+    {
+      name: "phone-chromium",
+      grepInvert: /desktop review|desktop shortcuts/,
+      use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
+    },
   ],
   webServer: {
-    command: "bun run --cwd ../../apps/tempo dev:web-test",
+    command:
+      "bun run --cwd ../../apps/tempo vite build --config vite.web-test.config.ts && bun run --cwd ../../apps/tempo vite preview --config vite.web-test.config.ts --host 127.0.0.1 --port 4179 --strictPort",
     url: "http://127.0.0.1:4179",
     reuseExistingServer: false,
   },
