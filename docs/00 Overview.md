@@ -14,7 +14,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | D2 | Agent protocol | ACP (Agent Client Protocol) over stdio, bridged by an in-container daemon, `tempod` | One protocol for all four agents. SAM uses the same approach. |
 | D3 | Source of truth | The transcript lives in WorkspaceDO SQLite. The container is disposable. | Work must survive the death of its container |
 | D4 | Resume | Three layers: a git checkpoint at each turn end, a container snapshot on sleep, and the agent's own session files backed up to R2 | Each layer has a fallback: no snapshot means clone plus setup script; no session files means a new session with a transcript handoff |
-| D5 | Repos | GitHub App. One branch per workspace, named `tempo/<workspace-slug>` | Conductor model; works on existing repos |
+| D5 | Repos | GitHub App. One branch per workspace: animal default, then first-prompt name (03) | Conductor model; works on existing repos |
 | D6 | Browser testing | Chromium and Playwright inside the Sandbox image. Browser Run Live View is optional. | Tests reach `localhost` with no public exposure |
 | D7 | Stack | The standard stack: TanStack Start, shadcn/ui, Effect v4, Alchemy v2, Drizzle, D1, R2, Better Auth, Bun. Custom agents add Cloudflare Artifacts and `isomorphic-git` (01, Custom agents) | Your standard stack for new products |
 | D8 | SAM code | Do not copy any SAM code. Use SAM as a design reference only. | SAM is AGPL-3.0 |
@@ -149,7 +149,7 @@ Tempo is one Worker deployment, three Durable Object classes, one egress handler
 | Tempo for Mac | Rust app on GPUI Kit (07) | 0 or more per owner | Window layout, drafts, its Keychain token | Tempo Worker (`/api/v1`, WebSockets) |
 | Image `workspace` | Container image (Debian trixie, Node 24) | 1 image, many containers | Agents, Chromium, Playwright, dev tools | — |
 | D1 database `tempo` | SQLite (D1) | 1 | Users, GitHub installations, projects, workspace summaries | — |
-| R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs, artifacts | — |
+| R2 bucket `tempo-data` | Object storage | 1 | Checkpoint bundles, home backups, attachments, script logs, artifacts, project conversation artifacts | — |
 | Artifacts namespace `tempo-agents` | Git-compatible storage | 1 repo per user | Custom agent definitions, one file per agent, one commit per save | — |
 
 ## Where state lives
@@ -164,7 +164,7 @@ The WorkspaceDO is the source of truth for a workspace. D1 holds only what lists
 | Workspace summary: name, branch, state, attention, PR | D1 `workspaces`, written only by its WorkspaceDO after createWorkspace inserts it | Deleted |
 | Workspace state, sessions, turns, transcript items, events, checkpoint index, review comments, script runs | WorkspaceDO SQLite | Workspace deleted |
 | Secrets | CredentialDO SQLite, AES-256-GCM | Deleted |
-| Checkpoint bundles, home backups, attachments, script logs, artifacts | R2 bucket `tempo-data` | Retention rules in 02 |
+| Checkpoint bundles, home backups, attachments, script logs, artifacts, project conversation artifacts | R2 bucket `tempo-data` | Retention rules in 02 |
 | Container snapshot | Cloudflare Containers snapshot | 30 days after creation or last restore |
 | Live UI connections | UserHubDO and WorkspaceDO memory | Connection closes |
 
@@ -172,7 +172,7 @@ The WorkspaceDO is the source of truth for a workspace. D1 holds only what lists
 
 Every flow runs as idempotent steps in the WorkspaceDO step runner. Steps, timeouts and failure handling are in 03 Lifecycles.
 
-1. **Create a workspace.** Pick a repo and base branch, type a prompt. The WorkspaceDO starts a container, clones the repo, creates `tempo/<slug>`, runs the setup script, starts the agent session and sends the prompt.
+1. **Create a workspace.** Pick a repo and base branch, type a prompt. The WorkspaceDO starts a container, clones the repo, creates the first-prompt branch (03), runs the setup script, starts the agent session and sends the prompt.
 2. **Send a prompt.** The UI calls a server function. The WorkspaceDO queues a turn, sends it to `tempod`, and streams items back to every open UI tab.
 3. **End a turn.** The WorkspaceDO asks `tempod` for a checkpoint and uploads it to R2, backs up the home folder, and asks for the changed files. The workspace shows unread if nobody is watching.
 4. **Sleep.** After 15 idle minutes, the WorkspaceDO writes a final checkpoint, snapshots the container and destroys it.
@@ -198,7 +198,7 @@ All four agents speak ACP v1 to `tempod`. Claude Code and Codex use your subscri
 Each workspace is one branch of one GitHub repo, and the container never holds a GitHub token. Flows are in 03 Lifecycles.
 
 - Repos come from a GitHub App that the owner creates and installs on their account or org.
-- A new workspace gets branch `tempo/<slug>`, created from `origin/<base_branch>` after a fetch. A workspace MAY instead check out an existing branch or a PR's head branch.
+- A new workspace defaults to branch `tempo/<animal-slug>`, renamed from its first prompt unless manually overridden (03), created from `origin/<base_branch>` after a fetch. A workspace MAY instead check out an existing branch or a PR's head branch.
 - One branch belongs to at most one non-archived workspace.
 - At the end of each turn, `tempod` commits the full working tree to a hidden ref (`refs/tempo/checkpoints/<checkpointId>`) without touching the branch or the index, and uploads a git bundle of it to R2.
 - `TempoOutbound` adds a repo-scoped installation token to every HTTPS request for `github.com` and `api.github.com`.
@@ -231,7 +231,7 @@ An agent can show you a file it made: a plan, a screenshot, a diagram, a PDF rep
 
 The UI copies Conductor's three-pane layout in the browser. Full spec is in 04 UI.
 
-- **Left sidebar:** projects, each with its workspaces. Each row shows the branch, the city name, a status icon and the PR number.
+- **Left sidebar:** projects, each with its workspaces. Each row shows the branch, the animal name, a status icon and the PR number.
 - **Center:** tabs for chats (one per session), files, the diff, previews and artifacts. The composer sits at the bottom of a chat tab.
 - **Right panel, top:** Changes, All files, Checks and Artifacts.
 - **Right panel, bottom:** Setup, Run and Terminal tabs.

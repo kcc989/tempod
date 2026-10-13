@@ -262,6 +262,38 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "listProjectConversations": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProjectConversationsIn.json"
+        },
+        "output": {
+          "$ref": "ListProjectConversationsOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getProjectConversation": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetProjectConversationIn.json"
+        },
+        "output": {
+          "$ref": "ConversationArtifact.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "createWorkspace": {
       "type": "object",
       "properties": {
@@ -1480,6 +1512,8 @@
     "deleteEnvironment",
     "setEnvironmentSecret",
     "deleteEnvironmentSecret",
+    "listProjectConversations",
+    "getProjectConversation",
     "createWorkspace",
     "listModels",
     "listWorkspaces",

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ListProjectConversationsIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["projectId"],
+  "additionalProperties": true
+}

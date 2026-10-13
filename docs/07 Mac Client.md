@@ -31,6 +31,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Web UI area (04) | Mac app | Notes |
 | --- | --- | --- |
 | Sidebar, hover card, right-click menu, History | Same |  |
+| Saved conversations | Default browser | Opens the owner’s Tempo `/history` to read project-scoped saved conversations; browser sign-in may be required |
 | New workspace dialog | Same | Prompt-focused composer, new branch by default, workspace options in a secondary menu, models from `listModels`; creating automatically makes the first chat. First prompt is text only. |
 | Chat tabs, transcript, composer, queue, Stop | Same |  |
 | Send now (live steering) | Same | Show only for a running chat whose adapter advertises steering. Enter still queues. |
@@ -41,6 +42,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
 | Checks | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
+| Workspace startup status | Same | Compact spinner and current op step; fall back to the workspace status before a step is available. No step list, timings or queue explanation. |
 | Previews | Different | Open in the default browser; no Browser tab |
 | Artifact cards, Artifacts tab, Artifact tab | Different | Images, Markdown and text show in the app. HTML and PDF artifacts open in the default browser through `openArtifact`. Mermaid blocks show as code (Artifacts, below). |
 | Image and Markdown file tabs, image diffs, plan proposals | Same | Mermaid blocks show as code |
@@ -218,6 +220,8 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 - **Large files:** above 20,000 diff lines in one file, show `This diff is too large to show.` and an **Open file** button.
 
 ## Terminal, scripts and previews
+
+**Guided PRs.** `Create or update guide` in the workspace sends the same shared authoring prompt as the web UI through the active chat's normal `sendPrompt` flow. It is disabled without a chat or when archived; the composer’s read-only and sending checks also apply. `Open guide` opens `<Tempo origin>/w/<workspaceId>?guide=true` in the default browser. The chapter, diff and interactive artifact renderer is the authenticated web Guide view (04); the native client does not execute artifact HTML. This follows C7's browser policy and ships in the same phase as the web feature.
 
 **Terminal**
 
@@ -422,3 +426,6 @@ Pages read on 2026-10-11.
 - [Effect v4: Schema to JSON Schema](https://effect.website/docs/v4/schema/json-schema)
 - [RFC 8628: OAuth 2.0 Device Authorization Grant](https://www.rfc-editor.org/rfc/rfc8628)
 - [Apple: Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+
+## Branch naming
+New workspaces use animal slugs and receive a branch name from the first accepted prompt as in 03. The workspace header offers Rename branch with Save branch and Cancel. It calls `renameBranch` and preserves server error messages; enable it only for ready, working or sleeping workspaces with an unpushed branch. A manual save overrides automatic naming.

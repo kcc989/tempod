@@ -357,6 +357,7 @@ fn navigation(cx: &App) -> impl IntoElement {
 
 fn footer(cx: &App) -> impl IntoElement {
     h_flex()
+        .flex_wrap()
         .flex_none()
         .w_full()
         .px_2()
@@ -371,6 +372,19 @@ fn footer(cx: &App) -> impl IntoElement {
                 .label("History")
                 .on_click(|_, window, cx| {
                     window.dispatch_action(Box::new(crate::actions::ShowHistory), cx)
+                }),
+        )
+        .child(
+            Button::new("saved-conversations")
+                .ghost()
+                .small()
+                .label("Saved conversations")
+                .on_click(|_, _, cx| {
+                    if let Some(state) = crate::app::AppState::try_global(cx)
+                        && let Some(origin) = state.read(cx).server_url.clone()
+                    {
+                        cx.open_url(&format!("{}/history", origin.trim_end_matches('/')));
+                    }
                 }),
         )
         .child(

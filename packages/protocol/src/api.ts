@@ -15,6 +15,8 @@ import { EnvName } from "./settings.ts";
 import {
   AgentModelOptions,
   ChangedFile,
+  ConversationArtifact,
+  ConversationSummary,
   CheckRun,
   CheckpointInfo,
   CredentialStatus,
@@ -120,6 +122,13 @@ export const API = {
   deleteEnvironment: fn("POST", Schema.Struct({ environmentId: S }), Empty),
   setEnvironmentSecret: fn("POST", Schema.Struct({ environmentId: S, name: EnvName, value: S }), Empty),
   deleteEnvironmentSecret: fn("POST", Schema.Struct({ environmentId: S, name: S }), Empty),
+
+  listProjectConversations: fn(
+    "GET",
+    Schema.Struct({ projectId: S, cursor: opt(S) }),
+    Schema.Struct({ conversations: Schema.Array(ConversationSummary), cursor: Schema.NullOr(S) }),
+  ),
+  getProjectConversation: fn("GET", Schema.Struct({ projectId: S, conversationId: S }), ConversationArtifact),
 
   // Workspaces
   createWorkspace: fn(

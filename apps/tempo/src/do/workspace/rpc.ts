@@ -1,3 +1,4 @@
+import { promptSlug } from "@tempo/cities";
 import { and, asc, desc, eq, gte, inArray, lt, ne, sql, type SQL } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
@@ -40,6 +41,7 @@ import { github } from "../../github/provider.ts";
 import { errorText, log } from "../../log.ts";
 import { containerRunning, requireTempod } from "./container.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
+import { saveConversation } from "./conversations.ts";
 import { sendEnv } from "./events.ts";
 import { defaultPrBody, getGithubToken, refreshPullRequest, requirePushed } from "./git.ts";
 import {
@@ -159,6 +161,81 @@ const branchInUse = async (core: WorkspaceCore, branch: string): Promise<boolean
   return hit.some((w) => w.archivedAt === null);
 };
 
+const namingLocks = new WeakMap<WorkspaceCore, Promise<void>>();
+
+const withBranchNaming = async <T>(core: WorkspaceCore, action: () => Promise<T>): Promise<T> => {
+  const previous = namingLocks.get(core) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  namingLocks.set(core, current);
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release();
+  }
+};
+
+export const rememberFirstPrompt = (core: WorkspaceCore, text: string): void => {
+  if (core.kv<boolean>("firstPromptSeen")) return;
+  core.setKv("firstPromptSeen", true);
+  if (core.kv<boolean>("branchManuallyNamed") || core.ws().pushed === 1) return;
+  if (parseJson<{ kind: string }>(core.ws().sourceJson, { kind: "branch" }).kind !== "new") return;
+  const slug = promptSlug(text);
+  if (slug) core.setKv("promptBranch", `${core.settings().git.branch_prefix}${slug}`);
+};
+
+export const applyPromptBranch = async (
+  core: WorkspaceCore,
+  resendHello: () => Promise<void>,
+): Promise<void> => {
+  return withBranchNaming(core, async () => {
+    const base = core.kv<string>("promptBranch");
+    if (!base || core.kv<boolean>("branchManuallyNamed") || core.ws().pushed === 1) return;
+    if (!isValidBranch(base)) {
+      core.setKv("promptBranch", undefined);
+      return;
+    }
+    const row = core.ws();
+    const rev = row.summaryRev + 1;
+    let next = base;
+    for (let n = 2; ; n++) {
+      if (core.kv<boolean>("branchManuallyNamed")) return;
+      if (await branchInUse(core, next)) {
+        next = `${base}-${n}`;
+        continue;
+      }
+      try {
+        // Reserve atomically: the asynchronous summary publication cannot settle name collisions.
+        await drizzleD1(core.env.DB)
+          .update(workspaces)
+          .set({ branch: next, summaryRev: rev })
+          .where(eq(workspaces.id, row.workspaceId))
+          .run();
+        break;
+      } catch (error) {
+        const detail = String((error as { cause?: unknown } | null)?.cause ?? error);
+        if (!detail.includes("UNIQUE") || !detail.includes("workspaces.branch")) throw error;
+        next = `${base}-${n}`;
+      }
+    }
+    core.updateWs({ summaryRev: rev });
+    try {
+      if (core.tempod?.open && containerRunning(core) && next !== row.branch)
+        await core.tempod.request("git.renameBranch", { from: row.branch, to: next });
+    } catch (error) {
+      core.publish();
+      throw error;
+    }
+    core.updateWs({ branch: next });
+    core.publish();
+    await resendHello();
+    core.setKv("promptBranch", undefined);
+  });
+};
+
 export const makeMethods = (rt: RpcRuntime): Methods => {
   const { core, runner } = rt;
 
@@ -177,21 +254,28 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       return {};
     },
 
-    renameBranch: async ({ branch }) => {
-      const row = core.ws();
-      const next = branch.trim();
-      if (!isValidBranch(next)) throw new TempoError("BRANCH_INVALID");
-      if (row.pushed === 1) throw new TempoError("BRANCH_ALREADY_PUSHED");
-      if (next === row.branch) return {};
-      if (await branchInUse(core, next)) throw new TempoError("BRANCH_IN_USE");
-      if (core.tempod?.open && containerRunning(core)) {
-        await core.tempod.request("git.renameBranch", { from: row.branch, to: next });
-      }
-      core.updateWs({ branch: next });
-      core.publish();
-      await rt.resendHello();
-      return {};
-    },
+    renameBranch: async ({ branch }) =>
+      withBranchNaming(core, async () => {
+        const row = core.ws();
+        const next = branch.trim();
+        if (!isValidBranch(next)) throw new TempoError("BRANCH_INVALID");
+        if (row.pushed === 1) throw new TempoError("BRANCH_ALREADY_PUSHED");
+        if (next === row.branch) {
+          core.setKv("branchManuallyNamed", true);
+          core.setKv("promptBranch", undefined);
+          return {};
+        }
+        if (await branchInUse(core, next)) throw new TempoError("BRANCH_IN_USE");
+        if (core.tempod?.open && containerRunning(core)) {
+          await core.tempod.request("git.renameBranch", { from: row.branch, to: next });
+        }
+        core.setKv("branchManuallyNamed", true);
+        core.setKv("promptBranch", undefined);
+        core.updateWs({ branch: next });
+        core.publish();
+        await rt.resendHello();
+        return {};
+      }),
 
     setWorkspaceEnvironment: async ({ environmentId }) => {
       if (environmentId !== null) {
@@ -276,6 +360,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     deleteWorkspace: async () => {
       const row = core.ws();
       if (row.state !== "archived") throw new TempoError("WORKSPACE_NOT_ARCHIVED");
+      await saveConversation(core, true);
       for (const prefix of ["checkpoints", "homes", "attachments", "logs", "artifacts"]) {
         let cursor: string | undefined;
         do {
@@ -492,6 +577,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         : [];
       if (atts.length !== new Set(attachmentIds).size)
         throw new TempoError("VALIDATION_FAILED", undefined, "unknown attachment");
+      const firstPrompt = !core.db.select({ id: turns.id }).from(turns).get();
       const drafts = reviewCommentIds.length
         ? core.db
             .select({ id: reviewComments.id })
@@ -543,6 +629,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             .where(inArray(attachments.id, [...attachmentIds]))
             .run();
       });
+      if (firstPrompt) rememberFirstPrompt(core, text);
       const turn = core.turnToWire(core.turnRow(turnId));
       core.broadcast({ type: "turn", turn });
       core.insertItem({
