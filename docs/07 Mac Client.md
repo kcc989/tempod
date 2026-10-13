@@ -19,7 +19,7 @@ The Mac app is a client of the cloud Tempo only. It does not run workspaces on t
 | C7 | Previews | Open in the default browser. No in-app Browser tab in this version. | GPUI Kit's WebView (`gpui-wry`) is experimental and draws over popovers, dialogs and menus |
 | C8 | Terminal | `crates/tempo-terminal`: a fork of `gpui-terminal` 0.1.0 (MIT or Apache-2.0) on `alacritty_terminal` 0.25.1, ported to GPUI Kit's GPUI | GPUI Kit has no terminal; `gpui-terminal` targets a different GPUI release |
 | C9 | Platform | macOS 15 or later, Apple silicon (arm64) only | GPUI Kit needs macOS 15; one architecture halves the test matrix |
-| C10 | Shortcuts | Conductor's ⌘ bindings: the Conductor column of the shortcut table in 04 | No browser reserves keys in a native app |
+| C10 | Shortcuts | ⌘ bindings: the Mac column of the shortcut table in 04 | No browser reserves keys in a native app |
 | C11 | Distribution | Signed with the owner's Developer ID, notarized, and served as a DMG by the owner's own Tempo (R2). The app checks for updates; the owner installs them. | Self-hosted end to end; no third-party update service |
 
 **License rule.** GPUI, GPUI Kit, `gpui-terminal` and `alacritty_terminal` are Apache-2.0 or MIT. Zed's editor crates (for example `terminal_view` and `editor`) are GPL-3.0. MUST NOT copy code from them.
@@ -204,7 +204,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 - **Views:** unified and split, kept in `state.json`. Unified only when the window is below 1,024 pt wide, as 04.
 - **Highlighting:** none in diffs in this version. File tabs have it.
 - **Comments:** click a line number, or drag across several, to add a draft comment with `addReviewComment`. A file-level comment button sits in each file header. `Send <n> comments to <agent>` puts them into the composer as one chip, as 04.
-- **Keys:** ↓ and ↑ (Conductor column of 04) move to the next and previous file when focus is in the Changes list. ⌃V marks the file viewed; viewed marks live in `state.json` with the file's diff hash.
+- **Keys:** ↓ and ↑ (Mac column of 04) move to the next and previous file when focus is in the Changes list. ⌃V marks the file viewed; viewed marks live in `state.json` with the file's diff hash.
 - **Large files:** above 20,000 diff lines in one file, show `This diff is too large to show.` and an **Open file** button.
 
 ## Terminal, scripts and previews
@@ -235,7 +235,7 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 | Window | Minimize (⌘M); Zoom; Workspace 1 to 9 (⌘1 to ⌘9) |
 | Help | Open Tempo in Browser |
 
-**Shortcuts.** Every action uses the Conductor column of the shortcut table in 04. Bind them with GPUI key bindings in four key contexts: `Workspace`, `Composer`, `Diff` and `Terminal`. Spike S11 confirms the binding and menu APIs in GPUI Kit 0.7.1.
+**Shortcuts.** Every action uses the Mac column of the shortcut table in 04. Bind them with GPUI key bindings in four key contexts: `Workspace`, `Composer`, `Diff` and `Terminal`. Spike S11 confirms the binding and menu APIs in GPUI Kit 0.7.1.
 
 **Notifications.** Use `UNUserNotificationCenter` through the `objc2-user-notifications` crate. Ask for permission only when the owner turns notifications on in Settings. Send one only when the app is not active, for the three events in 04 (a turn ends, `needs_input`, `error`), with the same title and body. A click activates the app and opens that workspace; put `workspaceId` in `userInfo`. This needs a signed app bundle.
 
@@ -353,7 +353,7 @@ Phase 4 starts after gate D passes. Server changes come first, so the web UI nev
 | AT-33 | `Open in Tempo for Mac` in the web UI opens the same workspace in the app. |
 | AT-34 | The notarized DMG from `mac:release` installs and opens on a clean macOS 15 Mac with Gatekeeper on. |
 | AT-35 | Revoking the Mac session in web Settings → Devices returns the app to the sign-in screen within 60 s. |
-| AT-36 | Every action in 04's shortcut table works with its Conductor binding. |
+| AT-36 | Every action in 04's shortcut table works with its Mac binding. |
 | AT-37 | A logs, Keychain and disk check after a full run finds no token, secret, prompt or transcript text outside the Keychain. |
 
 ## Risks and open questions

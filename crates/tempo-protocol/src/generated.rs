@@ -4224,10 +4224,6 @@ pub enum SettingsSource {
     Tempo,
     #[serde(rename = ".tempo")]
     Xtempo,
-    #[serde(rename = ".conductor")]
-    Xconductor,
-    #[serde(rename = "conductor.json")]
-    ConductorXjson,
     #[serde(rename = "default")]
     Default,
 }
@@ -4236,8 +4232,6 @@ impl ::std::fmt::Display for SettingsSource {
         match *self {
             Self::Tempo => f.write_str("tempo"),
             Self::Xtempo => f.write_str(".tempo"),
-            Self::Xconductor => f.write_str(".conductor"),
-            Self::ConductorXjson => f.write_str("conductor.json"),
             Self::Default => f.write_str("default"),
         }
     }
@@ -4248,8 +4242,6 @@ impl ::std::str::FromStr for SettingsSource {
         match value {
             "tempo" => Ok(Self::Tempo),
             ".tempo" => Ok(Self::Xtempo),
-            ".conductor" => Ok(Self::Xconductor),
-            "conductor.json" => Ok(Self::ConductorXjson),
             "default" => Ok(Self::Default),
             _ => Err("invalid value".into()),
         }

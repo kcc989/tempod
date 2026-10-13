@@ -12,7 +12,7 @@ use gpui_kit::{
 
 pub const TABS: [&str; 5] = ["Logins", "Project", "Appearance", "General", "Shortcuts"];
 
-/// The shortcut table of 04 with its Conductor column, read-only.
+/// The shortcut table of 04 with its Mac column, read-only.
 pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Command palette", "⌘K"),
     ("New workspace", "⌘N"),

@@ -228,13 +228,13 @@ describe("effective values and sources (04: Tempo, .tempo or default)", () => {
   it("uses the open workspace's values and sources", () => {
     const ctx = {
       settings: effective,
-      sources: { "scripts.setup": ".tempo" as const, "scripts.run.dev": "conductor.json" as const },
+      sources: { "scripts.setup": ".tempo" as const, "scripts.run.dev": "default" as const },
       layer,
     };
     expect(effectiveLeaf(fieldDef("scripts.setup"), ctx)).toEqual({ text: "bun install", source: ".tempo" });
     expect(effectiveLeaf(fieldDef("git.branch_prefix"), ctx)).toEqual({ text: "tempo/", source: "default" });
     expect(effectiveEntries(fieldDef("scripts.run"), ctx)).toEqual([
-      { key: "dev", text: "bun run dev · default", source: "conductor.json" },
+      { key: "dev", text: "bun run dev · default", source: "default" },
     ]);
     expect(effectiveEntries(fieldDef("environment_variables"), ctx)).toEqual([
       { key: "NODE_ENV", text: "NODE_ENV=development", source: "default" },
@@ -280,7 +280,7 @@ describe("effective values and sources (04: Tempo, .tempo or default)", () => {
 
   it("labels sources as 04 names them", () => {
     expect(sourceLabel("tempo")).toBe("Tempo");
-    expect(sourceLabel("conductor.json")).toBe("conductor.json");
+    expect(sourceLabel("default")).toBe("default");
   });
 
   it("formats values for display", () => {

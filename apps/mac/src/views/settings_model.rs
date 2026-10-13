@@ -516,8 +516,6 @@ pub fn source_label(source: SettingsSource) -> &'static str {
     match source {
         SettingsSource::Tempo => "Tempo",
         SettingsSource::Xtempo => ".tempo",
-        SettingsSource::Xconductor => ".conductor",
-        SettingsSource::ConductorXjson => "conductor.json",
         SettingsSource::Default => "default",
     }
 }
@@ -969,11 +967,11 @@ mod tests {
         let sources = BTreeMap::from([
             (
                 "environment_variables.B".to_string(),
-                SettingsSource::Xconductor,
+                SettingsSource::Xtempo,
             ),
             (
                 "environment.egress_policy".to_string(),
-                SettingsSource::ConductorXjson,
+                SettingsSource::Tempo,
             ),
         ]);
         let open = EffectiveContext {
@@ -984,7 +982,7 @@ mod tests {
         };
         assert_eq!(
             effective_leaf(def("environment.egress_policy"), &open),
-            ("Allowlist".into(), SettingsSource::ConductorXjson)
+            ("Allowlist".into(), SettingsSource::Tempo)
         );
         let entries = effective_entries(def("environment_variables"), &open);
         assert_eq!(
@@ -992,7 +990,7 @@ mod tests {
                 .iter()
                 .map(|e| (e.text.as_str(), source_label(e.source)))
                 .collect::<Vec<_>>(),
-            [("A=1", "default"), ("B=2", ".conductor")]
+            [("A=1", "default"), ("B=2", ".tempo")]
         );
         assert_eq!(source_label(SettingsSource::Tempo), "Tempo");
     }
