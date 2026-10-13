@@ -31,7 +31,13 @@ import { getGithubToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { previewFetch } from "./preview.ts";
 import { finishTurn, recoverSteering, runQueue } from "./queue.ts";
-import { makeMethods, type MethodInput, type Methods } from "./rpc.ts";
+import {
+  applyPromptBranch,
+  rememberFirstPrompt,
+  makeMethods,
+  type MethodInput,
+  type Methods,
+} from "./rpc.ts";
 import { OpRunner } from "./runner.ts";
 import { closeOpenRuns } from "./scripts.ts";
 import { afterSkipWithState, makeHooks, makeSteps } from "./steps.ts";
@@ -222,6 +228,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
           first.turn = { sessionId, turnId };
         }
       });
+      if (input.prompt) {
+        rememberFirstPrompt(core, input.prompt.text);
+        await applyPromptBranch(core, () => this.resendHello());
+      }
       const firstTurn = first.turn;
       if (input.prompt && firstTurn) {
         core.insertItem({
@@ -439,7 +449,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     queueMicrotask(() => {
       this.queueScheduled = false;
       if (!this.core.wsOrNull()) return;
-      void runQueue(this.core, () => this.runner.hasPendingOrRunning()).catch((e) =>
+      void runQueue(
+        this.core,
+        () => this.runner.hasPendingOrRunning(),
+        () => applyPromptBranch(this.core, () => this.resendHello()),
+      ).catch((e) =>
         log("error", "queue runner failed", { workspaceId: this.core.workspaceId, error: errorText(e) }),
       );
     });

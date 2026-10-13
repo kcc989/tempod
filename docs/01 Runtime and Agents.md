@@ -398,7 +398,7 @@ Scripts work as in Conductor: one setup script, any number of run scripts, one a
 | Var | Value |
 | --- | --- |
 | `TEMPO_WORKSPACE_ID` | Workspace ULID |
-| `TEMPO_WORKSPACE_NAME` | Workspace slug, for example `lisbon` |
+| `TEMPO_WORKSPACE_NAME` | Workspace slug, for example `otter` |
 | `TEMPO_WORKSPACE_PATH` | `/workspace` |
 | `TEMPO_DEFAULT_BRANCH` | The workspace's base branch |
 | `TEMPO_PORT` | `3000`. Ports 3000 to 3009 are for the project. |

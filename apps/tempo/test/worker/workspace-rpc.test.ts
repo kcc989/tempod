@@ -330,7 +330,7 @@ describe("init", { timeout: 30_000 }, () => {
       id: w.workspaceId,
       projectId: w.seeded.projectId,
       slug: w.slug,
-      branch: w.branch,
+      branch: "tempo/move-invoice-generation-into-a-background-job-add-retries-an",
       state: "starting",
       title: text.slice(0, 60),
       pinned: false,
@@ -413,7 +413,7 @@ describe("init", { timeout: 30_000 }, () => {
     expect(again.id).toBe(w.workspaceId);
     expect(again.title).toBe("First prompt");
     expect(again.slug).toBe(w.slug);
-    expect(again.branch).toBe(w.branch);
+    expect(again.branch).toBe("tempo/first-prompt");
     const after = await detail(w.stub);
     expect(after.previewToken).toBe(before.previewToken);
     expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
@@ -1964,5 +1964,30 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
 
   it("returns NOT_FOUND for a workspace that was never created", async () => {
     expect(codeOf(await uninitialised().getDiagnostics({}))).toBe("NOT_FOUND");
+  });
+});
+
+describe("first prompt while setup is pending", () => {
+  it("preserves a manual override made before the pending rename runs", async () => {
+    const w = await seedHeld();
+    const session = ok(await w.stub.createSession({ agent: "claude" }));
+    expect(
+      codeOf(
+        await w.stub.sendPrompt({
+          sessionId: session.id,
+          text: "Fix login",
+          mentions: [],
+          attachmentIds: [],
+          reviewCommentIds: [],
+        }),
+      ),
+    ).toBe("OK");
+    expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
+    expect(codeOf(await w.stub.renameBranch({ branch: "feature/override" }))).toBe("OK");
+    w.tempod.healthy = true;
+    await driveToState(w.stub, "working");
+    expect((await detail(w.stub)).branch).toBe("feature/override");
+    expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
+    expect(w.tempod.requestsOf("repo.clone")[0].branch).toBe("feature/override");
   });
 });

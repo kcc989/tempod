@@ -14,7 +14,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | D2 | Agent protocol | ACP (Agent Client Protocol) over stdio, bridged by an in-container daemon, `tempod` | One protocol for all four agents. SAM uses the same approach. |
 | D3 | Source of truth | The transcript lives in WorkspaceDO SQLite. The container is disposable. | Work must survive the death of its container |
 | D4 | Resume | Three layers: a git checkpoint at each turn end, a container snapshot on sleep, and the agent's own session files backed up to R2 | Each layer has a fallback: no snapshot means clone plus setup script; no session files means a new session with a transcript handoff |
-| D5 | Repos | GitHub App. One branch per workspace, named `tempo/<workspace-slug>` | Conductor model; works on existing repos |
+| D5 | Repos | GitHub App. One branch per workspace: animal default, then first-prompt name (03) | Conductor model; works on existing repos |
 | D6 | Browser testing | Chromium and Playwright inside the Sandbox image. Browser Run Live View is optional. | Tests reach `localhost` with no public exposure |
 | D7 | Stack | The standard stack: TanStack Start, shadcn/ui, Effect v4, Alchemy v2, Drizzle, D1, R2, Better Auth, Bun | Your standard stack for new products |
 | D8 | SAM code | Do not copy any SAM code. Use SAM as a design reference only. | SAM is AGPL-3.0 |
@@ -165,7 +165,7 @@ The WorkspaceDO is the source of truth for a workspace. D1 holds only what lists
 
 Every flow runs as idempotent steps in the WorkspaceDO step runner. Steps, timeouts and failure handling are in 03 Lifecycles.
 
-1. **Create a workspace.** Pick a repo and base branch, type a prompt. The WorkspaceDO starts a container, clones the repo, creates `tempo/<slug>`, runs the setup script, starts the agent session and sends the prompt.
+1. **Create a workspace.** Pick a repo and base branch, type a prompt. The WorkspaceDO starts a container, clones the repo, creates the first-prompt branch (03), runs the setup script, starts the agent session and sends the prompt.
 2. **Send a prompt.** The UI calls a server function. The WorkspaceDO queues a turn, sends it to `tempod`, and streams items back to every open UI tab.
 3. **End a turn.** The WorkspaceDO asks `tempod` for a checkpoint and uploads it to R2, backs up the home folder, and asks for the changed files. The workspace shows unread if nobody is watching.
 4. **Sleep.** After 15 idle minutes, the WorkspaceDO writes a final checkpoint, snapshots the container and destroys it.
@@ -191,7 +191,7 @@ All four agents speak ACP v1 to `tempod`. Claude Code and Codex use your subscri
 Each workspace is one branch of one GitHub repo, and the container never holds a GitHub token. Flows are in 03 Lifecycles.
 
 - Repos come from a GitHub App that the owner creates and installs on their account or org.
-- A new workspace gets branch `tempo/<slug>`, created from `origin/<base_branch>` after a fetch. A workspace MAY instead check out an existing branch or a PR's head branch.
+- A new workspace defaults to branch `tempo/<animal-slug>`, renamed from its first prompt unless manually overridden (03), created from `origin/<base_branch>` after a fetch. A workspace MAY instead check out an existing branch or a PR's head branch.
 - One branch belongs to at most one non-archived workspace.
 - At the end of each turn, `tempod` commits the full working tree to a hidden ref (`refs/tempo/checkpoints/<checkpointId>`) without touching the branch or the index, and uploads a git bundle of it to R2.
 - `TempoOutbound` adds a repo-scoped installation token to every HTTPS request for `github.com` and `api.github.com`.
@@ -213,7 +213,7 @@ Agents test in a real Chromium inside their own container; you see the same app 
 
 The UI copies Conductor's three-pane layout in the browser. Full spec is in 04 UI.
 
-- **Left sidebar:** projects, each with its workspaces. Each row shows the branch, the city name, a status icon and the PR number.
+- **Left sidebar:** projects, each with its workspaces. Each row shows the branch, the animal name, a status icon and the PR number.
 - **Center:** tabs for chats (one per session), files, the diff and previews. The composer sits at the bottom of a chat tab.
 - **Right panel, top:** Changes, All files, and Checks.
 - **Right panel, bottom:** Setup, Run and Terminal tabs.

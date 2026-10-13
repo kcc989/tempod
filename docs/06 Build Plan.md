@@ -30,7 +30,7 @@ tempo/
     tempod/                     the daemon: main.ts, server.ts, outbox.ts, acp/, scripts.ts,
                                 git.ts, ports.ts, watcher.ts, proxy.ts
     settings/                   settings.toml parsing and Conductor mapping (used by tempod and the Worker)
-    cities/                     the fixed slug list
+    cities/                     the fixed animal slug list
   container/
     Dockerfile
     versions.json

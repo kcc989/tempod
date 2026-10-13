@@ -391,7 +391,11 @@ export const steerQueued = async (core: WorkspaceCore, queued: TurnRow): Promise
   }
 };
 
-export const runQueue = async (core: WorkspaceCore, opsBusy: () => boolean): Promise<void> => {
+export const runQueue = async (
+  core: WorkspaceCore,
+  opsBusy: () => boolean,
+  beforeStart: () => Promise<void> = async () => {},
+): Promise<void> => {
   if (core.queueBusy) return;
   const row = core.wsOrNull();
   if (!row) return;
@@ -411,6 +415,7 @@ export const runQueue = async (core: WorkspaceCore, opsBusy: () => boolean): Pro
   }
   core.queueBusy = true;
   try {
+    await beforeStart();
     await startTurn(core, next);
   } finally {
     core.queueBusy = false;

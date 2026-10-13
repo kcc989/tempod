@@ -5,7 +5,7 @@ use super::tokens::{Token, color};
 use crate::actions::*;
 use crate::stores::workspace::WorkspaceStore;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::input::{Textarea, TextareaState};
+use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{Disableable as _, h_flex, v_flex};
@@ -54,6 +54,8 @@ pub struct WorkspaceView {
     error: Option<String>,
     queue_editor: Option<QueueEditor>,
     queue_pending: bool,
+    branch_editor: Option<Entity<InputState>>,
+    branch_pending: bool,
     _store_changed: Subscription,
 }
 
@@ -88,10 +90,66 @@ impl WorkspaceView {
             error: None,
             queue_editor: None,
             queue_pending: false,
+            branch_editor: None,
+            branch_pending: false,
             _store_changed: changed,
         };
         view.sync(window, cx);
         view
+    }
+
+    fn edit_branch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(workspace) = self.store.read(cx).state.workspace.as_ref() else {
+            return;
+        };
+        if workspace.pushed
+            || !matches!(
+                workspace.state,
+                p::WorkspaceState::Ready | p::WorkspaceState::Working | p::WorkspaceState::Sleeping
+            )
+        {
+            return;
+        }
+        let branch = workspace.branch.clone();
+        let input = cx.new(|cx| InputState::new(window, cx).default_value(branch));
+        input.update(cx, |input, cx| input.focus(window, cx));
+        self.branch_editor = Some(input);
+        cx.notify();
+    }
+
+    fn save_branch(&mut self, cx: &mut Context<Self>) {
+        if self.branch_pending {
+            return;
+        }
+        let Some(input) = self.branch_editor.as_ref() else {
+            return;
+        };
+        let branch = input.read(cx).value().trim().to_string();
+        let Ok(branch) = branch.try_into() else {
+            self.error = Some("That branch name is not valid.".to_string());
+            cx.notify();
+            return;
+        };
+        let request = self.client.call::<api::RenameBranch>(p::RenameBranchIn {
+            workspace_id: self.store.read(cx).workspace_id.clone(),
+            branch,
+        });
+        self.branch_pending = true;
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.branch_pending = false;
+                match result {
+                    Ok(_) => {
+                        this.branch_editor = None;
+                        this.error = None;
+                    }
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn tab_ids(&self, cx: &gpui_kit::App) -> Vec<String> {
@@ -700,6 +758,15 @@ impl Render for WorkspaceView {
                 p::WorkspaceState::Archived | p::WorkspaceState::Archiving
             )
         });
+        let branch_locked = store.state.workspace.as_ref().is_none_or(|w| {
+            w.pushed
+                || !matches!(
+                    w.state,
+                    p::WorkspaceState::Ready
+                        | p::WorkspaceState::Working
+                        | p::WorkspaceState::Sleeping
+                )
+        });
         let credentials = self.credentials.clone();
         let weak = cx.weak_entity();
         let new_chat = Button::new("new-chat-menu")
@@ -855,12 +922,43 @@ impl Render for WorkspaceView {
         v_flex()
             .size_full()
             .children(heading.map(|heading| {
-                div()
+                h_flex()
                     .px_3()
                     .py_2()
+                    .gap_2()
                     .border_b_1()
                     .border_color(color(Token::Border, cx))
                     .child(heading)
+                    .child(
+                        Button::new("rename-branch")
+                            .label("Rename branch")
+                            .disabled(branch_locked || self.branch_pending)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.edit_branch(window, cx)),
+                            ),
+                    )
+            }))
+            .children(self.branch_editor.as_ref().map(|input| {
+                h_flex()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .child(Input::new(input).disabled(self.branch_pending))
+                    .child(
+                        Button::new("save-branch")
+                            .label("Save branch")
+                            .disabled(self.branch_pending)
+                            .on_click(cx.listener(|this, _, _, cx| this.save_branch(cx))),
+                    )
+                    .child(
+                        Button::new("cancel-branch")
+                            .label("Cancel")
+                            .disabled(self.branch_pending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.branch_editor = None;
+                                cx.notify();
+                            })),
+                    )
             }))
             .on_action(
                 cx.listener(|this, _: &NextTab, window, cx| this.cycle_tab(true, window, cx)),
@@ -1087,6 +1185,48 @@ mod tests {
             assert!(Instant::now() < deadline, "queue update did not finish");
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[gpui_kit::test]
+    fn branch_editor_sends_the_manual_override(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        state.workspace.as_mut().unwrap().pushed = false;
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.edit_branch(window, cx);
+                view.branch_editor
+                    .as_ref()
+                    .unwrap()
+                    .update(cx, |input, cx| {
+                        input.set_value("feature/my-name", window, cx);
+                    });
+                view.save_branch(cx);
+            });
+        })
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            if !view.read_with(cx, |view, _| view.branch_pending) {
+                break;
+            }
+            assert!(Instant::now() < deadline, "branch rename did not finish");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(view.read_with(cx, |view, _| view.branch_editor.is_none()));
+        let requests = server.requests.lock().unwrap();
+        let (_, input) = requests
+            .iter()
+            .find(|(path, _)| path.ends_with("/renameBranch"))
+            .unwrap();
+        assert_eq!(input["branch"], "feature/my-name");
     }
 
     #[gpui_kit::test]

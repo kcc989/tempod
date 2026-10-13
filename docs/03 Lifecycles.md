@@ -116,9 +116,9 @@ The server function does the checks and the D1 insert; the WorkspaceDO does ever
 **In the `createWorkspace` server function**
 
 1. Validate input. Load the project.
-2. Pick the slug: the first city name in the fixed list that no non-archived workspace in this project uses. If all are used, add `-2`, `-3`, and so on to the first name.
+2. Pick the slug: the first animal name in the fixed list that no non-archived workspace in this project uses. If all are used, add `-2`, `-3`, and so on to the first name.
 3. Pick the branch:
-   - `source.kind = "new"`: `<git.branch_prefix><slug>`, for example `tempo/lisbon`.
+   - `source.kind = "new"`: `<git.branch_prefix><slug>`, for example `tempo/otter`.
    - `source.kind = "branch"`: `source.branch`. It MUST exist on origin.
    - `source.kind = "pr"`: the PR's `head.ref` from `GET /repos/{owner}/{repo}/pulls/{number}`. If `head.repo.id` is not the project's repo id, fail with `VALIDATION_FAILED` and the message "Pull requests from forks are not supported."
 4. Insert the D1 row with `state = 'creating'`. The partial unique index on `(project_id, branch)` rejects a branch in use; map that to `BRANCH_IN_USE`.
@@ -127,7 +127,7 @@ The server function does the checks and the D1 insert; the WorkspaceDO does ever
 **In `WorkspaceDO.init`**
 
 1. Write the `workspace` row. Make `preview_token` (16 chars from `[a-z0-9]`, from `crypto.getRandomValues`). Set `title` to the first 60 characters of the prompt, or to the slug.
-2. If there is a prompt: create a session (`starting`, agent = input agent or project default), a turn (`queued`, `seq = 1`) and its `user_message` item.
+2. If there is a prompt: assign a prompt-based branch as described below, then create a session (`starting`, agent = input agent or project default), a turn (`queued`, `seq = 1`) and its `user_message` item.
 3. Insert the `create` op. Set state `starting`. Set the alarm to now.
 4. Publish the summary to UserHubDO.
 
@@ -162,6 +162,8 @@ A prompt becomes a queued turn at once. The queue runner sends it when the works
 4. Broadcast `turn` and `item.upsert`.
 5. If the state is `sleeping` or `error`, insert a `wake` op.
 6. Run the queue runner.
+
+**First-prompt branch naming.** New workspaces begin with `<git.branch_prefix><animal-slug>`. Once the first prompt is accepted, derive a branch suffix by applying Unicode NFKD normalization, lowercasing, removing combining accents, replacing runs outside `[a-z0-9]` with `-`, truncating to 60 characters, and trimming edge hyphens. Keep the animal branch if this is empty. Preserve the configured branch prefix; append `-2`, `-3`, etc. if another active workspace uses the name. A prompt supplied at creation sets the branch before cloning; a later prompt renames it before its first turn starts, once setup/wake finishes. Persist the first prompt's naming decision independently of queued-turn edits or deletion. Never automatically rename existing-branch or PR workspaces, pushed branches, or a branch manually named through `renameBranch`, including a save of its current name. Subsequent prompts do not change the branch. Existing workspaces with prior turns keep their branch.
 
 **Live steering.** `sendPrompt` accepts optional `delivery: "queue" | "steer"`; the default is `queue`. A steering message is first saved as a queued turn and user message. When the same chat has a running turn and its adapter advertised steering, reserve the queued turn with `steering_pending = 1` and pause the queue runner while sending `session.steer`. The daemon uses the ACP v1 `_session/steering` extension with `_meta.steering.idleBehavior = "promptRequired"`. It checks the target turn and deduplicates the message id.
 

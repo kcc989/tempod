@@ -676,7 +676,7 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
 
   it("unlinkProject returns PROJECT_HAS_WORKSPACES while a live workspace exists", async () => {
     const o = await owner();
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "lisbon" });
+    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "otter" });
     const res = await call("unlinkProject", o, { projectId: o.projectId });
     expect(errOf(res)).toMatchObject({
       code: "PROJECT_HAS_WORKSPACES",
@@ -736,9 +736,9 @@ describe("createWorkspace (03, Create a workspace)", () => {
     expect(conforms(WorkspaceSummary, first)).toBe(true);
     expect(first).toMatchObject({
       projectId: o.projectId,
-      slug: "lisbon",
-      title: "lisbon",
-      branch: "tempo/lisbon",
+      slug: "otter",
+      title: "otter",
+      branch: "tempo/otter",
       baseBranch: "main",
       state: "starting",
       defaultAgent: "claude",
@@ -751,13 +751,13 @@ describe("createWorkspace (03, Create a workspace)", () => {
         source: { kind: "new", baseBranch: "main" },
       }),
     );
-    expect(second).toMatchObject({ slug: "porto", branch: "tempo/porto" });
+    expect(second).toMatchObject({ slug: "fox", branch: "tempo/fox" });
     const row = await d1Row("SELECT * FROM workspaces WHERE id = ?", first.id);
     expect(row).toMatchObject({
       project_id: o.projectId,
       user_id: o.userId,
-      slug: "lisbon",
-      branch: "tempo/lisbon",
+      slug: "otter",
+      branch: "tempo/otter",
       base_branch: "main",
     });
   });
@@ -770,26 +770,26 @@ describe("createWorkspace (03, Create a workspace)", () => {
         source: { kind: "new", baseBranch: "main" },
       }),
     );
-    expect(ws).toMatchObject({ slug: "lisbon", branch: "feat/lisbon" });
+    expect(ws).toMatchObject({ slug: "otter", branch: "feat/otter" });
   });
 
   it("reuses a slug that only an archived workspace holds", async () => {
-    // 03: "the first city name in the fixed list that no non-archived workspace in this project uses"
+    // 03: "the first animal name in the fixed list that no non-archived workspace in this project uses"
     const o = await owner();
     await insertWorkspaceRow({
       projectId: o.projectId,
       userId: o.userId,
-      slug: "lisbon",
+      slug: "otter",
       archivedAt: Date.now() - 1000,
     });
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "porto" });
+    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "fox" });
     const ws = ok(
       await call("createWorkspace", o, {
         projectId: o.projectId,
         source: { kind: "new", baseBranch: "main" },
       }),
     );
-    expect(ws).toMatchObject({ slug: "lisbon", branch: "tempo/lisbon" });
+    expect(ws).toMatchObject({ slug: "otter", branch: "tempo/otter" });
   });
 
   it("sets the title to the first 60 characters of the prompt and honours the agent", async () => {
@@ -845,7 +845,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
         source: { kind: "branch", branch: "feature/checkout" },
       }),
     );
-    expect(ws).toMatchObject({ slug: "lisbon", branch: "feature/checkout", baseBranch: "main" });
+    expect(ws).toMatchObject({ slug: "otter", branch: "feature/checkout", baseBranch: "main" });
   });
 
   it("source.kind 'branch' returns NOT_FOUND when the branch is not on origin", async () => {
@@ -868,7 +868,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
     await insertWorkspaceRow({
       projectId: o.projectId,
       userId: o.userId,
-      slug: "lisbon",
+      slug: "otter",
       branch: "feature/busy",
     });
     const res = await call("createWorkspace", o, {
@@ -889,7 +889,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
       projectId: o.projectId,
       userId: o.userId,
       slug: "custom",
-      branch: "tempo/lisbon",
+      branch: "tempo/otter",
     });
     const res = await call("createWorkspace", o, {
       projectId: o.projectId,
@@ -904,7 +904,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
     await insertWorkspaceRow({
       projectId: o.projectId,
       userId: o.userId,
-      slug: "lisbon",
+      slug: "otter",
       branch: "feature/held",
     });
     const res = await call("createWorkspace", o, {
@@ -921,7 +921,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
     await insertWorkspaceRow({
       projectId: o.projectId,
       userId: o.userId,
-      slug: "lisbon",
+      slug: "otter",
       branch: "feature/old",
       archivedAt: Date.now(),
     });
@@ -940,7 +940,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
     const ws = ok(
       await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number: 8 } }),
     );
-    expect(ws).toMatchObject({ branch: "pr-branch-8", baseBranch: "develop", slug: "lisbon" });
+    expect(ws).toMatchObject({ branch: "pr-branch-8", baseBranch: "develop", slug: "otter" });
     gh.pulls.delete(8);
   });
 
@@ -985,13 +985,13 @@ describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
     const a = await insertWorkspaceRow({
       projectId: o.projectId,
       userId: o.userId,
-      slug: "lisbon",
+      slug: "otter",
       lastActivityAt: 1_000,
     });
     const b = await insertWorkspaceRow({
       projectId: o.projectId,
       userId: o.userId,
-      slug: "porto",
+      slug: "fox",
       lastActivityAt: 3_000,
     });
     const c = await insertWorkspaceRow({
@@ -1002,7 +1002,7 @@ describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
       archivedAt: 2_500,
     });
     const other = await owner();
-    const d = await insertWorkspaceRow({ projectId: other.projectId, userId: other.userId, slug: "lisbon" });
+    const d = await insertWorkspaceRow({ projectId: other.projectId, userId: other.userId, slug: "otter" });
 
     const live = ok(await call("listWorkspaces", o, {}));
     expect(live.map((w: Row) => w["id"])).toEqual([b, a]);
@@ -1021,7 +1021,7 @@ describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
     const theirs = await insertWorkspaceRow({
       projectId: other.projectId,
       userId: other.userId,
-      slug: "lisbon",
+      slug: "otter",
     });
     for (const [fn, input] of [
       ["getWorkspace", {}],
@@ -1035,7 +1035,7 @@ describe("listWorkspaces and workspace functions (02, Workspaces)", () => {
     }
     expect(await d1Row("SELECT pinned, title FROM workspaces WHERE id = ?", theirs)).toMatchObject({
       pinned: 0,
-      title: "lisbon",
+      title: "otter",
     });
     expect(codeOf(await call("getWorkspace", o, { workspaceId: newId() }))).toBe("NOT_FOUND");
   });
@@ -1368,7 +1368,7 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     const theirs = await insertWorkspaceRow({
       projectId: other.projectId,
       userId: other.userId,
-      slug: "lisbon",
+      slug: "otter",
     });
     const res = await v1("/api/v1/rpc/getWorkspace", {
       method: "POST",
@@ -1483,7 +1483,7 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
     const theirs = await insertWorkspaceRow({
       projectId: other.projectId,
       userId: other.userId,
-      slug: "lisbon",
+      slug: "otter",
     });
     for (const path of [
       `/api/ws/workspace/${theirs}`,
@@ -1603,14 +1603,14 @@ describe("attachments (02, Sessions and turns: attachments route)", () => {
     const theirs = await insertWorkspaceRow({
       projectId: other.projectId,
       userId: other.userId,
-      slug: "lisbon",
+      slug: "otter",
     });
     const notMine = await postAttachment(theirs, file(), { Authorization: `Bearer ${o.token}` });
     expect(((await notMine.json()) as ErrorBody).code).toBe("NOT_FOUND");
     const archived = await insertWorkspaceRow({
       projectId: o.projectId,
       userId: o.userId,
-      slug: "porto",
+      slug: "fox",
       archivedAt: Date.now(),
     });
     const res = await postAttachment(archived, file(), { Authorization: `Bearer ${o.token}` });
