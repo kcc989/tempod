@@ -196,6 +196,8 @@ export class WebFixture {
         return {
           diff: "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old README\n+new README\n",
         };
+      case "listRoles":
+        return [];
       case "listFiles":
         return {
           paths: ["README.md", "src/main.ts", ...Array.from({ length: 220 }, (_, i) => `src/file-${i}.ts`)],
