@@ -13,7 +13,7 @@
   "dependencies": {
     "@tempo/protocol": "workspace:*",
     "effect": "4.0.3",
-    "smol-toml": "1.9.1"
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "vitest": "4.1.11"

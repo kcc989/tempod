@@ -148,8 +148,8 @@ export const detail = (
   errorDetail: null,
   setupStatus: "succeeded",
   pushed: false,
-  previewToken: "k3j9x2m4q8w7e5r1",
   ports: [],
+  browserActive: false,
   settings,
   runningTurnId: null,
   queue: [],
@@ -159,8 +159,8 @@ export const detail = (
 });
 
 export const lisbonDetail = detail(lisbon, {
-  ports: [{ port: 3000, url: `https://3000-${W1}-k3j9x2m4q8w7e5r1.example-previews.com` }],
-  settingsWarnings: ["Unknown key scripts.watch in .tempo/settings.toml"],
+  ports: [{ port: 3000, url: `https://3000-${W1}.example-previews.com` }],
+  settingsWarnings: ["Unknown key scripts.watch in .tempo/settings.yaml"],
   settingsErrors: [],
   settingsSources: { "agent.default": "tempo", "scripts.setup": ".tempo", "environment.instance": "default" },
   changes: changesSummary,
@@ -235,6 +235,52 @@ export const codexSession: P.Session = {
   commands: [],
   usage: {},
   sortOrder: 1,
+};
+
+export const reviewerDefinition: P.CustomAgentDefinition = {
+  name: "Reviewer",
+  description: "Reviews code without editing it",
+  baseAgent: "claude",
+  model: "opus",
+  thoughtLevel: "high",
+  systemPrompt: "You review code. You do not edit files.",
+  tools: { allow: [], deny: ["Edit", "Write"] },
+  mcp: {
+    playwright: false,
+    servers: [
+      {
+        name: "docs",
+        type: "stdio",
+        command: "docs-mcp",
+        args: ["--stdio"],
+        env: { DOCS_TOKEN: "${DOCS_TOKEN}" },
+      },
+      {
+        name: "search",
+        type: "http",
+        url: "https://mcp.example.com/mcp",
+        headers: { Authorization: "${SEARCH_AUTH}" },
+      },
+    ],
+  },
+};
+
+export const CUSTOM_AGENT_ID = uid(601);
+
+export const reviewerAgent: P.CustomAgent = {
+  ...reviewerDefinition,
+  id: CUSTOM_AGENT_ID,
+  commitSha: "3c1f0e9d8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d",
+  updatedAt: 1_791_000_000_000,
+};
+
+export const reviewerSession: P.Session = {
+  ...claudeSession,
+  id: uid(602),
+  title: "Reviewer",
+  sortOrder: 2,
+  customAgent: { id: CUSTOM_AGENT_ID, name: "Reviewer", commitSha: reviewerAgent.commitSha },
+  profileIssues: ["thoughtLevel"],
 };
 
 export const turn = (n: number, overrides: Partial<P.Turn> = {}): P.Turn => ({
@@ -321,6 +367,38 @@ export const permissionContent: P.PermissionContent = {
 };
 
 /** One item of every kind, in the order a turn makes them. */
+export const ARTIFACT_ID = "01jart00000000000000000001";
+
+export const artifactContent: P.ArtifactItemContent = {
+  artifactId: ARTIFACT_ID,
+  version: 2,
+  title: "Checkout plan",
+  summary: "Steps to fix the flaky checkout test",
+  name: "plan.md",
+  path: "/home/tempo/artifacts/plan.md",
+  mime: "text/markdown",
+  artifactKind: "markdown",
+  size: 2048,
+};
+
+export const artifact: P.Artifact = {
+  id: ARTIFACT_ID,
+  version: 2,
+  sessionId: S1,
+  turnId: uid(101),
+  itemId: uid(1011),
+  path: "/home/tempo/artifacts/plan.md",
+  name: "plan.md",
+  title: "Checkout plan",
+  summary: "Steps to fix the flaky checkout test",
+  mime: "text/markdown",
+  kind: "markdown",
+  size: 2048,
+  sha256: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  status: "ready",
+  createdAt: at(110),
+};
+
 export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
   item("user_message", { n: 1, rev: 1, seconds: 100, content: userMessageContent }),
   item("agent_thought", {
@@ -361,6 +439,7 @@ export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
     status: "failed",
     content: { code: "AGENT_CRASHED", detail: null },
   }),
+  item("artifact", { n: 11, rev: 11, seconds: 110, content: artifactContent }),
 ];
 
 export const permissionRequest: P.PermissionRequest = {

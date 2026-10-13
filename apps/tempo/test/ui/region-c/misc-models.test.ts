@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeUrl, PREVIEW_SANDBOX, safeHttpUrl } from "~/ui/components/review/browser-model";
+import {
+  normalizeUrl,
+  PREVIEW_SANDBOX,
+  previewPortOf,
+  safeHttpUrl,
+} from "~/ui/components/review/browser-model";
 import {
   checksStateLabel,
   prStateLabel,
@@ -55,11 +60,11 @@ describe("Checks tab", () => {
 });
 
 describe("Browser tab", () => {
-  const current = "https://3000-lisbon-abcdefghijklmnop.previews.example.com/app";
+  const current = "https://3000-01jaxk3v2m9q8r7t6y5w4e3d2c.previews.example.com/app";
 
   it("keeps paths on the preview's origin", () => {
     expect(normalizeUrl("/about?x=1", current)).toBe(
-      "https://3000-lisbon-abcdefghijklmnop.previews.example.com/about?x=1",
+      "https://3000-01jaxk3v2m9q8r7t6y5w4e3d2c.previews.example.com/about?x=1",
     );
   });
 
@@ -77,6 +82,18 @@ describe("Browser tab", () => {
     expect(normalizeUrl("   ", current)).toBeNull();
     expect(safeHttpUrl("javascript:alert(1)")).toBeNull();
     expect(safeHttpUrl("https://github.com/a")).toBe("https://github.com/a");
+  });
+
+  it("finds the port of this workspace's preview URLs only (01, Preview URL)", () => {
+    const id = "01jaxk3v2m9q8r7t6y5w4e3d2c";
+    expect(previewPortOf(current, id)).toBe(3000);
+    expect(
+      previewPortOf("https://5173-01jaxk3v2m9q8r7t6y5w4e3d2c.previews.example.com/", id.toUpperCase()),
+    ).toBe(5173);
+    expect(previewPortOf(current, "01jaxk3v2m9q8r7t6y5w4e3d2d")).toBeNull();
+    expect(previewPortOf("https://example.com/", id)).toBeNull();
+    expect(previewPortOf("https://80-01jaxk3v2m9q8r7t6y5w4e3d2c.previews.example.com/", id)).toBeNull();
+    expect(previewPortOf("not a url", id)).toBeNull();
   });
 
   it("never lets the preview navigate the Tempo page", () => {

@@ -1,25 +1,30 @@
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, ne, sql, type SQL } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
+  EGRESS_BLOCK_RULES,
   TempoError,
   instanceLabel,
   newId,
-  newPreviewToken,
   type AgentId,
   type CheckpointInfo,
   type Diagnostics,
+  type EgressStatusFilter,
   type FnInput,
   type FnOutput,
   type ReviewComment,
   type Session,
   type Turn,
   type WorkspaceFnName,
+  type AgentProfile,
+  type SessionCustomAgent,
 } from "@tempo/protocol";
-import { workspaces } from "../../db/d1.ts";
+import { environments, workspaces } from "../../db/d1.ts";
+import { EMPTY_PROMPT, json, readItemContent } from "../../db/json.ts";
 import {
   attachments,
   checkpoints,
   egressLog,
+  environmentProposals,
   events,
   items,
   permissions,
@@ -45,11 +50,36 @@ import {
   requireCredential,
   steerQueued,
 } from "./queue.ts";
+import { browserLiveView } from "./browser.ts";
+import { openPreview, rotatePreviewKey } from "./preview.ts";
+import { listArtifacts, openArtifact } from "./artifacts.ts";
 import type { OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
 
-/** The method input: the server function's input minus workspaceId (02, WorkspaceDO RPC). */
-export type MethodInput<K extends WorkspaceFnName> = Omit<FnInput<K>, "workspaceId">;
+/** Session columns for a custom agent (02, sessions). */
+export const customSessionColumns = (custom: SessionAgentProfile | null | undefined) =>
+  custom
+    ? {
+        customAgentId: custom.customAgent.id,
+        customAgentName: custom.customAgent.name,
+        customAgentCommit: custom.customAgent.commitSha,
+        profileJson: JSON.stringify(custom.profile),
+      }
+    : {};
+
+/** A custom agent resolved by the Worker (01, Custom agents): what the session row stores. */
+export interface SessionAgentProfile {
+  readonly customAgent: SessionCustomAgent;
+  readonly profile: AgentProfile;
+  readonly model: string;
+}
+
+/**
+ * The method input: the server function's input minus workspaceId (02, WorkspaceDO RPC).
+ * createSession also takes the custom agent the Worker resolved from `customAgentId`.
+ */
+export type MethodInput<K extends WorkspaceFnName> = Omit<FnInput<K>, "workspaceId"> &
+  (K extends "createSession" ? { readonly custom?: SessionAgentProfile } : unknown);
 export type Methods = { [K in WorkspaceFnName]: (input: MethodInput<K>) => Promise<FnOutput<K>> };
 
 export interface RpcRuntime {
@@ -69,6 +99,19 @@ const BRANCH_RE =
 // oxlint-enable no-control-regex
 export const isValidBranch = (b: string): boolean =>
   b.length > 0 && b.length <= 250 && BRANCH_RE.test(b) && b !== "@";
+
+/** 02 getDiagnostics: host contains the text (any case) and the status matches, over every stored row. */
+const egressFilter = (host?: string, status: EgressStatusFilter = "all"): SQL | undefined => {
+  const conds: SQL[] = [];
+  const q = host?.toLowerCase() ?? "";
+  if (q !== "") conds.push(sql`instr(lower(${egressLog.host}), ${q}) > 0`);
+  if (status === "blocked") conds.push(inArray(egressLog.rule, [...EGRESS_BLOCK_RULES]));
+  else if (status !== "all") {
+    const floor = Number(status[0]) * 100;
+    conds.push(gte(egressLog.status, floor), lt(egressLog.status, floor + 100));
+  }
+  return conds.length > 0 ? and(...conds) : undefined;
+};
 
 const reviewToWire = (r: ReviewCommentRow): ReviewComment => ({
   id: r.id,
@@ -150,6 +193,37 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       return {};
     },
 
+    setWorkspaceEnvironment: async ({ environmentId }) => {
+      if (environmentId !== null) {
+        const found = await drizzleD1(core.env.DB)
+          .select({ id: environments.id })
+          .from(environments)
+          .where(and(eq(environments.id, environmentId), eq(environments.userId, core.ws().userId)))
+          .get();
+        if (!found) throw new TempoError("NOT_FOUND", undefined, "environment not found");
+      }
+      core.updateWs({ environmentId });
+      core.publish();
+      core.ctx.waitUntil(sendEnv(core));
+      return {};
+    },
+
+    resolveEnvironmentProposal: async ({ proposalId, status }) => {
+      const row = core.db
+        .select({ id: environmentProposals.id })
+        .from(environmentProposals)
+        .where(and(eq(environmentProposals.id, proposalId), eq(environmentProposals.status, "pending")))
+        .get();
+      if (!row) throw new TempoError("NOT_FOUND", undefined, "no pending proposal with that id");
+      core.db
+        .update(environmentProposals)
+        .set({ status })
+        .where(eq(environmentProposals.id, proposalId))
+        .run();
+      core.broadcastDetailSoon();
+      return {};
+    },
+
     setPinned: async ({ pinned }) => {
       core.updateWs({ pinned: pinned ? 1 : 0 });
       core.publish();
@@ -202,7 +276,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     deleteWorkspace: async () => {
       const row = core.ws();
       if (row.state !== "archived") throw new TempoError("WORKSPACE_NOT_ARCHIVED");
-      for (const prefix of ["checkpoints", "homes", "attachments", "logs"]) {
+      for (const prefix of ["checkpoints", "homes", "attachments", "logs", "artifacts"]) {
         let cursor: string | undefined;
         do {
           const list = await core.env.DATA.list({
@@ -230,12 +304,14 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       return {};
     },
 
-    rotatePreviewToken: async () => {
-      const previewToken = newPreviewToken();
-      core.updateWs({ previewToken });
-      core.broadcastDetailSoon();
-      return { previewToken };
+    openPreview: ({ port }) => openPreview(core, port),
+
+    rotatePreviewKey: async () => {
+      rotatePreviewKey(core);
+      return {};
     },
+
+    getBrowserLiveView: () => browserLiveView(core),
 
     setBaseBranch: async ({ baseBranch }) => {
       const row = core.ws();
@@ -253,7 +329,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       return {};
     },
 
-    getDiagnostics: async (): Promise<Diagnostics> => {
+    getDiagnostics: async ({ egressHost, egressStatus }): Promise<Diagnostics> => {
       const row = core.ws();
       return {
         ops: runner.recent(50).map((o) => ({
@@ -304,6 +380,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         egress: core.db
           .select()
           .from(egressLog)
+          .where(egressFilter(egressHost, egressStatus))
           .orderBy(desc(egressLog.id))
           .limit(500)
           .all()
@@ -317,15 +394,16 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             id: s.id,
             agent: s.agent as AgentId,
             acpSessionId: s.acpSessionId,
-            capabilities: parseJson(s.capabilitiesJson, {}),
+            capabilities: json.capabilities.read(s.capabilitiesJson, {}),
             live: core.liveSessions.has(s.id),
           })),
       };
     },
 
-    createSession: async ({ agent, model, modeId }): Promise<Session> => {
+    createSession: async ({ agent, model, modeId, custom }): Promise<Session> => {
       notArchived(core);
       await requireCredential(core, agent);
+      const chosenModel = model || custom?.model || "";
       const now = Date.now();
       const id = newId();
       const order =
@@ -340,7 +418,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           acpSessionId: null,
           status: "starting",
           modeId: modeId ?? null,
-          configJson: JSON.stringify(model ? { model } : {}),
+          configJson: json.config.write(chosenModel ? { model: chosenModel } : {}),
           modesJson: "[]",
           configOptionsJson: "[]",
           commandsJson: "[]",
@@ -349,6 +427,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           handoffPending: 0,
           pendingNote: null,
           generalPromptSent: 0,
+          ...customSessionColumns(custom),
           sortOrder: order + 1,
           createdAt: now,
           updatedAt: now,
@@ -413,6 +492,15 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         : [];
       if (atts.length !== new Set(attachmentIds).size)
         throw new TempoError("VALIDATION_FAILED", undefined, "unknown attachment");
+      const drafts = reviewCommentIds.length
+        ? core.db
+            .select({ id: reviewComments.id })
+            .from(reviewComments)
+            .where(and(inArray(reviewComments.id, [...reviewCommentIds]), eq(reviewComments.status, "draft")))
+            .all()
+        : [];
+      if (drafts.length !== new Set(reviewCommentIds).size)
+        throw new TempoError("VALIDATION_FAILED", undefined, "unknown or already sent review comment");
       const now = Date.now();
       const turnId = newId();
       const prompt = {
@@ -430,7 +518,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             seq: core.nextTurnSeq(),
             queuePos: core.nextQueuePos(),
             status: "queued",
-            promptJson: JSON.stringify(prompt),
+            promptJson: json.prompt.write(prompt),
             stopReason: null,
             errorCode: null,
             errorDetail: null,
@@ -500,33 +588,28 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     editQueuedTurn: async ({ turnId, text }): Promise<Turn> => {
       const turn = core.turnRow(turnId);
       if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
-      const prompt = { ...parseJson<Record<string, unknown>>(turn.promptJson, {}), text };
-      const updated = core.updateTurn(turnId, { promptJson: JSON.stringify(prompt) });
+      const prompt = { ...json.prompt.read(turn.promptJson, EMPTY_PROMPT), text };
+      const updated = core.updateTurn(turnId, { promptJson: json.prompt.write(prompt) });
       const item = core.db
         .select()
         .from(items)
         .where(and(eq(items.turnId, turnId), eq(items.kind, "user_message")))
         .get();
       if (item)
-        core.updateItem(item.id, {
-          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), text },
-        });
+        core.updateItem(item.id, { content: { ...readItemContent(item.kind, item.contentJson), text } });
       return updated;
     },
 
     deleteQueuedTurn: async ({ turnId }) => {
       const turn = core.turnRow(turnId);
       if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
-      core.ctx.storage.transactionSync(() => {
-        core.db.delete(items).where(eq(items.turnId, turnId)).run();
-        core.db.delete(turns).where(eq(turns.id, turnId)).run();
+      core.deleteTurn(turnId, () =>
         core.db
           .update(reviewComments)
           .set({ status: "draft", sentTurnId: null })
           .where(eq(reviewComments.sentTurnId, turnId))
-          .run();
-      });
-      core.broadcast({ type: "turn.deleted", turnId });
+          .run(),
+      );
       core.broadcastDetailSoon();
       return {};
     },
@@ -557,24 +640,24 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     setSessionConfig: async ({ sessionId, configId, value }) => {
       const s = core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
-      const options = parseJson<Array<{ id: string; category?: string | null }>>(s.configOptionsJson, []);
+      const options = json.configOptions.read(s.configOptionsJson, []);
       const isModel = options.find((o) => o.id === configId)?.category === "model";
-      const config = { ...parseJson<Record<string, unknown>>(s.configJson, {}), [configId]: value };
+      const config: Record<string, unknown> = { ...json.config.read(s.configJson, {}), [configId]: value };
       if (isModel && typeof value === "string") config["model"] = value;
       if (core.liveSessions.has(sessionId)) {
         const res = await requireTempod(core).request("session.setConfig", { sessionId, configId, value });
         core.updateSession(sessionId, {
-          configJson: JSON.stringify(config),
-          configOptionsJson: JSON.stringify(res.configOptions),
+          configJson: json.config.write(config),
+          configOptionsJson: json.configOptions.write(res.configOptions),
         });
-      } else core.updateSession(sessionId, { configJson: JSON.stringify(config) });
+      } else core.updateSession(sessionId, { configJson: json.config.write(config) });
       return {};
     },
 
     respondPermission: async ({ requestId, optionId }) => {
       const p = core.db.select().from(permissions).where(eq(permissions.requestId, requestId)).get();
       if (!p || p.status !== "pending") throw new TempoError("NOT_FOUND");
-      const options = parseJson<Array<{ optionId: string }>>(p.optionsJson, []);
+      const options = json.permissionOptions.read(p.optionsJson, []);
       if (!options.some((o) => o.optionId === optionId))
         throw new TempoError("VALIDATION_FAILED", undefined, "unknown option");
       await requireTempod(core).request("permission.respond", { requestId, optionId });
@@ -586,7 +669,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const item = core.itemRow(p.itemId);
       if (item)
         core.updateItem(item.id, {
-          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), chosenOptionId: optionId },
+          content: { ...readItemContent(item.kind, item.contentJson), chosenOptionId: optionId },
         });
       core.recomputeAttention();
       return {};
@@ -668,8 +751,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
 
     commitAndPush: async ({ message }) => {
       notArchived(core);
-      if (runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
       rt.requireReady();
+      // 03 Step runner: the op waits as pending behind other ops and starts in creation order.
       const msg = message.trim() || core.ws().title || "Update from Tempo";
       return awaitOp<{ commitSha: string }>("commit_push", { message: msg });
     },
@@ -691,6 +774,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           draft,
         },
       );
+      core.setKv("prTitle", title.trim() || row.title || row.branch);
       core.updateWs({ prNumber: pr.number, prState: pr.state, checksState: null });
       core.publish();
       core.scheduleAlarm();
@@ -732,13 +816,36 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
     },
 
     listFiles: async () => {
+      if (core.state === "sleeping") return core.files.list();
       rt.requireReady();
-      return requireTempod(core).request("fs.list", {});
+      const res = await requireTempod(core).request("fs.list", {});
+      try {
+        core.files.rememberList(res.paths);
+      } catch {
+        /* The live response is still usable. */
+      }
+      return res;
     },
 
     readFile: async ({ path }) => {
+      if (core.state === "sleeping") return core.files.read(path);
       rt.requireReady();
-      return requireTempod(core).request("fs.read", { path, maxBytes: 1024 * 1024 });
+      try {
+        const res = await requireTempod(core).request("fs.read", { path, maxBytes: 1024 * 1024 });
+        try {
+          core.files.rememberFile(path, res);
+        } catch {
+          /* The live response is still usable. */
+        }
+        return res;
+      } catch (e) {
+        try {
+          core.files.forgetFile(path);
+        } catch {
+          /* Preserve the live error. */
+        }
+        throw e;
+      }
     },
 
     searchFiles: async ({ query, regex }) => {
@@ -824,6 +931,15 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const res = await core.tempod.request("terminal.list", {});
       return res.terminalIds.map((terminalId) => ({ terminalId }));
     },
+
+    readFileAt: async ({ path, sha }) => {
+      rt.requireReady();
+      return requireTempod(core).request("git.readFile", { sha, path, maxBytes: 1024 * 1024 });
+    },
+
+    listArtifacts: async () => listArtifacts(core),
+
+    openArtifact: ({ artifactId, version }) => openArtifact(core, artifactId, version),
 
     listScriptRuns: async () =>
       core.db

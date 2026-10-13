@@ -8,6 +8,15 @@
 //! is escaped everywhere. That can show `&lt;` inside code, but never lets a tag through.
 use std::borrow::Cow;
 
+pub fn tool_text(src: &str, execute: bool) -> Cow<'_, str> {
+    if !execute || src.lines().any(|line| opening_fence(line).is_some()) {
+        return Cow::Borrowed(src);
+    }
+    let longest = src.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+    let fence = "`".repeat(longest.max(2) + 1);
+    Cow::Owned(format!("{fence}console\n{src}\n{fence}"))
+}
+
 pub fn escape_raw_html(src: &str) -> Cow<'_, str> {
     if !src.contains('<') {
         return Cow::Borrowed(src);
@@ -220,6 +229,23 @@ fn closing_run(b: &[u8], from: usize, n: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tool_output_preserves_fences_and_literal_console_lines() {
+        assert_eq!(
+            super::tool_text("```console\na\n```", true),
+            "```console\na\n```"
+        );
+        assert_eq!(
+            super::tool_text("~~~console\na\n~~~", true),
+            "~~~console\na\n~~~"
+        );
+        assert_eq!(
+            super::tool_text("# title\n* glob", true),
+            "```console\n# title\n* glob\n```"
+        );
+        assert_eq!(super::tool_text("**Done**", false), "**Done**");
+    }
+
     use super::escape_raw_html as esc;
 
     #[test]

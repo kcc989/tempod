@@ -9,12 +9,47 @@
         "default": {
           "$ref": "AgentId.json"
         },
-        "model": {
-          "type": "string"
+        "models": {
+          "type": "object",
+          "properties": {
+            "claude": {
+              "type": "string"
+            },
+            "codex": {
+              "type": "string"
+            },
+            "opencode": {
+              "type": "string"
+            },
+            "pi": {
+              "type": "string"
+            }
+          },
+          "required": ["claude", "codex", "opencode", "pi"],
+          "additionalProperties": true,
+          "default": {
+            "claude": "",
+            "codex": "",
+            "opencode": "",
+            "pi": ""
+          }
         }
       },
-      "required": ["default", "model"],
+      "required": ["default"],
       "additionalProperties": true
+    },
+    "browser": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "boolean"
+        }
+      },
+      "required": ["run"],
+      "additionalProperties": true,
+      "default": {
+        "run": false
+      }
     },
     "scripts": {
       "type": "object",

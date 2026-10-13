@@ -1,7 +1,7 @@
 import { reconnectDelay } from "@tempo/protocol";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal } from "@xterm/xterm";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Button } from "~/ui/components/ui/button";
 import { LoadingText } from "~/ui/components/ui/spinner";
 import { useTheme } from "~/ui/hooks/useTheme";
@@ -50,6 +50,9 @@ export function TerminalView({
   const [status, setStatus] = useState<Status>("loading");
   const [generation, setGeneration] = useState(0);
   const { resolved } = useTheme();
+  const focusWhenReady = useEffectEvent(() => {
+    if (active && focusSeq > 0) term.current?.focus();
+  });
 
   useEffect(() => {
     const el = host.current;
@@ -64,6 +67,7 @@ export function TerminalView({
     let retry: ReturnType<typeof setTimeout> | null = null;
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     let observer: ResizeObserver | null = null;
+    let reconnectAllowed = true;
 
     const send = (data: Uint8Array | string) => {
       if (ws && ready && ws.readyState === WebSocket.OPEN) ws.send(data);
@@ -103,11 +107,30 @@ export function TerminalView({
         ws = null;
         ready = false;
         const action = terminalCloseAction(e.code);
-        if (action !== "reconnect") return setStatus(action);
+        if (action !== "reconnect") {
+          reconnectAllowed = false;
+          return setStatus(action);
+        }
         setStatus("reconnecting");
         retry = setTimeout(connect, reconnectDelay(attempts++));
       };
     };
+
+    const reconnectNow = () => {
+      if (disposed || !t || !reconnectAllowed) return;
+      if (retry) clearTimeout(retry);
+      retry = null;
+      const previous = ws;
+      ws = null;
+      ready = false;
+      previous?.close(1000, "reconnecting");
+      connect();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") reconnectNow();
+    };
+    window.addEventListener("online", reconnectNow);
+    document.addEventListener("visibilitychange", onVisible);
 
     void (async () => {
       const [{ Terminal }, { FitAddon }] = await Promise.all([
@@ -127,6 +150,7 @@ export function TerminalView({
       t.loadAddon(fit);
       t.open(el);
       term.current = t;
+      focusWhenReady();
       safeFit();
       t.onData((d) => send(encodeInput(d)));
       t.onBinary((d) => send(encodeBinary(d)));
@@ -143,6 +167,8 @@ export function TerminalView({
 
     return () => {
       disposed = true;
+      window.removeEventListener("online", reconnectNow);
+      document.removeEventListener("visibilitychange", onVisible);
       if (retry) clearTimeout(retry);
       if (resizeTimer) clearTimeout(resizeTimer);
       observer?.disconnect();

@@ -17,8 +17,7 @@ export type WorkspaceBanner =
       readonly message: string;
       readonly detail: string | null;
     }
-  | { readonly kind: "setupFailed" }
-  | { readonly kind: "sleeping" };
+  | { readonly kind: "setupFailed" };
 
 const PROGRESS_TITLE: Partial<Record<WorkspaceDetail["state"], string>> = {
   creating: "Creating the workspace",
@@ -50,7 +49,6 @@ export const workspaceBanners = (
   ) {
     out.push({ kind: "setupFailed" });
   }
-  if (ws.state === "sleeping") out.push({ kind: "sleeping" });
   return out;
 };
 

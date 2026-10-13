@@ -1,22 +1,34 @@
-//! Settings (04, Settings; 07): its own window, with GPUI Kit `Settings` in M4. Tabs as on the
-//! web except Devices, which is web only (07, Scope).
+//! Settings (04, Settings; 07): a page in the main window with sidebar navigation.
+//! Devices is web only (07, Scope).
+use super::agents_settings::AgentsSettings;
+use super::environments::EnvironmentsPage;
+use super::settings_form::{
+    PROJECT_PAGES, SettingsForm, TAB_AGENTS, TAB_ENVIRONMENTS, TAB_GENERAL, TAB_LOGINS, TAB_MCP,
+    TAB_PROJECT,
+};
 use super::tokens::{Token, color};
-use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{TitleBar, h_flex, v_flex};
+use gpui_kit::assets::IconName;
+use gpui_kit::base::Root;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::{Selectable as _, h_flex, v_flex};
 use gpui_kit::{
-    App, AppContext as _, Context, IntoElement, ParentElement as _, Render, Styled as _, Window,
-    WindowOptions, div, px, size,
+    App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
+    div, px,
 };
 
-pub const TABS: [&str; 5] = [
+pub const TABS: [&str; 8] = [
     "Logins",
     "Project",
     "Appearance",
-    "Notifications",
+    "General",
     "Shortcuts",
+    "Environments",
+    "MCP servers",
+    "Agents",
 ];
 
-/// The shortcut table of 04 with its Conductor column, read-only.
+/// The shortcut table of 04 with its Mac column, read-only.
 pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Command palette", "⌘K"),
     ("New workspace", "⌘N"),
@@ -52,14 +64,46 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Settings", "⌘,"),
 ];
 
-pub struct SettingsWindow {
-    tab: usize,
+pub struct SettingsView {
+    pub(crate) form: Entity<SettingsForm>,
+    pub(crate) focus: FocusHandle,
+    environments: Entity<EnvironmentsPage>,
+    agents: Entity<AgentsSettings>,
 }
 
-impl Render for SettingsWindow {
+impl SettingsView {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let form = cx.new(|cx| {
+            let mut form = SettingsForm::new(window, cx);
+            form.tab = TAB_GENERAL;
+            form
+        });
+        cx.observe(&form, |_, _, cx| cx.notify()).detach();
+        if let Some(app) = crate::app::AppState::try_global(cx) {
+            let hub = app.read(cx).hub.clone();
+            cx.observe(&hub, |_, _, cx| cx.notify()).detach();
+        }
+        Self {
+            form,
+            focus: cx.focus_handle(),
+            environments: cx.new(|cx| EnvironmentsPage::new(window, cx)),
+            agents: cx.new(|cx| AgentsSettings::new(window, cx)),
+        }
+    }
+}
+
+impl Render for SettingsView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = color(Token::MutedForeground, cx);
-        let body = if TABS[self.tab] == "Shortcuts" {
+        let projects = crate::app::AppState::try_global(cx)
+            .map(|a| a.read(cx).hub.read(cx).projects.clone())
+            .unwrap_or_default();
+        let selected_project = self.form.read(cx).selected_project().cloned();
+        let (tab, section) = {
+            let form = self.form.read(cx);
+            (form.tab, form.section)
+        };
+        let body = if TABS[tab] == "Shortcuts" {
             v_flex()
                 .gap_1()
                 .children(SHORTCUTS.iter().map(|(action, keys)| {
@@ -69,29 +113,228 @@ impl Render for SettingsWindow {
                         .child(div().text_color(muted).child(*keys))
                 }))
                 .into_any_element()
+        } else if tab == TAB_ENVIRONMENTS {
+            self.environments.clone().into_any_element()
+        } else if tab == TAB_AGENTS {
+            self.agents.clone().into_any_element()
         } else {
-            super::skeleton_rows(6).into_any_element()
+            self.form.clone().into_any_element()
+        };
+        let sidebar = v_flex()
+            .id("settings-navigation")
+            .overflow_y_scroll()
+            .w(px(256.))
+            .flex_shrink_0()
+            .h_full()
+            .bg(color(Token::Sidebar, cx))
+            .p_3()
+            .gap_2()
+            .border_r_1()
+            .border_color(color(Token::Border, cx))
+            .child(
+                Button::new("settings-back")
+                    .ghost()
+                    .icon(IconName::ArrowLeft)
+                    .accessibility_label("Back to workspace")
+                    .child(div().w_full().text_left().child("Back to workspace"))
+                    .on_click(|_, _, cx| close(cx)),
+            )
+            .child(div().mt_4().text_lg().child("Settings"))
+            .child(div().mt_4().text_color(muted).child("Personal"))
+            .children(
+                [
+                    TAB_GENERAL,
+                    TAB_LOGINS,
+                    TAB_AGENTS,
+                    TAB_ENVIRONMENTS,
+                    TAB_MCP,
+                    2,
+                    4,
+                ]
+                .map(|ix| {
+                    Button::new(SharedString::from(format!("settings-nav-{ix}")))
+                        .ghost()
+                        .icon(match ix {
+                            TAB_GENERAL => IconName::Bell,
+                            TAB_LOGINS => IconName::KeyRound,
+                            2 => IconName::Palette,
+                            _ => IconName::Keyboard,
+                        })
+                        .accessibility_label(TABS[ix])
+                        .child(div().w_full().text_left().child(TABS[ix]))
+                        .selected(tab == ix)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.form.update(cx, |form, cx| form.show_tab(ix, cx));
+                        }))
+                }),
+            )
+            .child(div().mt_4().text_color(muted).child("Projects"))
+            .children(projects.iter().map(|project| {
+                let project = project.clone();
+                let name = format!("{}/{}", project.owner, project.name);
+                let selected = tab == TAB_PROJECT
+                    && selected_project
+                        .as_ref()
+                        .is_some_and(|p| p.id == project.id);
+                let target = project.clone();
+                v_flex()
+                    .gap_1()
+                    .child(
+                        Button::new(SharedString::from(format!(
+                            "settings-project-{}",
+                            project.id
+                        )))
+                        .ghost()
+                        .icon(IconName::FolderGit2)
+                        .accessibility_label(name.clone())
+                        .child(div().w_full().text_left().truncate().child(name))
+                        .selected(selected)
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                this.form.update(cx, |form, cx| {
+                                    form.show_project(target.clone(), 0, window, cx)
+                                });
+                            },
+                        )),
+                    )
+                    .children(selected.then(|| {
+                        v_flex()
+                            .ml_4()
+                            .pl_2()
+                            .gap_1()
+                            .border_l_1()
+                            .border_color(color(Token::Border, cx))
+                            .children(PROJECT_PAGES.iter().enumerate().map(|(ix, (label, _))| {
+                                let target = project.clone();
+                                Button::new(SharedString::from(format!(
+                                    "project-settings-nav-{}-{ix}",
+                                    project.id
+                                )))
+                                .ghost()
+                                .accessibility_label(*label)
+                                .child(div().w_full().text_left().child(*label))
+                                .selected(section == ix)
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| {
+                                        this.form.update(cx, |form, cx| {
+                                            form.show_project(target.clone(), ix, window, cx)
+                                        });
+                                    },
+                                ))
+                            }))
+                    }))
+            }));
+        let title = if tab == TAB_PROJECT {
+            PROJECT_PAGES[section].0
+        } else {
+            TABS[tab]
         };
         v_flex()
+            .key_context(crate::keymap::SETTINGS)
+            .track_focus(&self.focus)
+            .on_action(cx.listener(|_, _: &crate::actions::BackFromSettings, _, cx| close(cx)))
             .size_full()
-            .child(TitleBar::new().child("Settings"))
             .child(
-                TabBar::new("settings-tabs")
-                    .selected_index(self.tab)
-                    .on_click(cx.listener(|this, ix: &usize, _, cx| {
-                        this.tab = *ix;
-                        cx.notify();
-                    }))
-                    .children(TABS.map(|t| Tab::new().label(t))),
+                h_flex().size_full().items_start().child(sidebar).child(
+                    v_flex()
+                        .flex_1()
+                        .h_full()
+                        .min_w_0()
+                        .min_h_0()
+                        .px_8()
+                        .py_8()
+                        .child(
+                            v_flex()
+                                .w_full()
+                                .max_w(px(896.))
+                                .h_full()
+                                .min_h_0()
+                                .gap_6()
+                                .child(
+                                    v_flex()
+                                        .gap_2()
+                                        .children(
+                                            (tab == TAB_PROJECT)
+                                                .then(|| {
+                                                    selected_project.as_ref().map(|p| {
+                                                        div().text_sm().text_color(muted).child(
+                                                            format!("{}/{}", p.owner, p.name),
+                                                        )
+                                                    })
+                                                })
+                                                .flatten(),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_2xl()
+                                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                                .child(title),
+                                        )
+                                        .child(div().text_sm().text_color(muted).child(
+                                            match tab {
+                                                TAB_LOGINS => "Manage agent logins and API keys.",
+                                                TAB_GENERAL => {
+                                                    "Notifications and sound for this Mac."
+                                                }
+                                                TAB_PROJECT => {
+                                                    "Configure this project and its workspaces."
+                                                }
+                                                TAB_ENVIRONMENTS => {
+                                                    "Manage shared project environments."
+                                                }
+                                                TAB_MCP => "Manage MCP servers for your agents.",
+                                                2 => "Set your theme and transcript detail.",
+                                                _ => "Keyboard shortcuts for Tempo.",
+                                            },
+                                        )),
+                                )
+                                .child(div().flex_1().min_h_0().child(body)),
+                        ),
+                ),
             )
-            .child(div().flex_1().p_4().child(body))
     }
 }
 
+/// Shows the existing Settings page, preserving its selected section.
 pub fn open(cx: &mut App) {
-    let options = WindowOptions {
-        window_min_size: Some(size(px(560.), px(420.))),
-        ..TitleBar::window_options()
-    };
-    let _ = gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| SettingsWindow { tab: 0 }));
+    show(None, cx);
+}
+
+pub fn open_logins(cx: &mut App) {
+    show(Some(TAB_LOGINS), cx);
+}
+
+pub fn open_agents(cx: &mut App) {
+    show(Some(TAB_AGENTS), cx);
+}
+
+pub fn close(cx: &mut App) {
+    if let Some(app) = crate::app::AppState::try_global(cx) {
+        app.update(cx, |a, cx| {
+            a.settings_open = false;
+            cx.notify();
+        });
+    }
+}
+
+fn show(tab: Option<usize>, cx: &mut App) {
+    cx.defer(move |cx| {
+        if crate::app::ensure_main_window(cx).is_err() {
+            return;
+        }
+        let Some(app) = crate::app::AppState::try_global(cx) else {
+            return;
+        };
+        if let Some(handle) = app.read(cx).main_window {
+            let _ = handle.update(cx, |_, window, cx| {
+                if let Ok(view) = Root::read(window, cx)
+                    .view()
+                    .clone()
+                    .downcast::<super::main_window::MainWindow>()
+                {
+                    view.update(cx, |view, cx| view.show_settings(tab, window, cx));
+                }
+            });
+        }
+    });
 }

@@ -22,6 +22,7 @@ export const projectToWire = (r: schema.ProjectRow): Project => {
     defaultBranch: r.defaultBranch,
     settings: settings._tag === "Some" ? settings.value : {},
     sortOrder: r.sortOrder,
+    environmentId: r.environmentId,
   };
 };
 

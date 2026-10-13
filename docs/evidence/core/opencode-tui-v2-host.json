@@ -1,0 +1,51 @@
+{
+  "agent": "opencode",
+  "bin": "opencode (isolated npm installation)",
+  "live": false,
+  "agentInfo": {
+    "name": "OpenCode",
+    "version": "0.0.0-tui-v2-202606261840"
+  },
+  "agentCapabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "promptCapabilities": {
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "close": {},
+      "fork": {},
+      "list": {},
+      "resume": {}
+    }
+  },
+  "authMethods": [
+    "opencode-login"
+  ],
+  "modes": [
+    "build",
+    "plan"
+  ],
+  "currentModeId": "build",
+  "configOptions": [
+    {
+      "id": "model",
+      "type": "select",
+      "category": "model"
+    },
+    {
+      "id": "mode",
+      "type": "select",
+      "category": "mode"
+    }
+  ],
+  "setMode": "build",
+  "loadBeforeAnyTurn": {
+    "ok": true,
+    "replayedUpdates": 0
+  }
+}

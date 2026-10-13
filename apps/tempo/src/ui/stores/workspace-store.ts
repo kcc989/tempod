@@ -1,7 +1,7 @@
 import type { CredentialProvider } from "@tempo/protocol";
 import { ReconnectingSocket, wsUrl, type SocketLike, type SocketStatus } from "~/ui/lib/socket";
 import { connectionMonitor } from "./connection";
-import { parseWorkspaceMessage } from "./parse";
+import { isUnknownVersionHello, parseWorkspaceMessage } from "./parse";
 import {
   applyWorkspaceMessage,
   clearCredentialInvalid,
@@ -82,6 +82,7 @@ export class WorkspaceStore {
 
   /** Exposed for tests and for replaying a frame. */
   receive(raw: string): void {
+    if (isUnknownVersionHello(raw)) return this.socket.rejectVersion();
     const msg = parseWorkspaceMessage(raw);
     if (!msg) return;
     const { state, events } = applyWorkspaceMessage(this.snapshot, msg);

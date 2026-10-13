@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CustomAgent",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "baseAgent": {
+      "$ref": "AgentId.json"
+    },
+    "model": {
+      "type": "string"
+    },
+    "thoughtLevel": {
+      "type": "string"
+    },
+    "systemPrompt": {
+      "type": "string",
+      "maxLength": 32000
+    },
+    "tools": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["allow", "deny"],
+      "additionalProperties": true
+    },
+    "mcp": {
+      "type": "object",
+      "properties": {
+        "playwright": {
+          "type": "boolean"
+        },
+        "servers": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "$ref": "McpServerDef.json"
+          }
+        }
+      },
+      "required": ["playwright", "servers"],
+      "additionalProperties": true
+    },
+    "id": {
+      "type": "string"
+    },
+    "commitSha": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "baseAgent",
+    "model",
+    "thoughtLevel",
+    "systemPrompt",
+    "tools",
+    "mcp",
+    "id",
+    "commitSha",
+    "updatedAt"
+  ],
+  "additionalProperties": true
+}

@@ -1,4 +1,4 @@
-import { AlertCircleIcon, MoonIcon, TriangleAlertIcon } from "lucide-react";
+import { AlertCircleIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/ui/components/ui/button";
@@ -17,7 +17,7 @@ export interface WorkspaceBannersProps {
 
 /**
  * Banners above the center tabs (04, Empty, loading and error states): the current status while the
- * workspace is created or started, error, setup failed and sleeping.
+ * workspace is created or started, error and setup failed.
  */
 export function WorkspaceBanners({ workspaceId }: WorkspaceBannersProps) {
   const workspace = useWorkspaceSelector(workspaceId, (s) => s.workspace);
@@ -50,16 +50,6 @@ function Banner({ workspaceId, banner }: { workspaceId: string; banner: Workspac
       return <ErrorBanner workspaceId={workspaceId} message={banner.message} detail={banner.detail} />;
     case "setupFailed":
       return <SetupFailedBanner workspaceId={workspaceId} />;
-    case "sleeping":
-      return (
-        <div
-          role="status"
-          className="flex items-center gap-2 border-b bg-muted/60 px-3 py-1.5 text-sm text-muted-foreground"
-        >
-          <MoonIcon className="size-3.5 shrink-0" />
-          Sleeping. Sending a message wakes it.
-        </div>
-      );
   }
 }
 
