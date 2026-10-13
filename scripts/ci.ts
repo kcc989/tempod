@@ -3,21 +3,23 @@ import { appendFileSync } from "node:fs";
 const started = Number(process.env["CI_STARTED_AT"] ?? Date.now());
 const budgetMs = 270_000;
 const timings: { name: string; seconds: number }[] = [];
-const checks: [string, string[]][] = [
-  ["Container versions", ["bun", "run", "check:versions"]],
-  ["Typecheck", ["bun", "run", "typecheck"]],
-  ["Lint", ["bun", "run", "lint"]],
-  ["Format", ["bun", "run", "format:check"]],
-  ["Unit and integration tests", ["bun", "run", "test"]],
-  ["Daemon build", ["bun", "run", "build:tempod"]],
-  ["App build", ["bun", "run", "--cwd", "apps/tempo", "build"]],
-  ["Web client", ["bun", "run", "test:web"]],
-  ["Browser regressions", ["bun", "run", "--cwd", "tests/e2e", "test:browser"]],
-];
+type Check = [string, string[]];
+const checks = {
+  versions: ["Container versions", ["bun", "run", "check:versions"]],
+  typecheck: ["Typecheck", ["bun", "run", "typecheck"]],
+  lint: ["Lint", ["bun", "run", "lint"]],
+  format: ["Format", ["bun", "run", "format:check"]],
+  tests: ["Unit and integration tests", ["bun", "run", "test"]],
+  daemon: ["Daemon build", ["bun", "run", "build:tempod"]],
+  app: ["App build", ["bun", "run", "--cwd", "apps/tempo", "build"]],
+  web: ["Web client", ["bun", "run", "test:web"]],
+  browser: ["Browser regressions", ["bun", "run", "--cwd", "tests/e2e", "test:browser"]],
+} satisfies Record<string, Check>;
 
 let exitCode = 0;
-for (const [name, cmd] of checks) {
-  console.log(`::group::${name}`);
+const runCheck = async ([name, cmd]: Check): Promise<boolean> => {
+  if (exitCode !== 0 || Date.now() - started >= budgetMs) return false;
+  console.log(`Starting ${name}`);
   const stepStarted = Date.now();
   const child = Bun.spawn(cmd, { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
   const remaining = budgetMs - (Date.now() - started);
@@ -26,12 +28,25 @@ for (const [name, cmd] of checks) {
   clearTimeout(timer);
   const seconds = (Date.now() - stepStarted) / 1000;
   timings.push({ name, seconds });
-  console.log("::endgroup::");
   console.log(`::notice title=${name} runtime::${seconds.toFixed(1)} seconds`);
   if (result !== 0 || Date.now() - started >= budgetMs) {
     exitCode = result || 1;
-    break;
+    return false;
   }
+  return true;
+};
+
+const runSequence = async (sequence: Check[]): Promise<void> => {
+  for (const check of sequence) {
+    if (!(await runCheck(check))) break;
+  }
+};
+await runSequence([checks.versions, checks.lint, checks.format]);
+if (exitCode === 0) {
+  await Promise.all([runSequence([checks.typecheck, checks.daemon, checks.app]), runCheck(checks.tests)]);
+}
+if (exitCode === 0) {
+  await Promise.all([runCheck(checks.web), runCheck(checks.browser)]);
 }
 
 const total = (Date.now() - started) / 1000;

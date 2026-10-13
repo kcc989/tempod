@@ -2,6 +2,10 @@
 
 PRs have a **five-minute total runner budget**, not five minutes per parallel job.
 The single `check` job runs all local checks, builds, and browser regressions.
+Typecheck and builds overlap with tests on that one runner; the two browser
+suites also run concurrently on their separate fixture servers. The timing summary
+shows individual durations and the total elapsed time, so overlapping stages
+should not be added together.
 `bun run ci` reports stage durations to the Actions summary and fails after 270
 seconds including checkout, dependency setup and Chromium installation. The job
 has a five-minute timeout, reserving the last 30 seconds for cache saves and
@@ -15,7 +19,8 @@ and dependency patches. Image tests have a separate `TEMPO_IMAGE_TEST` hash. Liv
 agent/deployment tasks are never cached. Builds used by CI still execute, and
 browser fixtures build before previewing to avoid development-server transform
 costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
-to avoid loading the same dependency module graph into every workerd isolate. A cache miss must also fit the budget.
+to avoid loading the same dependency module graph into every workerd isolate.
+Component tests use two workers to limit CPU and memory contention. A cache miss must also fit the budget.
 
 ## Test audit
 

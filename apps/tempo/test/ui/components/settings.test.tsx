@@ -153,14 +153,14 @@ describe("settings page", () => {
     show();
     const nav = screen.getByRole("navigation", { name: "Settings" });
     fireEvent.click(within(nav).getByRole("button", { name: "Environment" }));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Sleep after idle (minutes)" }), {
+    fireEvent.change(screen.getByLabelText("Sleep after idle (minutes)", { selector: "input" }), {
       target: { value: "1" },
     });
     fireEvent.click(within(nav).getByRole("button", { name: "Git" }));
     fireEvent.click(screen.getByRole("button", { name: /Save/ }));
     expect(screen.getByRole("heading", { name: "Environment" })).toBeTruthy();
     expect(
-      screen.getByRole("spinbutton", { name: "Sleep after idle (minutes)" }).getAttribute("aria-invalid"),
+      screen.getByLabelText("Sleep after idle (minutes)", { selector: "input" }).getAttribute("aria-invalid"),
     ).toBe("true");
     expect(call).not.toHaveBeenCalledWith("updateProjectSettings", expect.anything());
   });

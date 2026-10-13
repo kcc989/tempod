@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
     expect: { requireAssertions: true },
+    maxWorkers: 2,
     environment: "happy-dom",
     include: ["test/ui/components/**/*.test.tsx"],
     setupFiles: ["./test/ui/components/setup.ts"],
