@@ -63,6 +63,9 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollIdle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [scrolling, setScrolling] = useState(false);
+  useEffect(() => () => clearTimeout(scrollIdle.current), []);
   const contentRef = useRef<HTMLDivElement>(null);
   const positionKey = `${workspaceId}:${sessionId}`;
   const initialPosition = useRef(positions.get(positionKey));
@@ -103,6 +106,9 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
     const el = scrollRef.current;
 
     if (!el) return;
+    setScrolling(true);
+    clearTimeout(scrollIdle.current);
+    scrollIdle.current = setTimeout(() => setScrolling(false), 1000);
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
     stick.current = atBottom;
     setAway(!atBottom);
@@ -174,7 +180,8 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
         }}
         tabIndex={0}
         aria-label="Transcript"
-        className="h-full overflow-y-auto outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+        data-scrolling={scrolling || undefined}
+        className="chat-scrollbar h-full overflow-y-auto outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
       >
         <div className="mx-auto w-full min-w-0 max-w-[51.25rem] px-[var(--chat-gutter,12px)] py-3">
           {virtual ? (

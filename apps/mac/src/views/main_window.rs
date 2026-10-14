@@ -107,6 +107,7 @@ impl MainWindow {
             }
         }
         Theme::update(cx, |theme| theme.font_size = px(13.));
+        Theme::set_scrollbar_mode(gpui_kit::component::scroll::ScrollbarMode::Scrolling, cx);
         let appearance = cx.observe_window_appearance(window, |_, window, cx| {
             if cx.global::<crate::storage::Local>().config().theme == crate::storage::Theme::System
             {

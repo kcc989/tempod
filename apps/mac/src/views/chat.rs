@@ -187,6 +187,7 @@ pub struct TranscriptView {
     attachment_source: Option<(Client, String)>,
     thumbnails: Thumbnails,
     pub read_only: bool,
+    pub chat_inset: f32,
     /// The chat's agent, for error messages that name it.
     pub agent: Option<AgentId>,
     /// No turn runs and none is queued, so a revert can start (04, Transcript).
@@ -216,6 +217,7 @@ impl TranscriptView {
             attachment_source: None,
             thumbnails: Thumbnails::default(),
             read_only: false,
+            chat_inset: 16.,
             agent: None,
             can_revert: false,
         }
@@ -495,6 +497,8 @@ impl Render for TranscriptView {
         let view = cx.weak_entity();
         let images = self.images.clone();
         let background = color(Token::Background, cx);
+        let inset = (self.chat_inset - 4.).max(0.);
+        let row_style = div().px_0().style().clone();
         MessageScroller::new("transcript", self.scroller.clone(), move |ix, _, cx| {
             let row = view
                 .upgrade()
@@ -504,6 +508,9 @@ impl Render for TranscriptView {
             div().w_full().flex().justify_start().child(
                 image_cache(images.clone())
                     .w_full()
+                    .max_w(px(820.))
+                    .mx_auto()
+                    .px(px(inset))
                     .min_w_0()
                     .children(row.map(|row| {
                         if row.native.is_some() {
@@ -514,6 +521,7 @@ impl Render for TranscriptView {
                     })),
             )
         })
+        .with_row_style(row_style)
         .with_jump_button_transition(std::time::Duration::ZERO)
         .with_jump_button_renderer(move |button| {
             button.label("Jump to latest").bg(background).shadow_md()

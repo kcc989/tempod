@@ -2762,6 +2762,12 @@ impl Render for WorkspaceView {
             })
             .collect();
         let content = if let Some(chat) = chat {
+            if chat.transcript.read(cx).chat_inset != self.chat_inset {
+                chat.transcript.update(cx, |transcript, cx| {
+                    transcript.chat_inset = self.chat_inset;
+                    cx.notify();
+                });
+            }
             let has_queue = !queued.is_empty();
             v_flex()
                 .size_full()
@@ -2770,10 +2776,6 @@ impl Render for WorkspaceView {
                         .flex_1()
                         .min_h_0()
                         .w_full()
-                        .max_w(gpui_kit::px(820.))
-                        .mx_auto()
-                        // The list and message row contribute 16 pt more than the composer.
-                        .px(gpui_kit::px((self.chat_inset - 16.).max(0.)))
                         .child(chat.transcript.clone()),
                 )
                 .children(has_queue.then(|| {
