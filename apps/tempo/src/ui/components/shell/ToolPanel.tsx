@@ -136,10 +136,16 @@ export function ToolPanel({ workspaceId, phone = false }: { workspaceId: string;
                   </Button>
                 </div>
               ))}
-              <TabsTrigger value="tools" aria-label="New tool tab">
-                <PlusIcon className="size-4" />
-              </TabsTrigger>
             </TabsList>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="New tool tab"
+              title="Open a tool"
+              onClick={() => selectTool(workspaceId, null)}
+            >
+              <PlusIcon className="size-4" />
+            </Button>
           </div>
         </SharedHeaderRegion>
         <TabsContent value="tools" className="min-h-0 overflow-y-auto p-6">

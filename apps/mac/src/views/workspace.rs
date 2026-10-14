@@ -1139,7 +1139,8 @@ impl WorkspaceView {
             .min_h(gpui_kit::px(40.))
             .bg(color(if self.shared_header { Token::Muted } else { Token::Panel }, cx))
             .gap_2()
-            .p_2()
+            .px_2()
+            .py_1()
             .border_b(gpui_kit::px(if self.shared_header { 0. } else { 1. }))
             .border_color(color(Token::Border, cx))
             .children(
@@ -1263,6 +1264,8 @@ impl WorkspaceView {
             }))
             .child(
                 Button::new("workspace-info")
+                    .ghost()
+                    .small()
                     .icon(gpui_kit::assets::IconName::Info)
                     .selected(self.tools.read(cx).info_open)
                     .accessibility_label("Workspace info")
@@ -1274,6 +1277,8 @@ impl WorkspaceView {
             )
             .child(
                 Button::new("toggle-right-side")
+                    .ghost()
+                    .small()
                     .icon(gpui_kit::assets::IconName::PanelRight)
                     .accessibility_label("Toggle right side")
                     .tooltip("Toggle right side (⌘⌥B)")

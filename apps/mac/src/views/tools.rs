@@ -375,6 +375,7 @@ impl ToolPanel {
             .bg(color(Token::Muted, cx))
             .child(
                 TabBar::new("tool-tabs")
+                    .underline()
                     .h_full()
                     .bg(color(Token::Muted, cx))
                     .selected_index(selected)
@@ -415,7 +416,15 @@ impl ToolPanel {
                                 })),
                         )
                     }))
-                    .child(Tab::new().label("+").aria_label("New tool tab")),
+                    .suffix(
+                        Button::new("new-tool-tab")
+                            .ghost()
+                            .small()
+                            .icon(gpui_kit::assets::IconName::Plus)
+                            .accessibility_label("New tool tab")
+                            .tooltip("Open a tool")
+                            .on_click(cx.listener(|this, _, _, cx| this.show_launcher(cx))),
+                    ),
             )
             .into_any_element()
     }
