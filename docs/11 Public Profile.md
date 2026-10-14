@@ -2,7 +2,7 @@
 
 Oct 14, 2026 · @Casey Collins
 
-The owner asked for GitHub-like public pages for a solo builder: a profile, public repositories that anyone can read, and pinned repositories. Tempo stays a single-owner deployment (00, 05). Nobody else signs in, and only the owner can trigger agents. This tab extends 02, 04, 05, 07 and 09 for that scope.
+Tempo is self-hosted: one owner deploys it on their own Cloudflare account (00, 05). The owner asked for a way to let other people read their code. This tab adds public projects, a profile page that lists them, and pinned projects. Everything is served by the owner's own Worker at `APP_HOST`, from the owner's own Artifacts namespace. Nobody else signs in, and visitors can only read. Only the owner can change anything or trigger agents. This tab extends 02, 04, 05, 07 and 09 for that scope.
 
 ## Decisions
 
@@ -78,7 +78,9 @@ The auth middleware (02) reads the session if there is one, then applies the fun
 - Anonymous calls go through the cookie path (`createServerFn`) with no cookie, and through `/api/v1/rpc` with no bearer token. The `visitor` list above is closed.
 - Visitor reads use the same Artifacts binding as owner reads. Tokens never appear in output (09).
 - Public pages show commit author names and email addresses, as Git does. The confirm dialog for `Public` says so.
-- This version adds no rate limit of its own. The owner can add Cloudflare rate-limiting rules on `APP_HOST` (05 allows extra layers).
+- Visitor reads run on the owner's Cloudflare account, so they count against the owner's Workers, D1 and Artifacts usage (05, Cost model). This version adds no rate limit of its own. The owner can add Cloudflare rate-limiting rules on `APP_HOST` (05 allows extra layers).
+- If Cloudflare Access protects `APP_HOST` (05), visitors cannot reach the public pages unless the owner's Access policy lets them in. Tempo does not change Access.
+- Visitors cannot clone. Clone tokens never leave the owner's Worker (09).
 
 ## Clients
 
