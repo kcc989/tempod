@@ -10,6 +10,38 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     input: MethodInput<K>,
   ): Promise<Result<FnOutput<K>>>;
 
+  requestAgent(input: MethodInput<"requestAgent">): Promise<Result<FnOutput<"requestAgent">>> {
+    return this.rpc("requestAgent", input);
+  }
+
+  cancelRun(input: MethodInput<"cancelRun">): Promise<Result<FnOutput<"cancelRun">>> {
+    return this.rpc("cancelRun", input);
+  }
+
+  listRuns(input: MethodInput<"listRuns">): Promise<Result<FnOutput<"listRuns">>> {
+    return this.rpc("listRuns", input);
+  }
+
+  resolveAgentProposal(
+    input: MethodInput<"resolveAgentProposal">,
+  ): Promise<Result<FnOutput<"resolveAgentProposal">>> {
+    return this.rpc("resolveAgentProposal", input);
+  }
+
+  sendRunToChat(input: MethodInput<"sendRunToChat">): Promise<Result<FnOutput<"sendRunToChat">>> {
+    return this.rpc("sendRunToChat", input);
+  }
+
+  listLifecycleEvents(
+    input: MethodInput<"listLifecycleEvents">,
+  ): Promise<Result<FnOutput<"listLifecycleEvents">>> {
+    return this.rpc("listLifecycleEvents", input);
+  }
+
+  getTrace(input: MethodInput<"getTrace">): Promise<Result<FnOutput<"getTrace">>> {
+    return this.rpc("getTrace", input);
+  }
+
   getWorkspace(input: MethodInput<"getWorkspace">): Promise<Result<FnOutput<"getWorkspace">>> {
     return this.rpc("getWorkspace", input);
   }
@@ -50,10 +82,18 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("deleteWorkspace", input);
   }
 
-  rotatePreviewToken(
-    input: MethodInput<"rotatePreviewToken">,
-  ): Promise<Result<FnOutput<"rotatePreviewToken">>> {
-    return this.rpc("rotatePreviewToken", input);
+  openPreview(input: MethodInput<"openPreview">): Promise<Result<FnOutput<"openPreview">>> {
+    return this.rpc("openPreview", input);
+  }
+
+  rotatePreviewKey(input: MethodInput<"rotatePreviewKey">): Promise<Result<FnOutput<"rotatePreviewKey">>> {
+    return this.rpc("rotatePreviewKey", input);
+  }
+
+  getBrowserLiveView(
+    input: MethodInput<"getBrowserLiveView">,
+  ): Promise<Result<FnOutput<"getBrowserLiveView">>> {
+    return this.rpc("getBrowserLiveView", input);
   }
 
   setBaseBranch(input: MethodInput<"setBaseBranch">): Promise<Result<FnOutput<"setBaseBranch">>> {
@@ -62,6 +102,18 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
 
   getDiagnostics(input: MethodInput<"getDiagnostics">): Promise<Result<FnOutput<"getDiagnostics">>> {
     return this.rpc("getDiagnostics", input);
+  }
+
+  setWorkspaceEnvironment(
+    input: MethodInput<"setWorkspaceEnvironment">,
+  ): Promise<Result<FnOutput<"setWorkspaceEnvironment">>> {
+    return this.rpc("setWorkspaceEnvironment", input);
+  }
+
+  resolveEnvironmentProposal(
+    input: MethodInput<"resolveEnvironmentProposal">,
+  ): Promise<Result<FnOutput<"resolveEnvironmentProposal">>> {
+    return this.rpc("resolveEnvironmentProposal", input);
   }
 
   createSession(input: MethodInput<"createSession">): Promise<Result<FnOutput<"createSession">>> {
@@ -200,5 +252,17 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
 
   listScriptRuns(input: MethodInput<"listScriptRuns">): Promise<Result<FnOutput<"listScriptRuns">>> {
     return this.rpc("listScriptRuns", input);
+  }
+
+  readFileAt(input: MethodInput<"readFileAt">): Promise<Result<FnOutput<"readFileAt">>> {
+    return this.rpc("readFileAt", input);
+  }
+
+  listArtifacts(input: MethodInput<"listArtifacts">): Promise<Result<FnOutput<"listArtifacts">>> {
+    return this.rpc("listArtifacts", input);
+  }
+
+  openArtifact(input: MethodInput<"openArtifact">): Promise<Result<FnOutput<"openArtifact">>> {
+    return this.rpc("openArtifact", input);
   }
 }

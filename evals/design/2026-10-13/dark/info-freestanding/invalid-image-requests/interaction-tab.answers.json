@@ -1,0 +1,4 @@
+{
+  "status": 422,
+  "error": "{\"errors\":[{\"message\":\"AiError: AiError: {\\\"error\\\":{\\\"type\\\":\\\"invalid_request\\\",\\\"message\\\":\\\"Request body failed validation\\\",\\\"details\\\":{\\\"formErrors\\\":[],\\\"fieldErrors\\\":{\\\"images\\\":[\\\"image payload does not match its content type\\\",\\\"image payload does not match its content type\\\"]}}}} (a2b74a3c-714a-451d-9382-2b7d7f5abf67)\",\"code\":5012}],\"success\":false,\"result\":{},\"messages\":[]}"
+}

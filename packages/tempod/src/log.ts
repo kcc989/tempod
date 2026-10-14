@@ -1,8 +1,9 @@
-import { redact, type LogLevel } from "@tempo/protocol";
+import { redactFields, type RedactableFields, type LogLevel } from "@tempo/protocol";
 
 const ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
-export type LogData = Record<string, unknown>;
+export type LogData = RedactableFields;
+
 export type LogSink = (level: LogLevel, msg: string, data: LogData | undefined) => void;
 
 /** JSON lines on stderr, always through the redact helper. `warn` and up also go to `onEvent`. */
@@ -20,17 +21,20 @@ export class Logger {
   /** Where `warn` and up go as `log` events; warnings logged before this are delivered now. */
   set onEvent(sink: LogSink | undefined) {
     this.sink = sink;
+
     if (!sink) return;
+
     for (const [level, msg, data] of this.early.splice(0)) sink(level, msg, data);
   }
 
   /** Writes to stderr only, never as a `log` event (used when the outbox itself fails). */
   local(level: LogLevel, msg: string, data?: LogData): void {
-    this.writeLine(level, msg, data === undefined ? undefined : (redact(data) as LogData));
+    this.writeLine(level, msg, data === undefined ? undefined : redactFields(data));
   }
 
   private writeLine(level: LogLevel, msg: string, clean: LogData | undefined): void {
     if (ORDER[level] < this.minLevel) return;
+
     try {
       this.write(JSON.stringify({ ts: Date.now(), level, msg, ...clean }));
     } catch {
@@ -39,13 +43,17 @@ export class Logger {
   }
 
   log(level: LogLevel, msg: string, data?: LogData): void {
-    const clean = data === undefined ? undefined : (redact(data) as LogData);
+    const clean = data === undefined ? undefined : redactFields(data);
     this.writeLine(level, msg, clean);
+
     if (ORDER[level] < ORDER.warn) return;
+
     if (!this.sink) {
       if (this.early.length < 100) this.early.push([level, msg, clean]);
+
       return;
     }
+
     try {
       this.sink(level, msg, clean);
     } catch {
@@ -67,4 +75,4 @@ export class Logger {
   }
 }
 
-export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+export const errorText = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));

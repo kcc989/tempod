@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { MessageMarkdown } from "../../../src/ui/components/chat/Markdown";
-import { openFile } from "../../../src/ui/state/workspace-ui";
+import { getWorkspaceUi, resetUiState } from "../../../src/ui/state/workspace-ui";
 
-vi.mock("~/ui/state/workspace-ui", () => ({ openFile: vi.fn() }));
+beforeEach(resetUiState);
 
 const markdown = (text: string) =>
   render(createElement(MessageMarkdown, { workspaceId: "w1", text, streaming: true }));
@@ -37,7 +37,7 @@ describe("agent Markdown (04, 05)", () => {
     (path) => {
       const { container } = markdown(`[Source](file:///workspace/${path})`);
       expect(container.querySelector("a, button")).toBeNull();
-      expect(openFile).not.toHaveBeenCalled();
+      expect(getWorkspaceUi("w1").tabs).toEqual([]);
       expect(screen.getByText("Source")).toBeTruthy();
     },
   );
@@ -45,6 +45,6 @@ describe("agent Markdown (04, 05)", () => {
   it("opens workspace file links in the file panel", () => {
     markdown("[Source](file:///workspace/src/main.ts#L12)");
     fireEvent.click(screen.getByRole("button", { name: "Source" }));
-    expect(openFile).toHaveBeenCalledWith("w1", "src/main.ts", 12);
+    expect(getWorkspaceUi("w1").tabs[0]?.tab).toEqual({ kind: "file", path: "src/main.ts", line: 12 });
   });
 });

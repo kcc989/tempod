@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc --checkers 2 -p tsconfig.json"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.8.0",

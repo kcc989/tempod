@@ -6,7 +6,7 @@
   "main": "./src/worker.ts",
   "compatibility_date": "2026-10-10",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
   "vars": {
     "APP_HOST": "localhost:5173",
     "PREVIEW_DOMAIN": "previews.localhost",
@@ -34,6 +34,7 @@
     "bindings": [
       { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
       { "name": "USER_HUB", "class_name": "UserHubDO" },
+      { "name": "REPOSITORY_CI", "class_name": "RepositoryCiDO" },
       { "name": "CREDENTIALS", "class_name": "CredentialDO" },
     ],
   },
@@ -41,6 +42,7 @@
     "WorkspaceDO": { "type": "durable-object", "storage": "sqlite" },
     "UserHubDO": { "type": "durable-object", "storage": "sqlite" },
     "CredentialDO": { "type": "durable-object", "storage": "sqlite" },
+    "RepositoryCiDO": { "type": "durable-object", "storage": "sqlite" },
   },
   "d1_databases": [
     {
@@ -51,4 +53,8 @@
     },
   ],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }],
+  "browser": { "binding": "BROWSER" },
+  "ai": { "binding": "AI" },
+  "worker_loaders": [{ "binding": "LOADER" }],
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "tempo-repos", "remote": true }],
 }

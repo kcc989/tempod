@@ -1,5 +1,5 @@
-import { useNavigate, useParams } from "@tanstack/react-router";
-import { FileDiffIcon, LayoutListIcon, MessageSquareIcon } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { FileDiffIcon, FolderGit2Icon, LayoutListIcon, MessageSquareIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLayout } from "~/ui/hooks/useWorkspaceUi";
 import { cn } from "~/ui/lib/utils";
@@ -7,27 +7,36 @@ import { setPhonePane, type PhonePane } from "~/ui/state/workspace-ui";
 
 /** 04, Phone width: bottom navigation Workspaces, Chat, Changes. */
 export function PhoneNav() {
-  const params = useParams({ strict: false }) as { workspaceId?: string };
+  const params = useParams({ strict: false });
   const navigate = useNavigate();
+  const location = useLocation();
+  const repositories = location.pathname === "/repositories" || location.pathname === "/";
   const { phonePane, lastWorkspaceId } = useLayout();
   const current = params.workspaceId ?? null;
   const target = current ?? lastWorkspaceId;
 
   const showPane = (pane: PhonePane) => {
     setPhonePane(pane);
+
     if (!current && target) void navigate({ to: "/w/$workspaceId", params: { workspaceId: target } });
   };
 
   return (
     <nav
       aria-label="Sections"
-      className="grid shrink-0 grid-cols-3 border-t bg-sidebar pb-[env(safe-area-inset-bottom)]"
+      className="grid shrink-0 grid-cols-4 border-t bg-sidebar pb-[env(safe-area-inset-bottom)]"
     >
+      <NavButton
+        icon={FolderGit2Icon}
+        label="Repositories"
+        active={repositories}
+        onClick={() => void navigate({ to: "/repositories" })}
+      />
       <NavButton
         icon={LayoutListIcon}
         label="Workspaces"
-        active={current === null}
-        onClick={() => void navigate({ to: "/" })}
+        active={location.pathname === "/workspaces"}
+        onClick={() => void navigate({ to: "/workspaces" })}
       />
       <NavButton
         icon={MessageSquareIcon}

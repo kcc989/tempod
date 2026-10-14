@@ -1,13 +1,16 @@
-import type { CredentialProvider, CredentialStatus } from "@tempo/protocol";
+import { useApiCall } from "~/ui/hooks/useCall";
+import type { CredentialProvider, CredentialStatus, FnOutput } from "@tempo/protocol";
+import { useQueryClient } from "@tanstack/react-query";
 import { FileJsonIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Badge } from "~/ui/components/ui/badge";
 import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
 import { Textarea } from "~/ui/components/ui/textarea";
-import { useCallMutation } from "~/ui/hooks/useCall";
+import { invalidateCalls, useCallMutation } from "~/ui/hooks/useCall";
+
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { formatRelative } from "~/ui/lib/format";
 import { errorCode, errorDetail, errorText, toastError } from "~/ui/lib/toast";
@@ -27,8 +30,11 @@ import { CommandLine } from "../parts";
 /** Settings → Logins (04). Values are write-only: once saved they are never shown again. */
 export function LoginsTab() {
   const status = useCredentialStatus();
+
   if (status.isPending) return <SkeletonRows rows={6} />;
+
   if (status.isError) return <ErrorState error={status.error} onRetry={() => void status.refetch()} />;
+
   return (
     <div className="grid gap-3">
       <p className="text-xs text-muted-foreground">
@@ -46,23 +52,25 @@ const forgetInvalid = (provider: CredentialProvider) => {
 };
 
 /** Server-side validation shows next to the field; other errors toast. */
-const inlineOrToast = (e: unknown, setError: (s: string) => void) => {
-  if (errorCode(e) === "VALIDATION_FAILED") {
-    const detail = errorDetail(e);
-    setError(detail ? `${errorText(e)} ${detail}` : errorText(e));
-  } else toastError(e);
+const inlineOrToast = (cause: unknown, setError: (s: string) => void) => {
+  if (errorCode(cause) === "VALIDATION_FAILED") {
+    const detail = errorDetail(cause);
+    setError(detail ? `${errorText(cause)} ${detail}` : errorText(cause));
+  } else toastError(cause);
 };
 
 function LoginCard({ row, status }: { row: LoginRow; status: CredentialStatus }) {
   const state = loginState(status, row.provider);
+
   const remove = useCallMutation("deleteCredential", {
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => toast.success(`${row.label} removed`),
   });
+
   const lastRefresh = row.provider === "codex" ? status.codex.lastRefresh : null;
 
   return (
-    <section aria-label={row.label} className="grid gap-2 rounded-lg border p-3">
+    <section aria-label={row.label} className="grid gap-2 rounded-lg border bg-card p-3">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">{row.label}</h3>
         <Badge variant={state.set ? "success" : "muted"}>{state.set ? "Set" : "Not set"}</Badge>
@@ -131,9 +139,10 @@ function SecretForm({
 function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   const save = useCallMutation("setClaudeToken", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setToken("");
       setError(null);
@@ -142,7 +151,9 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
     },
     onError: (e) => inlineOrToast(e, setError),
   });
+
   const id = `login-${row.provider}`;
+
   return (
     <SecretForm
       error={error}
@@ -151,6 +162,7 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
       onSubmit={() => {
         const problem = checkClaudeToken(token);
         setError(problem);
+
         if (!problem) save.mutate({ token: token.trim() });
       }}
     >
@@ -172,13 +184,151 @@ function ClaudeForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
 }
 
 function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
+  return (
+    <div className="grid gap-3">
+      <CodexDeviceLogin replacing={replacing} />
+      <details>
+        <summary className="cursor-pointer text-xs text-muted-foreground">Use auth.json instead</summary>
+        <div className="pt-2">
+          <CodexUploadForm row={row} replacing={replacing} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+export function CodexDeviceLogin({ replacing }: { replacing: boolean }) {
+  const call = useApiCall();
+
+  const queryClient = useQueryClient();
+  const [login, setLogin] = useState<FnOutput<"startCodexLogin"> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  const start = useCallMutation("startCodexLogin", {
+    toast: false,
+    onSuccess: (result) => {
+      setError(null);
+      setLogin(result);
+    },
+    onError: (e) => setError(errorText(e)),
+  });
+
+  useEffect(() => {
+    if (!login || cancelling) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const poll = async () => {
+      try {
+        const result =
+          Date.now() >= login.expiresAt
+            ? { status: "expired" as const }
+            : await call("pollCodexLogin", { loginId: login.loginId });
+
+        if (stopped) return;
+
+        if (result.status === "pending") {
+          timer = setTimeout(() => void poll(), login.intervalMs);
+
+          return;
+        }
+
+        setLogin(null);
+
+        if (result.status === "connected") {
+          forgetInvalid("codex");
+          await invalidateCalls(queryClient, "getCredentialStatus");
+          toast.success("Codex connected");
+        } else setError("Codex login expired. Connect again to get a new code.");
+      } catch (e) {
+        if (!stopped) {
+          setLogin(null);
+          setError(errorText(e));
+        }
+      }
+    };
+
+    timer = setTimeout(() => void poll(), login.intervalMs);
+
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [login, cancelling, queryClient, call]);
+
+  const cancel = async () => {
+    if (!login) return;
+    setCancelling(true);
+
+    try {
+      await call("cancelCodexLogin", { loginId: login.loginId });
+      setLogin(null);
+      setError(null);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs text-muted-foreground">
+        Sign in with ChatGPT using a one-time code. Enable device-code login in your ChatGPT security settings
+        or ask your workspace admin.
+      </p>
+      {login ? (
+        <>
+          <p className="text-xs">Open the sign-in page, then enter this code:</p>
+          <code className="text-lg tracking-widest" aria-label="Codex sign-in code">
+            {login.userCode}
+          </code>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm">
+              <a href={login.verificationUrl} target="_blank" rel="noopener noreferrer">
+                Open sign-in page
+              </a>
+            </Button>
+            <Button size="sm" variant="ghost" disabled={cancelling} onClick={() => void cancel()}>
+              Cancel
+            </Button>
+          </div>
+          <p role="status" className="text-xs text-muted-foreground">
+            Waiting for sign-in… This code expires in 15 minutes.
+          </p>
+        </>
+      ) : (
+        <Button
+          size="sm"
+          className="justify-self-start"
+          disabled={start.isPending}
+          onClick={() => {
+            setError(null);
+            start.mutate({});
+          }}
+        >
+          {start.isPending ? "Connecting…" : replacing ? "Reconnect Codex" : "Connect Codex"}
+        </Button>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CodexUploadForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [pasted, setPasted] = useState("");
   const [file, setFile] = useState<{ readonly name: string; readonly text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
   const save = useCallMutation("setCodexAuth", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setPasted("");
       setFile(null);
@@ -188,14 +338,18 @@ function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
     },
     onError: (e) => inlineOrToast(e, setError),
   });
+
   const id = `login-${row.provider}`;
 
   const readFile = async (f: File | undefined) => {
     if (!f) return;
+
     if (f.size > MAX_AUTH_JSON_BYTES) {
       setError("That file is too big for an auth.json.");
+
       return;
     }
+
     const text = await f.text();
     setPasted("");
     setFile({ name: f.name, text });
@@ -211,6 +365,7 @@ function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
         const text = file?.text ?? pasted;
         const problem = checkCodexAuth(text);
         setError(problem);
+
         if (!problem) save.mutate({ authJson: text });
       }}
     >
@@ -270,9 +425,10 @@ function CodexForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
 function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+
   const save = useCallMutation("setApiKey", {
     toast: false,
-    invalidates: ["getCredentialStatus"],
+    invalidates: ["getCredentialStatus", "listModels"],
     onSuccess: () => {
       setKey("");
       setError(null);
@@ -281,7 +437,9 @@ function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
     },
     onError: (e) => inlineOrToast(e, setError),
   });
+
   const id = `login-${row.provider}`;
+
   return (
     <SecretForm
       error={error}
@@ -290,6 +448,7 @@ function ApiKeyForm({ row, replacing }: { row: LoginRow; replacing: boolean }) {
       onSubmit={() => {
         const problem = checkApiKey(key);
         setError(problem);
+
         if (!problem && isApiKeyProvider(row.provider))
           save.mutate({ provider: row.provider, key: key.trim() });
       }}

@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentDefinition",
+  "type": "object",
+  "properties": {
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "baseAgent": {
+      "$ref": "AgentBase.json"
+    },
+    "model": {
+      "type": "string"
+    },
+    "thoughtLevel": {
+      "type": "string"
+    },
+    "prompt": {
+      "type": "string",
+      "maxLength": 32000
+    },
+    "access": {
+      "$ref": "AgentAccess.json"
+    },
+    "tools": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["allow", "deny"],
+      "additionalProperties": true
+    },
+    "mcp": {
+      "type": "object",
+      "properties": {
+        "playwright": {
+          "type": "boolean"
+        },
+        "servers": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "$ref": "McpServerDef.json"
+          }
+        }
+      },
+      "required": ["playwright", "servers"],
+      "additionalProperties": true
+    },
+    "outputKind": {
+      "$ref": "OutputKind.json"
+    }
+  },
+  "required": ["handle", "name"],
+  "additionalProperties": true
+}

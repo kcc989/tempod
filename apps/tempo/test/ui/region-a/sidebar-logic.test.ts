@@ -88,6 +88,7 @@ describe("workspace switching", () => {
       { id: "c", attention: "needs_input" as const },
       { id: "d", attention: "error" as const },
     ];
+
     expect(nextNeedingYou(order, null)).toBe("c");
     expect(nextNeedingYou(order, "c")).toBe("d");
     expect(nextNeedingYou(order, "d")).toBe("c");

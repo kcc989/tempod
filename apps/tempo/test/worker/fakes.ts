@@ -1,18 +1,38 @@
+import type { JsonData } from "@tempo/protocol";
+import { Schema } from "effect";
+import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { newId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
+import { newId, type AgentId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import type { WorkspaceCore } from "../../src/do/workspace/core.ts";
 import type { OpRunner } from "../../src/do/workspace/runner.ts";
+import type { SessionAgentProfile } from "../../src/do/workspace/rpc.ts";
 
 /**
  * Test doubles for the parts of a workspace that need a real container: `ctx.container` and
  * the tempod daemon behind port 7070. The fake tempod speaks the real protocol over a real
  * WebSocketPair, so the DO's TempodClient, acks and event ordering run unchanged.
  */
-
-export type RequestHandler = (params: any, op: TempodOp) => unknown | Promise<unknown>;
+export type RequestHandler = (
+  params: any,
+  op: TempodOp,
+) =>
+  | import("@tempo/protocol").TempodResult<TempodOp>
+  | import("@tempo/protocol").JsonData
+  | Promise<import("@tempo/protocol").TempodResult<TempodOp> | import("@tempo/protocol").JsonData>;
 
 export class FakeTempod {
+  private readonly toolReplies = new Map<string, (reply: import("@tempo/protocol").ToolRes) => void>();
+  tool(
+    input: Omit<import("@tempo/protocol").ToolReq, "id" | "type">,
+  ): Promise<import("@tempo/protocol").ToolRes> {
+    const id = newId();
+
+    return new Promise((resolve) => {
+      this.toolReplies.set(id, resolve);
+      this.socket?.send(JSON.stringify({ type: "tool.req", id, ...input }));
+    });
+  }
   readonly requests: Array<{ op: string; params: any }> = [];
   readonly hellos: any[] = [];
   readonly acks: number[] = [];
@@ -23,7 +43,63 @@ export class FakeTempod {
   readonly handlers = new Map<string, RequestHandler>();
   /** Requests that throw: op → {code, message}. */
   readonly failures = new Map<string, { code: string; message: string }>();
+  /** The tempod side of each preview WebSocket proxied through /v1/proxy, with its close code once closed. */
+  readonly proxySockets: Array<{ socket: WebSocket; closed: number | null }> = [];
+  /** Every request proxied through /v1/proxy, with the headers tempod received. */
+  readonly proxyRequests: Array<{ path: string; headers: Headers }> = [];
   healthy = true;
+  private healthGate: Promise<void> | null = null;
+  private onHealthProbe: (() => void) | null = null;
+  private connectGate: Promise<void> | null = null;
+  private onConnectProbe: (() => void) | null = null;
+
+  holdConnect() {
+    let markEntered!: () => void;
+    let release!: () => void;
+
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+
+    this.connectGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.onConnectProbe = markEntered;
+
+    return {
+      entered,
+      release: () => {
+        this.connectGate = null;
+        this.onConnectProbe = null;
+        release();
+      },
+    };
+  }
+
+  /** Blocks the actual health response until the test releases startup. */
+  holdHealth() {
+    let markEntered!: () => void;
+    let release!: () => void;
+
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+
+    this.healthGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.onHealthProbe = markEntered;
+
+    return {
+      entered,
+      release: () => {
+        this.healthy = true;
+        this.healthGate = null;
+        this.onHealthProbe = null;
+        release();
+      },
+    };
+  }
 
   constructor() {
     const ok = () => ({});
@@ -36,6 +112,7 @@ export class FakeTempod {
       sources: {},
     }));
     this.on("env.set", ok);
+    this.on("environment.set", ok);
     this.on("script.start", () => ({ pid: 1234 }));
     this.on("script.stop", ok);
     this.on("session.start", () => ({
@@ -73,65 +150,100 @@ export class FakeTempod {
     this.on("terminal.list", () => ({ terminalIds: [] }));
     this.on("shutdown", ok);
   }
-
   on(op: string, handler: RequestHandler): this {
     this.handlers.set(op, handler);
+
     return this;
   }
-
   fail(op: string, code: string, message = `${op} failed`): this {
     this.failures.set(op, { code, message });
+
     return this;
   }
-
   get connected(): boolean {
     return this.socket !== null;
   }
-
+  resume(incarnation: string, seq: number): void {
+    this.incarnation = incarnation;
+    this.seq = seq;
+  }
   /** Sends one event with the next seq. */
-  emit(event: TempodEvent): number {
+  emit(event: TempodEvent | import("@tempo/protocol").JsonData): number {
     const seq = ++this.seq;
     this.socket?.send(JSON.stringify({ type: "event", seq, ts: Date.now(), event }));
+
     return seq;
   }
-
   /** Sends an event with an explicit seq (for dedupe tests). */
-  emitRaw(seq: number, event: TempodEvent): void {
+  emitRaw(seq: number, event: TempodEvent | import("@tempo/protocol").JsonData): void {
     this.socket?.send(JSON.stringify({ type: "event", seq, ts: Date.now(), event }));
   }
-
   close(code = 1011): void {
     this.socket?.close(code, "fake close");
     this.socket = null;
   }
-
   requestsOf(op: string): any[] {
     return this.requests.filter((r) => r.op === op).map((r) => r.params);
   }
-
   /** The Fetcher behind getTcpPort(7070). */
   fetcher(token: () => string | null): Fetcher {
     return {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const req = new Request(input, init);
         const url = new URL(req.url);
+
         if (req.headers.get("Authorization") !== `Bearer ${token()}`)
           return new Response("unauthorized", { status: 401 });
+
         if (url.pathname === "/v1/health") {
+          this.onHealthProbe?.();
+
+          if (this.healthGate) await this.healthGate;
+
           if (!this.healthy) return new Response("starting", { status: 503 });
+
           return Response.json({ ok: true, version: this.version, incarnation: this.incarnation });
         }
-        if (url.pathname === "/v1/connect") return this.accept();
-        if (url.pathname.startsWith("/v1/proxy/"))
+
+        if (url.pathname === "/v1/connect") {
+          this.onConnectProbe?.();
+
+          if (this.connectGate) await this.connectGate;
+
+          return this.accept();
+        }
+
+        if (url.pathname.startsWith("/v1/proxy/")) {
+          this.proxyRequests.push({ path: `${url.pathname}${url.search}`, headers: req.headers });
+
+          if (req.headers.get("Upgrade")?.toLowerCase() === "websocket") return this.acceptProxy();
+
           return new Response(`proxied ${url.pathname}${url.search}`, { status: 200 });
+        }
+
         return new Response("not found", { status: 404 });
       },
       connect: () => {
         throw new Error("not supported");
       },
-    } as unknown as Fetcher;
+    };
   }
+  private acceptProxy(): Response {
+    const pair = new WebSocketPair();
 
+    const entry = {
+      socket: pair[1],
+      closed: Schema.decodeUnknownSync(Schema.Union([Schema.Number, Schema.Null]))(null),
+    };
+
+    entry.socket.accept();
+    entry.socket.addEventListener("close", (e) => {
+      entry.closed = e.code;
+    });
+    this.proxySockets.push(entry);
+
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
   private accept(): Response {
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
@@ -142,31 +254,48 @@ export class FakeTempod {
     server.addEventListener("close", () => {
       if (this.socket === server) this.socket = null;
     });
+
     return new Response(null, { status: 101, webSocket: client });
   }
-
   private async onMessage(ws: WebSocket, data: string): Promise<void> {
     const msg = JSON.parse(data);
+
+    if (msg.type === "tool.res") {
+      this.toolReplies.get(msg.id)?.(msg);
+      this.toolReplies.delete(msg.id);
+
+      return;
+    }
+
     if (msg.type === "hello") {
       this.hellos.push(msg);
+
       if (msg.incarnation !== this.incarnation) {
         this.seq = 0;
         this.emit({ kind: "incarnation.changed", incarnation: this.incarnation });
       }
+
       return;
     }
+
     if (msg.type === "ack") {
       this.acks.push(msg.upTo);
+
       return;
     }
+
     if (msg.type === "req") {
       this.requests.push({ op: msg.op, params: msg.params });
       const failure = this.failures.get(msg.op);
+
       if (failure) {
         ws.send(JSON.stringify({ type: "res", id: msg.id, ok: false, error: failure }));
+
         return;
       }
+
       const handler = this.handlers.get(msg.op);
+
       if (!handler) {
         ws.send(
           JSON.stringify({
@@ -176,8 +305,10 @@ export class FakeTempod {
             error: { code: "UNKNOWN_OP", message: msg.op },
           }),
         );
+
         return;
       }
+
       try {
         const result = await handler(msg.params, msg.op);
         ws.send(JSON.stringify({ type: "res", id: msg.id, ok: true, result }));
@@ -196,7 +327,8 @@ export class FakeTempod {
 }
 
 export const DEFAULT_EFFECTIVE = {
-  agent: { default: "claude", model: "" },
+  agent: { default: "claude", models: { claude: "", codex: "", opencode: "", pi: "" } },
+  browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
   environment: {
     instance: "standard-3",
@@ -218,15 +350,14 @@ export class FakeContainer {
   destroyed = 0;
   failStartWithSnapshot = false;
   snapshotFails = false;
-  readonly images: Record<string, string> = { workspace: "registry.example/workspace@sha256:1111" };
-
+  readonly images = { workspace: "registry.example/workspace@sha256:1111" };
   constructor(
     readonly tempod: FakeTempod,
     private readonly token: () => string | null,
   ) {}
-
   start(options: any): void {
     this.starts.push(options);
+
     if (this.failStartWithSnapshot && options.containerSnapshot) throw new Error("snapshot restore failed");
     this.running = true;
   }
@@ -252,12 +383,10 @@ export class FakeContainer {
   }
   async snapshotContainer(options?: { name?: string }): Promise<{ id: string; size: number; name?: string }> {
     if (this.snapshotFails) throw new Error("snapshot failed");
-    const snap = {
-      id: `snap-${this.snapshots.length + 1}`,
-      size: 1024,
-      ...(options?.name ? { name: options.name } : {}),
-    };
+    const base = { id: `snap-${this.snapshots.length + 1}`, size: 1024 };
+    const snap = options?.name ? { ...base, name: options.name } : base;
     this.snapshots.push(snap);
+
     return snap;
   }
   async exec(): Promise<never> {
@@ -272,22 +401,32 @@ export class FakeContainer {
 export interface Internals {
   readonly core: WorkspaceCore;
   readonly runner: OpRunner;
-  readonly handlers: { onEvent: (e: TempodEvent) => Promise<void> };
+  readonly handlers: import("../../src/do/workspace/container.ts").ConnectHandlers;
 }
 
-export const internals = (instance: WorkspaceDO): Internals => instance as unknown as Internals;
+/** Tests inspect the declared private fields without changing the production RPC surface. */
+export const internals = (instance: WorkspaceDO): Internals => ({
+  core: instance["core"],
+  runner: instance["runner"],
+  handlers: instance["handlers"],
+});
 
 /** Installs a fake container (and its tempod) in the DO. Call again after each DO restart. */
 export const installFakes = async (
-  stub: DurableObjectStub<WorkspaceDO>,
+  stub: WorkspaceStub,
   tempod = new FakeTempod(),
 ): Promise<{ tempod: FakeTempod; container: FakeContainer }> => {
   let container!: FakeContainer;
   await runInDurableObject(stub, (instance: WorkspaceDO) => {
     const core = internals(instance).core;
-    container = new FakeContainer(tempod, () => core.wsOrNull()?.tempodToken ?? null);
-    core.container = container as unknown as Container;
+    container = new FakeContainer(
+      tempod,
+      () =>
+        core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken") ?? core.kv<string>("ciToken") ?? null,
+    );
+    core.container = container;
   });
+
   return { tempod, container };
 };
 
@@ -298,30 +437,32 @@ export const waitFor = async (
   label = "condition",
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
+
   for (;;) {
     if (await check()) return;
+
     if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
     await new Promise((r) => setTimeout(r, 20));
   }
 };
 
 // ---------- DO helpers ----------
-
-type WorkspaceStub = DurableObjectStub<WorkspaceDO>;
-
 /** Rows from the DO's own SQLite. */
 export const sqlRows = (
   stub: WorkspaceStub,
   query: string,
   ...binds: unknown[]
-): Promise<Array<Record<string, any>>> =>
+): Promise<Array<Record<string, SqlStorageValue>>> =>
   runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) =>
     state.storage.sql.exec(query, ...binds).toArray(),
   );
 
 /** Sends one tempod event. The fake's socket belongs to the DO's I/O context, so it is sent from inside the DO. */
-export const emitEvent = (stub: WorkspaceStub, tempod: FakeTempod, event: TempodEvent): Promise<number> =>
-  runInDurableObject(stub, () => tempod.emit(event));
+export const emitEvent = (
+  stub: WorkspaceStub,
+  tempod: FakeTempod,
+  event: TempodEvent | JsonData,
+): Promise<number> => runInDurableObject(stub, () => tempod.emit(event));
 
 /** Waits until the DO has applied the event with this seq of its current incarnation. */
 export const waitApplied = (stub: WorkspaceStub, seq: number, timeoutMs = 5000): Promise<void> =>
@@ -341,9 +482,12 @@ export const driveToState = async (
   timeoutMs = 20_000,
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
+
   for (;;) {
     const state = String((await sqlRows(stub, "SELECT state FROM workspace WHERE id = 1"))[0]?.["state"]);
+
     if (states.includes(state)) return;
+
     if (Date.now() > deadline) throw new Error(`timed out driving to ${states.join("|")} (state ${state})`);
     await runInDurableObject(stub, (_i: WorkspaceDO, s: DurableObjectState) => {
       s.storage.sql.exec(
@@ -356,7 +500,6 @@ export const driveToState = async (
 };
 
 // ---------- D1 seeding ----------
-
 export const OWNER_GITHUB_ID = "4242";
 
 export interface Seeded {
@@ -390,6 +533,7 @@ export const seedProject = async (opts: { settingsJson?: string } = {}): Promise
       "INSERT INTO projects (id, user_id, installation_id, repo_id, repo_owner, repo_name, default_branch, settings_json, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 'acme', 'app', 'main', ?, 1, ?, ?)",
     ).bind(projectId, userId, installationId, repoId, opts.settingsJson ?? "{}", now, now),
   ]);
+
   return { userId, projectId, installationId, repoId };
 };
 
@@ -405,6 +549,7 @@ export const seedWorkspace = async (
     branch?: string;
     agent?: "claude" | "codex" | "opencode" | "pi";
     source?: Source;
+    savedProfile?: SessionAgentProfile;
   } = {},
 ) => {
   const workspaceId = newId();
@@ -416,9 +561,10 @@ export const seedWorkspace = async (
   )
     .bind(workspaceId, seeded.projectId, seeded.userId, slug, slug, branch, opts.agent ?? "claude", now, now)
     .run();
-  const stub = env.WORKSPACE.getByName(workspaceId);
+  const stub = workspaceStub(env.WORKSPACE, workspaceId);
   const fakes = await installFakes(stub);
-  const res = await stub.init({
+
+  const init = {
     workspaceId,
     projectId: seeded.projectId,
     userId: seeded.userId,
@@ -431,15 +577,26 @@ export const seedWorkspace = async (
     prompt: opts.prompt ? { text: opts.prompt } : null,
     author: { name: "Owner", email: `${OWNER_GITHUB_ID}+owner@users.noreply.github.com` },
     createdAt: now,
-  });
+  };
+
+  const res = await stub.init(opts.savedProfile ? { ...init, savedProfile: opts.savedProfile } : init);
+
   if (!res.ok) throw new Error(`init failed: ${res.error.code}`);
+
   return { workspaceId, stub, ...fakes };
 };
 
-/** Gives the user a credential for every agent. */
-export const seedCredentials = async (userId: string): Promise<void> => {
+/** Gives the user credentials for the selected agents (all agents when omitted). */
+export const seedCredentials = async (
+  userId: string,
+  agents: readonly AgentId[] = ["claude", "codex", "opencode", "pi"],
+): Promise<void> => {
   const creds = env.CREDENTIALS.getByName(userId);
-  await creds.putSecret("claude.oauth_token", "sk-ant-oat01-test-token-value");
-  await creds.putSecret("openrouter.api_key", "sk-or-test");
-  await creds.putSecret("openai.api_key", "sk-openai-test");
+
+  if (agents.includes("claude")) await creds.putSecret("claude.oauth_token", "sk-ant-oat01-test-token-value");
+
+  if (agents.includes("opencode") || agents.includes("pi"))
+    await creds.putSecret("openrouter.api_key", "sk-or-test");
+
+  if (agents.includes("codex")) await creds.putSecret("openai.api_key", "sk-openai-test");
 };

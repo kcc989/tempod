@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentAttachment",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "hooks": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "$ref": "AttachmentHook.json"
+      }
+    },
+    "autoSend": {
+      "type": "boolean"
+    },
+    "maxRuns": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 1,
+          "maximum": 10
+        }
+      ]
+    },
+    "timeout": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "agentId": {
+      "type": "string"
+    },
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "agent": {
+      "anyOf": [
+        {
+          "$ref": "AgentSummary.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "enabled",
+    "hooks",
+    "autoSend",
+    "maxRuns",
+    "timeout",
+    "id",
+    "projectId",
+    "agentId",
+    "createdAt",
+    "updatedAt",
+    "agent"
+  ],
+  "additionalProperties": true
+}

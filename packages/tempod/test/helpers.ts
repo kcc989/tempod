@@ -2,13 +2,26 @@ import { mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSy
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TempodEvent, type TempodEventOf } from "@tempo/protocol";
+import {
+  TempodEvent,
+  TempodToDo,
+  TEMPOD_REQUESTS,
+  type TempodRes,
+  type TempodOp,
+  type TempodParams,
+  type TempodResult,
+  type JsonData,
+  type JsonDataFields,
+  type DoToTempod,
+  type TempodEventOf,
+} from "@tempo/protocol";
 import { Schema } from "effect";
 import { loadConfig, type Config, type ConfigOverrides } from "../src/config.ts";
 import { run } from "../src/exec.ts";
 import { Logger } from "../src/log.ts";
 import { startServer, type TempodServer } from "../src/server.ts";
 import { Tempod, type TempodOptions } from "../src/tempod.ts";
+import { connectWebSocket } from "../src/websocket.ts";
 
 export const TOKEN = "test-token-0123456789";
 
@@ -17,6 +30,7 @@ const dirs: string[] = [];
 export const tmpDir = (prefix = "tempod-"): string => {
   const d = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
   dirs.push(d);
+
   return d;
 };
 
@@ -26,8 +40,8 @@ export const cleanupDirs = (): void => {
 
 export const quietLogger = (): Logger & { lines: string[] } => {
   const lines: string[] = [];
-  const log = new Logger({ write: (l) => lines.push(l), minLevel: "debug" }) as Logger & { lines: string[] };
-  log.lines = lines;
+  const log = Object.assign(new Logger({ write: (l) => lines.push(l), minLevel: "debug" }), { lines });
+
   return log;
 };
 
@@ -39,6 +53,7 @@ export const testConfig = (
   const workspace = overrides.workspace ?? join(root, "workspace");
   mkdirSync(home, { recursive: true });
   mkdirSync(workspace, { recursive: true });
+
   return loadConfig(
     {
       TEMPOD_TOKEN: TOKEN,
@@ -65,6 +80,7 @@ export const startTempod = (config: Config = testConfig(), opts: Partial<TempodO
   const log = quietLogger();
   const app = new Tempod(config, { log, forcePollingWatcher: true, portFiles: [], exit: () => {}, ...opts });
   const server = startServer(app, { hostname: "127.0.0.1", port: 0 });
+
   return {
     app,
     server,
@@ -78,7 +94,7 @@ export const startTempod = (config: Config = testConfig(), opts: Partial<TempodO
   };
 };
 
-export const hello = (over: Record<string, unknown> = {}) => ({
+export const hello = (over: JsonDataFields = {}) => ({
   type: "hello",
   v: 1,
   incarnation: null,
@@ -106,67 +122,83 @@ export interface EventMsg {
 export class DoClient {
   readonly ws: WebSocket;
   readonly events: EventMsg[] = [];
-  readonly raw: unknown[] = [];
+  readonly raw: TempodToDo[] = [];
   closed: { code: number; reason: string } | null = null;
-  private readonly waiters = new Map<string, (res: Res) => void>();
+  private readonly waiters = new Map<string, (res: TempodRes) => void>();
   private readonly listeners = new Set<() => void>();
   private nextId = 0;
   readonly opened: Promise<void>;
 
   constructor(base: string, token = TOKEN) {
-    this.ws = new WebSocket(`${base.replace("http", "ws")}/v1/connect`, {
+    this.ws = connectWebSocket(`${base.replace("http", "ws")}/v1/connect`, {
       headers: { Authorization: `Bearer ${token}` },
-    } as unknown as string[]);
+    });
     this.opened = new Promise((resolve, reject) => {
       this.ws.addEventListener("open", () => resolve(), { once: true });
       this.ws.addEventListener("error", () => reject(new Error("ws error")), { once: true });
     });
     this.ws.addEventListener("message", (ev) => {
-      const msg = JSON.parse(String(ev.data)) as {
-        type: string;
-        id?: string;
-        seq?: number;
-        ts?: number;
-        event?: unknown;
-      };
+      const msg = Schema.decodeUnknownSync(Schema.fromJsonString(TempodToDo))(String(ev.data));
       this.raw.push(msg);
-      if (msg.type === "res" && msg.id) this.waiters.get(msg.id)?.(msg as unknown as Res);
-      if (msg.type === "event")
-        this.events.push({ seq: msg.seq!, ts: msg.ts!, event: decodeEvent(msg.event) });
+
+      if (msg.type === "res") this.waiters.get(msg.id)?.(msg);
+
+      if (msg.type === "event") this.events.push({ seq: msg.seq, ts: msg.ts, event: decodeEvent(msg.event) });
+
       for (const l of this.listeners) l();
     });
     this.ws.addEventListener("close", (ev) => {
       this.closed = { code: ev.code, reason: ev.reason };
+
       for (const l of this.listeners) l();
     });
   }
 
-  send(msg: unknown): void {
+  send(msg: JsonData | DoToTempod): void {
     this.ws.send(JSON.stringify(msg));
   }
 
-  async hello(over: Record<string, unknown> = {}): Promise<void> {
+  async hello(over: JsonDataFields = {}): Promise<void> {
     await this.opened;
     this.send(hello(over));
   }
 
-  req<R = unknown>(op: string, params: unknown, timeoutMs = 30_000): Promise<Res<R>> {
+  reqRaw(op: string, params: JsonData | TempodParams<TempodOp>, timeoutMs = 30_000): Promise<TempodRes> {
     const id = `req-${++this.nextId}-${Math.random().toString(36).slice(2)}`;
-    return new Promise<Res<R>>((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error(`${op} timed out`)), timeoutMs);
-      this.waiters.set(id, (res) => {
-        clearTimeout(t);
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${op} timed out`)), timeoutMs);
+      this.waiters.set(id, (response) => {
+        clearTimeout(timer);
         this.waiters.delete(id);
-        resolve(res as Res<R>);
+        resolve(response);
       });
       this.send({ type: "req", id, op, params });
     });
   }
+  async req<O extends TempodOp>(
+    op: O,
+    params: JsonData | TempodParams<O>,
+    timeoutMs = 30_000,
+  ): Promise<Res<TempodResult<O>>> {
+    const response = await this.reqRaw(op, params, timeoutMs);
 
-  async ok<R = unknown>(op: string, params: unknown, timeoutMs?: number): Promise<R> {
-    const res = await this.req<R>(op, params, timeoutMs);
-    if (!res.ok) throw new Error(`${op} failed: ${res.error.code} ${res.error.message}`);
-    return res.result;
+    if (!response.ok) return response;
+    // SAFETY: the same op sent in the request selects its result codec and TempodResult<O>.
+    const schema = TEMPOD_REQUESTS[op].result as Schema.ConstraintDecoder<TempodResult<O>>;
+
+    return { ...response, result: Schema.decodeUnknownSync(schema)(response.result) };
+  }
+  async ok<O extends TempodOp>(
+    op: O,
+    params: JsonData | TempodParams<O>,
+    timeoutMs?: number,
+  ): Promise<TempodResult<O>> {
+    const response = await this.req(op, params, timeoutMs);
+
+    if (!response.ok) throw new Error(`${op} failed: ${response.error.code} ${response.error.message}`);
+
+    return response.result;
   }
 
   ack(upTo: number): void {
@@ -178,16 +210,20 @@ export class DoClient {
   }
 
   of<K extends TempodEvent["kind"]>(kind: K): Array<TempodEventOf<K>> {
-    return this.events.filter((e) => e.event.kind === kind).map((e) => e.event as TempodEventOf<K>);
+    return this.events
+      .map(({ event }) => event)
+      .filter((event): event is TempodEventOf<K> => event.kind === kind);
   }
 
   waitFor(pred: () => boolean, timeoutMs = 10_000, what = "condition"): Promise<void> {
     if (pred()) return Promise.resolve();
+
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         this.listeners.delete(check);
         reject(new Error(`timed out waiting for ${what}`));
       }, timeoutMs);
+
       const check = () => {
         if (pred()) {
           clearTimeout(t);
@@ -195,6 +231,7 @@ export class DoClient {
           resolve();
         }
       };
+
       this.listeners.add(check);
     });
   }
@@ -205,6 +242,7 @@ export class DoClient {
     timeoutMs = 10_000,
   ): Promise<TempodEventOf<K>> {
     await this.waitFor(() => this.of(kind).some(pred), timeoutMs, kind);
+
     return this.of(kind).find(pred)!;
   }
 
@@ -220,9 +258,11 @@ export type Res<R = unknown> =
 export const git = async (cwd: string, ...args: string[]): Promise<string> => {
   const r = await run(["git", ...args], {
     cwd,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" } as Record<string, string>,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
   });
+
   if (r.code !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+
   return r.stdout.trim();
 };
 
@@ -245,6 +285,7 @@ export const makeOrigin = async (): Promise<{ url: string; bare: string; seed: s
   await git(seed, "commit", "-q", "-m", "initial");
   await git(seed, "remote", "add", "origin", bare);
   await git(seed, "push", "-q", "origin", "main");
+
   return { url: `file://${bare}`, bare, seed };
 };
 
@@ -258,7 +299,9 @@ export const isAlive = (pid: number): boolean => {
         .trim()
         .startsWith("Z");
     }
+
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+
     return stat.slice(stat.lastIndexOf(")") + 2, stat.lastIndexOf(")") + 3) !== "Z";
   } catch {
     return false;
@@ -266,6 +309,7 @@ export const isAlive = (pid: number): boolean => {
 };
 
 export const FAKE_AGENT = join(import.meta.dir, "fixtures", "fake-agent.ts");
+
 export const fakeAgentCommand = (): string[] => [process.execPath, FAKE_AGENT];
 
 export const writeFile = (path: string, content: string | Uint8Array): void => {

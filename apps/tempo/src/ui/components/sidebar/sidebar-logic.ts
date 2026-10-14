@@ -1,17 +1,20 @@
+import { Schema } from "effect";
 import type { Attention, ChecksState, PrState, WorkspaceSummary } from "@tempo/protocol";
 import type { SidebarSection, SortMode } from "~/ui/stores/hub-state";
 
 /** localStorage keys (prefixed with "tempo:" by the storage helper). */
 export const SORT_KEY = "sidebar:sort";
+
 export const COLLAPSED_KEY = "sidebar:collapsed";
 
 export const DEFAULT_SORT: SortMode = "activity";
+
 export const NO_COLLAPSED: ReadonlyArray<string> = [];
 
 export const isSortMode = (u: unknown): u is SortMode => u === "activity" || u === "created";
 
 export const isStringList = (u: unknown): u is ReadonlyArray<string> =>
-  Array.isArray(u) && u.every((x) => typeof x === "string");
+  Array.isArray(u) && u.every((x) => Schema.is(Schema.String)(x));
 
 export const SORT_LABELS: Record<SortMode, string> = {
   activity: "Last activity",
@@ -39,13 +42,17 @@ export const stepWorkspace = (
 ): string | null => {
   if (ids.length === 0) return null;
   const i = current === null ? -1 : ids.indexOf(current);
+
   if (i < 0) return delta === 1 ? ids[0]! : ids[ids.length - 1]!;
+
   return ids[(i + delta + ids.length) % ids.length]!;
 };
 
 const needsYouRank = (a: Attention): number => {
   if (a === "needs_input" || a === "error") return 2;
+
   if (a === "unread") return 1;
+
   return 0;
 };
 
@@ -58,13 +65,18 @@ export const nextNeedingYou = (
   current: string | null,
 ): string | null => {
   let best = 0;
+
   for (const w of order) if (w.id !== current) best = Math.max(best, needsYouRank(w.attention));
+
   if (best === 0) return null;
   const start = current === null ? -1 : order.findIndex((w) => w.id === current);
+
   for (let k = 1; k <= order.length; k++) {
     const w = order[(start + k + order.length) % order.length]!;
+
     if (w.id !== current && needsYouRank(w.attention) === best) return w.id;
   }
+
   return null;
 };
 

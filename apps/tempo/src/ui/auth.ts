@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
-import { ERROR_MESSAGES } from "@tempo/protocol";
+import { ERROR_MESSAGES, type AppSetupStatus } from "@tempo/protocol";
+import { Option, Schema } from "effect";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 
@@ -10,6 +11,7 @@ let client: ReturnType<typeof makeClient> | null = null;
 
 export const authClient = (): ReturnType<typeof makeClient> => {
   client ??= makeClient();
+
   return client;
 };
 
@@ -25,21 +27,26 @@ export interface AuthSession {
   readonly sessionId: string;
 }
 
-interface FetchError {
-  readonly status?: number;
-  readonly message?: string;
-  readonly error?: string;
-  readonly code?: string;
-}
+const FetchError = Schema.Struct({
+  status: Schema.optional(Schema.Number),
+  message: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
+  code: Schema.optional(Schema.String),
+});
+
+const decodeFetchError = Schema.decodeUnknownOption(FetchError);
 
 const fetchSession = async (): Promise<AuthSession | null> => {
   const { data, error } = await authClient().getSession();
+
   if (error) {
-    if ((error as FetchError).status === 401) return null;
-    throw new Error((error as FetchError).message ?? "Session check failed");
+    if (error.status === 401) return null;
+    throw new Error(error.message ?? "Session check failed");
   }
+
   if (!data) return null;
   const u = data.user;
+
   return {
     user: { id: u.id, name: u.name, email: u.email, image: u.image ?? null },
     sessionId: data.session.id,
@@ -54,14 +61,15 @@ export const sessionQueryOptions = queryOptions({
 });
 
 /** Only same-site paths are followed after sign-in. */
-export const safeRedirect = (path: unknown): string =>
-  typeof path === "string" && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\")
+export const safeRedirect = (path: string | undefined): string =>
+  path !== undefined && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\")
     ? path
     : "/";
 
 /** 05: a sign-in refused by the owner check comes back to /login as ?error=forbidden. */
 export const loginErrorText = (error: string | undefined): string | null => {
   if (!error) return null;
+
   return error.toLowerCase() === "forbidden" ? ERROR_MESSAGES.FORBIDDEN : ERROR_MESSAGES.INTERNAL;
 };
 
@@ -71,7 +79,8 @@ export const signInWithGithub = async (redirect?: string): Promise<void> => {
     callbackURL: safeRedirect(redirect),
     errorCallbackURL: "/login",
   });
-  if (error) throw new Error((error as FetchError).message ?? "Sign-in failed");
+
+  if (error) throw new Error(error.message ?? "Sign-in failed");
 };
 
 /** Signs out and reloads at /login, which drops every socket and cached query. */
@@ -84,7 +93,6 @@ export const signOut = async (): Promise<void> => {
 };
 
 // Settings → Devices (07): sign-in sessions with Revoke.
-
 export interface DeviceSession {
   readonly id: string;
   readonly token: string;
@@ -96,16 +104,13 @@ export interface DeviceSession {
   readonly current: boolean;
 }
 
-const ms = (d: unknown): number =>
-  d instanceof Date
-    ? d.getTime()
-    : typeof d === "string" || typeof d === "number"
-      ? new Date(d).getTime()
-      : 0;
+const ms = (date: Date | string | number): number => new Date(date).getTime();
 
 export const listDeviceSessions = async (currentSessionId?: string): Promise<DeviceSession[]> => {
   const { data, error } = await authClient().listSessions();
-  if (error) throw new Error((error as FetchError).message ?? "Could not list sessions");
+
+  if (error) throw new Error(error.message ?? "Could not list sessions");
+
   return (data ?? [])
     .map((s) => ({
       id: s.id,
@@ -122,13 +127,16 @@ export const listDeviceSessions = async (currentSessionId?: string): Promise<Dev
 
 export const revokeDeviceSession = async (token: string): Promise<void> => {
   const { error } = await authClient().revokeSession({ token });
-  if (error) throw new Error((error as FetchError).message ?? "Could not revoke the session");
+
+  if (error) throw new Error(error.message ?? "Could not revoke the session");
 };
 
 /** A short name for a session's user agent. */
 export const sessionLabel = (userAgent: string | null): string => {
   if (!userAgent) return "Unknown device";
+
   if (/tempo/i.test(userAgent) && /mac|darwin/i.test(userAgent)) return "Tempo for Mac";
+
   const browser = /Edg\//.test(userAgent)
     ? "Edge"
     : /Firefox\//.test(userAgent)
@@ -138,6 +146,7 @@ export const sessionLabel = (userAgent: string | null): string => {
         : /Safari\//.test(userAgent)
           ? "Safari"
           : "Browser";
+
   const os = /iPhone|iPad/.test(userAgent)
     ? "iOS"
     : /Android/.test(userAgent)
@@ -149,26 +158,31 @@ export const sessionLabel = (userAgent: string | null): string => {
           : /Linux/.test(userAgent)
             ? "Linux"
             : null;
+
   return os ? `${browser} on ${os}` : browser;
 };
 
 // Device sign-in (07, Sign-in and first run). The GET claims the code for this user; it must come
 // before approve or deny.
-
 export type DeviceCodeStatus = "pending" | "approved" | "denied";
 
 export type DeviceLookup =
   | { readonly ok: true; readonly status: DeviceCodeStatus; readonly clientId: string | null }
   | { readonly ok: false; readonly reason: "invalid" | "expired" | "processed" | "error" };
 
-const failure = (error: unknown): DeviceLookup => {
-  const e = error as FetchError;
+const failure = (cause: unknown): DeviceLookup => {
+  const decoded = decodeFetchError(cause);
+  const e = Option.getOrElse(decoded, () => Schema.decodeUnknownSync(FetchError)({}));
   const code = e.error ?? e.code ?? "";
+
   if (/expired/i.test(code)) return { ok: false, reason: "expired" };
+
   if (/already_processed|ALREADY_PROCESSED/i.test(code) || /already processed/i.test(e.message ?? "")) {
     return { ok: false, reason: "processed" };
   }
+
   if (e.status === 400) return { ok: false, reason: "invalid" };
+
   return { ok: false, reason: "error" };
 };
 
@@ -177,6 +191,7 @@ export const normalizeUserCode = (code: string): string => code.replace(/[^a-zA-
 /** XXXX-XXXX for display, as Tempo for Mac shows it. */
 export const formatUserCode = (code: string): string => {
   const n = normalizeUserCode(code);
+
   return n.length === 8 ? `${n.slice(0, 4)}-${n.slice(4)}` : n;
 };
 
@@ -188,13 +203,17 @@ export const claimDeviceCode = async (userCode: string): Promise<DeviceLookup> =
       query: { user_code: userCode },
     },
   );
+
   if (error || !data) return failure(error);
+
   return { ok: true, status: data.status, clientId: data.client_id ?? null };
 };
 
 const decide = async (path: "/device/approve" | "/device/deny", userCode: string): Promise<DeviceLookup> => {
   const { error } = await authClient().$fetch(path, { method: "POST", body: { userCode } });
+
   if (error) return failure(error);
+
   return { ok: true, status: path === "/device/approve" ? "approved" : "denied", clientId: null };
 };
 
@@ -202,9 +221,12 @@ const decide = async (path: "/device/approve" | "/device/deny", userCode: string
 export const deviceOutcomeText = (r: DeviceLookup): string => {
   if (r.ok) {
     if (r.status === "approved") return "Tempo for Mac is signed in. You can close this tab.";
+
     if (r.status === "denied") return "Sign-in denied. You can close this tab.";
+
     return "";
   }
+
   switch (r.reason) {
     case "invalid":
       return "That code is not valid. Check it and try again.";
@@ -222,20 +244,26 @@ export const approveDevice = (userCode: string): Promise<DeviceLookup> => decide
 export const denyDevice = (userCode: string): Promise<DeviceLookup> => decide("/device/deny", userCode);
 
 /** GET /api/setup/status (no auth): whether the GitHub App exists, and its install link. */
-export interface SetupStatus {
-  readonly configured: boolean;
-  readonly installUrl: string | null;
-}
+export type SetupStatus = AppSetupStatus;
 
 export const setupStatusQueryOptions = queryOptions({
   queryKey: ["setup", "status"] as const,
   queryFn: async (): Promise<SetupStatus> => {
     const res = await fetch("/api/setup/status", { headers: { accept: "application/json" } });
+
     if (!res.ok) throw new Error(`Setup status returned ${res.status}`);
-    const body = (await res.json()) as { configured?: unknown; installUrl?: unknown };
+
+    const body = Schema.decodeUnknownSync(
+      Schema.Struct({
+        configured: Schema.optional(Schema.Unknown),
+        installUrl: Schema.optional(Schema.Unknown),
+      }),
+    )(await res.json());
+
     return {
       configured: body.configured === true,
-      installUrl: typeof body.installUrl === "string" && body.installUrl !== "" ? body.installUrl : null,
+      installUrl:
+        Schema.is(Schema.String)(body.installUrl) && body.installUrl !== "" ? body.installUrl : null,
     };
   },
   staleTime: 60_000,

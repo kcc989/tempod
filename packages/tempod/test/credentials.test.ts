@@ -7,6 +7,7 @@ import { cleanupDirs, DoClient, quietLogger, startTempod, tmpDir, type Harness }
 afterAll(cleanupDirs);
 
 let h: Harness | null = null;
+
 afterEach(async () => {
   await h?.close();
   h = null;
@@ -21,7 +22,7 @@ describe("codex auth.json", () => {
     const c = new DoClient(h.base);
     await c.hello();
     const content = auth("2026-10-01T10:00:00Z");
-    expect(await c.ok<unknown>("credential.put", { provider: "codex", content, version: 3 })).toEqual({});
+    expect(await c.ok("credential.put", { provider: "codex", content, version: 3 })).toEqual({});
     const path = join(h.config.codexHome, "auth.json");
     expect(readFileSync(path, "utf8")).toBe(content);
     expect(statSync(path).mode & 0o777).toBe(0o600);
@@ -54,15 +55,30 @@ describe("codex auth.json", () => {
     expect(c.of("credential.changed")).toHaveLength(1);
   });
 
+  test("closing a discovery session flushes a refresh before the container is destroyed", async () => {
+    h = startTempod();
+    const c = new DoClient(h.base);
+    await c.hello();
+    await c.ok("credential.put", { provider: "codex", content: auth("2026-10-01T10:00:00Z"), version: 1 });
+    h.app.codex.stop();
+    const refreshed = auth("2026-10-12T00:00:00Z", "discovery-refreshed");
+    writeFileSync(join(h.config.codexHome, "auth.json"), refreshed, { mode: 0o600 });
+    await c.ok("session.close", { sessionId: "discovery" });
+    expect(await c.waitEvent("credential.changed", () => true, 5000)).toMatchObject({ content: refreshed });
+    expect(h.log.lines.join("\n")).not.toContain("discovery-refreshed");
+  });
+
   test("half-written and last_refresh-less files are not sent", () => {
     const home = tmpDir("codex-");
     const changes: Array<[string, number]> = [];
     const log = quietLogger();
+
     const creds = new CodexCredentials({
       codexHome: home,
       log,
       onChanged: (content, lastRefresh) => changes.push([content, lastRefresh]),
     });
+
     const path = join(home, "auth.json");
     writeFileSync(path, '{"tokens": {"access_tok');
     creds.check();

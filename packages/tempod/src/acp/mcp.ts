@@ -1,0 +1,165 @@
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { McpServer } from "@agentclientprotocol/sdk";
+import {
+  BROWSER_RUN_CDP_ENDPOINT,
+  PLAYWRIGHT_MCP_SERVER,
+  TEMPO_MCP_SERVER,
+  TEMPO_SESSION_ID_ENV,
+  TEMPO_RUN_ID_ENV,
+  TEMPO_RUN_OUTPUT_KIND_ENV,
+  type BrowserMode,
+  type McpServerSpec,
+} from "@tempo/protocol";
+import { isObj } from "./convert.ts";
+
+/** How tempod runs its own MCP bridge: the command line and the CA env from startup step 2. */
+export interface Bridge {
+  readonly command: ReadonlyArray<string>;
+  readonly env: Record<string, string>;
+}
+
+type Remote = Extract<McpServerSpec, { transport: "http" | "sse" }>;
+
+type Stdio = Extract<McpServer, { command: string }>;
+
+/** 01 Browser Run: with `"run"`, Playwright MCP drives the Browser Run session instead of local Chromium. */
+export const playwrightServer = (browser: BrowserMode = "local"): Stdio => ({
+  name: PLAYWRIGHT_MCP_SERVER.name,
+  command: PLAYWRIGHT_MCP_SERVER.command,
+  args: browser === "run" ? ["--cdp-endpoint", BROWSER_RUN_CDP_ENDPOINT] : [...PLAYWRIGHT_MCP_SERVER.args],
+  env: PLAYWRIGHT_MCP_SERVER.env.map((e) => ({ ...e })),
+});
+
+/** The agent's `tempo` server: environment status, proposals and artifacts (01, Environments, Artifacts). */
+export const tempoServer = (sessionId: string, env: Record<string, string> = {}): Stdio => ({
+  name: TEMPO_MCP_SERVER.name,
+  command: TEMPO_MCP_SERVER.command,
+  args: [...TEMPO_MCP_SERVER.args],
+  env: [
+    { name: TEMPO_SESSION_ID_ENV, value: sessionId },
+    ...[TEMPO_RUN_ID_ENV, TEMPO_RUN_OUTPUT_KIND_ENV].flatMap((name) =>
+      env[name] ? [{ name, value: env[name] }] : [],
+    ),
+  ],
+});
+
+export const bridgeServer = (spec: Remote, bridge: Bridge): Stdio => {
+  const [command, ...prefix] = bridge.command;
+
+  return {
+    name: spec.name,
+    command: command ?? "tempod",
+    args: [
+      ...prefix,
+      "mcp-bridge",
+      "--transport",
+      spec.transport,
+      "--url",
+      spec.url,
+      ...spec.headers.flatMap((h) => ["--header", `${h.name}: ${h.value}`]),
+    ],
+    env: Object.entries(bridge.env).map(([name, value]) => ({ name, value })),
+  };
+};
+
+/** Transports the agent reported in `agentCapabilities.mcpCapabilities`. */
+export const mcpTransports = (capabilities: import("@tempo/protocol").AcpFields) => {
+  const mcp = capabilities["mcpCapabilities"];
+
+  return { http: isObj(mcp) && mcp["http"] === true, sse: isObj(mcp) && mcp["sse"] === true } satisfies {
+    http: boolean;
+    sse: boolean;
+  };
+};
+
+/** The `mcpServers` of `session/new` and `session/load`: Playwright, tempo, then the user's servers (01). */
+export const acpMcpServers = (
+  specs: ReadonlyArray<McpServerSpec>,
+  capabilities: import("@tempo/protocol").AcpFields,
+  bridge: Bridge,
+  browser: BrowserMode,
+  sessionId: string,
+  env: Record<string, string> = {},
+): McpServer[] => {
+  const supports = mcpTransports(capabilities);
+
+  return [
+    playwrightServer(browser),
+    tempoServer(sessionId, env),
+    ...specs.map((spec): McpServer => {
+      if (spec.transport === "stdio")
+        return {
+          name: spec.name,
+          command: spec.command,
+          args: [...spec.args],
+          env: spec.env.map((e) => ({ ...e })),
+        };
+
+      if (!supports[spec.transport]) return bridgeServer(spec, bridge);
+
+      return {
+        type: spec.transport,
+        name: spec.name,
+        url: spec.url,
+        headers: spec.headers.map((h) => ({ ...h })),
+      };
+    }),
+  ];
+};
+
+type PiEntry =
+  | { command: string; args: string[]; env: Record<string, string> }
+  | { url: string; headers: Record<string, string> };
+
+const stdioEntry = (s: {
+  command: string;
+  args: ReadonlyArray<string>;
+  env: ReadonlyArray<{ name: string; value: string }>;
+}): PiEntry => ({
+  command: s.command,
+  args: [...s.args],
+  env: Object.fromEntries(s.env.map((e) => [e.name, e.value])),
+});
+
+/** `~/.pi/agent/mcp.json` (01, Pi): pi-acp does not pass `mcpServers` to pi. Pi has no SSE client. */
+export const piMcpConfig = (
+  specs: ReadonlyArray<McpServerSpec>,
+  bridge: Bridge,
+  browser: BrowserMode,
+  sessionId: string,
+  env: Record<string, string> = {},
+) => {
+  const servers: Record<string, PiEntry> = {};
+  const playwright = playwrightServer(browser);
+  servers[playwright.name] = stdioEntry(playwright);
+  servers[TEMPO_MCP_SERVER.name] = stdioEntry(tempoServer(sessionId, env));
+
+  for (const spec of specs) {
+    if (spec.transport === "stdio") servers[spec.name] = stdioEntry(spec);
+    else if (spec.transport === "http")
+      servers[spec.name] = {
+        url: spec.url,
+        headers: Object.fromEntries(spec.headers.map((h) => [h.name, h.value])),
+      };
+    else servers[spec.name] = stdioEntry(bridgeServer(spec, bridge));
+  }
+
+  return { mcpServers: servers } satisfies { mcpServers: Record<string, PiEntry> };
+};
+
+export const writePiMcpConfig = (
+  piAgentDir: string,
+  specs: ReadonlyArray<McpServerSpec>,
+  bridge: Bridge,
+  browser: BrowserMode,
+  sessionId: string,
+  env: Record<string, string> = {},
+): void => {
+  mkdirSync(piAgentDir, { recursive: true });
+  const path = join(piAgentDir, "mcp.json");
+  writeFileSync(path, `${JSON.stringify(piMcpConfig(specs, bridge, browser, sessionId, env), null, 2)}\n`, {
+    mode: 0o600,
+  });
+  chmodSync(path, 0o600);
+};

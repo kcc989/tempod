@@ -1,0 +1,2 @@
+{"projectId":"01k70000000000000000000001","revision":2,"source":"version: 1\njobs:\n  test:\n    run: bun test\n","enabled":true,"jobs":[{"key":"test","name":"test","needs":[],"timeoutMinutes":20}],"required":["test"],"egressAllowlist":[],"updatedAt":1791709201000}
+{"projectId":"01k70000000000000000000001","revision":0,"source":"","enabled":false,"jobs":[],"required":[],"egressAllowlist":[],"updatedAt":null}

@@ -14,10 +14,13 @@
     "bindings": [
       { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
       { "name": "USER_HUB", "class_name": "UserHubDO" },
+      { "name": "REPOSITORY_CI", "class_name": "RepositoryCiDO" },
       { "name": "CREDENTIALS", "class_name": "CredentialDO" },
     ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceDO", "UserHubDO", "CredentialDO"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["WorkspaceDO", "UserHubDO", "CredentialDO", "RepositoryCiDO"] },
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -25,6 +28,8 @@
       "database_id": "test",
       "migrations_dir": "../src/db/migrations",
     },
+    { "binding": "TEST_LEGACY_DB", "database_name": "tempo-legacy", "database_id": "test-legacy" },
   ],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }],
+  "worker_loaders": [{ "binding": "LOADER" }],
 }

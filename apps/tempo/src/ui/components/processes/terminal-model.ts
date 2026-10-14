@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { CloseCode, type WorkspaceState } from "@tempo/protocol";
 
 /** Terminal tabs and channel frames (01, Terminal; 02, Terminal channel). */
@@ -10,12 +11,16 @@ export type TerminalAvailability = "loading" | "connect" | "sleeping" | "archive
  */
 export const terminalAvailability = (state: WorkspaceState | null): TerminalAvailability => {
   if (state === null) return "loading";
+
   if (state === "archived" || state === "archiving") return "archived";
+
   if (state === "sleeping" || state === "stopping") return "sleeping";
+
   return "connect";
 };
 
 export const TERMINAL_IDS = ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9"] as const;
+
 export type TerminalId = (typeof TERMINAL_IDS)[number];
 
 export const isTerminalId = (s: string): s is TerminalId => /^t[1-9]$/.test(s);
@@ -23,6 +28,7 @@ export const isTerminalId = (s: string): s is TerminalId => /^t[1-9]$/.test(s);
 /** The tabs to show: tmux sessions from listTerminals plus the ones opened here, t1 to t9 in order. */
 export const terminalTabs = (listed: ReadonlyArray<string>, opened: ReadonlyArray<string>): TerminalId[] => {
   const all = new Set([...listed, ...opened].filter(isTerminalId));
+
   return TERMINAL_IDS.filter((id) => all.has(id));
 };
 
@@ -45,6 +51,7 @@ export const terminalPath = (
   rows: number,
 ): string => {
   const size = terminalSize(cols, rows);
+
   return `/api/ws/terminal/${encodeURIComponent(workspaceId)}/${terminalId}?cols=${size.cols}&rows=${size.rows}`;
 };
 
@@ -54,8 +61,7 @@ export const resizeFrame = (cols: number, rows: number): string =>
 /** True for the server's one text frame, `{"type":"ready"}`. */
 export const isReadyFrame = (data: string): boolean => {
   try {
-    const v = JSON.parse(data) as { type?: unknown };
-    return typeof v === "object" && v !== null && v.type === "ready";
+    return Schema.is(Schema.Struct({ type: Schema.Literal("ready") }))(JSON.parse(data));
   } catch {
     return false;
   }
@@ -69,7 +75,9 @@ export const encodeInput = (data: string): Uint8Array => encoder.encode(data);
 /** xterm's onBinary gives one byte per char (mouse reports); send the bytes as they are. */
 export const encodeBinary = (data: string): Uint8Array => {
   const out = new Uint8Array(data.length);
+
   for (let i = 0; i < data.length; i++) out[i] = data.charCodeAt(i) & 0xff;
+
   return out;
 };
 
@@ -81,9 +89,13 @@ export type TerminalClose = "exited" | "replaced" | "notFound" | "badVersion" | 
  */
 export const terminalCloseAction = (code: number): TerminalClose => {
   if (code === 1000) return "exited";
+
   if (code === CloseCode.replaced) return "replaced";
+
   if (code === CloseCode.workspaceNotFound) return "notFound";
+
   if (code === CloseCode.badProtocolVersion) return "badVersion";
+
   return "reconnect";
 };
 

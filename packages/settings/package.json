@@ -4,16 +4,17 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./migrations/*": "./src/migrations/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc --checkers 2 -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
     "@tempo/protocol": "workspace:*",
     "effect": "4.0.3",
-    "smol-toml": "1.9.1"
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "vitest": "4.1.11"

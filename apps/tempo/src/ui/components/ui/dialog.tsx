@@ -2,6 +2,7 @@ import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import type * as React from "react";
 import { cn } from "~/ui/lib/utils";
+import { isMacPlatform, matchesCombo } from "~/ui/lib/shortcuts";
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -40,16 +41,18 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   onSubmitShortcut,
   onKeyDown,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  overlayClassName?: string;
   onSubmitShortcut?: () => void;
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
@@ -58,8 +61,10 @@ function DialogContent({
         )}
         onKeyDown={(e) => {
           onKeyDown?.(e);
-          if (e.defaultPrevented || !onSubmitShortcut) return;
-          if (e.code === "Enter" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+
+          if (e.defaultPrevented || e.nativeEvent.isComposing || !onSubmitShortcut) return;
+
+          if (matchesCombo(e, { code: "Enter", mod: true }, isMacPlatform())) {
             e.preventDefault();
             onSubmitShortcut();
           }

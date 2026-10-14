@@ -7,6 +7,11 @@ export default defineConfig({
     alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   test: {
+    deps: { optimizer: { ssr: { enabled: true, include: ["effect", "@tempo/protocol"] } } },
+    name: "ui",
+    maxWorkers: 2,
+    expect: { requireAssertions: true },
+    pool: "vmThreads",
     environment: "node",
     include: ["test/ui/**/*.test.ts"],
   },

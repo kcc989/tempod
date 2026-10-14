@@ -1,0 +1,11 @@
+{
+  "binarySha256": "7ac70b027d8599283abc054d99ad727f584d3824783a0db5aae7c83786d87086",
+  "build": "cargo build --locked -p tempo-mac --bin Tempo",
+  "sourceHead": "7ed017843b7b5a7b95b61c4bb235c019b2d0dbb7",
+  "workingTreeIncludesPendingEdits": true,
+  "signingVerified": true,
+  "keychainHelperPreserved": true,
+  "testsRun": false,
+  "relaunched": false,
+  "capturePendingReason": "Mac locked"
+}

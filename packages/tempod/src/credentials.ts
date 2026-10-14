@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { createHash, randomBytes } from "node:crypto";
 import {
   chmodSync,
@@ -45,6 +46,7 @@ export class CodexCredentials {
   put(content: string): void {
     mkdirSync(this.opts.codexHome, { recursive: true, mode: 0o700 });
     const tmp = join(this.opts.codexHome, `.auth.json.${randomBytes(6).toString("hex")}.tmp`);
+
     try {
       writeFileSync(tmp, content, { mode: 0o600 });
       chmodSync(tmp, 0o600);
@@ -59,19 +61,22 @@ export class CodexCredentials {
   start(): void {
     if (this.watcher || this.poll) return;
     const current = this.readCurrent();
+
     if (this.lastHash === null && current !== null) this.lastHash = sha256(current);
+
     try {
       mkdirSync(this.opts.codexHome, { recursive: true, mode: 0o700 });
       this.watcher = watch(this.opts.codexHome, { persistent: false }, (_event, name) => {
         if (name === null || name === "auth.json") this.schedule();
       });
-      (this.watcher as unknown as NodeJS.EventEmitter).on("error", () => {
+      this.watcher.on("error", () => {
         this.watcher?.close();
         this.watcher = null;
       });
     } catch (e) {
       this.opts.log.warn("cannot watch CODEX_HOME; polling only", { error: String(e) });
     }
+
     this.poll = setInterval(() => this.check(), this.opts.pollMs ?? 10_000);
   }
 
@@ -85,30 +90,42 @@ export class CodexCredentials {
 
   check(): void {
     const content = this.readCurrent();
+
     if (content === null) return;
     const hash = sha256(content);
+
     if (hash === this.lastHash) return;
     let lastRefresh = NaN;
+
     try {
-      const parsed = JSON.parse(content) as { last_refresh?: unknown };
-      if (typeof parsed.last_refresh === "string") lastRefresh = Date.parse(parsed.last_refresh);
+      const parsed = Schema.decodeUnknownSync(
+        Schema.fromJsonString(Schema.Struct({ last_refresh: Schema.optional(Schema.Unknown) })),
+      )(content);
+
+      if (Schema.is(Schema.String)(parsed.last_refresh)) lastRefresh = Date.parse(parsed.last_refresh);
     } catch {
       // Codex may be mid-write; the next event or poll retries.
       return;
     }
+
     this.lastHash = hash;
+
     if (!Number.isFinite(lastRefresh)) {
       this.opts.log.warn("codex auth.json changed without a valid last_refresh; not synced");
+
       return;
     }
+
     this.opts.onChanged(content, lastRefresh);
   }
 
   stop(): void {
     this.watcher?.close();
     this.watcher = null;
+
     if (this.poll) clearInterval(this.poll);
     this.poll = null;
+
     if (this.pending) clearTimeout(this.pending);
     this.pending = null;
   }

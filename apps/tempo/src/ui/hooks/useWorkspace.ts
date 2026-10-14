@@ -1,6 +1,6 @@
 import { call } from "~/ui/lib/api";
 import { toastError } from "~/ui/lib/toast";
-import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useEffectEvent, useSyncExternalStore } from "react";
 import type { WorkspaceEvent } from "~/ui/stores/workspace-state";
 import {
   getWorkspaceStore,
@@ -11,22 +11,30 @@ import {
 } from "~/ui/stores/workspace-store";
 import { usePageActive } from "./usePageActive";
 
+/** Externally managed stores for replay views and alternate workspace transports. */
+export const WorkspaceStoresContext = createContext<((workspaceId: string) => WorkspaceStore) | null>(null);
+
 /**
  * The cached store of an open workspace. Each caller keeps it connected while mounted; it closes
  * its socket a few seconds after the last caller unmounts.
  */
 export function useWorkspaceStore(workspaceId: string): WorkspaceStore {
-  const store = getWorkspaceStore(workspaceId);
+  const provided = useContext(WorkspaceStoresContext);
+  const store = provided ? provided(workspaceId) : getWorkspaceStore(workspaceId);
   useEffect(() => {
+    if (provided) return;
     retainWorkspaceStore(store);
+
     return () => releaseWorkspaceStore(store);
-  }, [store]);
+  }, [store, provided]);
+
   return store;
 }
 
 /** The live snapshot of one workspace channel (02, Workspace channel). */
 export function useWorkspace(workspaceId: string): WorkspaceSnapshot {
   const store = useWorkspaceStore(workspaceId);
+
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
@@ -37,6 +45,7 @@ export function useWorkspace(workspaceId: string): WorkspaceSnapshot {
 export function useWorkspaceSelector<S>(workspaceId: string, select: (s: WorkspaceSnapshot) => S): S {
   const store = useWorkspaceStore(workspaceId);
   const get = () => select(store.getSnapshot());
+
   return useSyncExternalStore(store.subscribe, get, get);
 }
 
@@ -68,6 +77,7 @@ export function useWorkspaceLifecycle(workspaceId: string): void {
 
   useWorkspaceEvents(workspaceId, (e) => {
     if (e.kind === "turnEnded" && active) markViewed(workspaceId);
+
     if (e.kind === "error") toastError({ code: e.code, message: e.message });
   });
 }

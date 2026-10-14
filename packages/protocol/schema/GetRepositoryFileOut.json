@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetRepositoryFileOut",
+  "type": "object",
+  "properties": {
+    "content": {
+      "type": "string"
+    },
+    "encoding": {
+      "type": "string",
+      "enum": ["utf8", "base64"]
+    },
+    "size": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": ["content", "encoding", "size"],
+  "additionalProperties": true
+}

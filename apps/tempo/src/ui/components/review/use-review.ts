@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import type { ChangedFile, DiffScope, WorkspaceState } from "@tempo/protocol";
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -19,6 +20,7 @@ export const retryWhileWaking = (query: { state: { error: Error | null } }): num
 export function useWorkspaceStateValue(workspaceId: string): WorkspaceState | undefined {
   const detail = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state);
   const summary = useHubWorkspace(workspaceId)?.state;
+
   return detail ?? summary;
 }
 
@@ -36,6 +38,8 @@ export interface ChangesResult {
   readonly fetching: boolean;
   readonly error: Error | null;
   readonly refetch: () => void;
+  /** The commit an image diff's `Before` comes from: baseSha (branch) or headSha (uncommitted). */
+  readonly beforeSha: string | null;
 }
 
 /**
@@ -50,17 +54,20 @@ export function useChanges(workspaceId: string): ChangesResult {
   const fromMessage = useWorkspaceSelector(workspaceId, (s) => s.changes);
   const fromDetail = useWorkspaceSelector(workspaceId, (s) => s.workspace?.changes ?? null);
   const lastKnown = fromMessage ?? fromDetail;
+
   const query = useCallQuery(
     "getChanges",
     { workspaceId, scope },
     { enabled: live, retry: false, placeholderData: keepPreviousData, refetchInterval: retryWhileWaking },
   );
+
   const { refetch } = query;
   useEffect(() => {
     if (live && changesSeq > 0) void refetch();
   }, [live, changesSeq, refetch]);
   const code = query.error ? errorCode(query.error) : null;
   const view = changesView({ state, scope, data: query.data, errorCode: code, lastKnown });
+
   return {
     scope,
     source: view.source,
@@ -70,6 +77,7 @@ export function useChanges(workspaceId: string): ChangesResult {
     fetching: query.isFetching,
     error: query.error,
     refetch: () => void refetch(),
+    beforeSha: query.data ? (scope === "branch" ? query.data.baseSha : query.data.headSha) : null,
   };
 }
 
@@ -85,14 +93,18 @@ export function useInvalidateOnChanges(workspaceId: string, names: ReadonlyArray
   const key = names.join(",");
   useEffect(() => {
     if (changesSeq === 0) return;
-    for (const name of key.split(",")) {
+
+    for (const name of ["getFileDiff", "listFiles", "readFile"] as const) {
+      if (!key.split(",").includes(name)) continue;
       const k = `${workspaceId}\u0000${name}`;
+
       if (handledSeq.get(k) === changesSeq) continue;
       handledSeq.set(k, changesSeq);
       void queryClient.invalidateQueries({
-        queryKey: callKey(name as RefetchedOnChanges),
+        queryKey: callKey(name),
         predicate: (q) =>
-          (q.queryKey[2] as { workspaceId?: string } | undefined)?.workspaceId === workspaceId,
+          Schema.is(Schema.Struct({ workspaceId: Schema.String }))(q.queryKey[2]) &&
+          q.queryKey[2].workspaceId === workspaceId,
       });
     }
   }, [changesSeq, key, queryClient, workspaceId]);
@@ -110,6 +122,7 @@ export function useReviewComments(workspaceId: string) {
     if (turnCount > 0) void refetch();
   }, [turnCount, refetch]);
   const draftList = useMemo(() => drafts(query.data), [query.data]);
+
   return { query, drafts: draftList };
 }
 
@@ -124,21 +137,36 @@ export function useAddComment(onDone?: () => void) {
   });
 }
 
-/** listFiles while the container is up; refetched when files change. */
+/** listFiles uses the DO fallback while sleeping. */
 export function useFileList(workspaceId: string, enabled = true) {
-  const live = useLive(workspaceId);
+  const state = useWorkspaceStateValue(workspaceId);
+  const live = isLive(state);
+  const available = live || state === "sleeping";
   useInvalidateOnChanges(workspaceId, LIST_FILES);
+
   const query = useCallQuery(
     "listFiles",
     { workspaceId },
-    { enabled: enabled && live, staleTime: 30_000, retry: false, refetchInterval: retryWhileWaking },
+    {
+      enabled: enabled && available,
+      staleTime: 30_000,
+      retry: false,
+      refetchInterval: live ? retryWhileWaking : false,
+    },
   );
-  return { query, live };
+
+  const { refetch } = query;
+  useEffect(() => {
+    if (enabled && available) void refetch();
+  }, [enabled, available, state, refetch]);
+
+  return { query, live, available };
 }
 
 const LIST_FILES = ["listFiles"] as const;
 
 const remembered = new Map<string, ReadonlySet<string>>();
+
 const NOTHING: ReadonlySet<string> = new Set();
 
 /** A set (open or folded folders) that outlives a hidden panel tab for this page load. */
@@ -146,14 +174,17 @@ export function useRememberedSet(
   key: string,
 ): [ReadonlySet<string>, (update: (cur: ReadonlySet<string>) => ReadonlySet<string>) => void] {
   const [value, setValue] = useState<ReadonlySet<string>>(() => remembered.get(key) ?? NOTHING);
+
   const set = useCallback(
     (update: (cur: ReadonlySet<string>) => ReadonlySet<string>) =>
       setValue((cur) => {
         const next = update(cur);
         remembered.set(key, next);
+
         return next;
       }),
     [key],
   );
+
   return [value, set];
 }

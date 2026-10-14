@@ -4,6 +4,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
+    deps: { optimizer: { web: { enabled: true, include: ["effect", "@tempo/protocol"] } } },
+    name: "components",
+    expect: { requireAssertions: true },
+    pool: "vmThreads",
+    maxWorkers: 2,
     environment: "happy-dom",
     include: ["test/ui/components/**/*.test.tsx"],
     setupFiles: ["./test/ui/components/setup.ts"],

@@ -1,0 +1,20 @@
+{
+  "app": {
+    "name": "Tempo",
+    "category": "Agent coding workspace",
+    "platform": "desktop",
+    "primary_user": "Developer",
+    "primary_job": "Read agent work and manage project workspaces"
+  },
+  "screen": {
+    "name": "Workspace tools",
+    "purpose": "Choose a tool while reading the chat transcript"
+  },
+  "image_legend": [
+    "Image 1: app window",
+    "Image 2: workspace sidebar",
+    "Image 3: app header and chat tabs",
+    "Image 4: tool picker"
+  ],
+  "page_text": "Window: \"Tempo\", App: Tempo.\n0 standard window Tempo, Secondary Actions: Raise\n\t1 container\n\t\t2 button Toggle sidebar\n\t\t3 button Rename branch\n\t\t4 button Copy branch name\n\t\t5 button Workspace info\n\t\t6 button Toggle right side\n\t\t7 tab group\n\t\t\t8 tab (settable, boolean) New tool tab, Value: on\n\t\t9 button New workspace\n\t\t10 button Search workspaces\n\t\t11 button Sort workspaces: Last activity\n\t\t12 button Add project\n\t\t13 button kcc989/farstep, expanded\n\t\t14 button New workspace in kcc989/farstep\n\t\t15 list kcc989/farstep\n\t\t\t16 container (selectable) lisbon \u00b7 Running\n\t\t17 button Archived workspaces\n\t\t18 button Saved chats\n\t\t19 button Settings\n\t\t20 tab group\n\t\t\t21 tab (settable, boolean) Farstep project README overview, Value: on\n\t\t\t\t22 button Close chat\n\t\t\t23 tab (settable, boolean) Turn summaries and check reporting, Value: off\n\t\t\t\t24 button Close chat\n\t\t\t25 button\n\t\t26 button New chat\n\t\t27 container (selectable)\n\t\t28 text entry area (settable) Message\n\t\t29 button Model and thinking: Opus 5.5\n\t\t30 button Context usage: 30785 of 1000000 tokens (3%)\n\t\t31 button Attach file\n\t\t32 button Send\n\t\t33 button Changes\n\t\t34 button Terminal\n\t\t35 button Run\n\t\t36 button Browser\n\t\t37 button Guides\n\t\t38 button Artifacts\n39 menu bar\n\t40 Tempo\n\t41 File\n\t42 Edit\n\t43 View\n\t44 Workspace\n\t45 Window\n\t46 Help\n\nThe focused UI element is 0 standard window Tempo, Secondary Actions: Raise"
+}

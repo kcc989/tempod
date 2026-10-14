@@ -44,13 +44,17 @@ const FAILED = new Set(["failure", "cancelled", "timed_out", "action_required", 
 /** 03, Status polling: queued or in progress is pending; these conclusions are failures. */
 export const runOutcome = (run: Pick<CheckRun, "status" | "conclusion">): RunOutcome => {
   if (run.status !== "completed" || run.conclusion === null) return "pending";
+
   if (FAILED.has(run.conclusion)) return "failure";
+
   if (run.conclusion === "success") return "success";
+
   return "neutral";
 };
 
 const words = (s: string): string => {
   const t = s.replace(/_/g, " ");
+
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
 

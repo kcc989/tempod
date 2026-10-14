@@ -2,7 +2,9 @@ import {
   AGENT_IDS,
   DEFAULT_SETTINGS,
   type AgentId,
+  type AgentModelOptions,
   type CredentialStatus,
+  type AgentSummary,
   type FnInput,
   type NewSource,
   type Project,
@@ -10,6 +12,9 @@ import {
 import { hasLogin } from "~/ui/lib/agents";
 
 /** New workspace (04, Dialogs): source tabs, agent and prompt. Pure, so it is unit-tested. */
+export type SavedAgentChoice = Pick<AgentSummary, "id" | "name" | "description" | "updatedAt"> & {
+  readonly baseAgent: AgentId;
+};
 
 export type SourceTab = "new" | "branch" | "pr";
 
@@ -55,26 +60,55 @@ export const initialAgent = (
   project: Pick<Project, "settings"> | undefined,
 ): AgentId | null => {
   const preferred = [project?.settings.agent?.default, DEFAULT_SETTINGS.agent.default];
+
   return (
     preferred.find((a): a is AgentId => a !== undefined && available.includes(a)) ?? available[0] ?? null
   );
 };
+
+/** Saved agents whose base agent has a login, after the plain agents (04, New workspace). */
+export const libraryAgentsWithLogin = (
+  agents: ReadonlyArray<SavedAgentChoice> | undefined,
+  available: ReadonlyArray<AgentId>,
+): SavedAgentChoice[] => (agents ?? []).filter((a) => available.includes(a.baseAgent));
+
+const LIBRARY_PREFIX = "agent:";
+
+/** The agent select's value: an agent id, or `agent:<agentId>`. */
+export const libraryAgentValue = (agentId: string): string => `${LIBRARY_PREFIX}${agentId}`;
+
+/** The saved agent a select value stands for; null for a model choice or one no longer offered. */
+export const libraryAgentOf = (
+  value: string | null,
+  custom: ReadonlyArray<SavedAgentChoice>,
+): SavedAgentChoice | null =>
+  value?.startsWith(LIBRARY_PREFIX)
+    ? (custom.find((a) => a.id === value.slice(LIBRARY_PREFIX.length)) ?? null)
+    : null;
 
 export const createInput = (
   project: Pick<Project, "id" | "defaultBranch">,
   draft: SourceDraft,
   agent: AgentId | null,
   prompt: string,
+  model?: string,
+  agentId?: string,
 ): FnInput<"createWorkspace"> | null => {
   const source = buildSource(draft, project);
+
   if (!source) return null;
   const text = prompt.trim();
-  return {
-    projectId: project.id,
-    source,
-    ...(agent ? { agent } : {}),
-    ...(text ? { prompt: { text } } : {}),
-  };
+  let input: FnInput<"createWorkspace"> = { projectId: project.id, source };
+
+  if (agent) input = { ...input, agent };
+
+  if (model) input = { ...input, model };
+
+  if (agentId) input = { ...input, agentId: agentId };
+
+  if (text) input = { ...input, prompt: { text } };
+
+  return input;
 };
 
 /** Pull requests matching the search by number, title or head branch. */
@@ -83,11 +117,54 @@ export const filterPullRequests = <P extends { number: number; title: string; he
   search: string,
 ): P[] => {
   const q = search.trim().toLowerCase().replace(/^#/, "");
+
   if (!q) return [...prs];
+
   return prs.filter(
     (p) =>
       String(p.number).startsWith(q) ||
       p.title.toLowerCase().includes(q) ||
       p.headBranch.toLowerCase().includes(q),
+  );
+};
+
+export interface ModelChoice {
+  readonly key: string;
+  readonly agent: AgentId;
+  readonly model: string;
+  readonly name: string;
+}
+
+export const modelChoices = (
+  available: ReadonlyArray<AgentId>,
+  reported: ReadonlyArray<AgentModelOptions>,
+): ModelChoice[] =>
+  available.flatMap((agent) =>
+    (reported.find((entry) => entry.agent === agent)?.options ?? []).map((option) => ({
+      key: JSON.stringify([agent, option.value]),
+      agent,
+      model: option.value,
+      name: option.name,
+    })),
+  );
+
+export const initialModel = (
+  choices: ReadonlyArray<ModelChoice>,
+  reported: ReadonlyArray<AgentModelOptions>,
+  project: Pick<Project, "settings">,
+): ModelChoice | null => {
+  const agent = initialAgent(
+    choices.map((choice) => choice.agent),
+    project,
+  );
+
+  const preferred = agent ? project.settings.agent?.models?.[agent] : undefined;
+  const current = reported.find((entry) => entry.agent === agent)?.currentValue;
+
+  return (
+    choices.find((choice) => choice.agent === agent && choice.model === preferred) ??
+    choices.find((choice) => choice.agent === agent && choice.model === current) ??
+    choices.find((choice) => choice.agent === agent) ??
+    null
   );
 };

@@ -1,8 +1,12 @@
+import { Schema } from "effect";
+import type { AppSetupStatus } from "@tempo/protocol";
 import { SYSTEM_CREDENTIALS } from "../do/credential.ts";
 import type { Env } from "../env.ts";
 import { clearGithubAppConfigCache, getGithubAppConfig } from "../github/app.ts";
 import { timingSafeEqual } from "../lib/crypto.ts";
-import { log } from "../log.ts";
+import { errorText, log } from "../log.ts";
+import { getSessionUser, isOwner } from "../auth/auth.ts";
+import { listInstallations } from "../server/handlers/projects.ts";
 import { appOrigin, escapeHtml, html } from "./common.ts";
 
 const notFound = () => new Response("Not found", { status: 404 });
@@ -10,17 +14,25 @@ const notFound = () => new Response("Not found", { status: 404 });
 /** 05, GitHub App setup (manifest flow). Works only while no App is configured, and only with the token. */
 export const handleSetup = async (request: Request, env: Env, url: URL): Promise<Response> => {
   if (url.pathname === "/setup/github/installed") {
-    // GitHub's setup_url. Installations are synced from GET /app/installations once the owner signs in.
+    // GitHub's setup_url (05 step 5). A signed-in owner gets the new installation stored now;
+    // otherwise the Add project dialog syncs GET /app/installations after sign-in.
+    await storeInstallation(request, env, url.searchParams.get("installation_id"));
+
     return Response.redirect(`${appOrigin(env)}/`, 302);
   }
+
   if (await getGithubAppConfig(env, { fresh: true })) return notFound();
   const token = url.searchParams.get("token") ?? url.searchParams.get("state") ?? "";
+
   if (!env.TEMPO_SETUP_TOKEN || !timingSafeEqual(token, env.TEMPO_SETUP_TOKEN)) return notFound();
 
   if (url.pathname === "/setup/github" && request.method === "GET") return setupPage(env, token);
+
   if (url.pathname === "/setup/github/callback" && request.method === "GET") {
     const code = url.searchParams.get("code");
+
     if (!code) return html("<h1>Missing code</h1>", 400);
+
     const res = await fetch(`https://api.github.com/app-manifests/${encodeURIComponent(code)}/conversions`, {
       method: "POST",
       headers: {
@@ -29,17 +41,23 @@ export const handleSetup = async (request: Request, env: Env, url: URL): Promise
         "X-GitHub-Api-Version": "2022-11-28",
       },
     });
+
     if (!res.ok) {
       log("warn", "github manifest conversion failed", { status: res.status });
+
       return html(`<h1>GitHub returned ${res.status}</h1><p>Start again from the setup link.</p>`, 502);
     }
-    const app = (await res.json()) as {
-      id: number;
-      slug: string;
-      pem: string;
-      client_id: string;
-      client_secret: string;
-    };
+
+    const app = Schema.decodeUnknownSync(
+      Schema.Struct({
+        id: Schema.Number,
+        slug: Schema.String,
+        pem: Schema.String,
+        client_id: Schema.String,
+        client_secret: Schema.String,
+      }),
+    )(await res.json());
+
     await env.CREDENTIALS.getByName(SYSTEM_CREDENTIALS).putGithubAppConfig({
       appId: String(app.id),
       slug: app.slug,
@@ -49,15 +67,38 @@ export const handleSetup = async (request: Request, env: Env, url: URL): Promise
     });
     clearGithubAppConfigCache();
     const install = `https://github.com/apps/${encodeURIComponent(app.slug)}/installations/new`;
+
     return html(
       `<h1>GitHub App created</h1><p>Next, install <code>${escapeHtml(app.slug)}</code> on your account or organization.</p><p><a href="${install}">Install the GitHub App</a></p><p>Then <a href="/">sign in to Tempo</a>.</p>`,
     );
   }
+
   return notFound();
+};
+
+const storeInstallation = async (
+  request: Request,
+  env: Env,
+  installationId: string | null,
+): Promise<void> => {
+  if (!installationId || !/^[1-9][0-9]{0,15}$/.test(installationId)) return;
+
+  try {
+    const user = await getSessionUser(env, request.headers, { allowCookie: true, allowBearer: false });
+
+    if (!user || !(await isOwner(env, user.id))) return;
+    const stored = await listInstallations({ env, user });
+
+    if (!stored.some((i) => i.installationId === Number(installationId)))
+      log("warn", "installation from setup_url not found", { installationId: Number(installationId) });
+  } catch (e) {
+    log("warn", "installation sync failed", { error: errorText(e) });
+  }
 };
 
 export const manifest = (env: Env) => {
   const origin = appOrigin(env);
+
   return {
     name: `Tempo (${env.APP_HOST})`.slice(0, 34),
     url: origin,
@@ -67,6 +108,7 @@ export const manifest = (env: Env) => {
     public: false,
     hook_attributes: { url: `${origin}/`, active: false },
     default_permissions: {
+      email_addresses: "read",
       contents: "write",
       pull_requests: "write",
       metadata: "read",
@@ -80,6 +122,7 @@ export const manifest = (env: Env) => {
 const setupPage = (env: Env, token: string): Response => {
   const json = escapeHtml(JSON.stringify(manifest(env)));
   const t = encodeURIComponent(token);
+
   return html(`<h1>Set up Tempo</h1>
 <p>Create the GitHub App that Tempo uses for sign-in and repo access. GitHub asks you to confirm.</p>
 <form id="personal" method="post" action="https://github.com/settings/apps/new?state=${t}">
@@ -97,8 +140,11 @@ const setupPage = (env: Env, token: string): Response => {
 /** Unauthenticated: whether the App exists, and its install link (both public facts). */
 export const handleSetupStatus = async (env: Env): Promise<Response> => {
   const config = await getGithubAppConfig(env);
-  return Response.json({
+
+  const status: AppSetupStatus = {
     configured: config !== null,
     installUrl: config ? `https://github.com/apps/${config.slug}/installations/new` : null,
-  });
+  };
+
+  return Response.json(status);
 };

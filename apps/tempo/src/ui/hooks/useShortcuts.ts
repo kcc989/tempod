@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, type RefObject } from "react";
-import { isEditableTarget, isMacPlatform, matchAction, type ActionId } from "~/ui/lib/shortcuts";
+import { isEditableTarget, isMacPlatform, matchAction, BINDINGS, type ActionId } from "~/ui/lib/shortcuts";
+import { modalOpen } from "~/ui/lib/modal";
 
 /** Return false to let the event through (no preventDefault). */
 export type ShortcutHandler = (e: KeyboardEvent) => void | false;
@@ -24,22 +25,38 @@ export function useShortcuts(
 
   const onKey = useEffectEvent((e: KeyboardEvent, mac: boolean) => {
     if (e.defaultPrevented || e.isComposing) return;
-    const id = matchAction(e, Object.keys(handlers) as ActionId[], mac, {
-      editable: isEditableTarget(e.target),
-      allowPlainInEditable,
-    });
+
+    if (!target && modalOpen()) return;
+
+    const id = matchAction(
+      e,
+      BINDINGS.map((binding) => binding.id).filter((id) => id in handlers),
+      mac,
+      {
+        editable: isEditableTarget(e.target),
+        allowPlainInEditable,
+      },
+    );
+
     if (!id) return;
     const result = handlers[id]?.(e);
+
     if (result !== false) e.preventDefault();
   });
 
   useEffect(() => {
     if (!enabled) return;
     const el: HTMLElement | Window | null = target ? target.current : window;
+
     if (!el) return;
     const mac = isMacPlatform();
-    const listener = (ev: Event) => onKey(ev as KeyboardEvent, mac);
+
+    const listener = (ev: Event) => {
+      if (ev instanceof KeyboardEvent) onKey(ev, mac);
+    };
+
     el.addEventListener("keydown", listener);
+
     return () => el.removeEventListener("keydown", listener);
   }, [target, enabled]);
 }

@@ -95,7 +95,7 @@ impl Client {
                             output.write_all(&bytes).await?;
                             output.flush().await?;
                         }
-                        Ok(ChannelEvent::Status(Status::Connecting | Status::Open)) => {}
+                        Ok(ChannelEvent::Status(Status::Connecting | Status::Open)) | Ok(ChannelEvent::DecodeError(_)) => {}
                         Ok(ChannelEvent::Status(Status::Down { .. })) => {
                             ready = false;
                             output.write_all(b"\r\nReconnecting to Tempo...\r\n").await?;

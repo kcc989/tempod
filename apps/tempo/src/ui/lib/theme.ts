@@ -3,9 +3,11 @@ import { Store } from "./store";
 
 /** Settings → Appearance (04): system, light or dark. Kept per browser. */
 export type ThemePreference = "system" | "light" | "dark";
+
 export type ResolvedTheme = "light" | "dark";
 
 export const THEME_KEY = "theme";
+
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 export const isThemePreference = (u: unknown): u is ThemePreference =>
@@ -13,6 +15,7 @@ export const isThemePreference = (u: unknown): u is ThemePreference =>
 
 export const readThemePreference = (): ThemePreference => {
   const raw = readString(THEME_KEY);
+
   return isThemePreference(raw) ? raw : "system";
 };
 
@@ -36,6 +39,7 @@ export const themeStore = new Store<ThemeState>({ preference: "system", resolved
 
 export const applyThemeClass = (resolved: ResolvedTheme): void => {
   const root = globalThis.document?.documentElement;
+
   if (!root) return;
   root.classList.toggle("dark", resolved === "dark");
   root.style.colorScheme = resolved;
@@ -57,6 +61,7 @@ export const setThemePreference = (preference: ThemePreference): void => {
 /** Reads the saved preference, applies it, and follows system and other-tab changes. */
 export const startThemeSync = (): (() => void) => {
   refresh(readThemePreference());
+
   const mql = (() => {
     try {
       return globalThis.matchMedia?.(DARK_QUERY) ?? null;
@@ -64,12 +69,16 @@ export const startThemeSync = (): (() => void) => {
       return null;
     }
   })();
+
   const onSystem = () => refresh();
+
   const onStorage = (e: StorageEvent) => {
     if (e.key === null || e.key.endsWith(THEME_KEY)) refresh(readThemePreference());
   };
+
   mql?.addEventListener("change", onSystem);
   globalThis.addEventListener?.("storage", onStorage);
+
   return () => {
     mql?.removeEventListener("change", onSystem);
     globalThis.removeEventListener?.("storage", onStorage);

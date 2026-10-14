@@ -264,10 +264,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires an attached terminal; run explicitly in a PTY"]
     fn raw_mode_restores_the_tty_on_an_error_when_attached() {
-        if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
-            return;
-        }
+        assert!(io::stdin().is_terminal() && io::stdout().is_terminal());
         let before = stty(&["-g"]).unwrap();
         let failed = (|| -> io::Result<()> {
             let _guard = RawTerminal::enter()?;

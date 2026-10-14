@@ -4,8 +4,383 @@ import * as w from "./world.ts";
 
 const { uid, at, W1, S1, S2, PROJECT_ID } = w;
 
+const RUN = {
+  id: uid(920),
+  changeId: uid(921),
+  parentRunId: null,
+  agentId: uid(923),
+  attachmentId: null,
+  handle: "reviewer",
+  name: "Reviewer",
+  agentVersion: 1,
+  agentSha: "a".repeat(64),
+  triggerEventId: uid(922),
+  decisionP: null,
+  sessionId: S1,
+  originSessionId: S2,
+  agent: "codex",
+  access: "read-only",
+  outputKind: "review",
+  status: "running",
+  followUpSent: false,
+  tokens: 0,
+  pinCheckpointId: null,
+  warning: null,
+  result: null,
+  sentTurnId: null,
+  errorCode: null,
+  errorDetail: null,
+  deadlineAt: at(40),
+  createdAt: at(1),
+  startedAt: at(2),
+  endedAt: null,
+} as const;
+
+const RUN_STARTED = {
+  agentId: uid(923),
+  handle: "reviewer",
+  agentVersion: 1,
+  agentSha: "a".repeat(64),
+  agent: "codex",
+  access: "read-only",
+  outputKind: "review",
+} as const;
+
+const RUN_COMPLETED = {
+  agentId: uid(923),
+  handle: "reviewer",
+  result: { status: "pass", summary: "No blocking findings." },
+} as const;
+
+const RUN_FAILED = { agentId: uid(923), handle: "reviewer", errorCode: "RUN_LIMIT" } as const;
+
+const RUN_DECIDED = {
+  attachmentId: uid(924),
+  agentId: uid(923),
+  handle: "reviewer",
+  hookIndex: 0,
+  hookEvent: "prompt",
+  outcome: "run",
+  threshold: 0.5,
+  p: 0.8,
+} as const;
+
+const LIFE_EVENT = {
+  id: uid(922),
+  occurredAt: at(1),
+  workspaceId: W1,
+  type: "tempo.change.created",
+  source: "tempo",
+  changeId: uid(921),
+  dedupeKey: `change:${uid(921)}:created`,
+  payload: { origin: "request", handle: "reviewer", text: "Review auth" },
+} as const;
+
+const LIFE_LOG = { seq: 1, event: LIFE_EVENT };
+
+const repositoryCommit: P.RepositoryCommit = {
+  hash: "a".repeat(40),
+  treeHash: "b".repeat(40),
+  message: "Initial commit",
+  author: { name: "Tempo", email: "tempo@localhost" },
+  committer: { name: "Tempo", email: "tempo@localhost" },
+  parents: [],
+  authoredAt: 1791849600,
+  committedAt: 1791849600,
+};
+
+const repositoryEntry: P.RepositoryEntry = {
+  name: "README.md",
+  path: "README.md",
+  hash: "c".repeat(40),
+  type: "blob",
+};
+
+const repositoryPullRequest: P.RepositoryPullRequest = {
+  id: uid(100),
+  projectId: PROJECT_ID,
+  number: 1,
+  title: "Add repository docs",
+  body: "Ready for review.",
+  headBranch: "tempo/oslo",
+  baseBranch: "main",
+  state: "open",
+  url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=pulls&pull=1`,
+  headSha: "a".repeat(40),
+  baseSha: "d".repeat(40),
+  mergeSha: null,
+  createdAt: at(0),
+  updatedAt: at(0),
+  mergedAt: null,
+};
+
+const repositoryLabel: P.RepositoryLabel = {
+  id: uid(110),
+  projectId: PROJECT_ID,
+  name: "bug",
+  color: "d73a4a",
+  description: "Something is broken",
+  createdAt: at(0),
+  updatedAt: at(0),
+};
+
+const repositoryIssue: P.RepositoryIssue = {
+  id: uid(111),
+  projectId: PROJECT_ID,
+  number: 1,
+  title: "Fix repository browsing",
+  body: "Directory navigation needs a fix.",
+  state: "open",
+  authorId: uid(1),
+  createdAt: at(0),
+  updatedAt: at(1),
+  closedAt: null,
+  url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=issues&issue=1`,
+  labels: [repositoryLabel],
+  commentCount: 1,
+};
+
+const repositoryIssueComment: P.RepositoryIssueComment = {
+  id: uid(112),
+  issueId: repositoryIssue.id,
+  authorId: uid(1),
+  body: "I can reproduce this.",
+  createdAt: at(1),
+  updatedAt: at(1),
+};
+
+const ciPipeline: P.CiPipeline = {
+  projectId: PROJECT_ID,
+  revision: 2,
+  source: "version: 1\njobs:\n  test:\n    run: bun test\n",
+  enabled: true,
+  jobs: [{ key: "test", name: "test", needs: [], timeoutMinutes: 20 }],
+  required: ["test"],
+  egressAllowlist: [],
+  updatedAt: at(1),
+};
+
+const ciRun: P.CiRun = {
+  id: uid(120),
+  projectId: PROJECT_ID,
+  number: 1,
+  branch: "main",
+  sha: "c".repeat(40),
+  revision: 2,
+  attempt: 1,
+  trigger: "push",
+  status: "completed",
+  conclusion: "success",
+  createdAt: at(0),
+  startedAt: at(1),
+  completedAt: at(2),
+  url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=checks&run=${uid(120)}`,
+};
+
+const ciJob: P.CiJob = {
+  key: "test",
+  name: "test",
+  needs: [],
+  status: "completed",
+  conclusion: "success",
+  exitCode: 0,
+  summary: null,
+  startedAt: at(1),
+  completedAt: at(2),
+};
+
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
-export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+const ENV_ID = uid(901);
+
+const INJECTOR_CODE = "export default { async fetch(request, env) { return fetch(request); } };\n";
+
+const ENVIRONMENT = {
+  id: ENV_ID,
+  name: "Payments",
+  egressPolicy: "allowlist",
+  egressAllowlist: ["pypi.org", "*.stripe.com"],
+  secrets: [
+    { name: "STRIPE_KEY", hosts: ["api.stripe.com"], set: true },
+    { name: "LOCAL_DB_URL", hosts: [], set: false },
+  ],
+  injectors: [
+    { name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE, sha256: "b".repeat(64) },
+  ],
+  createdAt: 1_790_000_000_000,
+  updatedAt: 1_790_000_100_000,
+} as const;
+
+const PROPOSAL = {
+  note: "The tests call the Stripe API and pip installs from PyPI.",
+  allowlistAdd: ["pypi.org", "files.pythonhosted.org"],
+  secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+} as const;
+
+const LIBRARY_DEFINITION: P.AgentDefinition = {
+  handle: "reviewer",
+  name: "Reviewer",
+  description: "Reviews code",
+  baseAgent: "auto",
+  model: "",
+  thoughtLevel: "",
+  prompt: "Review code.",
+  access: "read-only",
+  tools: { allow: [], deny: ["Edit"] },
+  mcp: { playwright: true, servers: [] },
+  outputKind: "review",
+};
+
+const LIBRARY_AGENT: P.Agent = {
+  ...LIBRARY_DEFINITION,
+  id: uid(701),
+  version: 1,
+  sha: "a".repeat(64),
+  starter: null,
+  createdAt: at(0),
+  updatedAt: at(1),
+};
+
+const LIBRARY_SUMMARY: P.AgentSummary = {
+  id: LIBRARY_AGENT.id,
+  handle: LIBRARY_AGENT.handle,
+  name: LIBRARY_AGENT.name,
+  description: LIBRARY_AGENT.description,
+  baseAgent: LIBRARY_AGENT.baseAgent,
+  access: LIBRARY_AGENT.access,
+  outputKind: LIBRARY_AGENT.outputKind,
+  version: 1,
+  sha: LIBRARY_AGENT.sha,
+  starter: null,
+  updatedAt: at(1),
+};
+
+const AGENT_ATTACHMENT: P.AgentAttachment = {
+  id: uid(702),
+  projectId: PROJECT_ID,
+  agentId: LIBRARY_AGENT.id,
+  enabled: true,
+  hooks: [{ event: "branch.pushed", when: "Does this change touch auth?", threshold: 0.7 }],
+  autoSend: false,
+  maxRuns: 3,
+  timeout: "20m",
+  createdAt: at(0),
+  updatedAt: at(1),
+  agent: LIBRARY_SUMMARY,
+};
+
+const AGENT_PROPOSAL: P.AgentProposal = {
+  note: "Review auth on push",
+  agent: LIBRARY_DEFINITION,
+  attach: {
+    handle: LIBRARY_DEFINITION.handle,
+    hooks: AGENT_ATTACHMENT.hooks,
+    autoSend: false,
+    maxRuns: 3,
+    timeout: "20m",
+  },
+};
+
+export const SHARED_SAMPLES = {
+  AgentProposal: [AGENT_PROPOSAL],
+  AgentProposalRecord: [
+    { id: uid(704), sessionId: S1, createdAt: at(0), status: "pending", proposal: AGENT_PROPOSAL },
+  ],
+  AgentLibraryToolResult: [{ agents: [LIBRARY_SUMMARY], attachments: [AGENT_ATTACHMENT] }],
+  AgentDefinition: [LIBRARY_DEFINITION],
+  Agent: [LIBRARY_AGENT],
+  AgentSummary: [LIBRARY_SUMMARY],
+  AgentHandle: ["reviewer"],
+  AttachmentHook: AGENT_ATTACHMENT.hooks,
+  AgentAttachment: [AGENT_ATTACHMENT, { ...AGENT_ATTACHMENT, agent: null }],
+  ConversationSummary: [
+    {
+      conversationId: W1,
+      projectId: PROJECT_ID,
+      title: "Saved chat",
+      branch: "tempo/chat",
+      updatedAt: at(10),
+    },
+  ],
+  ConversationArtifact: [
+    {
+      version: 1,
+      conversationId: W1,
+      projectId: PROJECT_ID,
+      title: "Saved chat",
+      branch: "tempo/chat",
+      updatedAt: at(10),
+      sessions: [],
+      turns: [],
+      items: [],
+    },
+  ],
+  Run: [RUN],
+  RunResult: [RUN_COMPLETED.result],
+  RunFinding: [{ path: "src/auth.ts", line: 1, text: "Check auth", blocking: true }],
+  PlanStep: [{ text: "Check auth", files: ["src/auth.ts"] }],
+  PlanReport: [{ status: "done", summary: "Plan", steps: [{ text: "Check auth" }], verify: "Run tests" }],
+  ReviewReport: [RUN_COMPLETED.result],
+  NoteReport: [{ status: "done", summary: "Finished" }],
+  RunContent: [{ runId: uid(920) }],
+  AgentProposalContent: [{ proposalId: uid(925) }],
+  LifecycleRunDecidedPayload: [RUN_DECIDED],
+  LifecycleEvent: [
+    LIFE_EVENT,
+    {
+      ...LIFE_EVENT,
+      type: "agent.turn.ended",
+      source: "agent",
+      payload: {
+        status: "completed",
+        stopReason: "end_turn",
+        usage: { totalTokens: 8, inputTokens: 5, outputTokens: 3 },
+      },
+    },
+    {
+      ...LIFE_EVENT,
+      type: "run.started",
+      source: "run",
+      payload: RUN_STARTED,
+    },
+    { ...LIFE_EVENT, type: "run.completed", source: "run", payload: RUN_COMPLETED },
+    { ...LIFE_EVENT, type: "run.failed", source: "run", payload: RUN_FAILED },
+    { ...LIFE_EVENT, type: "run.decided", source: "tempo", payload: RUN_DECIDED },
+    { ...LIFE_EVENT, type: "tempo.change.ended", payload: { status: "done" } },
+    {
+      ...LIFE_EVENT,
+      type: "tempo.branch.pushed",
+      payload: { branch: "tempo/test", commitSha: "a".repeat(40) },
+    },
+    { ...LIFE_EVENT, type: "tempo.check.passed", payload: { prNumber: 25 } },
+    { ...LIFE_EVENT, type: "tempo.check.failed", payload: { prNumber: 25 } },
+    { ...LIFE_EVENT, type: "tempo.check.failed", payload: { prNumber: 25, commitSha: "c".repeat(40) } },
+  ],
+  LifecycleChangeCreatedPayload: [LIFE_EVENT.payload],
+  LifecycleTurnEndedPayload: [
+    {
+      status: "completed",
+      stopReason: "end_turn",
+      usage: { totalTokens: 8, inputTokens: 5, outputTokens: 3 },
+    },
+  ],
+  LifecycleRunStartedPayload: [RUN_STARTED],
+  LifecycleRunCompletedPayload: [RUN_COMPLETED],
+  LifecycleRunFailedPayload: [RUN_FAILED],
+  LifecycleChangeEndedPayload: [{ status: "done" }],
+  LifecycleBranchPushedPayload: [{ branch: "tempo/test", commitSha: "a".repeat(40) }],
+  LifecycleCheckPayload: [{ prNumber: 25 }],
+  LifecycleLogEvent: [LIFE_LOG],
+  LifecyclePage: [{ events: [LIFE_LOG], nextBeforeSeq: null }],
+  LifecycleTrace: [{ chain: [LIFE_LOG], children: [], runs: [RUN] }],
+  TurnUsage: [{ totalTokens: 0, inputTokens: 0, outputTokens: 0 }],
+
+  AgentModelOptions: [
+    {
+      agent: "claude",
+      currentValue: "reported-model",
+      options: [{ value: "reported-model", name: "Reported model" }],
+    },
+  ],
   ErrorBody: [
     { code: "NOT_FOUND", message: "Not found." },
     {
@@ -28,14 +403,19 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   PermissionOption: w.permissionOptions,
   PlanEntry: w.planContent.entries,
   ToolLocation: w.toolCallContent.locations,
+  McpStdioServer: [w.reviewerDefinition.mcp.servers[0]],
+  McpRemoteServer: [
+    w.reviewerDefinition.mcp.servers[1],
+    { name: "events", type: "sse", url: "https://mcp.example.com/sse", headers: {} },
+  ],
   ContentBlock: [
     { type: "text", text: "Done." },
     { type: "image", mimeType: "image/png", data: "iVBORw0KGgo=" },
     { type: "resource_link", uri: "file:///workspace/src/app.tsx", name: "app.tsx" },
   ],
   Usage: [{}, w.claudeSession.usage],
+  Attachment: [{ id: uid(201), name: "shot.png", mime: "image/png", size: 8 }],
   Capabilities: [{}, { loadSession: true, promptCapabilities: { image: true } }],
-
   RunScript: Object.values(w.settings.scripts.run),
   CustomInstance: [
     { vcpu: 2, memoryMib: 8192, diskMb: 12000 },
@@ -47,22 +427,84 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { effective: DEFAULT_SETTINGS, warnings: [], errors: [] },
     {
       effective: w.settings,
-      warnings: ["Unknown key scripts.watch in .tempo/settings.toml"],
+      warnings: ["Unknown key scripts.watch in .tempo/settings.yaml"],
       errors: [],
       sources: { "agent.default": "tempo", "scripts.setup": ".tempo", "git.branch_prefix": "default" },
     },
   ],
-
   Project: [
     w.project,
     { ...w.project, id: uid(2), name: "docs", repoId: 812345679, settings: {}, sortOrder: 1 },
+    { ...w.project, id: uid(3), name: "pay", repoId: 812345680, sortOrder: 2, environmentId: ENV_ID },
+    {
+      ...w.project,
+      id: uid(3),
+      owner: "tempo",
+      name: "native",
+      installationId: null,
+      repoId: null,
+      provider: "artifacts",
+      artifactRepoId: "repo-native",
+      cloneUrl: null,
+    },
   ],
+  RepositoryCommit: [repositoryCommit],
+  RepositoryEntry: [repositoryEntry],
+  RepositoryDetail: [
+    {
+      projectId: PROJECT_ID,
+      name: "native",
+      description: null,
+      defaultBranch: "main",
+      remote: "https://0123456789abcdef0123456789abcdef.artifacts.cloudflare.net/git/tempo-repos/native.git",
+      readOnly: false,
+      ref: "main",
+      empty: false,
+      entries: [repositoryEntry],
+      commit: repositoryCommit,
+    },
+  ],
+  RepositoryPullRequest: [
+    repositoryPullRequest,
+    { ...repositoryPullRequest, state: "merged", mergeSha: "e".repeat(40), mergedAt: at(1) },
+  ],
+  RepositoryLabel: [repositoryLabel],
+  RepositoryIssue: [repositoryIssue, { ...repositoryIssue, state: "closed", closedAt: at(2) }],
+  RepositoryIssueComment: [repositoryIssueComment],
+  CiJobSpec: ciPipeline.jobs,
+  CiPipeline: [
+    ciPipeline,
+    { ...ciPipeline, revision: 0, source: "", enabled: false, jobs: [], required: [], updatedAt: null },
+  ],
+  CiRun: [
+    ciRun,
+    { ...ciRun, status: "queued", conclusion: null, startedAt: null, completedAt: null, trigger: "manual" },
+  ],
+  CiJob: [
+    ciJob,
+    {
+      ...ciJob,
+      key: "lint",
+      status: "running",
+      conclusion: null,
+      exitCode: null,
+      completedAt: null,
+      needs: [],
+    },
+    { ...ciJob, conclusion: "timed_out", exitCode: null, summary: "The job ran out of time." },
+  ],
+  CiRunDetail: [{ run: ciRun, jobs: [ciJob] }],
   WorkspaceSummary: [w.lisbon, w.oslo, w.kyoto],
   OpProgress: [w.opProgress],
   ChangedFile: w.changedFiles,
   ChangesSummary: [w.changesSummary, { files: [], additions: 0, deletions: 0 }],
   WorkspaceDetail: [
     w.lisbonDetail,
+    {
+      ...w.lisbonDetail,
+      environmentId: ENV_ID,
+      environmentProposals: [{ id: uid(903), createdAt: 1_790_000_200_000, proposal: PROPOSAL }],
+    },
     w.detail(w.oslo, { pushed: true, setupStatus: "none", op: w.opProgress, imageRef: null }),
     w.detail(w.kyoto, {
       state: "error",
@@ -72,7 +514,7 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       changes: null,
     }),
   ],
-  Session: [w.claudeSession, w.codexSession],
+  Session: [w.claudeSession, w.codexSession, w.reviewerSession],
   Mention: [{ path: "src/app.tsx" }],
   TurnPrompt: [
     w.turn(1).prompt,
@@ -95,6 +537,9 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
       endedAt: null,
     }),
     w.turn(4, { status: "failed", stopReason: null, errorCode: "AGENT_CRASHED", reverted: true }),
+    w.turn(5, {
+      usage: { totalTokens: 15300, inputTokens: 12000, outputTokens: 3300, cachedReadTokens: 9000 },
+    }),
   ],
   UserMessageContent: [w.userMessageContent],
   AgentMessageContent: [
@@ -123,6 +568,24 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
     { code: "AGENT_CRASHED", detail: null },
     { code: "CREDENTIAL_INVALID" },
     { code: "INTERNAL", detail: "exit 137" },
+  ],
+  ArtifactItemContent: [
+    w.artifactContent,
+    {
+      artifactId: w.ARTIFACT_ID,
+      version: 1,
+      title: "Login screen",
+      name: "login.png",
+      path: "/workspace/shots/login.png",
+      mime: "image/png",
+      artifactKind: "image",
+      size: 48213,
+    },
+  ],
+  Artifact: [
+    w.artifact,
+    { ...w.artifact, version: 1, summary: null, turnId: null, status: "uploading" },
+    { ...w.artifact, version: 3, status: "lost" },
   ],
   Item: w.itemsOfEveryKind,
   ScriptRun: [w.scriptRun, w.setupRun],
@@ -160,19 +623,96 @@ export const SHARED_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   CredentialState: [w.credentialStatus.claude, w.credentialStatus.openrouter],
   CredentialStatus: [w.credentialStatus],
+  McpEnvVar: [{ name: "ROOT", value: "/workspace" }],
+  McpHeader: [
+    { name: "Authorization", secret: true, value: null, set: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpHeaderInput: [
+    { name: "Authorization", secret: true },
+    { name: "X-Team", secret: false, value: "core" },
+  ],
+  McpServer: [
+    {
+      id: "01jmcp0000000000000000000a",
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      command: null,
+      args: [],
+      env: [],
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: null, set: true }],
+      createdAt: 1760000000000,
+      updatedAt: 1760000000000,
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: false,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+      env: [{ name: "ROOT", value: "/workspace" }],
+      url: null,
+      headers: [],
+      createdAt: 1760000000000,
+      updatedAt: 1760000100000,
+    },
+  ],
   Diagnostics: [w.diagnostics],
   NewSource: [
     { kind: "new", baseBranch: "main" },
     { kind: "branch", branch: "feature/search" },
     { kind: "pr", number: 42 },
   ],
+  SecretBinding: [
+    { name: "STRIPE_KEY", hosts: ["api.stripe.com"] },
+    { name: "LOCAL_DB_URL", hosts: [] },
+  ],
+  InjectorInput: [{ name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE }],
+  Injector: ENVIRONMENT.injectors,
+  EnvironmentSecret: ENVIRONMENT.secrets,
+  Environment: [
+    ENVIRONMENT,
+    {
+      ...ENVIRONMENT,
+      id: uid(902),
+      name: "Open",
+      egressPolicy: "open",
+      egressAllowlist: [],
+      secrets: [],
+      injectors: [],
+    },
+  ],
+  EnvironmentProposal: [
+    PROPOSAL,
+    {
+      note: "Sign S3 requests.",
+      egressPolicy: "allowlist",
+      injectors: [ENVIRONMENT.injectors[0]].map(({ name, hosts, code }) => ({ name, hosts, code })),
+    },
+  ],
+  PendingEnvironmentProposal: [{ id: uid(903), createdAt: 1_790_000_200_000, proposal: PROPOSAL }],
+  AppSetupStatus: [
+    { configured: false, installUrl: null },
+    { configured: true, installUrl: "https://github.com/apps/tempo-example/installations/new" },
+  ],
   ApiMeta: [
     { protocol: 1, serverVersion: "0.1.0", minMacClient: "0.1.0", latestMacClient: null },
     { protocol: 1, serverVersion: "0.2.0", minMacClient: "0.1.0", latestMacClient: "0.2.1" },
+    {
+      protocol: 1,
+      serverVersion: "0.2.0",
+      minMacClient: "0.1.0",
+      latestMacClient: "0.2.1",
+      latestMacClientSha256: "a".repeat(64),
+    },
   ],
-};
+} satisfies Record<string, ReadonlyArray<unknown>>;
 
-export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+export const CHANNEL_SAMPLES = {
+  WsRun: [{ type: "run", run: RUN }],
   WsHello: [
     {
       type: "hello",
@@ -225,12 +765,98 @@ export const CHANNEL_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   HubWorkspaceRemoved: [{ type: "workspace.removed", workspaceId: w.W3 }],
   TerminalResize: [{ type: "resize", cols: 120, rows: 36 }],
   TerminalReady: [{ type: "ready" }],
-};
+} satisfies Record<string, ReadonlyArray<unknown>>;
 
 const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
-export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> } = {
+export const INPUT_SAMPLES = {
+  createRepository: [{ name: "native", defaultBranch: "main" }],
+  importRepository: [{ name: "native", url: "https://github.com/acme/demo.git" }],
+  linkArtifactRepository: [{ name: "native" }],
+  getRepository: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, ref: "main", path: "src" }],
+  getRepositoryFile: [{ projectId: PROJECT_ID, ref: "main", path: "README.md" }],
+  listRepositoryCommits: [{ projectId: PROJECT_ID, ref: "main", offset: 0 }],
+  listRepositoryPullRequests: [{ projectId: PROJECT_ID, state: "all" }],
+  getRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1 }],
+  createRepositoryPullRequest: [
+    {
+      projectId: PROJECT_ID,
+      title: "Add docs",
+      body: "",
+      headBranch: "tempo/oslo",
+      baseBranch: "main",
+      draft: false,
+    },
+  ],
+  updateRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1, state: "closed" }],
+  resolveAgentProposal: [{ workspaceId: W1, proposalId: uid(704), apply: true }],
+  listRepositoryIssues: [
+    { projectId: PROJECT_ID },
+    { projectId: PROJECT_ID, state: "all", query: "browsing", labelId: repositoryLabel.id, offset: 0 },
+  ],
+  getRepositoryIssue: [{ projectId: PROJECT_ID, number: 1 }],
+  createRepositoryIssue: [
+    {
+      projectId: PROJECT_ID,
+      title: "Fix repository browsing",
+      body: "Directory navigation needs a fix.",
+      labelIds: [repositoryLabel.id],
+    },
+  ],
+  updateRepositoryIssue: [
+    { projectId: PROJECT_ID, number: 1, state: "closed" },
+    { projectId: PROJECT_ID, number: 1, title: "Updated title", body: "Updated description", labelIds: [] },
+  ],
+  deleteRepositoryIssue: [{ projectId: PROJECT_ID, number: 1 }],
+  listRepositoryIssueComments: [{ projectId: PROJECT_ID, number: 1, offset: 0 }],
+  createRepositoryIssueComment: [{ projectId: PROJECT_ID, number: 1, body: "I can reproduce this." }],
+  updateRepositoryIssueComment: [
+    { projectId: PROJECT_ID, number: 1, commentId: repositoryIssueComment.id, body: "Updated reply" },
+  ],
+  deleteRepositoryIssueComment: [{ projectId: PROJECT_ID, number: 1, commentId: repositoryIssueComment.id }],
+  listRepositoryLabels: [{ projectId: PROJECT_ID }],
+  getCiPipeline: [{ projectId: PROJECT_ID }],
+  updateCiPipeline: [{ projectId: PROJECT_ID, source: ciPipeline.source, revision: 1 }],
+  listCiRuns: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, branch: "main", offset: 50 }],
+  getCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
+  startCiRun: [{ projectId: PROJECT_ID, branch: "main" }],
+  rerunCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
+  cancelCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
+  getCiJobLog: [{ projectId: PROJECT_ID, runId: ciRun.id, job: "test" }],
+  createRepositoryLabel: [
+    { projectId: PROJECT_ID, name: "bug", color: "d73a4a", description: "Something is broken" },
+  ],
+  updateRepositoryLabel: [
+    { projectId: PROJECT_ID, labelId: repositoryLabel.id, name: "defect", color: "ffffff", description: "" },
+  ],
+  deleteRepositoryLabel: [{ projectId: PROJECT_ID, labelId: repositoryLabel.id }],
+  listAgents: [{}],
+  getAgent: [{ agentId: LIBRARY_AGENT.id }],
+  saveAgent: [
+    { definition: LIBRARY_DEFINITION },
+    { agentId: LIBRARY_AGENT.id, definition: LIBRARY_DEFINITION },
+  ],
+  deleteAgent: [{ agentId: LIBRARY_AGENT.id }],
+  listProjectAgents: [{ projectId: PROJECT_ID }],
+  putProjectAgent: [
+    {
+      projectId: PROJECT_ID,
+      agentId: LIBRARY_AGENT.id,
+      enabled: true,
+      hooks: AGENT_ATTACHMENT.hooks,
+      autoSend: false,
+      maxRuns: 3,
+      timeout: "20m",
+    },
+  ],
+  deleteProjectAgent: [{ projectId: PROJECT_ID, agentId: LIBRARY_AGENT.id }],
+  requestAgent: [{ workspaceId: W1, agentId: uid(923), text: "Review auth", sessionId: S1 }],
+  cancelRun: [{ workspaceId: W1, runId: uid(920) }],
+  listRuns: [{ workspaceId: W1 }],
+  sendRunToChat: [{ workspaceId: W1, runId: uid(920) }],
+  listLifecycleEvents: [{ workspaceId: W1, limit: 500 }],
+  getTrace: [{ workspaceId: W1, eventId: uid(922) }],
   listInstallationRepos: [{ installationId: 51234567 }],
   listInstallations: [{}],
   linkProject: [{ installationId: 51234567, repoId: 812345678 }],
@@ -241,15 +867,42 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   unlinkProject: [{ projectId: PROJECT_ID }],
   listBranches: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, query: "feat" }],
   listOpenPullRequests: [{ projectId: PROJECT_ID }],
+  setProjectEnvironment: [
+    { projectId: PROJECT_ID, environmentId: ENV_ID },
+    { projectId: PROJECT_ID, environmentId: null },
+  ],
+  listEnvironments: [{}],
+  createEnvironment: [{ name: "Payments" }],
+  updateEnvironment: [
+    { environmentId: ENV_ID, name: "Payments v2" },
+    {
+      environmentId: ENV_ID,
+      egressPolicy: "allowlist",
+      egressAllowlist: ["pypi.org"],
+      secrets: [{ name: "STRIPE_KEY", hosts: ["api.stripe.com"] }],
+      injectors: [{ name: "aws-sigv4", hosts: ["s3.amazonaws.com"], code: INJECTOR_CODE }],
+    },
+  ],
+  deleteEnvironment: [{ environmentId: ENV_ID }],
+  setEnvironmentSecret: [{ environmentId: ENV_ID, name: "STRIPE_KEY", value: "fixture-value" }],
+  deleteEnvironmentSecret: [{ environmentId: ENV_ID, name: "STRIPE_KEY" }],
   createWorkspace: [
     { projectId: PROJECT_ID, source: { kind: "new", baseBranch: "main" } },
     {
       projectId: PROJECT_ID,
       source: { kind: "pr", number: 42 },
       agent: "codex",
+      model: "reported-model",
       prompt: { text: "Fix the flaky test" },
     },
+    {
+      projectId: PROJECT_ID,
+      source: { kind: "branch", branch: "review/auth" },
+      agentId: w.LIBRARY_AGENT_ID,
+    },
   ],
+  listProjectConversations: [{ projectId: PROJECT_ID }],
+  getProjectConversation: [{ projectId: PROJECT_ID, conversationId: W1 }],
   listWorkspaces: [{}, { includeArchived: true }],
   getWorkspace: [ws],
   renameWorkspace: [{ ...ws, title: "Dark mode" }],
@@ -261,12 +914,15 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   archiveWorkspace: [ws],
   restoreWorkspace: [ws],
   deleteWorkspace: [ws],
-  rotatePreviewToken: [ws],
+  openPreview: [{ ...ws, port: 3000 }],
+  rotatePreviewKey: [ws],
+  getBrowserLiveView: [ws],
   setBaseBranch: [{ ...ws, baseBranch: "develop" }],
   getDiagnostics: [ws],
   createSession: [
     { ...ws, agent: "codex" },
     { ...ws, agent: "claude", model: "opus", modeId: "plan" },
+    { ...ws, agent: "claude", agentId: w.LIBRARY_AGENT_ID },
   ],
   closeSession: [{ ...ws, sessionId: S2 }],
   renameSession: [{ ...ws, sessionId: S1, title: "Reviewer" }],
@@ -324,19 +980,86 @@ export const INPUT_SAMPLES: { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<
   continueAfterSetupFailure: [ws],
   listTerminals: [ws],
   listScriptRuns: [ws],
+  readFileAt: [{ ...ws, path: "src/logo.png", sha: "9f2c1e0b7a6d5c4b3a291807f6e5d4c3b2a19087" }],
+  listArtifacts: [ws],
+  openArtifact: [{ ...ws, artifactId: w.ARTIFACT_ID, version: 2 }],
+  listModels: [{}],
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
   setCodexAuth: [{ authJson: '{"tokens":{"note":"fixture"}}' }],
+  startCodexLogin: [{}],
+  pollCodexLogin: [{ loginId: "fixture-login-id" }],
+  cancelCodexLogin: [{ loginId: "fixture-login-id" }],
   setApiKey: [{ provider: "openrouter", key: "fixture-openrouter-key" }],
   deleteCredential: [{ key: "codex" }],
   setProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL", value: "fixture-value" }],
   deleteProjectSecret: [{ projectId: PROJECT_ID, name: "DATABASE_URL" }],
   listProjectSecretNames: [{ projectId: PROJECT_ID }],
-};
+  setWorkspaceEnvironment: [
+    { ...ws, environmentId: ENV_ID },
+    { ...ws, environmentId: null },
+  ],
+  resolveEnvironmentProposal: [
+    { ...ws, proposalId: uid(903), status: "applied" },
+    { ...ws, proposalId: uid(903), status: "dismissed" },
+  ],
+  listMcpServers: [{}],
+  saveMcpServer: [
+    {
+      name: "linear",
+      enabled: true,
+      transport: "http",
+      url: "https://mcp.linear.app/mcp",
+      headers: [{ name: "Authorization", secret: true, value: "Bearer lin_api_x" }],
+    },
+    {
+      id: "01jmcp0000000000000000000b",
+      name: "fs",
+      enabled: true,
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem"],
+      env: [],
+    },
+  ],
+  deleteMcpServer: [{ id: "01jmcp0000000000000000000b" }],
+} satisfies { readonly [K in P.FnName]: ReadonlyArray<P.FnInput<K>> };
 
 /** Outputs that are not shared types, by their wire type name. */
-export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
+export const OUTPUT_SAMPLES = {
+  ListProjectConversationsOut: [
+    {
+      conversations: [
+        {
+          conversationId: W1,
+          projectId: PROJECT_ID,
+          title: "Saved chat",
+          branch: "tempo/chat",
+          updatedAt: at(10),
+        },
+      ],
+      cursor: null,
+    },
+  ],
+  SendRunToChatOut: [{ turnId: uid(926) }],
+  RequestAgentOut: [{ changeId: uid(921), runId: uid(920) }],
+
   Empty: [{}],
+  StartCodexLoginOut: [
+    {
+      loginId: "fixture-login-id",
+      verificationUrl: "https://auth.openai.com/codex/device",
+      userCode: "ABCD-EFGH",
+      expiresAt: 1_800_000_000_000,
+      intervalMs: 5000,
+    },
+  ],
+  PollCodexLoginOut: [{ status: "pending" }, { status: "connected" }, { status: "expired" }],
+  GetRepositoryFileOut: [{ content: "# Native repository\n", encoding: "utf8", size: 20 }],
+  GetCiJobLogOut: [
+    { text: "$ bun test\n12 pass\n", truncated: false },
+    { text: "[tempo: earlier output dropped]\nok\n", truncated: true },
+  ],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },
     { repoId: 812345679, owner: "acme", name: "docs", defaultBranch: "trunk", private: false },
@@ -362,6 +1085,7 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   CommitAndPushOut: [{ commitSha: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d" }],
   CreatePullRequestOut: [{ number: 43, url: "https://github.com/acme/webapp/pull/43" }],
   RefreshPullRequestOut: [
+    { prNumber: 12, prState: "merged", checksState: "success", prTitle: "Keep the merged title" },
     { prNumber: 42, prState: "open", checksState: "pending" },
     { prNumber: null, prState: null, checksState: null },
   ],
@@ -372,6 +1096,20 @@ export const OUTPUT_SAMPLES: Record<string, ReadonlyArray<unknown>> = {
   ],
   SearchFilesItem: [{ path: "src/theme/toggle.tsx", line: 3, text: "export const useTheme = () => {" }],
   ListTerminalsItem: [{ terminalId: "t1" }, { terminalId: "t2" }],
-  RotatePreviewTokenOut: [{ previewToken: "q8w7e5r1k3j9x2m4" }],
+  OpenPreviewOut: [
+    {
+      url: `https://3000-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
+    },
+  ],
+  ReadFileAtOut: [{ content: "iVBORw0KGgo=", encoding: "base64", size: 8 }],
+  OpenArtifactOut: [
+    {
+      url: `https://a-${w.ARTIFACT_ID}-${W1}.example-previews.com/__tempo/enter?code=k3j9x2m4q8w7e5r1a6s5d4f3g2h1j0k9`,
+    },
+  ],
   ListProjectSecretNamesOut: [{ names: ["DATABASE_URL", "STRIPE_KEY"] }],
-};
+  GetBrowserLiveViewOut: [
+    { url: "https://live.browser.run/ui/view?wss=live.browser.run/api/devtools/browser/s1/page/p1?jwt=x" },
+    { url: null },
+  ],
+} satisfies Record<string, ReadonlyArray<unknown>>;

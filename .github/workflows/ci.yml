@@ -4,24 +4,80 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 6
     steps:
+      - name: Start total CI budget
+        run: echo "CI_STARTED_AT=$(date +%s%3N)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
-      - run: bun install --frozen-lockfile
-      - name: Container versions agree (01, Container image)
-        run: bun run check:versions
-      - run: bun run typecheck
-      - run: bun run lint
-      - run: bun run format:check
-      - run: bun run test
-      - name: Build tempod
-        run: bun run build:tempod
-      - name: Build the app
-        run: bun run --cwd apps/tempo build
+      - name: Classify changes
+        id: changes
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: bun scripts/ci-changes.ts
+      - name: Restore task cache
+        if: steps.changes.outputs.docs_only != 'true'
+        id: tasks
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .turbo/cache
+          key: ci-v1-${{ runner.os }}-bun-1.4.2-${{ hashFiles('bun.lock') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ci-v1-${{ runner.os }}-bun-1.4.2-${{ hashFiles('bun.lock') }}-
+            ci-v1-${{ runner.os }}-bun-1.4.2-
+      - name: Install dependencies
+        id: install
+        run: |
+          if [ "${{ steps.changes.outputs.docs_only }}" = "true" ]; then
+            bun install --frozen-lockfile --filter tempo
+          else
+            bun install --frozen-lockfile
+            bun -e 'console.log("playwright_version=" + (await Bun.file("tests/e2e/node_modules/@playwright/test/package.json").json()).version)' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Restore Chromium
+        if: steps.changes.outputs.docs_only != 'true'
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-v1-${{ runner.os }}-playwright-${{ steps.install.outputs.playwright_version }}
+      - name: Install browser engine
+        if: steps.changes.outputs.docs_only != 'true' && steps.chromium.outputs.cache-hit != 'true'
+        run: ./tests/e2e/node_modules/.bin/playwright install chromium
+      - name: Checks within the total runtime budget
+        run: |
+          if [ "${{ steps.changes.outputs.docs_only }}" = "true" ]; then
+            bun run ci --docs-only
+          else
+            bun run ci
+          fi
+      - name: Save successful task results
+        if: ${{ !cancelled() && steps.changes.outputs.docs_only != 'true' && steps.install.outcome == 'success' && steps.tasks.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .turbo/cache
+          key: ${{ steps.tasks.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: web-acceptance-traces
+          path: |
+            tests/e2e/test-results/
+            tests/e2e/web-test-results/

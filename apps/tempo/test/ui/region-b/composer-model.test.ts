@@ -76,6 +76,7 @@ describe("attachments", () => {
       { name: "b", size: MAX_ATTACHMENT_BYTES },
       { name: "c", size: MAX_ATTACHMENT_BYTES + 1 },
     ]);
+
     expect(ok.map((f) => f.name)).toEqual(["a", "b"]);
     expect(tooLarge.map((f) => f.name)).toEqual(["c"]);
   });
@@ -88,14 +89,12 @@ describe("@ and / triggers", () => {
     expect(mentionTrigger("mail me@host", 12)).toBeNull();
     expect(mentionTrigger("@a b", 4)).toBeNull();
   });
-
   it("finds a / command only at the start", () => {
     expect(slashTrigger("/pl", 3)).toEqual({ start: 0, query: "pl" });
     expect(slashTrigger("/plan now", 9)).toBeNull();
     expect(slashTrigger("a /plan", 7)).toBeNull();
     expect(slashTrigger("/usr/bin", 8)).toBeNull();
   });
-
   it("replaces the trigger text and moves the caret", () => {
     const text = "see @sr please";
     const t = mentionTrigger(text, 7)!;
@@ -105,12 +104,12 @@ describe("@ and / triggers", () => {
       caret: 8,
     });
   });
-
   it("lists the agent's commands plus Tempo's /plan", () => {
     const commands = [
       { name: "review", description: "Review the diff" },
       { name: "compact", description: null },
     ];
+
     expect(slashEntries(commands, true, "").map((e) => e.key)).toEqual([
       "tempo:plan",
       "agent:review",
@@ -133,6 +132,7 @@ describe("insertions", () => {
       { id: 3, sessionId: "s1", insertion: { kind: "reviewComments", commentIds: ["c1", "c2"] } },
       { id: 4, sessionId: "s1", insertion: { kind: "text", text: "there" } },
     ]);
+
     expect(next).toEqual({
       text: "hi there",
       mentions: [{ path: "a.ts" }, { path: "b.ts" }],
@@ -144,7 +144,6 @@ describe("insertions", () => {
       ]).text,
     ).toBe("x");
   });
-
   it("labels the review-comment chip", () => {
     expect(reviewChipLabel(1)).toBe("1 review comment");
     expect(reviewChipLabel(3)).toBe("3 review comments");
@@ -161,13 +160,11 @@ describe("sending", () => {
     expect(canSend({ ...base, reviewCommentCount: 2 })).toBe(true);
     expect(canSend({ ...base, text: "go", uploading: true })).toBe(false);
   });
-
   it("labels queued chips with the first line", () => {
     expect(chipLabel("\n  fix the build\nthen test")).toBe("fix the build");
     expect(chipLabel("x".repeat(60), 10)).toBe(`${"x".repeat(9)}…`);
     expect(chipLabel("")).toBe("Empty message");
   });
-
   it("moves a queued chip within bounds", () => {
     expect(moveIndex(3, 0, -1)).toBe(0);
     expect(moveIndex(3, 0, 1)).toBe(1);
@@ -186,20 +183,22 @@ describe("pickers and usage", () => {
     expect(contextUsage({})).toBeNull();
     expect(contextUsage({ used: 1, size: 0 })).toBeNull();
   });
-
-  it("splits config options into the model picker, a mode option and the rest", () => {
+  it("splits config options into the model, reasoning level and mode pickers, and the rest", () => {
     const s = session({ configOptions: [model, effort, fast, modeOption] });
     const p = configPickers(s);
     expect(p.model?.id).toBe("model");
+    expect(p.thoughtLevel?.id).toBe("effort");
     expect(p.modeOption?.id).toBe("mode");
-    expect(p.others.map((o) => o.id)).toEqual(["effort", "fast"]);
+    expect(p.others.map((o) => o.id)).toEqual(["fast"]);
+    expect(configPickers(session({ configOptions: [model] })).thoughtLevel).toBeUndefined();
+
     const withModes = configPickers(
       session({ configOptions: [modeOption], modes: [{ id: "plan", name: "Plan" }] }),
     );
+
     expect(withModes.modeOption).toBeUndefined();
     expect(withModes.others).toEqual([]);
   });
-
   it("names the current value and keeps the agent's groups", () => {
     expect(currentValueLabel(model)).toBe("Sonnet");
     expect(currentValueLabel(fast)).toBe("Off");

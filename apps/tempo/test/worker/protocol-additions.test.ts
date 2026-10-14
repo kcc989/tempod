@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+import type { WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { newId, type Source, type TempodEvent } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
@@ -20,8 +22,9 @@ import {
 
 const T = 60_000;
 
-type Stub = DurableObjectStub<WorkspaceDO>;
-type Row = Record<string, any>;
+type Stub = WorkspaceStub;
+
+type Row = Record<string, SqlStorageValue>;
 
 interface Ctx {
   readonly stub: Stub;
@@ -37,30 +40,39 @@ const unwrap = <A>(
   res: { ok: true; value: A } | { ok: false; error: { code: string; message: string } },
 ): A => {
   if (!res.ok) throw new Error(`RPC failed: ${res.error.code} ${res.error.message}`);
+
   return res.value;
 };
 
 const wsRow = async (stub: Stub): Promise<Row> =>
   (await sqlRows(stub, "SELECT * FROM workspace WHERE id = 1"))[0]!;
+
 const turnRow = async (stub: Stub, id: string): Promise<Row | undefined> =>
   (await sqlRows(stub, "SELECT * FROM turns WHERE id = ?", id))[0];
+
 const sessionRow = async (stub: Stub, id: string): Promise<Row | undefined> =>
   (await sqlRows(stub, "SELECT * FROM sessions WHERE id = ?", id))[0];
+
 const notices = async (stub: Stub): Promise<Array<{ level: string; text: string }>> =>
   (await sqlRows(stub, "SELECT content_json FROM items WHERE kind = 'notice' ORDER BY rev")).map((r) =>
-    JSON.parse(r.content_json),
+    JSON.parse(Schema.decodeUnknownSync(Schema.String)(r.content_json)),
   );
+
 const errorItems = (stub: Stub, turnId: string) =>
   sqlRows(stub, "SELECT * FROM items WHERE turn_id = ? AND kind = 'error'", turnId);
+
 const isLive = (stub: Stub, sessionId: string): Promise<boolean> =>
   runInDurableObject(stub, (i: WorkspaceDO) => internals(i).core.liveSessions.has(sessionId));
+
 const eventSeqs = async (stub: Stub, incarnation: string): Promise<number[]> =>
   (await sqlRows(stub, "SELECT seq FROM events WHERE incarnation = ? ORDER BY seq", incarnation)).map((r) =>
     Number(r.seq),
   );
 
 const emit = (ctx: Ctx, event: TempodEvent): Promise<number> => emitEvent(ctx.stub, ctx.tempod, event);
+
 const closeTempod = (ctx: Ctx): Promise<void> => runInDurableObject(ctx.stub, () => ctx.tempod.close(1011));
+
 const log = (msg: string): TempodEvent => ({ kind: "log", level: "info", msg });
 
 const readyWorkspace = async (opts: { prompt?: string; source?: Source } = {}): Promise<Ctx> => {
@@ -68,6 +80,7 @@ const readyWorkspace = async (opts: { prompt?: string; source?: Source } = {}): 
   await seedCredentials(seeded.userId);
   const { stub, tempod } = await seedWorkspace(seeded, opts);
   await driveToState(stub, ["ready", "working"]);
+
   return { stub, tempod };
 };
 
@@ -77,6 +90,7 @@ const runningTurn = async (): Promise<RunningCtx> => {
   await waitFor(() => ctx.tempod.requestsOf("session.prompt").length === 1, 5000, "first prompt");
   const p = ctx.tempod.requestsOf("session.prompt")[0];
   await waitFor(async () => (await turnRow(ctx.stub, p.turnId))?.status === "running", 5000, "turn running");
+
   return { ...ctx, sessionId: p.sessionId, turnId: p.turnId };
 };
 
@@ -94,16 +108,14 @@ const endTurn = async (ctx: RunningCtx): Promise<void> => {
 };
 
 const sendPrompt = async (ctx: RunningCtx, text: string): Promise<string> =>
-  (
-    unwrap(
-      (await ctx.stub.sendPrompt({
-        sessionId: ctx.sessionId,
-        text,
-        mentions: [],
-        attachmentIds: [],
-        reviewCommentIds: [],
-      })) as never,
-    ) as { id: string }
+  unwrap(
+    await ctx.stub.sendPrompt({
+      sessionId: ctx.sessionId,
+      text,
+      mentions: [],
+      attachmentIds: [],
+      reviewCommentIds: [],
+    }),
   ).id;
 
 const promptFor = (tempod: FakeTempod, turnId: string) =>
@@ -113,14 +125,17 @@ const exited = (
   sessionId: string,
   reason?: "crashed" | "evicted" | "cancelled",
   stderrTail = "",
-): TempodEvent => ({
-  kind: "agent.exited",
-  sessionId,
-  code: reason === "crashed" || reason === undefined ? 1 : null,
-  signal: reason === "evicted" || reason === "cancelled" ? "SIGTERM" : null,
-  stderrTail,
-  ...(reason ? { reason } : {}),
-});
+): TempodEvent => {
+  const event: Extract<TempodEvent, { kind: "agent.exited" }> = {
+    kind: "agent.exited",
+    sessionId,
+    code: reason === "crashed" || reason === undefined ? 1 : null,
+    signal: reason === "evicted" || reason === "cancelled" ? "SIGTERM" : null,
+    stderrTail,
+  };
+
+  return reason ? { ...event, reason } : event;
+};
 
 // =============================================================================================
 // agent.exited reason
@@ -181,7 +196,7 @@ describe("agent.exited reason", () => {
       const acp = (await sessionRow(ctx.stub, ctx.sessionId))!.acp_session_id;
       const queued = await sendPrompt(ctx, "Then this");
       expect((await turnRow(ctx.stub, queued))!.status).toBe("queued");
-      unwrap((await ctx.stub.cancelTurn({ turnId: ctx.turnId })) as never);
+      unwrap(await ctx.stub.cancelTurn({ turnId: ctx.turnId }));
       expect(ctx.tempod.requestsOf("session.cancel")).toEqual([
         { sessionId: ctx.sessionId, turnId: ctx.turnId },
       ]);
@@ -240,7 +255,9 @@ describe("agent.exited reason", () => {
         expect((await turnRow(ctx.stub, ctx.turnId))!.error_code).toBe("AGENT_CRASHED");
         const errors = await errorItems(ctx.stub, ctx.turnId);
         expect(errors).toHaveLength(1);
-        expect(JSON.parse(errors[0]!.content_json).code).toBe("AGENT_CRASHED");
+        expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(errors[0]!.content_json)).code).toBe(
+          "AGENT_CRASHED",
+        );
         const crash = (await notices(ctx.stub)).filter((n) => n.text.includes("stopped unexpectedly"));
         expect(crash).toHaveLength(1);
         expect(crash[0]).toMatchObject({ level: "error" });
@@ -277,13 +294,13 @@ describe("repo.clone mode", () => {
       // IMPLEMENTATION_NOTES: "On a fresh-disk wake, the branch is tracked from origin when it exists."
       const ctx = await readyWorkspace();
       const branch = (await wsRow(ctx.stub)).branch;
-      expect(unwrap((await ctx.stub.sleepWorkspace({})) as never)).toBeDefined();
+      expect(unwrap(await ctx.stub.sleepWorkspace({}))).toBeDefined();
       await driveToState(ctx.stub, ["sleeping"]);
       // No usable snapshot: the wake starts from the image, so the disk is fresh.
       await runInDurableObject(ctx.stub, (_i: WorkspaceDO, state: DurableObjectState) => {
         state.storage.sql.exec("DELETE FROM snapshots");
       });
-      unwrap((await ctx.stub.wakeWorkspace({})) as never);
+      unwrap(await ctx.stub.wakeWorkspace({}));
       await driveToState(ctx.stub, ["ready"]);
       const clones = ctx.tempod.requestsOf("repo.clone");
       expect(clones.map((c) => c.mode)).toEqual(["create", "wake"]);
@@ -307,6 +324,7 @@ describe("incarnation.changed", () => {
       const a = ctx.tempod.incarnation;
       expect((await wsRow(ctx.stub)).tempod_incarnation).toBe(a);
       const seqsA: number[] = [];
+
       for (let i = 0; i < 4; i++) seqsA.push(await emit(ctx, log(`a${i}`)));
       await waitApplied(ctx.stub, seqsA.at(-1)!);
       expect(await eventSeqs(ctx.stub, a)).toEqual(seqsA);

@@ -1,14 +1,17 @@
-import { Schema } from "effect";
+import { AgentProposalRecord } from "./agent-proposals.ts";
+import { Effect, Schema } from "effect";
 import {
   AvailableCommand,
   Capabilities,
   ConfigOption,
+  ConfigSelectOption,
   ContentBlock,
   PermissionOption,
   PlanEntry,
   SessionMode,
   ToolCallContent,
   ToolLocation,
+  TurnUsage,
   Usage,
 } from "./acp.ts";
 import {
@@ -16,6 +19,11 @@ import {
   Attention,
   CheckpointReason,
   ChecksState,
+  CiJobConclusion,
+  CiRunConclusion,
+  CiStatus,
+  CiTrigger,
+  IssueState,
   NoticeLevel,
   OpKind,
   OpStatus,
@@ -29,23 +37,189 @@ import {
   TurnStatus,
   WorkspaceState,
 } from "./enums.ts";
+import { ProfileIssue } from "./agents.ts";
 import { ErrorCodeSchema } from "./errors.ts";
 import { Settings, SettingsLayer, SettingsSource } from "./settings.ts";
+import { PendingEnvironmentProposal } from "./environments.ts";
+import { ArtifactItemContent } from "./artifacts.ts";
 
 const N = Schema.NullOr;
+
 const Ms = Schema.Number;
 
 export const Project = Schema.Struct({
   id: Schema.String,
-  installationId: Schema.Number,
-  repoId: Schema.Number,
+  installationId: N(Schema.Number),
+  repoId: N(Schema.Number),
+  provider: Schema.optional(Schema.Literals(["github", "artifacts"])),
+  artifactRepoId: Schema.optional(N(Schema.String)),
+  cloneUrl: Schema.optional(N(Schema.String)),
   owner: Schema.String,
   name: Schema.String,
   defaultBranch: Schema.String,
   settings: SettingsLayer,
   sortOrder: Schema.Number,
+  environmentId: Schema.optional(N(Schema.String)),
 });
+
 export type Project = typeof Project.Type;
+
+export const RepositoryCommit = Schema.Struct({
+  hash: Schema.String,
+  treeHash: Schema.String,
+  message: Schema.String,
+  author: Schema.Struct({ name: Schema.String, email: Schema.String }),
+  committer: Schema.Struct({ name: Schema.String, email: Schema.String }),
+  parents: Schema.Array(Schema.String),
+  authoredAt: Schema.Number,
+  committedAt: Schema.Number,
+});
+
+export type RepositoryCommit = typeof RepositoryCommit.Type;
+
+export const RepositoryEntry = Schema.Struct({
+  name: Schema.String,
+  path: Schema.String,
+  hash: Schema.String,
+  type: Schema.Literals(["tree", "blob", "symlink", "gitlink", "exec"]),
+});
+
+export type RepositoryEntry = typeof RepositoryEntry.Type;
+
+export const RepositoryDetail = Schema.Struct({
+  projectId: Schema.String,
+  name: Schema.String,
+  description: N(Schema.String),
+  defaultBranch: Schema.String,
+  remote: Schema.String,
+  readOnly: Schema.Boolean,
+  ref: Schema.String,
+  empty: Schema.Boolean,
+  entries: Schema.Array(RepositoryEntry),
+  commit: N(RepositoryCommit),
+});
+
+export type RepositoryDetail = typeof RepositoryDetail.Type;
+
+export const RepositoryPullRequest = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  title: Schema.String,
+  body: Schema.String,
+  headBranch: Schema.String,
+  baseBranch: Schema.String,
+  state: PrState,
+  url: Schema.String,
+  headSha: N(Schema.String),
+  baseSha: N(Schema.String),
+  mergeSha: N(Schema.String),
+  createdAt: Schema.Number,
+  updatedAt: Schema.Number,
+  mergedAt: N(Schema.Number),
+});
+
+export type RepositoryPullRequest = typeof RepositoryPullRequest.Type;
+
+export const RepositoryLabel = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  name: Schema.String,
+  color: Schema.String,
+  description: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+});
+
+export type RepositoryLabel = typeof RepositoryLabel.Type;
+
+export const RepositoryIssue = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  title: Schema.String,
+  body: Schema.String,
+  state: IssueState,
+  authorId: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+  closedAt: N(Ms),
+  url: Schema.String,
+  labels: Schema.Array(RepositoryLabel),
+  commentCount: Schema.Number,
+});
+
+export type RepositoryIssue = typeof RepositoryIssue.Type;
+
+export const RepositoryIssueComment = Schema.Struct({
+  id: Schema.String,
+  issueId: Schema.String,
+  authorId: Schema.String,
+  body: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+});
+
+export type RepositoryIssueComment = typeof RepositoryIssueComment.Type;
+
+export const CiJobSpec = Schema.Struct({
+  key: Schema.String,
+  name: Schema.String,
+  needs: Schema.Array(Schema.String),
+  timeoutMinutes: Schema.Number,
+});
+
+export type CiJobSpec = typeof CiJobSpec.Type;
+
+export const CiPipeline = Schema.Struct({
+  projectId: Schema.String,
+  revision: Schema.Number,
+  source: Schema.String,
+  enabled: Schema.Boolean,
+  jobs: Schema.Array(CiJobSpec),
+  required: Schema.Array(Schema.String),
+  egressAllowlist: Schema.Array(Schema.String),
+  updatedAt: N(Ms),
+});
+
+export type CiPipeline = typeof CiPipeline.Type;
+
+export const CiRun = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  branch: Schema.String,
+  sha: Schema.String,
+  revision: Schema.Number,
+  attempt: Schema.Number,
+  trigger: CiTrigger,
+  status: CiStatus,
+  conclusion: N(CiRunConclusion),
+  createdAt: Ms,
+  startedAt: N(Ms),
+  completedAt: N(Ms),
+  url: Schema.String,
+});
+
+export type CiRun = typeof CiRun.Type;
+
+export const CiJob = Schema.Struct({
+  key: Schema.String,
+  name: Schema.String,
+  needs: Schema.Array(Schema.String),
+  status: CiStatus,
+  conclusion: N(CiJobConclusion),
+  exitCode: N(Schema.Number),
+  summary: N(Schema.String),
+  startedAt: N(Ms),
+  completedAt: N(Ms),
+});
+
+export type CiJob = typeof CiJob.Type;
+
+export const CiRunDetail = Schema.Struct({ run: CiRun, jobs: Schema.Array(CiJob) });
+
+export type CiRunDetail = typeof CiRunDetail.Type;
 
 export const WorkspaceSummary = Schema.Struct({
   id: Schema.String,
@@ -66,6 +240,7 @@ export const WorkspaceSummary = Schema.Struct({
   archivedAt: N(Ms),
   rev: Schema.Number,
 });
+
 export type WorkspaceSummary = typeof WorkspaceSummary.Type;
 
 export const OpProgress = Schema.Struct({
@@ -80,6 +255,7 @@ export const OpProgress = Schema.Struct({
     }),
   ),
 });
+
 export type OpProgress = typeof OpProgress.Type;
 
 export const ChangedFile = Schema.Struct({
@@ -89,6 +265,7 @@ export const ChangedFile = Schema.Struct({
   additions: Schema.Number,
   deletions: Schema.Number,
 });
+
 export type ChangedFile = typeof ChangedFile.Type;
 
 export const ChangesSummary = Schema.Struct({
@@ -96,6 +273,7 @@ export const ChangesSummary = Schema.Struct({
   additions: Schema.Number,
   deletions: Schema.Number,
 });
+
 export type ChangesSummary = typeof ChangesSummary.Type;
 
 export const WorkspaceDetail = Schema.Struct({
@@ -104,8 +282,12 @@ export const WorkspaceDetail = Schema.Struct({
   errorDetail: N(Schema.String),
   setupStatus: SetupStatus,
   pushed: Schema.Boolean,
-  previewToken: Schema.String,
+  prTitle: Schema.optional(N(Schema.String)),
   ports: Schema.Array(Schema.Struct({ port: Schema.Number, url: Schema.String })),
+  /** A Browser Run session is open (01, Browser Run). */
+  browserActive: Schema.Boolean.annotate({ default: false }).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(false)),
+  ),
   settings: Settings,
   runningTurnId: N(Schema.String),
   queue: Schema.Array(Schema.String),
@@ -117,10 +299,15 @@ export const WorkspaceDetail = Schema.Struct({
   settingsSources: Schema.optional(Schema.Record(Schema.String, SettingsSource)),
   changes: Schema.optional(N(ChangesSummary)),
   hasUnpushedCommits: Schema.optional(Schema.Boolean),
+  environmentId: Schema.optional(N(Schema.String)),
+  agentProposals: Schema.optionalKey(Schema.Array(AgentProposalRecord)),
+  environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
 });
+
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
 
 export const Session = Schema.Struct({
+  runId: Schema.optional(Schema.String),
   id: Schema.String,
   agent: AgentId,
   title: Schema.String,
@@ -133,10 +320,25 @@ export const Session = Schema.Struct({
   usage: Usage,
   sortOrder: Schema.Number,
   steering: Schema.optional(Schema.Boolean),
+  agentId: Schema.optional(Schema.String),
+  agentName: Schema.optional(Schema.String),
+  agentVersion: Schema.optional(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))),
+  agentSha: Schema.optional(Schema.String),
+  profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
 });
+
 export type Session = typeof Session.Type;
 
+export const AgentModelOptions = Schema.Struct({
+  agent: AgentId,
+  options: Schema.Array(ConfigSelectOption),
+  currentValue: Schema.String,
+});
+
+export type AgentModelOptions = typeof AgentModelOptions.Type;
+
 export const Mention = Schema.Struct({ path: Schema.String });
+
 export type Mention = typeof Mention.Type;
 
 export const TurnPrompt = Schema.Struct({
@@ -145,6 +347,7 @@ export const TurnPrompt = Schema.Struct({
   attachmentIds: Schema.Array(Schema.String),
   reviewCommentIds: Schema.Array(Schema.String),
 });
+
 export type TurnPrompt = typeof TurnPrompt.Type;
 
 export const Turn = Schema.Struct({
@@ -162,21 +365,35 @@ export const Turn = Schema.Struct({
   queuedAt: Ms,
   startedAt: N(Ms),
   endedAt: N(Ms),
+  usage: Schema.optional(TurnUsage),
 });
+
 export type Turn = typeof Turn.Type;
 
 // Item content per kind (02, Item model).
+export const Attachment = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  mime: Schema.String,
+  size: Schema.Number,
+});
+
+export type Attachment = typeof Attachment.Type;
+
 export const UserMessageContent = Schema.Struct({
   text: Schema.String,
   mentions: Schema.Array(Mention),
   attachments: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String, mime: Schema.String })),
   reviewCommentIds: Schema.Array(Schema.String),
 });
+
 export const AgentMessageContent = Schema.Struct({
   text: Schema.String,
   blocks: Schema.optional(Schema.Array(ContentBlock)),
 });
+
 export const AgentThoughtContent = Schema.Struct({ text: Schema.String });
+
 export const ToolCallItemContent = Schema.Struct({
   toolCallId: Schema.String,
   title: Schema.String,
@@ -186,7 +403,9 @@ export const ToolCallItemContent = Schema.Struct({
   rawInput: Schema.optional(Schema.Unknown),
   rawOutput: Schema.optional(Schema.Unknown),
 });
+
 export const PlanContent = Schema.Struct({ entries: Schema.Array(PlanEntry) });
+
 export const PermissionContent = Schema.Struct({
   requestId: Schema.String,
   toolCallId: Schema.optional(N(Schema.String)),
@@ -194,21 +413,44 @@ export const PermissionContent = Schema.Struct({
   options: Schema.Array(PermissionOption),
   chosenOptionId: Schema.optional(N(Schema.String)),
 });
-export const NoticeContent = Schema.Struct({ level: NoticeLevel, text: Schema.String });
+
+export const NoticeContent = Schema.Struct({
+  agentId: Schema.optionalKey(Schema.String),
+  eventId: Schema.optionalKey(Schema.String),
+  level: NoticeLevel,
+  text: Schema.String,
+  checkpointId: Schema.optional(Schema.String),
+});
+
 export const HandoffContent = Schema.Struct({ text: Schema.String });
+
 export const RevertMarkerContent = Schema.Struct({ checkpointId: Schema.String, toTurnSeq: Schema.Number });
+
 export const ErrorContent = Schema.Struct({ code: Schema.String, detail: Schema.optional(N(Schema.String)) });
 
 export type UserMessageContent = typeof UserMessageContent.Type;
+
 export type AgentMessageContent = typeof AgentMessageContent.Type;
+
 export type ToolCallItemContent = typeof ToolCallItemContent.Type;
+
 export type PlanContent = typeof PlanContent.Type;
+
 export type PermissionContent = typeof PermissionContent.Type;
+
 export type NoticeContent = typeof NoticeContent.Type;
+
 export type RevertMarkerContent = typeof RevertMarkerContent.Type;
+
 export type ErrorContent = typeof ErrorContent.Type;
 
+export const RunContent = Schema.Struct({ runId: Schema.String });
+
+export const AgentProposalContent = Schema.Struct({ proposalId: Schema.String });
+
 export const ITEM_CONTENT = {
+  run: RunContent,
+  agent_proposal: AgentProposalContent,
   user_message: UserMessageContent,
   agent_message: AgentMessageContent,
   agent_thought: AgentThoughtContent,
@@ -219,6 +461,7 @@ export const ITEM_CONTENT = {
   handoff: HandoffContent,
   revert_marker: RevertMarkerContent,
   error: ErrorContent,
+  artifact: ArtifactItemContent,
 } as const;
 
 const itemFields = {
@@ -235,6 +478,8 @@ const itemOf = <K extends keyof typeof ITEM_CONTENT>(kind: K) =>
   Schema.Struct({ ...itemFields, kind: Schema.Literal(kind), content: ITEM_CONTENT[kind] });
 
 export const Item = Schema.Union([
+  itemOf("run"),
+  itemOf("agent_proposal"),
   itemOf("user_message"),
   itemOf("agent_message"),
   itemOf("agent_thought"),
@@ -245,8 +490,11 @@ export const Item = Schema.Union([
   itemOf("handoff"),
   itemOf("revert_marker"),
   itemOf("error"),
+  itemOf("artifact"),
 ]);
+
 export type Item = typeof Item.Type;
+
 export type ItemOf<K extends Item["kind"]> = Extract<Item, { kind: K }>;
 
 export const ScriptRun = Schema.Struct({
@@ -260,6 +508,7 @@ export const ScriptRun = Schema.Struct({
   startedAt: Ms,
   endedAt: N(Ms),
 });
+
 export type ScriptRun = typeof ScriptRun.Type;
 
 export const ReviewComment = Schema.Struct({
@@ -273,6 +522,7 @@ export const ReviewComment = Schema.Struct({
   sentTurnId: N(Schema.String),
   createdAt: Ms,
 });
+
 export type ReviewComment = typeof ReviewComment.Type;
 
 export const PermissionRequest = Schema.Struct({
@@ -283,6 +533,7 @@ export const PermissionRequest = Schema.Struct({
   title: Schema.String,
   options: Schema.Array(PermissionOption),
 });
+
 export type PermissionRequest = typeof PermissionRequest.Type;
 
 export const CheckpointInfo = Schema.Struct({
@@ -292,17 +543,21 @@ export const CheckpointInfo = Schema.Struct({
   reason: CheckpointReason,
   createdAt: Ms,
 });
+
 export type CheckpointInfo = typeof CheckpointInfo.Type;
 
 export const CheckRun = Schema.Struct({
+  summary: Schema.optionalKey(Schema.String),
   name: Schema.String,
   status: Schema.String,
   conclusion: N(Schema.String),
   url: Schema.String,
 });
+
 export type CheckRun = typeof CheckRun.Type;
 
 export const CredentialState = Schema.Struct({ set: Schema.Boolean, updatedAt: N(Ms) });
+
 export const CredentialStatus = Schema.Struct({
   claude: CredentialState,
   codex: Schema.Struct({ ...CredentialState.fields, lastRefresh: N(Ms) }),
@@ -310,6 +565,7 @@ export const CredentialStatus = Schema.Struct({
   anthropic: CredentialState,
   openai: CredentialState,
 });
+
 export type CredentialStatus = typeof CredentialStatus.Type;
 
 export const Diagnostics = Schema.Struct({
@@ -375,6 +631,37 @@ export const Diagnostics = Schema.Struct({
     }),
   ),
 });
+
 export type Diagnostics = typeof Diagnostics.Type;
 
 export const ErrorCodeField = ErrorCodeSchema;
+
+/** Project-scoped, long-lived transcript artifact in R2. */
+export const ConversationSummary = Schema.Struct({
+  conversationId: Schema.String,
+  projectId: Schema.String,
+  title: Schema.String,
+  branch: Schema.String,
+  updatedAt: Schema.Number,
+});
+
+export type ConversationSummary = typeof ConversationSummary.Type;
+
+export const ConversationArtifact = Schema.Struct({
+  version: Schema.Literal(1),
+  ...ConversationSummary.fields,
+  sessions: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      agent: AgentId,
+      title: Schema.String,
+      status: SessionStatus,
+      createdAt: Schema.Number,
+      closedAt: Schema.NullOr(Schema.Number),
+    }),
+  ),
+  turns: Schema.Array(Turn),
+  items: Schema.Array(Item),
+});
+
+export type ConversationArtifact = typeof ConversationArtifact.Type;

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getExpandState,
   isExpanded,
@@ -13,7 +13,12 @@ import {
   toReactStyle,
 } from "~/ui/components/chat/highlight";
 
-afterEach(() => resetExpand());
+beforeEach(() => vi.stubEnv("SSR", false));
+
+afterEach(() => {
+  resetExpand();
+  vi.unstubAllEnvs();
+});
 
 describe("expand all tool calls (⌃O)", () => {
   it("toggles all, and single rows on top of that", () => {
@@ -32,6 +37,12 @@ describe("expand all tool calls (⌃O)", () => {
 });
 
 describe("code highlighting", () => {
+  it("keeps server renders plain without loading browser grammars", async () => {
+    vi.stubEnv("SSR", true);
+    expect(await highlight("const serverOnly = 1;", "ts")).toBeNull();
+    const { highlightFile } = await import("~/ui/components/review/highlight");
+    expect(await highlightFile("const serverOnly = 2;", "app.ts")).toBeNull();
+  });
   it("converts Shiki styles for React and keeps custom properties", () => {
     expect(toReactStyle({ color: "#111", "font-style": "italic", "--shiki-dark": "#eee" })).toEqual({
       color: "#111",

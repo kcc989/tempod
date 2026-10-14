@@ -5,6 +5,7 @@ import {
   canArchive,
   githubUrlFor,
   powerAction,
+  prLink,
   primaryEnabled,
   renameValue,
   shortcutAvailability,
@@ -128,10 +129,10 @@ describe("workspace power and archive", () => {
   });
 
   it("archives only from ready, working, sleeping or error", () => {
-    expect(["ready", "working", "sleeping", "error"].every((s) => canArchive(s as never))).toBe(true);
+    expect((["ready", "working", "sleeping", "error"] as const).every((s) => canArchive(s))).toBe(true);
     expect(
-      ["creating", "starting", "setting_up", "stopping", "archiving", "archived"].some((s) =>
-        canArchive(s as never),
+      (["creating", "starting", "setting_up", "stopping", "archiving", "archived"] as const).some((s) =>
+        canArchive(s),
       ),
     ).toBe(false);
   });
@@ -153,6 +154,25 @@ describe("links and inputs", () => {
     expect(githubUrlFor(project, { prNumber: null, branch: "tempo/x" }, false)).toBe(
       "https://github.com/acme/app",
     );
+  });
+
+  it("links #<number> ↗ to the PR on GitHub, coloured by prState (04, Top bar left)", () => {
+    expect(prLink({ owner: "acme", name: "app" }, { prNumber: 12, prState: "open" })).toEqual({
+      label: "#12 ↗",
+      url: "https://github.com/acme/app/pull/12",
+      className: "text-success",
+      ariaLabel: "Pull request #12, open. Opens on GitHub",
+    });
+
+    const tone = (prState: "open" | "draft" | "merged" | "closed" | null) =>
+      prLink({ owner: "acme", name: "app" }, { prNumber: 3, prState })?.className;
+
+    expect(tone("draft")).toBe("text-muted-foreground");
+    expect(tone("merged")).toBe("text-merged");
+    expect(tone("closed")).toBe("text-destructive");
+    expect(tone(null)).toBe("text-muted-foreground");
+    expect(prLink({ owner: "acme", name: "app" }, { prNumber: null, prState: null })).toBeNull();
+    expect(prLink(undefined, { prNumber: 12, prState: "open" })).toBeNull();
   });
 
   it("saves a rename only when it changed and is not blank", () => {

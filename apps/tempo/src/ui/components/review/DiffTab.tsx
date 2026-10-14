@@ -11,12 +11,13 @@ import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useLocalStorage } from "~/ui/hooks/useLocalStorage";
 import { useIsNarrow } from "~/ui/hooks/useMediaQuery";
+import { useAction } from "~/ui/hooks/useActions";
 import { useShortcuts } from "~/ui/hooks/useShortcuts";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
 import { agentLabel } from "~/ui/lib/agents";
 import { isEditableTarget } from "~/ui/lib/shortcuts";
-import { insertIntoComposer, openDiff, targetChatSession } from "~/ui/state/workspace-ui";
+import { insertIntoComposer, openDiff, openGuide, targetChatSession } from "~/ui/state/workspace-ui";
 import { changeRows, GROUP_BY_FOLDER_KEY, isBoolean, totals } from "./changes-model";
 import { ScopeToggle } from "./ChangesView";
 import { DiffFile } from "./DiffFile";
@@ -38,6 +39,7 @@ import { LineCounts, SourceNote, WakeButton } from "./parts";
 import { useChanges, useDeleteComment, useInvalidateOnChanges, useReviewComments } from "./use-review";
 
 const UNIFIED: DiffView = "unified";
+
 const GET_FILE_DIFF = ["getFileDiff"] as const;
 
 /**
@@ -58,24 +60,30 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
     () => changeRows(changes.files, { grouped }).flatMap((r) => (r.kind === "file" ? [r.file] : [])),
     [changes.files, grouped],
   );
+
   const draftsByPath = useMemo(() => {
     const m = new Map<string, ReviewComment[]>();
+
     for (const c of drafts) {
       const list = m.get(c.path);
+
       if (list) list.push(c);
       else m.set(c.path, [c]);
     }
+
     return m;
   }, [drafts]);
-  const sum = totals(files);
 
+  const sum = totals(files);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sections = useRef(new Map<string, HTMLElement>());
   const hashes = useRef(new Map<string, string>());
+
   const register = useCallback((path: string, el: HTMLElement | null) => {
     if (el) sections.current.set(path, el);
     else sections.current.delete(path);
   }, []);
+
   const onHash = useCallback((path: string, hash: string | null) => {
     if (hash) hashes.current.set(path, hash);
     else hashes.current.delete(path);
@@ -83,62 +91,84 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
 
   const topOf = (el: HTMLElement): number => {
     const root = scrollRef.current;
+
     if (!root) return 0;
+
     return el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
   };
+
   const tops = () =>
     files.map((f) => {
       const el = sections.current.get(f.path);
+
       return el ? topOf(el) : 0;
     });
+
   const scrollToPath = (path: string, focus: boolean) => {
     const root = scrollRef.current;
     const el = sections.current.get(path);
+
     if (!root || !el) return false;
     root.scrollTop = topOf(el);
+
     if (focus) el.querySelector<HTMLElement>("[data-file-toggle]")?.focus({ preventScroll: true });
+
     return true;
   };
 
   // Show tab.path each time the tab is opened at a file.
   const [revealed, setRevealed] = useState<{ path: string; seq: number } | null>(null);
+
   if (tab.path && revealed?.seq !== seq) setRevealed({ path: tab.path, seq });
   const revealedSeq = useRef(0);
   useLayoutEffect(() => {
     if (!revealed || revealedSeq.current === revealed.seq) return;
+
     if (scrollToPath(revealed.path, false)) revealedSeq.current = revealed.seq;
   });
 
   const toggleViewed = (path: string) => {
     const hash = hashes.current.get(path);
+
     if (!hash) return;
     setMarks((m) => withViewed(m, path, hash, m[path] !== hash));
   };
 
   const step = (dir: 1 | -1) => {
     const root = scrollRef.current;
+
     if (!root) return;
     const i = stepFileIndex(tops(), root.scrollTop, dir);
     const f = i === null ? undefined : files[i];
+
     if (f) scrollToPath(f.path, true);
   };
 
+  const markCurrentViewed = () => {
+    const root = scrollRef.current;
+
+    if (!root || files.length === 0) return;
+    const f = files[currentFileIndex(tops(), root.scrollTop)];
+
+    if (f) toggleViewed(f.path);
+  };
+
+  useAction("nextFile", () => step(1), { enabled: active });
+  useAction("prevFile", () => step(-1), { enabled: active });
+  useAction("markViewed", markCurrentViewed, { enabled: active && files.length > 0 });
   useShortcuts(
     {
       nextFile: () => step(1),
       prevFile: () => step(-1),
       markViewed: (e) => {
         if (isEditableTarget(e.target)) return false;
-        const root = scrollRef.current;
-        if (!root || files.length === 0) return;
-        const f = files[currentFileIndex(tops(), root.scrollTop)];
-        if (f) toggleViewed(f.path);
+        markCurrentViewed();
       },
     },
     { enabled: active },
   );
-
   let body;
+
   if (!changes.hasList) {
     body =
       changes.source === "error" ? (
@@ -160,6 +190,7 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
         workspaceId={workspaceId}
         file={f}
         scope={changes.scope}
+        beforeSha={changes.beforeSha}
         view={view}
         live={changes.live}
         viewedHash={marks[f.path]}
@@ -177,6 +208,9 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-2 py-1.5">
         <ScopeToggle workspaceId={workspaceId} changes={changes} />
+        <Button size="sm" variant="outline" onClick={() => openGuide(workspaceId)}>
+          Guide
+        </Button>
         {sum.files > 0 && (
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             {sum.files === 1 ? "1 file" : `${sum.files} files`}
@@ -226,7 +260,7 @@ export function DiffTab({ workspaceId, tab, active, seq }: CenterTabProps<"diff"
 }
 
 /** `Send <n> comments to <agent>`: the drafts go to the composer as one chip. */
-function SendComments({
+export function SendComments({
   workspaceId,
   drafts,
 }: {
@@ -234,12 +268,16 @@ function SendComments({
   drafts: ReadonlyArray<ReviewComment>;
 }) {
   const sessionId = useWorkspaceUiSelector(workspaceId, targetChatSession);
+
   const sessionAgent = useWorkspaceSelector(workspaceId, (s) =>
     sessionId ? s.sessions[sessionId]?.agent : undefined,
   );
+
   const defaultAgent = useHubWorkspace(workspaceId)?.defaultAgent;
   const agent = sessionAgent ?? defaultAgent;
+
   if (drafts.length === 0) return null;
+
   return (
     <Button
       size="sm"
@@ -253,10 +291,18 @@ function SendComments({
   );
 }
 
-function DraftsMenu({ workspaceId, drafts }: { workspaceId: string; drafts: ReadonlyArray<ReviewComment> }) {
+export function DraftsMenu({
+  workspaceId,
+  drafts,
+}: {
+  workspaceId: string;
+  drafts: ReadonlyArray<ReviewComment>;
+}) {
   const [open, setOpen] = useState(false);
   const remove = useDeleteComment();
+
   if (drafts.length === 0) return null;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

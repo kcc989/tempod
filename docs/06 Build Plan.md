@@ -28,9 +28,9 @@ tempo/
   packages/
     protocol/                   Effect Schemas: shared types, channels, tempod protocol, errors
     tempod/                     the daemon: main.ts, server.ts, outbox.ts, acp/, scripts.ts,
-                                git.ts, ports.ts, watcher.ts, proxy.ts
-    settings/                   settings.toml parsing and Conductor mapping (used by tempod and the Worker)
-    cities/                     the fixed slug list
+                                git.ts, ports.ts, watcher.ts, proxy.ts, artifacts.ts
+    settings/                   settings.yaml parsing (used by tempod and the Worker)
+    cities/                     the fixed animal slug list
   container/
     Dockerfile
     versions.json
@@ -44,7 +44,7 @@ tempo/
   CLAUDE.md                     symlink to AGENTS.md
 ```
 
-**Tooling:** Bun, Vite, TypeScript in strict mode, Vitest with `@cloudflare/vitest-pool-workers` for DO tests, oxlint, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
+**Tooling:** Bun, Vite, TypeScript 7.0.2 (native compiler) in strict mode, Vitest with `@cloudflare/vitest-pool-workers` for DO tests, oxlint with the vendored anti-slop generic and Effect rules, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
 
 **Scripts** (root `package.json`): `dev`, `build`, `typecheck`, `lint`, `format`, `test`, `test:conformance`, `test:e2e`, `deploy`.
 
@@ -53,6 +53,8 @@ tempo/
 &#91;embedded content: Build roadmap · 4 phases, 4 test gates\]
 
 A phase starts only after the gate before it passes. Work for the next phase MAY begin early in a branch, but it MUST NOT merge until the gate passes. If a spike shows the spec is wrong, change the spec first, then the code.
+
+Phase 6 (08) is the exception: it MAY run in parallel with phases 2 to 5, its milestones merge when their own tests pass, and gate H needs gate B. Its spike is S21 (08).
 
 ## Spikes
 
@@ -70,6 +72,9 @@ Each spike is throwaway code in its own branch that answers one question. Its re
 | S8 | Do previews work for real dev servers? | A Vite dev server bound to `127.0.0.1` loads through the preview URL, and hot reload over WebSocket works. A sleeping workspace shows the wake page. | — |
 | S9 | Do OpenCode and Pi work through ACP? | `opencode acp` and `pi-acp` complete 3 turns each with OpenRouter via the placeholder swap. Record whether `session/load` works for each. | R6 |
 | S10 | Does the terminal work through the DO? | PTY `exec` with tmux over the DO WebSocket. Resize works. A reconnect gets the same session and scrollback. | — |
+| S18 | Do artifacts work as 01, 04 and 05 use them? Runs at the start of phase 5, not in gate A. | Claude Code, Codex, OpenCode and Pi each start the `tempo` MCP server from `tempod mcp` and call `publish_artifact`. An HTML artifact loads in Tempo's iframe through the entry link and cookie in Chrome, Safari and Firefox, and its `fetch`, image and WebSocket requests to the internet are blocked. A PDF artifact shows in the iframe. Mermaid 12.1.0 renders a flowchart with HTML labels off; record the config keys. Record which agents send `rawInput.plan` on a plan proposal. | R19 |
+| S17 | Does Browser Run work as 01 uses it? | Playwright MCP in the container connects over `wss://browser.tempo.internal/` through `TempoOutbound` to a session from `env.BROWSER.acquire`. The remote browser loads `http://localhost:<port>` through `outboundByHost`. Live View shows the page in an iframe on `APP_HOST`. `closeSession` ends it. | — |
+| S20 | Does each adapter apply a agent profile? | For each base agent, start a session with a profile that sets every field in the table in 01, Agents. Record which fields take effect: the agent follows the system prompt, a denied tool is absent, an allowed-only list hides other built-in tools, a pi codemode script cannot call a denied built-in or MCP tool, an MCP server's tools are listed, and the reasoning level shows in the config options. `session/load` keeps the profile. | R21 |
 
 ## Acceptance tests
 
@@ -97,9 +102,9 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-11 | A Codex token refresh in one workspace reaches a second running workspace, which then completes a turn. |
 | AT-12 | The diff view is correct for added, changed, deleted, renamed and untracked files in both scopes. Review comments reach the agent in the next prompt. |
 | AT-13 | Revert restores the exact tree of the chosen checkpoint, shows the marker, and the next prompt carries the revert note. |
-| AT-14 | A repo with only `.conductor/settings.toml` runs its setup and run scripts, with `CONDUCTOR_PORT` set. |
+| AT-14 | A repo with only `.tempo/settings.yaml` runs its setup and run scripts, with `TEMPO_PORT` set. |
 | AT-15 | A terminal runs commands; after a reconnect, the session and scrollback are still there. |
-| AT-16 | A Vite preview works with hot reload. Rotating the token breaks the old link. An agent passes a Playwright MCP check on `localhost`. |
+| AT-16 | A Vite preview opened from Tempo works with hot reload, also in a Browser tab. The bare preview URL in a fresh browser shows the preview 404 page. Reset preview access stops an open preview. An agent passes a Playwright MCP check on `localhost`. |
 
 **Gate D: Phase 3**
 
@@ -110,7 +115,31 @@ Each gate is a list of end-to-end tests in `tests/e2e`, run against a deployed t
 | AT-19 | Archive, restore, wake: transcript and files are intact. |
 | AT-20 | With the `allowlist` policy, a host not on the list gets 403 and an `egress_log` row. `APP_HOST` is blocked under both policies. |
 | AT-21 | At phone width: list workspaces, read a live transcript, send a prompt, approve a permission. |
-| AT-22 | Every shortcut in 04 works in Chrome, Safari and Firefox on macOS. |
+| AT-22 | Every shortcut in 04 works in Chrome on macOS. |
+| AT-38 | A workspace created from a PR shows `#<number> ↗` and the PR state at once; Create PR is not offered. |
+| AT-39 | With `browser.run = true`, an agent checks the app on `localhost` in Browser Run, and the Live View tab shows it. Under `allowlist`, the agent uses local Chromium. |
+| AT-40 | An OpenCode chat with no `agent.models.opencode` is disabled in the New chat menu; a queued OpenCode turn fails with `MODEL_REQUIRED`. |
+
+**Gate F: Phase 5**
+
+| ID | Test |
+| --- | --- |
+| AT-41 | Each of the four agents publishes a PNG, a Markdown file with a Mermaid block, a PDF and an HTML file. Each shows as an artifact card in its turn and in the Artifacts tab, and opens in the Artifact tab. The Mermaid block is a diagram. |
+| AT-42 | Publishing the same path again makes version 2. The Artifact tab shows version 2 and can switch back to version 1. |
+| AT-43 | After the workspace sleeps, and again after archive, every artifact opens and downloads without waking the container. |
+| AT-44 | An HTML artifact that calls `fetch`, loads a remote image and opens a WebSocket gets no network response, and no request reaches the network. The bare artifact URL in a fresh browser shows the preview 404 page. Reset preview access stops an open artifact. |
+| AT-45 | A file tab shows a PNG and a Markdown preview with a Mermaid diagram. The Diff tab shows before and after images for a changed PNG in both scopes. |
+| AT-46 | A Claude plan proposal shows as a `Plan` card with Markdown, and approving it continues the turn. |
+| AT-47 | The Mac app shows artifact cards, the Artifacts tab, images and Markdown in-app, and opens HTML and PDF artifacts in the default browser. |
+
+**Gate G: Agent profiles** (after Gate F in 07; the Mac app ships its part in the same phase)
+
+| ID | Test |
+| --- | --- |
+| AT-48 | Create a agent on `claude` with a system prompt, `tools.deny = ["Edit", "Write"]`, a model and a reasoning level. A chat from it uses that model and level, follows the prompt, and cannot edit a file. `profileIssues` is empty. |
+| AT-49 | The same definition on `codex` follows the prompt, uses the model and level, and shows the notice for `tool limits`. The same definition on `opencode` and on `pi`, with `tools.deny = ["edit", "write"]` and one stdio MCP server, follows the prompt, cannot edit a file, lists the server's tools, and shows no notice. |
+| AT-50 | Edit a agent while a chat from it is open. The open chat keeps the old profile after a sleep and wake; a new chat gets the new one. Delete the agent: the open chat still works and the New chat menu no longer lists it. |
+| AT-51 | An MCP server with `env = { X = "${MY_SECRET}" }` and a project secret `MY_SECRET` starts and lists its tools. Saving a literal env value fails with `VALIDATION_FAILED`. Grep of logs, D1, `events`, R2 and agent definitions finds no secret value. |
 
 **Also at Gate D:** during a full e2e run, grep all Worker logs, `events` rows and R2 objects for the test credentials' values. Zero matches is required.
 
@@ -150,6 +179,28 @@ The Tempo Spec (tabs 00 to 06) is the source of truth. Read the tab for the area
 16. If behavior must change, change the spec in the same pull request, and say so in its description.
 ```
 
+## PR CI budget
+
+All local PR checks, builds and browser regressions share one job and target
+under five total runner minutes. `bun run ci` measures each stage and permits
+300 seconds for check commands after setup, with a six-minute hard job timeout
+for setup and cleanup. Total elapsed time including setup remains visible. See `docs/CI.md` for the test audit, suite
+boundaries and rules. Worker, UI and component tests and browser fixture builds
+have separate cache entries that include transitive workspace sources. The fixed
+production CI build is cached with its configuration and environment inputs;
+deployment builds with arbitrary configuration remain uncached. Browser tests
+still execute for code changes in a shared Playwright worker pool. RPC tests can
+use configurable isolated ready-workspace fixtures and explicit agent credentials;
+lifecycle tests still exercise real initialization and operation steps.
+Documentation-only changes retain the
+required check with a root-tooling-only install and lint/format only; unavailable
+change bases run the full suite with every workspace installed.
+Hosted acceptance and installed-agent conformance remain
+explicit gates; skipped tests do not satisfy them.
+The daemon image workflow and test image install only root tooling and the daemon's
+dependency closure with Bun workspace filters; image builds and all daemon/image
+checks remain complete.
+
 ## Definition of done
 
 A change is done only when every box below is true.
@@ -163,3 +214,53 @@ A change is done only when every box below is true.
 - [ ] UI changes work at phone width and in both themes.
 - [ ] The acceptance tests of the current phase still pass.
 - [ ] If behavior changed, the spec changed in the same pull request.
+
+
+## Phase 7: Agents as data
+
+## Milestones
+
+Each milestone is one pull request and merges when its own tests pass.
+
+| Milestone | Content | Demo |
+| --- | --- | --- |
+| M1 Spec | All spec changes above, with S22 done | The owner approves the spec |
+| M2 Library | `agents`, `project_agents`, the migration, starters, agent and attachment functions, both Settings pages, chat sessions from an agent | A saved definition starts a chat. A new agent attaches to a project with no deploy. |
+| M3 Runs | `runs` rebuild, the run engine, `report_result`, the run card, Send to chat, read-only controls, requests | `@reviewer` shows a findings card, and Send to chat queues the turn |
+| M4 Decisions | `AI` binding, the decision step, `run.decided`, skip lines, Diagnostics | A push that touches auth code runs the reviewer. A push that does not shows a skip line. |
+| M5 Proposals | `list_agents`, `propose_agent_change`, the proposal card, `resolveAgentProposal` | "Make me an agent that checks migrations on push" ends with an applied agent and attachment |
+| M6 Remove | Everything in Remove | No `role` names remain in code, wire types or the spec, except migration code |
+
+## Tests
+
+Follow `docs/CI.md` and the CI and test budget rules in `AGENTS.md`. Every test proves one behavior and asserts an outcome.
+
+- Unit: definition and hook validation, handle derivation, hook matching, decision batching at 64, threshold, the state builder's caps and redaction, each output kind schema, the Send to chat texts and the migration mapping.
+- Worker integration with `@cloudflare/vitest-pool-workers` and a fake `AI` binding: ownership and CRUD for every new function; event → decision → run → `report_result` → `run.completed` → auto-send; the follow-up; `RUN_RESULT_MISSING`; timeout; cancel; the files-changed warning; protected files; `max_runs`; decision failure and Run anyway; proposal apply and reject; migration idempotency.
+- `tempod`, in the container image: `report_result` is listed only with `TEMPO_RUN_ID` and uses the right schema; `list_agents` and `propose_agent_change` are hidden in run sessions.
+
+## Gate I
+
+Tab 06 rules: deployed, real logins, three runs in a row.
+
+1. An agent saved in Settings and attached to a project runs on its hook in a workspace, with no deploy.
+2. A `branch.pushed` hook with a question runs the agent for a matching change and skips it for a change that does not match. Both decisions show their probability in the trace.
+3. `@planner` shows a plan card. Approve queues a turn in the chat with the plan.
+4. A `review` run reports a blocking finding. Send to chat queues the fix request.
+5. A read-only agent that edits a file shows the warning, and Revert restores the files.
+6. A `check.failed` attachment with auto-send stops at `max_runs`.
+7. `propose_agent_change` from a chat ends with an applied agent. A rejected proposal changes nothing.
+8. Kill the container during a run: the run fails with `RUN_TURN_FAILED`, no event is lost, and dispatch resumes after the DO restarts.
+9. A grep of lifecycle events, run results and decision logs for the test credentials finds nothing.
+
+## Project CI (10)
+
+Built with the Artifacts forge (09). Local gates: Worker, tempod, web and Mac tests listed in 10, Deployment and validation.
+
+Hosted gate J (not run; needs the owner's account and approval):
+
+1. Save a two-job pipeline with `needs` for a native repository. A push from a workspace starts one run on the exact pushed SHA; both jobs pass and their logs show in web and Mac.
+2. A push from outside Tempo starts a run within one reconciliation interval.
+3. A job that runs `git push` and a request to a host outside the allowlist both fail; the job log shows the 403s.
+4. A failing required job blocks the PR merge with `PR_NOT_MERGEABLE`; a rerun that passes allows it.
+5. Cancel stops the job containers; a late result does not change the run.

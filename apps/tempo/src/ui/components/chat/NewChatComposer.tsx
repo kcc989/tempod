@@ -1,0 +1,129 @@
+import { useRef, useState } from "react";
+import { DEFAULT_SETTINGS, type Session } from "@tempo/protocol";
+import { CornerDownLeftIcon } from "lucide-react";
+import { Button } from "~/ui/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/ui/components/ui/dialog";
+import { ComposerSurface, ComposerInput, ComposerToolbar } from "./ComposerControls";
+import { useCallMutation } from "~/ui/hooks/useCall";
+import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
+import { needsModel } from "~/ui/lib/agents";
+import { LaunchModelPicker, useLaunchModels } from "./LaunchModelPicker";
+
+export function NewChatComposer({
+  workspaceId,
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  workspaceId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (session: Session) => void;
+}) {
+  const settings = useWorkspaceSelector(workspaceId, (s) => s.workspace?.settings ?? DEFAULT_SETTINGS);
+  const selection = useLaunchModels(settings);
+  const agent = selection.pickedAgent?.baseAgent ?? selection.selected?.agent ?? selection.fallbackAgent;
+
+  const model = selection.pickedAgent
+    ? undefined
+    : (selection.selected?.model ?? (agent ? settings.agent.models[agent] || undefined : undefined));
+
+  const agentId = selection.pickedAgent?.id;
+
+  const canCreate =
+    agent !== null && (agentId !== undefined || model !== undefined || !needsModel(agent, settings));
+
+  const [prompt, setPrompt] = useState("");
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const [created, setCreated] = useState<Session | null>(null);
+  const submitting = useRef(false);
+  const create = useCallMutation("createSession");
+  const send = useCallMutation("sendPrompt");
+  const busy = create.isPending || send.isPending;
+
+  const submit = async () => {
+    if (submitting.current || !agent || !canCreate) return;
+    submitting.current = true;
+
+    try {
+      let input: import("@tempo/protocol").FnInput<"createSession"> = { workspaceId, agent };
+
+      if (model) input = { ...input, model };
+
+      if (agentId) input = { ...input, agentId: agentId };
+      const session = created ?? (await create.mutateAsync(input));
+
+      setCreated(session);
+
+      if (prompt.trim())
+        await send.mutateAsync({
+          workspaceId,
+          sessionId: session.id,
+          text: prompt.trim(),
+          mentions: [],
+          attachmentIds: [],
+          reviewCommentIds: [],
+        });
+      onCreated(session);
+      onOpenChange(false);
+      setPrompt("");
+      setCreated(null);
+    } catch {
+      // The mutations show the error; keep the draft and session for retry.
+    } finally {
+      submitting.current = false;
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!busy) onOpenChange(value);
+      }}
+    >
+      <DialogContent
+        className="gap-0 rounded-2xl border-0 bg-transparent p-0 shadow-none"
+        style={{ width: "min(48rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
+        overlayClassName="backdrop-blur-sm"
+        onSubmitShortcut={() => void submit()}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          textarea.current?.focus();
+        }}
+      >
+        <DialogTitle className="sr-only">New chat</DialogTitle>
+        <DialogDescription className="sr-only">
+          Choose a model and start a chat. Enter opens an empty chat too.
+        </DialogDescription>
+        <ComposerSurface>
+          <ComposerInput
+            ref={textarea}
+            aria-label="Prompt"
+            placeholder="What do you want to work on?"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            disabled={busy}
+            className="max-h-[min(24rem,50dvh)] min-h-48"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || e.shiftKey || e.altKey || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              void submit();
+            }}
+          />
+          <ComposerToolbar className="justify-between">
+            <LaunchModelPicker
+              selection={selection}
+              disabled={busy || created !== null}
+              onClosed={() => textarea.current?.focus()}
+            />
+            <Button size="sm" disabled={busy || !canCreate} onClick={() => void submit()}>
+              {busy ? "Starting…" : "Create chat"}
+              <CornerDownLeftIcon className="size-3.5" />
+            </Button>
+          </ComposerToolbar>
+        </ComposerSurface>
+      </DialogContent>
+    </Dialog>
+  );
+}

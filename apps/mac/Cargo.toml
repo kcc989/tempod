@@ -1,6 +1,6 @@
 [package]
 name = "tempo-mac"
-version = "0.1.0"
+version = "0.2.0"
 description = "Tempo for Mac (07): the native client"
 edition.workspace = true
 license.workspace = true
@@ -30,12 +30,14 @@ profiler = ["gpui-kit/profiler"]
 [dependencies]
 async-channel = "=2.5.0"
 gpui-kit = { version = "=0.7.1" }
+resvg = "=0.48.1"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 sha2 = "=0.10.9"
+tempo-terminal = { path = "../../crates/tempo-terminal" }
 tempo-client = { path = "../../crates/tempo-client" }
 tempo-protocol = { path = "../../crates/tempo-protocol" }
-toml = "=0.8.23"
+serde_yaml_ng = "=0.10.0"
 
 [dev-dependencies]
 gpui-kit = { version = "=0.7.1", features = ["test-support"] }

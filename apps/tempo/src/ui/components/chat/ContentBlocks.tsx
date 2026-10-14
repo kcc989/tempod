@@ -1,9 +1,11 @@
+import { Match } from "effect";
 import { FileIcon, LinkIcon } from "lucide-react";
 import { useMemo } from "react";
 import { diffLines } from "~/ui/lib/diff";
 import { stripAnsi } from "~/ui/lib/format";
 import { cn } from "~/ui/lib/utils";
 import { openFile } from "~/ui/state/workspace-ui";
+import { MessageMarkdown } from "./Markdown";
 import { fileLinkTarget, toUnifiedHunks, workspacePath, type BlockView } from "./transcript-model";
 
 /** One ACP content block (agent message blocks and tool call content). */
@@ -11,13 +13,29 @@ export function BlockViewer({
   workspaceId,
   block,
   monospace = false,
+  markdown = false,
+  streaming = false,
 }: {
   workspaceId: string;
   block: BlockView;
   monospace?: boolean;
+  markdown?: boolean;
+  streaming?: boolean;
 }) {
   switch (block.kind) {
     case "text":
+      if (markdown && (!monospace || /(?:^|\n) {0,3}(?:`{3,}|~{3,})/.test(stripAnsi(block.text)))) {
+        return (
+          <div className="max-h-80 overflow-auto">
+            <MessageMarkdown
+              workspaceId={workspaceId}
+              text={monospace ? stripAnsi(block.text) : block.text}
+              streaming={streaming}
+            />
+          </div>
+        );
+      }
+
       return (
         <pre
           className={cn(
@@ -52,6 +70,7 @@ export function BlockViewer({
 
 function ResourceLink({ workspaceId, uri, name }: { workspaceId: string; uri: string; name: string }) {
   const file = fileLinkTarget(uri);
+
   if (file) {
     return (
       <button
@@ -64,6 +83,7 @@ function ResourceLink({ workspaceId, uri, name }: { workspaceId: string; uri: st
       </button>
     );
   }
+
   if (/^https?:\/\//i.test(uri)) {
     return (
       <a
@@ -77,6 +97,7 @@ function ResourceLink({ workspaceId, uri, name }: { workspaceId: string; uri: st
       </a>
     );
   }
+
   return <span className="text-xs text-muted-foreground">{workspacePath(name) || uri}</span>;
 }
 
@@ -96,6 +117,7 @@ export function UnifiedDiff({
   const rel = workspacePath(path);
   const adds = hunks.reduce((n, h) => n + h.lines.filter((l) => l.kind === "add").length, 0);
   const dels = hunks.reduce((n, h) => n + h.lines.filter((l) => l.kind === "del").length, 0);
+
   return (
     <div className="overflow-hidden rounded-md border">
       <div className="flex h-6 items-center gap-2 border-b bg-muted/40 px-2 text-xs">
@@ -127,10 +149,18 @@ export function UnifiedDiff({
                   {l.kind === "add" ? l.newLine : l.oldLine}
                 </span>
                 <span aria-hidden className="w-4 shrink-0 text-center select-none">
-                  {l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}
+                  {Match.value(l).pipe(
+                    Match.when({ kind: "add" }, () => "+"),
+                    Match.when({ kind: "del" }, () => "−"),
+                    Match.orElse(() => " "),
+                  )}
                 </span>
                 <span className="sr-only">
-                  {l.kind === "add" ? "Added: " : l.kind === "del" ? "Removed: " : ""}
+                  {Match.value(l).pipe(
+                    Match.when({ kind: "add" }, () => "Added: "),
+                    Match.when({ kind: "del" }, () => "Removed: "),
+                    Match.orElse(() => ""),
+                  )}
                 </span>
                 <span className="pr-2">{l.text}</span>
               </div>

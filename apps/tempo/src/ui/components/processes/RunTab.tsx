@@ -40,11 +40,12 @@ export function RunTab({ workspaceId }: { workspaceId: string }) {
   const entries = runScriptEntries(workspace.settings);
   const scriptId = selectedRunScriptId(workspace.settings, picked);
   const script = entries.find((e) => e.id === scriptId);
+
   if (!script) {
     return (
       <EmptyState
         title="No run scripts."
-        description="Add one to .tempo/settings.toml or in project settings."
+        description="Add one to .tempo/settings.yaml or in project settings."
         action={
           <Button
             size="sm"

@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleRunCompletedPayload",
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
+    "result": {
+      "$ref": "RunResult.json"
+    }
+  },
+  "required": ["agentId", "handle", "result"],
+  "additionalProperties": true
+}

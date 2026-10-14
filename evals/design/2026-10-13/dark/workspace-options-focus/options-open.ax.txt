@@ -1,0 +1,81 @@
+The following is a diff from the previous accessibility tree for Window: "Tempo" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~			52 pop up button (settable) Model, Value: Default (recommended)
++		54 dialog
++			55 button New branch
++			56 button Existing branch
++			57 button Pull request
++			58 text field (settable) Branch or PR number, Value: main
++			59 button auth-enrollment-flow
++			60 button auth-evals-recording
++			61 button auth-recovery-liveview
++			62 button codex/account-setup-workspace
++			63 button codex/adaptive-account-authentication
++			64 button codex/agent-authenticator-setup
++			65 button codex/authenticator-enrollment
++			66 button codex/automatic-manual-email
++			67 button codex/autonomous-runs
++			68 button codex/clef-flash-decisions
++			69 button codex/demo-account-page
++			70 button codex/demo-account-setup
++			71 button codex/explore-agent
++			72 button codex/explore-replay-baseline
++			73 button codex/fast-ci-cache
++			74 button codex/faster-pr-checks
++			75 button codex/fix-adaptive-account-form-tests
++			76 button codex/fix-authenticator-lifecycle
++			77 button codex/fix-browser-test-startup
++			78 button codex/fix-manual-setup-loading
++			79 button codex/fix-preview-cleanup
++			80 button codex/guide-variants
++			81 button codex/independent-authenticator
++			82 button codex/lean-ci-local
++			83 button codex/m1-components
++			84 button codex/m14-narration-captions
++			85 button codex/member-app-visual-direction
++			86 button codex/native-account-browser
++			87 button codex/recover-stalled-sign-in
++			88 button codex/remember-verified-portal
++			89 button codex/setup-browser-action-parity
++			90 button codex/setup-browser-expand
++			91 button codex/setup-continuation-inputs
++			92 button codex/setup-copy-icon
++			93 button codex/setup-invite-fullscreen
++			94 button codex/setup-paste-commit
++			95 button codex/setup-sign-in-continuation
++			96 button codex/setup-sign-in-email
++			97 button codex/sign-in-email-state
++			98 button codex/sign-in-guard-before-approval
++			99 button feat/inbox-code-reveal
++			100 button feat/reset-saved-authenticator
++			101 button feat/use-saved-authenticator-code
++			102 button fix/authenticator-save-terminal
++			103 button fix/authenticator-status
++			104 button fix/browser-handshake-timeout
++			105 button fix/bundler-source-imports
++			106 button fix/chrome-cold-startup
++			107 button fix/chrome-startup
++			108 button fix/evaluation-regression
++			109 button fix/farstep-parallel-ci
++			110 button fix/hubspot-recording-acceptance
++			111 button fix/manual-authenticator-key
++			112 button fix/manual-email-login-links
++			113 button fix/preserve-2fa-browser
++			114 button fix/provider-copy-authenticator-save
++			115 button fix/2fa-completion-dialog
++			116 button fix-public-access-guard
++			117 button kcc989/agent-inbox-invite-form
++			118 button kcc989/app-ui-guides-runs-staff
++			119 button kcc989/directive-agent-runner
++			120 button kcc989/goal-first-nav-layout
++			121 button kcc989/implement-milestone-5
++			122 button kcc989/implement-next-milestone
++			123 button kcc989/m4-jev-loop
++			124 button kcc989/m9-knowledge-base
++			125 button kcc989/m11-video-share-links
++			126 button kcc989/staging-access-cors-error
++			127 button kcc989/storybook-design-system
++			128 button kcc989/video-captions-tts
++			129 button main
++			130 button setup/cloudflare-runner
++			131 button Keep open
+The focused UI element is 0 standard window Tempo, Secondary Actions: Raise

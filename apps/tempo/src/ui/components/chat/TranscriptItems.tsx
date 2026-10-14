@@ -1,3 +1,6 @@
+import { AgentProposalCard } from "./AgentProposalCard";
+import { RunCard } from "./RunCard";
+import { Match, Schema } from "effect";
 import type { AgentId, Item, ItemOf, Turn } from "@tempo/protocol";
 import {
   AlertCircleIcon,
@@ -5,7 +8,6 @@ import {
   BanIcon,
   BrainIcon,
   CheckCircle2Icon,
-  CheckIcon,
   ChevronRightIcon,
   CircleDashedIcon,
   CircleIcon,
@@ -35,12 +37,14 @@ import { useShortcuts } from "~/ui/hooks/useShortcuts";
 import { formatDuration, formatTime } from "~/ui/lib/format";
 import { isEditableTarget } from "~/ui/lib/shortcuts";
 import { cn } from "~/ui/lib/utils";
-import { CONFIRM_TEXT, confirm, openFile } from "~/ui/state/workspace-ui";
-import { attachmentPreview } from "./attachment-cache";
+import { CONFIRM_TEXT, confirm, openFile, setPhonePane, showRightTab } from "~/ui/state/workspace-ui";
+import { thumbnailSrc } from "./attachment-cache";
 import { reviewChipLabel } from "./composer-model";
 import { BlockViewer, UnifiedDiff } from "./ContentBlocks";
 import { toggleExpanded, useExpanded } from "./expand-store";
+import { ArtifactCard } from "~/ui/components/artifacts/ArtifactCard";
 import { MessageMarkdown } from "./Markdown";
+import { currentStep, editCounts, planProposalText, toolLabel, workSummary, workType } from "./work-model";
 import {
   blockView,
   errorItemMessage,
@@ -52,6 +56,7 @@ import {
   toolIcon,
   turnDuration,
   turnOutcome,
+  turnTokens,
   workspacePath,
   type ToolIcon,
 } from "./transcript-model";
@@ -71,12 +76,32 @@ export const ItemView = memo(function ItemView({
   ctx,
   item,
   turn,
+  permission,
 }: {
   ctx: ItemContext;
   item: Item;
   turn: Turn | undefined;
+  /** A plan proposal's permission item, shown under its card. */
+  permission?: Item | undefined;
 }) {
   switch (item.kind) {
+    case "run":
+      return (
+        <RunCard
+          workspaceId={ctx.workspaceId}
+          runId={item.content.runId}
+          canRevert={ctx.canRevert}
+          writable={ctx.writable}
+        />
+      );
+    case "agent_proposal":
+      return (
+        <AgentProposalCard
+          workspaceId={ctx.workspaceId}
+          proposalId={item.content.proposalId}
+          writable={ctx.writable}
+        />
+      );
     case "user_message":
       return <UserMessage ctx={ctx} item={item} turn={turn} />;
     case "agent_message":
@@ -85,14 +110,27 @@ export const ItemView = memo(function ItemView({
       return (
         <Collapsed label={item.status === "streaming" ? "Thinking…" : "Thinking"} text={item.content.text} />
       );
-    case "tool_call":
+    case "tool_call": {
+      const plan = planProposalText(item);
+
+      if (plan !== null)
+        return (
+          <PlanProposal
+            ctx={ctx}
+            plan={plan}
+            permission={permission?.kind === "permission" ? permission : undefined}
+          />
+        );
+
       return <ToolCall ctx={ctx} item={item} />;
+    }
+
     case "plan":
       return <Plan item={item} />;
     case "permission":
       return <Permission ctx={ctx} item={item} />;
     case "notice":
-      return <Notice item={item} />;
+      return <Notice item={item} ctx={ctx} />;
     case "handoff":
       return (
         <Collapsed label="Session restarted; transcript handed to the agent" text={item.content.text} mono />
@@ -108,8 +146,29 @@ export const ItemView = memo(function ItemView({
       );
     case "error":
       return <ErrorCard ctx={ctx} item={item} turn={turn} />;
+    case "artifact":
+      return <ArtifactCard workspaceId={ctx.workspaceId} item={item} />;
   }
 });
+
+/** 04 Plan proposals: the plan as Markdown, expanded, with its permission's buttons under it. */
+function PlanProposal({
+  ctx,
+  plan,
+  permission,
+}: {
+  ctx: ItemContext;
+  plan: string;
+  permission: ItemOf<"permission"> | undefined;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-2">
+      <p className="text-xs font-medium text-muted-foreground">Plan</p>
+      <MessageMarkdown workspaceId={ctx.workspaceId} text={plan} streaming={false} />
+      {permission && <Permission ctx={ctx} item={permission} />}
+    </div>
+  );
+}
 
 function UserMessage({
   ctx,
@@ -124,11 +183,14 @@ function UserMessage({
   const { text, mentions, attachments, reviewCommentIds } = item.content;
   const checkpointId = turn?.checkpointId ?? null;
   const canRevert = ctx.writable && ctx.canRevert && checkpointId !== null && turn !== undefined;
+
   const onRevert = async () => {
     if (!turn || checkpointId === null) return;
+
     if (!(await confirm(CONFIRM_TEXT.revert(turn.seq)))) return;
     revert.mutate({ workspaceId: ctx.workspaceId, checkpointId });
   };
+
   return (
     <div className="group/user flex flex-col items-end gap-1">
       <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2">
@@ -146,26 +208,9 @@ function UserMessage({
                 <span className="truncate">{m.path}</span>
               </button>
             ))}
-            {attachments.map((a) => {
-              const preview = attachmentPreview(a.id);
-              return preview ? (
-                <img
-                  key={a.id}
-                  src={preview}
-                  alt={a.name}
-                  title={a.name}
-                  className="size-16 rounded-sm border object-cover"
-                />
-              ) : (
-                <span
-                  key={a.id}
-                  className="inline-flex max-w-60 items-center gap-1 rounded-sm border bg-background px-1.5 py-px text-xs"
-                >
-                  <PaperclipIcon className="size-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{a.name}</span>
-                </span>
-              );
-            })}
+            {attachments.map((a) => (
+              <AttachmentThumb key={a.id} workspaceId={ctx.workspaceId} attachment={a} />
+            ))}
             {reviewCommentIds.length > 0 && (
               <span className="inline-flex items-center gap-1 rounded-sm border bg-background px-1.5 py-px text-xs">
                 <MessageSquareIcon className="size-3 text-muted-foreground" />
@@ -196,6 +241,7 @@ function UserMessage({
 
 function AgentMessage({ ctx, item }: { ctx: ItemContext; item: ItemOf<"agent_message"> }) {
   const streaming = item.status === "streaming";
+
   return (
     <div className="flex flex-col gap-2">
       {item.content.text !== "" && (
@@ -256,12 +302,13 @@ const STATUS_TEXT: Record<Item["status"], string> = {
 
 function StatusIcon({ status }: { status: Item["status"] }) {
   const label = STATUS_TEXT[status];
+
   switch (status) {
     case "in_progress":
     case "streaming":
       return <Spinner aria-label={label} className="text-primary" />;
     case "completed":
-      return <CheckIcon aria-label={label} className="size-3.5 text-success" />;
+      return null;
     case "failed":
       return <XCircleIcon aria-label={label} className="size-3.5 text-destructive" />;
     case "cancelled":
@@ -274,35 +321,63 @@ function StatusIcon({ status }: { status: Item["status"] }) {
 const MAX_LOCATIONS = 5;
 
 function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }) {
-  const open = useExpanded(ctx.sessionId, item.id);
+  const failed = item.status === "failed";
+  const open = useExpanded(ctx.sessionId, item.id, failed);
   const { title, toolKind, locations, content, rawInput } = item.content;
   const Icon = TOOL_ICONS[toolIcon(toolKind)];
   const mono = toolKind === "execute";
   const hasBody = content.length > 0 || rawInput !== undefined;
+  const label = toolLabel(item);
+  const edit = workType(item) === "edit" ? editCounts(item) : null;
+
   return (
-    <div className="rounded-md border">
-      <button
-        type="button"
-        aria-expanded={hasBody ? open : undefined}
-        onClick={() => hasBody && toggleExpanded(ctx.sessionId, item.id)}
-        className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm",
-          hasBody ? "hover:bg-accent/60" : "cursor-default",
+    <div className="min-w-0">
+      <div className="flex items-center">
+        <button
+          type="button"
+          aria-expanded={hasBody ? open : undefined}
+          onClick={() => hasBody && toggleExpanded(ctx.sessionId, item.id, failed)}
+          title={title || undefined}
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm",
+            hasBody ? "hover:bg-accent/60" : "cursor-default",
+          )}
+        >
+          <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className={cn("min-w-0 flex-1 truncate", label.mono && "font-mono text-xs")}>
+            {edit?.path ? workspacePath(edit.path).split("/").pop() || label.text : label.text}
+          </span>
+          {edit && (
+            <span className="shrink-0 font-mono text-xs">
+              <span className="text-success">+{edit.added}</span>{" "}
+              <span className="text-destructive">−{edit.removed}</span>
+            </span>
+          )}
+          <StatusIcon status={item.status} />
+          {hasBody && (
+            <ChevronRightIcon
+              className={cn(
+                "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-90",
+              )}
+            />
+          )}
+        </button>
+        {edit && (
+          <Button
+            size="sm"
+            variant="link"
+            className="h-6 shrink-0 px-2 text-xs"
+            onClick={() => {
+              showRightTab(ctx.workspaceId, "changes");
+              setPhonePane("changes");
+            }}
+          >
+            Changes
+          </Button>
         )}
-      >
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate">{title || "Tool call"}</span>
-        <StatusIcon status={item.status} />
-        {hasBody && (
-          <ChevronRightIcon
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform",
-              open && "rotate-90",
-            )}
-          />
-        )}
-      </button>
-      {locations.length > 0 && (
+      </div>
+      {locations.length > 0 && !edit && (
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-2 pb-1 pl-7.5">
           {locations.slice(0, open ? undefined : MAX_LOCATIONS).map((loc, i) => (
             <button
@@ -320,9 +395,10 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
         </div>
       )}
       {open && hasBody && (
-        <div className="flex flex-col gap-2 border-t p-2">
+        <div className="flex min-w-0 flex-col gap-2 pt-1 pr-2 pb-2 pl-7.5">
           {content.map((c, i) => {
             const view = toolContentView(c);
+
             if (view.kind === "diff") {
               return (
                 <UnifiedDiff
@@ -334,6 +410,7 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
                 />
               );
             }
+
             if (view.kind === "terminal") {
               return (
                 <p key={i} className="rounded-md bg-muted/50 p-2 font-mono text-xs">
@@ -341,7 +418,17 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
                 </p>
               );
             }
-            return <BlockViewer key={i} workspaceId={ctx.workspaceId} block={view.block} monospace={mono} />;
+
+            return (
+              <BlockViewer
+                key={i}
+                workspaceId={ctx.workspaceId}
+                block={view.block}
+                monospace={mono}
+                markdown
+                streaming={item.status === "streaming" || item.status === "in_progress"}
+              />
+            );
           })}
           {content.length === 0 && rawInput !== undefined && (
             <pre className="max-h-60 overflow-auto rounded-md bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">
@@ -354,9 +441,10 @@ function ToolCall({ ctx, item }: { ctx: ItemContext; item: ItemOf<"tool_call"> }
   );
 }
 
-const jsonText = (u: unknown): string => {
+const jsonText = <T,>(u: T): string => {
   try {
-    const s = typeof u === "string" ? u : JSON.stringify(u, null, 2);
+    const s = Schema.is(Schema.String)(u) ? u : (JSON.stringify(u, null, 2) ?? String(u));
+
     return s.length > 20_000 ? `${s.slice(0, 20_000)}…` : s;
   } catch {
     return String(u);
@@ -365,6 +453,7 @@ const jsonText = (u: unknown): string => {
 
 function Plan({ item }: { item: ItemOf<"plan"> }) {
   const { done, total } = planProgress(item.content.entries);
+
   return (
     <div className="rounded-md border px-2 py-1.5">
       <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -373,12 +462,16 @@ function Plan({ item }: { item: ItemOf<"plan"> }) {
       <ul className="flex flex-col gap-0.5">
         {item.content.entries.map((e, i) => (
           <li key={i} className="flex items-start gap-2 text-sm">
-            {e.status === "completed" ? (
-              <CheckCircle2Icon aria-label="Done" className="mt-0.5 size-3.5 shrink-0 text-success" />
-            ) : e.status === "in_progress" ? (
-              <Spinner aria-label="In progress" className="mt-0.5 text-primary" />
-            ) : (
-              <CircleIcon aria-label="To do" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+            {Match.value(e).pipe(
+              Match.when({ status: "completed" }, () => (
+                <CheckCircle2Icon aria-label="Done" className="mt-0.5 size-3.5 shrink-0 text-success" />
+              )),
+              Match.when({ status: "in_progress" }, () => (
+                <Spinner aria-label="In progress" className="mt-0.5 text-primary" />
+              )),
+              Match.orElse(() => (
+                <CircleIcon aria-label="To do" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+              )),
             )}
             <span className={cn(e.status === "completed" && "text-muted-foreground line-through")}>
               {e.content}
@@ -398,9 +491,11 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
   const { options, requestId, chosenOptionId } = item.content;
   const allow = firstPermissionOption(options, "allow");
   const reject = firstPermissionOption(options, "reject");
+
   const choose = (optionId: string) => {
     if (!respond.isPending) respond.mutate({ workspaceId: ctx.workspaceId, requestId, optionId });
   };
+
   useShortcuts(
     {
       permissionAllow: (e) => {
@@ -418,6 +513,7 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
     if (pending && !isEditableTarget(document.activeElement)) ref.current?.focus({ preventScroll: true });
   }, [pending]);
   const chosen = options.find((o) => o.optionId === chosenOptionId);
+
   return (
     <div
       ref={ref}
@@ -462,8 +558,11 @@ function Permission({ ctx, item }: { ctx: ItemContext; item: ItemOf<"permission"
   );
 }
 
-function Notice({ item }: { item: ItemOf<"notice"> }) {
+function Notice({ item, ctx }: { item: ItemOf<"notice">; ctx: ItemContext }) {
+  const revert = useCallMutation("revertToCheckpoint");
   const { level, text } = item.content;
+  const request = useCallMutation("requestAgent", { invalidates: ["listRuns", "listLifecycleEvents"] });
+
   return (
     <p
       role={level === "error" ? "alert" : undefined}
@@ -475,6 +574,34 @@ function Notice({ item }: { item: ItemOf<"notice"> }) {
       )}
     >
       {text}
+      {item.content.agentId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!ctx.writable || request.isPending}
+          onClick={() =>
+            request.mutate({
+              workspaceId: ctx.workspaceId,
+              sessionId: ctx.sessionId,
+              agentId: item.content.agentId!,
+            })
+          }
+        >
+          Run anyway
+        </Button>
+      )}
+      {item.content.checkpointId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={revert.isPending}
+          onClick={() =>
+            revert.mutate({ workspaceId: ctx.workspaceId, checkpointId: item.content.checkpointId! })
+          }
+        >
+          Revert
+        </Button>
+      )}
     </p>
   );
 }
@@ -484,6 +611,7 @@ function ErrorCard({ ctx, item, turn }: { ctx: ItemContext; item: ItemOf<"error"
   const [showDetail, setShowDetail] = useState(false);
   const { code, detail } = item.content;
   const prompt = turn?.prompt;
+
   return (
     <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-2">
       <div className="flex items-start gap-2">
@@ -533,30 +661,109 @@ function ErrorCard({ ctx, item, turn }: { ctx: ItemContext; item: ItemOf<"error"
   );
 }
 
-/** Under each turn: its duration, and how it ended when that is not plain success. */
-export function TurnFooter({ turn }: { turn: Turn }) {
-  const ms = turnDuration(turn);
+function AttachmentThumb({
+  workspaceId,
+  attachment,
+}: {
+  workspaceId: string;
+  attachment: { id: string; name: string; mime: string };
+}) {
+  const [failed, setFailed] = useState(false);
+  const src = failed ? undefined : thumbnailSrc(workspaceId, attachment);
+
+  return src ? (
+    <img
+      src={src}
+      alt={attachment.name}
+      title={attachment.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="size-16 rounded-sm border object-cover"
+    />
+  ) : (
+    <span className="inline-flex max-w-60 items-center gap-1 rounded-sm border bg-background px-1.5 py-px text-xs">
+      <PaperclipIcon className="size-3 shrink-0 text-muted-foreground" />
+      <span className="truncate">{attachment.name}</span>
+    </span>
+  );
+}
+
+/**
+ * Under each turn: its duration, unless its work row shows it, its tokens when the agent sent usage,
+ * and how it ended when that is not plain success.
+ */
+export function TurnFooter({ turn, worked = false }: { turn: Turn; worked?: boolean }) {
+  const ms = worked ? null : turnDuration(turn);
+  const tokens = turnTokens(turn);
   const outcome = turnOutcome(turn);
-  if (ms === null && outcome === null) return null;
+
+  if (ms === null && tokens === null && outcome === null) return null;
+
   return (
     <p className="text-xs text-muted-foreground">
-      {[ms !== null ? formatDuration(ms) : null, outcome].filter(Boolean).join(" · ")}
+      {[ms !== null ? formatDuration(ms) : null, tokens, outcome].filter(Boolean).join(" · ")}
     </p>
+  );
+}
+
+/** Seconds since `since`, ticking while mounted. */
+function useElapsed(since: number | null, live: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+
+    return () => clearInterval(t);
+  }, [live]);
+
+  return Math.max(1000, Math.floor((now - (since ?? now)) / 1000) * 1000);
+}
+
+/** One row per turn for its reads, commands and thoughts (04, Work row). */
+export function WorkRow({ ctx, turn, items }: { ctx: ItemContext; turn: Turn; items: ReadonlyArray<Item> }) {
+  const id = `work:${turn.id}`;
+  const running = turn.status === "running";
+  const open = useExpanded(ctx.sessionId, id, running);
+  const elapsed = useElapsed(turn.startedAt, running);
+
+  const text = running
+    ? [currentStep(items) ?? "Working", formatDuration(elapsed)].join(" · ")
+    : workSummary(items, turnDuration(turn));
+
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => toggleExpanded(ctx.sessionId, id, running)}
+        className="flex max-w-full items-center gap-1.5 rounded-sm py-0.5 text-left text-xs text-muted-foreground hover:text-foreground"
+      >
+        {running ? (
+          <Spinner aria-label="Running" className="text-primary" />
+        ) : (
+          <ChevronRightIcon className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")} />
+        )}
+        <span className="min-w-0 truncate">{text}</span>
+      </button>
+      {open && (
+        <div className="mt-1 flex flex-col gap-1.5 border-l-2 pl-3">
+          {items.map((item) => (
+            <ItemView key={item.id} ctx={ctx} item={item} turn={turn} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
 /** The running turn: a spinner with the time so far. */
 export function WorkingRow({ turn }: { turn: Turn }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const since = turn.startedAt ?? now;
+  const elapsed = useElapsed(turn.startedAt, true);
+
   return (
     <p className="flex items-center gap-2 text-xs text-muted-foreground">
       <Spinner aria-hidden className="text-primary" />
-      Working {formatDuration(Math.max(1000, Math.floor((now - since) / 1000) * 1000))}
+      Working {formatDuration(elapsed)}
     </p>
   );
 }

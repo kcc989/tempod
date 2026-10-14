@@ -1,0 +1,88 @@
+import { createUiEnvironment } from "../environment";
+import type { LifecycleLogEvent } from "@tempo/protocol";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { emptyWorkspaceState } from "../../../src/ui/stores/workspace-state";
+import { detail } from "../fixtures";
+import { LifecycleEvents } from "../../../src/ui/components/dialogs/LifecycleEvents";
+
+const environment = createUiEnvironment();
+
+const call = environment.request;
+
+const show = (child: React.ReactNode) => render(child, { wrapper: environment.Provider });
+
+afterEach(() => vi.resetAllMocks());
+
+describe("event diagnostics", () => {
+  it("filters events by change and loads a selected trace and agent hooks", async () => {
+    const event = {
+      seq: 1,
+      event: {
+        id: "00000000000000000000000001",
+        workspaceId: "00000000000000000000000002",
+        occurredAt: 1,
+        type: "run.decided",
+        source: "tempo",
+        changeId: "00000000000000000000000003",
+        dedupeKey: "test",
+        payload: {
+          attachmentId: "00000000000000000000000004",
+          agentId: "00000000000000000000000005",
+          handle: "reviewer",
+          hookIndex: 0,
+          hookEvent: "branch.pushed",
+          outcome: "skip",
+          p: 0.2,
+          threshold: 0.6,
+        },
+      },
+    } satisfies LifecycleLogEvent;
+
+    environment.setState({ ...emptyWorkspaceState, workspace: detail() });
+    call.mockImplementation(async (name) => {
+      if (name === "listProjectAgents")
+        return [
+          {
+            id: "00000000000000000000000004",
+            projectId: "p1",
+            agentId: "00000000000000000000000005",
+            enabled: true,
+            autoSend: false,
+            maxRuns: 3,
+            timeout: "20m",
+            createdAt: 1,
+            updatedAt: 1,
+            agent: null,
+            hooks: [{ event: "branch.pushed", when: "Does this affect auth?", threshold: 0.6 }],
+          },
+        ];
+
+      if (name === "listLifecycleEvents") return { events: [event], nextBeforeSeq: null };
+
+      if (name === "getTrace") return { chain: [event], children: [], runs: [] };
+
+      return [];
+    });
+    show(<LifecycleEvents workspaceId="00000000000000000000000002" />);
+    fireEvent.click(await screen.findByText(/Does this affect auth/));
+    await screen.findByText("Agent hooks");
+    expect(screen.getByText(/reviewer · skip · 20%/)).toBeTruthy();
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("getTrace", {
+        workspaceId: "00000000000000000000000002",
+        eventId: "00000000000000000000000001",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Filter events by change"), {
+      target: { value: "00000000000000000000000003" },
+    });
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("listLifecycleEvents", {
+        workspaceId: "00000000000000000000000002",
+        changeId: "00000000000000000000000003",
+        limit: 500,
+      }),
+    );
+  });
+});

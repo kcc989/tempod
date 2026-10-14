@@ -1,11 +1,14 @@
+import { Schema } from "effect";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { sessionQueryOptions } from "~/ui/auth";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { SettingsPage } from "~/ui/components/settings/SettingsPage";
 import { DialogHost } from "~/ui/components/shell/DialogHost";
 import { GlobalChrome } from "~/ui/components/shell/GlobalChrome";
 import { PhoneNav } from "~/ui/components/shell/PhoneNav";
 import { ReconnectingBar } from "~/ui/components/shell/ReconnectingBar";
+import { AppHeader } from "~/ui/components/shell/AppHeader";
 import { Sidebar } from "~/ui/components/sidebar/Sidebar";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/ui/components/ui/resizable";
 import { useAction } from "~/ui/hooks/useActions";
@@ -13,7 +16,7 @@ import { useGlobalShortcuts } from "~/ui/hooks/useGlobalShortcuts";
 import { useHubConnection } from "~/ui/hooks/useHub";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useReconnectRules } from "~/ui/hooks/useReconnectRules";
-import { useLayout } from "~/ui/hooks/useWorkspaceUi";
+import { useLayout, useSettings } from "~/ui/hooks/useWorkspaceUi";
 import { readJson, writeJson } from "~/ui/lib/storage";
 import { errorCode, onUnauthenticated, toastError } from "~/ui/lib/toast";
 import {
@@ -25,8 +28,9 @@ import {
   toggleSidebar,
 } from "~/ui/state/workspace-ui";
 
-/** 04, Sidebar: 280 px by default, resizable from 220 to 400 px. */
-export const SIDEBAR_WIDTH = { default: 280, min: 220, max: 400 } as const;
+/** 04, Sidebar: 240 px by default, resizable from 220 to 320 px. */
+export const SIDEBAR_WIDTH = { default: 240, min: 220, max: 320 } as const;
+
 const SIDEBAR_KEY = "layout:sidebar-width";
 
 const clampWidth = (n: number) => Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, Math.round(n)));
@@ -36,7 +40,7 @@ const readSidebarWidth = (): number =>
     readJson<number>(
       SIDEBAR_KEY,
       SIDEBAR_WIDTH.default,
-      (u): u is number => typeof u === "number" && Number.isFinite(u),
+      (u): u is number => Schema.is(Schema.Number)(u) && Number.isFinite(u),
     ),
   );
 
@@ -46,6 +50,7 @@ const readSidebarWidth = (): number =>
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const isPhone = useIsPhone();
+  const settings = useSettings();
   const navigate = useNavigate();
   useHubConnection();
   useReconnectRules();
@@ -67,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     () =>
       queryClient.getQueryCache().subscribe((event) => {
         if (event.type !== "updated" || event.action.type !== "error") return;
+
         if (errorCode(event.action.error) === "UNAUTHENTICATED") toastError(event.action.error);
       }),
     [queryClient],
@@ -90,14 +96,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
       <ReconnectingBar />
-      {isPhone ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
-          <PhoneNav />
-        </div>
-      ) : (
-        <DesktopFrame>{children}</DesktopFrame>
-      )}
+      <div className={settings ? "hidden" : "flex min-h-0 flex-1 flex-col"} inert={settings !== null}>
+        {isPhone ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+            <PhoneNav />
+          </div>
+        ) : (
+          <DesktopFrame>{children}</DesktopFrame>
+        )}
+      </div>
+      {settings && <SettingsPage />}
       <GlobalChrome />
       <DialogHost />
     </div>
@@ -106,12 +115,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function DesktopFrame({ children }: { children: ReactNode }) {
   const { sidebarOpen } = useLayout();
+
   // Read again each time the sidebar opens, so it comes back at the width it was closed at.
   const initialWidth = useMemo(
     () => (sidebarOpen ? readSidebarWidth() : SIDEBAR_WIDTH.default),
     [sidebarOpen],
   );
+
   const width = useRef(initialWidth);
+  const [headerSidebarWidth, setHeaderSidebarWidth] = useState(initialWidth);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -123,37 +135,42 @@ function DesktopFrame({ children }: { children: ReactNode }) {
   const onSidebarResize = (size: { inPixels: number }) => {
     if (size.inPixels <= 0) return;
     const next = clampWidth(size.inPixels);
+
     if (next === width.current) return;
     width.current = next;
+    setHeaderSidebarWidth(next);
+
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => writeJson(SIDEBAR_KEY, next), 250);
   };
 
   return (
     <div className="min-h-0 flex-1">
-      <ResizablePanelGroup id="shell" orientation="horizontal">
-        {sidebarOpen && (
-          <>
-            <ResizablePanel
-              id="sidebar"
-              defaultSize={initialWidth}
-              minSize={SIDEBAR_WIDTH.min}
-              maxSize={SIDEBAR_WIDTH.max}
-              groupResizeBehavior="preserve-pixel-size"
-              onResize={onSidebarResize}
-              className="bg-sidebar text-sidebar-foreground"
-            >
-              <aside aria-label="Workspaces" className="flex h-full min-h-0 flex-col">
-                <Sidebar variant="panel" />
-              </aside>
-            </ResizablePanel>
-            <ResizableHandle aria-label="Resize sidebar" />
-          </>
-        )}
-        <ResizablePanel id="main" minSize={360}>
-          <main className="flex h-full min-h-0 min-w-0 flex-col">{children}</main>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+      <AppHeader sidebarWidth={sidebarOpen ? headerSidebarWidth : 40}>
+        <ResizablePanelGroup id="shell" orientation="horizontal">
+          {sidebarOpen && (
+            <>
+              <ResizablePanel
+                id="sidebar"
+                defaultSize={initialWidth}
+                minSize={SIDEBAR_WIDTH.min}
+                maxSize={SIDEBAR_WIDTH.max}
+                groupResizeBehavior="preserve-pixel-size"
+                onResize={onSidebarResize}
+                className="bg-sidebar text-sidebar-foreground"
+              >
+                <aside aria-label="Workspaces" className="flex h-full min-h-0 flex-col">
+                  <Sidebar variant="panel" />
+                </aside>
+              </ResizablePanel>
+              <ResizableHandle aria-label="Resize sidebar" />
+            </>
+          )}
+          <ResizablePanel id="main" minSize={360}>
+            <main className="flex h-full min-h-0 min-w-0 flex-col">{children}</main>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </AppHeader>
     </div>
   );
 }

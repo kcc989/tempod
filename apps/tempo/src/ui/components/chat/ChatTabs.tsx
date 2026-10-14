@@ -1,6 +1,6 @@
-import type { AgentId } from "@tempo/protocol";
+import { useApiCall } from "~/ui/hooks/useCall";
 import { ChevronDownIcon, HistoryIcon, PlusIcon, ShieldQuestionIcon, XIcon } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { CENTER_TAB_KINDS, CenterTabPart } from "~/ui/components/chat/tab-kinds";
 import { EmptyState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -16,17 +16,15 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "~/ui/components/ui/dropdown-menu";
 import { Spinner } from "~/ui/components/ui/spinner";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useCallMutation } from "~/ui/hooks/useCall";
-import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { useWorkspaceSelector, useWorkspaceStore } from "~/ui/hooks/useWorkspace";
 import { useWorkspaceUi } from "~/ui/hooks/useWorkspaceUi";
-import { call } from "~/ui/lib/api";
+
 import { agentLabel } from "~/ui/lib/agents";
 import { formatBinding } from "~/ui/lib/shortcuts";
 import { errorCode, toastError } from "~/ui/lib/toast";
@@ -36,13 +34,11 @@ import {
   CONFIRM_TEXT,
   closeTab,
   confirm,
-  getWorkspaceUi,
   openTab,
   syncChatTabs,
   type OpenTab,
 } from "~/ui/state/workspace-ui";
 import {
-  agentMenu,
   chatTabIds,
   closedSessions,
   nextTabIndex,
@@ -51,31 +47,48 @@ import {
   sessionTitle,
   waitUntil,
 } from "./chat-tabs-model";
+import { NewChatComposer } from "./NewChatComposer";
 import { toggleExpandAll } from "./expand-store";
 
 export interface ChatTabsProps {
   readonly workspaceId: string;
   /** `phone`: one chat at a time with a menu at the top to switch (04, Phone width). */
   readonly variant?: "desktop" | "phone";
+  readonly aside?: ReactNode;
 }
 
 /** How long to wait for a cancelled turn to end before closing its chat. */
 const CANCEL_WAIT_MS = 30_000;
 
 /** The center tab host: chat, file, diff and browser tabs (04, Center: chat tabs and composer). */
-export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
+export function ChatTabs({ workspaceId, variant = "desktop", aside }: ChatTabsProps) {
+  const call = useApiCall();
+
   const store = useWorkspaceStore(workspaceId);
   const ready = useWorkspaceSelector(workspaceId, (s) => s.ready);
   const sessions = useWorkspaceSelector(workspaceId, (s) => s.sessions);
   const state = useWorkspaceSelector(workspaceId, (s) => s.workspace?.state);
-  const ui = useWorkspaceUi(workspaceId);
+  const workspaceUi = useWorkspaceUi(workspaceId);
+
+  const ui =
+    variant === "phone"
+      ? workspaceUi
+      : {
+          ...workspaceUi,
+          tabs: workspaceUi.tabs.filter((t) => t.tab.kind === "chat"),
+          activeKey: workspaceUi.activeKey?.startsWith("chat:")
+            ? workspaceUi.activeKey
+            : workspaceUi.lastChatSessionId
+              ? `chat:${workspaceUi.lastChatSessionId}`
+              : (workspaceUi.tabs.find((t) => t.tab.kind === "chat")?.key ?? null),
+        };
+
   const [viewingClosed, setViewingClosed] = useState<ReadonlyArray<string>>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const activateWhenShown = useRef<string | null>(null);
   const baseId = useId();
   const archived = state === "archived" || state === "archiving";
-
   const openIds = useMemo(() => openSessionIds(sessions), [sessions]);
   const tabIds = chatTabIds(openIds, viewingClosed, sessions).join("\n");
   useEffect(() => {
@@ -83,53 +96,56 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     const ids = tabIds === "" ? [] : tabIds.split("\n");
     syncChatTabs(workspaceId, ids);
     const pending = activateWhenShown.current;
+
     if (pending && ids.includes(pending)) {
       activateWhenShown.current = null;
       activateTab(workspaceId, `chat:${pending}`);
     }
   }, [ready, workspaceId, tabIds]);
 
-  const createSession = useCallMutation("createSession", {
-    onSuccess: (session) => {
-      activateWhenShown.current = session.id;
-      openTab(workspaceId, { kind: "chat", sessionId: session.id });
-    },
-  });
   const renameSession = useCallMutation("renameSession");
-
-  const newChat = (agent: AgentId) => createSession.mutate({ workspaceId, agent });
 
   const closeChat = async (sessionId: string) => {
     const key = `chat:${sessionId}`;
     const session = store.getSnapshot().sessions[sessionId];
+
     if (!session || session.status === "closed") {
       setViewingClosed((v) => v.filter((id) => id !== sessionId));
       closeTab(workspaceId, key);
+
       return;
     }
+
     const running = runningTurnOf(store.getSnapshot().turns, sessionId);
+
     if (running) {
       if (!(await confirm(CONFIRM_TEXT.closeRunningChat()))) return;
+
       try {
         await call("cancelTurn", { workspaceId, turnId: running.id });
       } catch (e) {
         if (errorCode(e) !== "TURN_NOT_ACTIVE") {
           toastError(e);
+
           return;
         }
       }
+
       await waitUntil(
         store.subscribe,
         () => store.getSnapshot().turns[running.id]?.status !== "running",
         CANCEL_WAIT_MS,
       );
     }
+
     try {
       await call("closeSession", { workspaceId, sessionId });
     } catch (e) {
       toastError(e);
+
       return;
     }
+
     closeTab(workspaceId, key);
   };
 
@@ -146,6 +162,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const rename = (sessionId: string, title: string) => {
     setRenaming(null);
     const cur = store.getSnapshot().sessions[sessionId]?.title ?? "";
+
     if (title.trim() !== cur.trim()) renameSession.mutate({ workspaceId, sessionId, title: title.trim() });
   };
 
@@ -154,8 +171,8 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   useAction(
     "closeTab",
     () => {
-      const s = getWorkspaceUi(workspaceId);
-      const t = s.tabs.find((x) => x.key === s.activeKey);
+      const t = ui.tabs.find((x) => x.key === ui.activeKey);
+
       if (t) close(t);
     },
     { enabled: active !== undefined },
@@ -167,24 +184,47 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     },
     { enabled: active?.tab.kind === "chat" },
   );
-
   const closed = useMemo(() => closedSessions(sessions), [sessions]);
 
   const newChatMenu = (
-    <NewChatMenu open={menuOpen} onOpenChange={setMenuOpen} disabled={!ready || archived} onPick={newChat} />
+    <>
+      <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="New chat"
+          disabled={!ready || archived}
+          onClick={() => setMenuOpen(true)}
+        >
+          <PlusIcon />
+        </Button>
+      </SimpleTooltip>
+      {menuOpen && (
+        <NewChatComposer
+          workspaceId={workspaceId}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          onCreated={(session) => {
+            activateWhenShown.current = session.id;
+            openTab(workspaceId, { kind: "chat", sessionId: session.id });
+          }}
+        />
+      )}
+    </>
   );
+
   const closedMenu =
     closed.length > 0 ? (
       <DropdownMenu>
-        <SimpleTooltip label="Closed chats">
+        <SimpleTooltip label="Closed chats in this workspace">
           <DropdownMenuTrigger asChild>
-            <Button size="icon-sm" variant="ghost" aria-label="Closed chats">
+            <Button size="icon-sm" variant="ghost" aria-label="Closed chats in this workspace">
               <HistoryIcon />
             </Button>
           </DropdownMenuTrigger>
         </SimpleTooltip>
         <DropdownMenuContent align="end" className="max-h-80 min-w-52">
-          <DropdownMenuLabel>Closed chats</DropdownMenuLabel>
+          <DropdownMenuLabel>Closed chats in this workspace ({closed.length})</DropdownMenuLabel>
           {closed.map((s) => (
             <DropdownMenuItem key={s.id} onSelect={() => openClosed(s.id)}>
               <span className="min-w-0 flex-1 truncate">{sessionTitle(s)}</span>
@@ -277,12 +317,16 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
     if (e.key === "F2" && t.tab.kind === "chat" && sessions[t.tab.sessionId]?.status !== "closed") {
       e.preventDefault();
       setRenaming(t.tab.sessionId);
+
       return;
     }
+
     const next = nextTabIndex(e.key, index, ui.tabs.length);
+
     if (next === null) return;
     e.preventDefault();
     const target = ui.tabs[next];
+
     if (!target) return;
     activateTab(workspaceId, target.key);
     document.getElementById(`${baseId}-tab-${next}`)?.focus();
@@ -294,13 +338,14 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         <div
           role="tablist"
           aria-label="Center tabs"
-          className="flex h-full min-w-0 items-center gap-0.5 overflow-x-auto px-1"
+          className="flex h-full min-w-0 items-center gap-0.5 overflow-x-auto pr-1 pl-3"
         >
           {ui.tabs.map((t, i) => {
             const selected = t.key === ui.activeKey;
             const sessionId = t.tab.kind === "chat" ? t.tab.sessionId : null;
             const isClosed = sessionId !== null && sessions[sessionId]?.status === "closed";
             const canRename = sessionId !== null && !isClosed && !archived;
+
             return (
               <ContextMenu key={t.key}>
                 <ContextMenuTrigger asChild>
@@ -308,7 +353,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
                     className={cn(
                       "group/tab flex h-7 shrink-0 items-center rounded-md",
                       selected
-                        ? "bg-accent text-accent-foreground"
+                        ? "border-b-2 border-primary bg-accent font-medium text-accent-foreground"
                         : "text-muted-foreground hover:bg-accent/50",
                     )}
                   >
@@ -378,80 +423,55 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         {newChatMenu}
         <div className="ml-auto flex items-center">{closedMenu}</div>
       </div>
-      <div
-        role="tabpanel"
-        id={`${baseId}-panel`}
-        aria-labelledby={active ? `${baseId}-tab-${ui.tabs.indexOf(active)}` : undefined}
-        className="min-h-0 flex-1"
-      >
-        {body}
+      <div className="flex min-h-0 flex-1">
+        <div
+          role="tabpanel"
+          id={`${baseId}-panel`}
+          aria-labelledby={active ? `${baseId}-tab-${ui.tabs.indexOf(active)}` : undefined}
+          className="min-h-0 min-w-0 flex-1"
+        >
+          {body}
+        </div>
+        {aside}
       </div>
     </div>
-  );
-}
-
-function NewChatMenu({
-  open,
-  onOpenChange,
-  disabled,
-  onPick,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  disabled: boolean;
-  onPick: (agent: AgentId) => void;
-}) {
-  const creds = useCredentialStatus().data;
-  const entries = agentMenu(creds);
-  return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <SimpleTooltip label={`New chat (${formatBinding("newChat")})`}>
-        <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="ghost" aria-label="New chat" disabled={disabled}>
-            <PlusIcon />
-          </Button>
-        </DropdownMenuTrigger>
-      </SimpleTooltip>
-      <DropdownMenuContent align="start" className="min-w-56">
-        <DropdownMenuLabel>New chat</DropdownMenuLabel>
-        {entries.map((e) => (
-          <DropdownMenuItem key={e.agent} disabled={!e.enabled} onSelect={() => onPick(e.agent)}>
-            <span className="flex-1">{e.label}</span>
-            {!e.enabled && (
-              <DropdownMenuShortcut className="tracking-normal">Add login in Settings</DropdownMenuShortcut>
-            )}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
 /** The kind icon, or for a chat: a spinner while its turn runs, a question mark while it waits for you. */
 function TabIcon({ workspaceId, tab }: { workspaceId: string; tab: OpenTab }) {
   const sessionId = tab.tab.kind === "chat" ? tab.tab.sessionId : null;
+
   const status = useWorkspaceSelector(workspaceId, (s) => {
     if (sessionId === null) return null;
+
     if (Object.values(s.permissions).some((p) => p.sessionId === sessionId)) return "needs_input";
+
     if (Object.values(s.turns).some((t) => t.sessionId === sessionId && t.status === "running"))
       return "running";
+
     return s.sessions[sessionId]?.status === "starting" ? "running" : null;
   });
+
   if (status === "needs_input")
     return <ShieldQuestionIcon aria-label="Waiting for you" className="size-3.5 shrink-0 text-warning" />;
+
   if (status === "running") return <Spinner aria-label="Working" className="text-primary" />;
   const Icon = CENTER_TAB_KINDS[tab.tab.kind].icon;
+
   return <Icon aria-hidden className="size-3.5 shrink-0" />;
 }
 
 function RenameInput({ initial, onDone }: { initial: string; onDone: (title: string | null) => void }) {
   const [value, setValue] = useState(initial);
   const done = useRef(false);
+
   const finish = (title: string | null) => {
     if (done.current) return;
     done.current = true;
     onDone(title);
   };
+
   return (
     <input
       autoFocus

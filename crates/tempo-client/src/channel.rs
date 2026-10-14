@@ -84,6 +84,7 @@ pub enum Status {
 pub enum ChannelEvent<M> {
     Status(Status),
     Message(M),
+    DecodeError(String),
 }
 
 pub type HubChannelEvent = ChannelEvent<HubServerMessage>;
@@ -206,6 +207,7 @@ impl Client {
         self.open(Spec {
             url: Box::new(move || url.to_string()),
             decode_text: decode_hub,
+            decode_issue: |_| None,
             decode_binary: |_| None,
             ping: true,
             input: None,
@@ -233,6 +235,7 @@ impl Client {
                 url.to_string()
             }),
             decode_text: decode_workspace,
+            decode_issue: workspace_decode_issue,
             decode_binary: |_| None,
             ping: true,
             input: None,
@@ -280,6 +283,7 @@ impl Client {
                 url.to_string()
             }),
             decode_text: decode_terminal_text,
+            decode_issue: |_| None,
             decode_binary: |bytes| Some(TerminalFrame::Output(bytes)),
             ping: false,
             input: Some((input_rx, size.clone())),
@@ -326,6 +330,48 @@ fn decode_workspace(text: &str) -> Option<(WorkspaceServerMessage, bool)> {
     Some((msg, pong))
 }
 
+fn workspace_decode_issue(text: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    if value["type"] != "hello" {
+        return None;
+    }
+    fn issue<T: serde::de::DeserializeOwned>(
+        component: &str,
+        value: serde_json::Value,
+    ) -> Option<String> {
+        let error = serde_json::from_value::<T>(value).err()?;
+        let text = error.to_string();
+        let field = text
+            .strip_prefix("missing field `")
+            .and_then(|s| s.strip_suffix('`'))
+            .filter(|s| s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
+        Some(match field {
+            Some(field) => format!("{component}: missing field {field}"),
+            None => format!("{component}: invalid data ({:?})", error.classify()),
+        })
+    }
+    if let Some(error) =
+        issue::<tempo_protocol::WorkspaceDetail>("workspace", value["workspace"].clone())
+    {
+        return Some(error);
+    }
+    if let Some(sessions) = value["sessions"].as_array() {
+        for session in sessions {
+            if let Some(error) = issue::<tempo_protocol::Session>("session", session.clone()) {
+                return Some(error);
+            }
+        }
+    }
+    if let Some(turns) = value["turns"].as_array() {
+        for turn in turns {
+            if let Some(error) = issue::<tempo_protocol::Turn>("turn", turn.clone()) {
+                return Some(error);
+            }
+        }
+    }
+    issue::<tempo_protocol::WsHello>("hello", value)
+}
+
 fn decode_terminal_text(text: &str) -> Option<(TerminalFrame, bool)> {
     serde_json::from_str::<TerminalReady>(text)
         .ok()
@@ -336,6 +382,7 @@ struct Spec<M> {
     url: Box<dyn Fn() -> String + Send>,
     /// The message and whether it is a `pong`.
     decode_text: fn(&str) -> Option<(M, bool)>,
+    decode_issue: fn(&str) -> Option<String>,
     decode_binary: fn(Vec<u8>) -> Option<M>,
     ping: bool,
     input: Option<(async_channel::Receiver<TerminalInput>, Arc<AtomicU32>)>,
@@ -490,7 +537,7 @@ impl<M: Send + 'static> Engine<M> {
                         TerminalInput::Keys(bytes) => {
                             if !terminal_ready { continue; }
                             Message::Binary(bytes.into())
-                        }
+                        },
                         TerminalInput::Resize { cols, rows } => {
                             let (cols, rows) = (cols.clamp(10, 500), rows.clamp(5, 200));
                             if let Some((_, size)) = &self.spec.input {
@@ -531,8 +578,14 @@ impl<M: Send + 'static> Engine<M> {
                         Some(Ok(Message::Text(text))) => {
                             let decoded = (self.spec.decode_text)(text.as_str());
                             if input_rx.is_some() && decoded.is_some() { terminal_ready = true; }
+                            if decoded.is_none()
+                                && let Some(issue) = (self.spec.decode_issue)(text.as_str())
+                                && !self.deliver(ChannelEvent::DecodeError(issue)).await
+                            {
+                                return Outcome::Exit;
+                            }
                             decoded
-                        }
+                        },
                         Some(Ok(Message::Binary(bytes))) => {
                             (self.spec.decode_binary)(bytes.to_vec()).map(|m| (m, false))
                         }
@@ -662,6 +715,34 @@ fn upgrade_request(client: &Client, http_url: &str) -> Option<(Request, String, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hello_decode_diagnostics_never_include_payload_values() {
+        let hello =
+            include_str!("../../../packages/protocol/fixtures/channel/workspace-first-load.jsonl")
+                .lines()
+                .next()
+                .unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(hello).unwrap();
+        value["sessions"][0]["title"] = serde_json::json!("private prompt and secret token");
+        value["sessions"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("modes");
+        let text = value.to_string();
+        assert!(decode_workspace(&text).is_none());
+        assert_eq!(
+            workspace_decode_issue(&text).as_deref(),
+            Some("session: missing field modes")
+        );
+        value["sessions"][0]["modes"] = serde_json::json!("private prompt and secret token");
+        assert_eq!(
+            workspace_decode_issue(&value.to_string()).as_deref(),
+            Some("session: invalid data (Data)")
+        );
+        assert!(workspace_decode_issue("not JSON").is_none());
+        assert!(workspace_decode_issue(r#"{"type":"unknown","secret":"private"}"#).is_none());
+    }
 
     #[test]
     fn backoff_doubles_to_ten_seconds_with_twenty_percent_jitter() {

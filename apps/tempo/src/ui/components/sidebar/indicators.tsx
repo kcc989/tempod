@@ -18,7 +18,9 @@ export function StatusIcon({
 }) {
   const indicator = statusIndicator(workspace, op);
   const box = cn("flex size-3.5 shrink-0 items-center justify-center", className);
+
   if (!indicator) return <span aria-hidden className={box} />;
+
   const icon = (() => {
     switch (indicator.kind) {
       case "needs_input":
@@ -35,6 +37,7 @@ export function StatusIcon({
         return <MoonIcon className="size-3.5 text-muted-foreground" />;
     }
   })();
+
   return (
     <SimpleTooltip label={indicator.tooltip}>
       <span role="img" aria-label={indicator.tooltip} className={box}>
@@ -54,6 +57,7 @@ export function PrBadge({
 }) {
   if (w.prNumber === null) return null;
   const label = `PR #${w.prNumber}${w.prState ? `, ${PR_STATE_LABELS[w.prState].toLowerCase()}` : ""}`;
+
   return (
     <Badge variant={prBadgeVariant(w.prState)} aria-label={label} className={cn("tabular-nums", className)}>
       #{w.prNumber}
@@ -65,6 +69,7 @@ export function PrBadge({
 export function ChecksDot({ workspace: w }: { workspace: Pick<WorkspaceSummary, "checksState"> }) {
   if (w.checksState === null) return null;
   const label = CHECKS_LABELS[w.checksState];
+
   return (
     <SimpleTooltip label={label}>
       <span role="img" aria-label={label} className="flex size-3 shrink-0 items-center justify-center">
@@ -74,8 +79,34 @@ export function ChecksDot({ workspace: w }: { workspace: Pick<WorkspaceSummary, 
   );
 }
 
-/** 04, Container pill. */
-export function ContainerPill({ pill, className }: { pill: Pill; className?: string }) {
+/** 04, Container pill. With `onWake` (sleeping) it is the workspace view's one Wake button. */
+export function ContainerPill({
+  pill,
+  className,
+  onWake,
+}: {
+  pill: Pill;
+  className?: string;
+  onWake?: () => void;
+}) {
+  if (onWake) {
+    return (
+      <SimpleTooltip label="Wake. Sending a message also wakes it.">
+        <button
+          type="button"
+          onClick={onWake}
+          className={cn(
+            "inline-flex h-6 max-w-56 min-w-0 shrink items-center gap-1.5 rounded-full border px-2 text-xs whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground",
+            className,
+          )}
+        >
+          <MoonIcon aria-hidden className="size-3 shrink-0" />
+          <span className="truncate">{pill.text}</span>
+        </button>
+      </SimpleTooltip>
+    );
+  }
+
   return (
     <span
       role="status"

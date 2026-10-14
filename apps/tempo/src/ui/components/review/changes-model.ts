@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import type { ChangedFile, ChangesSummary, WorkspaceState } from "@tempo/protocol";
 
 /** 04, Changes tab: the status letter (A, M, D, R) and helpers for the file list. */
@@ -5,18 +6,19 @@ import type { ChangedFile, ChangesSummary, WorkspaceState } from "@tempo/protoco
 /** The `Group by folder` toggle, kept per browser. */
 export const GROUP_BY_FOLDER_KEY = "review:group-by-folder";
 
-export const isBoolean = (u: unknown): u is boolean => typeof u === "boolean";
+export const isBoolean = (u: unknown): u is boolean => Schema.is(Schema.Boolean)(u);
 
-const STATUS_LABELS: Readonly<Record<string, string>> = {
+const STATUS_LABELS = {
   A: "Added",
   M: "Modified",
   D: "Deleted",
   R: "Renamed",
-};
+} satisfies Readonly<Record<string, string>>;
 
 export const statusLetter = (status: string): string => (status.charAt(0) || "M").toUpperCase();
 
-export const statusLabel = (status: string): string => STATUS_LABELS[statusLetter(status)] ?? "Changed";
+export const statusLabel = (status: string): string =>
+  Object.entries(STATUS_LABELS).find(([key]) => key === statusLetter(status))?.[1] ?? "Changed";
 
 /** Text colour per status letter; colour marks state only. */
 export const statusClass = (status: string): string => {
@@ -34,6 +36,7 @@ export const statusClass = (status: string): string => {
 
 export const splitPath = (path: string): { readonly dir: string; readonly name: string } => {
   const i = path.lastIndexOf("/");
+
   return i < 0 ? { dir: "", name: path } : { dir: path.slice(0, i), name: path.slice(i + 1) };
 };
 
@@ -49,10 +52,12 @@ export interface Totals {
 export const totals = (files: ReadonlyArray<ChangedFile>): Totals => {
   let additions = 0;
   let deletions = 0;
+
   for (const f of files) {
     additions += f.additions;
     deletions += f.deletions;
   }
+
   return { files: files.length, additions, deletions };
 };
 
@@ -89,6 +94,7 @@ export const changeRows = (
   opts: { readonly grouped: boolean; readonly collapsed?: ReadonlySet<string> },
 ): ChangeRow[] => {
   const sorted = sortFiles(files);
+
   if (!opts.grouped) {
     return sorted.map((file) => ({
       kind: "file",
@@ -99,16 +105,22 @@ export const changeRows = (
       dir: splitPath(file.path).dir,
     }));
   }
+
   const groups = new Map<string, ChangedFile[]>();
+
   for (const f of sorted) {
     const { dir } = splitPath(f.path);
     const list = groups.get(dir);
+
     if (list) list.push(f);
     else groups.set(dir, [f]);
   }
+
   const rows: ChangeRow[] = [];
+
   for (const dir of [...groups.keys()].sort(comparePaths)) {
     const list = groups.get(dir)!;
+
     if (dir !== "") {
       const t = totals(list);
       const collapsed = opts.collapsed?.has(dir) ?? false;
@@ -121,8 +133,10 @@ export const changeRows = (
         deletions: t.deletions,
         collapsed,
       });
+
       if (collapsed) continue;
     }
+
     for (const file of list) {
       rows.push({
         kind: "file",
@@ -134,6 +148,7 @@ export const changeRows = (
       });
     }
   }
+
   return rows;
 };
 
@@ -173,15 +188,21 @@ export const changesView = (i: ChangesViewInput): ChangesView => {
   // The last known summary is branch scope (02, `changes` message).
   const fallback = i.lastKnown?.files ?? null;
   const branchFallback = i.scope === "branch" ? fallback : null;
+
   if (!isLive(i.state)) {
     if (isComingUp(i.state)) return { source: "waking", files: fallback ?? EMPTY, hasList: true };
+
     return { source: "lastKnown", files: fallback ?? EMPTY, hasList: true };
   }
+
   if (i.errorCode === "CONTAINER_NOT_READY") {
     return { source: "waking", files: i.data?.files ?? fallback ?? EMPTY, hasList: true };
   }
+
   if (i.data) return { source: i.errorCode ? "error" : "live", files: i.data.files, hasList: true };
+
   if (i.errorCode)
     return { source: "error", files: branchFallback ?? EMPTY, hasList: branchFallback !== null };
+
   return { source: "loading", files: branchFallback ?? EMPTY, hasList: branchFallback !== null };
 };

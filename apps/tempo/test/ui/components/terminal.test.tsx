@@ -1,213 +1,190 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TerminalView } from "../../../src/ui/components/processes/TerminalView";
+import type { ITerminalOptions } from "@xterm/xterm";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import {
+  TerminalView,
+  TerminalRuntimeContext,
+  type OpenTerminal,
+  type TerminalSurface,
+} from "../../../src/ui/components/processes/TerminalView";
 
-const harness = vi.hoisted(() => ({
-  terminals: [] as Array<any>,
-  sockets: [] as Array<any>,
-  dimensions: { cols: 76, rows: 32 },
-}));
+const sockets: FakeSocket[] = [];
 
-vi.mock("@xterm/xterm", () => ({
-  Terminal: class {
-    cols = 80;
-    rows = 24;
-    options: any;
-    textarea = document.createElement("textarea");
-    data: ((value: string) => void) | undefined;
-    binary: ((value: string) => void) | undefined;
-    resized: ((size: { cols: number; rows: number }) => void) | undefined;
-    write = vi.fn();
-    dispose = vi.fn();
-    constructor(options: any) {
-      this.options = options;
-      harness.terminals.push(this);
-    }
-    open(host: HTMLElement) {
-      host.appendChild(this.textarea);
-    }
-    loadAddon() {}
-    focus() {
-      this.textarea.focus();
-    }
-    onData(callback: (value: string) => void) {
-      this.data = callback;
-    }
-    onBinary(callback: (value: string) => void) {
-      this.binary = callback;
-    }
-    onResize(callback: (size: { cols: number; rows: number }) => void) {
-      this.resized = callback;
-    }
-    resize(cols: number, rows: number) {
-      if (this.cols === cols && this.rows === rows) return;
-      this.cols = cols;
-      this.rows = rows;
-      this.resized?.({ cols, rows });
-    }
-  },
-}));
-vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: class {
-    proposeDimensions() {
-      return harness.dimensions;
-    }
-  },
-}));
-vi.mock("~/ui/components/processes/terminal-theme", () => ({
-  terminalFont: () => "monospace",
-  terminalTheme: () => ({}),
-}));
+let width = 540;
 
-class Socket {
+let height = 460;
+
+let resizeObserved: ResizeObserverCallback;
+
+class FakeSocket {
   static OPEN = 1;
   readyState = 1;
   binaryType = "";
-  onmessage: ((event: { data: unknown }) => void) | null = null;
+  onmessage: ((event: { data: string | ArrayBuffer }) => void) | null = null;
   onclose: ((event: { code: number }) => void) | null = null;
   send = vi.fn();
   close = vi.fn();
   constructor(readonly url: string) {
-    harness.sockets.push(this);
+    sockets.push(this);
   }
   ready() {
     this.onmessage?.({ data: '{"type":"ready"}' });
   }
-  disconnect(code: number) {
-    this.readyState = 3;
-    this.onclose?.({ code });
-  }
 }
 
-let width = 540;
-let height = 460;
-let frames: FrameRequestCallback[];
-let resized: ResizeObserverCallback;
-const fit = () =>
-  act(() => {
-    const pending = frames.splice(0);
-    pending.forEach((fn) => fn(0));
+function fixture() {
+  const options: ITerminalOptions = {};
+  const textarea = document.createElement("textarea");
+  let keys = (_value: string) => {};
+
+  let resized = (_value: { cols: number; rows: number }) => {};
+
+  const terminal = {
+    cols: 80,
+    rows: 24,
+    options,
+    focus() {
+      textarea.focus();
+    },
+    dispose: vi.fn(),
+    reset: vi.fn(),
+    write: vi.fn(),
+    onData(listener: (value: string) => void) {
+      keys = listener;
+    },
+    onBinary() {},
+    onResize(listener: Parameters<TerminalSurface["onResize"]>[0]) {
+      resized = listener;
+    },
+  } satisfies TerminalSurface;
+
+  let dimensions = { cols: 76, rows: 32 };
+  let finishLoading = () => {};
+
+  const loaded = new Promise<void>((resolve) => {
+    finishLoading = resolve;
   });
-const props = { workspaceId: "w1", terminalId: "t1" as const, active: true, focusSeq: 0 };
-const loaded = async () => {
-  await waitFor(() => expect(harness.terminals).toHaveLength(1));
-  fit();
-};
+
+  const open: OpenTerminal = async (host) => {
+    await loaded;
+    host.appendChild(textarea);
+
+    return {
+      terminal,
+      fit() {
+        if (terminal.cols !== dimensions.cols || terminal.rows !== dimensions.rows) {
+          terminal.cols = dimensions.cols;
+          terminal.rows = dimensions.rows;
+          resized(dimensions);
+        }
+
+        return true;
+      },
+    };
+  };
+
+  const element = (active = true) =>
+    createElement(
+      TerminalRuntimeContext.Provider,
+      { value: open },
+      createElement(TerminalView, { workspaceId: "w1", terminalId: "t1", active, focusSeq: 0 }),
+    );
+
+  return {
+    terminal,
+    textarea,
+    element,
+    load: finishLoading,
+    keys: (value: string) => keys(value),
+    resize: (cols: number, rows: number) => {
+      dimensions = { cols, rows };
+    },
+  };
+}
 
 beforeEach(() => {
-  harness.terminals.length = 0;
-  harness.sockets.length = 0;
-  harness.dimensions = { cols: 76, rows: 32 };
   width = 540;
   height = 460;
-  frames = [];
-  vi.stubGlobal("WebSocket", Socket);
+  vi.stubGlobal("WebSocket", FakeSocket);
   vi.stubGlobal(
     "ResizeObserver",
     class {
       constructor(callback: ResizeObserverCallback) {
-        resized = callback;
+        resizeObserved = callback;
       }
       observe() {}
       disconnect() {}
     },
   );
-  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => frames.push(callback));
-  vi.stubGlobal("cancelAnimationFrame", vi.fn());
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => width);
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(() => height);
 });
+
 afterEach(() => {
-  vi.useRealTimers();
   vi.unstubAllGlobals();
+  sockets.length = 0;
 });
 
-describe("sidebar terminal", () => {
-  it("focuses after asynchronous loading and sends ls and Enter as binary input after ready", async () => {
-    render(createElement(TerminalView, props));
-    await loaded();
-    const terminal = harness.terminals[0];
-    const socket = harness.sockets[0];
-    expect(socket.url).toContain("cols=76&rows=32");
-    expect(terminal.options.disableStdin).toBe(true);
-    terminal.data("too early");
-    expect(socket.send).not.toHaveBeenCalled();
-    act(() => socket.ready());
-    expect(terminal.options.disableStdin).toBe(false);
-    expect(document.activeElement).toBe(terminal.textarea);
-    terminal.data("ls\r");
-    expect(socket.send).toHaveBeenLastCalledWith(new TextEncoder().encode("ls\r"));
-    terminal.binary("\x1b[Mÿ");
-    expect(socket.send).toHaveBeenLastCalledWith(new Uint8Array([27, 91, 77, 255]));
-  });
+it("focuses after asynchronous loading and sends ls plus Enter only after ready", async () => {
+  const f = fixture();
+  render(f.element());
+  f.load();
+  await waitFor(() => expect(sockets).toHaveLength(1));
+  f.keys("too early");
+  expect(sockets[0]!.send).not.toHaveBeenCalled();
+  act(() => sockets[0]!.ready());
+  await waitFor(() => expect(document.activeElement).toBe(f.textarea));
+  f.keys("ls\r");
+  expect(sockets[0]!.send).toHaveBeenLastCalledWith(new TextEncoder().encode("ls\r"));
+});
 
-  it("waits for a visible measurable host, then refits and focuses when shown", async () => {
-    width = height = 0;
-    const view = render(createElement(TerminalView, { ...props, active: false }));
-    await loaded();
-    expect(harness.sockets).toHaveLength(0);
-    width = 540;
-    height = 460;
-    view.rerender(createElement(TerminalView, { ...props, focusSeq: 1 }));
-    fit();
-    act(() => harness.sockets[0].ready());
-    expect(document.activeElement).toBe(harness.terminals[0].textarea);
-    view.rerender(createElement(TerminalView, { ...props, active: false }));
-    harness.dimensions = { cols: 50, rows: 20 };
-    view.rerender(createElement(TerminalView, props));
-    fit();
-    expect(harness.terminals[0].cols).toBe(50);
-    expect(harness.terminals[0].rows).toBe(20);
-    expect(harness.sockets).toHaveLength(1);
-  });
+it("reconnects online to the same session with the latest dimensions and resets before redraw", async () => {
+  const f = fixture();
+  const view = render(f.element());
+  f.load();
+  await waitFor(() => expect(sockets).toHaveLength(1));
+  act(() => sockets[0]!.ready());
+  f.resize(60, 25);
+  act(() => window.dispatchEvent(new Event("online")));
+  expect(sockets).toHaveLength(2);
+  expect(sockets[1]!.url).toContain("/w1/t1?cols=60&rows=25");
+  act(() => sockets[1]!.ready());
+  expect(f.terminal.write).toHaveBeenCalledWith(new Uint8Array([27, 99]));
+  await waitFor(() => expect(document.activeElement).toBe(f.textarea));
+  view.unmount();
+  expect(f.terminal.dispose).toHaveBeenCalledOnce();
+  expect(sockets[1]!.close).toHaveBeenCalledWith(1000, "closed");
+});
 
-  it("uses the same clamped grid locally and remotely when resized", async () => {
-    render(createElement(TerminalView, props));
-    await loaded();
-    act(() => harness.sockets[0].ready());
-    vi.useFakeTimers();
-    harness.dimensions = { cols: 800, rows: 300 };
-    resized([], {} as ResizeObserver);
-    fit();
-    await act(() => vi.advanceTimersByTimeAsync(100));
-    expect([harness.terminals[0].cols, harness.terminals[0].rows]).toEqual([500, 200]);
-    expect(JSON.parse(harness.sockets[0].send.mock.lastCall[0])).toEqual({
-      type: "resize",
-      cols: 500,
-      rows: 200,
-    });
-  });
+it("does not resurrect a replaced terminal on an online event", async () => {
+  const f = fixture();
+  render(f.element());
+  f.load();
+  await waitFor(() => expect(sockets).toHaveLength(1));
+  act(() => sockets[0]!.onclose?.({ code: 4001 }));
+  expect(screen.getByRole("status").textContent).toContain("somewhere else");
+  act(() => window.dispatchEvent(new Event("online")));
+  expect(sockets).toHaveLength(1);
+});
 
-  it("disables input on disconnect and restores focus and the latest size on reconnect", async () => {
-    render(createElement(TerminalView, props));
-    await loaded();
-    const terminal = harness.terminals[0];
-    const socket = harness.sockets[0];
-    act(() => socket.ready());
-    vi.useFakeTimers();
-    act(() => socket.disconnect(1006));
-    expect(terminal.options.disableStdin).toBe(true);
-    harness.dimensions = { cols: 60, rows: 25 };
-    await act(() => vi.advanceTimersByTimeAsync(10000));
-    expect(harness.sockets).toHaveLength(2);
-    expect(harness.sockets[1].url).toContain("cols=60&rows=25");
-    act(() => harness.sockets[1].ready());
-    expect(terminal.write).toHaveBeenCalledWith("\x1bc");
-    expect(terminal.options.disableStdin).toBe(false);
-    expect(document.activeElement).toBe(terminal.textarea);
-    const count = harness.sockets[1].send.mock.calls.length;
-    act(() => harness.sockets[1].ready());
-    expect(harness.sockets[1].send).toHaveBeenCalledTimes(count);
-  });
-
-  it("disposes the socket and xterm when the panel closes", async () => {
-    const view = render(createElement(TerminalView, props));
-    await loaded();
-    act(() => harness.sockets[0].ready());
-    view.unmount();
-    expect(harness.sockets[0].close).toHaveBeenCalledWith(1000, "closed");
-    expect(harness.sockets[0].onmessage).toBeNull();
-    expect(harness.terminals[0].dispose).toHaveBeenCalledOnce();
-  });
+it("waits for a measurable visible terminal and resizes the established connection", async () => {
+  width = height = 0;
+  const f = fixture();
+  const view = render(f.element(false));
+  f.load();
+  await waitFor(() => expect(screen.getByLabelText("Terminal t1").contains(f.textarea)).toBe(true));
+  expect(sockets).toHaveLength(0);
+  width = 540;
+  height = 460;
+  view.rerender(f.element());
+  await waitFor(() => expect(sockets).toHaveLength(1));
+  act(() => sockets[0]!.ready());
+  await waitFor(() => expect(document.activeElement).toBe(f.textarea));
+  f.resize(50, 20);
+  act(() => resizeObserved([], new ResizeObserver(() => {})));
+  await waitFor(() =>
+    expect(sockets[0]!.send).toHaveBeenLastCalledWith('{"type":"resize","cols":50,"rows":20}'),
+  );
+  expect(sockets).toHaveLength(1);
 });

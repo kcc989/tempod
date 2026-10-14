@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS artifacts (
+  artifact_id   TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL,
+  path          TEXT NOT NULL,
+  last_version  INTEGER NOT NULL,
+  UNIQUE (session_id, path)
+);
 `;
 
 export class TempodDb {
@@ -32,7 +39,9 @@ export class TempodDb {
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA synchronous = NORMAL;");
     this.db.exec(SCHEMA);
+
     if (this.getMeta("incarnation") === null) this.setMeta("incarnation", newId());
+
     if (this.getMeta("last_seq") === null) this.setMeta("last_seq", "0");
     // Processes recorded by an earlier run (for example, a disk restored from a snapshot) no longer exist.
     this.db.exec("DELETE FROM processes;");
@@ -40,6 +49,7 @@ export class TempodDb {
 
   getMeta(key: string): string | null {
     const row = this.db.query<{ value: string }, [string]>("SELECT value FROM meta WHERE key = ?").get(key);
+
     return row ? row.value : null;
   }
 

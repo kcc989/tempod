@@ -9,7 +9,7 @@ import {
   type HubState,
   type NotifyEvent,
 } from "./hub-state";
-import { parseHubMessage } from "./parse";
+import { isUnknownVersionHello, parseHubMessage } from "./parse";
 
 export interface HubSnapshot extends HubState {
   readonly status: SocketStatus;
@@ -24,15 +24,16 @@ export class HubStore {
   private started = false;
 
   constructor(factory?: (url: string) => SocketLike) {
-    this.socket = new ReconnectingSocket({
+    const options: import("~/ui/lib/socket").ReconnectingSocketOptions = {
       url: () => wsUrl("/api/ws/hub"),
       onMessage: (raw) => this.receive(raw),
       onStatus: (status) => {
         connectionMonitor.report("hub", status);
         this.set({ ...this.snapshot, status });
       },
-      ...(factory ? { factory } : {}),
-    });
+    };
+
+    this.socket = new ReconnectingSocket(factory ? { ...options, factory } : options);
   }
 
   start(): void {
@@ -56,6 +57,7 @@ export class HubStore {
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
+
     return () => {
       this.listeners.delete(listener);
     };
@@ -63,29 +65,36 @@ export class HubStore {
 
   onNotify(listener: (e: NotifyEvent) => void): () => void {
     this.notifyListeners.add(listener);
+
     return () => {
       this.notifyListeners.delete(listener);
     };
   }
 
   receive(raw: string): void {
+    if (isUnknownVersionHello(raw)) return this.socket.rejectVersion();
     const msg = parseHubMessage(raw);
+
     if (!msg) return;
     const next = applyHubMessage(this.snapshot, msg);
+
     if (next === this.snapshot) return;
     const events = notifyEvents(this.snapshot, next);
     this.set({ ...next, status: this.snapshot.status });
+
     for (const e of events) for (const l of this.notifyListeners) l(e);
   }
 
   /** Applies a summary returned by a server function (for example createWorkspace). */
   merge(summary: WorkspaceSummary): void {
     const next = mergeSummary(this.snapshot, summary);
+
     if (next !== this.snapshot) this.set({ ...next, status: this.snapshot.status });
   }
 
   private set(next: HubSnapshot): void {
     this.snapshot = next;
+
     for (const l of this.listeners) l();
   }
 }
@@ -94,5 +103,6 @@ let hub: HubStore | null = null;
 
 export const getHubStore = (): HubStore => {
   hub ??= new HubStore();
+
   return hub;
 };

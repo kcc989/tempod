@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CiRunDetail",
+  "type": "object",
+  "properties": {
+    "run": {
+      "$ref": "CiRun.json"
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "$ref": "CiJob.json"
+      }
+    }
+  },
+  "required": ["run", "jobs"],
+  "additionalProperties": true
+}

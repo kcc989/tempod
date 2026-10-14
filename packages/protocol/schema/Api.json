@@ -4,6 +4,753 @@
   "description": "Server functions at POST /api/v1/rpc/<name>: the HTTP method of the web wrapper, the input and the output.",
   "type": "object",
   "properties": {
+    "createRepository": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CreateRepositoryIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "importRepository": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ImportRepositoryIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "linkArtifactRepository": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "LinkArtifactRepositoryIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getRepository": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetRepositoryIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryDetail.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getRepositoryFile": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetRepositoryFileIn.json"
+        },
+        "output": {
+          "$ref": "GetRepositoryFileOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listRepositoryCommits": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRepositoryCommitsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RepositoryCommit.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listRepositoryPullRequests": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRepositoryPullRequestsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RepositoryPullRequest.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getRepositoryPullRequest": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetRepositoryPullRequestIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryPullRequest.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "createRepositoryPullRequest": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CreateRepositoryPullRequestIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryPullRequest.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateRepositoryPullRequest": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateRepositoryPullRequestIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryPullRequest.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getCiPipeline": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCiPipelineIn.json"
+        },
+        "output": {
+          "$ref": "CiPipeline.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateCiPipeline": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateCiPipelineIn.json"
+        },
+        "output": {
+          "$ref": "CiPipeline.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listCiRuns": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListCiRunsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "CiRun.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRunDetail.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "startCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "StartCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRun.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rerunCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RerunCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRun.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRun.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getCiJobLog": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCiJobLogIn.json"
+        },
+        "output": {
+          "$ref": "GetCiJobLogOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listRepositoryIssues": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRepositoryIssuesIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RepositoryIssue.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getRepositoryIssue": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetRepositoryIssueIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryIssue.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "createRepositoryIssue": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CreateRepositoryIssueIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryIssue.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateRepositoryIssue": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateRepositoryIssueIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryIssue.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteRepositoryIssue": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteRepositoryIssueIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listRepositoryIssueComments": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRepositoryIssueCommentsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RepositoryIssueComment.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "createRepositoryIssueComment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CreateRepositoryIssueCommentIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryIssueComment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateRepositoryIssueComment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateRepositoryIssueCommentIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryIssueComment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteRepositoryIssueComment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteRepositoryIssueCommentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listRepositoryLabels": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRepositoryLabelsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "RepositoryLabel.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "createRepositoryLabel": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CreateRepositoryLabelIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryLabel.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateRepositoryLabel": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateRepositoryLabelIn.json"
+        },
+        "output": {
+          "$ref": "RepositoryLabel.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteRepositoryLabel": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteRepositoryLabelIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listAgents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetAgentIn.json"
+        },
+        "output": {
+          "$ref": "Agent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SaveAgentIn.json"
+        },
+        "output": {
+          "$ref": "Agent.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteAgentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listProjectAgents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProjectAgentsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentAttachment.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "putProjectAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "PutProjectAgentIn.json"
+        },
+        "output": {
+          "$ref": "AgentAttachment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteProjectAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteProjectAgentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "requestAgent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RequestAgentIn.json"
+        },
+        "output": {
+          "$ref": "RequestAgentOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelRunIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listRuns": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListRunsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "Run.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "resolveAgentProposal": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ResolveAgentProposalIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "sendRunToChat": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SendRunToChatIn.json"
+        },
+        "output": {
+          "$ref": "SendRunToChatOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listLifecycleEvents": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListLifecycleEventsIn.json"
+        },
+        "output": {
+          "$ref": "LifecyclePage.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getTrace": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetTraceIn.json"
+        },
+        "output": {
+          "$ref": "LifecycleTrace.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listInstallationRepos": {
       "type": "object",
       "properties": {
@@ -147,6 +894,153 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "setProjectEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetProjectEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listEnvironments": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "Environment.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "createEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CreateEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Environment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Environment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setEnvironmentSecret": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetEnvironmentSecretIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteEnvironmentSecret": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteEnvironmentSecretIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listProjectConversations": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProjectConversationsIn.json"
+        },
+        "output": {
+          "$ref": "ListProjectConversationsOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getProjectConversation": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetProjectConversationIn.json"
+        },
+        "output": {
+          "$ref": "ConversationArtifact.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "createWorkspace": {
       "type": "object",
       "properties": {
@@ -158,6 +1052,25 @@
         },
         "output": {
           "$ref": "WorkspaceSummary.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listModels": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "AgentModelOptions.json"
+          }
         }
       },
       "required": ["method", "input", "output"],
@@ -342,17 +1255,49 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
-    "rotatePreviewToken": {
+    "openPreview": {
       "type": "object",
       "properties": {
         "method": {
           "const": "POST"
         },
         "input": {
-          "$ref": "RotatePreviewTokenIn.json"
+          "$ref": "OpenPreviewIn.json"
         },
         "output": {
-          "$ref": "RotatePreviewTokenOut.json"
+          "$ref": "OpenPreviewOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rotatePreviewKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RotatePreviewKeyIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getBrowserLiveView": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "GetBrowserLiveViewIn.json"
+        },
+        "output": {
+          "$ref": "GetBrowserLiveViewOut.json"
         }
       },
       "required": ["method", "input", "output"],
@@ -385,6 +1330,38 @@
         },
         "output": {
           "$ref": "Diagnostics.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setWorkspaceEnvironment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetWorkspaceEnvironmentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "resolveEnvironmentProposal": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ResolveEnvironmentProposalIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
         }
       },
       "required": ["method", "input", "output"],
@@ -920,6 +1897,57 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "readFileAt": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ReadFileAtIn.json"
+        },
+        "output": {
+          "$ref": "ReadFileAtOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listArtifacts": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListArtifactsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "Artifact.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "openArtifact": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "OpenArtifactIn.json"
+        },
+        "output": {
+          "$ref": "OpenArtifactOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "getCredentialStatus": {
       "type": "object",
       "properties": {
@@ -960,6 +1988,54 @@
         },
         "input": {
           "$ref": "SetCodexAuthIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "startCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "StartCodexLoginOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "pollCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "PollCodexLoginIn.json"
+        },
+        "output": {
+          "$ref": "PollCodexLoginOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelCodexLogin": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelCodexLoginIn.json"
         },
         "output": {
           "$ref": "Empty.json"
@@ -1047,9 +2123,105 @@
       },
       "required": ["method", "input", "output"],
       "additionalProperties": false
+    },
+    "listMcpServers": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "McpServer.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "saveMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "McpServerInput.json"
+        },
+        "output": {
+          "$ref": "McpServer.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteMcpServer": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteMcpServerIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
     }
   },
   "required": [
+    "createRepository",
+    "importRepository",
+    "linkArtifactRepository",
+    "getRepository",
+    "getRepositoryFile",
+    "listRepositoryCommits",
+    "listRepositoryPullRequests",
+    "getRepositoryPullRequest",
+    "createRepositoryPullRequest",
+    "updateRepositoryPullRequest",
+    "getCiPipeline",
+    "updateCiPipeline",
+    "listCiRuns",
+    "getCiRun",
+    "startCiRun",
+    "rerunCiRun",
+    "cancelCiRun",
+    "getCiJobLog",
+    "listRepositoryIssues",
+    "getRepositoryIssue",
+    "createRepositoryIssue",
+    "updateRepositoryIssue",
+    "deleteRepositoryIssue",
+    "listRepositoryIssueComments",
+    "createRepositoryIssueComment",
+    "updateRepositoryIssueComment",
+    "deleteRepositoryIssueComment",
+    "listRepositoryLabels",
+    "createRepositoryLabel",
+    "updateRepositoryLabel",
+    "deleteRepositoryLabel",
+    "listAgents",
+    "getAgent",
+    "saveAgent",
+    "deleteAgent",
+    "listProjectAgents",
+    "putProjectAgent",
+    "deleteProjectAgent",
+    "requestAgent",
+    "cancelRun",
+    "listRuns",
+    "resolveAgentProposal",
+    "sendRunToChat",
+    "listLifecycleEvents",
+    "getTrace",
     "listInstallationRepos",
     "listInstallations",
     "linkProject",
@@ -1058,7 +2230,17 @@
     "unlinkProject",
     "listBranches",
     "listOpenPullRequests",
+    "setProjectEnvironment",
+    "listEnvironments",
+    "createEnvironment",
+    "updateEnvironment",
+    "deleteEnvironment",
+    "setEnvironmentSecret",
+    "deleteEnvironmentSecret",
+    "listProjectConversations",
+    "getProjectConversation",
     "createWorkspace",
+    "listModels",
     "listWorkspaces",
     "getWorkspace",
     "renameWorkspace",
@@ -1070,9 +2252,13 @@
     "archiveWorkspace",
     "restoreWorkspace",
     "deleteWorkspace",
-    "rotatePreviewToken",
+    "openPreview",
+    "rotatePreviewKey",
+    "getBrowserLiveView",
     "setBaseBranch",
     "getDiagnostics",
+    "setWorkspaceEnvironment",
+    "resolveEnvironmentProposal",
     "createSession",
     "closeSession",
     "renameSession",
@@ -1105,14 +2291,23 @@
     "continueAfterSetupFailure",
     "listTerminals",
     "listScriptRuns",
+    "readFileAt",
+    "listArtifacts",
+    "openArtifact",
     "getCredentialStatus",
     "setClaudeToken",
     "setCodexAuth",
+    "startCodexLogin",
+    "pollCodexLogin",
+    "cancelCodexLogin",
     "setApiKey",
     "deleteCredential",
     "setProjectSecret",
     "deleteProjectSecret",
-    "listProjectSecretNames"
+    "listProjectSecretNames",
+    "listMcpServers",
+    "saveMcpServer",
+    "deleteMcpServer"
   ],
   "additionalProperties": false
 }

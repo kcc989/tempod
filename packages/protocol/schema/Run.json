@@ -1,0 +1,322 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Run",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "changeId": {
+      "type": "string"
+    },
+    "parentRunId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "attachmentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
+    "name": {
+      "type": "string"
+    },
+    "agentVersion": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            },
+            {
+              "minimum": 1
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentSha": {
+      "type": "string"
+    },
+    "triggerEventId": {
+      "type": "string"
+    },
+    "decisionP": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sessionId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "originSessionId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agent": {
+      "anyOf": [
+        {
+          "$ref": "AgentId.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "access": {
+      "$ref": "AgentAccess.json"
+    },
+    "outputKind": {
+      "$ref": "OutputKind.json"
+    },
+    "status": {
+      "$ref": "RunStatus.json"
+    },
+    "followUpSent": {
+      "type": "boolean"
+    },
+    "tokens": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "pinCheckpointId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "warning": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["files_changed"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "result": {
+      "anyOf": [
+        {
+          "$ref": "RunResult.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sentTurnId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorCode": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorDetail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deadlineAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "allOf": [
+        {
+          "minimum": 0
+        }
+      ]
+    },
+    "startedAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endedAt": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hook": {
+      "anyOf": [
+        {
+          "$ref": "AttachmentHook.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "profileIssues": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "ProfileIssue.json"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "changeId",
+    "parentRunId",
+    "agentId",
+    "attachmentId",
+    "handle",
+    "name",
+    "agentVersion",
+    "agentSha",
+    "triggerEventId",
+    "decisionP",
+    "sessionId",
+    "originSessionId",
+    "agent",
+    "access",
+    "outputKind",
+    "status",
+    "followUpSent",
+    "tokens",
+    "pinCheckpointId",
+    "warning",
+    "result",
+    "sentTurnId",
+    "errorCode",
+    "errorDetail",
+    "deadlineAt",
+    "createdAt",
+    "startedAt",
+    "endedAt"
+  ],
+  "additionalProperties": true
+}

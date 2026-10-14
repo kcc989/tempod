@@ -1,0 +1,12 @@
+{
+  "area": "color-depth",
+  "run": 3,
+  "version": "2.1-draft",
+  "calibrated": false,
+  "requestSha256": "54913cc7e7b9e6f7eee4ab7364932be09aa4f850f782c72efc3cc9aaacf22d49",
+  "attemptStatuses": [200],
+  "timestamp": "2026-10-13T22:08:40Z",
+  "stateless": true,
+  "priorResultsIncluded": false,
+  "groupLabelIncluded": false
+}

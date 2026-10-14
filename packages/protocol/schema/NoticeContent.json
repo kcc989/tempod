@@ -3,11 +3,27 @@
   "title": "NoticeContent",
   "type": "object",
   "properties": {
+    "agentId": {
+      "type": "string"
+    },
+    "eventId": {
+      "type": "string"
+    },
     "level": {
       "$ref": "NoticeLevel.json"
     },
     "text": {
       "type": "string"
+    },
+    "checkpointId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["level", "text"],

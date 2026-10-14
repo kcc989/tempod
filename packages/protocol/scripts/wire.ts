@@ -6,10 +6,43 @@ import * as P from "../src/index.ts";
  * Rust type get. tempod's protocol is left out: only the WorkspaceDO speaks it.
  */
 export const SHARED = {
+  AgentProposal: P.AgentProposal,
+  AgentProposalRecord: P.AgentProposalRecord,
+  AgentLibraryToolResult: P.AgentLibraryToolResult,
+  RunStatus: P.RunStatus,
+  Run: P.Run,
+  RunResult: P.RunResult,
+  RunFinding: P.RunFinding,
+  PlanStep: P.PlanStep,
+  PlanReport: P.PlanReport,
+  ReviewReport: P.ReviewReport,
+  NoteReport: P.NoteReport,
+  RunContent: P.RunContent,
+  AgentProposalContent: P.AgentProposalContent,
+  LifecycleRunDecidedPayload: P.LifecycleRunDecidedPayload,
+  LifecycleEvent: P.LifecycleEvent,
+  LifecycleTempoSource: P.LifecycleTempoSource,
+  LifecycleAgentSource: P.LifecycleAgentSource,
+  LifecycleRunSource: P.LifecycleRunSource,
+  LifecycleChangeCreatedPayload: P.LifecycleChangeCreatedPayload,
+  LifecycleTurnEndedPayload: P.LifecycleTurnEndedPayload,
+  LifecycleRunStartedPayload: P.LifecycleRunStartedPayload,
+  LifecycleRunCompletedPayload: P.LifecycleRunCompletedPayload,
+  LifecycleRunFailedPayload: P.LifecycleRunFailedPayload,
+  LifecycleChangeEndedPayload: P.LifecycleChangeEndedPayload,
+  LifecycleBranchPushedPayload: P.LifecycleBranchPushedPayload,
+  LifecycleCheckPayload: P.LifecycleCheckPayload,
+
+  LifecycleLogEvent: P.LifecycleLogEvent,
+  LifecyclePage: P.LifecyclePage,
+  LifecycleTrace: P.LifecycleTrace,
+  TurnUsage: P.TurnUsage,
+
   AgentId: P.AgentId,
   WorkspaceState: P.WorkspaceState,
   Attention: P.Attention,
   PrState: P.PrState,
+  IssueState: P.IssueState,
   ChecksState: P.ChecksState,
   SetupStatus: P.SetupStatus,
   OpKind: P.OpKind,
@@ -30,6 +63,7 @@ export const SHARED = {
   CredentialProvider: P.CredentialProvider,
   InstanceName: P.InstanceName,
   EgressPolicy: P.EgressPolicy,
+  EgressStatusFilter: P.EgressStatusFilter,
   RunMode: P.RunMode,
   LogLevel: P.LogLevel,
   NoticeLevel: P.NoticeLevel,
@@ -46,7 +80,14 @@ export const SHARED = {
   ToolLocation: P.ToolLocation,
   ContentBlock: P.ContentBlock,
   Usage: P.Usage,
+  Attachment: P.Attachment,
   Capabilities: P.Capabilities,
+  McpTransport: P.McpTransport,
+  McpEnvVar: P.McpEnvVar,
+  McpHeader: P.McpHeader,
+  McpServer: P.McpServer,
+  McpHeaderInput: P.McpHeaderInput,
+  McpServerInput: P.McpServerInput,
 
   RunScript: P.RunScript,
   CustomInstance: P.CustomInstance,
@@ -56,13 +97,43 @@ export const SHARED = {
   SettingsSource: P.SettingsSource,
   SettingsReadResult: P.SettingsReadResult,
 
+  McpStdioServer: P.McpStdioServer,
+  McpRemoteServer: P.McpRemoteServer,
+  McpServerDef: P.McpServerDef,
+  AgentBase: P.AgentBase,
+  AgentAccess: P.AgentAccess,
+  AgentHandle: P.AgentHandle,
+  OutputKind: P.OutputKind,
+  AgentDefinition: P.AgentDefinition,
+  Agent: P.Agent,
+  AgentSummary: P.AgentSummary,
+  HookEvent: P.HookEvent,
+  AttachmentHook: P.AttachmentHook,
+  AgentAttachment: P.AgentAttachment,
+  ProfileIssue: P.ProfileIssue,
+
   Project: P.Project,
+  RepositoryCommit: P.RepositoryCommit,
+  RepositoryEntry: P.RepositoryEntry,
+  RepositoryDetail: P.RepositoryDetail,
+  RepositoryPullRequest: P.RepositoryPullRequest,
+  RepositoryLabel: P.RepositoryLabel,
+  RepositoryIssue: P.RepositoryIssue,
+  RepositoryIssueComment: P.RepositoryIssueComment,
+  CiJobSpec: P.CiJobSpec,
+  CiPipeline: P.CiPipeline,
+  CiRun: P.CiRun,
+  CiJob: P.CiJob,
+  CiRunDetail: P.CiRunDetail,
+  ConversationSummary: P.ConversationSummary,
+  ConversationArtifact: P.ConversationArtifact,
   WorkspaceSummary: P.WorkspaceSummary,
   OpProgress: P.OpProgress,
   ChangedFile: P.ChangedFile,
   ChangesSummary: P.ChangesSummary,
   WorkspaceDetail: P.WorkspaceDetail,
   Session: P.Session,
+  AgentModelOptions: P.AgentModelOptions,
   Mention: P.Mention,
   TurnPrompt: P.TurnPrompt,
   Turn: P.Turn,
@@ -76,6 +147,10 @@ export const SHARED = {
   HandoffContent: P.HandoffContent,
   RevertMarkerContent: P.RevertMarkerContent,
   ErrorContent: P.ErrorContent,
+  ArtifactKind: P.ArtifactKind,
+  ArtifactStatus: P.ArtifactStatus,
+  ArtifactItemContent: P.ArtifactItemContent,
+  Artifact: P.Artifact,
   Item: P.Item,
   ScriptRun: P.ScriptRun,
   ScriptRunWithLog: P.ScriptRunWithLog,
@@ -88,7 +163,15 @@ export const SHARED = {
   Diagnostics: P.Diagnostics,
   NewSource: P.NewSource,
   ApiMeta: P.ApiMeta,
-} as const satisfies Record<string, Schema.Top>;
+  AppSetupStatus: P.AppSetupStatus,
+  SecretBinding: P.SecretBinding,
+  InjectorInput: P.InjectorInput,
+  Injector: P.Injector,
+  EnvironmentSecret: P.EnvironmentSecret,
+  Environment: P.Environment,
+  EnvironmentProposal: P.EnvironmentProposal,
+  PendingEnvironmentProposal: P.PendingEnvironmentProposal,
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 export const WORKSPACE_CHANNEL = {
   WsHello: P.WsHello,
@@ -98,6 +181,7 @@ export const WORKSPACE_CHANNEL = {
   WsWorkspace: P.WsWorkspace,
   WsSession: P.WsSession,
   WsTurn: P.WsTurn,
+  WsRun: P.WsRun,
   WsTurnDeleted: P.WsTurnDeleted,
   WsPermission: P.WsPermission,
   WsScriptOutput: P.WsScriptOutput,
@@ -108,24 +192,24 @@ export const WORKSPACE_CHANNEL = {
   WsPong: P.WsPong,
   WorkspaceServerMessage: P.WorkspaceServerMessage,
   ClientPing: P.ClientPing,
-} as const satisfies Record<string, Schema.Top>;
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 export const HUB_CHANNEL = {
   HubHello: P.HubHello,
   HubWorkspace: P.HubWorkspace,
   HubWorkspaceRemoved: P.HubWorkspaceRemoved,
   HubServerMessage: P.HubServerMessage,
-} as const satisfies Record<string, Schema.Top>;
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 export const TERMINAL_CHANNEL = {
   TerminalResize: P.TerminalResize,
   TerminalReady: P.TerminalReady,
-} as const satisfies Record<string, Schema.Top>;
+} as const satisfies Record<string, Schema.Top & Schema.ConstraintDecoder<unknown>>;
 
 const pascal = (s: string): string => s[0]!.toUpperCase() + s.slice(1);
 
 const isEmptyStruct = (ast: SchemaAST.AST): boolean =>
-  ast._tag === "Objects" && ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0;
+  SchemaAST.isObjects(ast) && ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0;
 
 /** How an API function's input or output maps to a wire type. */
 export type TypeRef =
@@ -140,11 +224,13 @@ export interface ApiFunction {
 }
 
 const byAst = new Map<SchemaAST.AST, string>();
-const wire: Array<readonly [string, Schema.Top]> = [];
 
-const register = (name: string, schema: Schema.Top): void => {
+const wire: Array<readonly [string, Schema.Top & Schema.ConstraintDecoder<unknown>]> = [];
+
+const register = (name: string, schema: Schema.Top & Schema.ConstraintDecoder<unknown>): void => {
   if (wire.some(([n]) => n === name)) throw new Error(`duplicate wire type name ${name}`);
   wire.push([name, schema]);
+
   if (!byAst.has(schema.ast)) byAst.set(schema.ast, name);
 };
 
@@ -152,29 +238,43 @@ for (const group of [SHARED, WORKSPACE_CHANNEL, HUB_CHANNEL, TERMINAL_CHANNEL]) 
   for (const [name, schema] of Object.entries(group)) register(name, schema);
 }
 
-const resolve = (fn: string, suffix: "In" | "Out", schema: Schema.Top): TypeRef => {
+const resolve = (
+  fn: string,
+  suffix: "In" | "Out",
+  schema: Schema.Top & Schema.ConstraintDecoder<unknown>,
+): TypeRef => {
   const named = byAst.get(schema.ast);
+
   if (named) return { kind: "named", name: named };
+
   if (isEmptyStruct(schema.ast)) {
     if (!byAst.has(schema.ast)) register("Empty", schema);
+
     return { kind: "named", name: "Empty" };
   }
+
   const ast = schema.ast;
-  if (ast._tag === "Arrays" && ast.elements.length === 0 && ast.rest.length === 1) {
+
+  if (SchemaAST.isArrays(ast) && ast.elements.length === 0 && ast.rest.length === 1) {
     const item = ast.rest[0]!;
     const itemName = byAst.get(item);
+
     if (itemName) return { kind: "array", name: itemName };
     const name = `${pascal(fn)}Item`;
     register(name, Schema.make(item));
+
     return { kind: "array", name };
   }
+
   const name = `${pascal(fn)}${suffix}`;
   register(name, schema);
+
   return { kind: "named", name };
 };
 
 export const API_FUNCTIONS: ReadonlyArray<ApiFunction> = P.FN_NAMES.map((name) => {
   const f = P.API[name];
+
   return {
     name,
     method: f.method,
@@ -184,11 +284,14 @@ export const API_FUNCTIONS: ReadonlyArray<ApiFunction> = P.FN_NAMES.map((name) =
 });
 
 /** Every wire type in a stable order: shared types, channels, then API inputs and outputs. */
-export const WIRE_TYPES: ReadonlyArray<readonly [string, Schema.Top]> = wire;
+export const WIRE_TYPES: ReadonlyArray<readonly [string, Schema.Top & Schema.ConstraintDecoder<unknown>]> =
+  wire;
 
-export const wireType = (name: string): Schema.Top => {
+export const wireType = (name: string): Schema.Top & Schema.ConstraintDecoder<unknown> => {
   const found = wire.find(([n]) => n === name);
+
   if (!found) throw new Error(`unknown wire type ${name}`);
+
   return found[1];
 };
 

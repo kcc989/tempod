@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { expect, test } from "@playwright/test";
 import {
   appUrl,
@@ -22,26 +23,32 @@ import { sleep } from "./lib/util.ts";
  */
 
 test.skip(!ENABLED, SKIP_REASON);
+
 test.afterEach(cleanupTest);
+
 test.afterAll(cleanupFile);
 
 const MAC_CLIENT_ID = "tempo-mac";
+
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 
-interface DeviceCode {
-  readonly device_code: string;
-  readonly user_code: string;
-  readonly verification_uri: string;
-  readonly verification_uri_complete: string;
-  readonly expires_in: number;
-  readonly interval: number;
-}
+const DeviceCode = Schema.Struct({
+  device_code: Schema.String,
+  user_code: Schema.String,
+  verification_uri: Schema.String,
+  verification_uri_complete: Schema.String,
+  expires_in: Schema.Number,
+  interval: Schema.Number,
+});
+
+type DeviceCode = typeof DeviceCode.Type;
 
 /** Steps 3 and 6 of the Mac first run (07, Sign-in and first run). */
 const requestDeviceCode = async (): Promise<DeviceCode> => {
   const r = await fetchApp("/api/auth/device/code", { token: null, json: { client_id: MAC_CLIENT_ID } });
   expect(r.status, r.text).toBe(200);
-  return r.json as DeviceCode;
+
+  return Schema.decodeUnknownSync(DeviceCode)(r.json);
 };
 
 const pollToken = (code: DeviceCode) =>
@@ -54,12 +61,18 @@ const pollToken = (code: DeviceCode) =>
 const pollUntilDecided = async (code: DeviceCode, timeoutMs = 120_000) => {
   let interval = Math.max(1, code.interval) * 1_000;
   const deadline = Date.now() + timeoutMs;
+
   for (;;) {
     await sleep(interval);
     const r = await pollToken(code);
-    const error = (r.json as { error?: string } | undefined)?.error;
+
+    const error = Schema.decodeUnknownSync(
+      Schema.Union([Schema.Struct({ error: Schema.optional(Schema.String) }), Schema.Undefined]),
+    )(r.json)?.error;
+
     if (error === "slow_down") interval += 5_000;
     else if (error !== "authorization_pending") return r;
+
     if (Date.now() > deadline) throw new Error("the device code was neither approved nor denied in time");
   }
 };
@@ -68,10 +81,12 @@ const pollUntilDecided = async (code: DeviceCode, timeoutMs = 120_000) => {
 const decideWithBearer = async (code: DeviceCode, decision: "approve" | "deny") => {
   const claim = await fetchApp(`/api/auth/device?user_code=${encodeURIComponent(code.user_code)}`);
   expect(claim.status, claim.text).toBe(200);
+
   const r = await fetchApp(`/api/auth/device/${decision}`, {
     json: { userCode: code.user_code },
     headers: { Origin: E2E.url },
   });
+
   expect(r.status, r.text).toBe(200);
 };
 
@@ -82,8 +97,8 @@ test.describe("AT-23 device sign-in", () => {
     const { status, meta } = await getMeta();
     expect(status).toBe(200);
     expect(meta).toMatchObject({ protocol: 1 });
-    expect(typeof meta?.serverVersion).toBe("string");
-    expect(typeof meta?.minMacClient).toBe("string");
+    expect(Schema.is(Schema.String)(meta?.serverVersion)).toBe(true);
+    expect(Schema.is(Schema.String)(meta?.minMacClient)).toBe(true);
   });
 
   test("AT-23 a device code approved by the owner signs the app in; the token works on /api/v1 until signed out", async () => {
@@ -93,12 +108,18 @@ test.describe("AT-23 device sign-in", () => {
       code.user_code,
     );
     const pending = await pollToken(code);
-    expect((pending.json as { error?: string }).error).toBe("authorization_pending");
+    expect(
+      Schema.decodeUnknownSync(Schema.Struct({ error: Schema.optional(Schema.String) }))(pending.json).error,
+    ).toBe("authorization_pending");
 
     await decideWithBearer(code, "approve");
     const granted = await pollUntilDecided(code);
     expect(granted.status, granted.text).toBe(200);
-    const token = (granted.json as { access_token?: string }).access_token;
+
+    const token = Schema.decodeUnknownSync(Schema.Struct({ access_token: Schema.optional(Schema.String) }))(
+      granted.json,
+    ).access_token;
+
     expect(token).toBeTruthy();
 
     expect((await rpcRaw("listProjects", {}, { token: token ?? null })).status).toBe(200);
@@ -113,7 +134,9 @@ test.describe("AT-23 device sign-in", () => {
     await decideWithBearer(code, "deny");
     const denied = await pollUntilDecided(code);
     expect(denied.status).toBe(400);
-    expect((denied.json as { error?: string }).error).toBe("access_denied");
+    expect(
+      Schema.decodeUnknownSync(Schema.Struct({ error: Schema.optional(Schema.String) }))(denied.json).error,
+    ).toBe("access_denied");
   });
 
   for (const decision of ["Approve", "Deny"] as const) {
@@ -128,13 +151,19 @@ test.describe("AT-23 device sign-in", () => {
         .toContain(normalize(code.user_code));
       await page.getByRole("button", { name: decision, exact: true }).click();
       const r = await pollUntilDecided(code);
+
       if (decision === "Approve") {
-        const token = (r.json as { access_token?: string }).access_token ?? null;
+        const token =
+          Schema.decodeUnknownSync(Schema.Struct({ access_token: Schema.optional(Schema.String) }))(r.json)
+            .access_token ?? null;
+
         expect(token).toBeTruthy();
         expect((await rpcRaw("listProjects", {}, { token })).status).toBe(200);
         await fetchApp("/api/auth/sign-out", { token, json: {} });
       } else {
-        expect((r.json as { error?: string }).error).toBe("access_denied");
+        expect(
+          Schema.decodeUnknownSync(Schema.Struct({ error: Schema.optional(Schema.String) }))(r.json).error,
+        ).toBe("access_denied");
       }
     });
   }
@@ -163,16 +192,23 @@ test.describe("AT-24 /api/v1 auth", () => {
     requireUi();
     const cookie = storageStateCookie();
     test.skip(!cookie, "the storage state holds no cookie for the app host");
+
     const session = await fetchApp("/api/auth/get-session", {
       token: null,
       headers: { Cookie: cookie ?? "" },
     });
-    expect((session.json as { user?: unknown } | null)?.user, "the cookie is a live session").toBeTruthy();
+
+    expect(
+      Schema.is(Schema.Struct({ user: Schema.JsonObject }))(session.json),
+      "the cookie is a live session",
+    ).toBeTruthy();
+
     const r = await rpcRaw(
       "listProjects",
       {},
       { token: null, headers: { Cookie: cookie ?? "", Origin: E2E.url } },
     );
+
     expect(r.status).toBe(401);
     expect(r.json).toMatchObject({ code: "UNAUTHENTICATED" });
   });
@@ -182,7 +218,10 @@ test.describe("AT-24 /api/v1 auth", () => {
     const ok = await uploadAttachment(summary.id, "e2e.txt", "hello from e2e\n");
     expect(ok.status, ok.text).toBe(200);
     expect(ok.json).toMatchObject({ name: "e2e.txt", mime: "text/plain", size: 15 });
-    expect((ok.json as { attachmentId?: string }).attachmentId).toMatch(/^[0-9a-hjkmnp-tv-z]{26}$/);
+    expect(
+      Schema.decodeUnknownSync(Schema.Struct({ attachmentId: Schema.optional(Schema.String) }))(ok.json)
+        .attachmentId,
+    ).toMatch(/^[0-9a-hjkmnp-tv-z]{26}$/);
     expect((await uploadAttachment(summary.id, "e2e.txt", "x", "text/plain", { token: null })).status).toBe(
       401,
     );
@@ -192,18 +231,22 @@ test.describe("AT-24 /api/v1 auth", () => {
 test("AT-25 all three channels accept a bearer upgrade with no Origin; a wrong Origin gets 403", async () => {
   await requireChannels();
   const { summary } = await newWorkspace();
+
   const paths = {
     hub: "/api/ws/hub",
     workspace: `/api/ws/workspace/${summary.id}?sinceRev=0`,
     terminal: `/api/ws/terminal/${summary.id}/t1?cols=80&rows=24`,
   };
+
   const cookie = storageStateCookie();
+
   for (const [name, path] of Object.entries(paths)) {
     expect(await upgradeStatus(path, bearer()), `${name}: bearer, no Origin`).toBe(101);
     expect(
       await upgradeStatus(path, { ...bearer(), Origin: "https://evil.example" }),
       `${name}: bearer, wrong Origin`,
     ).toBe(403);
+
     if (cookie) {
       expect(
         await upgradeStatus(path, { Cookie: cookie, Origin: "https://evil.example" }),
@@ -217,19 +260,33 @@ test("AT-25 all three channels accept a bearer upgrade with no Origin; a wrong O
   }
 
   const hub = await Socket.open(paths.hub);
+
   const hello = await hub.until(
     "hub hello",
-    () => hub.messages.find((m) => (m.data as { type?: string }).type === "hello"),
+    () =>
+      hub.messages.find(
+        (m) =>
+          Schema.decodeUnknownSync(Schema.Struct({ type: Schema.optional(Schema.String) }))(m.data).type ===
+          "hello",
+      ),
     30_000,
   );
+
   expect(hello.data).toMatchObject({ type: "hello", v: 1 });
   hub.close();
   const ws = await Socket.open(paths.workspace);
+
   const wsHello = await ws.until(
     "workspace hello",
-    () => ws.messages.find((m) => (m.data as { type?: string }).type === "hello"),
+    () =>
+      ws.messages.find(
+        (m) =>
+          Schema.decodeUnknownSync(Schema.Struct({ type: Schema.optional(Schema.String) }))(m.data).type ===
+          "hello",
+      ),
     30_000,
   );
+
   expect(wsHello.data).toMatchObject({ type: "hello", v: 1, workspace: { id: summary.id } });
   ws.close();
 });

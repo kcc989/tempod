@@ -4,7 +4,7 @@ Phase 0 (06, Spikes) and phase 4 (07, Spikes). Each spike is throwaway code in i
 answers one question. Its result goes here as `S<n>.md`: what was tried, what worked, exact names
 and timings. If a result differs from the spec, change the spec before phase 1.
 
-None has run yet: they need a Cloudflare account on Workers Paid and real Claude and Codex logins.
+Historical phase-0 status is listed below. Goal 4 uses [S20](https://github.com/kcc989/tempod/blob/main/spikes/S20.md), [S22](https://github.com/kcc989/tempod/blob/main/spikes/S22.md) and [S23](https://github.com/kcc989/tempod/blob/main/spikes/S23.md). S22 passed 50 deployed Worker calls at p95 878 ms; S20/S23 remain open for real agent logins.
 
 | ID      | Question                             | Status  | Notes from the build                                                                                                  |
 | ------- | ------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------- |

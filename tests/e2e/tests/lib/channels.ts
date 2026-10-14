@@ -1,3 +1,9 @@
+import {
+  HubServerMessage as HubServerMessageSchema,
+  WorkspaceServerMessage as WorkspaceServerMessageSchema,
+  Item as ItemSchema,
+} from "@tempo/protocol";
+import { Schema } from "effect";
 import type {
   HubServerMessage,
   Item,
@@ -66,8 +72,9 @@ export class WorkspaceWatch {
   static async open(workspaceId: string, sinceRev = 0): Promise<WorkspaceWatch> {
     const socket = await Socket.open(`/api/ws/workspace/${workspaceId}?sinceRev=${sinceRev}`, { ping: true });
     const watch = new WorkspaceWatch(workspaceId, socket);
-    socket.onJson((m) => watch.apply(m as WorkspaceServerMessage));
+    socket.onJson((m) => watch.apply(Schema.decodeUnknownSync(WorkspaceServerMessageSchema)(m)));
     await watch.until("hello and the item backlog", () => watch.backlogDone, 60_000);
+
     return watch;
   }
 
@@ -89,11 +96,13 @@ export class WorkspaceWatch {
       `workspace ${this.workspaceId} state ${states.join(" or ")}`,
       () => {
         const d = this.detail;
+
         if (d?.state === "error" && !states.includes("error")) {
           throw new Error(
             `workspace ${this.workspaceId} went to error: ${d.errorCode ?? ""} ${d.errorDetail ?? ""}`,
           );
         }
+
         return d && states.includes(d.state) ? d : undefined;
       },
       timeoutMs,
@@ -113,6 +122,7 @@ export class WorkspaceWatch {
       `turn ${turnId} to end`,
       () => {
         const t = this.turns.get(turnId);
+
         return t && isEnded(t) ? t : undefined;
       },
       timeoutMs,
@@ -143,11 +153,14 @@ export class WorkspaceWatch {
   /** When this connection first saw agent output after `since`. */
   firstAgentOutputAt(since = 0): number | undefined {
     let first: number | undefined;
+
     for (const item of this.items.values()) {
       if (!AGENT_OUTPUT_KINDS.includes(item.kind)) continue;
       const at = this.firstSeenAt.get(item.id) ?? Number.POSITIVE_INFINITY;
+
       if (at >= since && (first === undefined || at < first)) first = at;
     }
+
     return first;
   }
 
@@ -155,14 +168,18 @@ export class WorkspaceWatch {
   pendingPermissions(): PermissionRequest[] {
     return [...this.permissions.values()].filter((p) => {
       const item = this.items.get(p.itemId);
+
       return !(item?.kind === "permission" && item.content.chosenOptionId) && item?.status !== "cancelled";
     });
   }
 
   private noteState(): void {
     const d = this.detail;
+
     if (!d) return;
+
     if (this.states.at(-1)?.state !== d.state) this.states.push({ state: d.state, at: Date.now() });
+
     if (this.attentions.at(-1)?.attention !== d.attention)
       this.attentions.push({ attention: d.attention, at: Date.now() });
   }
@@ -170,15 +187,20 @@ export class WorkspaceWatch {
   private putTurn(turn: Turn): void {
     this.turns.set(turn.id, turn);
     let seen = this.turnStatusAt.get(turn.id);
+
     if (!seen) this.turnStatusAt.set(turn.id, (seen = new Map()));
+
     if (!seen.has(turn.status)) seen.set(turn.status, Date.now());
   }
 
   private putItem(item: Item): void {
     this.items.set(item.id, item);
+
     if (!this.firstSeenAt.has(item.id)) this.firstSeenAt.set(item.id, Date.now());
+
     if (item.kind === "tool_call") {
       const seen = this.toolStatuses.get(item.id) ?? [];
+
       if (seen.at(-1) !== item.status) seen.push(item.status);
       this.toolStatuses.set(item.id, seen);
     }
@@ -193,58 +215,80 @@ export class WorkspaceWatch {
       case "hello":
         this.detail = m.workspace;
         this.noteState();
+
         for (const s of m.sessions) this.sessions.set(s.id, s);
+
         for (const t of m.turns) this.putTurn(t);
         this.itemsRev = Math.max(this.itemsRev, m.itemsRev);
+
         return;
       case "items":
         for (const item of m.items) this.putItem(item);
         this.itemsRev = Math.max(this.itemsRev, m.itemsRev);
+
         if (m.done) this.backlogDone = true;
+
         return;
       case "item.upsert":
         if (this.stale(m.itemsRev)) return;
         this.putItem(m.item);
         this.itemsRev = Math.max(this.itemsRev, m.itemsRev);
+
         return;
       case "item.delta": {
         if (this.stale(m.itemsRev)) return;
         const item = this.items.get(m.itemId);
+
         if (item && "text" in item.content) {
-          this.items.set(m.itemId, {
-            ...item,
-            content: { ...item.content, text: item.content.text + m.append.text },
-          } as Item);
+          this.items.set(
+            m.itemId,
+            Schema.decodeUnknownSync(ItemSchema)({
+              ...item,
+              content: { ...item.content, text: item.content.text + m.append.text },
+            }),
+          );
         }
+
         this.deltas.set(m.itemId, (this.deltas.get(m.itemId) ?? 0) + 1);
         this.itemsRev = Math.max(this.itemsRev, m.itemsRev);
+
         return;
       }
+
       case "workspace":
         this.detail = m.workspace;
         this.noteState();
+
         return;
       case "session":
         this.sessions.set(m.session.id, m.session);
+
         return;
       case "turn":
         this.putTurn(m.turn);
+
         return;
       case "turn.deleted":
         this.turns.delete(m.turnId);
+
         return;
       case "permission":
         this.permissions.set(m.request.requestId, m.request);
+
         return;
       case "script.output":
         this.scriptOutput.set(m.runId, (this.scriptOutput.get(m.runId) ?? "") + m.data);
+
         return;
       case "script.run":
         this.scriptRuns.set(m.run.id, m.run);
+
         if (!this.scriptRunSeenAt.has(m.run.id)) this.scriptRunSeenAt.set(m.run.id, Date.now());
+
         return;
       case "error":
         this.errors.push({ code: m.code, message: m.message });
+
         return;
       case "changes":
       case "credential.invalid":
@@ -268,8 +312,9 @@ export class HubWatch {
   static async open(): Promise<HubWatch> {
     const socket = await Socket.open("/api/ws/hub", { ping: true });
     const hub = new HubWatch(socket);
-    socket.onJson((m) => hub.apply(m as HubServerMessage));
+    socket.onJson((m) => hub.apply(Schema.decodeUnknownSync(HubServerMessageSchema)(m)));
     await hub.until("hub hello", () => hub.hello, 30_000);
+
     return hub;
   }
 
@@ -289,16 +334,19 @@ export class HubWatch {
   maxConcurrent(ids: ReadonlyArray<string>, state: WorkspaceState): number {
     const current = new Map<string, WorkspaceState>();
     let max = 0;
+
     for (const e of this.timeline) {
       if (!ids.includes(e.summary.id)) continue;
       current.set(e.summary.id, e.summary.state);
       max = Math.max(max, [...current.values()].filter((s) => s === state).length);
     }
+
     return max;
   }
 
   private put(summary: WorkspaceSummary): void {
     const known = this.summaries.get(summary.id);
+
     if (known && known.rev >= summary.rev) return;
     this.summaries.set(summary.id, summary);
     this.timeline.push({ summary, at: Date.now() });
@@ -309,13 +357,16 @@ export class HubWatch {
       case "hello":
         for (const s of m.workspaces) this.put(s);
         this.hello = true;
+
         return;
       case "workspace":
         this.put(m.summary);
+
         return;
       case "workspace.removed":
         this.summaries.delete(m.workspaceId);
         this.removed.add(m.workspaceId);
+
         return;
       case "pong":
         return;

@@ -11,9 +11,13 @@ import {
   CommandList,
 } from "~/ui/components/ui/command";
 import { LoadingText } from "~/ui/components/ui/spinner";
+import { Button } from "~/ui/components/ui/button";
+import { PhoneUnavailable } from "~/ui/components/shell/States";
+import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { Toggle } from "~/ui/components/ui/toggle";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useCallQuery } from "~/ui/hooks/useCall";
+import { useDebounced } from "~/ui/hooks/useDebounced";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
 import { fuzzyFilter } from "~/ui/lib/fuzzy";
 import { Store } from "~/ui/lib/store";
@@ -32,13 +36,16 @@ function useIsFirstHost(workspaceId: string): boolean {
   const token = `${workspaceId}\u0000${id}`;
   useEffect(() => {
     hosts.set((cur) => [...cur, token]);
+
     return () => hosts.set((cur) => cur.filter((t) => t !== token));
   }, [token]);
+
   const first = useSyncExternalStore(
     hosts.subscribe,
     () => hosts.getSnapshot().find((t) => t.startsWith(`${workspaceId}\u0000`)) ?? null,
     () => null,
   );
+
   return first === token;
 }
 
@@ -48,7 +55,9 @@ function useIsFirstHost(workspaceId: string): boolean {
  */
 export function ReviewDialogs({ workspaceId }: { workspaceId: string }) {
   const first = useIsFirstHost(workspaceId);
+
   if (!first) return null;
+
   return (
     <>
       <OpenFileDialog workspaceId={workspaceId} />
@@ -60,6 +69,7 @@ export function ReviewDialogs({ workspaceId }: { workspaceId: string }) {
 function OpenFileDialog({ workspaceId }: { workspaceId: string }) {
   const { open, args, onOpenChange } = useDialog("openFile");
   const mine = open && args?.workspaceId === workspaceId;
+
   return (
     <CommandDialog
       open={mine}
@@ -74,19 +84,24 @@ function OpenFileDialog({ workspaceId }: { workspaceId: string }) {
 }
 
 function OpenFileBody({ workspaceId }: { workspaceId: string }) {
+  const phone = useIsPhone();
   const [query, setQuery] = useState("");
-  const { query: files, live } = useFileList(workspaceId);
+  const { query: files, available } = useFileList(workspaceId);
   const paths = files.data?.paths;
   const results = useMemo(() => fuzzyFilter(query, paths ?? [], (p) => p, 50), [query, paths]);
+
   const pick = (path: string) => {
     closeDialog("openFile");
     openFile(workspaceId, path);
   };
+
   return (
     <>
       <CommandInput value={query} onValueChange={setQuery} placeholder="Open file" aria-label="File name" />
       <CommandList>
-        {!live ? (
+        {phone ? (
+          <PhoneUnavailable />
+        ) : !available || (files.isError && !paths && errorCode(files.error) === "CONTAINER_NOT_READY") ? (
           <div className="flex justify-center p-4">
             <WakeButton workspaceId={workspaceId} label="Wake to browse files" />
           </div>
@@ -95,12 +110,18 @@ function OpenFileBody({ workspaceId }: { workspaceId: string }) {
             <LoadingText label="Loading files" />
           </div>
         ) : files.isError && !paths ? (
-          <p className="p-4 text-center text-sm text-muted-foreground">{errorText(files.error)}</p>
+          <div className="flex flex-col items-center gap-2 p-4 text-sm text-muted-foreground">
+            <p>{errorText(files.error)}</p>
+            <Button size="sm" variant="outline" onClick={() => void files.refetch()}>
+              Retry
+            </Button>
+          </div>
         ) : (
           <>
             <CommandEmpty>No matching files.</CommandEmpty>
             {results.map((path) => {
               const { dir, name } = splitPath(path);
+
               return (
                 <CommandItem key={path} value={path} onSelect={() => pick(path)}>
                   <FileIcon />
@@ -119,6 +140,7 @@ function OpenFileBody({ workspaceId }: { workspaceId: string }) {
 function SearchFilesDialog({ workspaceId }: { workspaceId: string }) {
   const { open, args, onOpenChange } = useDialog("searchFiles");
   const mine = open && args?.workspaceId === workspaceId;
+
   return (
     <CommandDialog
       open={mine}
@@ -133,32 +155,29 @@ function SearchFilesDialog({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
-
 function SearchBody({ workspaceId }: { workspaceId: string }) {
+  const phone = useIsPhone();
   const [text, setText] = useState("");
   const [regex, setRegex] = useState(false);
   const live = useLive(workspaceId);
   const query = useDebounced(text.trim(), SEARCH_DEBOUNCE_MS);
+
   const search = useCallQuery("searchFiles", regex ? { workspaceId, query, regex } : { workspaceId, query }, {
-    enabled: live && query !== "",
+    enabled: !phone && live && query !== "",
     retry: false,
     placeholderData: keepPreviousData,
     staleTime: 10_000,
   });
+
   const groups = useMemo(() => groupMatches(search.data ?? []), [search.data]);
+
   const pick = (path: string, line: number) => {
     closeDialog("searchFiles");
     openFile(workspaceId, path, line);
   };
+
   const count = search.data?.length ?? 0;
+
   return (
     <>
       <div className="flex items-center gap-1 border-b pr-2 [&_[data-slot=command-input-wrapper]]:flex-1 [&_[data-slot=command-input-wrapper]]:border-b-0">
@@ -175,7 +194,9 @@ function SearchBody({ workspaceId }: { workspaceId: string }) {
         </SimpleTooltip>
       </div>
       <CommandList className="max-h-[420px]">
-        {!live ? (
+        {phone ? (
+          <PhoneUnavailable />
+        ) : !live ? (
           <div className="flex justify-center p-4">
             <WakeButton workspaceId={workspaceId} label="Wake to search files" />
           </div>

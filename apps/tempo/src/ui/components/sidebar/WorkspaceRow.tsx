@@ -32,8 +32,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/ui/components/u
 import { Skeleton } from "~/ui/components/ui/skeleton";
 import { useCallQuery } from "~/ui/hooks/useCall";
 import { formatRelative } from "~/ui/lib/format";
-import { pillText } from "~/ui/lib/indicators";
-import { githubChecksUrl } from "~/ui/lib/links";
+import { pillText, statusIndicator } from "~/ui/lib/indicators";
+import { projectChecksUrl } from "~/ui/lib/links";
 import { cn } from "~/ui/lib/utils";
 import { setPhonePane } from "~/ui/state/workspace-ui";
 import { ChecksDot, PrBadge, StatusIcon } from "./indicators";
@@ -54,6 +54,17 @@ export function WorkspaceRow({
 }) {
   const [renaming, setRenaming] = useState(false);
   const renameRequested = useRef(false);
+  const status = statusIndicator(w)?.tooltip ?? pillText(w.state, { op: null }).text;
+  const branch = w.branch.split("/").at(-1) === w.title ? "" : w.branch;
+  const slug = w.slug !== w.title && w.branch.split("/").at(-1) !== w.slug ? w.slug : "";
+  const detail = [branch, slug].filter(Boolean).join(" · ");
+
+  const metadata = (
+    <span className="flex min-w-0 items-center gap-2 pl-5 text-xs text-muted-foreground">
+      {detail && <span className="min-w-0 truncate">{detail}</span>}
+      <span className="shrink-0">{status}</span>
+    </span>
+  );
 
   const body = (
     <>
@@ -65,15 +76,13 @@ export function WorkspaceRow({
           <ChecksDot workspace={w} />
         </span>
       </span>
-      <span className="truncate pl-5 text-xs text-muted-foreground">
-        {w.branch} · {w.slug}
-      </span>
+      {metadata}
     </>
   );
 
   const rowClass = cn(
-    "flex min-w-0 flex-col gap-0.5 rounded-md px-2 outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[status=active]:bg-sidebar-accent",
-    phone ? "py-2" : "py-1",
+    "flex min-w-0 flex-col gap-0.5 rounded-md px-3 text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[status=active]:bg-sidebar-accent",
+    "py-2",
   );
 
   if (renaming) {
@@ -90,9 +99,7 @@ export function WorkspaceRow({
             }}
           />
         </span>
-        <span className="truncate pl-5 text-xs text-muted-foreground">
-          {w.branch} · {w.slug}
-        </span>
+        {metadata}
       </div>
     );
   }
@@ -150,6 +157,7 @@ function RenameField({
   onDone: () => void;
 }) {
   const actions = useWorkspaceActions(workspaceId);
+
   return <InlineEdit value={title} label="Workspace title" onSave={actions.rename} onDone={onDone} />;
 }
 
@@ -164,6 +172,7 @@ function RowMenu({
   onRename: () => void;
 }) {
   const actions = useWorkspaceActions(w.id);
+
   return (
     <>
       <ContextMenuItem onSelect={onRename}>
@@ -178,17 +187,12 @@ function RowMenu({
         <CopyIcon />
         Copy branch name
       </ContextMenuItem>
-      {project ? (
+      {project && w.prNumber !== null && (
         <ContextMenuItem asChild>
           <a href={githubUrlFor(project, w, undefined)} target="_blank" rel="noopener noreferrer">
             <ExternalLinkIcon />
-            Open on GitHub
+            {project.provider === "artifacts" ? "Open pull request" : "Open PR on GitHub"}
           </a>
-        </ContextMenuItem>
-      ) : (
-        <ContextMenuItem disabled>
-          <ExternalLinkIcon />
-          Open on GitHub
         </ContextMenuItem>
       )}
       <ContextMenuSeparator />
@@ -211,14 +215,16 @@ function RowHoverCard({
   const detail = useCallQuery("getWorkspace", { workspaceId: w.id }, { staleTime: 10_000 });
   const actions = useWorkspaceActions(w.id);
   const view = workspaceView(w, detail.data) ?? { w, d: null };
+
   const pill = pillText(view.w.state, {
     op: view.d?.op ?? null,
     instance: view.d?.settings.environment.instance,
   });
+
   const primary = detail.data ? topPrimary(view) : null;
   const power = powerAction(view.w.state);
-  const checksUrl =
-    project && w.prNumber !== null ? githubChecksUrl(project.owner, project.name, w.prNumber) : undefined;
+
+  const checksUrl = project && w.prNumber !== null ? projectChecksUrl(project, w.prNumber) : undefined;
 
   return (
     <div className="flex flex-col gap-2.5">

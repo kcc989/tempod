@@ -18,13 +18,14 @@ const rowKey = (r: TreeRow) => `${r.kind}:${r.path}`;
 
 const activeFilePath = (s: WorkspaceUiState): string | null => {
   const t = s.tabs.find((x) => x.key === s.activeKey);
+
   return t?.tab.kind === "file" ? t.tab.path : null;
 };
 
 /** 04, All files tab: a tree from listFiles; a click opens a read-only file tab. */
 export function FilesView({ workspaceId }: { workspaceId: string }) {
   const state = useWorkspaceStateValue(workspaceId);
-  const { query, live } = useFileList(workspaceId);
+  const { query, live, available } = useFileList(workspaceId);
   const tree = useMemo(() => buildTree(query.data?.paths ?? []), [query.data]);
   const [expanded, setExpanded] = useRememberedSet(`files:${workspaceId}`);
   const rows = useMemo(() => treeRows(tree, expanded), [tree, expanded]);
@@ -35,8 +36,10 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
       setExpanded((cur) => {
         if (cur.has(path) === open) return cur;
         const next = new Set(cur);
+
         if (open) next.add(path);
         else next.delete(path);
+
         return next;
       }),
     [setExpanded],
@@ -55,25 +58,34 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
   ): boolean => {
     if (e.key === "ArrowRight") {
       if (row.kind !== "dir") return false;
+
       if (row.expanded) moveTo(index + 1);
       else setOpen(row.path, true);
+
       return true;
     }
+
     if (e.key === "ArrowLeft") {
       if (row.kind === "dir" && row.expanded) {
         setOpen(row.path, false);
+
         return true;
       }
+
       const parent = parentRowIndex(rows, index);
+
       if (parent === null) return false;
       moveTo(parent);
+
       return true;
     }
+
     return false;
   };
 
   let body;
-  if (!live) {
+
+  if (!available || (state === "sleeping" && query.isError && !query.data)) {
     body = isComingUp(state) ? (
       <div className="flex flex-1 items-center justify-center p-6">
         <LoadingText label={ERROR_MESSAGES.CONTAINER_NOT_READY} />
@@ -124,7 +136,7 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
         <Button
           size="sm"
           variant="ghost"
-          disabled={!live}
+          disabled={!available || !query.data}
           onClick={() => openDialog({ kind: "openFile", workspaceId })}
         >
           <FileIcon />
@@ -142,6 +154,9 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
           <ShortcutKbd action="searchFiles" />
         </Button>
       </div>
+      {state === "sleeping" && query.data && (
+        <p className="px-3 py-1 text-xs text-muted-foreground">Last synced files. May be out of date.</p>
+      )}
       <div className="flex min-h-0 flex-1 flex-col">{body}</div>
     </div>
   );
@@ -149,8 +164,10 @@ export function FilesView({ workspaceId }: { workspaceId: string }) {
 
 function TreeRowView({ row, current }: { row: TreeRow; current: boolean }) {
   const indent = { paddingLeft: `${row.depth * 12}px` };
+
   if (row.kind === "dir") {
     const Chevron = row.expanded ? ChevronDownIcon : ChevronRightIcon;
+
     return (
       <span className="flex min-w-0 flex-1 items-center gap-1" style={indent}>
         <Chevron aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
@@ -161,6 +178,7 @@ function TreeRowView({ row, current }: { row: TreeRow; current: boolean }) {
       </span>
     );
   }
+
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1" style={indent}>
       <span aria-hidden className="size-3.5 shrink-0" />

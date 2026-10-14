@@ -22,6 +22,16 @@
           "type": "null"
         }
       ]
+    },
+    "latestMacClientSha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["protocol", "serverVersion", "minMacClient", "latestMacClient"],

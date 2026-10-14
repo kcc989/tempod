@@ -15,7 +15,7 @@ import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
-import { githubPullUrl } from "~/ui/lib/links";
+import { projectPullUrl } from "~/ui/lib/links";
 import { cn } from "~/ui/lib/utils";
 import {
   checksStateLabel,
@@ -44,38 +44,29 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
   const prNumber = w?.prNumber ?? null;
   const prState = w?.prState ?? null;
   const checksState = w?.checksState ?? null;
-  const prOpen = prState === "open" || prState === "draft";
-
   const runs = useCallQuery("listCheckRuns", { workspaceId }, { enabled: prNumber !== null, retry: false });
   const refresh = useCallMutation("refreshPullRequest", { toast: false });
   const { mutate } = refresh;
   const { refetch } = runs;
-
   useEffect(() => {
     if (prNumber !== null) mutate({ workspaceId });
   }, [prNumber, workspaceId, mutate]);
-
   const seen = useRef({ checksState, prState });
   useEffect(() => {
     if (seen.current.checksState === checksState && seen.current.prState === prState) return;
     seen.current = { checksState, prState };
+
     if (prNumber !== null) void refetch();
   }, [checksState, prState, prNumber, refetch]);
-
-  const open = useCallQuery(
-    "listOpenPullRequests",
-    { projectId: w?.projectId ?? "" },
-    { enabled: prOpen && !!w?.projectId, staleTime: 60_000, retry: false },
-  );
-  const title = open.data?.find((p) => p.number === prNumber)?.title ?? null;
+  const title = detail?.prTitle ?? refresh.data?.prTitle ?? null;
   const sorted = useMemo(() => sortRuns(runs.data ?? []), [runs.data]);
 
   if (!w) return <SkeletonRows />;
-  if (prNumber === null) return <EmptyState title="No pull request yet." />;
 
+  if (prNumber === null) return <EmptyState title="No pull request yet." />;
   const pr = prStateLabel(prState);
   const checks = checksStateLabel(checksState);
-  const url = project ? githubPullUrl(project.owner, project.name, prNumber) : null;
+  const url = project ? projectPullUrl(project, prNumber) : null;
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
@@ -90,7 +81,9 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
             >
               #{prNumber}
               <ExternalLinkIcon aria-hidden className="size-3" />
-              <span className="sr-only">Open on GitHub</span>
+              <span className="sr-only">
+                {project?.provider === "artifacts" ? "Open pull request" : "Open on GitHub"}
+              </span>
             </a>
           ) : (
             <span className="font-mono text-sm font-medium">#{prNumber}</span>
@@ -128,6 +121,7 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
               const outcome = runOutcome(run);
               const { icon: Icon, className } = OUTCOME_ICON[outcome];
               const href = safeHttpUrl(run.url);
+
               const content = (
                 <>
                   <Icon aria-hidden className={cn("size-3.5 shrink-0", className)} />
@@ -136,6 +130,7 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
                   {href && <ExternalLinkIcon aria-hidden className="size-3 shrink-0 text-muted-foreground" />}
                 </>
               );
+
               return (
                 <li key={`${run.name}:${i}`}>
                   {href ? (

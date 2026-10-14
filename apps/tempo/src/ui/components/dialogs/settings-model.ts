@@ -5,14 +5,18 @@ import {
   DEFAULT_SETTINGS,
   EnvName,
   HostPattern,
+  InstanceName,
+  Instance as InstanceSchema,
+  type JsonData,
+  type JsonDataArray,
+  type JsonDataFields,
   SETTINGS_SOURCE_LABELS,
   instanceLabel,
-  type Instance,
   type Settings,
-  type SettingsLayer,
+  SettingsLayer,
   type SettingsSource,
 } from "@tempo/protocol";
-import { Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 
 /**
  * Settings → Project (04): every settings key as one field of a SettingsLayer form. A field is
@@ -55,11 +59,39 @@ export const FIELDS = [
     options: AGENT_IDS.map((a) => ({ value: a, label: AGENT_LABELS[a] })),
   },
   {
-    path: "agent.model",
+    path: "agent.models.claude",
     section: "Agent",
-    label: "Model",
+    label: "Claude default model",
     kind: "text",
-    hint: "The agent's model value. OpenCode and Pi need one.",
+    hint: "The agent's model value. Empty uses the agent's own default.",
+  },
+  {
+    path: "agent.models.codex",
+    section: "Agent",
+    label: "Codex default model",
+    kind: "text",
+    hint: "The agent's model value. Empty uses the agent's own default.",
+  },
+  {
+    path: "agent.models.opencode",
+    section: "Agent",
+    label: "OpenCode default model",
+    kind: "text",
+    hint: "The agent's model value. Required to start an OpenCode chat.",
+  },
+  {
+    path: "agent.models.pi",
+    section: "Agent",
+    label: "Pi default model",
+    kind: "text",
+    hint: "The agent's model value. Required to start a Pi chat.",
+  },
+  {
+    path: "browser.run",
+    section: "Browser",
+    label: "Browser Run",
+    kind: "bool",
+    hint: "Agents use Browser Run, watched in Live View. Ignored under the allowlist egress policy.",
   },
   { path: "scripts.setup", section: "Scripts", label: "Setup script", kind: "multiline" },
   { path: "scripts.run", section: "Scripts", label: "Run scripts", kind: "run" },
@@ -127,6 +159,9 @@ export type FieldPath = (typeof FIELDS)[number]["path"];
 
 export const SECTIONS: ReadonlyArray<string> = [...new Set(FIELDS.map((f) => f.section))];
 
+/** The Settings → Project page (04) that shows a section. Browser Run is on Agents. */
+export const sectionPage = (section: string): string => (section === "Browser" ? "Agent" : section);
+
 export interface InstanceEdit {
   readonly preset: (typeof INSTANCE_PRESETS)[number] | "custom";
   readonly vcpu: string;
@@ -163,25 +198,32 @@ export interface FieldState {
 }
 
 export type SettingsForm = Readonly<Record<FieldPath, FieldState>>;
+
 export type FieldErrors = Partial<Record<FieldPath, string>>;
 
 let rowSeq = 0;
+
 export const nextRowKey = (): number => ++rowSeq;
 
-const isObj = (u: unknown): u is Record<string, unknown> =>
-  typeof u === "object" && u !== null && !Array.isArray(u);
+const isObj = (value: JsonData): value is JsonDataFields => Predicate.isObject(value);
 
-export const getAt = (obj: unknown, path: string): unknown =>
-  path.split(".").reduce<unknown>((o, k) => (isObj(o) ? o[k] : undefined), obj);
+const isArray = (value: JsonData): value is JsonDataArray => Array.isArray(value);
 
-const setAt = (obj: Record<string, unknown>, path: string, value: unknown): void => {
+export const getAt = (obj: Settings | SettingsLayer, path: string): JsonData =>
+  path.split(".").reduce<JsonData>((value, key) => (isObj(value) ? value[key] : undefined), obj);
+
+const setAt = (obj: JsonDataFields, path: string, value: JsonData): void => {
   const keys = path.split(".");
-  let o = obj;
-  for (const k of keys.slice(0, -1)) {
-    if (!isObj(o[k])) o[k] = {};
-    o = o[k] as Record<string, unknown>;
+  let current = obj;
+
+  for (const key of keys.slice(0, -1)) {
+    const child = current[key];
+    const next: JsonDataFields = isObj(child) ? { ...child } : {};
+    current[key] = next;
+    current = next;
   }
-  o[keys[keys.length - 1]!] = value;
+
+  current[keys[keys.length - 1]!] = value;
 };
 
 export const fieldDef = (path: FieldPath): FieldDef => FIELDS.find((f) => f.path === path)!;
@@ -189,22 +231,23 @@ export const fieldDef = (path: FieldPath): FieldDef => FIELDS.find((f) => f.path
 const CUSTOM_START: Omit<InstanceEdit, "preset"> = { vcpu: "2", memoryMib: "8192", diskMb: "10000" };
 
 /** A stored value as the field's editor value. */
-export const toEdit = (def: FieldDef, value: unknown): EditValue => {
+export const toEdit = (def: FieldDef, value: JsonData): EditValue => {
   switch (def.kind) {
     case "text":
     case "multiline":
     case "select":
-      return { kind: "text", text: typeof value === "string" ? value : "" };
+      return { kind: "text", text: Schema.is(Schema.String)(value) ? value : "" };
     case "number":
-      return { kind: "text", text: typeof value === "number" ? String(value) : "" };
+      return { kind: "text", text: Schema.is(Schema.Number)(value) ? String(value) : "" };
     case "hosts":
-      return { kind: "text", text: Array.isArray(value) ? value.join("\n") : "" };
+      return { kind: "text", text: isArray(value) ? value.join("\n") : "" };
     case "bool":
       return { kind: "bool", on: value === true };
     case "instance": {
-      if (typeof value === "string" && (INSTANCE_PRESETS as ReadonlyArray<string>).includes(value)) {
-        return { kind: "instance", instance: { preset: value as InstanceEdit["preset"], ...CUSTOM_START } };
+      if (Schema.is(Schema.String)(value) && Schema.is(InstanceName)(value)) {
+        return { kind: "instance", instance: { preset: value, ...CUSTOM_START } };
       }
+
       if (isObj(value)) {
         return {
           kind: "instance",
@@ -216,18 +259,21 @@ export const toEdit = (def: FieldDef, value: unknown): EditValue => {
           },
         };
       }
+
       return { kind: "instance", instance: { preset: "standard-3", ...CUSTOM_START } };
     }
+
     case "run":
       return {
         kind: "run",
         rows: Object.entries(isObj(value) ? value : {}).map(([id, s]) => {
           const r = isObj(s) ? s : {};
+
           return {
             key: nextRowKey(),
             id,
-            command: typeof r["command"] === "string" ? r["command"] : "",
-            cwd: typeof r["cwd"] === "string" ? r["cwd"] : "",
+            command: Schema.is(Schema.String)(r["command"]) ? r["command"] : "",
+            cwd: Schema.is(Schema.String)(r["cwd"]) ? r["cwd"] : "",
             isDefault: r["default"] === true,
           };
         }),
@@ -238,16 +284,20 @@ export const toEdit = (def: FieldDef, value: unknown): EditValue => {
         rows: Object.entries(isObj(value) ? value : {}).map(([name, v]) => ({
           key: nextRowKey(),
           name,
-          value: typeof v === "string" ? v : "",
+          value: Schema.is(Schema.String)(v) ? v : "",
         })),
       };
   }
 };
 
-type Parsed = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: string };
+type Parsed =
+  | { readonly ok: true; readonly value: JsonData }
+  | { readonly ok: false; readonly error: string };
 
 const isHost = Schema.is(HostPattern);
+
 const isCustomInstance = Schema.is(CustomInstance);
+
 const WHOLE = /^\d+$/;
 
 /** The editor value as a layer value, or the reason it is not valid. */
@@ -257,35 +307,44 @@ export const fromEdit = (def: FieldDef, edit: EditValue): Parsed => {
       if (def.kind === "number") {
         const t = edit.text.trim();
         const n = Number(t);
+
         return WHOLE.test(t) && n >= 5 && n <= 240
           ? { ok: true, value: n }
           : { ok: false, error: "Use a whole number from 5 to 240." };
       }
+
       if (def.kind === "hosts") {
         const hosts = edit.text
           .split("\n")
           .map((l) => l.trim().toLowerCase())
           .filter((l) => l !== "");
+
         const bad = hosts.find((h) => !isHost(h));
+
         return bad === undefined
           ? { ok: true, value: hosts }
           : { ok: false, error: `Not a host pattern: ${bad}` };
       }
+
       if (def.kind === "select") {
         return def.options?.some((o) => o.value === edit.text)
           ? { ok: true, value: edit.text }
           : { ok: false, error: "Pick a value." };
       }
+
       return { ok: true, value: def.kind === "text" ? edit.text.trim() : edit.text };
     }
+
     case "bool":
       return { ok: true, value: edit.on };
     case "instance": {
       const i = edit.instance;
+
       if (i.preset !== "custom") return { ok: true, value: i.preset };
       const parts = [i.vcpu, i.memoryMib, i.diskMb].map((s) => s.trim());
       const [vcpu, memoryMib, diskMb] = parts.map(Number);
       const value = { vcpu, memoryMib, diskMb };
+
       return parts.every((p) => WHOLE.test(p)) && isCustomInstance(value)
         ? { ok: true, value }
         : {
@@ -294,29 +353,44 @@ export const fromEdit = (def: FieldDef, edit: EditValue): Parsed => {
               "Use 1 to 4 vCPU, 4096 to 12288 MiB of memory (3072 MiB per vCPU at least) and 1 to 20000 MB of disk.",
           };
     }
+
     case "run": {
       const out: Record<string, { command: string; cwd?: string; default?: boolean }> = {};
+
       for (const r of edit.rows) {
         const id = r.id.trim();
+
         if (id === "") return { ok: false, error: "Each run script needs a name." };
+
         if (id in out) return { ok: false, error: `Two run scripts are named ${id}.` };
+
         if (r.command.trim() === "") return { ok: false, error: `Run script ${id} needs a command.` };
-        out[id] = {
+
+        const script: NonNullable<NonNullable<SettingsLayer["scripts"]>["run"]>[string] = {
           command: r.command,
-          ...(r.cwd.trim() ? { cwd: r.cwd.trim() } : {}),
-          ...(r.isDefault ? { default: true } : {}),
         };
+
+        const cwd = r.cwd.trim();
+        out[id] = r.isDefault ? { ...script, default: true } : script;
+
+        if (cwd) out[id] = { ...out[id]!, cwd };
       }
+
       return { ok: true, value: out };
     }
+
     case "env": {
       const out: Record<string, string> = {};
+
       for (const r of edit.rows) {
         const name = r.name.trim();
+
         if (name === "") return { ok: false, error: "Each variable needs a name." };
+
         if (name in out) return { ok: false, error: `Two variables are named ${name}.` };
         out[name] = r.value;
       }
+
       return { ok: true, value: out };
     }
   }
@@ -326,33 +400,42 @@ const isRecordField = (def: FieldDef): boolean => def.kind === "run" || def.kind
 
 /**
  * The form for a project's saved overrides. A field the project does not set starts from its
- * effective value, so turning the override on keeps what is in use. Run scripts and variables
+ * effective value, so editing starts from what is in use. Run scripts and variables
  * merge per entry with the repo files, so their editors hold only the project's own entries.
  */
 export const formFromLayer = (layer: SettingsLayer, effective: Settings): SettingsForm => {
   const form: Record<string, FieldState> = {};
+
   for (const def of FIELDS) {
     const own = getAt(layer, def.path);
     const start = own !== undefined ? own : isRecordField(def) ? {} : getAt(effective, def.path);
     form[def.path] = { set: own !== undefined, value: toEdit(def, start) };
   }
+
+  // SAFETY: FIELDS contains every FieldPath exactly once and the loop creates its FieldState.
   return form as SettingsForm;
 };
 
 /** The layer to save, or the fields that are not valid. */
-export const layerFromForm = (
-  form: SettingsForm,
-): { readonly layer: SettingsLayer; readonly errors: FieldErrors } => {
-  const layer: Record<string, unknown> = {};
-  const errors: Record<string, string> = {};
+export const layerFromForm = (form: SettingsForm) => {
+  const layer: JsonDataFields = {};
+  const errors: FieldErrors = {};
+
   for (const def of FIELDS) {
     const f = form[def.path];
+
     if (!f.set) continue;
     const parsed = fromEdit(def, f.value);
+
     if (parsed.ok) setAt(layer, def.path, parsed.value);
     else errors[def.path] = parsed.error;
   }
-  return { layer: layer as SettingsLayer, errors: errors as FieldErrors };
+
+  // SAFETY: only registered paths are set, using fromEdit validation for that field.
+  return { layer: Schema.decodeUnknownSync(SettingsLayer)(layer), errors } satisfies {
+    readonly layer: SettingsLayer;
+    readonly errors: FieldErrors;
+  };
 };
 
 /** The form without React row keys, to tell whether it changed. */
@@ -362,26 +445,28 @@ export const formSignature = (form: SettingsForm): string =>
       const f = form[d.path];
       const v = f.value;
       const value = v.kind === "run" || v.kind === "env" ? v.rows.map((r) => ({ ...r, key: 0 })) : v;
+
       return [f.set, value];
     }),
   );
 
-const stable = (u: unknown): unknown =>
-  Array.isArray(u)
-    ? u.map(stable)
-    : isObj(u)
-      ? Object.fromEntries(
-          Object.keys(u)
-            .filter((k) => u[k] !== undefined)
-            .sort()
-            .map((k) => [k, stable(u[k])]),
-        )
-      : u;
+const stable = (value: JsonData): JsonData => {
+  if (isArray(value)) return value.map(stable);
 
-export const sameLayer = (a: unknown, b: unknown): boolean =>
+  if (!isObj(value)) return value;
+  const out: JsonDataFields = {};
+
+  for (const key of Object.keys(value).sort()) {
+    if (value[key] !== undefined) out[key] = stable(value[key]);
+  }
+
+  return out;
+};
+
+export const sameLayer = (a: JsonData, b: JsonData): boolean =>
   JSON.stringify(stable(a)) === JSON.stringify(stable(b));
 
-// Effective values and where they came from (04: Tempo, .tempo, .conductor, conductor.json or default).
+// Effective values and where they came from (04: Tempo, .tempo or default).
 
 export interface EffectiveContext {
   /** The open workspace's effective settings, when it belongs to this project. */
@@ -401,52 +486,63 @@ export const sourceLabel = (s: SettingsSource): string => SETTINGS_SOURCE_LABELS
 
 const sourceOf = (ctx: EffectiveContext, path: string, fromLayer: boolean): SettingsSource => {
   if (ctx.settings && ctx.sources) return ctx.sources[path] ?? "default";
+
   return fromLayer ? "tempo" : "default";
 };
 
-export const formatValue = (def: FieldDef, value: unknown): string => {
+export const formatValue = (def: FieldDef, value: JsonData): string => {
   switch (def.kind) {
     case "bool":
       return value === true ? "On" : "Off";
     case "select":
       return def.options?.find((o) => o.value === value)?.label ?? String(value ?? "");
     case "hosts":
-      return Array.isArray(value) && value.length > 0 ? value.join(", ") : "None";
-    case "instance":
-      return value === undefined ? "" : instanceLabel(value as Instance);
+      return isArray(value) && value.length > 0 ? value.join(", ") : "None";
+    case "instance": {
+      const decoded = Schema.decodeUnknownOption(InstanceSchema)(value);
+
+      return Option.isSome(decoded) ? instanceLabel(decoded.value) : "";
+    }
+
     case "number":
       return String(value ?? "");
     default:
-      return typeof value === "string" && value !== "" ? value : "Empty";
+      return Schema.is(Schema.String)(value) && value !== "" ? value : "Empty";
   }
 };
 
 /** One leaf key's effective value and source. */
-export const effectiveLeaf = (
-  def: FieldDef,
-  ctx: EffectiveContext,
-): { readonly text: string; readonly source: SettingsSource } => {
+export const effectiveLeaf = (def: FieldDef, ctx: EffectiveContext) => {
   const own = getAt(ctx.layer, def.path);
+
   const value = ctx.settings
     ? getAt(ctx.settings, def.path)
     : own !== undefined
       ? own
       : getAt(DEFAULT_SETTINGS, def.path);
-  return { text: formatValue(def, value), source: sourceOf(ctx, def.path, own !== undefined) };
+
+  return { text: formatValue(def, value), source: sourceOf(ctx, def.path, own !== undefined) } satisfies {
+    readonly text: string;
+    readonly source: SettingsSource;
+  };
 };
 
 /** Run scripts or variables in effect, one row per entry with its own source. */
 export const effectiveEntries = (def: FieldDef, ctx: EffectiveContext): EffectiveEntry[] => {
   const record = getAt(ctx.settings ?? ctx.layer, def.path);
   const ownRecord = getAt(ctx.layer, def.path);
+
   if (!isObj(record)) return [];
   const prefix = def.kind === "run" ? "scripts.run" : "environment_variables";
+
   return Object.entries(record).map(([k, v]) => {
     const fromLayer = isObj(ownRecord) && k in ownRecord;
+
     const text =
       def.kind === "run" && isObj(v)
-        ? `${String(v["command"] ?? "")}${typeof v["cwd"] === "string" && v["cwd"] ? ` (in ${v["cwd"]})` : ""}${v["default"] === true ? " · default" : ""}`
+        ? `${String(v["command"] ?? "")}${Schema.is(Schema.String)(v["cwd"]) && v["cwd"] ? ` (in ${v["cwd"]})` : ""}${v["default"] === true ? " · default" : ""}`
         : `${k}=${String(v)}`;
+
     return { key: k, text, source: sourceOf(ctx, `${prefix}.${k}`, fromLayer) };
   });
 };

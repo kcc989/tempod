@@ -4,6 +4,7 @@ import {
   closeDialog,
   dialogStore,
   layoutStore,
+  settingsStore,
   openDialog,
   workspaceUiStore,
   type ConfirmRequest,
@@ -37,23 +38,30 @@ export function useDialogState(): DialogState | null {
  * Wires a dialog component to the dialog store: `open` and `onOpenChange` go straight to Radix
  * Dialog; `args` is the open request (project, tab, workspace…).
  */
-export function useDialog<K extends DialogKind>(
-  kind: K,
-): {
-  readonly open: boolean;
-  readonly args: DialogOf<K> | null;
-  readonly onOpenChange: (open: boolean) => void;
-} {
+export function useDialog<K extends DialogKind>(kind: K) {
   const dialog = useStoreSelector(dialogStore, (s) => s.dialog);
-  const args = dialog?.kind === kind ? (dialog as DialogOf<K>) : null;
+  const matches = (value: DialogState): value is DialogOf<K> => value.kind === kind;
+  const args = dialog && matches(dialog) ? dialog : null;
+
   const onOpenChange = useCallback(
     (open: boolean) => {
       if (!open) closeDialog(kind);
-      else if (dialogStore.getSnapshot().dialog?.kind !== kind) openDialog({ kind } as DialogState);
+      else if (dialogStore.getSnapshot().dialog?.kind !== kind) {
+        if (args) openDialog(args);
+        else if (kind === "newWorkspace") openDialog({ kind: "newWorkspace" });
+        else if (kind === "addProject") openDialog({ kind: "addProject" });
+        else if (kind === "settings") openDialog({ kind: "settings" });
+        else if (kind === "palette") openDialog({ kind: "palette" });
+      }
     },
-    [kind],
+    [kind, args],
   );
-  return { open: args !== null, args, onOpenChange };
+
+  return { open: args !== null, args, onOpenChange } satisfies {
+    readonly open: boolean;
+    readonly args: DialogOf<K> | null;
+    readonly onOpenChange: (open: boolean) => void;
+  };
 }
 
 export function useConfirmRequest(): ConfirmRequest | null {
@@ -62,4 +70,8 @@ export function useConfirmRequest(): ConfirmRequest | null {
     () => dialogStore.getSnapshot().confirm,
     () => null,
   );
+}
+
+export function useSettings(): DialogOf<"settings"> | null {
+  return useStore(settingsStore);
 }

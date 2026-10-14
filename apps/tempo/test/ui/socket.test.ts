@@ -18,14 +18,15 @@ class FakeSocket implements SocketLike {
   }
   open() {
     this.readyState = 1;
-    this.onopen?.({});
+    this.onopen?.(new Event("open"));
   }
   message(data: string) {
-    this.onmessage?.({ data });
+    this.onmessage?.(new MessageEvent("message", { data }));
   }
   serverClose(code: number) {
     this.readyState = 3;
-    this.onclose?.({ code });
+    // SAFETY: this callback reads only code; the test supplies that CloseEvent field.
+    this.onclose?.({ code } as CloseEvent);
   }
 }
 
@@ -43,6 +44,7 @@ describe("ReconnectingSocket", () => {
       factory: (url) => {
         const s = new FakeSocket(url);
         sockets.push(s);
+
         return s;
       },
       random: () => 0.5,
@@ -71,16 +73,20 @@ describe("ReconnectingSocket", () => {
     const s = make();
     s.start();
     const delays: number[] = [];
+
     for (let i = 0; i < 7; i++) {
       const before = sockets.length;
       sockets[sockets.length - 1]!.serverClose(1006);
       let waited = 0;
+
       while (sockets.length === before) {
         vi.advanceTimersByTime(100);
         waited += 100;
       }
+
       delays.push(waited);
     }
+
     expect(delays).toEqual([500, 1000, 2000, 4000, 8000, 10000, 10000]);
     expect(statuses).toContain("reconnecting");
     rev = 42;
@@ -120,6 +126,17 @@ describe("ReconnectingSocket", () => {
     expect(s.status).toBe(status);
   });
 
+  it("rejectVersion closes with 4400 and never reconnects", () => {
+    const sock = make();
+    sock.start();
+    sockets[0]!.open();
+    sock.rejectVersion();
+    expect(sockets[0]!.closed).toBe(4400);
+    expect(sock.status).toBe("bad_version");
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(1);
+  });
+
   it("stop closes the socket and cancels retries", () => {
     const s = make();
     s.start();
@@ -128,5 +145,15 @@ describe("ReconnectingSocket", () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
     expect(s.status).toBe("stopped");
+  });
+});
+
+describe("isUnknownVersionHello", () => {
+  it("flags only a hello whose v is not 1", async () => {
+    const { isUnknownVersionHello } = await import("~/ui/stores/parse");
+    expect(isUnknownVersionHello(JSON.stringify({ type: "hello", v: 2, workspaces: [] }))).toBe(true);
+    expect(isUnknownVersionHello(JSON.stringify({ type: "hello", v: 1, workspaces: [] }))).toBe(false);
+    expect(isUnknownVersionHello(JSON.stringify({ type: "pong" }))).toBe(false);
+    expect(isUnknownVersionHello("not json")).toBe(false);
   });
 });

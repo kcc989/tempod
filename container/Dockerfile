@@ -13,38 +13,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # gh and bun: versions from versions.json, passed as build args
 ARG GH_VERSION
 ARG BUN_VERSION
-RUN curl -fsSL https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz \
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export CURL_CA_BUNDLE=/run/secrets/proxy_ca; fi; \
+    curl -fsSL https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz \
     | tar -xz -C /tmp && mv /tmp/gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh
-RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v${BUN_VERSION}"
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export CURL_CA_BUNDLE=/run/secrets/proxy_ca; fi; \
+    curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v${BUN_VERSION}"
 RUN corepack enable
-
-ARG PLAYWRIGHT_MCP_VERSION
-RUN npm install -g \
-    @agentclientprotocol/claude-agent-acp@0.89.1 \
-    @agentclientprotocol/codex-acp@2.2.2 \
-    opencode-ai@1.18.35 \
-    @earendil-works/pi-coding-agent@1.1.0 \
-    pi-acp@0.0.34 \
-    playwright@1.61.1 \
-    @playwright/mcp@${PLAYWRIGHT_MCP_VERSION}
-
-# @playwright/mcp 0.0.83 names its bin `playwright-mcp`; 01 calls it `mcp-server-playwright`.
-# Keep both until spike S7 settles the name (docs/IMPLEMENTATION_NOTES.md).
-RUN if [ ! -e "$(npm prefix -g)/bin/mcp-server-playwright" ]; then \
-      ln -s "$(npm prefix -g)/bin/playwright-mcp" "$(npm prefix -g)/bin/mcp-server-playwright"; fi
-
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-RUN playwright install --with-deps chromium && chmod -R a+rwX /opt/ms-playwright
 
 COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
+COPY --chmod=0644 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
 
 RUN groupmod -n tempo node \
  && usermod -l tempo -d /home/tempo -s /bin/bash node \
  && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
+
+ARG PLAYWRIGHT_MCP_VERSION
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install -g \
+    @agentclientprotocol/claude-agent-acp@0.89.1 \
+    @agentclientprotocol/codex-acp@2.2.2 \
+    opencode-ai@1.18.35 \
+    @earendil-works/pi-coding-agent@1.1.0 \
+    pi-acp@0.0.34 \
+    playwright@1.61.1 \
+    @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} \
+ && if [ ! -e "$(npm prefix -g)/bin/mcp-server-playwright" ]; then \
+      ln -s "$(npm prefix -g)/bin/playwright-mcp" "$(npm prefix -g)/bin/mcp-server-playwright"; fi \
+ && playwright install --with-deps chromium \
+ && chmod -R a+rwX /opt/ms-playwright \
+ && npm cache clean --force \
+ && rm -rf /var/lib/apt/lists/*
 
 ENV HOME=/home/tempo \
     LANG=C.UTF-8 \

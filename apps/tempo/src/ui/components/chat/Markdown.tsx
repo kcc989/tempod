@@ -1,11 +1,14 @@
+import { Schema } from "effect";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
 import Markdown, { defaultUrlTransform, type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "~/ui/components/ui/button";
+import { useTheme } from "~/ui/hooks/useTheme";
 import { cn } from "~/ui/lib/utils";
 import { openFile } from "~/ui/state/workspace-ui";
 import { highlight, type HighlightLines } from "./highlight";
+import { DiagramRendererContext } from "./mermaid";
 import { fileLinkTarget } from "./transcript-model";
 
 interface MarkdownEnv {
@@ -15,6 +18,7 @@ interface MarkdownEnv {
 }
 
 type Element = NonNullable<ExtraProps["node"]>;
+
 type ElementContent = Element["children"][number];
 
 const Env = createContext<MarkdownEnv>({ workspaceId: "", streaming: false });
@@ -25,6 +29,7 @@ const textOf = (node: ElementContent | Element): string =>
 const languageOf = (code: Element | undefined): string => {
   const cls = code?.properties?.["className"];
   const list: string[] = Array.isArray(cls) ? cls.map(String) : String(cls ?? "").split(" ");
+
   return list.find((c) => c.startsWith("language-"))?.slice("language-".length) ?? "";
 };
 
@@ -37,6 +42,7 @@ const urlTransform = (url: string): string =>
 function MarkdownLink({ href, children }: { href?: string | undefined; children?: React.ReactNode }) {
   const { workspaceId } = useContext(Env);
   const target = href ? fileLinkTarget(href) : null;
+
   if (target) {
     return (
       <button
@@ -48,7 +54,9 @@ function MarkdownLink({ href, children }: { href?: string | undefined; children?
       </button>
     );
   }
+
   if (!href) return <span>{children}</span>;
+
   return (
     <a href={href} target="_blank" rel="noopener noreferrer">
       {children}
@@ -58,9 +66,11 @@ function MarkdownLink({ href, children }: { href?: string | undefined; children?
 
 /** 05: remote images in agent Markdown are not loaded; they show as links. */
 function MarkdownImage({ src, alt }: { src?: string | Blob | undefined; alt?: string | undefined }) {
-  const url = typeof src === "string" ? src : undefined;
+  const url = Schema.is(Schema.String)(src) ? src : undefined;
   const label = alt?.trim() || url || "Image";
+
   if (!isWeb(url)) return <span className="text-muted-foreground">{label}</span>;
+
   return (
     <a href={url} target="_blank" rel="noopener noreferrer">
       {label}
@@ -74,7 +84,11 @@ const components: Components = {
   pre: ({ node }) => {
     const code = node?.children.find((c): c is Element => c.type === "element" && c.tagName === "code");
     const text = code ? textOf(code) : node ? textOf(node) : "";
-    return <CodeBlock code={text.replace(/\n$/, "")} lang={languageOf(code)} />;
+    const lang = languageOf(code);
+
+    if (lang === "mermaid") return <MermaidBlock code={text.replace(/\n$/, "")} />;
+
+    return <CodeBlock code={text.replace(/\n$/, "")} lang={lang} />;
   },
 };
 
@@ -92,7 +106,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
 }) {
   return (
     <Env.Provider value={{ workspaceId, streaming }}>
-      <div className="prose-tempo text-sm">
+      <div className="prose-tempo max-w-[75ch] text-sm">
         <Markdown remarkPlugins={plugins} components={components} urlTransform={urlTransform}>
           {text}
         </Markdown>
@@ -100,6 +114,47 @@ export const MessageMarkdown = memo(function MessageMarkdown({
     </Env.Provider>
   );
 });
+
+/**
+ * A `mermaid` code block as a diagram, shown through `<img>`. While the message streams it stays a
+ * code block; when rendering fails the code block stays with a note under it (04).
+ */
+export function MermaidBlock({ code }: { code: string }) {
+  const renderMermaid = useContext(DiagramRendererContext);
+  const { streaming } = useContext(Env);
+  const dark = useTheme().resolved === "dark";
+  const [result, setResult] = useState<{ key: string; src: string | null } | null>(null);
+  const key = `${dark ? "d" : "l"}:${code}`;
+  useEffect(() => {
+    if (streaming) return;
+    let live = true;
+    renderMermaid(code, dark).then(
+      (src) => live && setResult({ key, src }),
+      () => live && setResult({ key, src: null }),
+    );
+
+    return () => {
+      live = false;
+    };
+  }, [code, dark, key, streaming, renderMermaid]);
+  const current = result?.key === key ? result : null;
+
+  if (current?.src)
+    return (
+      <div className="my-2 overflow-x-auto rounded-md border bg-background p-2">
+        <img src={current.src} alt="Diagram" className="max-w-full" />
+      </div>
+    );
+
+  return (
+    <>
+      <CodeBlock code={code} lang="mermaid" />
+      {current && current.src === null && (
+        <p className="-mt-1 mb-2 text-xs text-destructive">Diagram failed to render.</p>
+      )}
+    </>
+  );
+}
 
 /** A code block with lazy Shiki highlighting and a copy button. */
 export function CodeBlock({ code, lang, className }: { code: string; lang: string; className?: string }) {
@@ -115,11 +170,13 @@ export function CodeBlock({ code, lang, className }: { code: string; lang: strin
       .catch(() => {
         // Plain text stays.
       });
+
     return () => {
       live = false;
     };
   }, [code, lang, streaming]);
   const lines = result && result.code === code && result.lang === lang ? result.lines : null;
+
   return (
     <div className={cn("group/code relative my-2 rounded-md border bg-muted/40", className)}>
       <div className="flex h-6 items-center justify-between border-b px-2 text-xs text-muted-foreground">
@@ -150,8 +207,10 @@ export function CopyButton({ text, label = "Copy code" }: { text: string; label?
   useEffect(() => {
     if (!copied) return;
     const t = setTimeout(() => setCopied(false), 1500);
+
     return () => clearTimeout(t);
   }, [copied]);
+
   return (
     <Button
       size="icon-sm"

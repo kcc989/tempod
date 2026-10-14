@@ -30,6 +30,7 @@ export function FirstRunChecklist({ steps, installUrl }: FirstRunChecklistProps)
 
   const recheck = () => {
     void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey });
+
     for (const name of [
       "listInstallations",
       "getCredentialStatus",
@@ -45,6 +46,7 @@ export function FirstRunChecklist({ steps, installUrl }: FirstRunChecklistProps)
     if (!visible || nextId === null || !EXTERNAL.has(nextId)) return;
     const queryKey = nextId === "createApp" ? setupStatusQueryOptions.queryKey : callKey("listInstallations");
     const t = setInterval(() => void queryClient.invalidateQueries({ queryKey }), POLL_MS);
+
     return () => clearInterval(t);
   }, [visible, nextId, queryClient]);
 
@@ -61,6 +63,7 @@ export function FirstRunChecklist({ steps, installUrl }: FirstRunChecklistProps)
       <ol className="flex flex-col gap-1">
         {steps.map((s, i) => {
           const current = s.id === next?.id;
+
           return (
             <li
               key={s.id}

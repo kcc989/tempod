@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RunContent",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string"
+    }
+  },
+  "required": ["runId"],
+  "additionalProperties": true
+}

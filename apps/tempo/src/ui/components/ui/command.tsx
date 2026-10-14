@@ -41,6 +41,14 @@ function CommandDialog({
       <DialogContent
         className={cn("top-[20%] translate-y-0 overflow-hidden p-0 sm:max-w-xl", className)}
         showCloseButton={false}
+        onKeyDown={(event) => {
+          // Focus can arrive before Radix mounts its Escape listener.
+          if (event.key === "Escape" && !event.defaultPrevented && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onOpenChange?.(false);
+          }
+        }}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>

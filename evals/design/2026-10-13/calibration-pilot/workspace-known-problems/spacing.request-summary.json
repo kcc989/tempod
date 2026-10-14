@@ -1,0 +1,84 @@
+{
+  "model": "clef",
+  "state": {
+    "app": {
+      "name": "Tempo",
+      "category": "Agent coding workspace",
+      "platform": "desktop",
+      "primary_user": "Developer",
+      "primary_job": "Read agent work, edit a project, and manage chats"
+    },
+    "screen": {
+      "name": "Workspace",
+      "purpose": "Read a conversation and inspect project changes beside it"
+    },
+    "image_legend": [
+      "Image 1: supplied full frame",
+      "Image 2: sidebar",
+      "Image 3: header controls",
+      "Image 4: composer"
+    ]
+  },
+  "images": [
+    {
+      "content_type": "image/png",
+      "file": "full.png",
+      "sha256": "777debfe64f22d27609d5a115db560e9c0974ec3de3606360a210be655c17dc9",
+      "bytes": 568271
+    },
+    {
+      "content_type": "image/png",
+      "file": "detail-1.png",
+      "sha256": "f87996664a5acd395ee1d3d7be66c7c32d03d57ea36f6f22dd158faff5df11c7",
+      "bytes": 75819
+    },
+    {
+      "content_type": "image/png",
+      "file": "detail-2.png",
+      "sha256": "c0ba0d6c2bfc89d82326b85f1dca2e243eb76fa3f24a77b72170c74ce76dbff5",
+      "bytes": 90502
+    },
+    {
+      "content_type": "image/png",
+      "file": "detail-3.png",
+      "sha256": "65b88efce9f623829339fdecb1e09c58725201fbbbf1256791c31d268363e02d",
+      "bytes": 34096
+    }
+  ],
+  "questions": {
+    "spacing_grouping": {
+      "type": "score",
+      "instructions": "In the images, how does spacing show what belongs together?",
+      "criteria": [
+        "Gaps are random, or the same everywhere, so groups are hard to see",
+        "Groups exist, but some gaps break them or join unrelated items",
+        "Related items sit close together, gaps between groups are wider, and the same gap sizes repeat"
+      ]
+    },
+    "spacing_alignment": {
+      "type": "noul",
+      "instructions": "In the images, do elements line up on shared left edges and columns?"
+    },
+    "spacing_consistent": {
+      "type": "noul",
+      "instructions": "In the images, do repeated components, such as rows, cards, tabs, and buttons, use the same padding and height?"
+    },
+    "quality_heading_spacing": {
+      "type": "noul",
+      "instructions": "In the images, is a heading closer to the section above it than to its own content?"
+    },
+    "quality_cramped": {
+      "type": "noul",
+      "instructions": "In the images, is text pressed against the edge of a button, a card, or the screen?"
+    },
+    "slop_monotonous_spacing": {
+      "type": "noul",
+      "instructions": "In the images, are all gaps the same size, so that related items are no closer together than separate groups?"
+    },
+    "type_line_height": {
+      "type": "noul",
+      "instructions": "In the images, does text with several lines have comfortable space between the lines?"
+    }
+  },
+  "originalRequestSha256": "5bce29bb72a18639027eedde253252f5d9cfc2e1a4ec5cf5a9a5496441e571bc"
+}

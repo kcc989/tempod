@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   activateTab,
+  selectTool,
+  closeTool,
+  closeWorkspaceInfo,
   closeDialog,
   closeTab,
   confirm,
@@ -11,15 +14,19 @@ import {
   getLayout,
   getWorkspaceUi,
   insertIntoComposer,
+  isRightOpen,
   moveTab,
   openDialog,
   openDiff,
   openFile,
+  openLiveView,
   openTab,
   parseTabRef,
   resetUiState,
   resolveConfirm,
+  setLayout,
   setPhonePane,
+  setRightQuiet,
   showBottomTab,
   showRightTab,
   syncChatTabs,
@@ -36,7 +43,9 @@ import {
 import { installLocalStorage, removeLocalStorage } from "./storage-stub";
 
 const W = "w1";
+
 const keys = () => getWorkspaceUi(W).tabs.map((t) => t.key);
+
 const active = () => getWorkspaceUi(W).activeKey;
 
 let storage: Map<string, string>;
@@ -58,10 +67,12 @@ describe("tab refs", () => {
     [{ kind: "file", path: "src/a.ts", line: null }, "file:src/a.ts:"],
     [{ kind: "diff", path: "README.md" }, "diff:README.md"],
     [{ kind: "diff", path: null }, "diff:"],
+    [{ kind: "guide" }, "guide:"],
     [{ kind: "browser", url: "https://p-1.example.com:3000/x" }, "browser:https://p-1.example.com:3000/x"],
+    [{ kind: "liveView" }, "liveView:"],
   ];
 
-  it("serializes as chat:<id>, file:<path>:<line?>, diff:<path?>, browser:<url> and parses back", () => {
+  it("serializes as chat:<id>, file:<path>:<line?>, diff:<path?>, browser:<url>, liveView: and parses back", () => {
     for (const [tab, ref] of cases) {
       expect(tabRef(tab)).toBe(ref);
       expect(parseTabRef(ref)).toEqual(tab);
@@ -73,6 +84,7 @@ describe("tab refs", () => {
     expect(parseTabRef("file:a.ts:0")).toBeNull();
     expect(parseTabRef("file:a.ts:x")).toBeNull();
     expect(parseTabRef("chat:")).toBeNull();
+    expect(parseTabRef("liveView:https://live.example.com/x")).toBeNull();
     expect(parseTabRef("nope:1")).toBeNull();
     expect(parseTabRef("plain")).toBeNull();
   });
@@ -99,6 +111,18 @@ describe("center tabs", () => {
     expect(again.tab).toEqual({ kind: "file", path: "a.ts", line: 40 });
     expect(again.seq).toBeGreaterThan(seq);
     expect(active()).toBe("file:a.ts");
+  });
+
+  it("keeps one Live View tab, which holds no link (04, Browser tabs)", () => {
+    openTab(W, { kind: "chat", sessionId: "s1" });
+    const key = openLiveView(W);
+    const seq = getWorkspaceUi(W).tabs[1]!.seq;
+    activateTab(W, "chat:s1");
+    expect(openLiveView(W)).toBe(key);
+    expect(keys()).toEqual(["chat:s1", "liveView"]);
+    expect(getWorkspaceUi(W).tabs[1]!.tab).toEqual({ kind: "liveView" });
+    expect(getWorkspaceUi(W).tabs[1]!.seq).toBeGreaterThan(seq);
+    expect(active()).toBe("liveView");
   });
 
   it("can open without activating, except when nothing is active", () => {
@@ -227,10 +251,13 @@ describe("panels and layout", () => {
   });
 
   it("⌥J opens the right side when it is closed", () => {
+    setLayout({ lastWorkspaceId: W });
     toggleRight();
     toggleBottom();
+    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: true });
     toggleBottom();
+    expect(getWorkspaceUi(W).activeToolKey).toBeNull();
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: false });
   });
 
@@ -243,6 +270,14 @@ describe("panels and layout", () => {
     showBottomTab(W, "setup");
     expect(getWorkspaceUi(W).bottomTab).toBe("setup");
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: true });
+  });
+
+  it("at phone width the Setup output opens as its own pane", () => {
+    setPhonePane("chat");
+    showBottomTab(W, "run");
+    expect(getLayout().phonePane).toBe("chat");
+    showBottomTab(W, "setup");
+    expect(getLayout().phonePane).toBe("setup");
   });
 
   it("falls back to defaults when storage is broken", () => {
@@ -272,7 +307,7 @@ describe("dialogs and confirmations", () => {
   });
 
   it("a newer confirm cancels the older one", async () => {
-    const first = confirm(CONFIRM_TEXT.rotatePreview());
+    const first = confirm(CONFIRM_TEXT.resetPreviewAccess());
     const second = confirm(CONFIRM_TEXT.closeRunningChat());
     await expect(first).resolves.toBe(false);
     expect(dialogStore.getSnapshot().confirm?.title).toBe("Stop the agent and close this chat?");
@@ -284,6 +319,65 @@ describe("dialogs and confirmations", () => {
     expect(CONFIRM_TEXT.revert(3).description).toBe(
       "Files go back to the end of turn 3. A safety checkpoint is saved first.",
     );
-    expect(CONFIRM_TEXT.rotatePreview().description).toBe("Old preview links will stop working.");
+    expect(CONFIRM_TEXT.resetPreviewAccess().description).toBe(
+      "Open previews will stop working. Open them again from Tempo.",
+    );
+  });
+});
+
+describe("right side starts closed (04, Right and bottom panels)", () => {
+  it("stays closed while quiet until the user opens it for that workspace", () => {
+    setLayout({ lastWorkspaceId: W });
+    setRightQuiet(W, true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(false);
+    toggleRight();
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(false);
+    closeWorkspaceInfo("w2");
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(true);
+    setRightQuiet("w2", true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(false);
+    toggleRight();
+    expect(getLayout().rightOpen).toBe(false);
+  });
+
+  it("keeps Info visible when the workspace stops being quiet, then reveals tools when Info closes", () => {
+    setRightQuiet(W, true);
+    setRightQuiet(W, false);
+    expect(getWorkspaceUi(W).infoOpen).toBe(true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(false);
+    closeWorkspaceInfo(W);
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(true);
+  });
+
+  it("⌥J and showing a tab pin it open", () => {
+    setLayout({ lastWorkspaceId: W });
+    setRightQuiet(W, true);
+    toggleBottom();
+    expect(getWorkspaceUi(W).rightPinned).toBe(true);
+    expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: true });
+    setRightQuiet("w2", true);
+    showRightTab("w2", "changes");
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(true);
+  });
+});
+
+describe("independent tools", () => {
+  it("keeps the target chat while opening documents and selecting tools", () => {
+    syncChatTabs(W, ["s1", "s2"]);
+    activateTab(W, "chat:s2");
+    setLayout({ rightOpen: false });
+    openFile(W, "README.md", 3);
+    expect(getWorkspaceUi(W).activeToolKey).toBe("file:README.md");
+    expect(getLayout().rightOpen).toBe(true);
+    selectTool(W, "terminal");
+    expect(targetChatSession(getWorkspaceUi(W))).toBe("s2");
+    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
+    activateTab(W, "chat:s1");
+    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
+    expect(targetChatSession(getWorkspaceUi(W))).toBe("s1");
+    closeTool(W, "terminal");
+    expect(getWorkspaceUi(W).activeToolKey).toBeNull();
+    expect(keys()).toContain("file:README.md");
   });
 });

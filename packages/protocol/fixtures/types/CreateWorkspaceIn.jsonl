@@ -1,2 +1,3 @@
 {"projectId":"01k70000000000000000000001","source":{"kind":"new","baseBranch":"main"}}
-{"projectId":"01k70000000000000000000001","source":{"kind":"pr","number":42},"agent":"codex","prompt":{"text":"Fix the flaky test"}}
+{"projectId":"01k70000000000000000000001","source":{"kind":"pr","number":42},"agent":"codex","model":"reported-model","prompt":{"text":"Fix the flaky test"}}
+{"projectId":"01k70000000000000000000001","source":{"kind":"branch","branch":"review/auth"},"agentId":"01k700000000000000000000js"}

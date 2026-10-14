@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
-import type { AgentId, Project } from "@tempo/protocol";
-import { CheckIcon, FolderGit2Icon } from "lucide-react";
-import { useState } from "react";
+import type { Project } from "@tempo/protocol";
+import { CheckIcon, FolderGit2Icon, MoreHorizontalIcon, CornerDownLeftIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -18,39 +18,37 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "~/ui/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Label } from "~/ui/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
-import { Textarea } from "~/ui/components/ui/textarea";
+import { ComposerSurface, ComposerInput, ComposerToolbar } from "~/ui/components/chat/ComposerControls";
+import { LaunchModelPicker, useLaunchModels } from "~/ui/components/chat/LaunchModelPicker";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
-import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
-import { agentLabel } from "~/ui/lib/agents";
 import { cn } from "~/ui/lib/utils";
 import { getHubStore } from "~/ui/stores/hub-store";
 import { closeDialog, openDialog, setPhonePane, type DialogOf } from "~/ui/state/workspace-ui";
 import { BranchPicker } from "./BranchPicker";
 import {
-  agentsWithLogin,
   createInput,
   emptySource,
   filterPullRequests,
-  initialAgent,
   isSourceTab,
   SOURCE_TABS,
   type SourceDraft,
 } from "./new-workspace-model";
-import { Field, SubmitKbd } from "./parts";
+import { Field } from "./parts";
 
 /** 04, New workspace (⌥N). Args: the project and a prompt to start with. */
 export function NewWorkspaceDialog() {
   const { open, args, onOpenChange } = useDialog("newWorkspace");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {args && <NewWorkspaceBody args={args} />}
@@ -60,12 +58,15 @@ export function NewWorkspaceDialog() {
 
 function NewWorkspaceBody({ args }: { args: DialogOf<"newWorkspace"> }) {
   const projects = useProjects();
+
   if (projects.isPending || projects.isError || projects.data.length === 0) {
     return (
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New workspace</DialogTitle>
-          <DialogDescription className="sr-only">Pick a project, a branch and an agent.</DialogDescription>
+          <DialogDescription className="sr-only">
+            Choose a project and model, then describe what you want to work on.
+          </DialogDescription>
         </DialogHeader>
         {projects.isPending ? (
           <SkeletonRows rows={4} />
@@ -81,6 +82,7 @@ function NewWorkspaceBody({ args }: { args: DialogOf<"newWorkspace"> }) {
       </DialogContent>
     );
   }
+
   return <NewWorkspaceForm args={args} projects={projects.data} />;
 }
 
@@ -93,34 +95,58 @@ function NewWorkspaceForm({
 }) {
   const navigate = useNavigate();
   const isPhone = useIsPhone();
-  const credentials = useCredentialStatus();
+
   const [projectId, setProjectId] = useState(
     args.projectId && projects.some((p) => p.id === args.projectId) ? args.projectId : projects[0]!.id,
   );
+
   const [source, setSource] = useState<SourceDraft>(emptySource);
-  const [pickedAgent, setPickedAgent] = useState<AgentId | null>(null);
   const [prompt, setPrompt] = useState(args.prompt ?? "");
   const [keepOpen, setKeepOpen] = useState(false);
   const [tried, setTried] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const creating = useRef(false);
+  const sourceFocus = useRef<HTMLButtonElement>(null);
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
-  const available = agentsWithLogin(credentials.data);
-  const agent =
-    pickedAgent && available.includes(pickedAgent) ? pickedAgent : initialAgent(available, project);
-  const input = createInput(project, source, agent, prompt);
+  const selection = useLaunchModels(project.settings);
+  const { credentials, models, available, selected, pickedAgent } = selection;
+
+  const repository = useCallQuery(
+    "getRepository",
+    { projectId: project.id },
+    { enabled: project.provider === "artifacts" },
+  );
+
+  const writable = project.provider !== "artifacts" || (!!repository.data && !repository.data.readOnly);
+
+  const requestedInput = pickedAgent
+    ? createInput(project, source, pickedAgent.baseAgent, prompt, undefined, pickedAgent.id)
+    : models.isSuccess && selected
+      ? createInput(project, source, selected.agent, prompt, selected.model)
+      : !prompt.trim()
+        ? createInput(project, source, selection.fallbackAgent, prompt)
+        : null;
+
+  const input = writable ? requestedInput : null;
 
   const create = useCallMutation("createWorkspace", {
     invalidates: ["listWorkspaces"],
     onSuccess: (summary) => {
       getHubStore().merge(summary);
       setTried(false);
+
       if (keepOpen) {
         setPrompt("");
+
         if (source.tab !== "new") setSource((s) => ({ ...s, branch: null, prNumber: null }));
         toast.success(`Created ${summary.title}`);
+
         return;
       }
+
       closeDialog("newWorkspace");
+
       if (isPhone) setPhonePane("chat");
       void navigate({ to: "/w/$workspaceId", params: { workspaceId: summary.id } });
     },
@@ -128,162 +154,209 @@ function NewWorkspaceForm({
 
   const submit = () => {
     setTried(true);
-    if (!input || create.isPending) return;
-    create.mutate(input);
+
+    if (!input) {
+      setOptionsOpen(true);
+
+      return;
+    }
+
+    if (creating.current) return;
+    creating.current = true;
+    create.mutate(input, {
+      onSettled: () => {
+        creating.current = false;
+      },
+    });
   };
 
   return (
-    <DialogContent onSubmitShortcut={submit} className="sm:max-w-xl">
-      <DialogHeader>
+    <DialogContent
+      onSubmitShortcut={submit}
+      className="gap-0 overflow-visible rounded-2xl border-0 bg-transparent p-0 shadow-none"
+      style={{ width: "min(48rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
+      overlayClassName="backdrop-blur-sm"
+      onOpenAutoFocus={(event) => {
+        event.preventDefault();
+        document.getElementById("nw-prompt")?.focus();
+      }}
+    >
+      <DialogHeader className="sr-only">
         <DialogTitle>New workspace</DialogTitle>
-        <DialogDescription className="sr-only">Pick a project, a branch and an agent.</DialogDescription>
+        <DialogDescription>
+          Choose a project and model, then describe what you want to work on.
+        </DialogDescription>
       </DialogHeader>
-      <form
-        className="grid gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <Field label="Project" htmlFor="nw-project">
-          <Select
-            value={project.id}
-            onValueChange={(v) => {
-              setProjectId(v);
-              setSource(emptySource());
-            }}
-          >
-            <SelectTrigger id="nw-project" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.owner}/{p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-
-        <Tabs
-          value={source.tab}
-          onValueChange={(v) => isSourceTab(v) && setSource((s) => ({ ...s, tab: v }))}
-          className="gap-2"
+      <ComposerSurface>
+        <form
+          className="flex min-h-72 flex-col"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
         >
-          <TabsList aria-label="Source" className="w-full">
-            {SOURCE_TABS.map((t) => (
-              <TabsTrigger key={t.id} value={t.id}>
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value="new">
-            <Field label="Base branch" htmlFor="nw-base" hint="The new branch starts from this one.">
-              <BranchPicker
-                key={project.id}
-                id="nw-base"
-                projectId={project.id}
-                label="Base branch"
-                value={source.baseBranch || project.defaultBranch}
-                placeholder={project.defaultBranch}
-                onChange={(b) => setSource((s) => ({ ...s, baseBranch: b }))}
-              />
-            </Field>
-          </TabsContent>
-          <TabsContent value="branch">
-            <Field
-              label="Branch"
-              htmlFor="nw-branch"
-              error={tried && !source.branch ? "Pick a branch." : null}
+          {repository.data?.readOnly && (
+            <p role="alert" className="pb-3 text-sm text-muted-foreground">
+              This repository is read-only.
+            </p>
+          )}
+          {project.provider === "artifacts" && repository.isError && (
+            <ErrorState error={repository.error} onRetry={() => void repository.refetch()} />
+          )}
+          <div className="mb-3 flex items-center gap-2 border-b pb-2 pr-8">
+            <Select
+              value={project.id}
+              onValueChange={(value) => {
+                setProjectId(value);
+                setSource(emptySource());
+              }}
             >
-              <BranchPicker
-                key={project.id}
-                id="nw-branch"
-                projectId={project.id}
-                label="Branch"
-                value={source.branch}
-                placeholder="Pick a branch"
-                invalid={tried && !source.branch}
-                onChange={(b) => setSource((s) => ({ ...s, branch: b }))}
-              />
-            </Field>
-          </TabsContent>
-          <TabsContent value="pr">
-            <PullRequestPicker
-              key={project.id}
-              projectId={project.id}
-              value={source.prNumber}
-              invalid={tried && source.prNumber === null}
-              onChange={(n) => setSource((s) => ({ ...s, prNumber: n }))}
-            />
-          </TabsContent>
-        </Tabs>
+              <SelectTrigger
+                id="nw-project"
+                aria-label="Project"
+                className="w-auto max-w-[70%] border-0 bg-transparent shadow-none"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.owner}/{p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Popover open={optionsOpen} onOpenChange={setOptionsOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" aria-label="Workspace options">
+                  <MoreHorizontalIcon className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="w-[min(24rem,calc(100vw-3rem))] space-y-3"
+                onOpenAutoFocus={(event) => {
+                  if (sourceFocus.current) {
+                    event.preventDefault();
+                    sourceFocus.current.focus();
+                  }
+                }}
+              >
+                <Tabs
+                  value={source.tab}
+                  onValueChange={(v) => isSourceTab(v) && setSource((s) => ({ ...s, tab: v }))}
+                  className="gap-2"
+                >
+                  <TabsList aria-label="Source" className="w-full">
+                    {SOURCE_TABS.map((t) => (
+                      <TabsTrigger
+                        key={t.id}
+                        value={t.id}
+                        ref={source.tab === t.id ? sourceFocus : undefined}
+                      >
+                        {t.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  <TabsContent value="new">
+                    <Field label="Base branch" htmlFor="nw-base" hint="The new branch starts from this one.">
+                      <BranchPicker
+                        key={project.id}
+                        id="nw-base"
+                        projectId={project.id}
+                        label="Base branch"
+                        value={source.baseBranch || project.defaultBranch}
+                        placeholder={project.defaultBranch}
+                        onChange={(b) => setSource((s) => ({ ...s, baseBranch: b }))}
+                      />
+                    </Field>
+                  </TabsContent>
+                  <TabsContent value="branch">
+                    <Field
+                      label="Branch"
+                      htmlFor="nw-branch"
+                      error={tried && !source.branch ? "Pick a branch." : null}
+                    >
+                      <BranchPicker
+                        key={project.id}
+                        id="nw-branch"
+                        projectId={project.id}
+                        label="Branch"
+                        value={source.branch}
+                        placeholder="Pick a branch"
+                        invalid={tried && !source.branch}
+                        onChange={(b) => setSource((s) => ({ ...s, branch: b }))}
+                      />
+                    </Field>
+                  </TabsContent>
+                  <TabsContent value="pr">
+                    <PullRequestPicker
+                      key={project.id}
+                      projectId={project.id}
+                      value={source.prNumber}
+                      invalid={tried && source.prNumber === null}
+                      onChange={(n) => setSource((s) => ({ ...s, prNumber: n }))}
+                    />
+                  </TabsContent>
+                </Tabs>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="nw-keep"
+                    checked={keepOpen}
+                    onCheckedChange={(value) => setKeepOpen(value === true)}
+                  />
+                  <Label htmlFor="nw-keep" className="font-normal">
+                    Keep open
+                  </Label>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
 
-        <Field
-          label="Agent"
-          htmlFor="nw-agent"
-          hint={
-            available.length === 0 && credentials.isSuccess ? (
-              <>
-                No agent has a login yet.{" "}
+          <ComposerInput
+            id="nw-prompt"
+            aria-label="Prompt"
+            disabled={create.isPending}
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            placeholder="What do you want to work on?"
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing)
+                return;
+              event.preventDefault();
+              submit();
+            }}
+            className="min-h-48 flex-1 max-h-[50dvh]"
+          />
+          <ComposerToolbar className="justify-between">
+            <div className="min-w-0 flex-1">
+              <LaunchModelPicker
+                selection={selection}
+                disabled={create.isPending}
+                onClosed={() => document.getElementById("nw-prompt")?.focus()}
+              />
+              {credentials.isSuccess && !available.length && (
                 <Button
                   type="button"
                   variant="link"
-                  className="h-auto p-0 text-xs"
+                  className="h-auto px-3 text-xs"
                   onClick={() => openDialog({ kind: "settings", tab: "logins" })}
                 >
-                  Add a login
+                  Add a login to choose a model
                 </Button>
-              </>
-            ) : undefined
-          }
-        >
-          <Select
-            value={agent ?? ""}
-            onValueChange={(v) => setPickedAgent(v as AgentId)}
-            disabled={available.length === 0}
-          >
-            <SelectTrigger id="nw-agent" className="w-full">
-              <SelectValue placeholder={credentials.isPending ? "Loading" : "No agent"} />
-            </SelectTrigger>
-            <SelectContent>
-              {available.map((a) => (
-                <SelectItem key={a} value={a}>
-                  {agentLabel(a)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-
-        <Field
-          label="Prompt"
-          htmlFor="nw-prompt"
-          hint="Attachments and @-mentions work once the workspace is open."
-        >
-          <Textarea
-            id="nw-prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="What should the agent do?"
-            className="max-h-60 min-h-20"
-          />
-        </Field>
-
-        <DialogFooter className="sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Checkbox id="nw-keep" checked={keepOpen} onCheckedChange={(c) => setKeepOpen(c === true)} />
-            <Label htmlFor="nw-keep" className="font-normal">
-              Keep open
-            </Label>
-          </div>
-          <Button type="submit" disabled={create.isPending || (tried && !input)}>
-            {create.isPending ? "Creating…" : "Create"}
-            <SubmitKbd className="border-primary-foreground/30 bg-primary-foreground/15 text-primary-foreground" />
-          </Button>
-        </DialogFooter>
-      </form>
+              )}
+            </div>
+            <Button
+              type="submit"
+              className="bg-foreground text-background hover:bg-foreground/90"
+              disabled={create.isPending || !input}
+            >
+              {create.isPending ? "Creating…" : "Create"}
+              <CornerDownLeftIcon className="size-3.5" />
+            </Button>
+          </ComposerToolbar>
+        </form>
+      </ComposerSurface>
     </DialogContent>
   );
 }
@@ -301,9 +374,12 @@ function PullRequestPicker({
 }) {
   const prs = useCallQuery("listOpenPullRequests", { projectId }, { staleTime: 30_000 });
   const [search, setSearch] = useState("");
+
   if (prs.isPending) return <SkeletonRows rows={3} />;
+
   if (prs.isError) return <ErrorState error={prs.error} onRetry={() => void prs.refetch()} />;
   const shown = filterPullRequests(prs.data, search);
+
   return (
     <div className="grid gap-1.5">
       <Command

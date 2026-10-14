@@ -23,6 +23,7 @@ impl RenderOnce for TopBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let muted = color(Token::MutedForeground, cx);
         h_flex()
+            .bg(color(Token::Panel, cx))
             .h(px(40.))
             .px_3()
             .gap_2()

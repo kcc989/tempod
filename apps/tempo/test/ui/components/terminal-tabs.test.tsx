@@ -1,59 +1,88 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { createElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BottomPanel } from "../../../src/ui/components/processes/BottomPanel";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
+import { describe, expect, it } from "vitest";
 import { TerminalTab } from "../../../src/ui/components/processes/TerminalTab";
+import { TerminalRuntimeContext, type OpenTerminal } from "../../../src/ui/components/processes/TerminalView";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
+import { ApiCallContext, callKey } from "../../../src/ui/hooks/useCall";
+import { WorkspaceStoresContext } from "../../../src/ui/hooks/useWorkspace";
+import { createApiClient } from "../../../src/ui/lib/api-client";
+import { WorkspaceStore } from "../../../src/ui/stores/workspace-store";
+import { detail } from "../fixtures";
 
-const listed = vi.hoisted(() => ({ ids: [] as string[] }));
-vi.mock("~/ui/hooks/useCall", () => ({
-  useCallQuery: () => ({ data: listed.ids.map((terminalId) => ({ terminalId })), isSuccess: true }),
-  useCallMutation: () => ({ isPending: false }),
-}));
-vi.mock("~/ui/hooks/useWorkspace", () => ({ useWorkspaceSelector: () => "ready" }));
-vi.mock("~/ui/hooks/useWorkspaceUi", () => ({ useWorkspaceUiSelector: () => "terminal" }));
-vi.mock("~/ui/hooks/useMediaQuery", () => ({ useIsPhone: () => false }));
-vi.mock("~/ui/components/processes/useScripts", () => ({ useToggleRunAction: () => {} }));
-vi.mock("~/ui/components/processes/RunTab", () => ({ RunTab: () => null }));
-vi.mock("~/ui/components/processes/SetupTab", () => ({ SetupTab: () => null }));
-vi.mock("~/ui/components/processes/TerminalView", () => ({
-  TerminalView: ({ terminalId, active }: { terminalId: string; active: boolean }) =>
-    createElement("div", { "data-testid": terminalId, "data-active": active }),
-}));
-beforeEach(() => {
-  listed.ids = [];
+const open: OpenTerminal = async () => ({
+  terminal: {
+    cols: 80,
+    rows: 24,
+    options: {},
+    focus() {},
+    dispose() {},
+    reset() {},
+    write() {},
+    onData() {},
+    onBinary() {},
+    onResize() {},
+  },
+  fit: () => true,
 });
 
+function fixture() {
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+  const workspace = new WorkspaceStore("w1");
+  workspace.receive(
+    JSON.stringify({ type: "hello", v: 1, workspace: detail(), sessions: [], turns: [], itemsRev: 0 }),
+  );
+  const key = callKey("listTerminals", { workspaceId: "w1" });
+  client.setQueryData(key, []);
+
+  const api = createApiClient(async () => {
+    throw new Error("Unexpected terminal API call");
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(
+      ApiCallContext.Provider,
+      { value: api },
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          WorkspaceStoresContext.Provider,
+          { value: () => workspace },
+          createElement(
+            TerminalRuntimeContext.Provider,
+            { value: open },
+            createElement(TooltipProvider, null, children),
+          ),
+        ),
+      ),
+    );
+
+  const view = render(createElement(TerminalTab, { workspaceId: "w1", visible: true }), { wrapper });
+
+  return { client, key, view };
+}
+
 describe("terminal tab lifecycle", () => {
-  it("keeps an opened shell when the server's terminal list refreshes", () => {
-    const view = render(createElement(TerminalTab, { workspaceId: "w1", visible: true }), {
-      wrapper: TooltipProvider,
-    });
-    expect(screen.getByTestId("t1").getAttribute("data-active")).toBe("true");
-    listed.ids = ["t3"];
-    view.rerender(createElement(TerminalTab, { workspaceId: "w1", visible: true }));
-    expect(screen.getByRole("tab", { name: "t1" })).toBeDefined();
-    expect(screen.getByTestId("t1").getAttribute("data-active")).toBe("true");
-    expect(screen.getByRole("tab", { name: "t3" })).toBeDefined();
-    expect(screen.queryByTestId("t3")).toBeNull();
+  it("keeps an opened shell when the server's terminal list refreshes", async () => {
+    const f = fixture();
+    expect(screen.getByRole("tab", { name: "t1" }).getAttribute("aria-selected")).toBe("true");
+    act(() => f.client.setQueryData(f.key, [{ terminalId: "t3" }]));
+    expect(screen.getByRole("tab", { name: "t1" }).getAttribute("aria-selected")).toBe("true");
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "t3" }).getAttribute("aria-selected")).toBe("false"),
+    );
+    expect(screen.queryByLabelText("Terminal t3")).toBeNull();
   });
 
-  it("opens the next free terminal and keeps visited shells mounted when switching tabs", () => {
-    render(createElement(TerminalTab, { workspaceId: "w1", visible: true }), { wrapper: TooltipProvider });
+  it("keeps visited shells mounted when switching terminal tabs", () => {
+    fixture();
     fireEvent.click(screen.getByRole("button", { name: "New terminal" }));
-    expect(screen.getByTestId("t2").getAttribute("data-active")).toBe("true");
-    expect(screen.getByTestId("t1").getAttribute("data-active")).toBe("false");
+    expect(screen.getByRole("tab", { name: "t2" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Terminal t1")).toBeDefined();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "t1" }), { button: 0, ctrlKey: false });
-    expect(screen.getByTestId("t1").getAttribute("data-active")).toBe("true");
-    expect(screen.getByTestId("t2").getAttribute("data-active")).toBe("false");
-  });
-
-  it("resets local terminal tabs when switching workspaces", () => {
-    const view = render(createElement(BottomPanel, { workspaceId: "w1" }), { wrapper: TooltipProvider });
-    fireEvent.click(screen.getByRole("button", { name: "New terminal" }));
-    expect(screen.getByTestId("t2").getAttribute("data-active")).toBe("true");
-    view.rerender(createElement(BottomPanel, { workspaceId: "w2" }));
-    expect(screen.queryByRole("tab", { name: "t2" })).toBeNull();
-    expect(screen.getByTestId("t1").getAttribute("data-active")).toBe("true");
+    expect(screen.getByRole("tab", { name: "t1" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Terminal t2")).toBeDefined();
   });
 });

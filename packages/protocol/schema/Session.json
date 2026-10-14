@@ -3,6 +3,16 @@
   "title": "Session",
   "type": "object",
   "properties": {
+    "runId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "id": {
       "type": "string"
     },
@@ -64,6 +74,66 @@
       "anyOf": [
         {
           "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentName": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentVersion": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 1
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "agentSha": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "profileIssues": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "ProfileIssue.json"
+          }
         },
         {
           "type": "null"

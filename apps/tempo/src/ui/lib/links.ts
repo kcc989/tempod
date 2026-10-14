@@ -1,3 +1,5 @@
+import type { Project } from "@tempo/protocol";
+
 /** URLs the UI builds. */
 
 export const workspacePath = (workspaceId: string): string => `/w/${encodeURIComponent(workspaceId)}`;
@@ -23,3 +25,26 @@ export const githubPullUrl = (owner: string, name: string, prNumber: number): st
 
 export const githubChecksUrl = (owner: string, name: string, prNumber: number): string =>
   `${githubPullUrl(owner, name, prNumber)}/checks`;
+
+export const repositoryPath = (projectId: string, options: { ref?: string; pull?: number } = {}): string => {
+  const search = new URLSearchParams({ project: projectId });
+
+  if (options.ref) search.set("ref", options.ref);
+
+  if (options.pull !== undefined) {
+    search.set("tab", "pulls");
+    search.set("pull", String(options.pull));
+  }
+
+  return `/repositories?${search}`;
+};
+
+export const projectPullUrl = (project: Project, number: number): string =>
+  project.provider === "artifacts"
+    ? repositoryPath(project.id, { pull: number })
+    : githubPullUrl(project.owner, project.name, number);
+
+export const projectChecksUrl = (project: Project, number: number): string =>
+  project.provider === "artifacts"
+    ? repositoryPath(project.id, { pull: number })
+    : githubChecksUrl(project.owner, project.name, number);

@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "typecheck": "tsc -p tsconfig.json"
+    "test:browser": "playwright test -c playwright.browser.config.ts",
+    "typecheck": "tsc --checkers 2 -p tsconfig.json",
+    "test:web": "playwright test -c playwright.web.config.ts",
+    "test:ci": "playwright test -c playwright.ci.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",
-    "@tempo/protocol": "workspace:*"
+    "@tempo/protocol": "workspace:*",
+    "effect": "4.0.3"
   }
 }

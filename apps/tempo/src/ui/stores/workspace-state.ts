@@ -1,4 +1,7 @@
+import { Item as ItemSchema } from "@tempo/protocol";
+import { Schema } from "effect";
 import type {
+  Run,
   ChangesSummary,
   CredentialProvider,
   Item,
@@ -22,6 +25,7 @@ export interface WorkspaceState {
   readonly backlogDone: boolean;
   readonly workspace: WorkspaceDetail | null;
   readonly sessions: Readonly<Record<string, Session>>;
+  readonly runs: Readonly<Record<string, Run>>;
   readonly turns: Readonly<Record<string, Turn>>;
   readonly items: Readonly<Record<string, Item>>;
   /** Item ids per session, oldest first. */
@@ -49,6 +53,7 @@ export const emptyWorkspaceState: WorkspaceState = {
   backlogDone: false,
   workspace: null,
   sessions: {},
+  runs: {},
   turns: {},
   items: {},
   order: {},
@@ -68,9 +73,11 @@ const ENDED = new Set<Turn["status"]>(["completed", "cancelled", "failed", "inte
 
 export const isTurnEnded = (t: Pick<Turn, "status">): boolean => ENDED.has(t.status);
 
-const byKey = <T extends { readonly id: string }>(list: ReadonlyArray<T>): Record<string, T> => {
+const byKey = <T extends { readonly id: string }>(list: ReadonlyArray<T>) => {
   const out: Record<string, T> = {};
+
   for (const x of list) out[x.id] = x;
+
   return out;
 };
 
@@ -87,15 +94,20 @@ const insertOrdered = (
   let hi = ids.length;
   // Fast path: newest item goes at the end.
   const last = ids.length > 0 ? items[ids[ids.length - 1]!] : undefined;
+
   if (!last || compareItems(last, item) < 0) return [...ids, item.id];
+
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
     const other = items[ids[mid]!];
+
     if (other && compareItems(other, item) < 0) lo = mid + 1;
     else hi = mid;
   }
+
   const next = ids.slice();
   next.splice(lo, 0, item.id);
+
   return next;
 };
 
@@ -114,38 +126,44 @@ const upsertItems = (
   let order = state.order;
   let permissions = state.permissions;
   let itemsRev = state.itemsRev;
-  let copiedItems = false;
-  let copiedOrder = false;
+  let copiedItems: Record<string, Item> | null = null;
+  let copiedOrder: Record<string, ReadonlyArray<string>> | null = null;
+
   for (const item of incoming) {
     itemsRev = Math.max(itemsRev, item.rev);
     const prev = items[item.id];
+
     if (prev && prev.rev > item.rev) continue;
+
     if (!copiedItems) {
-      items = { ...items };
-      copiedItems = true;
+      copiedItems = { ...state.items };
+      items = copiedItems;
     }
-    (items as Record<string, Item>)[item.id] = item;
+
+    // SAFETY: items was cloned above before its first write; the store snapshot stays immutable.
+    copiedItems[item.id] = item;
+
     if (!prev || prev.sessionId !== item.sessionId) {
       if (!copiedOrder) {
-        order = { ...order };
-        copiedOrder = true;
+        copiedOrder = { ...state.order };
+        order = copiedOrder;
       }
+
       if (prev && prev.sessionId !== item.sessionId) {
-        (order as Record<string, ReadonlyArray<string>>)[prev.sessionId] = (
-          order[prev.sessionId] ?? []
-        ).filter((id) => id !== item.id);
+        // SAFETY: order was cloned above before its first write; only this owned copy is changed.
+        copiedOrder[prev.sessionId] = (order[prev.sessionId] ?? []).filter((id) => id !== item.id);
       }
-      (order as Record<string, ReadonlyArray<string>>)[item.sessionId] = insertOrdered(
-        order[item.sessionId] ?? [],
-        item,
-        items,
-      );
+
+      // SAFETY: order was cloned above before its first write; only this owned copy is changed.
+      copiedOrder[item.sessionId] = insertOrdered(order[item.sessionId] ?? [], item, items);
     }
+
     if (item.kind === "permission" && isPermissionDone(item) && item.content.requestId in permissions) {
       const { [item.content.requestId]: _done, ...rest } = permissions;
       permissions = rest;
     }
   }
+
   return { items, order, permissions, itemsRev };
 };
 
@@ -165,6 +183,7 @@ export const applyWorkspaceMessage = (state: WorkspaceState, msg: WorkspaceServe
   ) {
     return same(state);
   }
+
   switch (msg.type) {
     case "hello":
       return same({
@@ -177,6 +196,7 @@ export const applyWorkspaceMessage = (state: WorkspaceState, msg: WorkspaceServe
       });
     case "items": {
       const next = upsertItems(state, msg.items);
+
       return same({
         ...state,
         ...next,
@@ -184,44 +204,63 @@ export const applyWorkspaceMessage = (state: WorkspaceState, msg: WorkspaceServe
         backlogDone: state.backlogDone || msg.done,
       });
     }
+
     case "item.upsert": {
       const next = upsertItems(state, [msg.item]);
+
       return same({ ...state, ...next, itemsRev: Math.max(next.itemsRev, msg.itemsRev) });
     }
+
     case "item.delta": {
       const item = state.items[msg.itemId];
       const itemsRev = Math.max(state.itemsRev, msg.itemsRev);
+
       if (!item || !("text" in item.content)) return same({ ...state, itemsRev });
       const content = { ...item.content, text: item.content.text + msg.append.text };
-      const updated = { ...item, content } as Item;
+      const updated = Schema.decodeUnknownSync(ItemSchema)({ ...item, content });
+
       return same({ ...state, itemsRev, items: { ...state.items, [item.id]: updated } });
     }
+
     case "workspace":
       return same({ ...state, workspace: msg.workspace });
     case "session":
       return same({ ...state, sessions: { ...state.sessions, [msg.session.id]: msg.session } });
+    case "run":
+      return same({ ...state, runs: { ...state.runs, [msg.run.id]: msg.run } });
     case "turn": {
       const prev = state.turns[msg.turn.id];
+
       const events: WorkspaceEvent[] =
         isTurnEnded(msg.turn) && (!prev || !isTurnEnded(prev)) ? [{ kind: "turnEnded", turn: msg.turn }] : [];
+
       return { state: { ...state, turns: { ...state.turns, [msg.turn.id]: msg.turn } }, events };
     }
+
     case "turn.deleted": {
       if (!(msg.turnId in state.turns)) return same(state);
       const { [msg.turnId]: _gone, ...turns } = state.turns;
+
       return same({ ...state, turns });
     }
+
     case "permission": {
       const item = state.items[msg.request.itemId];
+
       if (item && item.kind === "permission" && isPermissionDone(item)) return same(state);
+
       return same({ ...state, permissions: { ...state.permissions, [msg.request.requestId]: msg.request } });
     }
+
     case "script.output": {
       const prev = state.scriptOutput[msg.runId] ?? "";
       let text = prev + msg.data;
+
       if (text.length > MAX_SCRIPT_OUTPUT) text = text.slice(text.length - MAX_SCRIPT_OUTPUT);
+
       return same({ ...state, scriptOutput: { ...state.scriptOutput, [msg.runId]: text } });
     }
+
     case "script.run":
       return same({ ...state, scriptRuns: { ...state.scriptRuns, [msg.run.id]: msg.run } });
     case "changes":
@@ -232,9 +271,12 @@ export const applyWorkspaceMessage = (state: WorkspaceState, msg: WorkspaceServe
       });
     case "credential.invalid": {
       const events: WorkspaceEvent[] = [{ kind: "credentialInvalid", provider: msg.provider }];
+
       if (state.credentialInvalid.includes(msg.provider)) return { state, events };
+
       return { state: { ...state, credentialInvalid: [...state.credentialInvalid, msg.provider] }, events };
     }
+
     case "error":
       return { state, events: [{ kind: "error", code: msg.code, message: msg.message }] };
     case "pong":
@@ -246,11 +288,14 @@ export const applyWorkspaceMessage = (state: WorkspaceState, msg: WorkspaceServe
 export const seedScriptOutput = (state: WorkspaceState, runId: string, logTail: string): WorkspaceState => {
   const live = state.scriptOutput[runId];
   let text: string;
+
   if (live === undefined || live === "") text = logTail;
   else if (logTail.endsWith(live)) text = logTail;
   else if (live.startsWith(logTail)) text = live;
   else text = logTail + live;
+
   if (text === live) return state;
+
   return { ...state, scriptOutput: { ...state.scriptOutput, [runId]: text } };
 };
 
@@ -259,6 +304,7 @@ export const clearCredentialInvalid = (
   providers: ReadonlyArray<CredentialProvider>,
 ): WorkspaceState => {
   const next = state.credentialInvalid.filter((p) => !providers.includes(p));
+
   return next.length === state.credentialInvalid.length ? state : { ...state, credentialInvalid: next };
 };
 
@@ -286,16 +332,20 @@ export const reorderedQueue = (
   toIndex: number,
 ): string[] => {
   const all = queuedTurns(state).map((t) => t.id);
+
   const mine = queuedTurns(state)
     .filter((t) => t.sessionId === sessionId)
     .map((t) => t.id);
+
   const from = mine.indexOf(turnId);
+
   if (from < 0) return all;
   const moved = mine.slice();
   moved.splice(from, 1);
   moved.splice(Math.max(0, Math.min(toIndex, moved.length)), 0, turnId);
   // Put the session's turns back into the slots they held, in the new order.
   let k = 0;
+
   return all.map((id) => (mine.includes(id) ? moved[k++]! : id));
 };
 
@@ -316,17 +366,21 @@ export const transcriptRows = (
   const lastIndexOfTurn = new Map<string, number>();
   order.forEach((id, i) => {
     const t = items[id]?.turnId;
+
     if (t) lastIndexOfTurn.set(t, i);
   });
   order.forEach((id, i) => {
     const item = items[id];
+
     if (!item) return;
     const turn = item.turnId ? turns[item.turnId] : undefined;
     rows.push({ kind: "item", key: id, itemId: id, reverted: turn?.reverted === true });
+
     if (turn && lastIndexOfTurn.get(turn.id) === i && isTurnEnded(turn)) {
       rows.push({ kind: "turnFooter", key: `footer:${turn.id}`, turnId: turn.id });
     }
   });
+
   return rows;
 };
 
@@ -336,17 +390,23 @@ export const runningPlan = (
   sessionId: string,
 ): { readonly done: number; readonly total: number } | null => {
   const turn = runningTurn(state, sessionId);
+
   if (!turn) return null;
   const ids = state.order[sessionId] ?? [];
+
   for (let i = ids.length - 1; i >= 0; i--) {
     const item = state.items[ids[i]!];
+
     if (!item || item.turnId !== turn.id) continue;
+
     if (item.kind === "plan") {
       const total = item.content.entries.length;
       const done = item.content.entries.filter((e) => e.status === "completed").length;
+
       return total > 0 ? { done, total } : null;
     }
   }
+
   return null;
 };
 

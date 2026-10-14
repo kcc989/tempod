@@ -48,6 +48,7 @@ describe("queued message controls", () => {
       onDragStart: vi.fn(),
       onDrop: vi.fn(),
     };
+
     const view = render(createElement(QueuedChip, { ...props, turn: { ...turn, steeringPending: true } }));
     expect(screen.getByRole("status").textContent).toContain("Sending now");
     expect(screen.queryByRole("button")).toBeNull();

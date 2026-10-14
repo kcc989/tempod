@@ -10,5 +10,6 @@ export function useCredentialStatus() {
 /** True when the agent has a login or key; undefined while loading. */
 export function useHasLogin(agent: AgentId): boolean | undefined {
   const { data } = useCredentialStatus();
+
   return data === undefined ? undefined : hasLogin(agent, data);
 }

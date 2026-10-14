@@ -3,5 +3,22 @@
   "semi": true,
   "singleQuote": false,
   "trailingComma": "all",
-  "ignorePatterns": ["docs/**", "**/routeTree.gen.ts", "**/migrations/**", "**/worker-runtime.d.ts"]
+  "ignorePatterns": [
+    "docs/**",
+    "**/routeTree.gen.ts",
+    "**/migrations/**",
+    "**/worker-runtime.d.ts",
+    ".agent/**",
+    ".agents/**",
+    ".claude/**",
+    ".codex/**",
+    ".continue/**",
+    ".cursor/**",
+    ".gemini/**",
+    ".opencode/**",
+    ".pi/**",
+    ".roo/**",
+    ".windsurf/**",
+    "tools/oxlint/anti-slop/**"
+  ]
 }

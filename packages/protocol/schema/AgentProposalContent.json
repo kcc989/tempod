@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentProposalContent",
+  "type": "object",
+  "properties": {
+    "proposalId": {
+      "type": "string"
+    }
+  },
+  "required": ["proposalId"],
+  "additionalProperties": true
+}

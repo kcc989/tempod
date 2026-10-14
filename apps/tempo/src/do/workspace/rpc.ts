@@ -1,25 +1,33 @@
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { resolveAgentProposal } from "../../agents/proposals.ts";
+import { Schema } from "effect";
+import { promptSlug } from "@tempo/cities";
+import { and, asc, desc, eq, gte, inArray, lt, ne, sql, type SQL } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import {
+  EGRESS_BLOCK_RULES,
+  API,
   TempoError,
   instanceLabel,
   newId,
-  newPreviewToken,
-  type AgentId,
   type CheckpointInfo,
   type Diagnostics,
+  type EgressStatusFilter,
   type FnInput,
   type FnOutput,
   type ReviewComment,
+  type RepositoryPullRequest,
   type Session,
   type Turn,
   type WorkspaceFnName,
+  type AgentProfile,
 } from "@tempo/protocol";
-import { workspaces } from "../../db/d1.ts";
+import { environments, workspaces } from "../../db/d1.ts";
+import { EMPTY_PROMPT, json, readItemContent } from "../../db/json.ts";
 import {
   attachments,
   checkpoints,
   egressLog,
+  environmentProposals,
   events,
   items,
   permissions,
@@ -32,11 +40,25 @@ import {
 } from "../../db/workspace-do.ts";
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import { github } from "../../github/provider.ts";
+import { artifactHeadSha } from "../../artifacts/repositories.ts";
+import {
+  createArtifactPullRequest,
+  findArtifactOpenPullRequest,
+  getArtifactPullRequest,
+} from "../../artifacts/pull-requests.ts";
 import { errorText, log } from "../../log.ts";
 import { containerRunning, requireTempod } from "./container.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
+import { saveConversation } from "./conversations.ts";
 import { sendEnv } from "./events.ts";
-import { defaultPrBody, getGithubToken, refreshPullRequest, requirePushed } from "./git.ts";
+import {
+  defaultPrBody,
+  getGithubToken,
+  nativeChecks,
+  refreshPullRequest,
+  requirePushed,
+  repositoryBranchExists,
+} from "./git.ts";
 import {
   DEFAULT_MODE,
   dropQueuedTurnsOf,
@@ -45,11 +67,41 @@ import {
   requireCredential,
   steerQueued,
 } from "./queue.ts";
-import type { OpRunner } from "./runner.ts";
+import { browserLiveView } from "./browser.ts";
+import { openPreview, rotatePreviewKey } from "./preview.ts";
+import { listArtifacts, openArtifact } from "./artifacts.ts";
+import type { OpInput, OpResult, OpRunner } from "./runner.ts";
 import { runToWire, runningRuns, startScript, SETUP_TIMEOUT_MS } from "./scripts.ts";
 
-/** The method input: the server function's input minus workspaceId (02, WorkspaceDO RPC). */
-export type MethodInput<K extends WorkspaceFnName> = Omit<FnInput<K>, "workspaceId">;
+/** Session columns for a library agent (02, sessions). */
+export const agentSessionColumns = (savedProfile: SessionAgentProfile | null | undefined) =>
+  savedProfile
+    ? {
+        agentId: savedProfile.agentId,
+        agentName: savedProfile.agentName,
+        agentSha: savedProfile.agentSha,
+        agentVersion: savedProfile.agentVersion,
+        profileJson: JSON.stringify(savedProfile.profile),
+      }
+    : {};
+
+/** A library agent resolved by the Worker (01, Agents): what the session row stores. */
+export interface SessionAgentProfile {
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly agentVersion: number;
+  readonly agentSha: string;
+  readonly profile: AgentProfile;
+  readonly model: string;
+}
+
+/**
+ * The method input: the server function's input minus workspaceId (02, WorkspaceDO RPC).
+ * createSession also takes the library agent the Worker resolved from `agentId`.
+ */
+export type MethodInput<K extends WorkspaceFnName> = Omit<FnInput<K>, "workspaceId"> &
+  (K extends "createSession" ? { readonly savedProfile?: SessionAgentProfile } : unknown);
+
 export type Methods = { [K in WorkspaceFnName]: (input: MethodInput<K>) => Promise<FnOutput<K>> };
 
 export interface RpcRuntime {
@@ -66,30 +118,50 @@ export interface RpcRuntime {
 // oxlint-disable no-control-regex
 const BRANCH_RE =
   /^(?![-./]|HEAD$|.*(?:\/\.|\/\/|\.\.|@\{|\\|\.lock\/))[^\x00-\x20~^:?*[\x7f]+(?<![./]|\.lock)$/;
+
 // oxlint-enable no-control-regex
 export const isValidBranch = (b: string): boolean =>
   b.length > 0 && b.length <= 250 && BRANCH_RE.test(b) && b !== "@";
+
+/** 02 getDiagnostics: host contains the text (any case) and the status matches, over every stored row. */
+const egressFilter = (host?: string, status: EgressStatusFilter = "all"): SQL | undefined => {
+  const conds: SQL[] = [];
+  const q = host?.toLowerCase() ?? "";
+
+  if (q !== "") conds.push(sql`instr(lower(${egressLog.host}), ${q}) > 0`);
+
+  if (status === "blocked") conds.push(inArray(egressLog.rule, [...EGRESS_BLOCK_RULES]));
+  else if (status !== "all") {
+    const floor = Number(status[0]) * 100;
+    conds.push(gte(egressLog.status, floor), lt(egressLog.status, floor + 100));
+  }
+
+  return conds.length > 0 ? and(...conds) : undefined;
+};
 
 const reviewToWire = (r: ReviewCommentRow): ReviewComment => ({
   id: r.id,
   path: r.path,
   lineStart: r.lineStart,
   lineEnd: r.lineEnd,
-  side: r.side as ReviewComment["side"],
+  side: r.side,
   body: r.body,
-  status: r.status as ReviewComment["status"],
+  status: r.status,
   sentTurnId: r.sentTurnId,
   createdAt: r.createdAt,
 });
 
 const notArchived = (core: WorkspaceCore) => {
   const s = core.state;
+
   if (s === "archived" || s === "archiving") throw new TempoError("WORKSPACE_ARCHIVED");
 };
 
 const sessionBusy = (core: WorkspaceCore, sessionId: string) => {
   const running = core.runningTurn();
+
   if (running && running.sessionId === sessionId) throw new TempoError("SESSION_BUSY");
+
   if (
     core.db
       .select()
@@ -102,6 +174,7 @@ const sessionBusy = (core: WorkspaceCore, sessionId: string) => {
 
 const branchInUse = async (core: WorkspaceCore, branch: string): Promise<boolean> => {
   const row = core.ws();
+
   const hit = await drizzleD1(core.env.DB)
     .select({ id: workspaces.id, archivedAt: workspaces.archivedAt })
     .from(workspaces)
@@ -113,109 +186,316 @@ const branchInUse = async (core: WorkspaceCore, branch: string): Promise<boolean
       ),
     )
     .all();
+
   return hit.some((w) => w.archivedAt === null);
 };
 
-export const makeMethods = (rt: RpcRuntime): Methods => {
+const namingLocks = new WeakMap<WorkspaceCore, Promise<void>>();
+
+const withBranchNaming = async <T>(core: WorkspaceCore, action: () => Promise<T>): Promise<T> => {
+  const previous = namingLocks.get(core) ?? Promise.resolve();
+  let release!: () => void;
+
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  namingLocks.set(core, current);
+  await previous;
+
+  try {
+    return await action();
+  } finally {
+    release();
+  }
+};
+
+export const rememberFirstPrompt = (core: WorkspaceCore, text: string): void => {
+  if (core.kv<boolean>("firstPromptSeen")) return;
+  core.setKv("firstPromptSeen", true);
+
+  if (core.kv<boolean>("branchManuallyNamed") || core.ws().pushed === 1) return;
+
+  if (
+    parseJson(Schema.Struct({ kind: Schema.String }))(core.ws().sourceJson, { kind: "branch" }).kind !== "new"
+  )
+    return;
+  const slug = promptSlug(text);
+
+  if (slug) core.setKv("promptBranch", `${core.settings().git.branch_prefix}${slug}`);
+};
+
+export const applyPromptBranch = async (
+  core: WorkspaceCore,
+  resendHello: () => Promise<void>,
+): Promise<void> => {
+  return withBranchNaming(core, async () => {
+    const base = core.kv<string>("promptBranch");
+
+    if (!base || core.kv<boolean>("branchManuallyNamed") || core.ws().pushed === 1) return;
+
+    if (!isValidBranch(base)) {
+      core.setKv("promptBranch", undefined);
+
+      return;
+    }
+
+    const row = core.ws();
+    const rev = row.summaryRev + 1;
+    let next = base;
+
+    for (let n = 2; ; n++) {
+      if (core.kv<boolean>("branchManuallyNamed")) return;
+
+      if (await branchInUse(core, next)) {
+        next = `${base}-${n}`;
+        continue;
+      }
+
+      try {
+        // Reserve atomically: the asynchronous summary publication cannot settle name collisions.
+        await drizzleD1(core.env.DB)
+          .update(workspaces)
+          .set({ branch: next, summaryRev: rev })
+          .where(eq(workspaces.id, row.workspaceId))
+          .run();
+        break;
+      } catch (error) {
+        const detail = String(error instanceof Error && error.cause !== undefined ? error.cause : error);
+
+        if (!detail.includes("UNIQUE") || !detail.includes("workspaces.branch")) throw error;
+        next = `${base}-${n}`;
+      }
+    }
+
+    core.updateWs({ summaryRev: rev });
+
+    try {
+      if (core.tempod?.open && containerRunning(core) && next !== row.branch)
+        await core.tempod.request("git.renameBranch", { from: row.branch, to: next });
+    } catch (error) {
+      core.publish();
+      throw error;
+    }
+
+    core.updateWs({ branch: next });
+    core.publish();
+    await resendHello();
+    core.setKv("promptBranch", undefined);
+  });
+};
+
+export const workspaceMethods = (rt: RpcRuntime): Methods => {
   const { core, runner } = rt;
 
-  const awaitOp = async <T>(kind: "revert" | "commit_push", input: Record<string, unknown>): Promise<T> => {
+  const awaitOp = async (kind: "revert" | "commit_push" | "merge_pr", input: OpInput): Promise<OpResult> => {
     const op = runner.insert(kind, input);
     core.broadcastDetailSoon();
-    return (await runner.wait(op.id)) as T;
+
+    return runner.wait(op.id);
   };
 
   return {
-    getWorkspace: async () => core.detail(),
+    requestAgent: async ({ agentId, text, sessionId }) => {
+      notArchived(core);
+      rt.ensureAwake();
 
+      return core.lifecycle.request(agentId, text, sessionId);
+    },
+    cancelRun: async ({ runId }) => {
+      await core.lifecycle.runs.cancel(runId);
+
+      return {};
+    },
+    listRuns: async ({ changeId }) => core.lifecycle.listRuns(changeId),
+    sendRunToChat: async ({ runId }) => {
+      notArchived(core);
+      rt.ensureAwake();
+
+      return core.lifecycle.runs.send(runId);
+    },
+    listLifecycleEvents: async (input) => core.lifecycle.listEvents(input),
+    getTrace: async ({ eventId }) => core.lifecycle.trace(eventId),
+    getWorkspace: async () => core.detail(),
     renameWorkspace: async ({ title }) => {
       core.updateWs({ title: title.trim().slice(0, 200) });
       core.publish();
+
       return {};
     },
+    renameBranch: async ({ branch }) =>
+      withBranchNaming(core, async () => {
+        if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
+        const row = core.ws();
+        const next = branch.trim();
 
-    renameBranch: async ({ branch }) => {
-      const row = core.ws();
-      const next = branch.trim();
-      if (!isValidBranch(next)) throw new TempoError("BRANCH_INVALID");
-      if (row.pushed === 1) throw new TempoError("BRANCH_ALREADY_PUSHED");
-      if (next === row.branch) return {};
-      if (await branchInUse(core, next)) throw new TempoError("BRANCH_IN_USE");
-      if (core.tempod?.open && containerRunning(core)) {
-        await core.tempod.request("git.renameBranch", { from: row.branch, to: next });
+        if (!isValidBranch(next)) throw new TempoError("BRANCH_INVALID");
+
+        if (row.pushed === 1) throw new TempoError("BRANCH_ALREADY_PUSHED");
+
+        if (next === row.branch) {
+          core.setKv("branchManuallyNamed", true);
+          core.setKv("promptBranch", undefined);
+
+          return {};
+        }
+
+        if (await branchInUse(core, next)) throw new TempoError("BRANCH_IN_USE");
+
+        if (core.tempod?.open && containerRunning(core)) {
+          await core.tempod.request("git.renameBranch", { from: row.branch, to: next });
+        }
+
+        core.setKv("branchManuallyNamed", true);
+        core.setKv("promptBranch", undefined);
+        core.updateWs({ branch: next });
+        core.publish();
+        await rt.resendHello();
+
+        return {};
+      }),
+    setWorkspaceEnvironment: async ({ environmentId }) => {
+      if (environmentId !== null) {
+        const found = await drizzleD1(core.env.DB)
+          .select({ id: environments.id })
+          .from(environments)
+          .where(and(eq(environments.id, environmentId), eq(environments.userId, core.ws().userId)))
+          .get();
+
+        if (!found) throw new TempoError("NOT_FOUND", undefined, "environment not found");
       }
-      core.updateWs({ branch: next });
+
+      core.updateWs({ environmentId });
       core.publish();
-      await rt.resendHello();
+      core.ctx.waitUntil(sendEnv(core));
+
       return {};
     },
+    resolveAgentProposal: async ({ proposalId, apply }) => {
+      await resolveAgentProposal(core, proposalId, apply);
 
+      return {};
+    },
+    resolveEnvironmentProposal: async ({ proposalId, status }) => {
+      const row = core.db
+        .select({ id: environmentProposals.id })
+        .from(environmentProposals)
+        .where(and(eq(environmentProposals.id, proposalId), eq(environmentProposals.status, "pending")))
+        .get();
+
+      if (!row) throw new TempoError("NOT_FOUND", undefined, "no pending proposal with that id");
+      core.db
+        .update(environmentProposals)
+        .set({ status })
+        .where(eq(environmentProposals.id, proposalId))
+        .run();
+      core.broadcastDetailSoon();
+
+      return {};
+    },
     setPinned: async ({ pinned }) => {
       core.updateWs({ pinned: pinned ? 1 : 0 });
       core.publish();
+
       return {};
     },
-
     markViewed: async () => {
       core.updateWs({ lastViewedAt: Date.now() });
       core.recomputeAttention(false);
       core.publish();
+
       return {};
     },
-
     wakeWorkspace: async () => {
       const s = core.state;
+
       if (s === "archived") throw new TempoError("WORKSPACE_ARCHIVED");
+
       if (s === "archiving") throw new TempoError("WORKSPACE_BUSY");
       rt.ensureAwake();
+
       return {};
     },
-
     sleepWorkspace: async () => {
       const s = core.state;
+
       if (s === "archived") throw new TempoError("WORKSPACE_ARCHIVED");
+
       if (s === "sleeping") return {};
+
       if (s !== "ready" || runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
       runner.insert("sleep");
+
       return {};
     },
-
     archiveWorkspace: async () => {
       const s = core.state;
+
       if (s === "archived" || s === "archiving") return {};
+
       if (!["ready", "working", "sleeping", "error"].includes(s)) throw new TempoError("WORKSPACE_BUSY");
+
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
+      const project = await core.project();
+      const row = core.ws();
+
+      if (
+        project.provider === "artifacts" &&
+        core.settings().git.delete_branch_on_archive &&
+        row.pushed === 1 &&
+        row.prState !== "open" &&
+        row.prState !== "draft" &&
+        row.branch !== project.defaultBranch &&
+        row.branch !== row.baseBranch &&
+        !containerRunning(core) &&
+        !(await findArtifactOpenPullRequest(core.env, project, row.branch))
+      )
+        throw new TempoError(
+          "WORKSPACE_BUSY",
+          "Wake this workspace before archiving with branch deletion enabled.",
+        );
+
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
       core.setState("archiving");
       runner.insert("archive");
+
       return {};
     },
-
     restoreWorkspace: async () => {
       const s = core.state;
+
       if (s !== "archived" && s !== "archiving") return {};
+
       if (runner.find("restore")) return {};
+
       if (s === "archived" && (await branchInUse(core, core.ws().branch)))
         throw new TempoError("BRANCH_IN_USE");
       runner.insert("restore");
+
       return {};
     },
-
     deleteWorkspace: async () => {
       const row = core.ws();
+
       if (row.state !== "archived") throw new TempoError("WORKSPACE_NOT_ARCHIVED");
-      for (const prefix of ["checkpoints", "homes", "attachments", "logs"]) {
+      await saveConversation(core, true);
+
+      for (const prefix of ["checkpoints", "homes", "attachments", "logs", "artifacts"]) {
         let cursor: string | undefined;
+
         do {
-          const list = await core.env.DATA.list({
-            prefix: `${prefix}/${row.workspaceId}/`,
-            ...(cursor ? { cursor } : {}),
-          });
+          const options = { prefix: `${prefix}/${row.workspaceId}/` };
+          const list = await core.env.DATA.list(cursor ? { ...options, cursor } : options);
+
           if (list.objects.length) await core.env.DATA.delete(list.objects.map((o) => o.key));
           cursor = list.truncated ? list.cursor : undefined;
         } while (cursor);
       }
+
       await drizzleD1(core.env.DB).delete(workspaces).where(eq(workspaces.id, row.workspaceId)).run();
       await core.env.USER_HUB.getByName(row.userId).remove(row.workspaceId);
       core.closeTerminals(1001, "deleted");
+
       for (const ws of core.uiSockets()) {
         try {
           ws.close(4404, "workspace deleted");
@@ -223,48 +503,53 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           // already closed
         }
       }
+
       await core.ctx.storage.deleteAlarm();
       await core.ctx.storage.deleteAll();
       // Recreate the empty tables, so later calls on this instance see "not found", not "no such table".
       await runMigrations(core.db, WORKSPACE_MIGRATIONS);
+
       return {};
     },
+    openPreview: ({ port }) => openPreview(core, port),
+    rotatePreviewKey: async () => {
+      rotatePreviewKey(core);
 
-    rotatePreviewToken: async () => {
-      const previewToken = newPreviewToken();
-      core.updateWs({ previewToken });
-      core.broadcastDetailSoon();
-      return { previewToken };
+      return {};
     },
-
+    getBrowserLiveView: () => browserLiveView(core),
     setBaseBranch: async ({ baseBranch }) => {
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
       const row = core.ws();
+
       if (row.prNumber !== null) throw new TempoError("PR_EXISTS");
-      const project = await core.project();
-      const exists = await github.branchExists(
-        await getGithubToken(core),
-        { owner: project.owner, name: project.name },
-        baseBranch,
-      );
+      const exists = await repositoryBranchExists(core, baseBranch);
+
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
+
       if (!exists) throw new TempoError("NOT_FOUND", undefined, "branch not on origin");
       core.updateWs({ baseBranch });
       core.publish();
       await rt.resendHello();
+
       return {};
     },
-
-    getDiagnostics: async (): Promise<Diagnostics> => {
+    getDiagnostics: async ({ egressHost, egressStatus }): Promise<Diagnostics> => {
       const row = core.ws();
+
       return {
         ops: runner.recent(50).map((o) => ({
           id: o.id,
-          kind: o.kind as Diagnostics["ops"][number]["kind"],
-          status: o.status as Diagnostics["ops"][number]["status"],
+          kind: o.kind,
+          status: o.status,
           step: o.step,
           attempt: o.attempt,
           errorCode: o.errorCode,
           errorDetail: o.errorDetail,
-          timings: parseJson<{ timings?: Record<string, number> }>(o.stateJson, {}).timings ?? {},
+          timings:
+            parseJson(
+              Schema.Struct({ timings: Schema.optional(Schema.Record(Schema.String, Schema.Number)) }),
+            )(o.stateJson, {}).timings ?? {},
           createdAt: o.createdAt,
           updatedAt: o.updatedAt,
         })),
@@ -298,12 +583,20 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           .limit(200)
           .all()
           .map((e) => {
-            const p = parseJson<{ level?: string; msg?: string; data?: unknown }>(e.payloadJson, {});
+            const p = parseJson(
+              Schema.Struct({
+                level: Schema.optional(Schema.String),
+                msg: Schema.optional(Schema.String),
+                data: Schema.optional(Schema.Json),
+              }),
+            )(e.payloadJson, {});
+
             return { ts: e.receivedAt, level: p.level ?? "info", msg: p.msg ?? "", data: p.data };
           }),
         egress: core.db
           .select()
           .from(egressLog)
+          .where(egressFilter(egressHost, egressStatus))
           .orderBy(desc(egressLog.id))
           .limit(500)
           .all()
@@ -315,22 +608,24 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           .all()
           .map((s) => ({
             id: s.id,
-            agent: s.agent as AgentId,
+            agent: s.agent,
             acpSessionId: s.acpSessionId,
-            capabilities: parseJson(s.capabilitiesJson, {}),
+            capabilities: json.capabilities.read(s.capabilitiesJson, {}),
             live: core.liveSessions.has(s.id),
           })),
       };
     },
-
-    createSession: async ({ agent, model, modeId }): Promise<Session> => {
+    createSession: async ({ agent, model, modeId, savedProfile }): Promise<Session> => {
       notArchived(core);
       await requireCredential(core, agent);
+      const chosenModel = model ?? savedProfile?.model ?? "";
       const now = Date.now();
       const id = newId();
+
       const order =
         core.db.select({ o: sessions.sortOrder }).from(sessions).orderBy(desc(sessions.sortOrder)).get()?.o ??
         0;
+
       core.db
         .insert(sessions)
         .values({
@@ -340,7 +635,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           acpSessionId: null,
           status: "starting",
           modeId: modeId ?? null,
-          configJson: JSON.stringify(model ? { model } : {}),
+          configJson: json.config.write(savedProfile || chosenModel ? { model: chosenModel } : {}),
           modesJson: "[]",
           configOptionsJson: "[]",
           commandsJson: "[]",
@@ -349,6 +644,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           handoffPending: 0,
           pendingNote: null,
           generalPromptSent: 0,
+          ...agentSessionColumns(savedProfile),
           sortOrder: order + 1,
           createdAt: now,
           updatedAt: now,
@@ -358,6 +654,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       const session = core.sessionToWire(core.sessionRow(id));
       core.broadcast({ type: "session", session });
       rt.ensureAwake();
+
       if (core.tempod?.open && ["ready", "working"].includes(core.state)) {
         core.ctx.waitUntil(
           ensureSessionLive(core, core.sessionRow(id)).catch((e) => {
@@ -366,28 +663,34 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           }),
         );
       }
+
       return session;
     },
-
     closeSession: async ({ sessionId }) => {
       const s = core.sessionRow(sessionId);
+
       if (s.status === "closed") return {};
+
+      if (s.runId && ["queued", "running"].includes(core.lifecycle.runs.row(s.runId).status))
+        await core.lifecycle.runs.cancel(s.runId);
       sessionBusy(core, sessionId);
       dropQueuedTurnsOf(core, sessionId);
+
       if (core.liveSessions.has(sessionId)) {
         core.liveSessions.delete(sessionId);
         await core.tempod?.request("session.close", { sessionId }).catch(() => undefined);
       }
+
       core.updateSession(sessionId, { status: "closed", closedAt: Date.now() });
+
       return {};
     },
-
     renameSession: async ({ sessionId, title }) => {
       core.sessionRow(sessionId);
       core.updateSession(sessionId, { title: title.trim().slice(0, 200) });
+
       return {};
     },
-
     sendPrompt: async ({
       sessionId,
       text,
@@ -397,13 +700,23 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       delivery,
     }): Promise<Turn> => {
       notArchived(core);
+
+      if (/^\s*\/agent(?:\s|$)/.test(text))
+        throw new TempoError("VALIDATION_FAILED", undefined, "Use requestAgent for /agent requests.");
       const session = core.sessionRow(sessionId);
+
+      if (session.runId && ["queued", "running"].includes(core.lifecycle.runs.row(session.runId).status))
+        throw new TempoError("SESSION_BUSY");
+
       if (session.status === "closed")
         throw new TempoError("VALIDATION_FAILED", undefined, "the chat is closed");
+
       if (!text.trim() && attachmentIds.length === 0 && reviewCommentIds.length === 0) {
         throw new TempoError("VALIDATION_FAILED", undefined, "the message is empty");
       }
-      await requireCredential(core, session.agent as AgentId);
+
+      await requireCredential(core, session.agent);
+
       const atts = attachmentIds.length
         ? core.db
             .select()
@@ -411,16 +724,31 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             .where(inArray(attachments.id, [...attachmentIds]))
             .all()
         : [];
+
       if (atts.length !== new Set(attachmentIds).size)
         throw new TempoError("VALIDATION_FAILED", undefined, "unknown attachment");
+      const firstPrompt = !core.db.select({ id: turns.id }).from(turns).get();
+
+      const drafts = reviewCommentIds.length
+        ? core.db
+            .select({ id: reviewComments.id })
+            .from(reviewComments)
+            .where(and(inArray(reviewComments.id, [...reviewCommentIds]), eq(reviewComments.status, "draft")))
+            .all()
+        : [];
+
+      if (drafts.length !== new Set(reviewCommentIds).size)
+        throw new TempoError("VALIDATION_FAILED", undefined, "unknown or already sent review comment");
       const now = Date.now();
       const turnId = newId();
+
       const prompt = {
         text,
         mentions: [...mentions],
         attachmentIds: [...attachmentIds],
         reviewCommentIds: [...reviewCommentIds],
       };
+
       core.ctx.storage.transactionSync(() => {
         core.db
           .insert(turns)
@@ -430,7 +758,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             seq: core.nextTurnSeq(),
             queuePos: core.nextQueuePos(),
             status: "queued",
-            promptJson: JSON.stringify(prompt),
+            promptJson: json.prompt.write(prompt),
             stopReason: null,
             errorCode: null,
             errorDetail: null,
@@ -441,6 +769,8 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             endedAt: null,
           })
           .run();
+        core.lifecycle.createPromptChange(turnId, sessionId, session.agent);
+
         if (reviewCommentIds.length) {
           core.db
             .update(reviewComments)
@@ -448,6 +778,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             .where(and(inArray(reviewComments.id, [...reviewCommentIds]), eq(reviewComments.status, "draft")))
             .run();
         }
+
         if (atts.length)
           core.db
             .update(attachments)
@@ -455,6 +786,9 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             .where(inArray(attachments.id, [...attachmentIds]))
             .run();
       });
+
+      if (firstPrompt) rememberFirstPrompt(core, text);
+      core.lifecycle.kick();
       const turn = core.turnToWire(core.turnRow(turnId));
       core.broadcast({ type: "turn", turn });
       core.insertItem({
@@ -470,69 +804,77 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         },
       });
       core.broadcastDetailSoon();
+
       if (delivery === "steer") {
         const running = await steerQueued(core, core.turnRow(turnId));
+
         if (running) return running;
       }
+
       // A prompt in sleeping, error or stopping (03, sendPrompt step 5): stopping wakes after the sleep op.
       rt.ensureAwake();
       core.kickQueue();
+
       return turn;
     },
-
     cancelTurn: async ({ turnId }) => {
       const turn = core.turnRow(turnId);
+
       if (turn.steeringPending) throw new TempoError("TURN_NOT_ACTIVE");
+
       if (turn.status === "queued") {
         finishTurn(core, turnId, "cancelled", { stopReason: "cancelled" });
         core.broadcastDetailSoon();
+
         return {};
       }
+
       if (turn.status !== "running") throw new TempoError("TURN_NOT_ACTIVE");
+
       try {
         await requireTempod(core).request("session.cancel", { sessionId: turn.sessionId, turnId });
       } catch {
         if (finishTurn(core, turnId, "cancelled", { stopReason: "cancelled" })) core.kickQueue();
       }
+
       return {};
     },
-
     editQueuedTurn: async ({ turnId, text }): Promise<Turn> => {
       const turn = core.turnRow(turnId);
+
       if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
-      const prompt = { ...parseJson<Record<string, unknown>>(turn.promptJson, {}), text };
-      const updated = core.updateTurn(turnId, { promptJson: JSON.stringify(prompt) });
+      const prompt = { ...json.prompt.read(turn.promptJson, EMPTY_PROMPT), text };
+      const updated = core.updateTurn(turnId, { promptJson: json.prompt.write(prompt) });
+
       const item = core.db
         .select()
         .from(items)
         .where(and(eq(items.turnId, turnId), eq(items.kind, "user_message")))
         .get();
+
       if (item)
-        core.updateItem(item.id, {
-          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), text },
-        });
+        core.updateItem(item.id, { content: { ...readItemContent(item.kind, item.contentJson), text } });
+
       return updated;
     },
-
     deleteQueuedTurn: async ({ turnId }) => {
       const turn = core.turnRow(turnId);
+
       if (turn.status !== "queued" || turn.steeringPending) throw new TempoError("TURN_NOT_QUEUED");
-      core.ctx.storage.transactionSync(() => {
-        core.db.delete(items).where(eq(items.turnId, turnId)).run();
-        core.db.delete(turns).where(eq(turns.id, turnId)).run();
+      core.deleteTurn(turnId, () =>
         core.db
           .update(reviewComments)
           .set({ status: "draft", sentTurnId: null })
           .where(eq(reviewComments.sentTurnId, turnId))
-          .run();
-      });
-      core.broadcast({ type: "turn.deleted", turnId });
+          .run(),
+      );
       core.broadcastDetailSoon();
+
       return {};
     },
-
     reorderQueue: async ({ turnIds }) => {
       const queued = core.queuedTurns().map((t) => t.id);
+
       if (
         queued.length !== turnIds.length ||
         new Set(turnIds).size !== turnIds.length ||
@@ -540,41 +882,47 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       ) {
         throw new TempoError("VALIDATION_FAILED", undefined, "turnIds must list every queued turn once");
       }
+
       turnIds.forEach((id, i) => core.updateTurn(id, { queuePos: i + 1 }));
       core.broadcastDetailSoon();
+
       return {};
     },
-
     setSessionMode: async ({ sessionId, modeId }) => {
       core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
+
       if (core.liveSessions.has(sessionId))
         await requireTempod(core).request("session.setMode", { sessionId, modeId });
       core.updateSession(sessionId, { modeId });
+
       return {};
     },
-
     setSessionConfig: async ({ sessionId, configId, value }) => {
       const s = core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
-      const options = parseJson<Array<{ id: string; category?: string | null }>>(s.configOptionsJson, []);
+      const options = json.configOptions.read(s.configOptionsJson, []);
       const isModel = options.find((o) => o.id === configId)?.category === "model";
-      const config = { ...parseJson<Record<string, unknown>>(s.configJson, {}), [configId]: value };
-      if (isModel && typeof value === "string") config["model"] = value;
+      const config = { ...json.config.read(s.configJson, {}), [configId]: value };
+
+      if (isModel && Schema.is(Schema.String)(value)) config["model"] = value;
+
       if (core.liveSessions.has(sessionId)) {
         const res = await requireTempod(core).request("session.setConfig", { sessionId, configId, value });
         core.updateSession(sessionId, {
-          configJson: JSON.stringify(config),
-          configOptionsJson: JSON.stringify(res.configOptions),
+          configJson: json.config.write(config),
+          configOptionsJson: json.configOptions.write(res.configOptions),
         });
-      } else core.updateSession(sessionId, { configJson: JSON.stringify(config) });
+      } else core.updateSession(sessionId, { configJson: json.config.write(config) });
+
       return {};
     },
-
     respondPermission: async ({ requestId, optionId }) => {
       const p = core.db.select().from(permissions).where(eq(permissions.requestId, requestId)).get();
+
       if (!p || p.status !== "pending") throw new TempoError("NOT_FOUND");
-      const options = parseJson<Array<{ optionId: string }>>(p.optionsJson, []);
+      const options = json.permissionOptions.read(p.optionsJson, []);
+
       if (!options.some((o) => o.optionId === optionId))
         throw new TempoError("VALIDATION_FAILED", undefined, "unknown option");
       await requireTempod(core).request("permission.respond", { requestId, optionId });
@@ -584,25 +932,26 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         .where(eq(permissions.requestId, requestId))
         .run();
       const item = core.itemRow(p.itemId);
+
       if (item)
         core.updateItem(item.id, {
-          content: { ...parseJson<Record<string, unknown>>(item.contentJson, {}), chosenOptionId: optionId },
+          content: { ...readItemContent(item.kind, item.contentJson), chosenOptionId: optionId },
         });
       core.recomputeAttention();
+
       return {};
     },
-
     getChanges: async ({ scope }) => {
       rt.requireReady();
       const res = await requireTempod(core).request("git.changes", { scope });
+
       return { files: res.files, baseSha: res.baseSha, headSha: res.headSha };
     },
-
     getFileDiff: async ({ scope, path }) => {
       rt.requireReady();
+
       return requireTempod(core).request("git.fileDiff", { scope, path });
     },
-
     addReviewComment: async ({ path, lineStart, lineEnd, side, body }): Promise<ReviewComment> => {
       const row: ReviewCommentRow = {
         id: newId(),
@@ -615,18 +964,18 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         sentTurnId: null,
         createdAt: Date.now(),
       };
+
       core.db.insert(reviewComments).values(row).run();
+
       return reviewToWire(row);
     },
-
     deleteReviewComment: async ({ commentId }) => {
       core.db.delete(reviewComments).where(eq(reviewComments.id, commentId)).run();
+
       return {};
     },
-
     listReviewComments: async () =>
       core.db.select().from(reviewComments).orderBy(asc(reviewComments.createdAt)).all().map(reviewToWire),
-
     listCheckpoints: async (): Promise<CheckpointInfo[]> => {
       const seqs = new Map(
         core.db
@@ -635,6 +984,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           .all()
           .map((t) => [t.id, t.seq]),
       );
+
       return core.db
         .select()
         .from(checkpoints)
@@ -644,11 +994,10 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           id: c.id,
           turnId: c.turnId,
           turnSeq: c.turnId ? (seqs.get(c.turnId) ?? null) : null,
-          reason: c.reason as CheckpointInfo["reason"],
+          reason: c.reason,
           createdAt: c.createdAt,
         }));
     },
-
     revertToCheckpoint: async ({ checkpointId }) => {
       if (
         !core.db
@@ -659,27 +1008,116 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       ) {
         throw new TempoError("CHECKPOINT_NOT_FOUND");
       }
+
       if (core.runningTurn() || core.queuedTurns().length > 0 || runner.hasPendingOrRunning())
         throw new TempoError("WORKSPACE_BUSY");
       rt.requireReady();
       await awaitOp("revert", { checkpointId });
+
       return {};
     },
-
     commitAndPush: async ({ message }) => {
       notArchived(core);
-      if (runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
-      rt.requireReady();
-      const msg = message.trim() || core.ws().title || "Update from Tempo";
-      return awaitOp<{ commitSha: string }>("commit_push", { message: msg });
-    },
 
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
+      rt.requireReady();
+      // 03 Step runner: the op waits as pending behind other ops and starts in creation order.
+      const msg = message.trim() || core.ws().title || "Update from Tempo";
+
+      return Schema.decodeUnknownSync(API.commitAndPush.output)(
+        await awaitOp("commit_push", { message: msg }),
+      );
+    },
     createPullRequest: async ({ title, body, draft }) => {
       const row = core.ws();
+      const project = await core.project();
+
+      if (project.provider === "artifacts") {
+        const bind = async (pr: RepositoryPullRequest, adopt: boolean) => {
+          let remoteHead: string | null = null;
+
+          if (adopt) {
+            if (runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
+            remoteHead = await artifactHeadSha(
+              core.env,
+              project.name,
+              row.branch,
+              project.artifactRepoId ?? undefined,
+            );
+
+            if (!remoteHead)
+              throw new TempoError("NOT_FOUND", "The pull request's head branch is not on origin.");
+
+            if (!/^[a-f0-9]{40}$/.test(remoteHead)) throw new TempoError("ARTIFACTS_API_ERROR");
+
+            if (runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
+            const current = core.ws();
+
+            if (current.forcePushLease === 1 && current.lastPushedSha !== remoteHead)
+              throw new TempoError(
+                "PUSH_REJECTED",
+                "The remote branch changed after the revert. Reconcile it before opening this pull request.",
+              );
+          }
+
+          const baseChanged = core.ws().baseBranch !== pr.baseBranch;
+
+          const patch: Parameters<typeof core.updateWs>[0] = {
+            prNumber: pr.number,
+            prState: pr.state,
+            checksState: null,
+            baseBranch: pr.baseBranch,
+          };
+
+          if (remoteHead !== null) {
+            patch.pushed = 1;
+            patch.lastPushedSha = remoteHead;
+          }
+
+          core.updateWs(patch);
+          core.setKv("prTitle", pr.title);
+          core.publish();
+          core.scheduleAlarm();
+
+          if (baseChanged) await rt.resendHello();
+
+          return { number: pr.number, url: pr.url };
+        };
+
+        const existing = await findArtifactOpenPullRequest(core.env, project, row.branch);
+
+        if (existing) return bind(existing, true);
+        requirePushed(core);
+
+        if (row.prNumber !== null && (row.prState === "open" || row.prState === "draft"))
+          throw new TempoError("PR_EXISTS");
+        let pr;
+
+        try {
+          pr = await createArtifactPullRequest(core.env, project, {
+            title: title.trim() || row.title || row.branch,
+            headBranch: row.branch,
+            baseBranch: row.baseBranch,
+            body: body.trim() || defaultPrBody(core),
+            draft,
+          });
+        } catch (cause) {
+          if (!(cause instanceof TempoError && cause.code === "PR_EXISTS")) throw cause;
+          pr = await findArtifactOpenPullRequest(core.env, project, row.branch);
+
+          if (!pr) throw cause;
+
+          return bind(pr, true);
+        }
+
+        return bind(pr, false);
+      }
+
       requirePushed(core);
+
       if (row.prNumber !== null && (row.prState === "open" || row.prState === "draft"))
         throw new TempoError("PR_EXISTS");
-      const project = await core.project();
+
       const pr = await github.createPullRequest(
         await getGithubToken(core),
         { owner: project.owner, name: project.name },
@@ -691,24 +1129,65 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
           draft,
         },
       );
+
+      core.setKv("prTitle", title.trim() || row.title || row.branch);
       core.updateWs({ prNumber: pr.number, prState: pr.state, checksState: null });
       core.publish();
       core.scheduleAlarm();
+
       return { number: pr.number, url: pr.url };
     },
-
     mergePullRequest: async ({ method }) => {
       const row = core.ws();
+
       if (row.prNumber === null) throw new TempoError("PR_NOT_MERGEABLE");
       const project = await core.project();
-      await github.mergePullRequest(
-        await getGithubToken(core),
-        { owner: project.owner, name: project.name },
-        row.prNumber,
-        method,
-      );
+
+      if (project.provider === "artifacts") {
+        if (method === "rebase")
+          throw new TempoError("PR_NOT_MERGEABLE", "Choose merge or squash for this repository.");
+
+        if (
+          core.queueBusy ||
+          core.turnEndInProgress ||
+          core.runningTurn() ||
+          core.queuedTurns().length > 0 ||
+          runner.hasPendingOrRunning()
+        )
+          throw new TempoError("WORKSPACE_BUSY");
+        rt.requireReady();
+
+        const prior = runner
+          .recent(50)
+          .find(
+            (op) =>
+              op.kind === "merge_pr" &&
+              parseJson(Schema.Struct({ number: Schema.optional(Schema.Number) }))(op.inputJson, {})
+                .number === row.prNumber,
+          );
+
+        const pushedMergeSha = prior
+          ? parseJson(Schema.Struct({ pushedMergeSha: Schema.optional(Schema.String) }))(prior.stateJson, {})
+              .pushedMergeSha
+          : undefined;
+
+        await awaitOp("merge_pr", {
+          number: row.prNumber,
+          method,
+          pushedMergeSha,
+        });
+      } else {
+        await github.mergePullRequest(
+          await getGithubToken(core),
+          { owner: project.owner, name: project.name },
+          row.prNumber,
+          method,
+        );
+      }
+
       core.updateWs({ prState: "merged" });
       core.publish();
+
       if (
         core.settings().git.archive_on_merge &&
         ["ready", "working", "sleeping", "error"].includes(core.state)
@@ -716,47 +1195,84 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         core.setState("archiving");
         runner.insert("archive");
       }
+
       return {};
     },
-
     refreshPullRequest: async () => refreshPullRequest(core),
-
     listCheckRuns: async () => {
       const row = core.ws();
+
       if (row.prNumber === null) return [];
       const project = await core.project();
+
+      if (project.provider === "artifacts") {
+        const pr = await getArtifactPullRequest(core.env, project, row.prNumber);
+
+        return (await nativeChecks(core, project, pr.headBranch))?.runs ?? [];
+      }
+
       const token = await getGithubToken(core);
       const repo = { owner: project.owner, name: project.name };
       const pr = await github.getPullRequest(token, repo, row.prNumber);
+
       return github.listCheckRuns(token, repo, pr.head.sha);
     },
-
     listFiles: async () => {
+      if (core.state === "sleeping") return core.files.list();
       rt.requireReady();
-      return requireTempod(core).request("fs.list", {});
-    },
+      const res = await requireTempod(core).request("fs.list", {});
 
+      try {
+        core.files.rememberList(res.paths);
+      } catch {
+        /* The live response is still usable. */
+      }
+
+      return res;
+    },
     readFile: async ({ path }) => {
+      if (core.state === "sleeping") return core.files.read(path);
       rt.requireReady();
-      return requireTempod(core).request("fs.read", { path, maxBytes: 1024 * 1024 });
-    },
 
+      try {
+        const res = await requireTempod(core).request("fs.read", { path, maxBytes: 1024 * 1024 });
+
+        try {
+          core.files.rememberFile(path, res);
+        } catch {
+          /* The live response is still usable. */
+        }
+
+        return res;
+      } catch (e) {
+        try {
+          core.files.forgetFile(path);
+        } catch {
+          /* Preserve the live error. */
+        }
+
+        throw e;
+      }
+    },
     searchFiles: async ({ query, regex }) => {
       rt.requireReady();
+
       const res = await requireTempod(core).request("fs.search", {
         query,
         regex: regex ?? false,
         maxResults: 500,
       });
+
       return res.matches;
     },
-
     runScript: async ({ scriptId }) => {
       notArchived(core);
       const settings = core.settings();
       const def = settings.scripts.run[scriptId];
+
       if (!def) throw new TempoError("NOT_FOUND", undefined, "no such run script");
       rt.requireReady();
+
       if (settings.scripts.run_mode === "nonconcurrent") {
         for (const r of runningRuns(core, "run")) {
           await requireTempod(core)
@@ -764,6 +1280,7 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
             .catch(() => undefined);
         }
       }
+
       return startScript(core, {
         kind: "run",
         scriptId,
@@ -772,17 +1289,17 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         timeoutMs: null,
       });
     },
-
     stopScript: async ({ runId }) => {
       // Not a wake trigger (03): with no container, nothing runs that could be stopped.
       if (!containerRunning(core) || !core.tempod?.open) return {};
       await core.tempod.request("script.stop", { runId });
+
       return {};
     },
-
     rerunSetup: async () => {
       notArchived(core);
       const row = core.ws();
+
       if (
         row.setupStatus === "running" ||
         runningRuns(core, "setup").length > 0 ||
@@ -790,11 +1307,14 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
       ) {
         throw new TempoError("WORKSPACE_BUSY");
       }
+
       rt.requireReady();
       const command = core.settings().scripts.setup;
       core.updateWs({ setupStatus: command.trim() ? "running" : "none" });
       core.publish();
+
       if (!command.trim()) throw new TempoError("NOT_FOUND", undefined, "no setup script");
+
       const run = await startScript(core, {
         kind: "setup",
         scriptId: null,
@@ -802,13 +1322,14 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         cwd: "",
         timeoutMs: SETUP_TIMEOUT_MS,
       });
+
       if (run.status === "failed_to_start") {
         core.updateWs({ setupStatus: "failed" });
         core.recomputeAttention();
       }
+
       return run;
     },
-
     continueAfterSetupFailure: async () => {
       if (core.ws().setupStatus === "failed") {
         core.updateWs({ setupStatus: "skipped" });
@@ -816,15 +1337,22 @@ export const makeMethods = (rt: RpcRuntime): Methods => {
         core.publish();
         core.kickQueue();
       }
+
       return {};
     },
-
     listTerminals: async () => {
       if (!core.tempod?.open || !containerRunning(core)) return [];
       const res = await core.tempod.request("terminal.list", {});
+
       return res.terminalIds.map((terminalId) => ({ terminalId }));
     },
+    readFileAt: async ({ path, sha }) => {
+      rt.requireReady();
 
+      return requireTempod(core).request("git.readFile", { sha, path, maxBytes: 1024 * 1024 });
+    },
+    listArtifacts: async () => listArtifacts(core),
+    openArtifact: ({ artifactId, version }) => openArtifact(core, artifactId, version),
     listScriptRuns: async () =>
       core.db
         .select()
@@ -841,5 +1369,6 @@ export { DEFAULT_MODE };
 
 export const logEnvChange = (core: WorkspaceCore) => {
   log("info", "env changed", { workspaceId: core.workspaceId });
+
   return sendEnv(core);
 };

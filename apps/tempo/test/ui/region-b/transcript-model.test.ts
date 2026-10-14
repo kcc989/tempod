@@ -1,4 +1,4 @@
-import type { Item } from "@tempo/protocol";
+import type { Item, Turn } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import {
   announceText,
@@ -16,49 +16,53 @@ import {
   toUnifiedHunks,
   turnDuration,
   turnOutcome,
+  turnTokens,
   workspacePath,
 } from "~/ui/components/chat/transcript-model";
 import { diffLines } from "~/ui/lib/diff";
 import { agentMessage, turn, userMessage } from "../fixtures";
 
-const map = <T extends { id: string }>(...xs: T[]): Record<string, T> =>
-  Object.fromEntries(xs.map((x) => [x.id, x]));
+function map(...items: Item[]): Record<string, Item>;
+function map(...turns: Turn[]): Record<string, Turn>;
+function map(...rows: Array<Item | Turn>): Record<string, Item | Turn> {
+  return Object.fromEntries(rows.map((row) => [row.id, row]));
+}
 
-const notice = (id: string, createdAt: number, turnId: string | null = null): Item =>
-  ({
-    id,
-    sessionId: "s1",
-    turnId,
-    kind: "notice",
-    status: "completed",
-    content: { level: "info", text: id },
-    rev: 1,
-    createdAt,
-    updatedAt: createdAt,
-  }) as Item;
+const notice = (id: string, createdAt: number, turnId: string | null = null): Item => ({
+  id,
+  sessionId: "s1",
+  turnId,
+  kind: "notice",
+  status: "completed",
+  content: { level: "info", text: id },
+  rev: 1,
+  createdAt,
+  updatedAt: createdAt,
+});
 
-const permission = (over: Partial<Item> & { chosen?: string | null } = {}): Item =>
-  ({
-    id: "p1",
-    sessionId: "s1",
-    turnId: "t1",
-    kind: "permission",
-    status: "pending",
-    content: {
-      requestId: "r1",
-      title: "Run npm test?",
-      options: [
-        { optionId: "o1", name: "Always", kind: "allow_always" },
-        { optionId: "o2", name: "Once", kind: "allow_once" },
-        { optionId: "o3", name: "No", kind: "reject_once" },
-      ],
-      chosenOptionId: over.chosen ?? null,
-    },
-    rev: 1,
-    createdAt: 1000,
-    updatedAt: 1000,
-    ...over,
-  }) as Item;
+const permission = (
+  over: Partial<Extract<Item, { kind: "permission" }>> & { chosen?: string | null } = {},
+): Extract<Item, { kind: "permission" }> => ({
+  id: "p1",
+  sessionId: "s1",
+  turnId: "t1",
+  kind: "permission",
+  status: "pending",
+  content: {
+    requestId: "r1",
+    title: "Run npm test?",
+    options: [
+      { optionId: "o1", name: "Always", kind: "allow_always" },
+      { optionId: "o2", name: "Once", kind: "allow_once" },
+      { optionId: "o3", name: "No", kind: "reject_once" },
+    ],
+    chosenOptionId: over.chosen ?? null,
+  },
+  rev: 1,
+  createdAt: 1000,
+  updatedAt: 1000,
+  ...over,
+});
 
 describe("transcript rows", () => {
   it("shows items with a footer after each ended turn and a working row for the running one", () => {
@@ -66,12 +70,14 @@ describe("transcript rows", () => {
       turn({ id: "t1", seq: 1, status: "completed", startedAt: 100, endedAt: 900 }),
       turn({ id: "t2", seq: 2, status: "running", startedAt: 1000 }),
     );
+
     const items = map(
       userMessage("u1", "a", { turnId: "t1", createdAt: 100 }),
       agentMessage("m1", "b", { turnId: "t1", createdAt: 200, status: "completed" }),
       userMessage("u2", "c", { turnId: "t2", createdAt: 1000 }),
       agentMessage("m2", "d", { turnId: "t2", createdAt: 1100 }),
     );
+
     const rows = buildTranscriptRows(["u1", "m1", "u2", "m2"], items, turns);
     expect(rows.map((r) => r.key)).toEqual(["u1", "m1", "footer:t1", "u2", "m2", "working:t2"]);
   });
@@ -82,6 +88,7 @@ describe("transcript rows", () => {
       turn({ id: "t2", seq: 2, status: "completed", queuedAt: 150, startedAt: 500, endedAt: 800 }),
       turn({ id: "t3", seq: 3, status: "queued", queuedAt: 160, startedAt: null }),
     );
+
     const items = map(
       userMessage("u1", "first", { turnId: "t1", createdAt: 100 }),
       userMessage("u2", "waited", { turnId: "t2", createdAt: 150 }),
@@ -90,17 +97,20 @@ describe("transcript rows", () => {
       agentMessage("m1", "answer one", { turnId: "t1", createdAt: 200, status: "completed" }),
       agentMessage("m2", "answer two", { turnId: "t2", createdAt: 600, status: "completed" }),
     );
+
     const rows = buildTranscriptRows(["u1", "u2", "u3", "gone", "m1", "m2"], items, turns);
     expect(rows.map((r) => r.key)).toEqual(["u1", "m1", "footer:t1", "u2", "m2", "footer:t2"]);
   });
 
   it("dims reverted turns and keeps items without a turn in time order", () => {
     const turns = map(turn({ id: "t1", status: "completed", reverted: true, startedAt: 100, endedAt: 300 }));
+
     const items = map(
       userMessage("u1", "a", { turnId: "t1", createdAt: 100 }),
       notice("n0", 50),
       notice("n1", 400),
     );
+
     const rows = buildTranscriptRows(["n0", "u1", "n1"], items, turns);
     expect(rows.map((r) => [r.key, "dim" in r ? r.dim : null])).toEqual([
       ["n0", false],
@@ -114,11 +124,13 @@ describe("transcript rows", () => {
 describe("announcements", () => {
   it("announces each finished agent message once", () => {
     const seen = new Set<string>();
+
     const items = map(
       agentMessage("m1", "old", { status: "completed" }),
       agentMessage("m2", "streaming"),
       userMessage("u1", "hi"),
     );
+
     expect(messagesToAnnounce(seen, ["m1", "m2", "u1"], items)).toEqual(["m1"]);
     const done = { ...items, m2: agentMessage("m2", "streaming done", { status: "completed" }) };
     expect(messagesToAnnounce(seen, ["m1", "m2", "u1"], done)).toEqual(["m2"]);
@@ -127,10 +139,12 @@ describe("announcements", () => {
 
   it("skips cancelled and empty messages", () => {
     const seen = new Set<string>();
+
     const items = map(
       agentMessage("m1", "x", { status: "cancelled" }),
       agentMessage("m2", "  ", { status: "completed" }),
     );
+
     expect(messagesToAnnounce(seen, ["m1", "m2"], items)).toEqual([]);
   });
 
@@ -172,25 +186,22 @@ describe("item helpers", () => {
     expect(fileLinkTarget("file:///workspace/README.md")).toEqual({ path: "README.md", line: null });
     expect(fileLinkTarget("https://example.com")).toBeNull();
     expect(fileLinkTarget("file:///workspace/a%23b.ts")).toEqual({ path: "a#b.ts", line: null });
+
     for (const path of ["src/%", "%FF", "%00", "../etc/passwd", "%2e%2e/etc/passwd", "src//main.ts"])
       expect(fileLinkTarget(`file:///workspace/${path}`)).toBeNull();
   });
 
   it("picks the first allow and the first reject option", () => {
-    const p = permission() as Extract<Item, { kind: "permission" }>;
+    const p = permission();
     expect(firstPermissionOption(p.content.options, "allow")?.optionId).toBe("o1");
     expect(firstPermissionOption(p.content.options, "reject")?.optionId).toBe("o3");
     expect(firstPermissionOption([], "allow")).toBeUndefined();
   });
 
   it("knows when a permission was answered", () => {
-    expect(isPermissionAnswered(permission() as Extract<Item, { kind: "permission" }>)).toBe(false);
-    expect(isPermissionAnswered(permission({ chosen: "o2" }) as Extract<Item, { kind: "permission" }>)).toBe(
-      true,
-    );
-    expect(
-      isPermissionAnswered(permission({ status: "cancelled" }) as Extract<Item, { kind: "permission" }>),
-    ).toBe(true);
+    expect(isPermissionAnswered(permission())).toBe(false);
+    expect(isPermissionAnswered(permission({ chosen: "o2" }))).toBe(true);
+    expect(isPermissionAnswered(permission({ status: "cancelled" }))).toBe(true);
   });
 });
 
@@ -287,6 +298,13 @@ describe("turn footer", () => {
     expect(turnOutcome(turn({ status: "completed", stopReason: "end_turn" }))).toBeNull();
     expect(turnOutcome(turn({ status: "cancelled" }))).toBe("Stopped");
     expect(turnOutcome(turn({ status: "completed", stopReason: "max_tokens" }))).toBe("Hit the token limit");
+  });
+
+  it("shows tokens only when the agent sent usage for the turn", () => {
+    expect(turnTokens(turn({}))).toBeNull();
+    expect(
+      turnTokens(turn({ usage: { totalTokens: 15_300, inputTokens: 12_000, outputTokens: 3_300 } })),
+    ).toBe("15k tokens (12k in, 3.3k out)");
   });
 
   it("counts plan entries", () => {

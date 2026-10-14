@@ -2,5 +2,15 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "OpKind",
   "type": "string",
-  "enum": ["create", "wake", "sleep", "archive", "restore", "revert", "commit_push", "housekeeping"]
+  "enum": [
+    "create",
+    "wake",
+    "sleep",
+    "archive",
+    "restore",
+    "revert",
+    "commit_push",
+    "merge_pr",
+    "housekeeping"
+  ]
 }

@@ -24,6 +24,9 @@
       "$ref": "WsTurn.json"
     },
     {
+      "$ref": "WsRun.json"
+    },
+    {
       "$ref": "WsTurnDeleted.json"
     },
     {

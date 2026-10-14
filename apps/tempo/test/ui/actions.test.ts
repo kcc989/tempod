@@ -50,11 +50,14 @@ describe("action registry", () => {
     expect(runAction("merge")).toBe(false);
   });
 
-  it("lists available global actions in table order", () => {
+  it("lists available actions in table order, without typing-only keys", () => {
     registerAction("settings", () => undefined);
     registerAction("palette", () => undefined);
     registerAction("send", () => undefined);
-    expect(availableActions().map((b) => b.id)).toEqual(["palette", "settings"]);
+    registerAction("permissionAllow", () => undefined);
+    registerAction("stop", () => undefined);
+    registerAction("markViewed", () => undefined);
+    expect(availableActions().map((b) => b.id)).toEqual(["palette", "stop", "markViewed", "settings"]);
   });
 });
 

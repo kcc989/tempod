@@ -1,0 +1,33 @@
+{
+  "installedApp": "/Applications/Tempo.app",
+  "binarySha256": "f0a9b1c9433f9bdbe2b699dec73e9825c8cd1a754b7d186fc05ff67ceb151719",
+  "binaryUuid": "UUID: C05EEA33-C9C9-3704-ABD6-7EFCDEF3C096 (arm64) /Applications/Tempo.app/Contents/MacOS/Tempo",
+  "buildCommand": "cargo build --locked -p tempo-mac --bin Tempo",
+  "buildPassed": true,
+  "signatureVerified": true,
+  "keychainHelperIdentityVerified": true,
+  "nativeSources": {
+    "apps/mac/src/views/agents_settings.rs": "5ef132ef8f73bf0994157ad2c97eaf7a58b23ae1773e3d4ed7ac6ab001c95a96",
+    "apps/mac/src/views/composer.rs": "bdbf82237f9e8dd79131fb5f5e774000fc28b63f80ffaea5a8ff032f87baa4ff",
+    "apps/mac/src/views/main_window.rs": "436012a5da599baaf1bea335a41120df175fe6134908234932867bcd03d677e8",
+    "apps/mac/src/views/settings.rs": "63ff5ca0c307930e7218b49594aab28f945b9707df8ab5c9b36c191954c01770",
+    "apps/mac/src/views/tools.rs": "3835135843fc7f819d07177c8bc8d28d3772b5d2aaa69eaf95bcf170ae5513fd",
+    "apps/mac/src/views/workspace.rs": "225d1181f2017aa3a6fe3614fd993a426948aa1c8056b070ff83abcec9b51deb"
+  },
+  "containsOtherPendingNativeWork": true,
+  "testsRun": false,
+  "typecheckPassed": true,
+  "changedFileLintPassed": true,
+  "rootLintPassed": false,
+  "nativeVisualChecks": [
+    "Picker opens from pane toggle",
+    "36 pt tool rows",
+    "Text label in Changes outer tab",
+    "12 pt inset for section tabs",
+    "Header divider matches rail in fullscreen and windowed captures"
+  ],
+  "acceptanceEnabled": false,
+  "baseCommitDuringBuild": "bc9d77c",
+  "headerToolCommit": "1b897e2",
+  "sourceAfterBuildIsFormatOnly": true
+}

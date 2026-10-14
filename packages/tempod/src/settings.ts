@@ -12,15 +12,12 @@ const readOrNull = (path: string): string | null => {
 };
 
 export const readSettingsFiles = (workspace: string): SettingsFiles => ({
-  tempoToml: readOrNull(join(workspace, SETTINGS_PATHS.tempoToml)),
-  conductorToml: readOrNull(join(workspace, SETTINGS_PATHS.conductorToml)),
-  conductorJson: readOrNull(join(workspace, SETTINGS_PATHS.conductorJson)),
+  tempoYaml: readOrNull(join(workspace, SETTINGS_PATHS.tempoYaml)),
 });
 
 export const SETTINGS_FILE_PATHS: ReadonlyArray<string> = Object.values(SETTINGS_PATHS);
 
-const fingerprint = (files: SettingsFiles): string =>
-  JSON.stringify([files.tempoToml ?? null, files.conductorToml ?? null, files.conductorJson ?? null]);
+const fingerprint = (files: SettingsFiles): string => JSON.stringify([files.tempoYaml ?? null]);
 
 /** Last settings overrides and file contents, so the watcher can re-read settings when a file changes. */
 export class SettingsState {
@@ -44,17 +41,21 @@ export class SettingsState {
     this.persist(overrides);
     const files = readSettingsFiles(this.workspace);
     this.lastFingerprint = fingerprint(files);
+
     return resolveSettings(overrides, files);
   }
 
-  /** Re-resolves with the last overrides when any of the three files changed since the last read. */
+  /** Re-resolves with the last overrides when the settings file changed since the last read. */
   reReadIfChanged(): SettingsReadResult | null {
     const files = readSettingsFiles(this.workspace);
     const fp = fingerprint(files);
+
     if (fp === this.lastFingerprint) return null;
     this.lastFingerprint = fp;
+
     // Without a settings.read the UI overrides are unknown, and settings without them would be wrong.
     if (!this.known) return null;
+
     return resolveSettings(this.overrides, files);
   }
 

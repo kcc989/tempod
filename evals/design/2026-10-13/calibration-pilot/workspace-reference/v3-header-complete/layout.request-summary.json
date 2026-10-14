@@ -1,0 +1,69 @@
+{
+  "model": "clef",
+  "state": {
+    "app": {
+      "name": "Conductor",
+      "category": "Agent coding workspace",
+      "platform": "desktop",
+      "primary_user": "Developer",
+      "primary_job": "Read agent work, edit a project, and manage chats"
+    },
+    "screen": {
+      "name": "Workspace",
+      "purpose": "Read a conversation and inspect project changes beside it"
+    },
+    "image_legend": [
+      "Image 1: supplied full frame",
+      "Image 2: sidebar",
+      "Image 3: full-width application header and chat tabs",
+      "Image 4: composer"
+    ]
+  },
+  "images": [
+    {
+      "content_type": "image/png",
+      "file": "../full.png",
+      "sha256": "5b079100225978a2de6af5c803a42c0b6482ffe8a725c07c566b03cc126b0f71",
+      "bytes": 651167
+    },
+    {
+      "content_type": "image/png",
+      "file": "../detail-1.png",
+      "sha256": "742d37b3949109bb8f6e634cea174958b11069ada2dc24bc838d51dcfe4ddc8c",
+      "bytes": 97833
+    },
+    {
+      "content_type": "image/png",
+      "file": "header.png",
+      "sha256": "12cfc05a18920383ae2088d8c1ef2495c578de1ad3be69fd352fec2cfc67935c",
+      "bytes": 75104
+    },
+    {
+      "content_type": "image/png",
+      "file": "../detail-3.png",
+      "sha256": "4fcf6c8282f16eea21c99d7d89adb345740576d9faf4be12988706fa95eb05c1",
+      "bytes": 24589
+    }
+  ],
+  "questions": {
+    "layout_header_overhead": {
+      "type": "score",
+      "instructions": "For a conversation workspace, how much of the area above the transcript is spent on navigation and controls that serve the current work? Exclude the operating-system menu bar.",
+      "criteria": [
+        "An extra full-width application-branding row or repeated toolbar information consumes space above the workspace header and chat tabs.",
+        "There is no extra branding row, but secondary configuration or help actions take persistent space alongside the everyday controls.",
+        "The workspace header and chat tabs carry the necessary identity, state and navigation; secondary configuration and help are disclosed in menus or on demand."
+      ]
+    },
+    "layout_transcript_composer_alignment": {
+      "type": "score",
+      "instructions": "In a conversation workspace, how do the leading edges of message text and the composer input relate? Judge their actual positions, allowing for normal content padding.",
+      "criteria": [
+        "Message text starts far inside the composer leading edge, forming two separate horizontal tracks.",
+        "The tracks mostly align, but differences in padding make their leading edges visibly inconsistent.",
+        "Message text and composer input share a leading edge, apart from consistent small content padding."
+      ]
+    }
+  },
+  "originalRequestSha256": "dd416570489c5b309dc90790045fff45e58ed49c8cd29d037871b027af658de2"
+}

@@ -1,0 +1,173 @@
+{
+  "version": "2.1-draft-pilot",
+  "calibrated": false,
+  "acceptanceEnabled": false,
+  "theme": "dark",
+  "runsPerInput": 3,
+  "requiredReferences": 7,
+  "requiredKnownProblemScreens": 7,
+  "scope": "Two supplied comparison pairs; sidebar images are component frames, not full app captures.",
+  "groundTruthSentToProvider": false,
+  "cases": [
+    {
+      "id": "workspace-reference",
+      "pair": "workspace",
+      "app": "Conductor",
+      "label": "reference",
+      "labelBasis": "User supplied Conductor as the comparison for reducing top-bar controls.",
+      "source": "/var/folders/vd/nf8nml6j4nj7j4xs3qskt0qm0000gn/T/TemporaryItems/NSIRD_screencaptureui_ObJAee/Screenshot 2026-10-13 at 4.29.09\u202fPM.png",
+      "sourceSha256": "ce25566a3850da7aa6ce3bad397b34b9f8ed0439f96c99976f01335678a6d2a7",
+      "frameScope": "app",
+      "images": [
+        {
+          "file": "full.png",
+          "size": [3024, 1908],
+          "bytes": 651167,
+          "sha256": "5b079100225978a2de6af5c803a42c0b6482ffe8a725c07c566b03cc126b0f71",
+          "crop": null
+        },
+        {
+          "file": "detail-1.png",
+          "size": [512, 1908],
+          "bytes": 97833,
+          "sha256": "742d37b3949109bb8f6e634cea174958b11069ada2dc24bc838d51dcfe4ddc8c",
+          "crop": [0, 0, 512, 1908]
+        },
+        {
+          "file": "detail-2.png",
+          "size": [2512, 172],
+          "bytes": 36518,
+          "sha256": "9ddf3c4d968fd340000efc4b74802e0208e86320a62345eeb9fe9c513120a753",
+          "crop": [512, 0, 3024, 172]
+        },
+        {
+          "file": "detail-3.png",
+          "size": [1768, 353],
+          "bytes": 24589,
+          "sha256": "4fcf6c8282f16eea21c99d7d89adb345740576d9faf4be12988706fa95eb05c1",
+          "crop": [512, 1555, 2280, 1908]
+        }
+      ]
+    },
+    {
+      "id": "workspace-known-problems",
+      "pair": "workspace",
+      "app": "Tempo",
+      "label": "known_problems",
+      "labelBasis": "User reported excess top bars, persistent copy/base/guide actions, and narrow centered conversation.",
+      "source": "/var/folders/vd/nf8nml6j4nj7j4xs3qskt0qm0000gn/T/TemporaryItems/NSIRD_screencaptureui_ZxSO7i/Screenshot 2026-10-13 at 4.29.32\u202fPM.png",
+      "sourceSha256": "d4b44ca76d94145a459f8397479d767b64447e90886423ebd64e318fce7ed1b6",
+      "frameScope": "app",
+      "images": [
+        {
+          "file": "full.png",
+          "size": [3024, 1898],
+          "bytes": 568271,
+          "sha256": "777debfe64f22d27609d5a115db560e9c0974ec3de3606360a210be655c17dc9",
+          "crop": null
+        },
+        {
+          "file": "detail-1.png",
+          "size": [445, 1898],
+          "bytes": 75819,
+          "sha256": "f87996664a5acd395ee1d3d7be66c7c32d03d57ea36f6f22dd158faff5df11c7",
+          "crop": [0, 0, 445, 1898]
+        },
+        {
+          "file": "detail-2.png",
+          "size": [1965, 220],
+          "bytes": 90502,
+          "sha256": "c0ba0d6c2bfc89d82326b85f1dca2e243eb76fa3f24a77b72170c74ce76dbff5",
+          "crop": [445, 0, 2410, 220]
+        },
+        {
+          "file": "detail-3.png",
+          "size": [1965, 238],
+          "bytes": 34096,
+          "sha256": "65b88efce9f623829339fdecb1e09c58725201fbbbf1256791c31d268363e02d",
+          "crop": [445, 1660, 2410, 1898]
+        }
+      ]
+    },
+    {
+      "id": "sidebar-reference",
+      "pair": "sidebar",
+      "app": "Conductor",
+      "label": "reference",
+      "labelBasis": "User supplied Conductor sidebar as the comparison for the Tempo sidebar.",
+      "source": "/var/folders/vd/nf8nml6j4nj7j4xs3qskt0qm0000gn/T/TemporaryItems/NSIRD_screencaptureui_Sf1I4u/Screenshot 2026-10-13 at 4.34.23\u202fPM.png",
+      "sourceSha256": "9fcb52175127b2f53d0850f0f3cbe564d3401e3dbd7d7efc0d67ba58f7e0b51b",
+      "frameScope": "component",
+      "images": [
+        {
+          "file": "full.png",
+          "size": [528, 1918],
+          "bytes": 98295,
+          "sha256": "989a9f5fb3f1b0e0f44ef1f7ffcc49fa2c96dc8401ab379bca9e9d0f9bb2554c",
+          "crop": null
+        },
+        {
+          "file": "detail-1.png",
+          "size": [528, 520],
+          "bytes": 30349,
+          "sha256": "fa0ee4543b2e7878f68c99efcaea53d6e408cb1f5a5672d5ab1d702b7600d564",
+          "crop": [0, 0, 528, 520]
+        },
+        {
+          "file": "detail-2.png",
+          "size": [528, 840],
+          "bytes": 65625,
+          "sha256": "8e1fd547d804decea7849185925e1b801b570f7488cce290edbcba47d213bfa4",
+          "crop": [0, 490, 528, 1330]
+        },
+        {
+          "file": "detail-3.png",
+          "size": [528, 158],
+          "bytes": 7734,
+          "sha256": "0a184e52110f086465bce9762bfbae080e4898820d327de5d0c0b4224971aefb",
+          "crop": [0, 1760, 528, 1918]
+        }
+      ]
+    },
+    {
+      "id": "sidebar-known-problems",
+      "pair": "sidebar",
+      "app": "Tempo",
+      "label": "known_problems",
+      "labelBasis": "User called this sidebar clunky and cramped compared with Conductor.",
+      "source": "/var/folders/vd/nf8nml6j4nj7j4xs3qskt0qm0000gn/T/TemporaryItems/NSIRD_screencaptureui_sah60f/Screenshot 2026-10-13 at 4.33.59\u202fPM.png",
+      "sourceSha256": "c56a9b7e566d4ba412cf76579f06b00dc8aa10fcf099c91def0ee2f98fe5074d",
+      "frameScope": "component",
+      "images": [
+        {
+          "file": "full.png",
+          "size": [462, 1846],
+          "bytes": 59244,
+          "sha256": "13700487122123cbd5a3b719484b70599a0dec57571556b6fb5879dd59cf7c04",
+          "crop": null
+        },
+        {
+          "file": "detail-1.png",
+          "size": [462, 250],
+          "bytes": 28679,
+          "sha256": "eb08b140dc94cf996112b2fd166d7fdbd660d78c8646df379e11e45989315575",
+          "crop": [0, 0, 462, 250]
+        },
+        {
+          "file": "detail-2.png",
+          "size": [462, 455],
+          "bytes": 16760,
+          "sha256": "851ea7a3746b6608f8fc803c4a4bb9233aed67790c364305ec296f79b6448535",
+          "crop": [0, 195, 462, 650]
+        },
+        {
+          "file": "detail-3.png",
+          "size": [462, 166],
+          "bytes": 18061,
+          "sha256": "fc4754c9acbaeed2b81bb6253a741943b7caa17a43976c2397b905b1a5855f20",
+          "crop": [0, 1680, 462, 1846]
+        }
+      ]
+    }
+  ]
+}

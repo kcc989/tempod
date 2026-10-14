@@ -69,11 +69,14 @@ export function DiffLines({
   const onMouseUp = useEffectEvent(() => {
     if (!dragging.current) return;
     dragging.current = false;
+
     if (sel) setComposer(selectionRange(sel));
   });
+
   useEffect(() => {
     const up = () => onMouseUp();
     window.addEventListener("mouseup", up);
+
     return () => window.removeEventListener("mouseup", up);
   }, []);
 
@@ -89,17 +92,21 @@ export function DiffLines({
   const closeComposer = (added: boolean) => {
     setComposer(null);
     setSel(null);
+
     if (!added) focusGutter(stop);
   };
 
   const gutterKey = (e: KeyboardEvent<HTMLButtonElement>, ref: LineRef) => {
     const el = e.currentTarget;
+
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       const all = [
         ...(rootRef.current?.querySelectorAll<HTMLButtonElement>(`[data-gutter="${ref.side}"]`) ?? []),
       ];
+
       const target = all[all.indexOf(el) + (e.key === "ArrowDown" ? 1 : -1)];
       e.preventDefault();
+
       if (!target) return;
       const next: LineRef = { side: ref.side, line: Number(target.dataset.line) };
       setSel(
@@ -108,18 +115,23 @@ export function DiffLines({
           : null,
       );
       target.focus();
+
       return;
     }
+
     if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && view === "split") {
       const other = el
         .closest("[data-row]")
         ?.querySelector<HTMLButtonElement>(`[data-gutter="${e.key === "ArrowLeft" ? "old" : "new"}"]`);
+
       if (other && other !== el) {
         e.preventDefault();
         other.focus();
       }
+
       return;
     }
+
     if (e.key === "Escape" && sel) {
       e.preventDefault();
       setSel(null);
@@ -130,6 +142,7 @@ export function DiffLines({
     if (!ref) return <span aria-hidden className={cn("shrink-0 select-none", className)} />;
     const key = anchorKey(ref.side, ref.line);
     const selected = inRange(range, ref);
+
     return (
       <button
         type="button"
@@ -173,11 +186,13 @@ export function DiffLines({
 
   const extras = (keys: ReadonlyArray<string>) => {
     const cards: ReactNode[] = [];
+
     for (const k of keys) {
       for (const c of placed.byAnchor.get(k) ?? []) {
         cards.push(<DraftCard key={c.id} workspaceId={workspaceId} comment={c} />);
       }
     }
+
     if (composer && keys.includes(anchorKey(composer.side, composer.lineEnd))) {
       cards.push(
         <CommentForm
@@ -189,6 +204,7 @@ export function DiffLines({
         />,
       );
     }
+
     return cards.length > 0 ? <div className="py-0.5">{cards}</div> : null;
   };
 
@@ -208,6 +224,7 @@ export function DiffLines({
               const refs = splitRefs(row);
               const leftKind = row.left?.kind ?? null;
               const rightKind = row.right?.kind ?? null;
+
               return (
                 <Fragment key={`${hi}:${ri}`}>
                   <div data-row className="grid grid-cols-2">
@@ -269,6 +286,7 @@ export function DiffLines({
 
 function Code({ line }: { line: DiffLine | null }) {
   if (!line) return <span className="flex-1" />;
+
   return (
     <span className="min-w-0 flex-1 pr-2 break-all whitespace-pre-wrap">
       {line.kind !== "context" && (
@@ -285,19 +303,24 @@ function Code({ line }: { line: DiffLine | null }) {
 /** Every line-number button of a file, in order. */
 const gutterKeys = (parsed: ParsedDiff, view: DiffView): Set<string> => {
   const out = new Set<string>();
+
   for (const h of parsed.hunks) {
     if (view === "unified") {
       for (const l of h.lines) {
         const r = unifiedRef(l);
+
         if (r) out.add(anchorKey(r.side, r.line));
       }
     } else {
       for (const row of toSplitRows(h)) {
         const { left, right } = splitRefs(row);
+
         if (left) out.add(anchorKey(left.side, left.line));
+
         if (right) out.add(anchorKey(right.side, right.line));
       }
     }
   }
+
   return out;
 };

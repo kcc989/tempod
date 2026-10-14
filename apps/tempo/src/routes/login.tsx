@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ERROR_MESSAGES } from "@tempo/protocol";
@@ -19,12 +20,18 @@ interface LoginSearch {
 }
 
 export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>): LoginSearch => ({
-    ...(typeof search["redirect"] === "string" ? { redirect: search["redirect"] } : {}),
-    ...(typeof search["error"] === "string" ? { error: search["error"] } : {}),
-  }),
+  validateSearch: (search: Schema.JsonObject): LoginSearch => {
+    let result: LoginSearch = {};
+
+    if (Schema.is(Schema.String)(search["redirect"])) result = { ...result, redirect: search["redirect"] };
+
+    if (Schema.is(Schema.String)(search["error"])) result = { ...result, error: search["error"] };
+
+    return result;
+  },
   beforeLoad: async ({ context, search }) => {
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions).catch(() => null);
+
     if (session) throw redirect({ href: safeRedirect(search.redirect) });
   },
   component: LoginPage,
@@ -40,6 +47,7 @@ function LoginPage() {
   const signIn = async () => {
     setBusy(true);
     setFailed(false);
+
     try {
       await signInWithGithub(next);
     } catch {
@@ -63,7 +71,7 @@ function LoginPage() {
         {setup.isPending ? (
           <LoadingText label="Checking setup" />
         ) : setup.data && !setup.data.configured ? (
-          <p className="text-sm">Tempo is not set up yet. Open the setup link that the deploy printed.</p>
+          <p className="text-sm">Tempo is not set up yet. Open your private setup link.</p>
         ) : (
           <Button size="lg" onClick={() => void signIn()} disabled={busy}>
             <LogInIcon />

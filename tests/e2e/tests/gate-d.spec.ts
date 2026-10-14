@@ -23,11 +23,14 @@ import { leakedSecrets, nonce, sleep, waitFor } from "./lib/util.ts";
 /** Gate D: phase 3 (06, Acceptance tests AT-17 to AT-22, and the credential grep). */
 
 test.skip(!ENABLED, SKIP_REASON);
+
 test.afterEach(cleanupTest);
+
 test.afterAll(cleanupFile);
 
 /** GitHub creates check runs a few seconds after a PR opens; Tempo then polls every 60 s (03). */
 const CHECK_RUN_CREATION_MS = 15_000;
+
 /** TempoOutbound caches the egress config for 60 s (01, TempoOutbound). */
 const EGRESS_CONFIG_CACHE_MS = 65_000;
 
@@ -57,12 +60,14 @@ test.describe.serial("AT-17 and AT-18 pull requests", () => {
     const hub = await HubWatch.open();
     shared = { workspaceId };
     const createdAt = Date.now();
+
     const pr = await rpc("createPullRequest", {
       workspaceId,
       title: `e2e: run ${tag}`,
       body: "Created by the Tempo e2e suite.",
       draft: false,
     });
+
     expect(pr.url).toContain(`/pull/${pr.number}`);
     expect(
       (await rpcFails("createPullRequest", { workspaceId, title: "again", body: "", draft: false })).code,
@@ -72,10 +77,12 @@ test.describe.serial("AT-17 and AT-18 pull requests", () => {
       "the PR badge",
       () => {
         const s = hub.summaries.get(workspaceId);
+
         return s?.prNumber === pr.number && s.prState === "open" ? Date.now() : undefined;
       },
       TARGET.prUpdateMs,
     );
+
     expect(badgeAt - createdAt).toBeLessThan(TARGET.prUpdateMs);
 
     // The repo's pull_request workflow must create check runs (README.md, test repo).
@@ -84,20 +91,26 @@ test.describe.serial("AT-17 and AT-18 pull requests", () => {
       () => (hub.summaries.get(workspaceId)?.checksState ? Date.now() : undefined),
       TARGET.prUpdateMs + CHECK_RUN_CREATION_MS,
     );
+
     expect(checksAt - createdAt).toBeLessThan(TARGET.prUpdateMs + CHECK_RUN_CREATION_MS);
+
     const final = await hub.until(
       "the checks to finish",
       () => {
         const c = hub.summaries.get(workspaceId)?.checksState;
+
         return c === "success" || c === "failure" ? c : undefined;
       },
       15 * 60_000,
     );
+
     const runs = await rpc("listCheckRuns", { workspaceId });
     expect(runs.length).toBeGreaterThan(0);
+
     const failed = runs.some((r) =>
       ["failure", "cancelled", "timed_out", "action_required"].includes(r.conclusion ?? ""),
     );
+
     expect(final).toBe(failed ? "failure" : "success");
   });
 
@@ -108,6 +121,7 @@ test.describe.serial("AT-17 and AT-18 pull requests", () => {
     const watch = await WorkspaceWatch.open(workspaceId);
     const hub = await HubWatch.open();
     const restore = await withProjectSettings({ git: { archive_on_merge: true } });
+
     try {
       await watch.until(
         "archive_on_merge in the effective settings",
@@ -140,9 +154,11 @@ test("AT-19 archive, restore, wake: transcript and files are intact", async () =
   test.setTimeout(45 * 60_000);
   await requireChannels();
   const tag = nonce();
+
   const { summary, watch } = await newWorkspace({
     prompt: `e2e-${tag}: reply with exactly: TRANSCRIPT-${tag}`,
   });
+
   const workspaceId = summary.id;
   const t1 = await watch.waitTurnEnded(firstTurn(watch).id, 10 * 60_000);
   expect(t1.status).toBe("completed");
@@ -156,11 +172,13 @@ test("AT-19 archive, restore, wake: transcript and files are intact", async () =
     ].join("\n"),
   );
   const tree = await workingTreeHash(workspaceId);
+
   const transcript = [...watch.items.values()].map((i) => ({
     id: i.id,
     kind: i.kind,
     text: "text" in i.content ? i.content.text : null,
   }));
+
   expect(transcript.length).toBeGreaterThanOrEqual(2);
   watch.close();
 
@@ -176,11 +194,14 @@ test("AT-19 archive, restore, wake: transcript and files are intact", async () =
   await pollState(workspaceId, ["ready"], 20 * 60_000);
 
   const after = await WorkspaceWatch.open(workspaceId, 0);
+
   for (const item of transcript) {
     const now = after.items.get(item.id);
     expect(now?.kind, `item ${item.id}`).toBe(item.kind);
+
     if (item.text !== null && now && "text" in now.content) expect(now.content.text).toBe(item.text);
   }
+
   expect(after.agentText({ turnId: t1.id })).toContain(`TRANSCRIPT-${tag}`);
   expect(await workingTreeHash(workspaceId)).toBe(tree);
   expect((await rpcRetry("readFile", { workspaceId, path: `e2e-archive-${tag}.txt` })).content).toBe(
@@ -197,9 +218,11 @@ test("AT-20 with the allowlist policy a host not on the list gets 403 and an egr
   await requireChannels();
   const tag = nonce();
   const path = `/e2e-${tag}`;
+
   const restore = await withProjectSettings({
     environment: { egress_policy: "allowlist", egress_allowlist: [] },
   });
+
   try {
     const { summary, watch } = await newWorkspace();
     const workspaceId = summary.id;
@@ -215,9 +238,12 @@ test("AT-20 with the allowlist policy a host not on the list gets 403 and an egr
         workspaceId,
         `curl -sS -o /tmp/e2e-body -w '%{http_code}' --max-time 30 '${url}' || true; echo; head -c 300 /tmp/e2e-body 2>/dev/null || true`,
       );
+
       const [code = "0", ...body] = out.split("\n");
+
       return { code: Number(code), body: body.join("\n") };
     };
+
     const egressRow = (host: string, rowPath: string, since: number) =>
       waitFor(
         `an egress_log row for ${host}${rowPath}`,
@@ -285,16 +311,19 @@ test.describe("AT-21 phone width", () => {
       page,
       `e2e-${tag}: create a file named e2e-phone-${tag}.txt that contains ${tag}. Plan first, then leave plan mode and create it.`,
     );
+
     const turn = await watch.until(
       "the prompt sent from the phone",
       () => [...watch.turns.values()].find((t) => t.prompt.text.startsWith(`e2e-${tag}`)),
       60_000,
     );
+
     await expect(page.getByText(`e2e-${tag}`).first()).toBeVisible();
 
     const { turn: ended, answered } = await answerPermissionsUntilEnd(watch, turn.id, async (req) => {
       await choosePermission(page, allowOption(req).name);
     });
+
     expect(answered.length).toBeGreaterThan(0);
     expect(ended.status).toBe("completed");
     await expect(page.getByText(`e2e-phone-${tag}`).first()).toBeVisible();
@@ -341,17 +370,18 @@ test.describe("AT-22 keyboard shortcuts", () => {
     await expect(composer(page)).toBeFocused();
 
     await page.keyboard.press("Alt+KeyT");
+
     for (const agent of ["Claude", "Codex", "OpenCode", "Pi"])
       await expect(page.getByText(agent, { exact: true }).first()).toBeVisible();
     await page.keyboard.press("Escape");
   });
 
-  // Manual: Playwright drives Chromium, WebKit and Firefox builds, not Safari and Firefox as
-  // shipped on macOS, and 06 requires those browsers. On a Mac, in Chrome, Safari and Firefox,
+  // Manual: Linux Chromium does not establish shortcut behavior in Chrome on macOS.
+  // On a Mac, in Chrome,
   // go through every row of 04's shortcut table in a test workspace (⌥Y, ⌥P, ⌥M, ⌥A and ⌥R act on
   // git and scripts, so use a throwaway branch) and check each action runs and the browser does not
   // take the key.
-  test.fixme("AT-22 every shortcut in 04 works in Chrome, Safari and Firefox on macOS", async () => {});
+  test.fixme("AT-22 every shortcut in 04 works in Chrome on macOS", async () => {});
 });
 
 test.describe("Gate D credential grep", () => {
@@ -374,14 +404,17 @@ test.describe("Gate D credential grep", () => {
     const secrets = loadSecrets();
     const projects = await rpc("listProjects", {});
     const workspaces = await rpc("listWorkspaces", { includeArchived: true });
+
     const parts: string[] = [
       JSON.stringify(projects),
       JSON.stringify(workspaces),
       JSON.stringify(await rpc("getCredentialStatus", {})),
     ];
+
     for (const p of projects)
       parts.push(JSON.stringify(await rpc("listProjectSecretNames", { projectId: p.id })));
-    const note = (e: unknown) => `error: ${e instanceof Error ? e.message : String(e)}`;
+    const note = (cause: unknown) => `error: ${cause instanceof Error ? cause.message : String(cause)}`;
+
     for (const ws of workspaces) {
       const workspaceId = ws.id;
       parts.push(JSON.stringify(await rpc("getDiagnostics", { workspaceId }).catch(note)));
@@ -389,11 +422,13 @@ test.describe("Gate D credential grep", () => {
       parts.push(JSON.stringify(await rpc("listReviewComments", { workspaceId }).catch(note)));
       parts.push(JSON.stringify(await rpc("listCheckpoints", { workspaceId }).catch(note)));
       const watch = await WorkspaceWatch.open(workspaceId, 0).catch(() => null);
+
       if (watch) {
         parts.push(JSON.stringify(watch.socket.messages.map((m) => m.data)));
         watch.close();
       }
     }
+
     expectNoLeak(parts.join("\n"), secrets, "API or channel data");
   });
 
@@ -411,13 +446,17 @@ test.describe("Gate D credential grep", () => {
       "TEMPO_E2E_R2_DUMP is not set (unpacked copy of the bucket, README.md)",
     );
     const secrets = loadSecrets();
+
     const walk = (dir: string): string[] =>
       readdirSync(dir).flatMap((name) => {
         const p = join(dir, name);
+
         return statSync(p).isDirectory() ? walk(p) : [p];
       });
+
     const files = walk(required("TEMPO_E2E_R2_DUMP"));
     expect(files.length).toBeGreaterThan(0);
+
     for (const file of files) expectNoLeak(readFileSync(file, "latin1"), secrets, file);
   });
 

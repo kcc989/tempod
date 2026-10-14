@@ -18,7 +18,9 @@ class ConnectionMonitor extends Store<ConnState> {
 
   report(key: string, status: SocketStatus): void {
     const isDown = status === "connecting" || status === "reconnecting";
+
     if (isDown && !this.down.has(key)) this.down.set(key, Date.now());
+
     if (!isDown) this.down.delete(key);
     this.recompute();
   }
@@ -33,9 +35,12 @@ class ConnectionMonitor extends Store<ConnState> {
     this.timer = null;
     const now = Date.now();
     let earliest = Infinity;
+
     for (const since of this.down.values()) earliest = Math.min(earliest, since);
     const reconnecting = earliest !== Infinity && now - earliest >= DOWN_MS;
+
     if (reconnecting !== this.getSnapshot().reconnecting) this.set({ reconnecting });
+
     if (!reconnecting && earliest !== Infinity) {
       this.timer = setTimeout(() => this.recompute(), DOWN_MS - (now - earliest) + 10);
     }

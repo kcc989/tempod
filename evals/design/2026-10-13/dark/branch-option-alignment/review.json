@@ -1,0 +1,1159 @@
+{
+  "status": "needs_work",
+  "accepted": false,
+  "alignmentFixVisuallyConfirmed": true,
+  "branchDraftChangeConfirmed": true,
+  "longNameEllipsisCaseObserved": false,
+  "afterCaptureValid": true,
+  "afterCapture": "after/full.png",
+  "calibrated": false,
+  "areaScoreCalculated": false,
+  "areaReviews": {
+    "layout": {
+      "answeredQuestions": 13,
+      "uncertainQuestions": [
+        "focus_content_share",
+        "focus_reading_order",
+        "overflow_long_text",
+        "overflow_scroll_cue",
+        "quality_scroll_edge",
+        "type_scale",
+        "type_mono"
+      ]
+    },
+    "spacing": {
+      "answeredQuestions": 7,
+      "uncertainQuestions": []
+    },
+    "color-depth": {
+      "answeredQuestions": 12,
+      "uncertainQuestions": ["contrast_secondary"]
+    },
+    "usability": {
+      "answeredQuestions": 19,
+      "uncertainQuestions": [
+        "focus_primary_path",
+        "focus_affordance",
+        "status_items",
+        "status_lifecycle",
+        "nav_groups",
+        "copy_labels",
+        "states_disabled_clear",
+        "icons_meaning"
+      ]
+    }
+  },
+  "comparisons": {
+    "layout": {
+      "focus_content_share": {
+        "before": {
+          "type": "score",
+          "score": 0.9566,
+          "legend": {
+            "0": "Controls, banners, promotions, or decoration take most of the screen",
+            "1": "Content and controls take similar space",
+            "2": "The user's content takes most of the screen, and controls sit in a sidebar, a header, or a footer"
+          },
+          "probabilities": {
+            "0": 0.3193,
+            "1": 0.4049,
+            "2": 0.2758
+          },
+          "confidence": 0.0129
+        },
+        "after": {
+          "type": "score",
+          "score": 1.039,
+          "legend": {
+            "0": "Controls, banners, promotions, or decoration take most of the screen",
+            "1": "Content and controls take similar space",
+            "2": "The user's content takes most of the screen, and controls sit in a sidebar, a header, or a footer"
+          },
+          "probabilities": {
+            "0": 0.274,
+            "1": 0.4129,
+            "2": 0.3131
+          },
+          "confidence": 0.0154
+        }
+      },
+      "focus_reading_order": {
+        "before": {
+          "type": "noul",
+          "noul": 0.6204
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.5427
+        }
+      },
+      "focus_space_fit": {
+        "before": {
+          "type": "noul",
+          "noul": 0.2706
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.2668
+        }
+      },
+      "overflow_long_text": {
+        "before": {
+          "type": "choice",
+          "choice": "ellipsis",
+          "probabilities": {
+            "ellipsis": 0.5483,
+            "cut": 0.1574,
+            "breaks_layout": 0.0603,
+            "not_shown": 0.234
+          },
+          "confidence": 0.1785
+        },
+        "after": {
+          "type": "choice",
+          "choice": "ellipsis",
+          "probabilities": {
+            "ellipsis": 0.6411,
+            "cut": 0.1336,
+            "breaks_layout": 0.0436,
+            "not_shown": 0.1817
+          },
+          "confidence": 0.285
+        }
+      },
+      "overflow_scroll_cue": {
+        "before": {
+          "type": "choice",
+          "choice": "cue",
+          "probabilities": {
+            "cue": 0.6978,
+            "no_cue": 0.2717,
+            "not_shown": 0.0305
+          },
+          "confidence": 0.3426
+        },
+        "after": {
+          "type": "choice",
+          "choice": "cue",
+          "probabilities": {
+            "cue": 0.5461,
+            "no_cue": 0.4197,
+            "not_shown": 0.0342
+          },
+          "confidence": 0.2132
+        }
+      },
+      "quality_long_lines": {
+        "before": {
+          "type": "noul",
+          "noul": 0.152
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.2088
+        }
+      },
+      "quality_text_covered": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8119
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.8725
+        }
+      },
+      "quality_overflow": {
+        "before": {
+          "type": "noul",
+          "noul": 0.383
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.2509
+        }
+      },
+      "quality_scroll_edge": {
+        "before": {
+          "type": "noul",
+          "noul": 0.2632
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.3588
+        }
+      },
+      "type_hierarchy": {
+        "before": {
+          "type": "noul",
+          "noul": 0.9174
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.91
+        }
+      },
+      "type_scale": {
+        "before": {
+          "type": "score",
+          "score": 1.4721,
+          "legend": {
+            "0": "Many sizes with small differences, or no clear pattern",
+            "1": "A few sizes, but some styles look almost the same",
+            "2": "A small set of clearly different sizes and weights, used the same way for the same role everywhere"
+          },
+          "probabilities": {
+            "0": 0.1218,
+            "1": 0.2842,
+            "2": 0.594
+          },
+          "confidence": 0.1726
+        },
+        "after": {
+          "type": "score",
+          "score": 1.5029,
+          "legend": {
+            "0": "Many sizes with small differences, or no clear pattern",
+            "1": "A few sizes, but some styles look almost the same",
+            "2": "A small set of clearly different sizes and weights, used the same way for the same role everywhere"
+          },
+          "probabilities": {
+            "0": 0.1176,
+            "1": 0.2619,
+            "2": 0.6205
+          },
+          "confidence": 0.2011
+        }
+      },
+      "type_numbers": {
+        "before": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "aligned": 0.0169,
+            "ragged": 0.0124,
+            "not_shown": 0.9707
+          },
+          "confidence": 0.9139
+        },
+        "after": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "aligned": 0.0171,
+            "ragged": 0.0124,
+            "not_shown": 0.9705
+          },
+          "confidence": 0.9135
+        }
+      },
+      "type_mono": {
+        "before": {
+          "type": "choice",
+          "choice": "mono",
+          "probabilities": {
+            "mono": 0.5557,
+            "mixed": 0.3978,
+            "not_shown": 0.0465
+          },
+          "confidence": 0.2038
+        },
+        "after": {
+          "type": "choice",
+          "choice": "mono",
+          "probabilities": {
+            "mono": 0.6079,
+            "mixed": 0.3262,
+            "not_shown": 0.0659
+          },
+          "confidence": 0.2205
+        }
+      }
+    },
+    "spacing": {
+      "spacing_grouping": {
+        "before": {
+          "type": "score",
+          "score": 1.7402,
+          "legend": {
+            "0": "Gaps are random, or the same everywhere, so groups are hard to see",
+            "1": "Groups exist, but some gaps break them or join unrelated items",
+            "2": "Related items sit close together, gaps between groups are wider, and the same gap sizes repeat"
+          },
+          "probabilities": {
+            "0": 0.0586,
+            "1": 0.1426,
+            "2": 0.7988
+          },
+          "confidence": 0.4928
+        },
+        "after": {
+          "type": "score",
+          "score": 1.7213,
+          "legend": {
+            "0": "Gaps are random, or the same everywhere, so groups are hard to see",
+            "1": "Groups exist, but some gaps break them or join unrelated items",
+            "2": "Related items sit close together, gaps between groups are wider, and the same gap sizes repeat"
+          },
+          "probabilities": {
+            "0": 0.0558,
+            "1": 0.1671,
+            "2": 0.7771
+          },
+          "confidence": 0.4524
+        }
+      },
+      "spacing_alignment": {
+        "before": {
+          "type": "noul",
+          "noul": 0.7751
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.8532
+        }
+      },
+      "spacing_consistent": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8921
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.8423
+        }
+      },
+      "quality_heading_spacing": {
+        "before": {
+          "type": "noul",
+          "noul": 0.2643
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.2423
+        }
+      },
+      "quality_cramped": {
+        "before": {
+          "type": "noul",
+          "noul": 0.0516
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.0675
+        }
+      },
+      "slop_monotonous_spacing": {
+        "before": {
+          "type": "noul",
+          "noul": 0.0543
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.0526
+        }
+      },
+      "type_line_height": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8456
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.8428
+        }
+      }
+    },
+    "color-depth": {
+      "color_role": {
+        "before": {
+          "type": "score",
+          "score": 1.8072,
+          "legend": {
+            "0": "Color is decoration: gradients, many accent colors, or colored surfaces with no meaning",
+            "1": "The base is neutral, but some color is decoration only",
+            "2": "The base is neutral, and color appears only where it means something: status, category tags, the selected item, or the one main action"
+          },
+          "probabilities": {
+            "0": 0.0269,
+            "1": 0.1391,
+            "2": 0.834
+          },
+          "confidence": 0.5736
+        },
+        "after": {
+          "type": "score",
+          "score": 1.7962,
+          "legend": {
+            "0": "Color is decoration: gradients, many accent colors, or colored surfaces with no meaning",
+            "1": "The base is neutral, but some color is decoration only",
+            "2": "The base is neutral, and color appears only where it means something: status, category tags, the selected item, or the one main action"
+          },
+          "probabilities": {
+            "0": 0.0326,
+            "1": 0.1386,
+            "2": 0.8288
+          },
+          "confidence": 0.5609
+        }
+      },
+      "color_accents": {
+        "before": {
+          "type": "score",
+          "score": 1.9098,
+          "legend": {
+            "0": "Many accent colors with no clear system",
+            "1": "Two or three accent colors compete for attention",
+            "2": "One accent color, plus a small set of status colors such as green, amber, and red"
+          },
+          "probabilities": {
+            "0": 0.0123,
+            "1": 0.0656,
+            "2": 0.9221
+          },
+          "confidence": 0.7821
+        },
+        "after": {
+          "type": "score",
+          "score": 1.9243,
+          "legend": {
+            "0": "Many accent colors with no clear system",
+            "1": "Two or three accent colors compete for attention",
+            "2": "One accent color, plus a small set of status colors such as green, amber, and red"
+          },
+          "probabilities": {
+            "0": 0.0112,
+            "1": 0.0534,
+            "2": 0.9354
+          },
+          "confidence": 0.8171
+        }
+      },
+      "color_semantic": {
+        "before": {
+          "type": "noul",
+          "noul": 0.904
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.894
+        }
+      },
+      "color_not_alone": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8011
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.7905
+        }
+      },
+      "color_dark_layers": {
+        "before": {
+          "type": "choice",
+          "choice": "tonal",
+          "probabilities": {
+            "tonal": 0.9333,
+            "flat": 0.0633,
+            "not_shown": 0.0034
+          },
+          "confidence": 0.8125
+        },
+        "after": {
+          "type": "choice",
+          "choice": "tonal",
+          "probabilities": {
+            "tonal": 0.9059,
+            "flat": 0.0896,
+            "not_shown": 0.0045
+          },
+          "confidence": 0.7431
+        }
+      },
+      "contrast_secondary": {
+        "before": {
+          "type": "score",
+          "score": 1.2306,
+          "legend": {
+            "0": "Some needed text is very faint and hard to read",
+            "1": "Faint text is readable, but only with effort",
+            "2": "All needed text is easy to read; only decorative or disabled items are faint"
+          },
+          "probabilities": {
+            "0": 0.1829,
+            "1": 0.4036,
+            "2": 0.4135
+          },
+          "confidence": 0.051
+        },
+        "after": {
+          "type": "score",
+          "score": 1.1316,
+          "legend": {
+            "0": "Some needed text is very faint and hard to read",
+            "1": "Faint text is readable, but only with effort",
+            "2": "All needed text is easy to read; only decorative or disabled items are faint"
+          },
+          "probabilities": {
+            "0": 0.253,
+            "1": 0.3624,
+            "2": 0.3846
+          },
+          "confidence": 0.0149
+        }
+      },
+      "contrast_boundaries": {
+        "before": {
+          "type": "noul",
+          "noul": 0.7529
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.6648
+        }
+      },
+      "quality_gray_on_color": {
+        "before": {
+          "type": "noul",
+          "noul": 0.1337
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.077
+        }
+      },
+      "slop_dark_glow": {
+        "before": {
+          "type": "noul",
+          "noul": 0.0166
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.0203
+        }
+      },
+      "slop_glass": {
+        "before": {
+          "type": "noul",
+          "noul": 0.0252
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.0289
+        }
+      },
+      "slop_border_and_shadow": {
+        "before": {
+          "type": "noul",
+          "noul": 0.1982
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.1717
+        }
+      },
+      "restraint_noise": {
+        "before": {
+          "type": "score",
+          "score": 1.7491,
+          "legend": {
+            "0": "Many borders, shadows, badges, illustrations, or glows compete with the content",
+            "1": "Some extra decoration, but the main content is still easy to find",
+            "2": "Flat surfaces, thin dividers, and few shadows; illustrations appear only in empty states or onboarding"
+          },
+          "probabilities": {
+            "0": 0.0334,
+            "1": 0.184,
+            "2": 0.7826
+          },
+          "confidence": 0.4711
+        },
+        "after": {
+          "type": "score",
+          "score": 1.7323,
+          "legend": {
+            "0": "Many borders, shadows, badges, illustrations, or glows compete with the content",
+            "1": "Some extra decoration, but the main content is still easy to find",
+            "2": "Flat surfaces, thin dividers, and few shadows; illustrations appear only in empty states or onboarding"
+          },
+          "probabilities": {
+            "0": 0.0357,
+            "1": 0.1963,
+            "2": 0.768
+          },
+          "confidence": 0.4444
+        }
+      }
+    },
+    "usability": {
+      "focus_primary_path": {
+        "before": {
+          "type": "score",
+          "score": 1.3996,
+          "legend": {
+            "0": {
+              "what": "Several controls compete for attention, or nothing shows what to do first",
+              "examples": [
+                "Four filled buttons in different colors in the header",
+                "A promo banner, a tour popup, and a filled button all ask for a click"
+              ]
+            },
+            "1": {
+              "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
+              "examples": ["A filled 'Create' button next to a filled 'Upgrade' button of the same size"]
+            },
+            "2": {
+              "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
+              "examples": [
+                "An agents list where only 'Create Agent' is a filled dark button",
+                "A thread list where the rows are the focus and the header has only text buttons"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.1755,
+            "1": 0.2494,
+            "2": 0.5751
+          },
+          "confidence": 0.1357
+        },
+        "after": {
+          "type": "score",
+          "score": 1.3887,
+          "legend": {
+            "0": {
+              "what": "Several controls compete for attention, or nothing shows what to do first",
+              "examples": [
+                "Four filled buttons in different colors in the header",
+                "A promo banner, a tour popup, and a filled button all ask for a click"
+              ]
+            },
+            "1": {
+              "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
+              "examples": ["A filled 'Create' button next to a filled 'Upgrade' button of the same size"]
+            },
+            "2": {
+              "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
+              "examples": [
+                "An agents list where only 'Create Agent' is a filled dark button",
+                "A thread list where the rows are the focus and the header has only text buttons"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.1788,
+            "1": 0.2536,
+            "2": 0.5676
+          },
+          "confidence": 0.1276
+        }
+      },
+      "focus_affordance": {
+        "before": {
+          "type": "score",
+          "score": 1.3121,
+          "legend": {
+            "0": {
+              "what": "Actions and static text look the same",
+              "examples": [
+                "A header row where a branch name, a path, and 'Rename branch' all use the same plain text style"
+              ]
+            },
+            "1": {
+              "what": "Most actions look clickable, but some look like labels or labels look like buttons",
+              "examples": ["Buttons have borders, but one text action in the header has no style"]
+            },
+            "2": {
+              "what": "Every action looks clickable through a button shape, an icon, a link color, or a chevron, and static text never does",
+              "examples": [
+                "'Filters' and 'Display' are text buttons with icons and shortcut hints, and the page title is plain bold text"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.1817,
+            "1": 0.3245,
+            "2": 0.4938
+          },
+          "confidence": 0.0732
+        },
+        "after": {
+          "type": "score",
+          "score": 1.3242,
+          "legend": {
+            "0": {
+              "what": "Actions and static text look the same",
+              "examples": [
+                "A header row where a branch name, a path, and 'Rename branch' all use the same plain text style"
+              ]
+            },
+            "1": {
+              "what": "Most actions look clickable, but some look like labels or labels look like buttons",
+              "examples": ["Buttons have borders, but one text action in the header has no style"]
+            },
+            "2": {
+              "what": "Every action looks clickable through a button shape, an icon, a link color, or a chevron, and static text never does",
+              "examples": [
+                "'Filters' and 'Display' are text buttons with icons and shortcut hints, and the page title is plain bold text"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.1856,
+            "1": 0.3047,
+            "2": 0.5097
+          },
+          "confidence": 0.0807
+        }
+      },
+      "status_items": {
+        "before": {
+          "type": "score",
+          "score": 0.448,
+          "legend": {
+            "0": {
+              "what": "Items show no state; the user must open each item to learn it",
+              "examples": ["A list of project names with no status, owner, or date"]
+            },
+            "1": {
+              "what": "Some items show state, or state uses color only, with no icon, label, or count",
+              "examples": ["Rows have a colored left border but no label"]
+            },
+            "2": {
+              "what": "Each item that can change shows its state inline with an icon, a label, or a count",
+              "examples": [
+                "Sidebar threads show a spinner while running and a 'Needs input' badge when blocked",
+                "Each queue in the sidebar shows a count, such as 'First response 4'",
+                "A project chip shows 'On track' with a green icon"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.6899,
+            "1": 0.1722,
+            "2": 0.1379
+          },
+          "confidence": 0.287
+        },
+        "after": {
+          "type": "score",
+          "score": 0.4931,
+          "legend": {
+            "0": {
+              "what": "Items show no state; the user must open each item to learn it",
+              "examples": ["A list of project names with no status, owner, or date"]
+            },
+            "1": {
+              "what": "Some items show state, or state uses color only, with no icon, label, or count",
+              "examples": ["Rows have a colored left border but no label"]
+            },
+            "2": {
+              "what": "Each item that can change shows its state inline with an icon, a label, or a count",
+              "examples": [
+                "Sidebar threads show a spinner while running and a 'Needs input' badge when blocked",
+                "Each queue in the sidebar shows a count, such as 'First response 4'",
+                "A project chip shows 'On track' with a green icon"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.6617,
+            "1": 0.1834,
+            "2": 0.1549
+          },
+          "confidence": 0.2433
+        }
+      },
+      "status_consistent": {
+        "before": {
+          "type": "noul",
+          "noul": 0.9337
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.924
+        }
+      },
+      "status_lifecycle": {
+        "before": {
+          "type": "choice",
+          "choice": "explains",
+          "probabilities": {
+            "explains": 0.5722,
+            "bare": 0.4129,
+            "not_shown": 0.0149
+          },
+          "confidence": 0.2471
+        },
+        "after": {
+          "type": "choice",
+          "choice": "explains",
+          "probabilities": {
+            "explains": 0.5802,
+            "bare": 0.4072,
+            "not_shown": 0.0126
+          },
+          "confidence": 0.254
+        }
+      },
+      "nav_current": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8636
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.7818
+        }
+      },
+      "nav_groups": {
+        "before": {
+          "type": "score",
+          "score": 1.3749,
+          "legend": {
+            "0": "One long flat list, or items with no clear groups",
+            "1": "Groups exist, but names are vague or items repeat",
+            "2": "Short groups with clear names, such as pinned items, recent items by day, records, or workflow states, with counts where they help"
+          },
+          "probabilities": {
+            "0": 0.2037,
+            "1": 0.2177,
+            "2": 0.5786
+          },
+          "confidence": 0.1355
+        },
+        "after": {
+          "type": "score",
+          "score": 1.2822,
+          "legend": {
+            "0": "One long flat list, or items with no clear groups",
+            "1": "Groups exist, but names are vague or items repeat",
+            "2": "Short groups with clear names, such as pinned items, recent items by day, records, or workflow states, with counts where they help"
+          },
+          "probabilities": {
+            "0": 0.2521,
+            "1": 0.2135,
+            "2": 0.5344
+          },
+          "confidence": 0.0921
+        }
+      },
+      "nav_return": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8013
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.8335
+        }
+      },
+      "nav_tabs_current": {
+        "before": {
+          "type": "choice",
+          "choice": "clear",
+          "probabilities": {
+            "clear": 0.8515,
+            "weak": 0.1329,
+            "not_shown": 0.0156
+          },
+          "confidence": 0.6145
+        },
+        "after": {
+          "type": "choice",
+          "choice": "clear",
+          "probabilities": {
+            "clear": 0.8737,
+            "weak": 0.1114,
+            "not_shown": 0.0149
+          },
+          "confidence": 0.6641
+        }
+      },
+      "speed_search": {
+        "before": {
+          "type": "noul",
+          "noul": 0.9426
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.9354
+        }
+      },
+      "speed_shortcuts": {
+        "before": {
+          "type": "noul",
+          "noul": 0.5327
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.2933
+        }
+      },
+      "copy_labels": {
+        "before": {
+          "type": "score",
+          "score": 1.5686,
+          "legend": {
+            "0": "Vague, clever, or jargon words; buttons say 'Submit', 'OK', or 'Click here'",
+            "1": "Mostly clear, with some vague labels or mixed capitalization",
+            "2": "Plain, specific words; buttons start with a verb that names the result, such as 'Post update' or 'Add billing'; capitalization is consistent"
+          },
+          "probabilities": {
+            "0": 0.0387,
+            "1": 0.3541,
+            "2": 0.6072
+          },
+          "confidence": 0.2434
+        },
+        "after": {
+          "type": "score",
+          "score": 1.6138,
+          "legend": {
+            "0": "Vague, clever, or jargon words; buttons say 'Submit', 'OK', or 'Click here'",
+            "1": "Mostly clear, with some vague labels or mixed capitalization",
+            "2": "Plain, specific words; buttons start with a verb that names the result, such as 'Post update' or 'Add billing'; capitalization is consistent"
+          },
+          "probabilities": {
+            "0": 0.0337,
+            "1": 0.3188,
+            "2": 0.6475
+          },
+          "confidence": 0.283
+        }
+      },
+      "copy_status": {
+        "before": {
+          "type": "noul",
+          "noul": 0.7677
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.7249
+        }
+      },
+      "copy_controls_labeled": {
+        "before": {
+          "type": "noul",
+          "noul": 0.691
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.6699
+        }
+      },
+      "states_disabled_clear": {
+        "before": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "clear": 0.2426,
+            "confusing": 0.3543,
+            "not_shown": 0.4031
+          },
+          "confidence": 0.0203
+        },
+        "after": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "clear": 0.2929,
+            "confusing": 0.3319,
+            "not_shown": 0.3752
+          },
+          "confidence": 0.0051
+        }
+      },
+      "icons_one_set": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8971
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.8891
+        }
+      },
+      "icons_size": {
+        "before": {
+          "type": "noul",
+          "noul": 0.8504
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.8473
+        }
+      },
+      "icons_meaning": {
+        "before": {
+          "type": "score",
+          "score": 1.2135,
+          "legend": {
+            "0": "Icons are unusual or abstract, and they have no labels",
+            "1": "Most icons are common symbols, but some are unclear",
+            "2": "Every icon-only button is a common symbol, such as search, close, or add, or it has a label"
+          },
+          "probabilities": {
+            "0": 0.1779,
+            "1": 0.4307,
+            "2": 0.3914
+          },
+          "confidence": 0.0555
+        },
+        "after": {
+          "type": "score",
+          "score": 1.2497,
+          "legend": {
+            "0": "Icons are unusual or abstract, and they have no labels",
+            "1": "Most icons are common symbols, but some are unclear",
+            "2": "Every icon-only button is a common symbol, such as search, close, or add, or it has a label"
+          },
+          "probabilities": {
+            "0": 0.1646,
+            "1": 0.4212,
+            "2": 0.4142
+          },
+          "confidence": 0.0641
+        }
+      },
+      "quality_tiny_text": {
+        "before": {
+          "type": "noul",
+          "noul": 0.2714
+        },
+        "after": {
+          "type": "noul",
+          "noul": 0.2205
+        }
+      }
+    }
+  },
+  "interactions": {
+    "interaction-pick": {
+      "states_feedback": {
+        "type": "score",
+        "score": 0.4385,
+        "legend": {
+          "0": {
+            "what": "Nothing visible changes in image 2, or the user cannot tell if the action worked",
+            "examples": ["The user clicks an option and it shows no selected state"]
+          },
+          "1": {
+            "what": "A result appears, but far from the control, or only as a change that is easy to miss",
+            "examples": ["A save works, but the only sign is a small toast in the far corner"]
+          },
+          "2": {
+            "what": "The control shows a pressed or selected state, and the result or a short confirmation appears near the action",
+            "examples": [
+              "After a thumbs-up, the button fills and a toast says 'Thank you for your feedback!'"
+            ]
+          }
+        },
+        "probabilities": {
+          "0": 0.7297,
+          "1": 0.1021,
+          "2": 0.1682
+        },
+        "confidence": 0.3567
+      },
+      "feedback_selected": {
+        "type": "noul",
+        "noul": 0.2828
+      },
+      "feedback_layout_shift": {
+        "type": "noul",
+        "noul": 0.0649
+      },
+      "feedback_focus_visible": {
+        "type": "choice",
+        "choice": "not_keyboard",
+        "probabilities": {
+          "visible": 0.0336,
+          "missing": 0.052,
+          "not_keyboard": 0.9144
+        },
+        "confidence": 0.7598
+      }
+    },
+    "interaction-tab": {
+      "states_feedback": {
+        "type": "score",
+        "score": 0.2045,
+        "legend": {
+          "0": {
+            "what": "Nothing visible changes in image 2, or the user cannot tell if the action worked",
+            "examples": ["The user clicks an option and it shows no selected state"]
+          },
+          "1": {
+            "what": "A result appears, but far from the control, or only as a change that is easy to miss",
+            "examples": ["A save works, but the only sign is a small toast in the far corner"]
+          },
+          "2": {
+            "what": "The control shows a pressed or selected state, and the result or a short confirmation appears near the action",
+            "examples": [
+              "After a thumbs-up, the button fills and a toast says 'Thank you for your feedback!'"
+            ]
+          }
+        },
+        "probabilities": {
+          "0": 0.8503,
+          "1": 0.095,
+          "2": 0.0547
+        },
+        "confidence": 0.6025
+      },
+      "feedback_selected": {
+        "type": "noul",
+        "noul": 0.0448
+      },
+      "feedback_layout_shift": {
+        "type": "noul",
+        "noul": 0.0233
+      },
+      "feedback_focus_visible": {
+        "type": "choice",
+        "choice": "missing",
+        "probabilities": {
+          "visible": 0.1271,
+          "missing": 0.8564,
+          "not_keyboard": 0.0165
+        },
+        "confidence": 0.6248
+      }
+    }
+  },
+  "findings": [
+    {
+      "area": "usability",
+      "location": "New workspace options, branch selection",
+      "severity": "major",
+      "status": "review",
+      "evidence": "picked.jpg",
+      "finding": "Draft field changes, but persistent selected feedback remains unconfirmed. Clef selected probability 0.2828 and feedback confidence 0.3567."
+    },
+    {
+      "area": "usability",
+      "location": "New workspace options, keyboard focus",
+      "severity": "major",
+      "status": "needs_work",
+      "evidence": "tab.jpg",
+      "finding": "No visible focus mark after Tab; Clef returns missing with confidence 0.6248."
+    },
+    {
+      "area": "color-depth",
+      "location": "Floating workspace options and secondary text",
+      "severity": "unknown",
+      "status": "review",
+      "evidence": "after/full.png",
+      "finding": "Secondary contrast confidence 0.0149; no measured contrast claim."
+    }
+  ],
+  "checks": {
+    "types": "passed",
+    "macBuild": "passed",
+    "signing": "passed",
+    "tests": "not run"
+  },
+  "originalScorerUnchanged": true
+}

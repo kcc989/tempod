@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync,
@@ -10,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { ChangedFile, CheckpointResult } from "@tempo/protocol";
+import type { ChangedFile } from "@tempo/protocol";
 import { TempodDb } from "../src/db.ts";
 import { Git } from "../src/git.ts";
 import {
@@ -28,12 +29,15 @@ import {
 afterAll(cleanupDirs);
 
 const harnesses: Harness[] = [];
+
 afterEach(async () => {
   for (const x of harnesses.splice(0)) await x.close();
 });
 
 const T = 60_000;
+
 const BRANCH = "tempo/lisbon";
+
 const author = { name: "Ada Lovelace", email: "1+ada@users.noreply.github.com" };
 
 type Origin = Awaited<ReturnType<typeof makeOrigin>>;
@@ -46,8 +50,9 @@ const boot = async (origin?: Origin) => {
   await c.hello();
   await c.waitEvent("incarnation.changed");
   const ws = h.config.workspace;
-  const clone = (extra: Record<string, unknown> = {}) =>
-    c.ok<{ headSha: string; remoteHeadSha: string | null }>(
+
+  const clone = (extra: Partial<import("@tempo/protocol").TempodParams<"repo.clone">> = {}) =>
+    c.ok(
       "repo.clone",
       {
         url: o.url,
@@ -60,7 +65,9 @@ const boot = async (origin?: Origin) => {
       },
       60_000,
     );
+
   const g = (...args: string[]) => git(ws, ...args);
+
   return { origin: o, h, c, ws, clone, g };
 };
 
@@ -78,6 +85,7 @@ const pushToOrigin = async (
   await git(o.seed, "add", "-A");
   await git(o.seed, "commit", "-q", "-m", `seed ${file}`);
   await git(o.seed, "push", "-q", "-f", "origin", `${branch}:${branch}`);
+
   return git(o.seed, "rev-parse", "HEAD");
 };
 
@@ -100,11 +108,13 @@ describe("repo.clone", () => {
       const again = await clone();
       expect(again.headSha).toBe(mainSha);
       expect(readFileSync(join(ws, "keep.txt"), "utf8")).toBe("work in progress\n");
+
       const changed = await c.waitEvent(
         "git.changed",
         (e) => e.files.some((f) => f.path === "keep.txt"),
         10_000,
       );
+
       expect(changed.additions).toBe(1);
     },
     T,
@@ -138,6 +148,7 @@ describe("repo.clone", () => {
       const b = await boot(origin);
       const pr = await b.clone({ branch: "feature/x", source: { kind: "pr", number: 7 } });
       expect(pr.remoteHeadSha).toBe(sha);
+
       const missing = await (
         await boot(origin)
       ).c.req("repo.clone", {
@@ -148,6 +159,7 @@ describe("repo.clone", () => {
         author,
         mode: "create",
       });
+
       expect(missing).toMatchObject({ ok: false, error: { code: "CLONE_FAILED" } });
     },
     T,
@@ -163,13 +175,15 @@ describe("repo.clone", () => {
       expect(r.headSha).toBe(sha);
       expect(r.remoteHeadSha).toBe(sha);
       const b = await boot(origin);
-      const noMode = await b.c.ok<{ headSha: string }>("repo.clone", {
+
+      const noMode = await b.c.ok("repo.clone", {
         url: origin.url,
         branch: BRANCH,
         baseBranch: "main",
         source: { kind: "new" },
         author,
       });
+
       expect(noMode.headSha).toBe(sha);
       const c = await boot(origin);
       const fresh = await c.clone({ mode: "wake", branch: "tempo/other" });
@@ -191,6 +205,7 @@ describe("repo.clone", () => {
       expect(existsSync(join(ws, "README.md"))).toBe(true);
       expect(c.closed).toBeNull();
       const other = await boot();
+
       const badUrl = await other.c.req(
         "repo.clone",
         {
@@ -202,7 +217,9 @@ describe("repo.clone", () => {
         },
         60_000,
       );
+
       expect(badUrl).toMatchObject({ ok: false, error: { code: "CLONE_FAILED" } });
+
       const badName = await other.c.req("repo.clone", {
         url: origin.url,
         branch: "bad..name",
@@ -210,6 +227,7 @@ describe("repo.clone", () => {
         source: { kind: "new" },
         author,
       });
+
       expect(badName).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
     },
     T,
@@ -231,11 +249,13 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       const head = await g("rev-parse", "HEAD");
       const indexTree = await g("write-tree");
       const status = await g("status", "--porcelain");
-      const r = await c.ok<CheckpointResult>("git.checkpoint", {
+
+      const r = await c.ok("git.checkpoint", {
         checkpointId: "01CKPTA",
         turnId: "t1",
         reason: "turn_end",
       });
+
       if ("unchanged" in r) throw new Error("expected a checkpoint");
       expect(r.parent).toBe(head);
       expect(r.base).toBe(head);
@@ -254,14 +274,37 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       expect(files).not.toContain("ignored/cache.bin");
       expect(await g("show", `${r.commit}:a.txt`)).toBe("one\nTWO\nthree");
       expect(await g("bundle", "verify", r.bundlePath)).toBeDefined();
+
       const again = await c.ok("git.checkpoint", {
         checkpointId: "01CKPTB",
         turnId: null,
         reason: "pre_sleep",
       });
+
       expect(again).toEqual({ unchanged: true });
       const bad = await c.req("git.checkpoint", { checkpointId: "../x", turnId: null, reason: "turn_end" });
       expect(bad).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
+    },
+    T,
+  );
+
+  test(
+    "a checkpoint retry recovers its original bundle without overwriting its tree",
+    async () => {
+      const { c, ws, clone, g, h } = await boot();
+      await clone();
+      writeFileSync(join(ws, "a.txt"), "saved tree\n");
+      const params = { checkpointId: "01RETRY", turnId: "t1", reason: "turn_end" };
+      const first = await c.ok("git.checkpoint", params);
+
+      if ("unchanged" in first) throw new Error("expected checkpoint");
+      writeFileSync(join(ws, "a.txt"), "later unsaved edits\n");
+      rmSync(h.config.ckptBundle);
+      const retried = await c.ok("git.checkpoint", params);
+      expect(retried).toEqual(first);
+      expect(await g("show", `${first.commit}:a.txt`)).toBe("saved tree");
+      expect(readFileSync(join(ws, "a.txt"), "utf8")).toBe("later unsaved edits\n");
+      expect(await g("bundle", "verify", first.bundlePath)).toBeDefined();
     },
     T,
   );
@@ -279,11 +322,13 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       truncateSync(staged, 51 * 1024 * 1024);
       await g("add", "staged-big.bin");
       writeFileSync(join(ws, "small.txt"), "small\n");
-      const r = await c.ok<CheckpointResult>(
+
+      const r = await c.ok(
         "git.checkpoint",
         { checkpointId: "01BIG", turnId: null, reason: "turn_end" },
         60_000,
       );
+
       if ("unchanged" in r) throw new Error("expected a checkpoint");
       const files = (await g("ls-tree", "-r", "--name-only", r.commit)).split("\n");
       expect(files).toContain("small.txt");
@@ -304,22 +349,26 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       writeFileSync(join(a.ws, "README.md"), "uncommitted\n");
       writeFile(join(a.ws, "notes", "todo.md"), "untracked\n");
       rmSync(join(a.ws, "gone.txt"));
-      const r = await a.c.ok<CheckpointResult>("git.checkpoint", {
+
+      const r = await a.c.ok("git.checkpoint", {
         checkpointId: "01APPLY",
         turnId: "t1",
         reason: "pre_sleep",
       });
+
       if ("unchanged" in r) throw new Error("expected a checkpoint");
       const bundle = join(tmpDir("bundle-"), "restore.bundle");
       copyFileSync(r.bundlePath, bundle);
 
       const b = await boot(a.origin);
       await b.clone({ mode: "wake" });
-      const applied = await b.c.ok<{ headSha: string }>("repo.applyCheckpoint", {
+
+      const applied = await b.c.ok("repo.applyCheckpoint", {
         bundlePath: bundle,
         checkpointId: "01APPLY",
         branch: BRANCH,
       });
+
       expect(applied.headSha).toBe(head);
       expect(await b.g("symbolic-ref", "--short", "HEAD")).toBe(BRANCH);
       expect(readFileSync(join(b.ws, "a.txt"), "utf8")).toBe("committed change\n");
@@ -327,22 +376,28 @@ describe("git.checkpoint and repo.applyCheckpoint", () => {
       expect(readFileSync(join(b.ws, "notes", "todo.md"), "utf8")).toBe("untracked\n");
       expect(existsSync(join(b.ws, "gone.txt"))).toBe(false);
       expect(await b.g("diff", "--cached", "--name-only")).toBe("");
+
       const status = (await b.g("status", "--porcelain"))
         .split("\n")
         .map((l) => l.trim())
         .sort();
+
       expect(status).toEqual(["?? notes/", "D gone.txt", "M README.md"]);
-      const again = await b.c.ok<{ headSha: string }>("repo.applyCheckpoint", {
+
+      const again = await b.c.ok("repo.applyCheckpoint", {
         bundlePath: bundle,
         checkpointId: "01APPLY",
         branch: BRANCH,
       });
+
       expect(again.headSha).toBe(head);
+
       const missing = await b.c.req("repo.applyCheckpoint", {
         bundlePath: "/nonexistent.bundle",
         checkpointId: "01X",
         branch: BRANCH,
       });
+
       expect(missing).toMatchObject({ ok: false, error: { code: "CHECKPOINT_NOT_FOUND" } });
     },
     T,
@@ -358,17 +413,19 @@ describe("git.revert", () => {
       writeFileSync(join(ws, "a.txt"), "turn one\n");
       writeFileSync(join(ws, "u1.txt"), "untracked in turn one\n");
       const head1 = await g("rev-parse", "HEAD");
-      const ck = await c.ok<CheckpointResult>("git.checkpoint", {
+
+      const ck = await c.ok("git.checkpoint", {
         checkpointId: "01REV1",
         turnId: "t1",
         reason: "turn_end",
       });
+
       if ("unchanged" in ck) throw new Error("expected a checkpoint");
       writeFileSync(join(ws, "a.txt"), "turn two\n");
       await g("commit", "-q", "-am", "turn two commit");
       writeFileSync(join(ws, "u2.txt"), "untracked in turn two\n");
       writeFileSync(join(ws, "debug.log"), "ignored stays\n");
-      const r = await c.ok<{ headSha: string }>("git.revert", { checkpointId: "01REV1" });
+      const r = await c.ok("git.revert", { checkpointId: "01REV1" });
       expect(r.headSha).toBe(head1);
       expect(await g("rev-parse", "HEAD")).toBe(head1);
       expect(await g("symbolic-ref", "--short", "HEAD")).toBe(BRANCH);
@@ -391,13 +448,9 @@ describe("git.changes and git.fileDiff", () => {
       const { c, ws, clone, g, origin } = await boot();
       await clone();
       const base = await git(origin.bare, "rev-parse", "main");
-      const clean = await c.ok<{
-        files: ChangedFile[];
-        ahead: number;
-        dirty: boolean;
-        baseSha: string;
-        headSha: string;
-      }>("git.changes", { scope: "branch" });
+
+      const clean = await c.ok("git.changes", { scope: "branch" });
+
       expect(clean).toMatchObject({ files: [], ahead: 0, dirty: false, baseSha: base, headSha: base });
 
       writeFileSync(join(ws, "committed.txt"), "c1\nc2\n");
@@ -410,13 +463,8 @@ describe("git.changes and git.fileDiff", () => {
       writeFile(join(ws, "dir", "untracked.txt"), "u1\nu2\nu3\n");
       writeFileSync(join(ws, "debug.log"), "ignored\n");
 
-      const unc = await c.ok<{
-        files: ChangedFile[];
-        ahead: number;
-        dirty: boolean;
-        baseSha: string;
-        headSha: string;
-      }>("git.changes", { scope: "uncommitted" });
+      const unc = await c.ok("git.changes", { scope: "uncommitted" });
+
       expect(unc.baseSha).toBe(head);
       expect(unc.headSha).toBe(head);
       expect(unc.ahead).toBe(1);
@@ -428,7 +476,7 @@ describe("git.changes and git.fileDiff", () => {
       expect(u["renamed.txt"]).toMatchObject({ status: "R", oldPath: "old.txt", additions: 0, deletions: 0 });
       expect(u["dir/untracked.txt"]).toMatchObject({ status: "A", additions: 3, deletions: 0 });
 
-      const br = await c.ok<{ files: ChangedFile[]; baseSha: string }>("git.changes", { scope: "branch" });
+      const br = await c.ok("git.changes", { scope: "branch" });
       expect(br.baseSha).toBe(base);
       const b = byPath(br.files);
       expect(b["committed.txt"]).toMatchObject({ status: "A", additions: 2 });
@@ -438,22 +486,26 @@ describe("git.changes and git.fileDiff", () => {
       expect(b["dir/untracked.txt"]).toMatchObject({ status: "A", additions: 3 });
       expect(b["debug.log"]).toBeUndefined();
 
-      const diff = await c.ok<{ diff: string }>("git.fileDiff", { scope: "uncommitted", path: "a.txt" });
+      const diff = await c.ok("git.fileDiff", { scope: "uncommitted", path: "a.txt" });
       expect(diff.diff).toContain("-two");
       expect(diff.diff).toContain("+TWO");
       expect(diff.diff).toContain("+four");
-      const added = await c.ok<{ diff: string }>("git.fileDiff", {
+
+      const added = await c.ok("git.fileDiff", {
         scope: "uncommitted",
         path: "dir/untracked.txt",
       });
+
       expect(added.diff).toContain("+u1");
       expect(added.diff).toContain("new file");
-      const committed = await c.ok<{ diff: string }>("git.fileDiff", {
+
+      const committed = await c.ok("git.fileDiff", {
         scope: "branch",
         path: "committed.txt",
       });
+
       expect(committed.diff).toContain("+c2");
-      const none = await c.ok<{ diff: string }>("git.fileDiff", { scope: "uncommitted", path: "README.md" });
+      const none = await c.ok("git.fileDiff", { scope: "uncommitted", path: "README.md" });
       expect(none.diff).toBe("");
       expect(await c.req("git.fileDiff", { scope: "uncommitted", path: "nope.txt" })).toMatchObject({
         ok: false,
@@ -483,10 +535,12 @@ describe("git.commitAndPush and git.renameBranch", () => {
       expect(nothing).toMatchObject({ ok: false, error: { code: "NOTHING_TO_COMMIT" } });
 
       writeFileSync(join(ws, "feature.txt"), "feature\n");
-      const r = await c.ok<{ commitSha: string }>("git.commitAndPush", {
+
+      const r = await c.ok("git.commitAndPush", {
         message: "Add feature",
         branch: BRANCH,
       });
+
       expect(await git(origin.bare, "rev-parse", BRANCH)).toBe(r.commitSha);
       expect(await git(origin.bare, "log", "-1", "--format=%s|%an|%ae", BRANCH)).toBe(
         `Add feature|${author.name}|${author.email}`,
@@ -500,10 +554,12 @@ describe("git.commitAndPush and git.renameBranch", () => {
       await g("add", "local.txt");
       await g("commit", "-q", "-m", "local only");
       const localHead = await g("rev-parse", "HEAD");
-      const pushed = await c.ok<{ commitSha: string }>("git.commitAndPush", {
+
+      const pushed = await c.ok("git.commitAndPush", {
         message: "unused",
         branch: BRANCH,
       });
+
       expect(pushed.commitSha).toBe(localHead);
 
       const theirs = await pushToOrigin(origin, BRANCH, "theirs.txt", "someone else\n", BRANCH);
@@ -517,19 +573,24 @@ describe("git.commitAndPush and git.renameBranch", () => {
         branch: BRANCH,
         forceWithLeaseSha: localHead,
       });
+
       expect(stale).toMatchObject({ ok: false, error: { code: "PUSH_REJECTED" } });
       await g("fetch", "-q", "origin");
-      const forced = await c.ok<{ commitSha: string }>("git.commitAndPush", {
+
+      const forced = await c.ok("git.commitAndPush", {
         message: "x",
         branch: BRANCH,
         forceWithLeaseSha: theirs,
       });
+
       expect(await git(origin.bare, "rev-parse", BRANCH)).toBe(forced.commitSha);
+
       const badLease = await c.req("git.commitAndPush", {
         message: "x",
         branch: BRANCH,
         forceWithLeaseSha: "not-a-sha",
       });
+
       expect(badLease).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
     },
     T,
@@ -543,7 +604,7 @@ describe("git.commitAndPush and git.renameBranch", () => {
       await c.ok("git.renameBranch", { from: BRANCH, to: "tempo/porto" });
       expect(await g("symbolic-ref", "--short", "HEAD")).toBe("tempo/porto");
       expect(h.app.workspaceInfo?.branch).toBe("tempo/porto");
-      expect(await c.ok<unknown>("git.renameBranch", { from: BRANCH, to: "tempo/porto" })).toEqual({});
+      expect(await c.ok("git.renameBranch", { from: BRANCH, to: "tempo/porto" })).toEqual({});
       expect(await c.req("git.renameBranch", { from: "tempo/porto", to: "bad..name" })).toMatchObject({
         ok: false,
         error: { code: "BRANCH_INVALID" },
@@ -564,15 +625,19 @@ describe("deadlines", () => {
       const origin = await makeOrigin();
       const config = testConfig();
       const db = new TempodDb(join(config.stateDir, "tempod.db"));
+
       const gitOps = new Git({
         workspace: config.workspace,
         stateDir: config.stateDir,
         ckptIndex: config.ckptIndex,
         ckptBundle: config.ckptBundle,
         db,
-        env: () => ({ ...(process.env as Record<string, string>) }),
+        env: () => ({
+          ...Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.String))(process.env),
+        }),
         opMs: { commitAndPush: 1_500 },
       });
+
       try {
         await gitOps.clone({
           url: origin.url,
@@ -597,6 +662,55 @@ describe("deadlines", () => {
       } finally {
         db.close();
       }
+    },
+    T,
+  );
+});
+
+describe("git.readFile (02)", () => {
+  test(
+    "returns a file as it is in a commit: text as utf8, binary as base64; missing paths and big files fail",
+    async () => {
+      const { c, ws, clone, g } = await boot();
+      const { headSha } = await clone();
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3]);
+      writeFileSync(join(ws, "logo.png"), png);
+      await g("add", "logo.png");
+      await g("commit", "-q", "-m", "logo");
+      const head = await g("rev-parse", "HEAD");
+      writeFileSync(join(ws, "a.txt"), "changed\n");
+
+      const text = await c.ok("git.readFile", {
+        sha: headSha,
+        path: "a.txt",
+        maxBytes: 1024,
+      });
+
+      expect(text).toEqual({ content: "one\ntwo\nthree\n", encoding: "utf8", size: 14 });
+
+      const bin = await c.ok("git.readFile", {
+        sha: head,
+        path: `${ws}/logo.png`,
+        maxBytes: 1024,
+      });
+
+      expect(bin).toEqual({ content: png.toString("base64"), encoding: "base64", size: png.length });
+      expect(await c.req("git.readFile", { sha: headSha, path: "logo.png", maxBytes: 1024 })).toMatchObject({
+        ok: false,
+        error: { code: "NOT_FOUND" },
+      });
+      expect(await c.req("git.readFile", { sha: head, path: "logo.png", maxBytes: 4 })).toMatchObject({
+        ok: false,
+        error: { code: "FILE_TOO_LARGE" },
+      });
+      expect(await c.req("git.readFile", { sha: "--help", path: "a.txt", maxBytes: 9 })).toMatchObject({
+        ok: false,
+        error: { code: "NOT_FOUND" },
+      });
+      expect(await c.req("git.readFile", { sha: head, path: "/etc/passwd", maxBytes: 9 })).toMatchObject({
+        ok: false,
+        error: { code: "PATH_OUTSIDE_WORKSPACE" },
+      });
     },
     T,
   );

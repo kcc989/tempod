@@ -1,7 +1,19 @@
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
-import { afterEach, describe, expect, it } from "vitest";
+import { Schema } from "effect";
+import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.ts";
+import type { Result } from "@tempo/protocol";
+import {
+  createExecutionContext,
+  env,
+  runDurableObjectAlarm,
+  runInDurableObject,
+  waitOnExecutionContext,
+} from "cloudflare:test";
+import { describe, expect, it, vi, type TestContext } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
+import { github } from "../../src/github/provider.ts";
+import { previewCookie } from "../../src/do/workspace/preview.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
+import { seedReadyWorkspace } from "./ready-fixture.ts";
 import {
   DEFAULT_EFFECTIVE,
   FakeTempod,
@@ -20,61 +32,69 @@ import {
  * WorkspaceDO RPC methods (02, Server functions: Workspaces, Sessions and turns, Review and git,
  * Files) and the flows behind them (03, Prompt and turn, Revert, Archive and restore, Commit, push).
  */
+type Stub = WorkspaceStub;
 
-type Stub = DurableObjectStub<WorkspaceDO>;
-type Res = { readonly ok: boolean };
-type ErrorBody = { code: string; message: string; detail?: string };
-type Row = Record<string, any>;
+type Res<T = unknown> = Result<T>;
+
+type Row = Record<string, SqlStorageValue>;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Unwraps a Result envelope. RPC stubs widen the value types, so tests read values loosely. */
-const ok = (r: Res): any => {
-  if (!r.ok) {
-    const e = (r as unknown as { error: ErrorBody }).error;
-    throw new Error(`expected ok, got ${e.code}: ${e.message} ${e.detail ?? ""}`);
+const ok = <T>(result: Result<T>): T => {
+  if (!result.ok) {
+    const error = result.error;
+    throw new Error(`expected ok, got ${error.code}: ${error.message} ${error.detail ?? ""}`);
   }
-  return (r as unknown as { value: unknown }).value;
+
+  return result.value;
 };
-const codeOf = (r: Res): string => (r.ok ? "OK" : (r as unknown as { error: ErrorBody }).error.code);
+
+const codeOf = <T>(result: Result<T>): string => (result.ok ? "OK" : result.error.code);
 
 const ULID = /^[0-9a-hjkmnp-tv-z]{26}$/;
-const PREVIEW_TOKEN = /^[a-z0-9]{16}$/;
+
+const PREVIEW_KEY = /^[A-Za-z0-9_-]{43}$/;
 
 // ---------- storage helpers ----------
-
 const rows = (stub: Stub, query: string, ...binds: Array<string | number | null>): Promise<Row[]> =>
-  runInDurableObject(
-    stub,
-    (_i: WorkspaceDO, state: DurableObjectState) =>
-      state.storage.sql.exec(query, ...binds).toArray() as Row[],
+  runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) =>
+    state.storage.sql.exec(query, ...binds).toArray(),
   );
+
 const one = async (
   stub: Stub,
   query: string,
   ...binds: Array<string | number | null>
 ): Promise<Row | undefined> => (await rows(stub, query, ...binds))[0];
+
 const exec = (stub: Stub, query: string, ...binds: Array<string | number | null>): Promise<void> =>
   runInDurableObject(stub, (_i: WorkspaceDO, state: DurableObjectState) => {
     state.storage.sql.exec(query, ...binds);
   });
 
 const turnOf = (stub: Stub, id: string) => one(stub, "SELECT * FROM turns WHERE id = ?", id);
+
 const sessionOf = (stub: Stub, id: string) => one(stub, "SELECT * FROM sessions WHERE id = ?", id);
+
 const wsRow = async (stub: Stub) => (await one(stub, "SELECT * FROM workspace WHERE id = 1"))!;
+
 const detail = async (stub: Stub) => ok(await stub.getWorkspace({}));
+
 const d1Row = (id: string) => env.DB.prepare("SELECT * FROM workspaces WHERE id = ?").bind(id).first<Row>();
+
 const hubRev = (userId: string, workspaceId: string): Promise<number | null> =>
-  runInDurableObject(env.USER_HUB.getByName(userId), (_i: unknown, state: DurableObjectState) => {
+  runInDurableObject(env.USER_HUB.getByName(userId), (_i, state: DurableObjectState) => {
     const r = state.storage.sql
       .exec("SELECT rev FROM summaries WHERE workspace_id = ?", workspaceId)
       .toArray();
+
     return r.length ? Number(r[0]!["rev"]) : null;
   });
+
 const opsOf = async (stub: Stub, kind: string) => (await stub.listOps()).filter((o) => o.kind === kind);
 
 // ---------- driving ----------
-
 const driveUntil = async (
   stub: Stub,
   check: () => Promise<boolean>,
@@ -82,19 +102,28 @@ const driveUntil = async (
   timeoutMs = 20_000,
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
+
   for (;;) {
     if (await check()) return;
+
     if (Date.now() > deadline) throw new Error(`timed out driving to ${label}`);
+    // RPC assertions need op outcomes, not production retry delays.
+    await exec(
+      stub,
+      "UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'",
+    );
     await runDurableObjectAlarm(stub);
     await sleep(25);
   }
 };
+
 const stateOf = async (stub: Stub): Promise<string> => (await detail(stub)).state;
+
 const driveToState = (stub: Stub, ...states: string[]) =>
   driveUntil(stub, async () => states.includes(await stateOf(stub)), `state ${states.join("|")}`);
 
 /** Runs alarms while an RPC call that waits on an op (revert, commit_push) is in flight. */
-const whileDriving = async (stub: Stub, rpc: PromiseLike<unknown>): Promise<Res> => {
+const whileDriving = async <T>(stub: Stub, rpc: PromiseLike<Result<T>>): Promise<Result<T>> => {
   const call = Promise.resolve(rpc);
   let settled = false;
   void call.then(
@@ -102,19 +131,25 @@ const whileDriving = async (stub: Stub, rpc: PromiseLike<unknown>): Promise<Res>
     () => (settled = true),
   );
   const deadline = Date.now() + 20_000;
+
   while (!settled && Date.now() < deadline) {
+    // RPC assertions need op outcomes, not production retry delays.
+    await exec(
+      stub,
+      "UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'",
+    );
     await runDurableObjectAlarm(stub);
     await sleep(25);
   }
-  return (await call) as Res;
+
+  return await call;
 };
 
 /** The fake tempod's socket belongs to the DO's I/O context, so events are sent from inside it. */
-const emit = (w: Ws, event: Record<string, unknown>): Promise<number> =>
-  runInDurableObject(w.stub, () => w.tempod.emit(event as unknown as TempodEvent));
+const emit = (w: Ws, event: TempodEvent): Promise<number> =>
+  runInDurableObject(w.stub, () => w.tempod.emit(event));
 
 // ---------- seeding ----------
-
 interface Ws {
   readonly workspaceId: string;
   readonly stub: Stub;
@@ -123,22 +158,21 @@ interface Ws {
   readonly seeded: Seeded;
 }
 
-const holds: FakeTempod[] = [];
-afterEach(() => {
-  for (const t of holds.splice(0)) t.healthy = true;
-});
-/** Keeps the next container start waiting for health, so the workspace stays `starting`. */
-const hold = (tempod: FakeTempod) => {
+/** Releases only this test's fake when the case finishes, including on failure. */
+const hold = (tempod: FakeTempod, onTestFinished: TestContext["onTestFinished"]) => {
   tempod.healthy = false;
-  holds.push(tempod);
+  onTestFinished(() => {
+    tempod.healthy = true;
+  });
 };
 
 let counter = 0;
+
 const author = { name: "Owner", email: `${OWNER_GITHUB_ID}+owner@users.noreply.github.com` };
 
 const initInput = (
   w: { workspaceId: string; seeded: Seeded; slug: string; branch: string },
-  opts: { prompt?: string; agent?: AgentId } = {},
+  opts: { prompt?: string; agent?: AgentId; model?: string } = {},
 ) => ({
   workspaceId: w.workspaceId,
   projectId: w.seeded.projectId,
@@ -149,6 +183,7 @@ const initInput = (
   source: { kind: "new" as const },
   defaultAgent: "claude" as const,
   agent: opts.agent ?? "claude",
+  model: opts.model,
   prompt: opts.prompt ? { text: opts.prompt } : null,
   author,
   createdAt: Date.now(),
@@ -176,6 +211,7 @@ const insertD1Workspace = async (
       w.archived ? now : null,
     )
     .run();
+
   return id;
 };
 
@@ -184,20 +220,30 @@ const insertD1Workspace = async (
  * `container.start`, so the state stays `starting` and queued turns stay queued.
  */
 const seedHeld = async (
-  opts: { prompt?: string; agent?: AgentId; credentials?: boolean } = {},
+  onTestFinished: TestContext["onTestFinished"],
+  opts: {
+    prompt?: string;
+    agent?: AgentId;
+    model?: string;
+    credentials?: boolean;
+    prepare?: (tempod: FakeTempod, stub: Stub) => void;
+  } = {},
 ): Promise<Ws & { slug: string; branch: string; summary: any }> => {
   const seeded = await seedProject();
-  if (opts.credentials !== false) await seedCredentials(seeded.userId);
+
+  if (opts.credentials !== false) await seedCredentials(seeded.userId, [opts.agent ?? "claude"]);
   counter++;
   const workspaceId = newId();
   const slug = `held-${counter}`;
   const branch = `tempo/${slug}`;
   await insertD1Workspace(seeded, { id: workspaceId, slug, branch });
-  const stub = env.WORKSPACE.getByName(workspaceId);
+  const stub = workspaceStub(env.WORKSPACE, workspaceId);
   const tempod = new FakeTempod();
-  hold(tempod);
+  hold(tempod, onTestFinished);
+  opts.prepare?.(tempod, stub);
   const { container } = await installFakes(stub, tempod);
   const summary = ok(await stub.init(initInput({ workspaceId, seeded, slug, branch }, opts)));
+
   return { workspaceId, stub, tempod, container, seeded, slug, branch, summary };
 };
 
@@ -206,10 +252,12 @@ const readyWs = async (
   opts: { prompt?: string; credentials?: boolean } = {},
 ): Promise<Ws & { first: { sessionId: string; turnId: string } | null }> => {
   const seeded = await seedProject();
-  if (opts.credentials !== false) await seedCredentials(seeded.userId);
+
+  if (opts.credentials !== false) await seedCredentials(seeded.userId, ["claude"]);
   const w = await seedWorkspace(seeded, opts.prompt ? { prompt: opts.prompt } : {});
   await driveToState(w.stub, "ready", "working");
   let first: { sessionId: string; turnId: string } | null = null;
+
   if (opts.prompt && opts.credentials !== false) {
     await waitFor(() => w.tempod.requestsOf("session.prompt").length === 1, 5000, "first prompt");
     const p = w.tempod.requestsOf("session.prompt")[0];
@@ -220,12 +268,14 @@ const readyWs = async (
       "first turn running",
     );
   }
+
   return { ...w, seeded, first };
 };
 
 const liveSession = async (w: Ws, agent: AgentId = "claude") => {
   const s = ok(await w.stub.createSession({ agent }));
   await waitFor(async () => (await sessionOf(w.stub, s.id))?.["status"] === "idle", 5000, "session idle");
+
   return s;
 };
 
@@ -250,20 +300,20 @@ const endTurn = async (w: Ws, sessionId: string, turnId: string, stopReason = "e
 
 /** sleepWorkspace on a ready workspace, then the sleep op until `sleeping`. */
 const putToSleep = async (w: Ws) => {
-  expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("OK");
+  if (codeOf(await w.stub.sleepWorkspace({})) !== "OK") throw new Error("Fixture could not sleep");
   await driveToState(w.stub, "sleeping");
 };
 
 /** archiveWorkspace, then the archive op until `archived`, and the D1 row caught up. */
 const archiveIt = async (w: Ws) => {
-  expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
+  if (codeOf(await w.stub.archiveWorkspace({})) !== "OK") throw new Error("Fixture could not archive");
   await driveToState(w.stub, "archived");
   await waitFor(async () => (await d1Row(w.workspaceId))?.["archived_at"] != null, 5000, "D1 archived_at");
 };
 
 const settingsWith = (patch: {
-  scripts?: Record<string, unknown>;
-  environment?: Record<string, unknown>;
+  scripts?: Partial<import("@tempo/protocol").Settings["scripts"]>;
+  environment?: Partial<import("@tempo/protocol").Settings["environment"]>;
 }) => ({
   ...DEFAULT_EFFECTIVE,
   scripts: { ...DEFAULT_EFFECTIVE.scripts, ...patch.scripts },
@@ -271,7 +321,7 @@ const settingsWith = (patch: {
 });
 
 /** Makes tempod report new effective settings and has the DO read them again. */
-const useSettings = async (w: Ws, effective: unknown) => {
+const useSettings = async (w: Ws, effective: import("@tempo/protocol").Settings) => {
   w.tempod.on("settings.read", () => ({ effective, warnings: [], errors: [], sources: {} }));
   await w.stub.refreshSettings();
 };
@@ -279,16 +329,18 @@ const useSettings = async (w: Ws, effective: unknown) => {
 const uninitialised = (): Stub => env.WORKSPACE.getByName(newId());
 
 /** Opens the workspace channel (02) and collects what the DO sends. */
-const openUi = async (w: Ws) => {
+const openUi = async (w: Pick<Ws, "stub" | "workspaceId">) => {
   const res = await w.stub.fetch(`https://tempo.test/api/ws/workspace/${w.workspaceId}?sinceRev=0`, {
     headers: { Upgrade: "websocket" },
   });
+
   const socket = res.webSocket!;
   const messages: any[] = [];
   socket.accept();
   socket.addEventListener("message", (e) => {
     messages.push(JSON.parse(String(e.data)));
   });
+
   return { socket, messages };
 };
 
@@ -300,10 +352,48 @@ const forceError = (w: Ws) =>
 
 // =====================================================================================
 
-describe("init", { timeout: 30_000 }, () => {
-  it("writes the workspace row, the first session, turn and user_message item, inserts the create op and sets state starting", async () => {
+describe("ready RPC fixture contract", { timeout: 30_000 }, () => {
+  it("matches lifecycle-created defaults and serves independent workspace RPCs", async ({ expect }) => {
+    const full = await readyWs();
+    const minimal = await seedReadyWorkspace();
+
+    const defaults = async (w: Ws) => {
+      const d = await detail(w.stub);
+
+      return {
+        state: d.state,
+        attention: d.attention,
+        settings: d.settings,
+        setupStatus: d.setupStatus,
+        defaultAgent: d.defaultAgent,
+        pinned: d.pinned,
+        baseBranch: d.baseBranch,
+        ports: d.ports,
+        queue: d.queue,
+        runningTurnId: d.runningTurnId,
+      };
+    };
+
+    expect(await defaults(minimal)).toEqual(await defaults(full));
+    expect(ok(await minimal.stub.readFile({ path: "README.md" }))).toEqual(
+      ok(await full.stub.readFile({ path: "README.md" })),
+    );
+    expect(ok(await minimal.stub.getChanges({ scope: "branch" }))).toEqual(
+      ok(await full.stub.getChanges({ scope: "branch" })),
+    );
+    ok(await minimal.stub.renameWorkspace({ title: "Minimal fixture" }));
+    expect((await detail(minimal.stub)).title).toBe("Minimal fixture");
+    expect((await detail(full.stub)).title).not.toBe("Minimal fixture");
+  });
+});
+
+describe.concurrent("init", { timeout: 30_000 }, () => {
+  it("writes the workspace row, the first session, turn and user_message item, inserts the create op and sets state starting", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const text = "Move invoice generation into a background job, add retries and cover the job with tests";
-    const w = await seedHeld({ prompt: text, agent: "codex" });
+    const w = await seedHeld(onTestFinished, { prompt: text, agent: "codex" });
     // 03 createWorkspace 5: "Call WorkspaceDO.init(...) and return its WorkspaceSummary."
     expect(Object.keys(w.summary).sort()).toEqual(
       [
@@ -330,7 +420,7 @@ describe("init", { timeout: 30_000 }, () => {
       id: w.workspaceId,
       projectId: w.seeded.projectId,
       slug: w.slug,
-      branch: w.branch,
+      branch: "tempo/move-invoice-generation-into-a-background-job-add-retries-an",
       state: "starting",
       title: text.slice(0, 60),
       pinned: false,
@@ -339,9 +429,9 @@ describe("init", { timeout: 30_000 }, () => {
     const d = await detail(w.stub);
     // 03 "In WorkspaceDO.init" 1: "Set title to the first 60 characters of the prompt, or to the slug."
     expect(d.title).toBe(text.slice(0, 60));
-    // 03 init 1: "Make preview_token (16 chars from [a-z0-9] ...)"
-    expect(d.previewToken).toMatch(PREVIEW_TOKEN);
-    expect((await wsRow(w.stub))["preview_token"]).toBe(d.previewToken);
+    // 03 init 1: "Make preview_key (32 random bytes from crypto.getRandomValues, base64url)."
+    expect((await wsRow(w.stub))["preview_key"]).toMatch(PREVIEW_KEY);
+    expect(d).not.toHaveProperty("previewToken");
     // 03 init 3: "Insert the create op. Set state starting."
     expect(d.state).toBe("starting");
     const create = await opsOf(w.stub, "create");
@@ -354,7 +444,7 @@ describe("init", { timeout: 30_000 }, () => {
     const turns = await rows(w.stub, "SELECT * FROM turns");
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({ session_id: sessions[0]!["id"], status: "queued", seq: 1 });
-    expect(JSON.parse(turns[0]!["prompt_json"])).toEqual({
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(turns[0]!["prompt_json"]))).toEqual({
       text,
       mentions: [],
       attachmentIds: [],
@@ -368,7 +458,7 @@ describe("init", { timeout: 30_000 }, () => {
       turn_id: turns[0]!["id"],
     });
     // 02 Item model: user_message content_json = {text, mentions: [{path}], attachments: [{id, name, mime}], reviewCommentIds: []}
-    expect(JSON.parse(items[0]!["content_json"])).toEqual({
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(items[0]!["content_json"]))).toEqual({
       text,
       mentions: [],
       attachments: [],
@@ -384,38 +474,53 @@ describe("init", { timeout: 30_000 }, () => {
     await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) !== null, 5000, "hub summary");
   });
 
-  it("uses the slug as the title and creates no session, turn or item without a prompt", async () => {
-    const w = await seedHeld();
+  it("creates an idle first chat with the selected model and no turn or item without a prompt", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { agent: "codex", model: "reported-model" });
     const d = await detail(w.stub);
     expect(d.title).toBe(w.slug);
     expect(d.state).toBe("starting");
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(0);
+    const sessions = await rows(w.stub, "SELECT * FROM sessions");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ agent: "codex", status: "idle" });
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(sessions[0]!["config_json"]))).toEqual({
+      model: "reported-model",
+    });
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(0);
     expect(await rows(w.stub, "SELECT id FROM items")).toHaveLength(0);
     expect(await opsOf(w.stub, "create")).toHaveLength(1);
   });
 
-  it("keeps whole short prompts as the title and makes a fresh preview token per workspace", async () => {
-    const a = await seedHeld({ prompt: "Fix the login bug" });
-    const b = await seedHeld({ prompt: "Fix the login bug" });
+  it("keeps whole short prompts as the title and makes a fresh preview key per workspace", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const a = await seedHeld(onTestFinished, { prompt: "Fix the login bug" });
+    const b = await seedHeld(onTestFinished, { prompt: "Fix the login bug" });
     expect((await detail(a.stub)).title).toBe("Fix the login bug");
-    expect((await detail(a.stub)).previewToken).not.toBe((await detail(b.stub)).previewToken);
+    expect((await wsRow(a.stub))["preview_key"]).not.toBe((await wsRow(b.stub))["preview_key"]);
   });
 
-  it("is idempotent: a second init returns the existing summary and adds nothing", async () => {
-    const w = await seedHeld({ prompt: "First prompt" });
-    const before = await detail(w.stub);
+  it("is idempotent: a second init returns the existing summary and adds nothing", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First prompt" });
+    const before = await wsRow(w.stub);
+
     const again = ok(
       await w.stub.init(
         initInput({ ...w, slug: "other-slug", branch: "tempo/other" }, { prompt: "Second prompt" }),
       ),
     );
+
     expect(again.id).toBe(w.workspaceId);
     expect(again.title).toBe("First prompt");
     expect(again.slug).toBe(w.slug);
-    expect(again.branch).toBe(w.branch);
-    const after = await detail(w.stub);
-    expect(after.previewToken).toBe(before.previewToken);
+    expect(again.branch).toBe("tempo/first-prompt");
+    expect((await wsRow(w.stub))["preview_key"]).toBe(before["preview_key"]);
     expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
     expect(await rows(w.stub, "SELECT id FROM items")).toHaveLength(1);
@@ -423,12 +528,13 @@ describe("init", { timeout: 30_000 }, () => {
   });
 });
 
-describe("getWorkspace", { timeout: 30_000 }, () => {
-  it("returns every WorkspaceDetail field for a ready workspace", async () => {
+describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
+  it("returns every WorkspaceDetail field for a ready workspace", async ({ expect }) => {
     const w = await readyWs();
     const d = await detail(w.stub);
+
     // 02 Shared types: WorkspaceDetail = WorkspaceSummary plus errorCode, errorDetail, setupStatus, pushed,
-    // previewToken, ports, settings, runningTurnId, queue, imageRef, op
+    // ports, settings, runningTurnId, queue, imageRef, op
     for (const key of [
       "id",
       "projectId",
@@ -451,7 +557,6 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
       "errorDetail",
       "setupStatus",
       "pushed",
-      "previewToken",
       "ports",
       "settings",
       "runningTurnId",
@@ -461,6 +566,7 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     ]) {
       expect(d, key).toHaveProperty(key);
     }
+
     expect(d).toMatchObject({
       id: w.workspaceId,
       projectId: w.seeded.projectId,
@@ -486,20 +592,21 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     expect(d.rev).toBe((await wsRow(w.stub))["summary_rev"]);
   });
 
-  it("lists ports with their preview URLs", async () => {
-    const w = await readyWs();
+  it("lists ports with their preview URLs", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     await emit(w, { kind: "ports.changed", ports: [5173, 3000] });
     await waitFor(async () => (await detail(w.stub)).ports.length === 2, 5000, "ports");
     const d = await detail(w.stub);
-    // 01 Preview URL: https://<P>-<workspaceId lowercase>-<previewToken>.<PREVIEW_DOMAIN>
+    // 01 Preview URL: https://<P>-<workspaceId lowercase>.<PREVIEW_DOMAIN>; the hostname holds no secret.
     expect(d.ports).toEqual([
-      { port: 3000, url: `https://3000-${w.workspaceId}-${d.previewToken}.previews.test` },
-      { port: 5173, url: `https://5173-${w.workspaceId}-${d.previewToken}.previews.test` },
+      { port: 3000, url: `https://3000-${w.workspaceId}.previews.test` },
+      { port: 5173, url: `https://5173-${w.workspaceId}.previews.test` },
     ]);
+    expect(d).not.toHaveProperty("previewToken");
   });
 
-  it("shows the create op's progress while it runs", async () => {
-    const w = await seedHeld();
+  it("shows the create op's progress while it runs", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     await waitFor(async () => (await detail(w.stub)).op?.status === "running", 5000, "create op running");
     const d = await detail(w.stub);
     // 02 OpProgress: kind, status, step, steps: [{name, status, ms}]; 03 create steps
@@ -515,14 +622,14 @@ describe("getWorkspace", { timeout: 30_000 }, () => {
     expect(d.op!.steps.slice(1).every((s: { status: string }) => s.status === "pending")).toBe(true);
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().getWorkspace({}))).toBe("NOT_FOUND");
   });
 });
 
-describe("renameWorkspace", { timeout: 30_000 }, () => {
-  it("stores the title and publishes it to the D1 row", async () => {
-    const w = await seedHeld();
+describe.concurrent("renameWorkspace", { timeout: 30_000 }, () => {
+  it("stores the title and publishes it to the D1 row", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     const rev = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.renameWorkspace({ title: "Billing refactor" }))).toBe("OK");
     const d = await detail(w.stub);
@@ -535,14 +642,18 @@ describe("renameWorkspace", { timeout: 30_000 }, () => {
     );
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().renameWorkspace({ title: "x" }))).toBe("NOT_FOUND");
   });
 });
 
-describe("renameBranch", { timeout: 30_000 }, () => {
-  it("rejects names that are not valid git branch names with BRANCH_INVALID", async () => {
-    const w = await seedHeld();
+describe.concurrent("renameBranch", { timeout: 30_000 }, () => {
+  it("rejects names that are not valid git branch names with BRANCH_INVALID", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
+
     // 02 Error codes: BRANCH_INVALID = "Not a valid git branch name"
     for (const bad of [
       "",
@@ -567,38 +678,43 @@ describe("renameBranch", { timeout: 30_000 }, () => {
     ]) {
       expect(codeOf(await w.stub.renameBranch({ branch: bad })), JSON.stringify(bad)).toBe("BRANCH_INVALID");
     }
+
     expect((await detail(w.stub)).branch).toBe(w.branch);
   });
-
   // Regression (fixed): isValidBranch (src/do/workspace/rpc.ts:57-58) accepts names git refuses as branch names:
   // a first component that starts with ".", a component that ends in ".lock", a leading "-", and
   // "HEAD". renameBranch returns OK and stores them; git.renameBranch / repo.clone then fail.
-  it("rejects other names git refuses as branch names with BRANCH_INVALID", async () => {
-    const w = await seedHeld();
+  it("rejects other names git refuses as branch names with BRANCH_INVALID", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
+
     for (const bad of [".hidden", "a.lock/b", "-oops", "HEAD"]) {
       expect(codeOf(await w.stub.renameBranch({ branch: bad })), JSON.stringify(bad)).toBe("BRANCH_INVALID");
     }
   });
 
-  it("returns BRANCH_ALREADY_PUSHED once the branch is on origin", async () => {
-    const w = await seedHeld();
+  it("returns BRANCH_ALREADY_PUSHED once the branch is on origin", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     await exec(w.stub, "UPDATE workspace SET pushed = 1");
     // 02 Error codes: BRANCH_ALREADY_PUSHED = "Rename after push"
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/new-name" }))).toBe("BRANCH_ALREADY_PUSHED");
     expect((await detail(w.stub)).branch).toBe(w.branch);
   });
 
-  it("returns BRANCH_IN_USE when another live workspace of the project has the branch, and allows archived or other-project ones", async () => {
-    const w = await seedHeld();
+  it("returns BRANCH_IN_USE when another live workspace of the project has the branch, and allows archived or other-project ones", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     // 02 Error codes: BRANCH_IN_USE = "Another live workspace has the branch"
     await insertD1Workspace(w.seeded, { slug: `taken-${++counter}`, branch: "feature/taken" });
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/taken" }))).toBe("BRANCH_IN_USE");
     expect((await detail(w.stub)).branch).toBe(w.branch);
-
     await insertD1Workspace(w.seeded, { slug: `old-${++counter}`, branch: "feature/old", archived: true });
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/old" }))).toBe("OK");
     expect((await detail(w.stub)).branch).toBe("feature/old");
-
     const other = await seedProject();
     await insertD1Workspace(other, { slug: `else-${++counter}`, branch: "feature/elsewhere" });
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/elsewhere" }))).toBe("OK");
@@ -609,15 +725,20 @@ describe("renameBranch", { timeout: 30_000 }, () => {
     );
   });
 
-  it("stores the branch without a tempod request while the container is not up", async () => {
-    const w = await seedHeld();
+  it("stores the branch without a tempod request while the container is not up", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/offline" }))).toBe("OK");
     expect((await detail(w.stub)).branch).toBe("feature/offline");
     expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
   });
 
-  it("sends git.renameBranch {from, to} when connected, then stores and publishes the new branch", async () => {
-    const w = await readyWs();
+  it("sends git.renameBranch {from, to} when connected, then stores and publishes the new branch", async ({
+    expect,
+  }) => {
+    const w = await seedReadyWorkspace();
     const from = (await detail(w.stub)).branch;
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/renamed" }))).toBe("OK");
     // 02 tempod protocol: git.renameBranch {from, to}
@@ -636,8 +757,8 @@ describe("renameBranch", { timeout: 30_000 }, () => {
     );
   });
 
-  it("keeps the old branch when tempod fails the rename", async () => {
-    const w = await readyWs();
+  it("keeps the old branch when tempod fails the rename", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     const before = (await detail(w.stub)).branch;
     w.tempod.fail("git.renameBranch", "INTERNAL", "git branch -m failed");
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/nope" }))).toBe("INTERNAL");
@@ -645,9 +766,9 @@ describe("renameBranch", { timeout: 30_000 }, () => {
   });
 });
 
-describe("setPinned and markViewed", { timeout: 30_000 }, () => {
-  it("setPinned writes pinned through the DO and raises summary_rev in D1", async () => {
-    const w = await seedHeld();
+describe.concurrent("setPinned and markViewed", { timeout: 30_000 }, () => {
+  it("setPinned writes pinned through the DO and raises summary_rev in D1", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     const rev0 = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.setPinned({ pinned: true }))).toBe("OK");
     const d1 = await detail(w.stub);
@@ -657,6 +778,7 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["pinned"] === 1 && r["summary_rev"] === d1.rev;
       },
       5000,
@@ -669,6 +791,7 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["pinned"] === 0 && r["summary_rev"] === d2.rev;
       },
       5000,
@@ -676,8 +799,55 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     );
   });
 
-  it("a stale summary write changes nothing in D1", async () => {
-    const w = await seedHeld();
+  it("publishes the summary to the hub even when the D1 write fails", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
+
+    let restoreD1 = () => {};
+
+    await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      const environment = core.env;
+      const database = environment.DB;
+
+      const unavailable = {
+        prepare: () => {
+          throw new Error("D1 unavailable");
+        },
+        batch: <T>(statements: D1PreparedStatement[]) => database.batch<T>(statements),
+        exec: (query: string) => database.exec(query),
+        withSession: (bookmark?: D1SessionBookmark | D1SessionConstraint) => database.withSession(bookmark),
+        dump: () => database.dump(),
+      } satisfies D1Database;
+
+      Object.defineProperty(core, "env", {
+        value: { ...environment, DB: unavailable } satisfies typeof environment,
+      });
+      restoreD1 = () => {
+        Object.defineProperty(core, "env", { value: environment });
+      };
+    });
+
+    try {
+      ok(await w.stub.renameWorkspace({ title: "Renamed while D1 is down" }));
+      const rev = (await wsRow(w.stub))["summary_rev"];
+      // 02 Hub: "The WorkspaceDO calls UserHubDO.publish(summary) every time it increments summary_rev."
+      await waitFor(async () => (await hubRev(w.seeded.userId, w.workspaceId)) === rev, 5000, "hub rev");
+      expect((await d1Row(w.workspaceId))!["title"]).not.toBe("Renamed while D1 is down");
+    } finally {
+      await runInDurableObject(w.stub, () => restoreD1());
+    }
+
+    // The next publish brings D1 up to date.
+    ok(await w.stub.setPinned({ pinned: true }));
+    await waitFor(
+      async () => (await d1Row(w.workspaceId))?.["title"] === "Renamed while D1 is down",
+      5000,
+      "D1 caught up",
+    );
+  });
+
+  it("a stale summary write changes nothing in D1", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     const rev = (await detail(w.stub)).rev;
     await waitFor(async () => (await d1Row(w.workspaceId))?.["summary_rev"] === rev, 5000, "D1 caught up");
     await env.DB.prepare("UPDATE workspaces SET summary_rev = 1000000, title = 'newer write' WHERE id = ?")
@@ -695,7 +865,9 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     });
   });
 
-  it("markViewed sets last_viewed_at and clears unread attention, raising summary_rev", async () => {
+  it("markViewed sets last_viewed_at and clears unread attention, raising summary_rev", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Write a README" });
     const { sessionId, turnId } = w.first!;
     await endTurn(w, sessionId, turnId);
@@ -708,32 +880,38 @@ describe("setPinned and markViewed", { timeout: 30_000 }, () => {
     expect(after.attention).toBe("none");
     expect(after.rev).toBeGreaterThan(before.rev);
     const turn = await turnOf(w.stub, turnId);
-    expect((await wsRow(w.stub))["last_viewed_at"]).toBeGreaterThanOrEqual(turn!["ended_at"]);
+    expect((await wsRow(w.stub))["last_viewed_at"]).toBeGreaterThanOrEqual(
+      Schema.decodeUnknownSync(Schema.Number)(turn!["ended_at"]),
+    );
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
-        return r?.["attention"] === "none" && r["summary_rev"] >= after.rev;
+
+        return (
+          r?.["attention"] === "none" &&
+          Schema.decodeUnknownSync(Schema.Number)(r["summary_rev"]) >= after.rev
+        );
       },
       5000,
       "D1 attention none",
     );
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().setPinned({ pinned: true }))).toBe("NOT_FOUND");
     expect(codeOf(await uninitialised().markViewed({}))).toBe("NOT_FOUND");
   });
 });
 
-describe("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
-  it("returns WORKSPACE_BUSY while the workspace is not ready", async () => {
-    const w = await seedHeld();
+describe.concurrent("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
+  it("returns WORKSPACE_BUSY while the workspace is not ready", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     // 03 Transitions: only `ready` goes to `stopping` via sleepWorkspace; 02: WORKSPACE_BUSY
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("WORKSPACE_BUSY");
     expect(await opsOf(w.stub, "sleep")).toHaveLength(0);
   });
 
-  it("runs the sleep op from ready to sleeping, then a second call is a no-op", async () => {
+  it("runs the sleep op from ready to sleeping, then a second call is a no-op", async ({ expect }) => {
     const w = await readyWs();
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "sleep")).toHaveLength(1);
@@ -751,10 +929,13 @@ describe("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
     expect(await opsOf(w.stub, "sleep")).toHaveLength(1);
   });
 
-  it("wakeWorkspace on a sleeping workspace inserts a wake op and moves to starting", async () => {
+  it("wakeWorkspace on a sleeping workspace inserts a wake op and moves to starting", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
     // 03 Transitions: sleeping → starting (wake)
     expect(await stateOf(w.stub)).toBe("starting");
@@ -764,8 +945,8 @@ describe("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () => {
   });
 });
 
-describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60_000 }, () => {
-  it("archives a sleeping workspace without starting its container", async () => {
+describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60_000 }, () => {
+  it("archives a sleeping workspace without starting its container", async ({ expect }) => {
     const w = await readyWs();
     await putToSleep(w);
     const starts = w.container.starts.length;
@@ -777,7 +958,9 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect((await d1Row(w.workspaceId))!["state"]).toBe("archived");
   });
 
-  it("restoreWorkspace during archiving queues the restore op, which runs after the archive", async () => {
+  it("restoreWorkspace during archiving queues the restore op, which runs after the archive", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     expect(await stateOf(w.stub)).toBe("archiving");
@@ -791,6 +974,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["state"] === "sleeping" && r["archived_at"] === null;
       },
       5000,
@@ -798,15 +982,17 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     );
   });
 
-  it("returns WORKSPACE_BUSY when the state cannot go to archiving", async () => {
-    const w = await seedHeld();
+  it("returns WORKSPACE_BUSY when the state cannot go to archiving", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     // 03 Transitions: only ready, working, sleeping and error go to archiving
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("WORKSPACE_BUSY");
     expect(await stateOf(w.stub)).toBe("starting");
     expect(await opsOf(w.stub, "archive")).toHaveLength(0);
   });
 
-  it("archives a working workspace: cancels the running turn, deletes queued turns, cancels permissions, saves and frees the container", async () => {
+  it("archives a working workspace: cancels the running turn, deletes queued turns, cancels permissions, saves and frees the container", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Start the work" });
     const { sessionId, turnId } = w.first!;
     const queued = ok(await prompt(w, sessionId, "Then do more"));
@@ -820,12 +1006,10 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
       options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
     });
     await waitFor(async () => (await detail(w.stub)).attention === "needs_input", 5000, "needs_input");
-
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     // 03 Transitions: working → archiving (archive)
     expect(await stateOf(w.stub)).toBe("archiving");
     await driveToState(w.stub, "archived");
-
     // 03 Archive 1: "cancel the running turn and delete queued turns. Answer pending permission requests as cancelled."
     expect(w.tempod.requestsOf("session.cancel")).toEqual([{ sessionId, turnId }]);
     expect((await turnOf(w.stub, turnId))!["status"]).toBe("cancelled");
@@ -845,6 +1029,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["state"] === "archived" && r["archived_at"] === d.archivedAt;
       },
       5000,
@@ -853,7 +1038,9 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(d.attention).not.toBe("needs_input");
   });
 
-  it("refuses work on an archived workspace with WORKSPACE_ARCHIVED, and a second archive is a no-op", async () => {
+  it("refuses work on an archived workspace with WORKSPACE_ARCHIVED, and a second archive is a no-op", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     await archiveIt(w);
@@ -863,13 +1050,13 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("WORKSPACE_ARCHIVED");
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("WORKSPACE_ARCHIVED");
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(0);
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
+    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(2);
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "archive")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("archived");
   });
 
-  it("restores an archived workspace to sleeping and clears archived_at", async () => {
+  it("restores an archived workspace to sleeping and clears archived_at", async ({ expect }) => {
     const w = await readyWs();
     await archiveIt(w);
     expect(codeOf(await w.stub.restoreWorkspace({}))).toBe("OK");
@@ -879,6 +1066,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     await waitFor(
       async () => {
         const r = await d1Row(w.workspaceId);
+
         return r?.["state"] === "sleeping" && r["archived_at"] === null;
       },
       5000,
@@ -886,7 +1074,7 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     );
   });
 
-  it("restore returns BRANCH_IN_USE when another live workspace took the branch", async () => {
+  it("restore returns BRANCH_IN_USE when another live workspace took the branch", async ({ expect }) => {
     const w = await readyWs();
     await archiveIt(w);
     const branch = (await detail(w.stub)).branch;
@@ -897,7 +1085,9 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     expect(await opsOf(w.stub, "restore")).toHaveLength(0);
   });
 
-  it("restore gives the workspace a new slug when only the slug is taken, and keeps the branch", async () => {
+  it("restore gives the workspace a new slug when only the slug is taken, and keeps the branch", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     await archiveIt(w);
     const before = await detail(w.stub);
@@ -912,19 +1102,22 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
     await waitFor(async () => (await d1Row(w.workspaceId))?.["slug"] === after.slug, 5000, "D1 slug");
   });
 
-  it("deleteWorkspace returns WORKSPACE_NOT_ARCHIVED unless archived", async () => {
-    const w = await seedHeld();
+  it("deleteWorkspace returns WORKSPACE_NOT_ARCHIVED unless archived", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     // 02 Workspaces: deleteWorkspace (archived only) → WORKSPACE_NOT_ARCHIVED
     expect(codeOf(await w.stub.deleteWorkspace({}))).toBe("WORKSPACE_NOT_ARCHIVED");
     expect(await d1Row(w.workspaceId)).not.toBeNull();
     expect((await detail(w.stub)).state).toBe("starting");
   });
 
-  it("deleteWorkspace deletes the R2 keys, the D1 row, the DO rows and the hub summary", async () => {
+  it("deleteWorkspace deletes the R2 keys, the D1 row, the DO rows and the hub summary", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     await archiveIt(w);
     const id = w.workspaceId;
     const otherId = newId();
+
     // 02 R2 layout: checkpoints/, homes/, attachments/, logs/ per workspace
     const keys = [
       `checkpoints/${id}/c1.bundle`,
@@ -932,55 +1125,117 @@ describe("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60
       `attachments/${id}/a1/notes.txt`,
       `logs/${id}/run1.log`,
     ];
+
     for (const k of [...keys, `logs/${otherId}/run1.log`]) await env.DATA.put(k, "x");
     await waitFor(async () => (await hubRev(w.seeded.userId, id)) !== null, 5000, "hub summary");
-
     expect(codeOf(await w.stub.deleteWorkspace({}))).toBe("OK");
+
     // 03 Delete: "delete the R2 keys (02, R2 layout), the D1 row, and every row in the DO"; then UserHubDO.remove
     for (const k of keys) expect(await env.DATA.head(k), k).toBeNull();
     expect(await env.DATA.head(`logs/${otherId}/run1.log`)).not.toBeNull();
     expect(await d1Row(id)).toBeNull();
     expect(await hubRev(w.seeded.userId, id)).toBeNull();
+
     const tables = await runInDurableObject(w.stub, (_i: WorkspaceDO, state: DurableObjectState) =>
       state.storage.sql
         .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'workspace'")
         .toArray(),
     );
+
     if (tables.length > 0) expect(await rows(w.stub, "SELECT * FROM workspace")).toHaveLength(0);
     expect(codeOf(await w.stub.getWorkspace({}))).not.toBe("OK");
   });
 });
 
-describe("rotatePreviewToken", { timeout: 30_000 }, () => {
-  it("makes a new 16-character token and preview URLs use it", async () => {
-    const w = await seedHeld();
+describe.concurrent("rotatePreviewKey", { timeout: 30_000 }, () => {
+  it("makes a new preview key and leaves the preview URLs as they are", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     await exec(w.stub, "INSERT INTO ports (port, first_seen_at) VALUES (3000, 0)");
-    const before = (await detail(w.stub)).previewToken;
-    const { previewToken } = ok(await w.stub.rotatePreviewToken({}));
-    expect(previewToken).toMatch(PREVIEW_TOKEN);
-    expect(previewToken).not.toBe(before);
-    const d = await detail(w.stub);
-    expect(d.previewToken).toBe(previewToken);
-    // 01 Preview URL: "Rotating it breaks old links."
-    expect(d.ports).toEqual([
-      { port: 3000, url: `https://3000-${w.workspaceId}-${previewToken}.previews.test` },
+    const before = (await wsRow(w.stub))["preview_key"];
+    expect(ok(await w.stub.rotatePreviewKey({}))).toEqual({});
+    const after = (await wsRow(w.stub))["preview_key"];
+    expect(after).toMatch(PREVIEW_KEY);
+    expect(after).not.toBe(before);
+    expect((await detail(w.stub)).ports).toEqual([
+      { port: 3000, url: `https://3000-${w.workspaceId}.previews.test` },
     ]);
   });
 });
 
-describe("createSession, renameSession and closeSession", { timeout: 30_000 }, () => {
-  it("returns CREDENTIAL_MISSING when the agent has no login, and creates nothing", async () => {
-    const w = await seedHeld({ credentials: false });
+describe.concurrent("open previews", { timeout: 30_000 }, () => {
+  /** A preview cookie from openPreview and previewEnter, as the Worker gets one (05, Preview access). */
+  const cookieFor = async (w: Ws): Promise<string> => {
+    await exec(w.stub, "INSERT OR IGNORE INTO ports (port, first_seen_at) VALUES (3000, 0)");
+    const { url } = ok(await w.stub.openPreview({ port: 3000 }));
+
+    return (await w.stub.previewEnter(3000, new URL(url).searchParams.get("code")!))!;
+  };
+
+  const previewFetch = (w: Ws, cookie: string, init: { upgrade?: boolean } = {}) => {
+    const headers = new Headers({ "x-tempo-preview": `3000:${cookie}` });
+
+    if (init.upgrade) headers.set("Upgrade", "websocket");
+
+    return w.stub.fetch(`https://3000-${w.workspaceId}.previews.test/live`, { headers });
+  };
+
+  it("closes preview WebSockets that are already open when the key is reset, and the old cookie stops working", async ({
+    expect,
+  }) => {
+    const w = await seedReadyWorkspace();
+    const cookie = await cookieFor(w);
+    const res = await previewFetch(w, cookie, { upgrade: true });
+    expect(res.status).toBe(101);
+    const socket = res.webSocket!;
+    let closed: number | null = null;
+    socket.addEventListener("close", (e) => {
+      closed = e.code;
+    });
+    socket.accept();
+    await waitFor(() => w.tempod.proxySockets.length === 1, 3000, "proxied socket");
+    ok(await w.stub.rotatePreviewKey({}));
+    // 05 Preview access: "rotatePreviewKey makes a new preview_key; every preview cookie for the workspace stops working at once."
+    await waitFor(() => closed === 1008, 5000, "browser side closed");
+    await waitFor(() => w.tempod.proxySockets[0]!.closed !== null, 5000, "tempod side closed");
+    expect((await previewFetch(w, cookie)).status).toBe(404);
+  });
+
+  it("leaves open preview WebSockets alone until the key is reset", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
+    const cookie = await cookieFor(w);
+    const socket = (await previewFetch(w, cookie, { upgrade: true })).webSocket!;
+    let closed = false;
+    socket.addEventListener("close", () => {
+      closed = true;
+    });
+    socket.accept();
+    await waitFor(() => w.tempod.proxySockets.length === 1, 3000, "proxied socket");
+    ok(await w.stub.renameWorkspace({ title: "Still previewing" }));
+    await sleep(200);
+    expect(closed).toBe(false);
+    expect(w.tempod.proxySockets[0]!.closed).toBeNull();
+    socket.close(1000, "done");
+  });
+});
+
+describe.concurrent("createSession, renameSession and closeSession", { timeout: 30_000 }, () => {
+  it("returns CREDENTIAL_MISSING when the agent has no login, and creates nothing", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { credentials: false });
     // 02 Sessions and turns: createSession → CREDENTIAL_MISSING
     expect(codeOf(await w.stub.createSession({ agent: "claude" }))).toBe("CREDENTIAL_MISSING");
     await env.CREDENTIALS.getByName(w.seeded.userId).putSecret("openrouter.api_key", "sk-or-test");
     expect(codeOf(await w.stub.createSession({ agent: "codex" }))).toBe("CREDENTIAL_MISSING");
-    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(0);
+    expect(await rows(w.stub, "SELECT id FROM sessions")).toHaveLength(1);
     const s = ok(await w.stub.createSession({ agent: "opencode" }));
     expect(s).toMatchObject({ agent: "opencode", status: "starting" });
   });
 
-  it("inserts the session as starting, then starts it in tempod and marks it idle when the workspace is ready", async () => {
+  it("inserts the session as starting, then starts it in tempod and marks it idle when the workspace is ready", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = ok(await w.stub.createSession({ agent: "claude", model: "claude-opus-4" }));
     // 01 Start a session 1: "inserts the session row with status starting"
@@ -999,7 +1254,9 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     await waitFor(async () => (await sessionOf(w.stub, s.id))?.["status"] === "idle", 5000, "idle");
     const row = (await sessionOf(w.stub, s.id))!;
     expect(row["acp_session_id"]).toMatch(/^acp-/);
-    expect(JSON.parse(row["modes_json"])).toEqual([{ id: "default", name: "Default" }]);
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(row["modes_json"]))).toEqual([
+      { id: "default", name: "Default" },
+    ]);
     const second = ok(await w.stub.createSession({ agent: "claude", modeId: "plan" }));
     expect(second.sortOrder).toBeGreaterThan(s.sortOrder);
     await waitFor(() => w.tempod.requestsOf("session.start").length === 2, 5000, "second session.start");
@@ -1010,51 +1267,67 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
     });
   });
 
-  it("is a wake trigger on a sleeping workspace", async () => {
+  it("is a wake trigger on a sleeping workspace", async ({ expect, onTestFinished }) => {
     const w = await readyWs();
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     const s = ok(await w.stub.createSession({ agent: "claude" }));
     expect(s.status).toBe("starting");
     // 03 Wake triggers: createSession
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("starting");
   });
+  it("renameSession stores the title; unknown sessions are NOT_FOUND", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Hi" });
 
-  it("renameSession stores the title; unknown sessions are NOT_FOUND", async () => {
-    const w = await seedHeld({ prompt: "Hi" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     expect(codeOf(await w.stub.renameSession({ sessionId, title: "Billing" }))).toBe("OK");
-    expect((await sessionOf(w.stub, sessionId))!["title"]).toBe("Billing");
+    expect((await sessionOf(w.stub, Schema.decodeUnknownSync(Schema.String)(sessionId)))!["title"]).toBe(
+      "Billing",
+    );
     expect(codeOf(await w.stub.renameSession({ sessionId: newId(), title: "x" }))).toBe("NOT_FOUND");
   });
 
-  it("closeSession returns SESSION_BUSY while the session has a running turn", async () => {
+  it("closeSession returns SESSION_BUSY while the session has a running turn", async ({ expect }) => {
     const w = await readyWs({ prompt: "Busy work" });
     // 02 Sessions and turns: closeSession → SESSION_BUSY
     expect(codeOf(await w.stub.closeSession({ sessionId: w.first!.sessionId }))).toBe("SESSION_BUSY");
     expect((await sessionOf(w.stub, w.first!.sessionId))!["status"]).toBe("running");
   });
+  it("closeSession cancels the session's queued turns and closes it; prompts to it are then refused", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Queued work" });
 
-  it("closeSession cancels the session's queued turns and closes it; prompts to it are then refused", async () => {
-    const w = await seedHeld({ prompt: "Queued work" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const turnId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM turns"))!["id"],
+    );
+
     expect(codeOf(await w.stub.closeSession({ sessionId }))).toBe("OK");
-    const turn = (await turnOf(w.stub, turnId))!;
+    const turn = (await turnOf(w.stub, Schema.decodeUnknownSync(Schema.String)(turnId)))!;
     expect(turn["status"]).toBe("cancelled");
     expect(turn["queue_pos"]).toBeNull();
-    const s = (await sessionOf(w.stub, sessionId))!;
+    const s = (await sessionOf(w.stub, Schema.decodeUnknownSync(Schema.String)(sessionId)))!;
     expect(s["status"]).toBe("closed");
     expect(s["closed_at"]).not.toBeNull();
     expect((await detail(w.stub)).queue).toEqual([]);
     // 03 sendPrompt 1: "the session is not closed"
-    expect(codeOf(await prompt(w, sessionId, "more"))).toBe("VALIDATION_FAILED");
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "more"))).toBe(
+      "VALIDATION_FAILED",
+    );
     expect(codeOf(await w.stub.closeSession({ sessionId }))).toBe("OK");
     expect(codeOf(await w.stub.closeSession({ sessionId: newId() }))).toBe("NOT_FOUND");
   });
 
-  it("closeSession sends session.close for a live session", async () => {
+  it("closeSession sends session.close for a live session", async ({ expect }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     expect(codeOf(await w.stub.closeSession({ sessionId: s.id }))).toBe("OK");
@@ -1064,16 +1337,28 @@ describe("createSession, renameSession and closeSession", { timeout: 30_000 }, (
   });
 });
 
-describe("sendPrompt", { timeout: 30_000 }, () => {
-  it("queues a turn with the next seq and queue_pos, writes its user_message item and marks review comments sent", async () => {
-    const w = await seedHeld({ prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const first = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
+  it("queues a turn with the next seq and queue_pos, writes its user_message item and marks review comments sent", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const first = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
     const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 4, body: "Use a const" }));
     const c2 = ok(await w.stub.addReviewComment({ path: "src/other.ts", body: "Not sent" }));
+
     const t2 = ok(
-      await prompt(w, sessionId, "Second", { reviewCommentIds: [c1.id], mentions: [{ path: "src/app.ts" }] }),
+      await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Second", {
+        reviewCommentIds: [c1.id],
+        mentions: [{ path: "src/app.ts" }],
+      }),
     );
+
     // 03 sendPrompt 2: "status = 'queued', next seq, next queue_pos"
     expect(t2).toMatchObject({
       sessionId,
@@ -1090,17 +1375,19 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
       endedAt: null,
       reverted: false,
     });
-    const t3 = ok(await prompt(w, sessionId, "Third"));
+    const t3 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Third"));
     expect(t3).toMatchObject({ seq: 3, queuePos: 3, status: "queued" });
     expect((await detail(w.stub)).queue).toEqual([first, t2.id, t3.id]);
+
     // 03 sendPrompt 3 + 02 Item model user_message content
     const item = (await one(
       w.stub,
       "SELECT * FROM items WHERE turn_id = ? AND kind = 'user_message'",
       t2.id,
     ))!;
+
     expect(item["session_id"]).toBe(sessionId);
-    expect(JSON.parse(item["content_json"])).toEqual({
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"]))).toEqual({
       text: "Second",
       mentions: [{ path: "src/app.ts" }],
       attachments: [],
@@ -1117,12 +1404,57 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
       sentTurnId: null,
     });
   });
+  it("returns VALIDATION_FAILED for review comment ids that do not exist or were already sent, and queues nothing", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
 
-  it("broadcasts turn and item.upsert to the workspace channel", async () => {
-    const w = await seedHeld({ prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const c1 = ok(await w.stub.addReviewComment({ path: "src/app.ts", lineStart: 1, body: "Rename" }));
+    ok(
+      await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Uses c1", {
+        reviewCommentIds: [c1.id],
+      }),
+    );
+    const count = async () => (await rows(w.stub, "SELECT id FROM turns")).length;
+    const before = await count();
+    // 02 sendPrompt: VALIDATION_FAILED; 03 sendPrompt 3 marks only draft review comments sent.
+    expect(
+      codeOf(
+        await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Again", {
+          reviewCommentIds: [c1.id],
+        }),
+      ),
+    ).toBe("VALIDATION_FAILED");
+    expect(
+      codeOf(
+        await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Ghost", {
+          reviewCommentIds: [newId()],
+        }),
+      ),
+    ).toBe("VALIDATION_FAILED");
+    expect(await count()).toBe(before);
+    const c2 = ok(await w.stub.addReviewComment({ path: "src/app.ts", body: "Draft" }));
+    ok(
+      await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Uses c2 twice", {
+        reviewCommentIds: [c2.id, c2.id],
+      }),
+    );
+    expect(await count()).toBe(before + 1);
+  });
+  it("broadcasts turn and item.upsert to the workspace channel", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     const { socket, messages } = await openUi(w);
-    const t = ok(await prompt(w, sessionId, "Broadcast me"));
+    const t = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Broadcast me"));
     // 03 sendPrompt 4: "Broadcast turn and item.upsert."
     await waitFor(() => messages.some((m) => m.type === "turn" && m.turn.id === t.id), 5000, "turn message");
     await waitFor(
@@ -1141,10 +1473,16 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect(upsert.itemsRev).toBe(upsert.item.rev);
     socket.close();
   });
+  it("accepts a prompt with only an attachment and returns VALIDATION_FAILED for an unknown attachment", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
 
-  it("accepts a prompt with only an attachment and returns VALIDATION_FAILED for an unknown attachment", async () => {
-    const w = await seedHeld({ prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     const attId = newId();
     await w.stub.registerAttachment({
       id: attId,
@@ -1164,6 +1502,7 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
         }),
       ),
     ).toBe("VALIDATION_FAILED");
+
     const t = ok(
       await w.stub.sendPrompt({
         sessionId,
@@ -1173,19 +1512,23 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
         reviewCommentIds: [],
       }),
     );
+
     expect(t.prompt.attachmentIds).toEqual([attId]);
     const item = (await one(w.stub, "SELECT content_json FROM items WHERE turn_id = ?", t.id))!;
     // 02 Item model: user_message attachments: [{id, name, mime}]
-    expect(JSON.parse(item["content_json"]).attachments).toEqual([
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"])).attachments).toEqual([
       { id: attId, name: "shot.png", mime: "image/png" },
     ]);
     expect((await one(w.stub, "SELECT turn_id FROM attachments WHERE id = ?", attId))!["turn_id"]).toBe(t.id);
   });
 
-  it("inserts a wake op when the workspace is in error, and wakeWorkspace retries from error", async () => {
+  it("inserts a wake op when the workspace is in error, and wakeWorkspace retries from error", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     await forceError(w);
     // 03 Attention 2: "error: state is error ..."
     expect(await detail(w.stub)).toMatchObject({
@@ -1200,37 +1543,91 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
   });
+  it("returns VALIDATION_FAILED for an empty message or a closed session, and NOT_FOUND for an unknown session", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
 
-  it("returns VALIDATION_FAILED for an empty message or a closed session, and NOT_FOUND for an unknown session", async () => {
-    const w = await seedHeld({ prompt: "First" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    expect(codeOf(await prompt(w, sessionId, "   "))).toBe("VALIDATION_FAILED");
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "   "))).toBe(
+      "VALIDATION_FAILED",
+    );
     expect(codeOf(await prompt(w, newId(), "hi"))).toBe("NOT_FOUND");
     ok(await w.stub.closeSession({ sessionId }));
-    expect(codeOf(await prompt(w, sessionId, "hi"))).toBe("VALIDATION_FAILED");
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "hi"))).toBe(
+      "VALIDATION_FAILED",
+    );
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
   });
+  it("returns CREDENTIAL_MISSING when the session's agent has no login", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First", credentials: false });
 
-  it("returns CREDENTIAL_MISSING when the session's agent has no login", async () => {
-    const w = await seedHeld({ prompt: "First", credentials: false });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     // 03 sendPrompt 1: "the agent's credential is set (else CREDENTIAL_MISSING)"
-    expect(codeOf(await prompt(w, sessionId, "Second"))).toBe("CREDENTIAL_MISSING");
+    expect(codeOf(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Second"))).toBe(
+      "CREDENTIAL_MISSING",
+    );
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
   });
 
-  it("starts the turn at once when the workspace is ready and idle", async () => {
+  it("keeps starting a ready, idle turn in the request lifetime until the prompt is delivered", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
+    let releaseRename!: () => void;
+    let markRenameEntered!: () => void;
+    let background!: ExecutionContext;
+
+    const renameEntered = new Promise<void>((resolve) => {
+      markRenameEntered = resolve;
+    });
+
+    const renameGate = new Promise<void>((resolve) => {
+      releaseRename = resolve;
+    });
+
+    onTestFinished(() => runInDurableObject(w.stub, releaseRename));
+    w.tempod.on("git.renameBranch", async () => {
+      markRenameEntered();
+      await renameGate;
+
+      return {};
+    });
+    await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      background = createExecutionContext();
+      const waitUntil = core.ctx.waitUntil.bind(core.ctx);
+      core.ctx.waitUntil = (work) => {
+        waitUntil(work);
+        background.waitUntil(work);
+      };
+    });
     const t = ok(await prompt(w, s.id, "Add a health check"));
     expect(t.status).toBe("queued");
+    await runInDurableObject(w.stub, () => renameEntered);
+    await runInDurableObject(w.stub, async () => {
+      releaseRename();
+      await waitOnExecutionContext(background);
+    });
     // 03 Start the turn 3: session.prompt; turn running, session running, state working, queue_pos = null
-    await waitFor(() => w.tempod.requestsOf("session.prompt").length === 1, 5000, "session.prompt");
+    expect(w.tempod.requestsOf("session.prompt")).toHaveLength(1);
     const req = w.tempod.requestsOf("session.prompt")[0];
     expect(req).toMatchObject({ sessionId: s.id, turnId: t.id });
     expect(req.content.at(-1)).toEqual({ type: "text", text: "Add a health check" });
-    await waitFor(async () => (await turnOf(w.stub, t.id))?.["status"] === "running", 5000, "running");
     const row = (await turnOf(w.stub, t.id))!;
+    expect(row["status"]).toBe("running");
     expect(row["queue_pos"]).toBeNull();
     expect(row["started_at"]).not.toBeNull();
     expect((await sessionOf(w.stub, s.id))!["status"]).toBe("running");
@@ -1239,12 +1636,15 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
     expect(d.runningTurnId).toBe(t.id);
   });
 
-  it("inserts a wake op when sleeping, and the turn runs after the wake", async () => {
+  it("inserts a wake op when sleeping, and the turn runs after the wake", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     const acpId = (await sessionOf(w.stub, s.id))!["acp_session_id"];
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     const t = ok(await prompt(w, s.id, "Wake up and work"));
     // 03 sendPrompt 5: "If the state is sleeping or error, insert a wake op."
     expect(t.status).toBe("queued");
@@ -1264,20 +1664,31 @@ describe("sendPrompt", { timeout: 30_000 }, () => {
   });
 });
 
-describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 }, () => {
-  it("editQueuedTurn updates the turn's prompt text and its user_message item", async () => {
-    const w = await seedHeld({ prompt: "Original" });
-    const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+describe.concurrent("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 }, () => {
+  it("editQueuedTurn updates the turn's prompt text and its user_message item", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Original" });
+
+    const turnId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM turns"))!["id"],
+    );
+
     const before = (await one(w.stub, "SELECT * FROM items WHERE turn_id = ?", turnId))!;
     const t = ok(await w.stub.editQueuedTurn({ turnId, text: "Edited text" }));
     expect(t).toMatchObject({ id: turnId, status: "queued", prompt: { text: "Edited text" } });
     const item = (await one(w.stub, "SELECT * FROM items WHERE turn_id = ?", turnId))!;
-    expect(JSON.parse(item["content_json"]).text).toBe("Edited text");
-    expect(item["rev"]).toBeGreaterThan(before["rev"]);
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"])).text).toBe(
+      "Edited text",
+    );
+    expect(item["rev"]).toBeGreaterThan(Schema.decodeUnknownSync(Schema.Number)(before["rev"]));
     expect(item["rev"]).toBe((await wsRow(w.stub))["items_rev"]);
   });
 
-  it("returns TURN_NOT_QUEUED for a running or ended turn and NOT_FOUND for an unknown one", async () => {
+  it("returns TURN_NOT_QUEUED for a running or ended turn and NOT_FOUND for an unknown one", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Running" });
     const { turnId } = w.first!;
     // 02 Error codes: TURN_NOT_QUEUED = "Edit or delete on a turn that already started"
@@ -1289,12 +1700,18 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
     expect(codeOf(await w.stub.editQueuedTurn({ turnId: newId(), text: "x" }))).toBe("NOT_FOUND");
     expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: newId() }))).toBe("NOT_FOUND");
   });
+  it("deleteQueuedTurn removes the turn and its items and broadcasts turn.deleted", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Keep me" });
 
-  it("deleteQueuedTurn removes the turn and its items and broadcasts turn.deleted", async () => {
-    const w = await seedHeld({ prompt: "Keep me" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const keep = (await one(w.stub, "SELECT id FROM turns"))!["id"];
-    const t2 = ok(await prompt(w, sessionId, "Delete me"));
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const keep = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Delete me"));
     const { socket, messages } = await openUi(w);
     expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("OK");
     expect(await turnOf(w.stub, t2.id)).toBeUndefined();
@@ -1308,42 +1725,75 @@ describe("editQueuedTurn, deleteQueuedTurn and reorderQueue", { timeout: 30_000 
     );
     socket.close();
   });
+  it("deleteQueuedTurn raises items_rev with the deleted items; a refused delete leaves it alone", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Keep me" });
 
-  it("reorderQueue sets the order of the queued turns", async () => {
-    const w = await seedHeld({ prompt: "One" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const t1 = (await one(w.stub, "SELECT id FROM turns"))!["id"];
-    const t2 = ok(await prompt(w, sessionId, "Two")).id;
-    const t3 = ok(await prompt(w, sessionId, "Three")).id;
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Delete me"));
+    const before = (await wsRow(w.stub))["items_rev"];
+    expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("OK");
+    // 02 Rules: "Every change to items increments workspace.items_rev by 1"
+    expect((await wsRow(w.stub))["items_rev"]).toBe(Schema.decodeUnknownSync(Schema.Number)(before) + 1);
+    expect(codeOf(await w.stub.deleteQueuedTurn({ turnId: t2.id }))).toBe("NOT_FOUND");
+    expect((await wsRow(w.stub))["items_rev"]).toBe(Schema.decodeUnknownSync(Schema.Number)(before) + 1);
+  });
+  it("reorderQueue sets the order of the queued turns", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "One" });
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const t1 = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Two")).id;
+    const t3 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Three")).id;
     expect(codeOf(await w.stub.reorderQueue({ turnIds: [t3, t1, t2] }))).toBe("OK");
     expect((await detail(w.stub)).queue).toEqual([t3, t1, t2]);
     const pos = await rows(w.stub, "SELECT id, queue_pos FROM turns ORDER BY queue_pos");
     expect(pos.map((r) => r["id"])).toEqual([t3, t1, t2]);
   });
+  it("reorderQueue returns VALIDATION_FAILED unless turnIds are exactly the queued turns", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "One" });
 
-  it("reorderQueue returns VALIDATION_FAILED unless turnIds are exactly the queued turns", async () => {
-    const w = await seedHeld({ prompt: "One" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
-    const t1 = (await one(w.stub, "SELECT id FROM turns"))!["id"];
-    const t2 = ok(await prompt(w, sessionId, "Two")).id;
-    const t3 = ok(await prompt(w, sessionId, "Three")).id;
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
+    const t1 = Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM turns"))!["id"]);
+    const t2 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Two")).id;
+    const t3 = ok(await prompt(w, Schema.decodeUnknownSync(Schema.String)(sessionId), "Three")).id;
+
     for (const turnIds of [[t1, t2], [t1, t2, t3, newId()], [t1, t1, t2], [t3, t2, newId()], []]) {
       expect(codeOf(await w.stub.reorderQueue({ turnIds })), JSON.stringify(turnIds)).toBe(
         "VALIDATION_FAILED",
       );
     }
+
     ok(await w.stub.cancelTurn({ turnId: t3 }));
     expect(codeOf(await w.stub.reorderQueue({ turnIds: [t2, t1, t3] }))).toBe("VALIDATION_FAILED");
     expect((await detail(w.stub)).queue).toEqual([t1, t2]);
   });
 });
 
-describe("cancelTurn", { timeout: 30_000 }, () => {
-  it("cancels a queued turn", async () => {
-    const w = await seedHeld({ prompt: "Never mind" });
-    const turnId = (await one(w.stub, "SELECT id FROM turns"))!["id"];
+describe.concurrent("cancelTurn", { timeout: 30_000 }, () => {
+  it("cancels a queued turn", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Never mind" });
+
+    const turnId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM turns"))!["id"],
+    );
+
     expect(codeOf(await w.stub.cancelTurn({ turnId }))).toBe("OK");
-    const t = (await turnOf(w.stub, turnId))!;
+    const t = (await turnOf(w.stub, Schema.decodeUnknownSync(Schema.String)(turnId)))!;
     expect(t["status"]).toBe("cancelled");
     expect(t["queue_pos"]).toBeNull();
     expect(t["ended_at"]).not.toBeNull();
@@ -1353,7 +1803,9 @@ describe("cancelTurn", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.cancelTurn({ turnId: newId() }))).toBe("NOT_FOUND");
   });
 
-  it("sends session.cancel for a running turn, which ends cancelled when tempod reports it", async () => {
+  it("sends session.cancel for a running turn, which ends cancelled when tempod reports it", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Long task" });
     const { sessionId, turnId } = w.first!;
     expect(codeOf(await w.stub.cancelTurn({ turnId }))).toBe("OK");
@@ -1365,7 +1817,7 @@ describe("cancelTurn", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.cancelTurn({ turnId }))).toBe("TURN_NOT_ACTIVE");
   });
 
-  it("returns TURN_NOT_ACTIVE for a completed turn", async () => {
+  it("returns TURN_NOT_ACTIVE for a completed turn", async ({ expect }) => {
     const w = await readyWs({ prompt: "Quick" });
     await endTurn(w, w.first!.sessionId, w.first!.turnId);
     expect((await turnOf(w.stub, w.first!.turnId))!["status"]).toBe("completed");
@@ -1374,8 +1826,8 @@ describe("cancelTurn", { timeout: 30_000 }, () => {
   });
 });
 
-describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
-  it("return SESSION_BUSY while the session runs a turn", async () => {
+describe.concurrent("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
+  it("return SESSION_BUSY while the session runs a turn", async ({ expect }) => {
     const w = await readyWs({ prompt: "Busy" });
     const { sessionId } = w.first!;
     expect(codeOf(await w.stub.setSessionMode({ sessionId, modeId: "plan" }))).toBe("SESSION_BUSY");
@@ -1385,24 +1837,32 @@ describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
     expect(w.tempod.requestsOf("session.setMode")).toHaveLength(0);
     expect(w.tempod.requestsOf("session.setConfig")).toHaveLength(0);
   });
+  it("store the choice without a tempod request when the session has no live process", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished, { prompt: "Queued" });
 
-  it("store the choice without a tempod request when the session has no live process", async () => {
-    const w = await seedHeld({ prompt: "Queued" });
-    const sessionId = (await one(w.stub, "SELECT id FROM sessions"))!["id"];
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (await one(w.stub, "SELECT id FROM sessions"))!["id"],
+    );
+
     expect(codeOf(await w.stub.setSessionMode({ sessionId, modeId: "plan" }))).toBe("OK");
     expect(codeOf(await w.stub.setSessionConfig({ sessionId, configId: "effort", value: "high" }))).toBe(
       "OK",
     );
-    const s = (await sessionOf(w.stub, sessionId))!;
+    const s = (await sessionOf(w.stub, Schema.decodeUnknownSync(Schema.String)(sessionId)))!;
     expect(s["mode_id"]).toBe("plan");
     // 02 sessions.config_json: {configId: value} chosen by the user
-    expect(JSON.parse(s["config_json"])).toEqual({ effort: "high" });
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(s["config_json"]))).toEqual({ effort: "high" });
     expect(w.tempod.requestsOf("session.setMode")).toHaveLength(0);
     expect(w.tempod.requestsOf("session.setConfig")).toHaveLength(0);
     expect(codeOf(await w.stub.setSessionMode({ sessionId: newId(), modeId: "plan" }))).toBe("NOT_FOUND");
   });
 
-  it("send session.setMode and session.setConfig to tempod for a live session and store the result", async () => {
+  it("send session.setMode and session.setConfig to tempod for a live session and store the result", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     expect(codeOf(await w.stub.setSessionMode({ sessionId: s.id, modeId: "plan" }))).toBe("OK");
@@ -1415,10 +1875,12 @@ describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
     expect(w.tempod.requestsOf("session.setConfig")).toEqual([
       { sessionId: s.id, configId: "thinking", value: true },
     ]);
-    expect(JSON.parse((await sessionOf(w.stub, s.id))!["config_json"])).toMatchObject({ thinking: true });
+    expect(
+      JSON.parse(Schema.decodeUnknownSync(Schema.String)((await sessionOf(w.stub, s.id))!["config_json"])),
+    ).toMatchObject({ thinking: true });
   });
 
-  it("keep the old mode when tempod fails session.setMode", async () => {
+  it("keep the old mode when tempod fails session.setMode", async ({ expect }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     const before = (await sessionOf(w.stub, s.id))!["mode_id"];
@@ -1428,21 +1890,23 @@ describe("setSessionMode and setSessionConfig", { timeout: 30_000 }, () => {
   });
 });
 
-describe("respondPermission", { timeout: 30_000 }, () => {
-  it("returns NOT_FOUND for an unknown request", async () => {
-    const w = await seedHeld();
+describe.concurrent("respondPermission", { timeout: 30_000 }, () => {
+  it("returns NOT_FOUND for an unknown request", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     expect(codeOf(await w.stub.respondPermission({ requestId: "nope", optionId: "allow" }))).toBe(
       "NOT_FOUND",
     );
   });
 
-  it("sends permission.respond, records the answer and clears needs_input", async () => {
+  it("sends permission.respond, records the answer and clears needs_input", async ({ expect }) => {
     const w = await readyWs({ prompt: "Install deps" });
     const { sessionId, turnId } = w.first!;
+
     const options = [
       { optionId: "allow", name: "Allow", kind: "allow_once" },
       { optionId: "deny", name: "Deny", kind: "reject_once" },
     ];
+
     await emit(w, {
       kind: "item.created",
       sessionId,
@@ -1480,7 +1944,9 @@ describe("respondPermission", { timeout: 30_000 }, () => {
     });
     // 02 Item model: permission content gets chosenOptionId
     const item = (await one(w.stub, "SELECT content_json FROM items WHERE id = 'perm-item'"))!;
-    expect(JSON.parse(item["content_json"]).chosenOptionId).toBe("allow");
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(item["content_json"])).chosenOptionId).toBe(
+      "allow",
+    );
     expect((await detail(w.stub)).attention).toBe("none");
     expect(codeOf(await w.stub.respondPermission({ requestId: "req-9", optionId: "allow" }))).toBe(
       "NOT_FOUND",
@@ -1488,10 +1954,11 @@ describe("respondPermission", { timeout: 30_000 }, () => {
   });
 });
 
-describe("review comments", { timeout: 30_000 }, () => {
-  it("adds, lists and deletes review comments", async () => {
-    const w = await seedHeld();
+describe.concurrent("review comments", { timeout: 30_000 }, () => {
+  it("adds, lists and deletes review comments", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     expect(ok(await w.stub.listReviewComments({}))).toEqual([]);
+
     const c1 = ok(
       await w.stub.addReviewComment({
         path: "src/a.ts",
@@ -1501,6 +1968,7 @@ describe("review comments", { timeout: 30_000 }, () => {
         body: "Rename this",
       }),
     );
+
     // 02 Shared types: ReviewComment = id, path, lineStart, lineEnd, side, body, status, sentTurnId, createdAt
     expect(c1).toMatchObject({
       path: "src/a.ts",
@@ -1512,7 +1980,7 @@ describe("review comments", { timeout: 30_000 }, () => {
       sentTurnId: null,
     });
     expect(c1.id).toMatch(ULID);
-    expect(typeof c1.createdAt).toBe("number");
+    expect(c1.createdAt).toBeTypeOf("number");
     const c2 = ok(await w.stub.addReviewComment({ path: "README.md", body: "Whole file" }));
     // 02 review_comments.line_start: "null = whole file"
     expect(c2).toMatchObject({ path: "README.md", lineStart: null, side: null, status: "draft" });
@@ -1523,7 +1991,7 @@ describe("review comments", { timeout: 30_000 }, () => {
   });
 });
 
-describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
+describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
   const checkpointResult = (p: { checkpointId: string }) => ({
     commit: "1".repeat(40),
     tree: "2".repeat(40),
@@ -1533,13 +2001,18 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     bundleBytes: 10,
   });
 
-  it("returns CHECKPOINT_NOT_FOUND for an unknown checkpoint and an empty list at first", async () => {
-    const w = await seedHeld();
+  it("returns CHECKPOINT_NOT_FOUND for an unknown checkpoint and an empty list at first", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     expect(ok(await w.stub.listCheckpoints({}))).toEqual([]);
     expect(codeOf(await w.stub.revertToCheckpoint({ checkpointId: newId() }))).toBe("CHECKPOINT_NOT_FOUND");
   });
 
-  it("returns WORKSPACE_BUSY while a turn is queued, and reverts once the queue is empty", async () => {
+  it("returns WORKSPACE_BUSY while a turn is queued, and reverts once the queue is empty", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     const id = newId();
@@ -1566,7 +2039,9 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     expect(w.tempod.requestsOf("git.revert")).toEqual([{ checkpointId: id }]);
   });
 
-  it("lists turn checkpoints, refuses to revert while a turn runs, then reverts and marks the transcript", async () => {
+  it("lists turn checkpoints, refuses to revert while a turn runs, then reverts and marks the transcript", async ({
+    expect,
+  }) => {
     const w = await readyWs({ prompt: "Turn one" });
     w.tempod.on("git.checkpoint", (p) =>
       p.reason === "turn_end" ? checkpointResult(p) : { unchanged: true },
@@ -1574,12 +2049,11 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     const { sessionId, turnId: t1 } = w.first!;
     await endTurn(w, sessionId, t1);
     await waitFor(async () => (await turnOf(w.stub, t1))?.["checkpoint_id"] != null, 5000, "checkpoint 1");
-    const c1 = (await turnOf(w.stub, t1))!["checkpoint_id"];
+    const c1 = Schema.decodeUnknownSync(Schema.String)((await turnOf(w.stub, t1))!["checkpoint_id"]);
     // 02 Review and git: listCheckpoints → [{id, turnId, turnSeq, reason, createdAt}]
     const list = ok(await w.stub.listCheckpoints({}));
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ id: c1, turnId: t1, turnSeq: 1, reason: "turn_end" });
-
     const t2 = ok(await prompt(w, sessionId, "Turn two"));
     await waitFor(
       async () => (await turnOf(w.stub, t2.id))?.["status"] === "running",
@@ -1591,7 +2065,6 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     await waitFor(async () => (await turnOf(w.stub, t2.id))?.["checkpoint_id"] != null, 5000, "checkpoint 2");
     await driveToState(w.stub, "ready");
     await exec(w.stub, "UPDATE workspace SET pushed = 1, last_pushed_sha = ?", "9".repeat(40));
-
     const res = await whileDriving(w.stub, w.stub.revertToCheckpoint({ checkpointId: c1 }));
     expect(codeOf(res)).toBe("OK");
     // 03 Revert 2: safety checkpoint with reason pre_revert; 3: git.revert {checkpointId}
@@ -1601,7 +2074,10 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     expect((await turnOf(w.stub, t2.id))!["reverted"]).toBe(1);
     expect((await turnOf(w.stub, t1))!["reverted"]).toBe(0);
     const marker = (await one(w.stub, "SELECT * FROM items WHERE kind = 'revert_marker'"))!;
-    expect(JSON.parse(marker["content_json"])).toEqual({ checkpointId: c1, toTurnSeq: 1 });
+    expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(marker["content_json"]))).toEqual({
+      checkpointId: c1,
+      toTurnSeq: 1,
+    });
     // 03 Revert 5: pending_note, exactly
     expect((await sessionOf(w.stub, sessionId))!["pending_note"]).toBe(
       "Note: the user reverted the files to the state after turn 1. Changes made after that point are gone.",
@@ -1610,7 +2086,6 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
     expect((await wsRow(w.stub))["force_push_lease"]).toBe(1);
     // The user starts revert, so the state does not change (03 Step runner).
     expect(await stateOf(w.stub)).toBe("ready");
-
     const push = await whileDriving(w.stub, w.stub.commitAndPush({ message: "After revert" }));
     expect(ok(push)).toEqual({ commitSha: "f".repeat(40) });
     // 03 Commit and push 3-4: --force-with-lease=<branch>:<last_pushed_sha>, then clear the force flag
@@ -1619,8 +2094,8 @@ describe("listCheckpoints and revertToCheckpoint", { timeout: 60_000 }, () => {
   });
 });
 
-describe("commitAndPush", { timeout: 30_000 }, () => {
-  it("commits and pushes, then sets pushed and last_pushed_sha", async () => {
+describe.concurrent("commitAndPush", { timeout: 30_000 }, () => {
+  it("commits and pushes, then sets pushed and last_pushed_sha", async ({ expect }) => {
     const w = await readyWs();
     const branch = (await detail(w.stub)).branch;
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Add README" }));
@@ -1639,7 +2114,7 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.renameBranch({ branch: "feature/late" }))).toBe("BRANCH_ALREADY_PUSHED");
   });
 
-  it("passes PUSH_REJECTED through and leaves pushed and the state alone", async () => {
+  it("passes PUSH_REJECTED through and leaves pushed and the state alone", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Try" }));
@@ -1652,7 +2127,7 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
     expect((await opsOf(w.stub, "commit_push"))[0]!.status).toBe("failed");
   });
 
-  it("passes NOTHING_TO_COMMIT through", async () => {
+  it("passes NOTHING_TO_COMMIT through", async ({ expect }) => {
     const w = await readyWs();
     w.tempod.fail("git.commitAndPush", "NOTHING_TO_COMMIT", "clean");
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Nothing" }));
@@ -1661,9 +2136,39 @@ describe("commitAndPush", { timeout: 30_000 }, () => {
   });
 });
 
-describe("files and changes", { timeout: 30_000 }, () => {
-  it("pass through to tempod when the container is ready", async () => {
+describe.concurrent("commitAndPush behind other ops", { timeout: 30_000 }, () => {
+  it("waits as pending behind an op instead of returning WORKSPACE_BUSY, then runs in creation order", async ({
+    expect,
+  }) => {
     const w = await readyWs();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
+    });
+    const call = w.stub.commitAndPush({ message: "Second" });
+    // 03 Step runner: "Ops wait as pending and start in creation order."
+    await waitFor(async () => (await opsOf(w.stub, "commit_push")).length === 2, 3000, "queued op");
+    expect((await opsOf(w.stub, "commit_push")).map((o) => o.status)).toEqual(["pending", "pending"]);
+    const res = await whileDriving(w.stub, call);
+    expect(ok(res)).toEqual({ commitSha: "f".repeat(40) });
+    expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);
+  });
+
+  it("returns its own op's error code once the queued op runs", async ({ expect }) => {
+    const w = await readyWs();
+    w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
+    });
+    const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Second" }));
+    // 02 commitAndPush errors: NOTHING_TO_COMMIT, PUSH_REJECTED.
+    expect(codeOf(res)).toBe("PUSH_REJECTED");
+    expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);
+  });
+});
+
+describe.concurrent("files and changes", { timeout: 30_000 }, () => {
+  it("pass through to tempod when the container is ready", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     w.tempod.on("fs.search", () => ({ matches: [{ path: "src/a.ts", line: 3, text: "const foo = 1" }] }));
     w.tempod.on("git.fileDiff", () => ({ diff: "@@ -1 +1 @@\n-a\n+b\n" }));
     // 02 Review and git: getChanges → {files, baseSha, headSha}
@@ -1687,7 +2192,7 @@ describe("files and changes", { timeout: 30_000 }, () => {
       encoding: "utf8",
       size: 5,
     });
-    expect(w.tempod.requestsOf("fs.read")).toEqual([{ path: "README.md", maxBytes: 1024 * 1024 }]);
+    expect(w.tempod.requestsOf("fs.read").at(-1)).toEqual({ path: "README.md", maxBytes: 1024 * 1024 });
     // 02 Files: searchFiles → [{path, line, text}], at most 500
     expect(ok(await w.stub.searchFiles({ query: "foo" }))).toEqual([
       { path: "src/a.ts", line: 3, text: "const foo = 1" },
@@ -1695,8 +2200,8 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(w.tempod.requestsOf("fs.search")).toEqual([{ query: "foo", regex: false, maxResults: 500 }]);
   });
 
-  it("pass tempod's error codes through", async () => {
-    const w = await readyWs();
+  it("pass tempod's error codes through", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
     w.tempod.fail("fs.read", "FILE_TOO_LARGE", "2 MiB");
     expect(codeOf(await w.stub.readFile({ path: "big.bin" }))).toBe("FILE_TOO_LARGE");
     w.tempod.fail("fs.read", "PATH_OUTSIDE_WORKSPACE", "/etc/passwd");
@@ -1705,8 +2210,131 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(codeOf(await w.stub.getFileDiff({ scope: "branch", path: "missing.ts" }))).toBe("NOT_FOUND");
   });
 
-  it("return CONTAINER_NOT_READY while the workspace starts", async () => {
-    const w = await seedHeld();
+  it("syncs files before sleep and serves them without waking or contacting tempod", async ({ expect }) => {
+    const w = await readyWs();
+    w.tempod.on("fs.list", () => ({ paths: ["README.md", "src/a.ts", "bin.dat"] }));
+    w.tempod.on("fs.read", ({ path }) =>
+      path === "bin.dat"
+        ? { content: "AAE=", encoding: "base64", size: 2 }
+        : { content: `saved ${path}`, encoding: "utf8", size: 10 },
+    );
+    await putToSleep(w);
+    const before = w.tempod.requests.length;
+    expect(ok(await w.stub.listFiles({}))).toEqual({ paths: ["README.md", "bin.dat", "src/a.ts"] });
+    expect(ok(await w.stub.readFile({ path: "/workspace/src/a.ts" }))).toMatchObject({
+      content: "saved src/a.ts",
+    });
+    expect(ok(await w.stub.readFile({ path: "bin.dat" }))).toEqual({
+      content: "AAE=",
+      encoding: "base64",
+      size: 2,
+    });
+    expect(w.tempod.requests).toHaveLength(before);
+    expect(await opsOf(w.stub, "wake")).toHaveLength(0);
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
+  it("does not wake on a cache miss and rejects paths outside the workspace", async ({ expect }) => {
+    const w = await readyWs();
+    await putToSleep(w);
+    expect(codeOf(await w.stub.readFile({ path: "uncached.ts" }))).toBe("CONTAINER_NOT_READY");
+
+    for (const path of ["../README.md", "/etc/passwd", "/workspace/../etc/passwd"])
+      expect(codeOf(await w.stub.readFile({ path }))).toBe("PATH_OUTSIDE_WORKSPACE");
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.setKv("filesSyncedAt", undefined));
+    expect(codeOf(await w.stub.listFiles({}))).toBe("CONTAINER_NOT_READY");
+    expect(await opsOf(w.stub, "wake")).toHaveLength(0);
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
+  it("refreshes changed files, removes deleted files and drops unreadable cached contents", async ({
+    expect,
+  }) => {
+    const w = await readyWs();
+    const sync = () => runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
+    await sync();
+    w.tempod.on("fs.list", () => ({ paths: ["src/renamed.ts"] }));
+    w.tempod.on("fs.read", () => ({ content: "updated", encoding: "utf8", size: 7 }));
+
+    const seq = await emit(w, {
+      kind: "git.changed",
+      files: [
+        { path: "src/renamed.ts", oldPath: "README.md", status: "renamed", additions: 1, deletions: 1 },
+      ],
+      additions: 1,
+      deletions: 1,
+    });
+
+    await waitFor(
+      async () => Number((await wsRow(w.stub))["tempod_acked_seq"]) >= seq,
+      5000,
+      "file event applied",
+    );
+    await waitFor(
+      async () =>
+        (await one(w.stub, "SELECT response_json FROM file_cache WHERE path = 'src/renamed.ts'"))?.[
+          "response_json"
+        ] != null,
+      8000,
+      "file cache synced",
+    );
+    expect(await one(w.stub, "SELECT path FROM file_cache WHERE path = 'README.md'")).toBeUndefined();
+    expect(
+      await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.read("src/renamed.ts")),
+    ).toMatchObject({ content: "updated" });
+    w.tempod.fail("fs.read", "FILE_TOO_LARGE");
+    await putToSleep(w);
+    expect(ok(await w.stub.listFiles({}))).toEqual({ paths: ["src/renamed.ts"] });
+    expect(codeOf(await w.stub.readFile({ path: "src/renamed.ts" }))).toBe("CONTAINER_NOT_READY");
+  });
+
+  it("keeps the previous snapshot and completes sleep when syncing fails", async ({ expect }) => {
+    const w = await readyWs();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
+    w.tempod.fail("fs.list", "INTERNAL");
+    await putToSleep(w);
+    expect(ok(await w.stub.listFiles({}))).toEqual({ paths: ["README.md"] });
+    expect(ok(await w.stub.readFile({ path: "README.md" }))).toMatchObject({ content: "hello" });
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
+  it("bounds cache storage and excludes files absent from the non-ignored tree", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      const core = internals(i).core;
+      await core.files.sync();
+      core.files.rememberFile(".env", { content: "ignored", encoding: "utf8", size: 7 });
+      expect(() => core.files.read(".env")).toThrow();
+      core.files.rememberList(Array.from({ length: 20 }, (_, n) => `file-${n}.txt`));
+      const content = "x".repeat(900_000);
+
+      for (let n = 0; n < 20; n++)
+        core.files.rememberFile(`file-${n}.txt`, { content, encoding: "utf8", size: content.length });
+    });
+    const total = await one(w.stub, "SELECT SUM(bytes) AS bytes FROM file_cache");
+    expect(Number(total?.["bytes"])).toBeLessThanOrEqual(16 * 1024 * 1024);
+    expect(await one(w.stub, "SELECT path FROM file_cache WHERE path = '.env'")).toBeUndefined();
+  });
+
+  it("validates file_cache.response_json on read and write (02, Conventions)", async ({ expect }) => {
+    const w = await readyWs();
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      const { files } = internals(i).core;
+      await files.sync();
+      files.rememberFile("README.md", { content: "x", encoding: "latin1", size: 1 });
+      expect(() => files.read("README.md")).toThrow();
+    });
+    expect(await one(w.stub, "SELECT response_json FROM file_cache WHERE path = 'README.md'")).toEqual({
+      response_json: null,
+    });
+    await putToSleep(w);
+    await exec(w.stub, "UPDATE file_cache SET response_json = ? WHERE path = 'README.md'", '{"content":5}');
+    expect(codeOf(await w.stub.readFile({ path: "README.md" }))).toBe("CONTAINER_NOT_READY");
+    expect(await stateOf(w.stub)).toBe("sleeping");
+  });
+
+  it("return CONTAINER_NOT_READY while the workspace starts", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
     expect(codeOf(await w.stub.getChanges({ scope: "branch" }))).toBe("CONTAINER_NOT_READY");
     expect(codeOf(await w.stub.listFiles({}))).toBe("CONTAINER_NOT_READY");
     expect(codeOf(await w.stub.readFile({ path: "README.md" }))).toBe("CONTAINER_NOT_READY");
@@ -1714,16 +2342,20 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(w.tempod.requests).toHaveLength(0);
   });
 
-  it("return CONTAINER_NOT_READY and start a wake when sleeping (runScript too)", async () => {
+  it("return CONTAINER_NOT_READY and start a wake when sleeping (runScript too)", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     await useSettings(
       w,
       settingsWith({ scripts: { run: { dev: { command: "npm run dev", cwd: "", default: true } } } }),
     );
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     // 03 Wake triggers: "Read calls that need the container (getChanges, getFileDiff, listFiles, readFile,
-    // searchFiles) return CONTAINER_NOT_READY and also start a wake." runScript is a wake trigger.
+    // searchFiles) return CONTAINER_NOT_READY and also start a wake. The one exception is sleeping ..."
+    // getChanges starts the wake, so listFiles and readFile run in starting. runScript is a wake trigger.
     expect(codeOf(await w.stub.getChanges({ scope: "branch" }))).toBe("CONTAINER_NOT_READY");
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("starting");
@@ -1735,29 +2367,31 @@ describe("files and changes", { timeout: 30_000 }, () => {
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
   });
 
-  it("each read call alone starts a wake from sleeping", async () => {
+  it("each read call alone starts a wake from sleeping", async ({ expect, onTestFinished }) => {
     const w = await readyWs();
     await putToSleep(w);
-    hold(w.tempod);
+    hold(w.tempod, onTestFinished);
     expect(codeOf(await w.stub.searchFiles({ query: "x" }))).toBe("CONTAINER_NOT_READY");
     expect(await opsOf(w.stub, "wake")).toHaveLength(1);
     expect(await stateOf(w.stub)).toBe("starting");
   });
 });
 
-describe("scripts", { timeout: 30_000 }, () => {
+describe.concurrent("scripts", { timeout: 30_000 }, () => {
   const runScripts = {
     dev: { command: "npm run dev", cwd: "web", default: true },
     test: { command: "npm test", cwd: "", default: false },
   };
 
-  it("runScript returns NOT_FOUND for an unknown script", async () => {
+  it("runScript returns NOT_FOUND for an unknown script", async ({ expect }) => {
     const w = await readyWs();
     expect(codeOf(await w.stub.runScript({ scriptId: "dev" }))).toBe("NOT_FOUND");
     expect(w.tempod.requestsOf("script.start")).toHaveLength(0);
   });
 
-  it("runScript starts the run script and listScriptRuns shows it with its log tail and exit", async () => {
+  it("runScript starts the run script and listScriptRuns shows it with its log tail and exit", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     await useSettings(w, settingsWith({ scripts: { run: runScripts } }));
     expect(ok(await w.stub.listScriptRuns({}))).toEqual([]);
@@ -1791,20 +2425,22 @@ describe("scripts", { timeout: 30_000 }, () => {
     });
   });
 
-  it("with run_mode nonconcurrent, runScript stops the running run scripts first", async () => {
+  it("with run_mode nonconcurrent, runScript stops the running run scripts first", async ({ expect }) => {
     const w = await readyWs();
     await useSettings(w, settingsWith({ scripts: { run: runScripts, run_mode: "nonconcurrent" } }));
     const dev = ok(await w.stub.runScript({ scriptId: "dev" }));
     const test = ok(await w.stub.runScript({ scriptId: "test" }));
     // 01 Run scripts: "With run_mode = nonconcurrent, starting one stops the others first."
     expect(w.tempod.requestsOf("script.stop")).toEqual([{ runId: dev.id }]);
+
     const order = w.tempod.requests
       .filter((r) => r.op === "script.stop" || r.op === "script.start")
       .map((r) => `${r.op}:${r.params.runId}`);
+
     expect(order).toEqual([`script.start:${dev.id}`, `script.stop:${dev.id}`, `script.start:${test.id}`]);
   });
 
-  it("records failed_to_start when tempod refuses the start", async () => {
+  it("records failed_to_start when tempod refuses the start", async ({ expect }) => {
     const w = await readyWs();
     await useSettings(w, settingsWith({ scripts: { run: runScripts } }));
     w.tempod.fail("script.start", "INTERNAL", "spawn failed");
@@ -1814,7 +2450,9 @@ describe("scripts", { timeout: 30_000 }, () => {
     expect(ok(await w.stub.listScriptRuns({}))[0]).toMatchObject({ id: run.id, status: "failed_to_start" });
   });
 
-  it("continueAfterSetupFailure moves setup_status from failed to skipped and lets the queue run", async () => {
+  it("continueAfterSetupFailure moves setup_status from failed to skipped and lets the queue run", async ({
+    expect,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     await useSettings(w, settingsWith({ scripts: { setup: "exit 1" } }));
@@ -1829,7 +2467,6 @@ describe("scripts", { timeout: 30_000 }, () => {
     await sleep(200);
     expect(w.tempod.requestsOf("session.prompt")).toHaveLength(0);
     expect((await turnOf(w.stub, t.id))!["status"]).toBe("queued");
-
     expect(codeOf(await w.stub.continueAfterSetupFailure({}))).toBe("OK");
     // 03 Queue runner: "continueAfterSetupFailure sets it from failed to skipped"
     const d = await detail(w.stub);
@@ -1843,8 +2480,11 @@ describe("scripts", { timeout: 30_000 }, () => {
     await waitFor(async () => (await d1Row(w.workspaceId))?.["attention"] !== "error", 5000, "D1 attention");
   });
 
-  it("continueAfterSetupFailure changes nothing when setup did not fail", async () => {
-    const w = await seedHeld();
+  it("continueAfterSetupFailure changes nothing when setup did not fail", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const w = await seedHeld(onTestFinished);
     const rev = (await detail(w.stub)).rev;
     expect(codeOf(await w.stub.continueAfterSetupFailure({}))).toBe("OK");
     const d = await detail(w.stub);
@@ -1853,42 +2493,84 @@ describe("scripts", { timeout: 30_000 }, () => {
   });
 });
 
-describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 }, () => {
-  it("getEgressConfig returns {owner, repo, policy, allowlist} from the project and the effective settings", async () => {
-    const w = await readyWs();
-    // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist}
-    expect(await w.stub.getEgressConfig()).toEqual({
-      owner: "acme",
-      repo: "app",
-      policy: "open",
-      allowlist: [],
+describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout: 30_000 }, () => {
+  it("getEgressConfig returns {owner, repo, policy, allowlist, mcp} from the project and the effective settings", async ({
+    expect,
+  }) => {
+    const w = await seedReadyWorkspace({
+      settings: {
+        ...DEFAULT_EFFECTIVE,
+        environment: {
+          ...DEFAULT_EFFECTIVE.environment,
+          egress_policy: "allowlist",
+          egress_allowlist: ["*.npmjs.org", "example.com"],
+        },
+      },
     });
-    await useSettings(
-      w,
-      settingsWith({
-        environment: { egress_policy: "allowlist", egress_allowlist: ["*.npmjs.org", "example.com"] },
-      }),
-    );
+
+    // 02 WorkspaceDO RPC: getEgressConfig() returns {owner, repo, policy, allowlist, mcp}
     expect(await w.stub.getEgressConfig()).toEqual({
       owner: "acme",
       repo: "app",
+      environmentId: null,
       policy: "allowlist",
+      provider: "github",
+      cloneUrl: null,
       allowlist: ["*.npmjs.org", "example.com"],
+      secrets: [],
+      injectors: [],
+      mcp: [],
+    });
+    await useSettings(w, DEFAULT_EFFECTIVE);
+    expect(await w.stub.getEgressConfig()).toEqual({
+      owner: "acme",
+      repo: "app",
+      environmentId: null,
+      policy: "open",
+      provider: "github",
+      cloneUrl: null,
+      allowlist: [],
+      secrets: [],
+      injectors: [],
+      mcp: [],
     });
   });
+  it("getEgressConfig fails for a workspace that was never created", async ({ expect }) => {
+    let errorText = "";
 
-  it("getEgressConfig fails for a workspace that was never created", async () => {
-    let error: unknown = null;
     try {
       await uninitialised().getEgressConfig();
     } catch (e) {
-      error = e;
+      errorText = String(e);
     }
-    expect(String(error)).toMatch(/not found/i);
+
+    expect(errorText).toMatch(/not found/i);
+  });
+  it("logEgress keeps only the newest 10,000 rows on every insert", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
+    await exec(
+      w.stub,
+      "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 10000) INSERT INTO egress_log (ts, method, host, path, status, ms, rule) SELECT i, 'GET', 'example.com', '/' || i, 200, 1, 9 FROM n",
+    );
+    await w.stub.logEgress({ ts: 20_000, method: "GET", host: "x", path: "/", status: 200, ms: 1, rule: 8 });
+    // 02 egress_log: "Newest 10,000 rows only."
+    expect(await one(w.stub, "SELECT count(*) AS n, min(ts) AS lo, max(ts) AS hi FROM egress_log")).toEqual({
+      n: 10_000,
+      lo: 2,
+      hi: 20_000,
+    });
+    await w.stub.logEgress({ ts: 20_001, method: "GET", host: "x", path: "/", status: 200, ms: 1, rule: 8 });
+    expect((await one(w.stub, "SELECT count(*) AS n, min(ts) AS lo FROM egress_log"))!).toEqual({
+      n: 10_000,
+      lo: 3,
+    });
   });
 
-  it("logEgress appends rows that Diagnostics shows newest first; an unknown workspace ignores it", async () => {
-    const w = await seedHeld();
+  it("logEgress appends rows that Diagnostics shows newest first; an unknown workspace ignores it", async ({
+    expect,
+  }) => {
+    const w = await seedReadyWorkspace();
+
     const a = {
       ts: 1000,
       method: "GET",
@@ -1898,13 +2580,16 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
       ms: 12,
       rule: 3,
     };
+
     const b = { ts: 2000, method: "POST", host: "evil.example", path: "/x", status: 403, ms: 1, rule: 10 };
     await w.stub.logEgress(a);
     await w.stub.logEgress(b);
+
     const rowsNow = await rows(
       w.stub,
       "SELECT ts, method, host, path, status, ms, rule FROM egress_log ORDER BY id",
     );
+
     expect(rowsNow).toEqual([a, b]);
     // 05 Diagnostics: Egress = the newest 500 egress_log rows
     expect(ok(await w.stub.getDiagnostics({})).egress).toEqual([b, a]);
@@ -1912,8 +2597,8 @@ describe("internal methods: getEgressConfig and logEgress", { timeout: 30_000 },
   });
 });
 
-describe("getDiagnostics", { timeout: 30_000 }, () => {
-  it("returns {ops, container, logs, egress, sessions} as in 05 Observability", async () => {
+describe.concurrent("getDiagnostics", { timeout: 30_000 }, () => {
+  it("returns {ops, container, logs, egress, sessions} as in 05 Observability", async ({ expect }) => {
     const w = await readyWs();
     const s = await liveSession(w);
     await emit(w, { kind: "log", level: "warn", msg: "disk almost full", data: { pct: 91 } });
@@ -1951,7 +2636,15 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
     ]);
     expect(diag.egress).toEqual([]);
     // Sessions: each session's agent, ACP session id, capabilities and live or not
+    const initial = (await rows(w.stub, "SELECT id FROM sessions WHERE id != ?", s.id))[0]!;
     expect(diag.sessions).toEqual([
+      {
+        id: initial["id"],
+        agent: "claude",
+        acpSessionId: null,
+        capabilities: {},
+        live: false,
+      },
       {
         id: s.id,
         agent: "claude",
@@ -1962,7 +2655,374 @@ describe("getDiagnostics", { timeout: 30_000 }, () => {
     ]);
   });
 
-  it("returns NOT_FOUND for a workspace that was never created", async () => {
+  it("returns NOT_FOUND for a workspace that was never created", async ({ expect }) => {
     expect(codeOf(await uninitialised().getDiagnostics({}))).toBe("NOT_FOUND");
+  });
+});
+
+describe.concurrent("first prompt while setup is pending", { timeout: 30_000 }, () => {
+  it("preserves a manual override made before the pending rename runs", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    let health!: ReturnType<FakeTempod["holdHealth"]>;
+
+    const w = await seedHeld(onTestFinished, {
+      prepare: (tempod, stub) => {
+        health = tempod.holdHealth();
+        onTestFinished(() => runInDurableObject(stub, health.release));
+      },
+    });
+
+    await runInDurableObject(w.stub, () => health.entered);
+    const session = ok(await w.stub.createSession({ agent: "claude" }));
+    expect(
+      codeOf(
+        await w.stub.sendPrompt({
+          sessionId: session.id,
+          text: "Fix login",
+          mentions: [],
+          attachmentIds: [],
+          reviewCommentIds: [],
+        }),
+      ),
+    ).toBe("OK");
+    expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
+    expect(codeOf(await w.stub.renameBranch({ branch: "feature/override" }))).toBe("OK");
+    let markWorking!: () => void;
+
+    const working = new Promise<void>((resolve) => {
+      markWorking = resolve;
+    });
+
+    await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      const original = core.setState.bind(core);
+      core.setState = (next, error) => {
+        original(next, error);
+
+        if (next === "working") markWorking();
+      };
+
+      onTestFinished(() =>
+        runInDurableObject(w.stub, () => {
+          core.setState = original;
+        }),
+      );
+    });
+    await runInDurableObject(w.stub, async () => {
+      health.release();
+      await working;
+    });
+    expect((await detail(w.stub)).branch).toBe("feature/override");
+    expect(w.tempod.requestsOf("git.renameBranch")).toHaveLength(0);
+    expect(w.tempod.requestsOf("repo.clone")[0].branch).toBe("feature/override");
+  });
+});
+
+describe("PR title contract", () => {
+  it("persists closed and merged titles in refresh and detail even when status does not change", async ({
+    expect,
+  }) => {
+    const o = await seedProject();
+    const { stub } = await seedWorkspace(o);
+    await runInDurableObject(stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      core.updateWs({ prNumber: 17, prState: "closed", checksState: null });
+      core.ghToken = { token: "fake", expiresAt: Date.now() + 3600000 };
+    });
+    const pull = vi.spyOn(github, "getPullRequest");
+    const checks = vi.spyOn(github, "listCheckRuns").mockResolvedValue([]);
+
+    try {
+      for (const merged of [false, true]) {
+        const title = merged ? "Merged title" : "Closed title";
+        pull.mockResolvedValue({
+          number: 17,
+          title,
+          state: "closed",
+          merged,
+          merged_at: merged ? "2026-10-11" : null,
+          draft: false,
+          html_url: "https://github.com/acme/repo/pull/17",
+          base: { ref: "main" },
+          head: { sha: "abc", ref: "tempo/lisbon", repo: { id: 1 } },
+        });
+        expect(ok(await stub.refreshPullRequest({}))).toMatchObject({
+          prTitle: title,
+          prState: merged ? "merged" : "closed",
+        });
+        expect((await detail(stub)).prTitle).toBe(title);
+      }
+
+      pull.mockResolvedValue({
+        number: 17,
+        title: "Renamed merged title",
+        state: "closed",
+        merged: true,
+        merged_at: "2026-10-11",
+        draft: false,
+        html_url: "https://github.com/acme/repo/pull/17",
+        base: { ref: "main" },
+        head: { sha: "abc", ref: "tempo/lisbon", repo: { id: 1 } },
+      });
+      await stub.refreshPullRequest({});
+      expect((await detail(stub)).prTitle).toBe("Renamed merged title");
+    } finally {
+      pull.mockRestore();
+      checks.mockRestore();
+    }
+  });
+});
+
+describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, () => {
+  it("init stores the PR number, state and title, and status polling starts", async ({ expect }) => {
+    const seeded = await seedProject();
+    await seedCredentials(seeded.userId);
+    const workspaceId = newId();
+    const slug = `pr-${++counter}`;
+    const branch = "feature/retries";
+    await insertD1Workspace(seeded, { id: workspaceId, slug, branch });
+    const stub = env.WORKSPACE.getByName(workspaceId);
+    await installFakes(stub);
+
+    const summary = ok(
+      await stub.init({
+        ...initInput({ workspaceId, seeded, slug, branch }),
+        source: { kind: "pr", number: 42 },
+        pr: { number: 42, state: "draft", title: "Add retries" },
+      }),
+    );
+
+    // 03 init 1: "For source.kind = "pr", set pr_number and pr_state, and keep the PR title"
+    expect(summary).toMatchObject({ prNumber: 42, prState: "draft" });
+    expect(await detail(stub)).toMatchObject({ prNumber: 42, prState: "draft", prTitle: "Add retries" });
+    expect(await wsRow(stub)).toMatchObject({ pr_number: 42, pr_state: "draft" });
+    await waitFor(async () => (await d1Row(workspaceId))?.["pr_number"] === 42, 5000, "D1 pr_number");
+    expect((await d1Row(workspaceId))!["pr_state"]).toBe("draft");
+    // 03 Status polling: while a UI socket is open and pr_number is set.
+    await runInDurableObject(stub, (i: WorkspaceDO) => {
+      internals(i).core.ghToken = { token: "fake", expiresAt: Date.now() + 3_600_000 };
+    });
+
+    const pull = vi.spyOn(github, "getPullRequest").mockResolvedValue({
+      number: 42,
+      title: "Add retries to jobs",
+      state: "open",
+      merged: false,
+      merged_at: null,
+      draft: false,
+      html_url: "https://github.com/acme/repo/pull/17",
+      base: { ref: "main" },
+      head: { sha: "abc", ref: "tempo/lisbon", repo: { id: 1 } },
+    });
+
+    const checks = vi.spyOn(github, "listCheckRuns").mockResolvedValue([]);
+
+    try {
+      const ui = await openUi({ workspaceId, stub });
+      await runDurableObjectAlarm(stub);
+      await waitFor(() => pull.mock.calls.length > 0, 5000, "PR poll");
+      expect(pull.mock.calls[0]![2]).toBe(42);
+      await waitFor(async () => (await detail(stub)).prState === "open", 5000, "polled state");
+      expect((await detail(stub)).prTitle).toBe("Add retries to jobs");
+      ui.socket.close();
+    } finally {
+      pull.mockRestore();
+      checks.mockRestore();
+    }
+  });
+
+  it("a workspace from a branch or a new branch has no PR", async ({ expect, onTestFinished }) => {
+    const w = await seedHeld(onTestFinished);
+    expect(await detail(w.stub)).toMatchObject({ prNumber: null, prState: null, prTitle: null });
+  });
+});
+
+describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30_000 }, () => {
+  /** A workspace in `error` with no create or wake op left, as after a step failed for good. */
+  const errored = async (onTestFinished: TestContext["onTestFinished"]) => {
+    const w = await seedHeld(onTestFinished, { prompt: "First" });
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+      const { core, runner } = internals(i);
+
+      for (const kind of ["create", "wake"] as const) {
+        const op = runner.find(kind);
+
+        if (op) runner.cancel(op.id);
+      }
+
+      core.setState("error", { code: "CONTAINER_START_FAILED", detail: "test" });
+    });
+    expect(await stateOf(w.stub)).toBe("error");
+
+    return w;
+  };
+
+  const restarted = async (w: Ws) => {
+    const wakes = (await opsOf(w.stub, "wake")).filter(
+      (o) => o.status === "pending" || o.status === "running",
+    );
+
+    expect(wakes).toHaveLength(1);
+    expect(await stateOf(w.stub)).toBe("starting");
+  };
+
+  const sessionIdOf = async (w: Ws) =>
+    Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM sessions"))!["id"]);
+
+  const NOT_READY = "CONTAINER_NOT_READY";
+
+  const triggers: Array<[string, string, (w: Ws) => Promise<string>]> = [
+    ["sendPrompt", "OK", async (w) => codeOf(await prompt(w, await sessionIdOf(w), "Again"))],
+    ["createSession", "OK", async (w) => codeOf(await w.stub.createSession({ agent: "claude" }))],
+    ["wakeWorkspace", "OK", async (w) => codeOf(await w.stub.wakeWorkspace({}))],
+    ["rerunSetup", NOT_READY, async (w) => codeOf(await w.stub.rerunSetup({}))],
+    [
+      "runScript",
+      NOT_READY,
+      async (w) => {
+        await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+          const run = { dev: { command: "npm run dev", cwd: "", default: true } };
+          internals(i).core.updateWs({
+            settingsJson: JSON.stringify(settingsWith({ scripts: { run } })),
+          });
+        });
+
+        return codeOf(await w.stub.runScript({ scriptId: "dev" }));
+      },
+    ],
+    ["getChanges", NOT_READY, async (w) => codeOf(await w.stub.getChanges({ scope: "branch" }))],
+    [
+      "getFileDiff",
+      NOT_READY,
+      async (w) => codeOf(await w.stub.getFileDiff({ scope: "branch", path: "README.md" })),
+    ],
+    ["listFiles", NOT_READY, async (w) => codeOf(await w.stub.listFiles({}))],
+    ["readFile", NOT_READY, async (w) => codeOf(await w.stub.readFile({ path: "README.md" }))],
+    ["searchFiles", NOT_READY, async (w) => codeOf(await w.stub.searchFiles({ query: "x" }))],
+    [
+      "a terminal WebSocket",
+      "101",
+      async (w) => {
+        const res = await w.stub.fetch(`https://tempo.test/api/ws/terminal/${w.workspaceId}/t1`, {
+          headers: { Upgrade: "websocket" },
+        });
+
+        res.webSocket?.accept();
+        res.webSocket?.close();
+
+        return String(res.status);
+      },
+    ],
+    [
+      "a preview request",
+      "200",
+      async (w) => {
+        const cookie = await runInDurableObject(w.stub, (i: WorkspaceDO) =>
+          previewCookie(internals(i).core.ws().previewKey, 3000),
+        );
+
+        const res = await w.stub.previewFetch(
+          new Request("https://preview.test/", { headers: { Accept: "text/html" } }),
+          3000,
+          cookie ?? "",
+        );
+
+        await res.body?.cancel();
+
+        return String(res.status);
+      },
+    ],
+  ];
+
+  for (const [name, expected, trigger] of triggers) {
+    it(`${name} restarts it`, async ({ expect, onTestFinished }) => {
+      const w = await errored(onTestFinished);
+      expect(await trigger(w)).toBe(expected);
+      await restarted(w);
+    });
+  }
+
+  // 03 Wake triggers: only `sleeping` answers listFiles and readFile from the file cache.
+  const cachedReads: Array<[string, (w: Ws) => Promise<Res>]> = [
+    ["listFiles", (w) => w.stub.listFiles({})],
+    ["readFile", (w) => w.stub.readFile({ path: "README.md" })],
+  ];
+
+  for (const [name, read] of cachedReads) {
+    it(`${name} restarts it instead of answering from the file cache`, async ({ expect, onTestFinished }) => {
+      const w = await errored(onTestFinished);
+      await runInDurableObject(w.stub, (i: WorkspaceDO) => {
+        const { files } = internals(i).core;
+        files.rememberList(["README.md"]);
+        files.rememberFile("README.md", { content: "cached", encoding: "utf8", size: 6 });
+        expect(files.read("README.md")).toMatchObject({ content: "cached" });
+      });
+      expect(codeOf(await read(w))).toBe(NOT_READY);
+      await restarted(w);
+    });
+  }
+});
+
+describe.concurrent("getDiagnostics egress filters (02, 05 Observability)", { timeout: 30_000 }, () => {
+  const seedEgress = async (w: Ws) =>
+    runInDurableObject(w.stub, (_i: WorkspaceDO, state: DurableObjectState) => {
+      const add = (host: string, status: number, rule: number) =>
+        state.storage.sql.exec(
+          "INSERT INTO egress_log (ts, method, host, path, status, ms, rule) VALUES (?, 'GET', ?, '/', ?, 1, ?)",
+          Date.now(),
+          host,
+          status,
+          rule,
+        );
+
+      add("tempo.example.com", 403, 0);
+      add("api.github.com", 403, 7);
+      add("evil.example.net", 403, 10);
+      add("registry.npmjs.org", 404, 8);
+      add("openrouter.ai", 502, 4);
+      add("cdn.example.org", 301, 9);
+
+      for (let n = 0; n < 700; n++) add("Registry.NPMJS.org", 200, 8);
+
+      for (let n = 0; n < 600; n++) add("api.github.com", 200, 3);
+    });
+
+  const egressOf = async (
+    w: Ws,
+    input: import("../../src/do/workspace/rpc.ts").MethodInput<"getDiagnostics">,
+  ) =>
+    Schema.decodeUnknownSync(
+      Schema.Array(Schema.Struct({ host: Schema.String, status: Schema.Number, rule: Schema.Number })),
+    )(ok(await w.stub.getDiagnostics(input)).egress);
+
+  it("filters every stored row on the server and returns the newest 500 matches", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
+    await seedEgress(w);
+    const all = await egressOf(w, {});
+    expect(all).toHaveLength(500);
+    expect(all.every((r) => r.host === "api.github.com")).toBe(true);
+    // The npm rows are older than the newest 500; the filter still finds them.
+    const npm = await egressOf(w, { egressHost: "npmjs" });
+    expect(npm).toHaveLength(500);
+    expect(npm.every((r) => r.host.toLowerCase() === "registry.npmjs.org")).toBe(true);
+    expect(npm.at(-1)).toMatchObject({ status: 200 });
+    expect(await egressOf(w, { egressHost: "NPMJS", egressStatus: "4xx" })).toEqual([
+      expect.objectContaining({ host: "registry.npmjs.org", status: 404 }),
+    ]);
+    expect(await egressOf(w, { egressHost: "%" })).toEqual([]);
+  });
+
+  it("blocked means rule 0, 7 or 10; 2xx to 5xx match the status class", async ({ expect }) => {
+    const w = await seedReadyWorkspace();
+    await seedEgress(w);
+    const blocked = await egressOf(w, { egressStatus: "blocked" });
+    expect(blocked.map((r) => r.rule)).toEqual([10, 7, 0]);
+    expect((await egressOf(w, { egressStatus: "3xx" })).map((r) => r.host)).toEqual(["cdn.example.org"]);
+    expect((await egressOf(w, { egressStatus: "4xx" })).map((r) => r.status)).toEqual([404, 403, 403, 403]);
+    expect((await egressOf(w, { egressStatus: "5xx" })).map((r) => r.host)).toEqual(["openrouter.ai"]);
+    expect(await egressOf(w, { egressStatus: "2xx", egressHost: "example" })).toEqual([]);
+    expect(await egressOf(w, { egressStatus: "all", egressHost: "example.com" })).toHaveLength(1);
   });
 });

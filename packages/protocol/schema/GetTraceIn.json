@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetTraceIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "eventId": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId", "eventId"],
+  "additionalProperties": true
+}

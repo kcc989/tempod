@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RepositoryDetail",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "defaultBranch": {
+      "type": "string"
+    },
+    "remote": {
+      "type": "string"
+    },
+    "readOnly": {
+      "type": "boolean"
+    },
+    "ref": {
+      "type": "string"
+    },
+    "empty": {
+      "type": "boolean"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "RepositoryEntry.json"
+      }
+    },
+    "commit": {
+      "anyOf": [
+        {
+          "$ref": "RepositoryCommit.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "projectId",
+    "name",
+    "description",
+    "defaultBranch",
+    "remote",
+    "readOnly",
+    "ref",
+    "empty",
+    "entries",
+    "commit"
+  ],
+  "additionalProperties": true
+}

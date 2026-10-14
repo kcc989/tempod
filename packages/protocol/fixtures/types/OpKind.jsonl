@@ -5,4 +5,5 @@
 "restore"
 "revert"
 "commit_push"
+"merge_pr"
 "housekeeping"

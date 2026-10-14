@@ -1,4 +1,4 @@
-import { ArrowRightIcon, CheckIcon } from "lucide-react";
+import { ChevronDownIcon, CheckIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ErrorState } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -12,10 +12,55 @@ import {
 } from "~/ui/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Skeleton } from "~/ui/components/ui/skeleton";
+import {
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "~/ui/components/ui/dropdown-menu";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { baseBranchOptions } from "./topbar-logic";
 
 const DEBOUNCE_MS = 200;
+
+export function BaseBranchMenu({
+  workspaceId,
+  projectId,
+  branch,
+  baseBranch,
+  locked,
+  onDone,
+}: {
+  workspaceId: string;
+  projectId: string;
+  branch: string;
+  baseBranch: string;
+  locked: boolean;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <DropdownMenuSub open={open} onOpenChange={setOpen}>
+      <DropdownMenuSubTrigger disabled={locked}>
+        Base branch
+        <span className="ml-auto max-w-28 truncate font-mono text-xs text-muted-foreground">
+          {baseBranch}
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-72 p-0">
+        {open && (
+          <BranchList
+            workspaceId={workspaceId}
+            projectId={projectId}
+            branch={branch}
+            baseBranch={baseBranch}
+            onDone={onDone}
+          />
+        )}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
 
 /**
  * `→ <base branch>`. Until a PR exists it opens a searchable branch list (listBranches) and calls
@@ -36,12 +81,15 @@ export function BaseBranchPicker({
   locked: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
   const label = (
     <>
-      <ArrowRightIcon aria-hidden className="size-3 shrink-0" />
+      <span className="text-muted-foreground">Base:</span>
+      <ChevronDownIcon aria-hidden className="size-3 shrink-0" />
       <span className="truncate">{baseBranch}</span>
     </>
   );
+
   if (locked) {
     return (
       <span
@@ -52,6 +100,7 @@ export function BaseBranchPicker({
       </span>
     );
   }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -96,12 +145,15 @@ function BranchList({
   const [query, setQuery] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), DEBOUNCE_MS);
+
     return () => clearTimeout(t);
   }, [search]);
+
   const branches = useCallQuery("listBranches", query ? { projectId, query } : { projectId }, {
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
+
   const setBase = useCallMutation("setBaseBranch");
   const options = baseBranchOptions(branches.data ?? [], branch);
 
@@ -129,9 +181,9 @@ function BranchList({
                     if (name !== baseBranch) setBase.mutate({ workspaceId, baseBranch: name });
                     onDone();
                   }}
-                  className="font-mono text-xs"
+                  className="justify-start text-left font-mono text-xs"
                 >
-                  <span className="truncate">{name}</span>
+                  <span className="min-w-0 flex-1 truncate">{name}</span>
                   {name === baseBranch && <CheckIcon className="ml-auto" />}
                 </CommandItem>
               ))}

@@ -133,6 +133,16 @@
           "type": "null"
         }
       ]
+    },
+    "usage": {
+      "anyOf": [
+        {
+          "$ref": "TurnUsage.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

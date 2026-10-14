@@ -1,4 +1,5 @@
 import { CloseCode, reconnectDelay } from "@tempo/protocol";
+import { Schema } from "effect";
 
 /**
  * A WebSocket that follows the channel rules in 02: ping every 30 s, reconnect after 0.5 s
@@ -20,27 +21,30 @@ export interface SocketLike {
   readonly readyState: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
-  onopen: ((ev: unknown) => void) | null;
-  onmessage: ((ev: { data: unknown }) => void) | null;
-  onclose: ((ev: { code: number; reason?: string }) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
+  onopen: ((ev: Event) => void) | null;
+  onmessage: ((ev: MessageEvent) => void) | null;
+  onclose: ((ev: CloseEvent) => void) | null;
+  onerror: ((ev: Event) => void) | null;
 }
 
+export type TimerHandle = number | ReturnType<typeof globalThis.setTimeout>;
+
 export interface Timers {
-  setTimeout(fn: () => void, ms: number): unknown;
-  clearTimeout(handle: unknown): void;
-  setInterval(fn: () => void, ms: number): unknown;
-  clearInterval(handle: unknown): void;
+  setTimeout(fn: () => void, ms: number): TimerHandle;
+  clearTimeout(handle: TimerHandle): void;
+  setInterval(fn: () => void, ms: number): TimerHandle;
+  clearInterval(handle: TimerHandle): void;
 }
 
 export const PING_MS = 30_000;
+
 const OPEN = 1;
 
 const defaultTimers: Timers = {
   setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
-  clearTimeout: (h) => globalThis.clearTimeout(h as ReturnType<typeof setTimeout>),
+  clearTimeout: (h) => globalThis.clearTimeout(h),
   setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
-  clearInterval: (h) => globalThis.clearInterval(h as ReturnType<typeof setInterval>),
+  clearInterval: (h) => globalThis.clearInterval(h),
 };
 
 export interface ReconnectingSocketOptions {
@@ -57,14 +61,15 @@ export interface ReconnectingSocketOptions {
 export const wsUrl = (path: string): string => {
   const loc = globalThis.location;
   const proto = loc?.protocol === "https:" ? "wss:" : "ws:";
+
   return `${proto}//${loc?.host ?? "localhost"}${path}`;
 };
 
 export class ReconnectingSocket {
   private ws: SocketLike | null = null;
   private attempt = 0;
-  private retryTimer: unknown = null;
-  private pingTimer: unknown = null;
+  private retryTimer: TimerHandle | null = null;
+  private pingTimer: TimerHandle | null = null;
   private stopped = false;
   private gotMessage = false;
   private _status: SocketStatus = "connecting";
@@ -73,7 +78,7 @@ export class ReconnectingSocket {
 
   constructor(private readonly opts: ReconnectingSocketOptions) {
     this.timers = opts.timers ?? defaultTimers;
-    this.factory = opts.factory ?? ((url) => new WebSocket(url) as unknown as SocketLike);
+    this.factory = opts.factory ?? ((url) => new WebSocket(url));
   }
 
   get status(): SocketStatus {
@@ -90,21 +95,25 @@ export class ReconnectingSocket {
     this.clearTimers();
     const ws = this.ws;
     this.ws = null;
+
     if (ws) {
       ws.onopen = ws.onmessage = ws.onerror = null;
       ws.onclose = null;
+
       try {
         ws.close(1000, "closed");
       } catch {
         // Already closed.
       }
     }
+
     this.setStatus("stopped");
   }
 
   /** Reconnect at once (for example when the browser comes back online). */
   reconnectNow(): void {
     if (this.stopped || this._status === "open" || this.isTerminal()) return;
+
     if (this.retryTimer !== null) this.timers.clearTimeout(this.retryTimer);
     this.retryTimer = null;
     this.connect();
@@ -113,6 +122,7 @@ export class ReconnectingSocket {
   send(data: string): boolean {
     if (!this.ws || this.ws.readyState !== OPEN) return false;
     this.ws.send(data);
+
     return true;
   }
 
@@ -128,6 +138,7 @@ export class ReconnectingSocket {
 
   private clearTimers(): void {
     if (this.retryTimer !== null) this.timers.clearTimeout(this.retryTimer);
+
     if (this.pingTimer !== null) this.timers.clearInterval(this.pingTimer);
     this.retryTimer = null;
     this.pingTimer = null;
@@ -137,43 +148,79 @@ export class ReconnectingSocket {
     if (this.stopped) return;
     this.setStatus(this.attempt === 0 && this._status !== "reconnecting" ? "connecting" : "reconnecting");
     let ws: SocketLike;
+
     try {
       ws = this.factory(this.opts.url());
     } catch {
       this.scheduleReconnect();
+
       return;
     }
+
     this.ws = ws;
     this.gotMessage = false;
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.setStatus("open");
       this.opts.onOpen?.();
+
       if (this.pingTimer !== null) this.timers.clearInterval(this.pingTimer);
       this.pingTimer = this.timers.setInterval(() => this.send(JSON.stringify({ type: "ping" })), PING_MS);
     };
+
     ws.onmessage = (ev) => {
       if (this.ws !== ws) return;
+
       if (!this.gotMessage) {
         this.gotMessage = true;
         this.attempt = 0;
       }
-      if (typeof ev.data === "string") this.opts.onMessage(ev.data);
+
+      if (Schema.is(Schema.String)(ev.data)) this.opts.onMessage(ev.data);
     };
+
     ws.onerror = () => {
       // onclose follows.
     };
+
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;
       this.ws = null;
+
       if (this.pingTimer !== null) this.timers.clearInterval(this.pingTimer);
       this.pingTimer = null;
+
       if (this.stopped) return;
+
       if (ev.code === CloseCode.replaced) return this.setStatus("replaced");
+
       if (ev.code === CloseCode.badProtocolVersion) return this.setStatus("bad_version");
+
       if (ev.code === CloseCode.workspaceNotFound) return this.setStatus("not_found");
       this.scheduleReconnect();
     };
+  }
+
+  /** 02 Conventions: a side that gets an unknown `v` closes with 4400 and does not reconnect. */
+  rejectVersion(): void {
+    const ws = this.ws;
+    this.ws = null;
+
+    if (this.pingTimer !== null) this.timers.clearInterval(this.pingTimer);
+    this.pingTimer = null;
+
+    if (ws) {
+      ws.onopen = ws.onmessage = ws.onerror = null;
+      ws.onclose = null;
+
+      try {
+        ws.close(CloseCode.badProtocolVersion, "unknown protocol version");
+      } catch {
+        // Already closed.
+      }
+    }
+
+    this.setStatus("bad_version");
   }
 
   private scheduleReconnect(): void {

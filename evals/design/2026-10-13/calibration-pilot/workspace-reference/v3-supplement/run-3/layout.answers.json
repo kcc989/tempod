@@ -1,0 +1,47 @@
+{
+  "status": 200,
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "layout_header_overhead": {
+          "type": "score",
+          "score": 1.7015,
+          "legend": {
+            "0": "An extra full-width application-branding row or repeated toolbar information consumes space above the workspace header and chat tabs.",
+            "1": "There is no extra branding row, but secondary configuration or help actions take persistent space alongside the everyday controls.",
+            "2": "The workspace header and chat tabs carry the necessary identity, state and navigation; secondary configuration and help are disclosed in menus or on demand."
+          },
+          "probabilities": {
+            "0": 0.0684,
+            "1": 0.1618,
+            "2": 0.7698
+          },
+          "confidence": 0.4353
+        },
+        "layout_transcript_composer_alignment": {
+          "type": "score",
+          "score": 1.2658,
+          "legend": {
+            "0": "Message text starts far inside the composer leading edge, forming two separate horizontal tracks.",
+            "1": "The tracks mostly align, but differences in padding make their leading edges visibly inconsistent.",
+            "2": "Message text and composer input share a leading edge, apart from consistent small content padding."
+          },
+          "probabilities": {
+            "0": 0.2107,
+            "1": 0.3129,
+            "2": 0.4764
+          },
+          "confidence": 0.0539
+        }
+      },
+      "usage": {
+        "input_tokens": 3439,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

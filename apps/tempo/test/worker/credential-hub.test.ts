@@ -1,13 +1,18 @@
+import { WorkspaceSummary as WorkspaceSummarySchema } from "@tempo/protocol";
+import { Schema } from "effect";
+import type { WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { newId, type WorkspaceSummary } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import type { CredentialDO, SecretStatus } from "../../src/do/credential.ts";
+import { destroyContainer } from "../../src/do/workspace/container.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
-import { seedCredentials, seedProject, seedWorkspace, waitFor, type Seeded } from "./fakes.ts";
+import { internals, seedCredentials, seedProject, seedWorkspace, waitFor, type Seeded } from "./fakes.ts";
 
 // ---------- helpers ----------
 
 const enc = new TextEncoder();
+
 const dec = new TextDecoder();
 
 interface RawSecret {
@@ -25,13 +30,25 @@ const rawSecret = async (
   stub: DurableObjectStub<CredentialDO>,
   key: string,
 ): Promise<RawSecret | undefined> =>
-  runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => {
+  runInDurableObject(stub, (_i, state: DurableObjectState) => {
     const rows = state.storage.sql.exec("SELECT * FROM secrets WHERE key = ?", key).toArray();
-    return rows[0] as unknown as RawSecret | undefined;
+
+    return rows[0] === undefined
+      ? undefined
+      : Schema.decodeUnknownSync(
+          Schema.Struct({
+            key: Schema.String,
+            ciphertext: Schema.instanceOf(ArrayBuffer),
+            iv: Schema.instanceOf(ArrayBuffer),
+            version: Schema.Number,
+            meta_json: Schema.String,
+            updated_at: Schema.Number,
+          }),
+        )(rows[0]);
   });
 
 const writeRawSecret = async (stub: DurableObjectStub<CredentialDO>, row: RawSecret): Promise<void> =>
-  runInDurableObject(stub, (_i: unknown, state: DurableObjectState) => {
+  runInDurableObject(stub, (_i, state: DurableObjectState) => {
     state.storage.sql.exec(
       "INSERT OR REPLACE INTO secrets (key, ciphertext, iv, version, meta_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
       row.key,
@@ -44,7 +61,7 @@ const writeRawSecret = async (stub: DurableObjectStub<CredentialDO>, row: RawSec
   });
 
 const leaseRows = async (stub: DurableObjectStub<CredentialDO>): Promise<string[]> =>
-  runInDurableObject(stub, (_i: unknown, state: DurableObjectState) =>
+  runInDurableObject(stub, (_i, state: DurableObjectState) =>
     state.storage.sql
       .exec("SELECT workspace_id FROM codex_leases ORDER BY workspace_id")
       .toArray()
@@ -55,8 +72,10 @@ const leaseRows = async (stub: DurableObjectStub<CredentialDO>): Promise<string[
 const specKey = async (salt: string): Promise<CryptoKey> => {
   const bin = atob(env.TEMPO_ENCRYPTION_KEY);
   const raw = new Uint8Array(bin.length);
+
   for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
   const ikm = await crypto.subtle.importKey("raw", raw, "HKDF", false, ["deriveKey"]);
+
   return crypto.subtle.deriveKey(
     { name: "HKDF", hash: "SHA-256", salt: enc.encode(salt), info: enc.encode("tempo-secrets-v1") },
     ikm,
@@ -113,13 +132,16 @@ const openHub = async (userId: string): Promise<HubSocket> => {
   const res = await env.USER_HUB.getByName(userId).fetch("https://tempo.test/api/ws/hub", {
     headers: { Upgrade: "websocket" },
   });
+
   const ws = res.webSocket;
+
   if (!ws) throw new Error(`no websocket (status ${res.status})`);
   const messages: any[] = [];
   ws.addEventListener("message", (e: MessageEvent) => {
     messages.push(JSON.parse(String(e.data)));
   });
   ws.accept();
+
   return {
     ws,
     messages,
@@ -163,15 +185,18 @@ const insertD1Workspace = async (
       opts.rev,
     )
     .run();
+
   return id;
 };
 
-const driveToReady = async (stub: DurableObjectStub<WorkspaceDO>): Promise<void> => {
+const driveToReady = async (stub: WorkspaceStub): Promise<void> => {
   for (let i = 0; i < 15; i++) {
     await runDurableObjectAlarm(stub);
     const d = await stub.getWorkspace({});
+
     if (d.ok && (d.value.state === "ready" || d.value.state === "working")) return;
   }
+
   throw new Error("workspace did not become ready");
 };
 
@@ -255,10 +280,12 @@ describe("CredentialDO secrets", () => {
       "codex.auth_json",
       "openrouter.api_key",
     ]);
+
     for (const s of status) {
       expect(Object.keys(s).sort()).toEqual(["key", "meta", "updatedAt"]);
       expect(s.updatedAt).toBeGreaterThanOrEqual(before);
     }
+
     expect(status.find((s: SecretStatus) => s.key === "codex.auth_json")!.meta).toEqual({
       lastRefresh: 1_767_225_600_000,
     });
@@ -550,6 +577,73 @@ describe("CredentialDO Codex auth.json", () => {
   });
 });
 
+describe("Codex lease lifetime (01 Codex auth.json sync)", () => {
+  const codexWorkspace = async () => {
+    const seeded = await seedProject();
+    await seedCredentials(seeded.userId);
+    const creds = credsFor(seeded.userId);
+    await creds.putSecret("codex.auth_json", codexAuth(new Date().toISOString()), {
+      lastRefresh: Date.now(),
+    });
+    const w = await seedWorkspace(seeded, { agent: "codex", prompt: "Use codex" });
+    await driveToReady(w.stub);
+    await waitFor(async () => (await leaseRows(creds)).includes(w.workspaceId), 5000, "lease added");
+
+    return { ...w, creds };
+  };
+
+  const leaseKv = (stub: DurableObjectStub<WorkspaceDO>) =>
+    runInDurableObject(stub, (i: WorkspaceDO) => internals(i).core.kv<boolean>("codexLease") ?? false);
+
+  it("drops the lease when the container stops on its own, and the next Codex session start adds it again", async () => {
+    const w = await codexWorkspace();
+    w.container.running = false;
+    await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
+      await i["heartbeat"]();
+    });
+    // 01 Codex auth.json sync 6: CredentialDO "drops it when its container stops".
+    await waitFor(async () => !(await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease dropped");
+    expect(await leaseKv(w.stub)).toBe(false);
+    await driveToReady(w.stub);
+
+    const sessionId = Schema.decodeUnknownSync(Schema.String)(
+      (
+        await runInDurableObject(w.stub, (_i, state: DurableObjectState) =>
+          state.storage.sql.exec("SELECT id FROM sessions").one(),
+        )
+      )["id"],
+    );
+
+    const sent = await w.stub.sendPrompt({
+      sessionId,
+      text: "Again",
+      mentions: [],
+      attachmentIds: [],
+      reviewCommentIds: [],
+    });
+
+    expect(sent.ok).toBe(true);
+    await waitFor(async () => (await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease added again");
+    expect(await leaseKv(w.stub)).toBe(true);
+  });
+
+  it("drops the lease when the DO destroys the container", async () => {
+    const w = await codexWorkspace();
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => destroyContainer(internals(i).core, "test"));
+    await waitFor(async () => !(await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease dropped");
+    expect(await leaseKv(w.stub)).toBe(false);
+  });
+
+  it("keeps other workspaces' leases", async () => {
+    const w = await codexWorkspace();
+    const other = newId();
+    await w.creds.addCodexLease(other);
+    await runInDurableObject(w.stub, (i: WorkspaceDO) => destroyContainer(internals(i).core, "test"));
+    await waitFor(async () => !(await leaseRows(w.creds)).includes(w.workspaceId), 5000, "lease dropped");
+    expect(await leaseRows(w.creds)).toContain(other);
+  });
+});
+
 describe("CredentialDO system instance (02, 05 Secrets)", () => {
   const config = {
     appId: "123456",
@@ -592,8 +686,8 @@ describe("CredentialDO system instance (02, 05 Secrets)", () => {
     // 02: getGithubAppConfig "On the system instance only".
     // Called on the instance: a throwing RPC call is reported by the pool as an unhandled rejection.
     const user = credsFor(`user-${newId()}`);
-    await runInDurableObject(user, async (i: unknown) => {
-      const instance = i as CredentialDO;
+    await runInDurableObject(user, async (i) => {
+      const instance = i;
       await expect(instance.getGithubAppConfig()).rejects.toThrow(/system/);
       await expect(instance.putGithubAppConfig(config)).rejects.toThrow(/system/);
     });
@@ -631,7 +725,14 @@ describe("UserHubDO", () => {
     await waitFor(() => sock.messages.length >= 1, 3000, "hello");
     expect(sock.messages[0].type).toBe("hello");
     expect(sock.messages[0].v).toBe(1);
-    const byId = new Map((sock.messages[0].workspaces as WorkspaceSummary[]).map((w) => [w.id, w]));
+
+    const byId = new Map(
+      Schema.decodeUnknownSync(Schema.Array(WorkspaceSummarySchema))(sock.messages[0].workspaces).map((w) => [
+        w.id,
+        w,
+      ]),
+    );
+
     expect(byId.size).toBe(2);
     expect(byId.get(s1.id)).toEqual(s1);
     expect(byId.get(s2.id)).toEqual(s2);
@@ -677,6 +778,7 @@ describe("UserHubDO", () => {
     await hub.publish(added);
     await hub.remove(added.id);
     await waitFor(() => s1.messages.length >= 3 && s2.messages.length >= 3, 3000, "broadcasts");
+
     for (const s of [s1, s2]) {
       expect(s.messages.slice(1)).toEqual([
         { type: "workspace", summary: added },
@@ -687,6 +789,7 @@ describe("UserHubDO", () => {
     const s3 = await openHub(userId);
     await waitFor(() => s3.messages.length >= 1, 3000, "hello");
     expect(s3.messages[0].workspaces).toEqual([keep]);
+
     for (const s of [s1, s2, s3]) s.close();
   });
 
@@ -739,12 +842,14 @@ describe("UserHubDO", () => {
     const seeded = await seedProject();
     const otherUser = await seedProject();
     const w1 = await insertD1Workspace(seeded, { slug: "tokyo", rev: 4, lastActivityAt: 2_000 });
+
     const w2 = await insertD1Workspace(seeded, {
       slug: "seoul",
       rev: 7,
       lastActivityAt: 3_000,
       state: "sleeping",
     });
+
     await insertD1Workspace(otherUser, { slug: "lagos", rev: 1, lastActivityAt: 4_000 });
 
     const first = await openHub(seeded.userId);
@@ -752,7 +857,11 @@ describe("UserHubDO", () => {
     const hello = first.messages[0];
     expect(hello.type).toBe("hello");
     expect(hello.v).toBe(1);
-    const byId = new Map((hello.workspaces as WorkspaceSummary[]).map((w) => [w.id, w]));
+
+    const byId = new Map(
+      Schema.decodeUnknownSync(Schema.Array(WorkspaceSummarySchema))(hello.workspaces).map((w) => [w.id, w]),
+    );
+
     expect([...byId.keys()].sort()).toEqual([w1, w2].sort());
     expect(byId.get(w2)).toEqual({
       id: w2,
@@ -780,11 +889,17 @@ describe("UserHubDO", () => {
     await insertD1Workspace(seeded, { slug: "hanoi", rev: 1, lastActivityAt: 5_000 });
     const second = await openHub(seeded.userId);
     await waitFor(() => second.messages.length >= 1, 3000, "hello");
-    const ids = (second.messages[0].workspaces as WorkspaceSummary[]).map((w) => w.id).sort();
+
+    const ids = Schema.decodeUnknownSync(Schema.Array(WorkspaceSummarySchema))(second.messages[0].workspaces)
+      .map((w) => w.id)
+      .sort();
+
     expect(ids).toEqual([w1, w2].sort());
-    expect((second.messages[0].workspaces as WorkspaceSummary[]).find((w) => w.id === w1)!.title).toBe(
-      "tokyo",
-    );
+    expect(
+      Schema.decodeUnknownSync(Schema.Array(WorkspaceSummarySchema))(second.messages[0].workspaces).find(
+        (w) => w.id === w1,
+      )!.title,
+    ).toBe("tokyo");
     // The stale publish was not broadcast.
     expect(first.messages).toHaveLength(1);
     first.close();
@@ -805,7 +920,11 @@ describe("UserHubDO", () => {
     });
     const sock = await openHub(seeded.userId);
     await waitFor(() => sock.messages.length >= 1, 3000, "hello");
-    expect((sock.messages[0].workspaces as WorkspaceSummary[]).map((w) => w.id)).toEqual([live]);
+    expect(
+      Schema.decodeUnknownSync(Schema.Array(WorkspaceSummarySchema))(sock.messages[0].workspaces).map(
+        (w) => w.id,
+      ),
+    ).toEqual([live]);
     sock.close();
   });
 

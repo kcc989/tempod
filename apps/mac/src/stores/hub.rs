@@ -9,9 +9,11 @@ pub struct HubStore {
     pub projects: Vec<Project>,
     pub project_error: bool,
     pub projects_ready: bool,
+    pub projects_generation: u64,
     channel: Option<ChannelHandle>,
     task: Option<Task<()>>,
     projects_task: Option<Task<()>>,
+    reconnect_bar_task: Option<Task<()>>,
 }
 
 impl HubStore {
@@ -22,9 +24,11 @@ impl HubStore {
             projects: Vec::new(),
             project_error: false,
             projects_ready: false,
+            projects_generation: 0,
             channel: None,
             task: None,
             projects_task: None,
+            reconnect_bar_task: None,
         }
     }
 
@@ -36,13 +40,66 @@ impl HubStore {
                 if this
                     .update(cx, |hub, cx| {
                         match event {
+                            ChannelEvent::DecodeError(_) => {}
                             ChannelEvent::Message(message) => {
-                                hub.state.apply(message);
+                                let events = hub.state.apply(message);
+                                let config = cx.global::<crate::storage::Local>().config();
+                                if config.notifications && !crate::platform::app_is_active() {
+                                    for event in events {
+                                        let kind = match event.kind {
+                                            tempo_client::state::hub::NotifyKind::Finished => {
+                                                crate::platform::NotifyKind::Finished
+                                            }
+                                            tempo_client::state::hub::NotifyKind::NeedsInput => {
+                                                crate::platform::NotifyKind::NeedsInput
+                                            }
+                                            tempo_client::state::hub::NotifyKind::Error => {
+                                                crate::platform::NotifyKind::Error
+                                            }
+                                        };
+                                        let notice =
+                                            crate::platform::notice(kind, &event.workspace);
+                                        let sound = config.sound;
+                                        let (tx, rx) = async_channel::bounded(1);
+                                        crate::platform::notification_permission(
+                                            move |permission| {
+                                                let _ = tx.try_send(permission);
+                                            },
+                                        );
+                                        cx.spawn(async move |this, cx| {
+                                            if let Ok(permission) = rx.recv().await {
+                                                let _ = this.update(cx, |_, cx| {
+                                                    let config = cx
+                                                        .global::<crate::storage::Local>()
+                                                        .config();
+                                                    if crate::platform::should_notify(
+                                                        crate::platform::app_is_active(),
+                                                        permission,
+                                                        config.notifications,
+                                                    ) {
+                                                        crate::platform::notify(&notice, sound);
+                                                    }
+                                                });
+                                            }
+                                        })
+                                        .detach();
+                                    }
+                                }
                             }
                             ChannelEvent::Status(status) => {
+                                hub.reconnect_bar_task.take();
                                 hub.connection = match status {
                                     Status::Open => Connection::Open,
-                                    Status::Down { since } => Connection::Down(since),
+                                    Status::Down { since } => {
+                                        hub.reconnect_bar_task =
+                                            Some(cx.spawn(async move |this, cx| {
+                                                cx.background_executor()
+                                                    .timer(super::RECONNECTING_BAR_AFTER)
+                                                    .await;
+                                                let _ = this.update(cx, |_, cx| cx.notify());
+                                            }));
+                                        Connection::Down(since)
+                                    }
                                     _ => Connection::Closed,
                                 }
                             }
@@ -56,10 +113,15 @@ impl HubStore {
                 }
             }
         }));
+        self.projects_generation += 1;
+        let generation = self.projects_generation;
         let request = client.call::<ListProjects>(Default::default());
         self.projects_task = Some(cx.spawn(async move |this, cx| {
             let result = request.await;
             let _ = this.update(cx, |hub, cx| {
+                if hub.projects_generation != generation {
+                    return;
+                }
                 match result {
                     Ok(projects) => hub.projects = projects,
                     Err(_) => hub.project_error = true,

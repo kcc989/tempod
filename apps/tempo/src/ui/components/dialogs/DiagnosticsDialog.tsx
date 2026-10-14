@@ -1,4 +1,13 @@
-import { ERROR_CODES, ERROR_MESSAGES, type Diagnostics, type ErrorCode } from "@tempo/protocol";
+import { LifecycleEvents } from "./LifecycleEvents";
+import { Schema } from "effect";
+import {
+  ERROR_CODES,
+  ERROR_MESSAGES,
+  type Diagnostics,
+  type EgressStatusFilter,
+  type ErrorCode,
+} from "@tempo/protocol";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { RefreshCwIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
@@ -17,21 +26,23 @@ import { Input } from "~/ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
 import { useCallQuery } from "~/ui/hooks/useCall";
+import { useDebounced } from "~/ui/hooks/useDebounced";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
 import { agentLabel } from "~/ui/lib/agents";
 import { formatBytes, formatDateTime, formatDuration, formatTime } from "~/ui/lib/format";
 import { cn } from "~/ui/lib/utils";
 import {
   capabilityList,
+  diagnosticsInput,
+  EGRESS_HOST_DEBOUNCE_MS,
   EGRESS_STATUS_FILTERS,
   egressTone,
-  filterEgress,
+  hasEgressFilter,
   isBlocked,
   isEgressStatusFilter,
   logTone,
   opTone,
   timingRows,
-  type EgressStatusFilter,
   type Tone,
 } from "./diagnostics-model";
 
@@ -49,11 +60,12 @@ const TONE_TEXT: Record<Tone, string> = {
   muted: "text-muted-foreground",
 };
 
-const isErrorCode = (c: string): c is ErrorCode => (ERROR_CODES as ReadonlyArray<string>).includes(c);
+const isErrorCode = (c: string): c is ErrorCode => ERROR_CODES.some((value) => value === c);
 
 /** 05, Diagnostics view: ops, container, logs, egress and sessions of one workspace. */
 export function DiagnosticsDialog() {
   const { open, args, onOpenChange } = useDialog("diagnostics");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[min(46rem,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)] sm:max-w-4xl">
@@ -70,10 +82,19 @@ export function DiagnosticsDialog() {
 }
 
 function Body({ workspaceId }: { workspaceId: string }) {
-  const d = useCallQuery("getDiagnostics", { workspaceId });
+  const [host, setHost] = useState("");
+  const [status, setStatus] = useState<EgressStatusFilter>("all");
+  const egressHost = useDebounced(host, EGRESS_HOST_DEBOUNCE_MS);
+
+  const d = useCallQuery("getDiagnostics", diagnosticsInput(workspaceId, egressHost, status), {
+    placeholderData: keepPreviousData,
+  });
+
   if (d.isPending) return <SkeletonRows rows={8} />;
+
   if (d.isError) return <ErrorState error={d.error} onRetry={() => void d.refetch()} />;
   const data = d.data;
+
   return (
     <Tabs defaultValue="ops" className="min-h-0 gap-2">
       <div className="flex items-center gap-2">
@@ -82,6 +103,7 @@ function Body({ workspaceId }: { workspaceId: string }) {
           aria-label="Diagnostics"
           className="min-w-0 flex-1 justify-start overflow-x-auto"
         >
+          <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="ops">Ops</TabsTrigger>
           <TabsTrigger value="container">Container</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
@@ -93,6 +115,9 @@ function Body({ workspaceId }: { workspaceId: string }) {
           Refresh
         </Button>
       </div>
+      <TabsContent value="events" className="min-h-0 overflow-auto">
+        <LifecycleEvents workspaceId={workspaceId} />
+      </TabsContent>
       <TabsContent value="ops" className="min-h-0 overflow-y-auto">
         <Ops ops={data.ops} />
       </TabsContent>
@@ -103,7 +128,14 @@ function Body({ workspaceId }: { workspaceId: string }) {
         <Logs logs={data.logs} />
       </TabsContent>
       <TabsContent value="egress" className="flex min-h-0 flex-col gap-2">
-        <Egress rows={data.egress} />
+        <Egress
+          rows={data.egress}
+          host={host}
+          status={status}
+          onHost={setHost}
+          onStatus={setStatus}
+          filtered={hasEgressFilter(egressHost, status)}
+        />
       </TabsContent>
       <TabsContent value="sessions" className="min-h-0 overflow-y-auto">
         <Sessions sessions={data.sessions} />
@@ -114,6 +146,7 @@ function Body({ workspaceId }: { workspaceId: string }) {
 
 function ErrorLine({ code, detail }: { code: string | null; detail: string | null }) {
   if (!code && !detail) return null;
+
   return (
     <div className="grid gap-0.5 text-xs">
       {code && (
@@ -133,11 +166,13 @@ function ErrorLine({ code, detail }: { code: string | null; detail: string | nul
 
 function Ops({ ops }: { ops: Diagnostics["ops"] }) {
   if (ops.length === 0) return <EmptyState title="No ops yet." />;
+
   return (
     <ul className="flex flex-col divide-y rounded-md border">
       {ops.map((op) => {
         const timings = timingRows(op.timings);
         const total = timings.reduce((n, t) => n + t.ms, 0);
+
         return (
           <li key={op.id}>
             <Collapsible>
@@ -190,7 +225,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Container({ container: c }: { container: Diagnostics["container"] }) {
-  const instance = typeof c.instance === "string" ? c.instance : JSON.stringify(c.instance);
+  const instance = Schema.is(Schema.String)(c.instance) ? c.instance : JSON.stringify(c.instance);
+
   return (
     <div className="grid gap-3">
       <dl className="divide-y">
@@ -267,6 +303,7 @@ function Container({ container: c }: { container: Diagnostics["container"] }) {
 
 function Logs({ logs }: { logs: Diagnostics["logs"] }) {
   if (logs.length === 0) return <EmptyState title="No log events." />;
+
   return (
     <ul className="flex flex-col divide-y font-mono text-xs">
       {logs.map((l, i) => (
@@ -293,14 +330,27 @@ function Logs({ logs }: { logs: Diagnostics["logs"] }) {
 
 const EGRESS_ROW_PX = 26;
 
-function Egress({ rows }: { rows: Diagnostics["egress"] }) {
-  const [host, setHost] = useState("");
-  const [status, setStatus] = useState<EgressStatusFilter>("all");
-  const shown = filterEgress(rows, host, status);
+/** The rows come filtered from the server (02 getDiagnostics), newest 500 matches. */
+function Egress({
+  rows,
+  host,
+  status,
+  onHost,
+  onStatus,
+  filtered,
+}: {
+  rows: Diagnostics["egress"];
+  host: string;
+  status: EgressStatusFilter;
+  onHost: (host: string) => void;
+  onStatus: (status: EgressStatusFilter) => void;
+  filtered: boolean;
+}) {
   const scroller = useRef<HTMLDivElement>(null);
+
   // oxlint-disable-next-line react/incompatible-library
   const virtual = useVirtualizer({
-    count: shown.length,
+    count: rows.length,
     getScrollElement: () => scroller.current,
     estimateSize: () => EGRESS_ROW_PX,
     overscan: 12,
@@ -311,12 +361,12 @@ function Egress({ rows }: { rows: Diagnostics["egress"] }) {
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={host}
-          onChange={(e) => setHost(e.target.value)}
+          onChange={(e) => onHost(e.target.value)}
           placeholder="Filter by host"
           aria-label="Filter by host"
           className="w-56"
         />
-        <Select value={status} onValueChange={(v) => isEgressStatusFilter(v) && setStatus(v)}>
+        <Select value={status} onValueChange={(v) => isEgressStatusFilter(v) && onStatus(v)}>
           <SelectTrigger aria-label="Filter by status" className="w-36">
             <SelectValue />
           </SelectTrigger>
@@ -329,11 +379,11 @@ function Egress({ rows }: { rows: Diagnostics["egress"] }) {
           </SelectContent>
         </Select>
         <span className="text-xs text-muted-foreground" aria-live="polite">
-          {shown.length} of {rows.length}
+          {rows.length} shown
         </span>
       </div>
-      {shown.length === 0 ? (
-        <EmptyState title={rows.length === 0 ? "No requests yet." : "No matching requests."} />
+      {rows.length === 0 ? (
+        <EmptyState title={filtered ? "No matching requests." : "No requests yet."} />
       ) : (
         <div
           ref={scroller}
@@ -344,11 +394,12 @@ function Egress({ rows }: { rows: Diagnostics["egress"] }) {
         >
           <div
             role="table"
-            aria-rowcount={shown.length}
+            aria-rowcount={rows.length}
             style={{ height: virtual.getTotalSize(), position: "relative" }}
           >
             {virtual.getVirtualItems().map((v) => {
-              const r = shown[v.index]!;
+              const r = rows[v.index]!;
+
               return (
                 <div
                   key={v.key}
@@ -389,10 +440,12 @@ function Egress({ rows }: { rows: Diagnostics["egress"] }) {
 
 function Sessions({ sessions }: { sessions: Diagnostics["sessions"] }) {
   if (sessions.length === 0) return <EmptyState title="No sessions." />;
+
   return (
     <ul className="flex flex-col divide-y rounded-md border">
       {sessions.map((s) => {
         const caps = capabilityList(s.capabilities);
+
         return (
           <li key={s.id} className="grid gap-1 px-2 py-1.5 text-sm">
             <div className="flex items-center gap-2">

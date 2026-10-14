@@ -2,16 +2,19 @@ import type { AgentId } from "@tempo/protocol";
 import type { Config } from "../config.ts";
 
 /** Extra env per agent (01, Agents). */
-export const agentExtraEnv = (agent: AgentId, config: Config): Record<string, string> => {
+export const agentExtraEnv = (agent: AgentId, config: Config) => {
   switch (agent) {
     case "claude":
-      return { CLAUDE_CONFIG_DIR: config.claudeConfigDir };
+      return { CLAUDE_CONFIG_DIR: config.claudeConfigDir } satisfies Record<string, string>;
     case "codex":
-      return { CODEX_HOME: config.codexHome, INITIAL_AGENT_MODE: "agent-full-access" };
+      return { CODEX_HOME: config.codexHome, INITIAL_AGENT_MODE: "agent-full-access" } satisfies Record<
+        string,
+        string
+      >;
     case "opencode":
-      return {};
+      return {} satisfies Record<string, string>;
     case "pi":
-      return { PI_CODING_AGENT_SESSION_DIR: config.piSessionDir };
+      return { PI_CODING_AGENT_SESSION_DIR: config.piSessionDir } satisfies Record<string, string>;
   }
 };
 
@@ -25,11 +28,16 @@ export const agentEnv = (
   base: Record<string, string>,
   scriptEnv: Record<string, string>,
   sessionEnv: Record<string, string>,
-): Record<string, string> => {
+) => {
   const inherited = { ...base, ...scriptEnv };
+
   if (agent === "claude" && sessionEnv["CLAUDE_CODE_OAUTH_TOKEN"]) {
     delete inherited["ANTHROPIC_API_KEY"];
     delete inherited["ANTHROPIC_AUTH_TOKEN"];
   }
-  return { ...inherited, ...sessionEnv, ...agentExtraEnv(agent, config) };
+
+  const merged = { ...inherited, ...sessionEnv } satisfies Record<string, string>;
+  Object.assign(merged, agentExtraEnv(agent, config));
+
+  return merged;
 };

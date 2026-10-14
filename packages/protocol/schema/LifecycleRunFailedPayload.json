@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleRunFailedPayload",
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "handle": {
+      "$ref": "AgentHandle.json"
+    },
+    "errorCode": {
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["agentId", "handle", "errorCode"],
+  "additionalProperties": true
+}

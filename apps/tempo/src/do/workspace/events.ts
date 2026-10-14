@@ -1,15 +1,21 @@
-import { eq } from "drizzle-orm";
+import { Match, Schema } from "effect";
+import { asc, eq } from "drizzle-orm";
 import {
+  ENVIRONMENT_LIMITS,
   ERROR_CODES,
-  type AgentId,
+  TempoError,
+  newId,
+  toTurnUsage,
   type ErrorCode,
   type TempodEvent,
   type TempodEventOf,
 } from "@tempo/protocol";
-import { permissions, ports, scriptRuns, turns } from "../../db/workspace-do.ts";
+import { json } from "../../db/json.ts";
+import { environmentProposals, permissions, ports, scriptRuns, turns } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
 import { backupHome, takeCheckpoint, uploadBundleWithRetry } from "./durability.ts";
+import { onArtifactPublished, uploadAllArtifacts } from "./artifacts.ts";
 import { storeChanges, summarize } from "./git.ts";
 import { afterTurnEnded, finishTurn } from "./queue.ts";
 import type { OpRunner } from "./runner.ts";
@@ -22,11 +28,12 @@ export interface EventRuntime {
 }
 
 const toCode = (code: string | undefined, fallback: ErrorCode): ErrorCode =>
-  code && (ERROR_CODES as ReadonlyArray<string>).includes(code) ? (code as ErrorCode) : fallback;
+  Schema.is(Schema.Literals(ERROR_CODES))(code) ? code : fallback;
 
 /** Applies one tempod event (02, Events; 03, While it runs). Events arrive in seq order. */
-export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Promise<void> => {
+export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<void> | void => {
   const { core } = rt;
+
   switch (event.kind) {
     case "item.created":
       core.insertItem({
@@ -38,30 +45,55 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
         content: event.item.content,
         createdAt: event.item.createdAt,
       });
+
       return;
     case "item.delta":
       core.appendItemText(event.itemId, event.append.text);
+
       return;
-    case "item.updated":
-      core.updateItem(event.itemId, {
-        ...(event.patch.status ? { status: event.patch.status } : {}),
-        ...(event.patch.content ? { content: event.patch.content } : {}),
-      });
-      return;
-    case "session.updated": {
-      const p = event.patch;
-      core.updateSession(event.sessionId, {
-        ...(p.modeId !== undefined ? { modeId: p.modeId } : {}),
-        ...(p.modes ? { modesJson: JSON.stringify(p.modes) } : {}),
-        ...(p.configOptions ? { configOptionsJson: JSON.stringify(p.configOptions) } : {}),
-        ...(p.commands ? { commandsJson: JSON.stringify(p.commands) } : {}),
-        ...(p.usage ? { usageJson: JSON.stringify(p.usage) } : {}),
-        ...(p.title ? { title: p.title } : {}),
-      });
+    case "item.updated": {
+      const patch: Parameters<WorkspaceCore["updateItem"]>[1] = {};
+
+      if (event.patch.status) patch.status = event.patch.status;
+
+      if (event.patch.content) patch.content = event.patch.content;
+      core.updateItem(event.itemId, patch);
+
       return;
     }
-    case "turn.started":
+
+    case "session.updated": {
+      const p = event.patch;
+      const patch: Parameters<WorkspaceCore["updateSession"]>[1] = {};
+
+      if (p.modeId !== undefined) patch.modeId = p.modeId;
+
+      if (p.modes) patch.modesJson = json.modes.write(p.modes);
+
+      if (p.configOptions) patch.configOptionsJson = json.configOptions.write(p.configOptions);
+
+      if (p.commands) patch.commandsJson = json.commands.write(p.commands);
+
+      if (p.usage) patch.usageJson = json.usage.write(p.usage);
+
+      if (p.title) patch.title = p.title;
+      core.updateSession(event.sessionId, patch);
+
       return;
+    }
+
+    case "turn.started": {
+      const turn = core.db.select().from(turns).where(eq(turns.id, event.turnId)).get();
+
+      if (!turn || turn.sessionId !== event.sessionId || turn.status !== "queued") return;
+      core.updateTurn(turn.id, { status: "running", startedAt: Date.now(), queuePos: null });
+      core.updateSession(turn.sessionId, { status: "running" });
+
+      if (core.state === "ready") core.setState("working");
+
+      return;
+    }
+
     case "turn.ended":
       return onTurnEnded(rt, event);
     case "permission.requested": {
@@ -72,7 +104,7 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
           sessionId: event.sessionId,
           turnId: event.turnId,
           itemId: event.itemId,
-          optionsJson: JSON.stringify(event.options),
+          optionsJson: json.permissionOptions.write(event.options),
           status: "pending",
           chosenOptionId: null,
           createdAt: Date.now(),
@@ -92,15 +124,19 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
         },
       });
       core.recomputeAttention();
+
       return;
     }
+
     case "agent.exited": {
       core.liveSessions.delete(event.sessionId);
+
       // Planned exits: the session reloads on its next prompt; after a cancel timeout, turn.ended (cancelled) follows.
       if (event.reason === "evicted" || event.reason === "cancelled") return;
       const tail = event.stderrTail.trim().split("\n").slice(-20).join("\n");
       core.notice("error", `The agent stopped unexpectedly.${tail ? `\n${tail}` : ""}`, event.sessionId);
       const running = core.runningTurn();
+
       if (running && running.sessionId === event.sessionId) {
         if (
           finishTurn(core, running.id, "failed", {
@@ -109,33 +145,42 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
             errorDetail: tail,
           })
         ) {
-          void afterTurnEnded(core, running.id);
+          core.ctx.waitUntil(afterTurnEnded(core, running.id));
         }
       }
+
       return;
     }
+
     case "script.output":
       appendLog(core, event.runId, event.data);
       core.broadcast({ type: "script.output", runId: event.runId, stream: event.stream, data: event.data });
+
       return;
     case "script.exited":
       return onScriptExited(rt, event);
     case "git.changed":
       storeChanges(core, summarize(event.files));
+      core.files.requestSync(event.files.flatMap((f) => (f.oldPath ? [f.path, f.oldPath] : [f.path])));
+
       return;
     case "ports.changed": {
       const now = Date.now();
       const next = new Set(event.ports.filter((p) => p >= 1024 && p <= 65535 && p !== 7070));
       const current = core.db.select().from(ports).all();
+
       for (const p of current)
         if (!next.has(p.port)) core.db.delete(ports).where(eq(ports.port, p.port)).run();
+
       for (const p of next)
         core.db.insert(ports).values({ port: p, firstSeenAt: now }).onConflictDoNothing().run();
       core.broadcastDetailSoon();
+
       return;
     }
+
     case "settings.changed":
-      core.updateWs({ settingsJson: JSON.stringify(event.effective) });
+      core.updateWs({ settingsJson: json.settings.write(event.effective) });
       core.setKv("settingsIssues", {
         warnings: event.warnings,
         errors: event.errors,
@@ -143,36 +188,65 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
       });
       core.broadcastDetailSoon();
       core.ctx.waitUntil(sendEnv(core));
+
       return;
     case "credential.changed": {
-      const res = await core.credentials().offerCodexAuth(event.content, event.lastRefresh, core.workspaceId);
-      log("info", "codex auth offered", {
-        workspaceId: core.workspaceId,
-        accepted: res.accepted,
-        version: res.version,
-      });
-      return;
+      if (core.runningTurn() || core.turnEndInProgress || core.queueBusy) {
+        if (!core.pendingCodexAuth || core.pendingCodexAuth.lastRefresh < event.lastRefresh)
+          core.pendingCodexAuth = { content: event.content, lastRefresh: event.lastRefresh };
+
+        return;
+      }
+
+      return core
+        .credentials()
+        .offerCodexAuth(event.content, event.lastRefresh, core.workspaceId)
+        .then((res) => {
+          log("info", "codex auth offered", {
+            workspaceId: core.workspaceId,
+            accepted: res.accepted,
+            version: res.version,
+          });
+        });
     }
+
     case "credential.invalid":
       core.broadcast({ type: "credential.invalid", provider: event.provider });
+
       return;
     case "incarnation.changed":
       core.liveSessions.clear();
+
       return;
     case "outbox.overflow":
       core.notice("warning", "Some live events were lost; the transcript may have gaps.");
+
       return;
     case "tempod.stopping":
       core.ctx.waitUntil(onSigterm(core));
+
+      return;
+    case "environment.proposed":
+      storeProposal(core, event.proposal);
+
+      return;
+    case "artifact.published":
+      onArtifactPublished(core, event);
+
       return;
     case "log":
       log(
-        event.level === "error" ? "error" : event.level === "warn" ? "warn" : "info",
+        Match.value(event).pipe(
+          Match.when({ level: "error" }, () => "error" as const),
+          Match.when({ level: "warn" }, () => "warn" as const),
+          Match.orElse(() => "info" as const),
+        ),
         `tempod: ${event.msg}`,
         {
           workspaceId: core.workspaceId,
         },
       );
+
       return;
   }
 };
@@ -180,15 +254,17 @@ export const applyTempodEvent = async (rt: EventRuntime, event: TempodEvent): Pr
 const onTurnEnded = (rt: EventRuntime, event: TempodEventOf<"turn.ended">): void => {
   const { core } = rt;
   const turn = core.db.select().from(turns).where(eq(turns.id, event.turnId)).get();
+
   if (!turn || turn.status !== "running") return;
   const session = core.sessionRow(turn.sessionId);
   let status: "completed" | "cancelled" | "failed" | "interrupted";
   let errorCode: ErrorCode | null = null;
+
   if (event.interrupted) status = "interrupted";
   else if (event.error) {
     status = "failed";
     const msg = event.error.message ?? "";
-    const credential = (session.agent as AgentId) === "codex" && /401|refresh_token/.test(msg);
+    const credential = session.agent === "codex" && /401|refresh_token/.test(msg);
     errorCode = credential ? "CREDENTIAL_INVALID" : toCode(event.error.code, "AGENT_CRASHED");
   } else if (event.stopReason === "cancelled") status = "cancelled";
   else status = "completed";
@@ -196,21 +272,27 @@ const onTurnEnded = (rt: EventRuntime, event: TempodEventOf<"turn.ended">): void
     stopReason: event.stopReason,
     errorCode,
     errorDetail: event.error?.message ?? null,
+    usage: toTurnUsage(event.usage),
   });
+
   if (status === "interrupted") {
     core.notice("warning", "The turn was interrupted.", turn.sessionId, turn.id);
+
     if (core.tempodStopping) {
       core.recomputeAttention(false);
       core.publish();
+
       return;
     }
   }
-  void afterTurnEnded(core, turn.id);
+
+  core.ctx.waitUntil(afterTurnEnded(core, turn.id));
 };
 
-const onScriptExited = async (rt: EventRuntime, event: TempodEventOf<"script.exited">): Promise<void> => {
+const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">): void => {
   const { core, runner } = rt;
   const run = scriptRun(core, event.runId);
+
   if (!run || run.status !== "running") return;
   const status = event.timedOut ? "timed_out" : event.signal ? "killed" : "exited";
   core.db
@@ -221,58 +303,113 @@ const onScriptExited = async (rt: EventRuntime, event: TempodEventOf<"script.exi
   core.broadcast({ type: "script.run", run: runToWire(scriptRun(core, run.id)!) });
   core.ctx.waitUntil(uploadLog(core, run.id));
   const ok = status === "exited" && event.exitCode === 0;
+
   if (run.kind === "setup") {
     core.updateWs({ setupStatus: ok ? "succeeded" : "failed" });
     core.recomputeAttention(false);
     core.publish();
+
     if (ok && core.settings().scripts.auto_run_after_setup) {
       const id = defaultRunScriptId(core.settings());
       const def = id ? core.settings().scripts.run[id] : undefined;
+
       if (id && def) {
-        await startScript(core, {
-          kind: "run",
-          scriptId: id,
-          command: def.command,
-          cwd: def.cwd,
-          timeoutMs: null,
-        }).catch((e) =>
-          log("warn", "auto run failed", { workspaceId: core.workspaceId, error: errorText(e) }),
+        core.ctx.waitUntil(
+          startScript(core, {
+            kind: "run",
+            scriptId: id,
+            command: def.command,
+            cwd: def.cwd,
+            timeoutMs: null,
+          }).catch((e) =>
+            log("warn", "auto run failed", { workspaceId: core.workspaceId, error: errorText(e) }),
+          ),
         );
       }
     }
+
     const op = runner.waitingOn("setup.run");
-    if (op) await runner.completeWaiting(op.id, "setup.run", "next");
+
+    if (op) core.ctx.waitUntil(runner.completeWaiting(op.id, "setup.run", "next"));
     core.kickQueue();
+
     return;
   }
+
   if (run.kind === "archive") {
     if (!ok)
       core.notice("warning", `The archive script failed (exit ${event.exitCode ?? event.signal ?? "?"}).`);
     const op = runner.waitingOn("script.archive");
-    if (op) await runner.completeWaiting(op.id, "script.archive", "next");
+
+    if (op) core.ctx.waitUntil(runner.completeWaiting(op.id, "script.archive", "next"));
   }
 };
 
-/** SIGTERM (03, Failure handling): checkpoint, upload, back up, then shutdown. */
+/** SIGTERM (03, Failure handling): checkpoint, upload, back up, upload artifacts, then shutdown. */
 const onSigterm = async (core: WorkspaceCore): Promise<void> => {
   core.tempodStopping = true;
+
   try {
+    await core.files.sync();
     const { bundle } = await takeCheckpoint(core, "sigterm", null);
+
     if (bundle) await uploadBundleWithRetry(core, bundle);
     await backupHome(core).catch((e) => log("warn", "sigterm home backup failed", { error: errorText(e) }));
+    await uploadAllArtifacts(core).catch((e) =>
+      log("warn", "sigterm artifact upload failed", { error: errorText(e) }),
+    );
     await core.tempod?.request("shutdown", { reason: "sigterm" });
   } catch (e) {
     log("warn", "sigterm save failed", { workspaceId: core.workspaceId, error: errorText(e) });
   }
 };
 
-/** env.set after settings or secrets change (02). */
+/** env.set, then environment.set, after settings, secrets or the environment change (02). */
 export const sendEnv = async (core: WorkspaceCore): Promise<void> => {
   try {
     await core.tempod?.request("env.set", { env: await core.scriptEnv() });
   } catch (e) {
     log("warn", "env.set failed", { workspaceId: core.workspaceId, error: errorText(e) });
   }
+
+  await sendEnvironment(core);
+};
+
+export const sendEnvironment = async (core: WorkspaceCore): Promise<void> => {
+  if (!core.tempod?.open) return;
+
+  try {
+    await core.tempod.request("environment.set", { summary: await core.environmentSummary() });
+  } catch (e) {
+    // An older tempod image does not know the op; it gets the summary after its next restart.
+    if (e instanceof TempoError && e.code === "UNKNOWN_OP") return;
+    log("warn", "environment.set failed", { workspaceId: core.workspaceId, error: errorText(e) });
+  }
+};
+
+/** Stores an agent proposal as pending; over the limit, the oldest pending one is replaced (01). */
+const storeProposal = (core: WorkspaceCore, proposal: TempodEventOf<"environment.proposed">["proposal"]) => {
+  const pending = core.db
+    .select({ id: environmentProposals.id })
+    .from(environmentProposals)
+    .where(eq(environmentProposals.status, "pending"))
+    .orderBy(asc(environmentProposals.createdAt), asc(environmentProposals.id))
+    .all();
+
+  const over = pending.length - ENVIRONMENT_LIMITS.pendingProposalsMax + 1;
+
+  for (const p of pending.slice(0, Math.max(0, over)))
+    core.db.delete(environmentProposals).where(eq(environmentProposals.id, p.id)).run();
+  core.db
+    .insert(environmentProposals)
+    .values({
+      id: newId(),
+      createdAt: Date.now(),
+      status: "pending",
+      proposalJson: json.environmentProposal.write(proposal),
+    })
+    .run();
+  core.broadcastDetailSoon();
 };
 
 export const pendingPermissionsOf = (core: WorkspaceCore, turnId: string) =>

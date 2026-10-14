@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { AgentId, EgressPolicy, InstanceName, RunMode } from "./enums.ts";
 
 export const RunScript = Schema.Struct({
@@ -6,6 +6,7 @@ export const RunScript = Schema.Struct({
   cwd: Schema.String,
   default: Schema.Boolean,
 });
+
 export type RunScript = typeof RunScript.Type;
 
 const Int = Schema.Int;
@@ -17,9 +18,11 @@ export const CustomInstance = Schema.Struct({
 }).check(
   Schema.makeFilter((i) => i.memoryMib >= i.vcpu * 3072 || "at least 3 GiB of memory per vCPU is required"),
 );
+
 export type CustomInstance = typeof CustomInstance.Type;
 
 export const Instance = Schema.Union([InstanceName, CustomInstance]);
+
 export type Instance = typeof Instance.Type;
 
 export const HostPattern = Schema.String.check(
@@ -28,8 +31,26 @@ export const HostPattern = Schema.String.check(
 
 export const EnvName = Schema.String.check(Schema.isPattern(/^[A-Z_][A-Z0-9_]*$/));
 
+/** Each agent's default model: its `model` config value; "" means the agent's own default. */
+const DEFAULT_AGENT_MODELS = { claude: "", codex: "", opencode: "", pi: "" };
+
+export const AgentModels = Schema.Struct({
+  claude: Schema.String,
+  codex: Schema.String,
+  opencode: Schema.String,
+  pi: Schema.String,
+}).annotate({ default: DEFAULT_AGENT_MODELS });
+
+export type AgentModels = typeof AgentModels.Type;
+
 export const Settings = Schema.Struct({
-  agent: Schema.Struct({ default: AgentId, model: Schema.String }),
+  agent: Schema.Struct({
+    default: AgentId,
+    models: AgentModels.pipe(Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_AGENT_MODELS))),
+  }),
+  browser: Schema.Struct({ run: Schema.Boolean })
+    .annotate({ default: { run: false } })
+    .pipe(Schema.withDecodingDefaultKey(Effect.succeed({ run: false }))),
   scripts: Schema.Struct({
     setup: Schema.String,
     archive: Schema.String,
@@ -51,15 +72,17 @@ export const Settings = Schema.Struct({
   }),
   prompts: Schema.Struct({ general: Schema.String }),
 });
+
 export type Settings = typeof Settings.Type;
 
 export const DEFAULT_SETTINGS: Settings = {
-  agent: { default: "claude", model: "" },
+  agent: { default: "claude", models: DEFAULT_AGENT_MODELS },
+  browser: { run: false },
   scripts: { setup: "", archive: "", run_mode: "concurrent", auto_run_after_setup: false, run: {} },
   environment: {
     instance: "standard-3",
     sleep_after_idle_minutes: 15,
-    egress_policy: "open",
+    egress_policy: "allowlist",
     egress_allowlist: [],
   },
   environment_variables: {},
@@ -71,7 +94,20 @@ const opt = Schema.optional;
 
 /** One settings layer: every key optional. Used for files and for the project's UI overrides. */
 export const SettingsLayer = Schema.Struct({
-  agent: opt(Schema.Struct({ default: opt(AgentId), model: opt(Schema.String) })),
+  agent: opt(
+    Schema.Struct({
+      default: opt(AgentId),
+      models: opt(
+        Schema.Struct({
+          claude: opt(Schema.String),
+          codex: opt(Schema.String),
+          opencode: opt(Schema.String),
+          pi: opt(Schema.String),
+        }),
+      ),
+    }),
+  ),
+  browser: opt(Schema.Struct({ run: opt(Schema.Boolean) })),
   scripts: opt(
     Schema.Struct({
       setup: opt(Schema.String),
@@ -104,18 +140,19 @@ export const SettingsLayer = Schema.Struct({
   ),
   prompts: opt(Schema.Struct({ general: opt(Schema.String) })),
 });
+
 export type SettingsLayer = typeof SettingsLayer.Type;
 
-export const SETTINGS_SOURCES = ["tempo", ".tempo", ".conductor", "conductor.json", "default"] as const;
+export const SETTINGS_SOURCES = ["tempo", ".tempo", "default"] as const;
+
 export const SettingsSource = Schema.Literals(SETTINGS_SOURCES);
+
 export type SettingsSource = typeof SettingsSource.Type;
 
 /** UI labels for each source, as 04 names them. */
 export const SETTINGS_SOURCE_LABELS: Record<SettingsSource, string> = {
   tempo: "Tempo",
   ".tempo": ".tempo",
-  ".conductor": ".conductor",
-  "conductor.json": "conductor.json",
   default: "default",
 };
 
@@ -126,9 +163,10 @@ export const SettingsReadResult = Schema.Struct({
   /** Dotted key path → where its effective value came from. Additive field. */
   sources: opt(Schema.Record(Schema.String, SettingsSource)),
 });
+
 export type SettingsReadResult = typeof SettingsReadResult.Type;
 
 export const instanceLabel = (instance: Instance): string =>
-  typeof instance === "string"
+  Schema.is(InstanceName)(instance)
     ? instance
     : `${instance.vcpu} vCPU, ${Math.round(instance.memoryMib / 1024)} GiB`;

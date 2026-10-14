@@ -26,6 +26,7 @@ export function BranchPicker({
   label,
   onChange,
   invalid,
+  allowRef = false,
 }: {
   id: string;
   projectId: string;
@@ -34,8 +35,10 @@ export function BranchPicker({
   label: string;
   onChange: (branch: string) => void;
   invalid?: boolean;
+  allowRef?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
@@ -60,6 +63,7 @@ export function BranchPicker({
             projectId={projectId}
             value={value}
             label={label}
+            allowRef={allowRef}
             onPick={(b) => {
               onChange(b);
               setOpen(false);
@@ -76,18 +80,22 @@ function BranchList({
   value,
   label,
   onPick,
+  allowRef,
 }: {
   projectId: string;
   value: string | null;
   label: string;
   onPick: (branch: string) => void;
+  allowRef: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), DEBOUNCE_MS);
+
     return () => clearTimeout(t);
   }, [search]);
+
   const branches = useCallQuery("listBranches", query ? { projectId, query } : { projectId }, {
     staleTime: 30_000,
     placeholderData: (prev) => prev,
@@ -95,7 +103,11 @@ function BranchList({
 
   return (
     <Command shouldFilter={false} label={label}>
-      <CommandInput value={search} onValueChange={setSearch} placeholder="Search branches" />
+      <CommandInput
+        value={search}
+        onValueChange={setSearch}
+        placeholder={allowRef ? "Branch, tag or commit" : "Search branches"}
+      />
       <CommandList>
         {branches.isPending ? (
           <div aria-busy="true" aria-label="Loading" className="flex flex-col gap-1.5 p-2">
@@ -109,18 +121,23 @@ function BranchList({
           <>
             <CommandEmpty>No branches found.</CommandEmpty>
             <CommandGroup>
+              {allowRef && query && !branches.data.some((branch) => branch.name === query) && (
+                <CommandItem value={query} onSelect={() => onPick(query)}>
+                  Use ref: {query}
+                </CommandItem>
+              )}
               {branches.data.map((b) => (
                 <CommandItem
                   key={b.name}
                   value={b.name}
                   onSelect={() => onPick(b.name)}
-                  className="font-mono text-xs"
+                  className="w-full min-w-0 font-mono text-xs"
                 >
                   <CheckIcon
                     aria-hidden
                     className={cn("size-3", b.name === value ? "opacity-100" : "opacity-0")}
                   />
-                  <span className="truncate">{b.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-left">{b.name}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

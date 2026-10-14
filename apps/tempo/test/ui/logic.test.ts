@@ -85,6 +85,7 @@ describe("indicators", () => {
       prState: null,
       checksState: null,
     } as const;
+
     expect(primaryAction({ ...base, hasUncommitted: true, prNumber: 3, prState: "open" })?.kind).toBe(
       "commitPush",
     );
@@ -104,13 +105,13 @@ describe("indicators", () => {
 });
 
 describe("agents", () => {
-  const creds = (set: string[]) =>
-    Object.fromEntries(
-      ["claude", "codex", "openrouter", "anthropic", "openai"].map((k) => [
-        k,
-        { set: set.includes(k), updatedAt: null, lastRefresh: null },
-      ]),
-    ) as never;
+  const creds = (set: string[]) => ({
+    claude: { set: set.includes("claude"), updatedAt: null },
+    codex: { set: set.includes("codex"), updatedAt: null, lastRefresh: null },
+    openrouter: { set: set.includes("openrouter"), updatedAt: null },
+    anthropic: { set: set.includes("anthropic"), updatedAt: null },
+    openai: { set: set.includes("openai"), updatedAt: null },
+  });
 
   it("knows which login each agent needs", () => {
     expect(hasLogin("claude", creds(["anthropic"]))).toBe(true);
@@ -125,6 +126,7 @@ describe("agents", () => {
       { id: "bypassPermissions", name: "Bypass" },
       { id: "plan", name: "Plan" },
     ];
+
     expect(togglePlanTarget(session({ modes, modeId: "bypassPermissions" }), null)).toBe("plan");
     expect(togglePlanTarget(session({ modes, modeId: "plan" }), "default")).toBe("default");
     expect(togglePlanTarget(session({ modes, modeId: "plan" }), null)).toBe("bypassPermissions");
@@ -192,9 +194,12 @@ describe("diffs", () => {
   it("line diff reproduces both texts", () => {
     const rnd = (seed: number) => () => {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+
       return seed / 0x7fffffff;
     };
+
     const r = rnd(7);
+
     for (let n = 0; n < 200; n++) {
       const a = Array.from({ length: Math.floor(r() * 12) }, () => "abcd"[Math.floor(r() * 4)]!);
       const b = Array.from({ length: Math.floor(r() * 12) }, () => "abcd"[Math.floor(r() * 4)]!);
@@ -202,6 +207,7 @@ describe("diffs", () => {
       expect(lines.filter((l) => l.kind !== "add").map((l) => l.text)).toEqual(a);
       expect(lines.filter((l) => l.kind !== "del").map((l) => l.text)).toEqual(b);
     }
+
     const small = diffLines("a\nb\nc\n", "a\nx\nc\n");
     expect(small.map((l) => l.kind)).toEqual(["context", "del", "add", "context"]);
   });

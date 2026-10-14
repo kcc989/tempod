@@ -1,6 +1,6 @@
 # Rules for agents working on Tempo
 
-The Tempo Spec (tabs 00 to 07 in `docs/`) is the source of truth. Read the tab for the area you change before you write code.
+The Tempo Spec (tabs 00 to 09 in `docs/`) is the source of truth. Read the tab for the area you change before you write code.
 
 ## Never guess
 
@@ -49,3 +49,19 @@ Read `docs/README.md` inside that installed package first, then read the relevan
 
 This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
 <!-- END:turborepo-agent-rules -->
+
+## CI and test budget
+
+- Target less than five total runner minutes for normal PR CI. Keep the single `check` job. `bun run ci` allows 300 seconds for check commands after setup, with a six-minute hard job timeout for setup/cleanup. Report both check time and total time; do not increase these limits or add jobs without measurement and explicit authorization.
+- Read `docs/CI.md` before changing workflows, test configuration, or adding tests. Include the relevant stage timing from the CI summary when changing the suite.
+- Every test must identify a distinct behavior or regression and assert an observable outcome. Do not add source-text snapshots, assertions of mock configuration, success-only smoke tests, duplicate matrices, or conditional assertions that can execute zero checks.
+- Prefer the lowest test layer that proves the behavior. Browser tests are for real interaction, layout, accessibility, persistence and reconnect behavior; pure logic belongs in unit tests. Keep failure, security, idempotency, and migration coverage.
+- Wait for observable state instead of sleeping. Use a short local timeout when testing deadlines, and restore it afterwards. Never add retries to hide flakes.
+- Keep live deployment/agent suites explicit (`test:e2e`, `test:conformance`) and uncached. Image/tool/PID checks belong in `test:tempod:container`. A skip is never proof that those gates passed.
+- Concurrent Worker cases must use test-context assertions and cleanup, with a distinct user/project/DO per fixture. Keep global clock/GitHub mock groups sequential; keep shared DOM cases sequential.
+- Keep Worker files bounded at four and cases at four per file. Benchmark the complete cold CI workload before changing concurrency; retain the single job and existing deadlines.
+- Use the configurable `seedReadyWorkspace` test API for RPC contracts that only need a ready workspace; provision credentials explicitly for the agents under test. Keep real init/create fixtures for lifecycle, recovery, session creation and migration contracts, and preserve the minimal/full fixture equivalence check.
+- Browser suites share one two-worker Playwright pool in CI. Preserve standalone commands, distinct fixture servers, project-specific timeouts and focused phone/theme coverage when changing the combined configuration.
+- Keep Worker, UI and component caches separate. Include transitive workspace sources and shared helpers/configuration in their inputs; widen them when imports cross boundaries. Cache fixture builds, but execute the browser tests.
+- Documentation-only classification must fail closed for unavailable bases, code/config changes and both sides of renames. Keep the required `check` job; do not use workflow path ignores that leave it pending.
+- Preserve cache correctness: shared root configuration is a global input; include runtime-changing environment variables in task hashes. Do not cache deployment or live external checks.

@@ -1,0 +1,105 @@
+{
+  "name": "tempo",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-10",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
+  "vars": {
+    "APP_HOST": "tempo-core-test.example.invalid",
+    "PREVIEW_DOMAIN": "tempo-core-preview.example.invalid",
+    "TEMPO_OWNER_GITHUB_ID": "0",
+    "TEMPO_VERSION": "0.1.0"
+  },
+  "containers": [
+    {
+      "class_name": "WorkspaceDO",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "workspace": {
+          "dockerfile": "../../container/Dockerfile",
+          "build_context": "../..",
+          "build_vars": {
+            "GH_VERSION": "2.102.0",
+            "BUN_VERSION": "1.4.2",
+            "PLAYWRIGHT_MCP_VERSION": "0.0.83",
+            "TINI_VERSION": "0.19.0-3+b8",
+            "BASE_IMAGE": "node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66"
+          }
+        }
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WORKSPACE",
+        "class_name": "WorkspaceDO"
+      },
+      {
+        "name": "USER_HUB",
+        "class_name": "UserHubDO"
+      },
+      {
+        "name": "CREDENTIALS",
+        "class_name": "CredentialDO"
+      },
+      {
+        "name": "REPOSITORY_CI",
+        "class_name": "RepositoryCiDO"
+      }
+    ]
+  },
+  "exports": {
+    "WorkspaceDO": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "UserHubDO": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "CredentialDO": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "RepositoryCiDO": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tempo",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "DATA",
+      "bucket_name": "tempo-data"
+    }
+  ],
+  "ai": {"binding":"AI"},
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "routes": [
+    {
+      "pattern": "tempo-core-test.example.invalid",
+      "custom_domain": true
+    },
+    {
+      "pattern": "*.tempo-core-preview.example.invalid/*",
+      "zone_name": "tempo-core-preview.example.invalid"
+    }
+  ]
+}

@@ -1,15 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceCore } from "../../src/do/workspace/core.ts";
+import type { TerminalWorkspace } from "../../src/do/workspace/terminal.ts";
 import { openTerminal } from "../../src/do/workspace/terminal.ts";
 import { waitFor } from "./fakes.ts";
 
 const encoder = new TextEncoder();
+
 const decoder = new TextDecoder();
+
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
+
   const promise = new Promise<T>((done) => {
     resolve = done;
   });
+
   return { promise, resolve };
 };
 
@@ -17,6 +21,7 @@ const fixture = () => {
   let output!: ReadableStreamDefaultController<Uint8Array>;
   const writes: Uint8Array[] = [];
   const ended = deferred<number>();
+
   const proc = {
     stdin: new WritableStream<Uint8Array>({
       write: (bytes) => {
@@ -32,31 +37,36 @@ const fixture = () => {
     pid: 1,
     isPty: true,
     exitCode: ended.promise,
-    output: vi.fn(),
+    output: async () => ({ stdout: new ArrayBuffer(0), stderr: new ArrayBuffer(0), exitCode: 0 }),
     kill: vi.fn(() => ended.resolve(0)),
     resize: vi.fn(),
   };
-  const exec = vi.fn(async () => proc);
+
+  const exec = vi.fn<Container["exec"]>(async () => proc);
   const terminals = new Map();
-  const core = {
+
+  const core: TerminalWorkspace = {
     terminals,
     container: { exec, running: true },
     touchActivity: vi.fn(),
     scriptEnv: async () => ({}),
     wsOrNull: () => ({ workspaceId: "w1" }),
-  } as unknown as WorkspaceCore;
+  };
+
   const open = (waitReady: () => Promise<void> = async () => {}) => {
     const socket = openTerminal(core, "t1", 80, 24, waitReady).webSocket!;
     socket.binaryType = "arraybuffer";
     const messages: Array<string | ArrayBuffer> = [];
     const closed = deferred<number>();
     socket.addEventListener("message", (event) => {
-      messages.push(event.data as string | ArrayBuffer);
+      messages.push(event.data);
     });
     socket.addEventListener("close", (event) => closed.resolve(event.code));
     socket.accept();
+
     return { socket, messages, closed };
   };
+
   return { core, proc, exec, terminals, writes, output: () => output, ended, open };
 };
 
@@ -78,7 +88,10 @@ describe("terminal PTY bridge", () => {
     expect(decoder.decode(f.writes[0])).toBe("ls\r");
     f.output().enqueue(encoder.encode("README.md\r\n$ "));
     await waitFor(() => messages.length === 2);
-    expect(decoder.decode(messages[1] as ArrayBuffer)).toBe("README.md\r\n$ ");
+    const output = messages[1];
+
+    if (!(output instanceof ArrayBuffer)) throw new Error("Expected binary terminal output");
+    expect(decoder.decode(output)).toBe("README.md\r\n$ ");
     socket.send('{"type":"resize","cols":1000,"rows":300}');
     await waitFor(() => f.proc.resize.mock.calls.length === 1);
     expect(f.proc.resize).toHaveBeenCalledWith(500, 200);
@@ -93,7 +106,7 @@ describe("terminal PTY bridge", () => {
   it("kills an exec that finishes opening after the browser has disconnected", async () => {
     const f = fixture();
     const opened = deferred<ExecProcess>();
-    f.exec.mockImplementation(() => opened.promise as Promise<typeof f.proc>);
+    f.exec.mockImplementation(() => opened.promise);
     const { socket } = f.open();
     await waitFor(() => f.exec.mock.calls.length === 1);
     socket.close(1000, "panel closed");
@@ -131,7 +144,7 @@ describe("terminal PTY bridge", () => {
 
   it("never advertises ready if the process has no writable stdin", async () => {
     const f = fixture();
-    f.exec.mockResolvedValue({ ...f.proc, stdin: null } as unknown as typeof f.proc);
+    f.exec.mockResolvedValue({ ...f.proc, stdin: null });
     const { messages, closed } = f.open();
     expect(await closed.promise).toBe(1011);
     expect(messages).toEqual([]);

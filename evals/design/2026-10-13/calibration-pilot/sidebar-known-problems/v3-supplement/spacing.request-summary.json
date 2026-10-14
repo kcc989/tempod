@@ -1,0 +1,60 @@
+{
+  "model": "clef",
+  "state": {
+    "app": {
+      "name": "Tempo",
+      "category": "Agent coding workspace",
+      "platform": "desktop",
+      "primary_user": "Developer",
+      "primary_job": "Read agent work, edit a project, and manage chats"
+    },
+    "screen": {
+      "name": "Workspace sidebar",
+      "purpose": "Find a project and switch between its workspaces"
+    },
+    "image_legend": [
+      "Image 1: supplied full frame",
+      "Image 2: sidebar actions",
+      "Image 3: project and workspace rows",
+      "Image 4: sidebar footer"
+    ]
+  },
+  "images": [
+    {
+      "content_type": "image/png",
+      "file": "../full.png",
+      "sha256": "13700487122123cbd5a3b719484b70599a0dec57571556b6fb5879dd59cf7c04",
+      "bytes": 59244
+    },
+    {
+      "content_type": "image/png",
+      "file": "../detail-1.png",
+      "sha256": "eb08b140dc94cf996112b2fd166d7fdbd660d78c8646df379e11e45989315575",
+      "bytes": 28679
+    },
+    {
+      "content_type": "image/png",
+      "file": "../detail-2.png",
+      "sha256": "851ea7a3746b6608f8fc803c4a4bb9233aed67790c364305ec296f79b6448535",
+      "bytes": 16760
+    },
+    {
+      "content_type": "image/png",
+      "file": "../detail-3.png",
+      "sha256": "fc4754c9acbaeed2b81bb6253a741943b7caa17a43976c2397b905b1a5855f20",
+      "bytes": 18061
+    }
+  ],
+  "questions": {
+    "spacing_navigation_density": {
+      "type": "score",
+      "instructions": "In desktop navigation, how do project and workspace row heights compare with the amount of text and the nearby navigation actions? Judge useful content and padding, not how many items the account happens to contain.",
+      "criteria": [
+        "Short workspace names and state labels occupy oversized cards or rows about twice as tall as nearby navigation actions, with padding that dominates the content.",
+        "The rows fit their content, but some workspace rows or gaps are noticeably larger than related navigation controls without adding useful detail.",
+        "Project and workspace entries use compact content-fit rows, with consistent padding and enough room for the labels and status."
+      ]
+    }
+  },
+  "originalRequestSha256": "3fdf8c49a45d923624936cc0afbe523f215d943011fc2627ae4d01bd4e530991"
+}

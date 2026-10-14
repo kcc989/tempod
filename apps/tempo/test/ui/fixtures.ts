@@ -1,6 +1,6 @@
 import {
   DEFAULT_SETTINGS,
-  type Item,
+  type ItemOf,
   type Session,
   type Turn,
   type WorkspaceDetail,
@@ -34,8 +34,8 @@ export const detail = (over: Partial<WorkspaceDetail> = {}): WorkspaceDetail => 
   errorDetail: null,
   setupStatus: "succeeded",
   pushed: false,
-  previewToken: "abcdefghijklmnop",
   ports: [],
+  browserActive: false,
   settings: DEFAULT_SETTINGS,
   runningTurnId: null,
   queue: [],
@@ -76,30 +76,36 @@ export const turn = (over: Partial<Turn> = {}): Turn => ({
   ...over,
 });
 
-export const agentMessage = (id: string, text: string, over: Partial<Item> = {}): Item =>
-  ({
-    id,
-    sessionId: "s1",
-    turnId: "t1",
-    kind: "agent_message",
-    status: "streaming",
-    content: { text },
-    rev: 1,
-    createdAt: 1000,
-    updatedAt: 1000,
-    ...over,
-  }) as Item;
+export const agentMessage = (
+  id: string,
+  text: string,
+  over: Partial<ItemOf<"agent_message">> = {},
+): ItemOf<"agent_message"> => ({
+  id,
+  sessionId: "s1",
+  turnId: "t1",
+  kind: "agent_message",
+  status: "streaming",
+  content: { text },
+  rev: 1,
+  createdAt: 1000,
+  updatedAt: 1000,
+  ...over,
+});
 
-export const userMessage = (id: string, text: string, over: Partial<Item> = {}): Item =>
-  ({
-    id,
-    sessionId: "s1",
-    turnId: "t1",
-    kind: "user_message",
-    status: "completed",
-    content: { text, mentions: [], attachments: [], reviewCommentIds: [] },
-    rev: 1,
-    createdAt: 1000,
-    updatedAt: 1000,
-    ...over,
-  }) as Item;
+export const userMessage = (
+  id: string,
+  text: string,
+  over: Partial<ItemOf<"user_message">> = {},
+): ItemOf<"user_message"> => ({
+  id,
+  sessionId: "s1",
+  turnId: "t1",
+  kind: "user_message",
+  status: "completed",
+  content: { text, mentions: [], attachments: [], reviewCommentIds: [] },
+  rev: 1,
+  createdAt: 1000,
+  updatedAt: 1000,
+  ...over,
+});

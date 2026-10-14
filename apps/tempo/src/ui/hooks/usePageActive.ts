@@ -2,7 +2,9 @@ import { useSyncExternalStore } from "react";
 
 const isActive = (): boolean => {
   const doc = globalThis.document;
+
   if (!doc) return false;
+
   return doc.visibilityState === "visible" && doc.hasFocus();
 };
 
@@ -10,6 +12,7 @@ const subscribe = (listener: () => void): (() => void) => {
   globalThis.document?.addEventListener("visibilitychange", listener);
   globalThis.addEventListener?.("focus", listener);
   globalThis.addEventListener?.("blur", listener);
+
   return () => {
     globalThis.document?.removeEventListener("visibilitychange", listener);
     globalThis.removeEventListener?.("focus", listener);

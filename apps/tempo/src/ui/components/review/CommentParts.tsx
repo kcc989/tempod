@@ -16,6 +16,7 @@ const CARD = "sticky left-0 my-1 ml-2 w-[min(40rem,calc(100vw-5rem))] rounded-md
 
 export function DraftCard({ workspaceId, comment }: { workspaceId: string; comment: ReviewComment }) {
   const remove = useDeleteComment();
+
   const where =
     comment.lineStart === null
       ? "Whole file"
@@ -24,6 +25,7 @@ export function DraftCard({ workspaceId, comment }: { workspaceId: string; comme
           lineStart: comment.lineStart,
           lineEnd: comment.lineEnd ?? comment.lineStart,
         });
+
   return (
     <div className={cn(CARD, "font-sans")}>
       <div className="mb-1 flex items-center gap-2">
@@ -62,9 +64,11 @@ export function CommentForm({
   const id = useId();
   const [body, setBody] = useState("");
   const add = useAddComment(() => onDone(true));
+
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     const text = body.trim();
+
     if (text === "" || add.isPending) return;
     add.mutate(
       range
@@ -79,6 +83,7 @@ export function CommentForm({
         : { workspaceId, path, body: text },
     );
   };
+
   return (
     <form onSubmit={submit} className={cn(CARD, "flex flex-col gap-1.5 font-sans")}>
       <Label htmlFor={id} className="text-xs text-muted-foreground">
@@ -93,6 +98,7 @@ export function CommentForm({
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing) return;
+
           if (matchesCombo(e, SUBMIT, isMacPlatform())) {
             e.preventDefault();
             submit();

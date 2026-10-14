@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import type { NotifyEvent, NotifyKind } from "~/ui/stores/hub-state";
 
 /**
@@ -13,11 +14,7 @@ export interface NotifyPrefs {
 
 export const DEFAULT_NOTIFY_PREFS: NotifyPrefs = { enabled: true, sound: true };
 
-export const isNotifyPrefs = (u: unknown): u is NotifyPrefs =>
-  typeof u === "object" &&
-  u !== null &&
-  typeof (u as NotifyPrefs).enabled === "boolean" &&
-  typeof (u as NotifyPrefs).sound === "boolean";
+export const isNotifyPrefs = Schema.is(Schema.Struct({ enabled: Schema.Boolean, sound: Schema.Boolean }));
 
 export const NOTIFY_BODY: Record<NotifyKind, string> = {
   finished: "Finished",
@@ -50,6 +47,7 @@ export const shouldNotify = (ctx: {
 }): boolean => ctx.hidden && ctx.permission === "granted" && ctx.prefs.enabled;
 
 export const notificationPermission = (): PermissionState => {
-  const N = (globalThis as { Notification?: { permission: NotificationPermission } }).Notification;
+  const N = globalThis.Notification;
+
   return N ? N.permission : "unsupported";
 };

@@ -1,7 +1,10 @@
+import { TEMPO_MCP_SOCKET } from "@tempo/protocol";
 import { Deferred, Effect } from "effect";
 import { setupCa } from "./ca.ts";
 import { loadConfig, VERSION, type Config } from "./config.ts";
 import { errorText, Logger } from "./log.ts";
+import { bridgeMain } from "./mcp-bridge.ts";
+import { runMcpStdio } from "./tempo-mcp.ts";
 import { startServer } from "./server.ts";
 import { Tempod } from "./tempod.ts";
 
@@ -11,14 +14,17 @@ const program = (config: Config, log: Logger) =>
     const caEnv = yield* Effect.promise(() => setupCa(config, log));
     const exitCode = yield* Deferred.make<number>();
     const exit = (code: number) => Deferred.doneUnsafe(exitCode, Effect.succeed(code));
+
     const app = yield* Effect.acquireRelease(
       Effect.sync(() => new Tempod(config, { log, caEnv, exit })),
       (app) => Effect.promise(() => Promise.race([app.close(), Bun.sleep(10_000)])),
     );
+
     const server = yield* Effect.acquireRelease(
       Effect.sync(() => startServer(app, { port: config.port })),
       (s) => Effect.promise(() => Promise.race([s.stop(), Bun.sleep(2_000)])),
     );
+
     log.info("tempod listening", {
       port: server.port,
       version: VERSION,
@@ -26,29 +32,48 @@ const program = (config: Config, log: Logger) =>
     });
     process.on("SIGTERM", () => app.onSigterm());
     process.on("SIGINT", () => app.onSigterm());
+
     return yield* Deferred.await(exitCode);
   }).pipe(Effect.scoped);
 
-const log = new Logger();
-let config: Config;
-try {
-  config = loadConfig(process.env);
-} catch (e) {
-  log.error("bad configuration", { error: errorText(e) });
-  process.exit(2);
+if (process.argv[2] === "mcp") {
+  // `tempod mcp`: the agent's tempo MCP server (01, Environments). It needs no token.
+  runMcpStdio(TEMPO_MCP_SOCKET).then(
+    () => process.exit(0),
+    () => process.exit(1),
+  );
+} else if (process.argv[2] === "mcp-bridge") {
+  bridgeMain(process.argv.slice(3)).then(
+    (code) => process.exit(code),
+    (cause: unknown) => {
+      process.stderr.write(`mcp-bridge: ${errorText(cause)}\n`);
+      process.exit(1);
+    },
+  );
+} else {
+  const log = new Logger();
+  let config: Config;
+
+  try {
+    config = loadConfig(process.env);
+  } catch (e) {
+    log.error("bad configuration", { error: errorText(e) });
+    process.exit(2);
+  }
+
+  // Children must not see the token (01, Container config); the config holds the only copy.
+  delete process.env["TEMPOD_TOKEN"];
+  process.on("unhandledRejection", (cause: unknown) =>
+    log.local("error", "unhandled rejection", { error: errorText(cause) }),
+  );
+  process.on("uncaughtException", (cause: unknown) =>
+    log.local("error", "uncaught exception", { error: errorText(cause) }),
+  );
+  Effect.runPromise(program(config, log)).then(
+    (code) => process.exit(code),
+    (cause: unknown) => {
+      log.error("tempod failed", { error: errorText(cause) });
+      process.exit(1);
+    },
+  );
 }
-// Children must not see the token (01, Container config); the config holds the only copy.
-delete process.env["TEMPOD_TOKEN"];
-process.on("unhandledRejection", (e: unknown) =>
-  log.local("error", "unhandled rejection", { error: errorText(e) }),
-);
-process.on("uncaughtException", (e: unknown) =>
-  log.local("error", "uncaught exception", { error: errorText(e) }),
-);
-Effect.runPromise(program(config, log)).then(
-  (code) => process.exit(code),
-  (e: unknown) => {
-    log.error("tempod failed", { error: errorText(e) });
-    process.exit(1);
-  },
-);

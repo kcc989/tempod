@@ -1,13 +1,19 @@
 import { Schema } from "effect";
 
 export const ERROR_MESSAGES = {
+  AGENT_INVALID: "The agent is not valid.",
+  AGENT_LIMIT: "You have the most agents allowed. Delete one first.",
+  AGENT_NAME_TAKEN: "Another agent has this name or handle.",
+  ATTACHMENT_INVALID: "The agent's hooks or limits are not valid.",
   UNAUTHENTICATED: "Sign in to continue.",
   FORBIDDEN: "This Tempo belongs to someone else.",
   NOT_FOUND: "Not found.",
   VALIDATION_FAILED: "Check the highlighted fields.",
   PROJECT_EXISTS: "This repo is already a project.",
   PROJECT_HAS_WORKSPACES: "Archive this project's workspaces first.",
-  REPO_NOT_ACCESSIBLE: "Install the GitHub App on this repo.",
+  REPO_NOT_ACCESSIBLE: "This repository is not accessible.",
+  ARTIFACTS_NOT_CONFIGURED: "Configure the Cloudflare Artifacts binding to host repositories.",
+  ARTIFACTS_API_ERROR: "Cloudflare Artifacts could not complete the request.",
   BRANCH_IN_USE: "Another workspace uses this branch.",
   BRANCH_INVALID: "That branch name is not valid.",
   BRANCH_ALREADY_PUSHED: "You can't rename a branch after it is pushed.",
@@ -33,30 +39,52 @@ export const ERROR_MESSAGES = {
   NOT_PUSHED: "Push the branch first.",
   PR_EXISTS: "A pull request already exists.",
   PR_NOT_MERGEABLE: "This pull request can't be merged yet.",
+  CI_PIPELINE_INVALID: "The CI pipeline is not valid.",
+  CI_PIPELINE_CHANGED: "The CI pipeline changed. Reload it and try again.",
+  CI_NOT_CONFIGURED: "Add a CI pipeline for this repository first.",
   GITHUB_API_ERROR: "GitHub returned an error.",
   FILE_TOO_LARGE: "This file is too large to show.",
   PATH_OUTSIDE_WORKSPACE: "That path is outside the workspace.",
   CHECKPOINT_NOT_FOUND: "That checkpoint no longer exists.",
+  ARTIFACT_NOT_READY: "This artifact is still being saved. Try again in a moment.",
+  MODEL_REQUIRED: "Set a default model for this agent in Settings → Project.",
   SETTINGS_INVALID: "Settings are not valid.",
+  ENVIRONMENT_EXISTS: "An environment with this name already exists.",
   EGRESS_BLOCKED: "(Shown only in the egress log.)",
+  EVENT_INVALID: "(Logged only.)",
+  RUN_LIMIT: "This agent ran the most times allowed for this change.",
+  RUN_NO_AGENT: "No agent can run this. Add a login in Settings.",
+  RUN_TURN_FAILED: "The agent stopped before it finished.",
+  RUN_RESULT_MISSING: "The agent did not report a result.",
+  RUN_ACCESS_VIOLATION: "The agent changed protected login files.",
+  RUN_TIMED_OUT: "The agent ran out of time.",
+  RUN_NOT_RUNNING: "The run is not running.",
+  RUN_NOT_COMPLETED: "The run has no result yet.",
+  RUN_ALREADY_SENT: "This result is already in the chat.",
+  RUN_NO_CHAT: "This run has no chat to send to.",
   INTERNAL: "Something went wrong.",
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;
+
+// SAFETY: ERROR_MESSAGES is a closed literal whose enumerable keys are exactly the ErrorCode union.
 export const ERROR_CODES = Object.keys(ERROR_MESSAGES) as ReadonlyArray<ErrorCode>;
-export const ErrorCodeSchema = Schema.Literals(ERROR_CODES as readonly [ErrorCode, ...ErrorCode[]]);
+
+export const ErrorCodeSchema = Schema.Literals(ERROR_CODES);
 
 export const ErrorBody = Schema.Struct({
   code: ErrorCodeSchema,
   message: Schema.String,
   detail: Schema.optional(Schema.String),
 });
+
 export type ErrorBody = typeof ErrorBody.Type;
 
 export const AGENT_LABELS = { claude: "Claude", codex: "Codex", opencode: "OpenCode", pi: "Pi" } as const;
 
 export const errorMessage = (code: ErrorCode, agent?: keyof typeof AGENT_LABELS): string => {
   const text: string = ERROR_MESSAGES[code];
+
   return agent ? text.replace("<agent>", AGENT_LABELS[agent]) : text.replace("<agent> ", "");
 };
 
@@ -89,20 +117,18 @@ export type Result<A> =
   | { readonly ok: false; readonly error: ErrorBody };
 
 export const ok = <A>(value: A): Result<A> => ({ ok: true, value });
+
 export const err = (error: ErrorBody): Result<never> => ({ ok: false, error });
 
 export const toErrorBody = (cause: unknown): ErrorBody => {
   if (cause instanceof TempoError) return cause.toBody();
+
   if (isErrorBody(cause)) return cause;
+
   return { code: "INTERNAL", message: errorMessage("INTERNAL") };
 };
 
-export const isErrorBody = (u: unknown): u is ErrorBody =>
-  typeof u === "object" &&
-  u !== null &&
-  typeof (u as { code?: unknown }).code === "string" &&
-  (ERROR_CODES as ReadonlyArray<string>).includes((u as { code: string }).code) &&
-  typeof (u as { message?: unknown }).message === "string";
+export const isErrorBody = Schema.is(ErrorBody);
 
 export const unwrap = <A>(result: Result<A>): A => {
   if (result.ok) return result.value;

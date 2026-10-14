@@ -7,6 +7,7 @@ import { cleanupDirs, DoClient, git, startTempod, tmpDir, writeFile, type Harnes
 afterAll(cleanupDirs);
 
 let h: Harness | null = null;
+
 afterEach(async () => {
   await h?.close();
   h = null;
@@ -21,6 +22,7 @@ const setup = async () => {
   await c.waitEvent("incarnation.changed");
   const ws = h.config.workspace;
   await git(ws, "init", "-q", "-b", "main");
+
   return { c, ws, h: h! };
 };
 
@@ -46,7 +48,7 @@ describe("insideRoots", () => {
     expect(insideRoots([ws], join(ws, "..", "outside", "f"))).toBeNull();
     expect(insideRoots([ws], "relative/path")).toBeNull();
     expect(insideRoots([ws, outside], join(ws, "dangling-out"))).toBe(join(ws, "dangling-out"));
-    expect(typeof insideRoots([ws], join(ws, "loop-a"))).toBe("string");
+    expect(insideRoots([ws], join(ws, "loop-a"))).toBeTypeOf("string");
   });
 });
 
@@ -59,8 +61,8 @@ describe("fs.list, fs.read, fs.search", () => {
     writeFile(join(ws, "src", "b.ts"), "b\n");
     writeFile(join(ws, "dist", "out.js"), "x\n");
     writeFileSync(join(ws, "debug.log"), "x\n");
-    const r = await c.ok<{ paths: string[] }>("fs.list", {});
-    expect(r.paths.sort()).toEqual([".gitignore", "src/a.ts", "src/b.ts"]);
+    const r = await c.ok("fs.list", {});
+    expect(r.paths.toSorted()).toEqual([".gitignore", "src/a.ts", "src/b.ts"]);
   });
 
   test("fs.read: utf8 text, base64 for binary and invalid UTF-8, with the size", async () => {
@@ -68,20 +70,20 @@ describe("fs.list, fs.read, fs.search", () => {
     writeFileSync(join(ws, "a.txt"), "héllo\n");
     writeFileSync(join(ws, "bin.dat"), Buffer.from([0, 1, 2, 255]));
     writeFileSync(join(ws, "latin1.txt"), Buffer.from([0x68, 0xe9, 0x6c]));
-    expect(await c.ok<unknown>("fs.read", { path: "a.txt", maxBytes: MiB })).toEqual({
+    expect(await c.ok("fs.read", { path: "a.txt", maxBytes: MiB })).toEqual({
       content: "héllo\n",
       encoding: "utf8",
       size: 7,
     });
-    expect(await c.ok<unknown>("fs.read", { path: join(ws, "a.txt"), maxBytes: MiB })).toMatchObject({
+    expect(await c.ok("fs.read", { path: join(ws, "a.txt"), maxBytes: MiB })).toMatchObject({
       encoding: "utf8",
     });
-    expect(await c.ok<unknown>("fs.read", { path: "bin.dat", maxBytes: MiB })).toEqual({
+    expect(await c.ok("fs.read", { path: "bin.dat", maxBytes: MiB })).toEqual({
       content: "AAEC/w==",
       encoding: "base64",
       size: 4,
     });
-    expect(await c.ok<unknown>("fs.read", { path: "latin1.txt", maxBytes: MiB })).toEqual({
+    expect(await c.ok("fs.read", { path: "latin1.txt", maxBytes: MiB })).toEqual({
       content: "aOls",
       encoding: "base64",
       size: 3,
@@ -117,12 +119,14 @@ describe("fs.list, fs.read, fs.search", () => {
     symlinkSync(join(outside, "secret.txt"), join(ws, "link.txt"));
     symlinkSync(join(outside, "nothing-yet.txt"), join(ws, "dangling.txt"));
     mkdirSync(join(ws, "folder"));
+
     for (const path of ["../x.txt", "/etc/passwd", "link.txt", "dangling.txt", join(outside, "secret.txt")]) {
       expect(await c.req("fs.read", { path, maxBytes: MiB })).toMatchObject({
         ok: false,
         error: { code: "PATH_OUTSIDE_WORKSPACE" },
       });
     }
+
     expect(await c.req("fs.read", { path: "missing.txt", maxBytes: MiB })).toMatchObject({
       ok: false,
       error: { code: "NOT_FOUND" },
@@ -139,38 +143,46 @@ describe("fs.list, fs.read, fs.search", () => {
     writeFile(join(ws, "src", "a.ts"), "const needle = 1;\nconst other = 2;\nneedle();\n");
     writeFile(join(ws, "src", "b.ts"), "// a.b needle\n");
     writeFile(join(ws, "dist", "c.js"), "needle\n");
-    const lit = await c.ok<{ matches: Array<{ path: string; line: number; text: string }> }>("fs.search", {
+
+    const lit = await c.ok("fs.search", {
       query: "needle",
       regex: false,
       maxResults: 50,
     });
+
     const found = lit.matches.map((m) => `${m.path}:${m.line}:${m.text}`).sort();
     expect(found).toEqual([
       "src/a.ts:1:const needle = 1;",
       "src/a.ts:3:needle();",
       "src/b.ts:1:// a.b needle",
     ]);
-    const dot = await c.ok<{ matches: unknown[] }>("fs.search", {
+
+    const dot = await c.ok("fs.search", {
       query: "a.b",
       regex: false,
       maxResults: 50,
     });
+
     expect(dot.matches).toHaveLength(1);
-    const re = await c.ok<{ matches: Array<{ path: string }> }>("fs.search", {
+
+    const re = await c.ok("fs.search", {
       query: "^const \\w+ = 2",
       regex: true,
       maxResults: 50,
     });
+
     expect(re.matches.map((m) => m.path)).toEqual(["src/a.ts"]);
-    const capped = await c.ok<{ matches: unknown[] }>("fs.search", {
+
+    const capped = await c.ok("fs.search", {
       query: "needle",
       regex: false,
       maxResults: 2,
     });
+
     expect(capped.matches).toHaveLength(2);
     const bad = await c.req("fs.search", { query: "(", regex: true, maxResults: 5 });
     expect(bad).toMatchObject({ ok: false, error: { code: "VALIDATION_FAILED" } });
-    expect(await c.ok<unknown>("fs.search", { query: "", regex: false, maxResults: 5 })).toEqual({
+    expect(await c.ok("fs.search", { query: "", regex: false, maxResults: 5 })).toEqual({
       matches: [],
     });
   });
@@ -179,22 +191,20 @@ describe("fs.list, fs.read, fs.search", () => {
 describe("settings.read", () => {
   test("resolves overrides and files; a later file change sends settings.changed", async () => {
     const { c, ws, h } = await setup();
-    writeFile(join(ws, ".tempo", "settings.toml"), '[scripts]\nsetup = "bun install"\n');
-    writeFileSync(
-      join(ws, "conductor.json"),
-      JSON.stringify({ scripts: { archive: "echo bye" }, spotlight_testing: true }),
+    writeFile(
+      join(ws, ".tempo", "settings.yaml"),
+      "scripts:\n  setup: bun install\n  archive: echo bye\nspotlight_testing: true\n",
     );
-    const r = await c.ok<{
-      effective: { scripts: { setup: string; archive: string }; agent: { default: string } };
-      warnings: string[];
-    }>("settings.read", { overrides: { agent: { default: "codex" } } });
+
+    const r = await c.ok("settings.read", { overrides: { agent: { default: "codex" } } });
+
     expect(r.effective.scripts.setup).toBe("bun install");
     expect(r.effective.scripts.archive).toBe("echo bye");
     expect(r.effective.agent.default).toBe("codex");
     expect(r.warnings.join("\n")).toContain("spotlight_testing");
     await h.app.refresh();
     expect(c.of("settings.changed")).toHaveLength(0);
-    writeFile(join(ws, ".tempo", "settings.toml"), '[scripts]\nsetup = "npm ci"\n');
+    writeFile(join(ws, ".tempo", "settings.yaml"), "scripts:\n  setup: npm ci\n");
     await h.app.refresh();
     const changed = await c.waitEvent("settings.changed");
     expect(changed.effective.scripts.setup).toBe("npm ci");

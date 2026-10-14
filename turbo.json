@@ -10,15 +10,140 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "env": ["TEMPO_IMAGE_TEST"]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
     "@tempo/tempod#build": {
+      "env": ["TEMPO_BUILD_ID"],
       "outputs": ["$TURBO_ROOT$/dist/tempod"]
+    },
+    "@tempo/e2e#test": {
+      "cache": false
+    },
+    "@tempo/conformance#test": {
+      "cache": false
+    },
+    "@tempo/tempod#test": {
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "env": ["TEMPO_IMAGE_TEST"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/container/pi/**"]
+    },
+    "//#typecheck:root": {
+      "outputs": [],
+      "inputs": [
+        "alchemy.run.ts",
+        "scripts/**",
+        "container/**/*.ts",
+        "tsconfig*.json",
+        "package.json",
+        "bun.lock",
+        "patches/**"
+      ]
+    },
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "@tempo/app#test:worker": {
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "!src/ui/**",
+        "!src/routes/**",
+        "!src/routeTree.gen.ts",
+        "test/worker/**",
+        "test/wrangler.test.jsonc",
+        "vitest.worker.config.ts",
+        "wrangler.jsonc",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/agents-starter/**"
+      ]
+    },
+    "@tempo/app#test:ui": {
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "test/ui/**",
+        "!test/ui/components/**",
+        "vitest.ui.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/agents-starter/**"
+      ]
+    },
+    "@tempo/app#test:components": {
+      "dependsOn": ["^transit"],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "test/ui/**",
+        "!test/ui/**/*.test.ts",
+        "vitest.components.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/agents-starter/**"
+      ]
+    },
+    "@tempo/app#build:web-fixture": {
+      "dependsOn": ["^transit"],
+      "outputs": ["test/web/dist/**"],
+      "inputs": [
+        "src/**",
+        "test/web/**",
+        "!test/web/dist/**",
+        "vite.web-test.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/agents-starter/**"
+      ]
+    },
+    "@tempo/app#build:browser-fixture": {
+      "dependsOn": ["^transit"],
+      "outputs": ["test/browser/dist/**"],
+      "inputs": [
+        "src/**",
+        "test/browser/**",
+        "!test/browser/dist/**",
+        "test/browser/vite.config.ts",
+        "package.json",
+        "tsconfig.json",
+        "worker-runtime.d.ts",
+        "$TURBO_ROOT$/packages/agents-starter/**"
+      ]
+    },
+    "@tempo/app#build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/agents-starter/**"],
+      "cache": false,
+      "env": ["TEMPO_WRANGLER_CONFIG", "CLOUDFLARE_ENV", "NODE_ENV", "VITE_*"]
+    },
+    "@tempo/app#build:ci": {
+      "dependsOn": ["^transit"],
+      "outputs": ["dist/**", ".wrangler/deploy/config.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!test/**",
+        "!vitest*.config.ts",
+        "!vite.web-test.config.ts",
+        ".env*",
+        ".dev.vars*",
+        "$TURBO_ROOT$/packages/agents-starter/**",
+        "$TURBO_ROOT$/container/**"
+      ],
+      "env": ["CLOUDFLARE_ENV", "NODE_ENV", "VITE_*", "PWD"]
     }
-  }
+  },
+  "globalDependencies": ["tsconfig*.json", "bunfig.toml", "patches/**"],
+  "globalPassThroughEnv": ["XDG_CONFIG_HOME", "XDG_CACHE_HOME", "WRANGLER_SEND_METRICS"]
 }
