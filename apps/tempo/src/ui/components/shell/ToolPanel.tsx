@@ -154,6 +154,7 @@ export function ToolPanel({ workspaceId, phone = false }: { workspaceId: string;
             {launchers.map(({ key, label, icon: Icon, open }) => (
               <Button
                 key={key}
+                aria-label={label}
                 variant="ghost"
                 className="h-9 justify-start rounded-md bg-muted px-3 text-sm font-normal"
                 onClick={open}
