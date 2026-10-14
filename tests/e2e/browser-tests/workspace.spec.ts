@@ -136,7 +136,7 @@ test("closed chats stay readable after confirming stop and close", async ({ page
   await page.keyboard.press("Alt+w");
   await expect(page.getByRole("alertdialog", { name: "Stop the agent and close this chat?" })).toBeVisible();
   await page.getByRole("button", { name: "Stop and close", exact: true }).click();
-  await page.getByRole("button", { name: "Closed chats", exact: true }).click();
+  await page.getByRole("button", { name: "Closed chats in this workspace", exact: true }).click();
   await page.getByRole("menuitem", { name: /Chat/ }).click();
   await expect(page.getByText("This chat is closed.", { exact: true })).toBeVisible();
   await expect(page.getByText("Starting the implementation.", { exact: true })).toBeVisible();
