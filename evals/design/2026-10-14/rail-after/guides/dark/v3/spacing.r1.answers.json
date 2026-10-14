@@ -1,0 +1,33 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T18:38:52.967Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "slop_monotonous_spacing": {
+          "type": "noul",
+          "noul": 0.1497
+        },
+        "quality_cramped": {
+          "type": "noul",
+          "noul": 0.0868
+        },
+        "quality_heading_spacing": {
+          "type": "noul",
+          "noul": 0.2337
+        }
+      },
+      "usage": {
+        "input_tokens": 2810,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

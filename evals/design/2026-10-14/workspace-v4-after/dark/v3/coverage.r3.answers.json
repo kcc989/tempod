@@ -1,0 +1,59 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T18:38:07.880Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "speed_shortcuts": {
+          "type": "noul",
+          "noul": 0.7215
+        },
+        "speed_views": {
+          "type": "noul",
+          "noul": 0.0316
+        },
+        "ai_limits": {
+          "type": "noul",
+          "noul": 0.0341
+        },
+        "ai_feedback": {
+          "type": "noul",
+          "noul": 0.1344
+        },
+        "ai_evidence": {
+          "type": "noul",
+          "noul": 0.8029
+        },
+        "control_draft": {
+          "type": "noul",
+          "noul": 0.2124
+        },
+        "focus_space_fit": {
+          "type": "noul",
+          "noul": 0.2935
+        },
+        "overflow_scroll_cue": {
+          "type": "choice",
+          "choice": "no_cue",
+          "probabilities": {
+            "cue": 0.1215,
+            "no_cue": 0.6324,
+            "not_shown": 0.2461
+          },
+          "confidence": 0.2129
+        }
+      },
+      "usage": {
+        "input_tokens": 4383,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

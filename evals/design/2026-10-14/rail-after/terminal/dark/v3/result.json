@@ -1,0 +1,46 @@
+{
+  "verdict": "review",
+  "score": 0.82,
+  "dimensions": {
+    "focus": 0.74,
+    "status": 0.7,
+    "nav": 0.8,
+    "speed": 0.92,
+    "states": 0.74,
+    "copy": 0.63,
+    "type": 0.79,
+    "icons": 0.7,
+    "restraint": 0.87,
+    "overflow": 1,
+    "craft": 0.83,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [],
+  "issues": [],
+  "fixes": [
+    "Show the state of each item inline with an icon, a label, or a count.",
+    "Show a pressed or selected state at once, and confirm the result near the control.",
+    "Use status labels that a new user understands.",
+    "Make type hierarchy with size, weight, and grey tone before you add a second family.",
+    "Give each dropdown and selector a label that says what it sets.",
+    "Make click and tap targets at least 24 by 24 px."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_content_share",
+    "focus_affordance",
+    "status_items",
+    "nav_groups",
+    "states_disabled_clear",
+    "states_feedback",
+    "copy_labels",
+    "copy_status",
+    "copy_controls_labeled",
+    "type_scale",
+    "icons_meaning",
+    "overflow_long_text",
+    "quality_repeated_identifier"
+  ]
+}

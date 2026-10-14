@@ -1,0 +1,39 @@
+{
+  "policy": "acceptance-v2",
+  "rubric": "v3 (policy over the unchanged question file)",
+  "pass": false,
+  "reasons": [
+    "score 0.78 < 0.8",
+    "blocker: An action gives no visible feedback near the control.",
+    "weak dimension: states",
+    "verdict is review",
+    "answer below 0.40: feedback_selected = 0.05",
+    "area layout: review",
+    "area spacing: fail",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "states_feedback",
+      "value": 0.215,
+      "uncertain": true,
+      "source": "interaction-1"
+    },
+    {
+      "question": "feedback_selected",
+      "value": 0.05,
+      "uncertain": false,
+      "source": "interaction-1"
+    }
+  ],
+  "coverage": {
+    "speed_shortcuts": 0.39,
+    "speed_views": 0.07,
+    "ai_limits": 0.06,
+    "ai_feedback": 0.13,
+    "ai_evidence": 0.78,
+    "control_draft": 0.22,
+    "focus_space_fit": 0.18,
+    "overflow_scroll_cue": "no_cue"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "policy": "acceptance-v2",
+  "rubric": "v3 (policy over the unchanged question file)",
+  "pass": false,
+  "reasons": [
+    "verdict is review",
+    "answer below 0.40: status_lifecycle = 0.3",
+    "area layout: review",
+    "area spacing: fail",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "status_lifecycle",
+      "value": 0.3,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "states_empty",
+      "value": 0.262,
+      "uncertain": true,
+      "source": "usability"
+    }
+  ],
+  "coverage": {
+    "speed_shortcuts": 0.1,
+    "speed_views": 0.36,
+    "ai_limits": 0.05,
+    "ai_feedback": 0.11,
+    "ai_evidence": 0.74,
+    "control_draft": 0.3,
+    "focus_space_fit": 0.21,
+    "overflow_scroll_cue": "no_cue"
+  }
+}

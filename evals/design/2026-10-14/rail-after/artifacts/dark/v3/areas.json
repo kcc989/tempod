@@ -1,0 +1,153 @@
+{
+  "layout": {
+    "status": "review",
+    "gate": "clef+measured",
+    "measured": {
+      "headerOneRow": true
+    },
+    "clefScore": 0.88,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.71,
+      "type": 0.8,
+      "overflow": 1,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:type_scale",
+      "layout:type_mono"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "spacing": {
+    "status": "fail",
+    "gate": "measured",
+    "measured": {
+      "specRowHeights": true,
+      "footerLeftAligned": true,
+      "spacingOnScale": true,
+      "chatBarInset": true,
+      "targetSize24px": false
+    },
+    "clefScore": 0.97,
+    "clefCounts": false,
+    "dimensions": {
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured targetSize24px: fail"
+    ],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "color-depth": {
+    "status": "pass",
+    "gate": "measured",
+    "measured": {
+      "textContrastAA": true,
+      "nonTextContrast3": true
+    },
+    "clefScore": 0.92,
+    "clefCounts": false,
+    "dimensions": {
+      "icons": 0.71,
+      "restraint": 0.89,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make click and tap targets at least 24 by 24 px.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "gate": "clef",
+    "measured": {},
+    "clefScore": 0.76,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.72,
+      "status": 0.67,
+      "nav": 0.8,
+      "speed": 0.89,
+      "states": 0.4,
+      "copy": 0.63,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "An action gives no visible feedback near the control.",
+      "dimension states below 0.6",
+      "feedback_selected = 0.05 (below 0.40)"
+    ],
+    "informational": [],
+    "lowAnswers": [
+      {
+        "question": "states_feedback",
+        "value": 0.215,
+        "uncertain": true,
+        "source": "interaction-1"
+      },
+      {
+        "question": "feedback_selected",
+        "value": 0.05,
+        "uncertain": false,
+        "source": "interaction-1"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:nav_groups",
+      "usability:nav_tabs_current",
+      "usability:states_empty",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:copy_status",
+      "usability:copy_controls_labeled",
+      "usability:quality_repeated_identifier",
+      "interaction-1:states_feedback",
+      "interaction-1:feedback_layout_shift"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show a pressed or selected state at once, and confirm the result near the control.",
+      "Show the state of each item inline with an icon, a label, or a count.",
+      "Give the control a visible pressed or selected state.",
+      "Use status labels that a new user understands.",
+      "Give each dropdown and selector a label that says what it sets.",
+      "In empty states, say what will appear and why, and offer one action."
+    ]
+  }
+}

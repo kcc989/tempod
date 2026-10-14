@@ -1,0 +1,61 @@
+{
+  "verdict": "review",
+  "score": 0.82,
+  "dimensions": {
+    "focus": 0.82,
+    "status": 0.58,
+    "ai": 0.72,
+    "scan": 0.79,
+    "nav": 0.9,
+    "speed": 0.95,
+    "states": 0.73,
+    "copy": 0.69,
+    "type": 0.77,
+    "icons": 0.72,
+    "restraint": 0.84,
+    "overflow": 1,
+    "consistency": 0.9,
+    "contrast": 1,
+    "craft": 0.83,
+    "slop": 1,
+    "quality": 0.8
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "status"
+  ],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.79
+    }
+  ],
+  "fixes": [
+    "Show a pressed or selected state at once, and confirm the result near the control.",
+    "Make all status signals agree. Remove spinners from work that is not running.",
+    "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+    "When work sleeps or pauses, say what that means and how to resume.",
+    "Set code, commands, IDs, and paths in one monospace font.",
+    "Give each dropdown and selector a label that says what it sets."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "status_items",
+    "status_consistent",
+    "ai_steps",
+    "scan_rows",
+    "states_disabled_clear",
+    "states_feedback",
+    "feedback_selected",
+    "copy_labels",
+    "copy_status",
+    "copy_controls_labeled",
+    "type_scale",
+    "type_mono",
+    "icons_meaning",
+    "restraint_noise",
+    "quality_repeated_text"
+  ]
+}

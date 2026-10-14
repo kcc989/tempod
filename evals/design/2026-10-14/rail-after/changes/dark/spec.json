@@ -1,0 +1,54 @@
+{
+  "case": "evals/design/2026-10-14/rail-after/changes/dark",
+  "theme": "dark",
+  "tokensRev": "71a8b4d",
+  "screen": {
+    "name": "Changes tool",
+    "purpose": "Review the workspace's uncommitted changes, then commit and push them"
+  },
+  "quads": [
+    "/Users/caseycollins/.claude/projects/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/tool-results/mcp-computer-use-blob-1792002705104-syoupq.jpg",
+    "/Users/caseycollins/.claude/projects/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/tool-results/mcp-computer-use-blob-1792002705632-gqx9jn.jpg",
+    "/Users/caseycollins/.claude/projects/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/tool-results/mcp-computer-use-blob-1792002706098-gbm7rs.jpg",
+    "/Users/caseycollins/.claude/projects/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/tool-results/mcp-computer-use-blob-1792002706661-ln5u72.jpg"
+  ],
+  "crops": [
+    {
+      "name": "rail",
+      "legend": "crop of the right tool pane",
+      "box": [
+        2328,
+        0,
+        2912,
+        1644
+      ]
+    },
+    {
+      "name": "tabs",
+      "legend": "crop of the header and tool tabs",
+      "box": [
+        1600,
+        0,
+        2912,
+        240
+      ]
+    }
+  ],
+  "interactions": [
+    {
+      "action": "Clicked \"Files\" in the Changes tool",
+      "before": "/Users/caseycollins/.claude/projects/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/tool-results/mcp-computer-use-blob-1792002862190-nrj9zu.jpg",
+      "after": "/Users/caseycollins/.claude/projects/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/tool-results/mcp-computer-use-blob-1792002869164-266sv4.jpg"
+    }
+  ],
+  "known": {
+    "ai": false,
+    "async": false,
+    "collection": false,
+    "editing": true,
+    "empty": true,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Verified in the running Mac app (merged build 71a8b4d, dark): Changes tool open: no changed files ('No changes.'), commit message field and Commit and push button."
+}

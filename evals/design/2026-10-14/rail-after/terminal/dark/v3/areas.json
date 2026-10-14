@@ -1,0 +1,134 @@
+{
+  "layout": {
+    "status": "review",
+    "gate": "clef+measured",
+    "measured": {
+      "headerOneRow": true
+    },
+    "clefScore": 0.89,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.76,
+      "type": 0.79,
+      "overflow": 1,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:overflow_long_text",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make type hierarchy with size, weight, and grey tone before you add a second family.",
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "spacing": {
+    "status": "fail",
+    "gate": "measured",
+    "measured": {
+      "specRowHeights": true,
+      "footerLeftAligned": true,
+      "spacingOnScale": true,
+      "chatBarInset": true,
+      "targetSize24px": false
+    },
+    "clefScore": 0.97,
+    "clefCounts": false,
+    "dimensions": {
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured targetSize24px: fail"
+    ],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "color-depth": {
+    "status": "pass",
+    "gate": "measured",
+    "measured": {
+      "textContrastAA": true,
+      "nonTextContrast3": true
+    },
+    "clefScore": 0.92,
+    "clefCounts": false,
+    "dimensions": {
+      "icons": 0.7,
+      "restraint": 0.87,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make click and tap targets at least 24 by 24 px.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "review",
+    "gate": "clef",
+    "measured": {},
+    "clefScore": 0.81,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.71,
+      "status": 0.7,
+      "nav": 0.8,
+      "speed": 0.92,
+      "states": 0.74,
+      "copy": 0.63,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:nav_groups",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:copy_status",
+      "usability:copy_controls_labeled",
+      "usability:quality_repeated_identifier",
+      "interaction-1:states_feedback"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show the state of each item inline with an icon, a label, or a count.",
+      "Show a pressed or selected state at once, and confirm the result near the control.",
+      "Use status labels that a new user understands.",
+      "Give each dropdown and selector a label that says what it sets.",
+      "Make click and tap targets at least 24 by 24 px.",
+      "Put navigation in short groups with clear names. Add counts where they help."
+    ]
+  }
+}

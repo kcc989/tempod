@@ -1,0 +1,49 @@
+[0] AXButton/AXUnknown [230,8 23×23] "Toggle sidebar"
+[1] AXButton/AXUnknown [266,10 801×20] "Rename branch"
+[2] AXButton/AXUnknown [1074,8 23×23] "Copy branch name"
+[3] AXButton/AXUnknown [1104,8 23×23] "Workspace info"
+[4] AXButton/AXUnknown [1134,8 23×23] "Toggle right side"
+[5] AXTabGroup/AXUnknown [1164,0 292×39]
+[6] AXRadioButton/AXTabButton [1164,2 69×35] "Changes"
+[7] AXButton/AXUnknown [1214,9 20×20] "Close Changes"
+[8] AXButton/AXUnknown [1433,8 23×23] "New tool tab"
+[9] AXButton/AXUnknown [10,49 241×35] "New workspace"
+[10] AXButton/AXUnknown [10,87 241×35] "Search workspaces"
+[11] AXButton/AXUnknown [200,138 23×23] (title withheld)
+[12] AXButton/AXUnknown [226,138 23×23] "Add project"
+[13] AXButton/AXUnknown [10,177 214×35] (title withheld)
+[14] AXButton/AXUnknown [225,183 23×23] (title withheld)
+[15] AXImage/AXUnknown [19,225 14×14] "Sleeping"
+[16] AXButton/AXUnknown [10,263 214×35] (title withheld)
+[17] AXButton/AXUnknown [225,268 23×23] (title withheld)
+[18] AXImage/AXUnknown [19,349 14×14] "Sleeping"
+[19] AXImage/AXUnknown [19,387 14×14] "Sleeping"
+[20] AXButton/AXUnknown [10,664 241×35] "Repositories"
+[21] AXButton/AXUnknown [10,702 241×35] "Archived workspaces"
+[22] AXButton/AXUnknown [10,740 241×35] "Saved chats"
+[23] AXButton/AXUnknown [10,778 241×35] "Settings"
+[24] AXTabGroup/AXUnknown [272,39 857×35]
+[25] AXRadioButton/AXTabButton [272,39 159×35] "Tempo README summary"
+[26] AXButton/AXUnknown [412,46 20×20] "Close chat"
+[27] AXButton/AXUnknown [1113,49 16×16]
+[28] AXButton/AXUnknown [1134,45 23×23] "New chat"
+[29] AXButton/AXUnknown [996,112 91×25] "Revert to here"
+[30] AXButton/AXUnknown [336,160 751×25] "Work"
+[31] AXTextArea/AXUnknown [338,719 748×47] "Message"
+[32] AXButton/AXUnknown [338,772 153×27] (title withheld)
+[33] AXButton/AXUnknown [963,772 60×27] (title withheld)
+[34] AXButton/AXUnknown [1029,774 23×23] "Attach file"
+[35] AXButton/AXUnknown [1059,774 27×23] "Send"
+[36] AXTabGroup/AXUnknown [1173,39 274×35]
+[37] AXRadioButton/AXTabButton [1173,39 47×35] "Changes"
+[38] AXRadioButton/AXTabButton [1235,39 24×35] "Files"
+[39] AXRadioButton/AXTabButton [1275,39 39×35] "Checks"
+[40] AXButton/AXUnknown [1170,81 53×20] "Branch"
+[41] AXButton/AXUnknown [1229,81 98×20] "Group by folder"
+[42] AXButton/AXUnknown [1333,81 56×20] "Refresh"
+[43] AXButton/AXUnknown [1395,81 20×20] "Open on GitHub"
+[44] AXTextField/AXUnknown [1173,762 274×25] "Commit message"
+[45] AXButton/AXUnknown [1173,794 274×20] "Commit and push"
+[46] AXButton/AXCloseButton [8,8 16×16]
+[47] AXButton/AXFullScreenButton [53,8 16×16]
+[48] AXButton/AXMinimizeButton [30,8 16×16]

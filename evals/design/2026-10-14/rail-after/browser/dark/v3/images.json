@@ -1,0 +1,82 @@
+{
+  "full.png": {
+    "bytes": 523046,
+    "sha256": "5be0689d8c938b352a23b5c70d553cb0e610adb779a590aacd8b697894eb0a76"
+  },
+  "rail.png": {
+    "bytes": 38484,
+    "sha256": "b28928b95edb32dedb9b09d99b7ae6b13f448036b95b536261dec853ae9e1402"
+  },
+  "tabs.png": {
+    "bytes": 62519,
+    "sha256": "be47823d6b58f7d5c25c8defa996e3240a8c1e89f84591df0847c9ab86491739"
+  },
+  "interactions/0-before.jpg": {
+    "bytes": 99432,
+    "sha256": "423fd9530100d49269e2dc3d562b4731445cb4b170af7f9466103942cac82c73"
+  },
+  "interactions/0-after.jpg": {
+    "bytes": 95433,
+    "sha256": "cdeb7c1e6c8984acc8ca3afbc8d71783006dc193cece5c6b7cdcb02ddb8c3e92"
+  },
+  "v3/replicates/q95/full.png.jpg": {
+    "bytes": 336034,
+    "sha256": "c6fdd826914d737871ceeeeb6128e680bf3a1bbce3d0b76cc089472c193f6f5e"
+  },
+  "v3/replicates/q95/rail.png.jpg": {
+    "bytes": 35273,
+    "sha256": "7ebe12c221fc0fd78894d9de10919b453d452618f047e6b73910df27daf7d1d4"
+  },
+  "v3/replicates/q95/tabs.png.jpg": {
+    "bytes": 36683,
+    "sha256": "da57d9bcfec621a5c34a7731f579a8c887ceb87e2a6bcb4b79dcfd5f08243978"
+  },
+  "v3/replicates/q95/interactions__0-before.jpg.jpg": {
+    "bytes": 117672,
+    "sha256": "130ad7a82710c546994656636ff2279f90cddc926e629f7bc7569e5cf4e44760"
+  },
+  "v3/replicates/q95/interactions__0-after.jpg.jpg": {
+    "bytes": 112367,
+    "sha256": "4cffe6e1fa3f1b6b036197c3016b5346549a2acee57fdcfcb21017fbcb4ecfd8"
+  },
+  "v3/replicates/q90/full.png.jpg": {
+    "bytes": 321318,
+    "sha256": "fa42251e05cf5a914a4147083c60a5cccd4d20494298bb7da19930fec86c7355"
+  },
+  "v3/replicates/q90/rail.png.jpg": {
+    "bytes": 34426,
+    "sha256": "60d3c26b975e97975d8df48aa1d5c9ef1448e95f461a747ade291f5c7d56d3e8"
+  },
+  "v3/replicates/q90/tabs.png.jpg": {
+    "bytes": 34816,
+    "sha256": "e398e949e65e970a8bd64eaef3e74e4b5c2f85d46c42315c5604d507481527b9"
+  },
+  "v3/replicates/q90/interactions__0-before.jpg.jpg": {
+    "bytes": 112936,
+    "sha256": "c801d2cc8592246b64e0feb7735fc1591b4a59cfcd4555c1b8d17f74b74dc030"
+  },
+  "v3/replicates/q90/interactions__0-after.jpg.jpg": {
+    "bytes": 107893,
+    "sha256": "4f2a6b2ca090643edf5411a95e8a6cbad7fdd10b5c05cc512a7d2242fba85e5d"
+  },
+  "v3/replicates/q85/full.png.jpg": {
+    "bytes": 312641,
+    "sha256": "5aa4bb4c7db72f5f00ee56e0530768590b6dc9223c6dd33550263404b2a3d1fd"
+  },
+  "v3/replicates/q85/rail.png.jpg": {
+    "bytes": 33686,
+    "sha256": "623fa46f094bcd4f0a4f960b06ad14591fff5ae8355b6aa5957e758a16af5b8a"
+  },
+  "v3/replicates/q85/tabs.png.jpg": {
+    "bytes": 33709,
+    "sha256": "3168d6899071d6c215616be03d01dc5eda0ed7f16f65845ea98f19303ae9c85f"
+  },
+  "v3/replicates/q85/interactions__0-before.jpg.jpg": {
+    "bytes": 112936,
+    "sha256": "c801d2cc8592246b64e0feb7735fc1591b4a59cfcd4555c1b8d17f74b74dc030"
+  },
+  "v3/replicates/q85/interactions__0-after.jpg.jpg": {
+    "bytes": 107893,
+    "sha256": "4f2a6b2ca090643edf5411a95e8a6cbad7fdd10b5c05cc512a7d2242fba85e5d"
+  }
+}

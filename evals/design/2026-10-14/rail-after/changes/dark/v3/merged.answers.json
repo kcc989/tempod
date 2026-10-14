@@ -1,0 +1,566 @@
+{
+  "layout": {
+    "focus_primary_path": {
+      "type": "score",
+      "score": 1.625225,
+      "confidence": 0.39225,
+      "probabilities": {
+        "0": 0.12492500000000001,
+        "1": 0.1249,
+        "2": 0.7501749999999999
+      }
+    },
+    "focus_content_share": {
+      "type": "score",
+      "score": 1.508975,
+      "confidence": 0.221775,
+      "probabilities": {
+        "0": 0.13222499999999998,
+        "1": 0.22662500000000002,
+        "2": 0.64115
+      }
+    },
+    "focus_reading_order": {
+      "type": "noul",
+      "noul": 0.690625
+    },
+    "overflow_long_text": {
+      "type": "choice",
+      "choice": "ellipsis",
+      "confidence": 0.45770000000000005,
+      "probabilities": {
+        "ellipsis": 0.7363,
+        "cut": 0.03845,
+        "breaks_layout": 0.0282,
+        "not_shown": 0.19705
+      }
+    },
+    "type_hierarchy": {
+      "type": "noul",
+      "noul": 0.78635
+    },
+    "type_scale": {
+      "type": "score",
+      "score": 1.461125,
+      "confidence": 0.1663,
+      "probabilities": {
+        "0": 0.128875,
+        "1": 0.281125,
+        "2": 0.59
+      }
+    },
+    "type_line_height": {
+      "type": "noul",
+      "noul": 0.855275
+    },
+    "type_numbers": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.89365,
+      "probabilities": {
+        "aligned": 0.0232,
+        "ragged": 0.013275,
+        "not_shown": 0.963525
+      }
+    },
+    "type_mono": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.061575000000000005,
+      "probabilities": {
+        "mono": 0.193525,
+        "mixed": 0.336225,
+        "not_shown": 0.47025000000000006
+      }
+    },
+    "slop_eyebrow_label": {
+      "type": "noul",
+      "noul": 0.02265
+    },
+    "slop_icon_tile_heading": {
+      "type": "noul",
+      "noul": 0.032325000000000007
+    },
+    "slop_badge_headline": {
+      "type": "noul",
+      "noul": 0.01925
+    },
+    "slop_italic_serif_headline": {
+      "type": "noul",
+      "noul": 0.008575
+    },
+    "slop_hero_headline": {
+      "type": "noul",
+      "noul": 0.017275
+    },
+    "slop_flat_hierarchy": {
+      "type": "noul",
+      "noul": 0.0975
+    },
+    "slop_tight_tracking": {
+      "type": "noul",
+      "noul": 0.0188
+    },
+    "slop_numbered_labels": {
+      "type": "noul",
+      "noul": 0.01395
+    },
+    "slop_hero_metric": {
+      "type": "noul",
+      "noul": 0.017599999999999998
+    },
+    "slop_card_grid": {
+      "type": "noul",
+      "noul": 0.016
+    },
+    "slop_nested_cards": {
+      "type": "noul",
+      "noul": 0.025099999999999997
+    },
+    "slop_hidden_image": {
+      "type": "noul",
+      "noul": 0.018075
+    },
+    "quality_tiny_text": {
+      "type": "noul",
+      "noul": 0.18345
+    },
+    "quality_all_caps": {
+      "type": "noul",
+      "noul": 0.011049999999999999
+    },
+    "quality_long_lines": {
+      "type": "noul",
+      "noul": 0.10722499999999999
+    },
+    "quality_text_covered": {
+      "type": "noul",
+      "noul": 0.016550000000000002
+    },
+    "quality_overflow": {
+      "type": "noul",
+      "noul": 0.0436
+    },
+    "quality_broken_image": {
+      "type": "noul",
+      "noul": 0.017974999999999998
+    },
+    "quality_scroll_edge": {
+      "type": "noul",
+      "noul": 0.093
+    }
+  },
+  "spacing": {
+    "slop_monotonous_spacing": {
+      "type": "noul",
+      "noul": 0.123225
+    },
+    "quality_cramped": {
+      "type": "noul",
+      "noul": 0.09582500000000001
+    },
+    "quality_heading_spacing": {
+      "type": "noul",
+      "noul": 0.23352499999999998
+    }
+  },
+  "color-depth": {
+    "restraint_noise": {
+      "type": "score",
+      "score": 1.713325,
+      "confidence": 0.41852500000000004,
+      "probabilities": {
+        "0": 0.040625,
+        "1": 0.2054,
+        "2": 0.753975
+      }
+    },
+    "icons_one_set": {
+      "type": "noul",
+      "noul": 0.843025
+    },
+    "icons_size": {
+      "type": "noul",
+      "noul": 0.63835
+    },
+    "icons_meaning": {
+      "type": "score",
+      "score": 1.1863000000000001,
+      "confidence": 0.063525,
+      "probabilities": {
+        "0": 0.1793,
+        "1": 0.45507499999999995,
+        "2": 0.365625
+      }
+    },
+    "slop_grid_background": {
+      "type": "noul",
+      "noul": 0.019174999999999998
+    },
+    "slop_rounded_border_accent": {
+      "type": "noul",
+      "noul": 0.07552500000000001
+    },
+    "slop_side_stripe": {
+      "type": "noul",
+      "noul": 0.02935
+    },
+    "slop_border_and_shadow": {
+      "type": "noul",
+      "noul": 0.0652
+    },
+    "slop_glass": {
+      "type": "noul",
+      "noul": 0.026275
+    },
+    "slop_stripes": {
+      "type": "noul",
+      "noul": 0.01525
+    },
+    "slop_extreme_radius": {
+      "type": "noul",
+      "noul": 0.066425
+    },
+    "slop_rough_illustration": {
+      "type": "noul",
+      "noul": 0.018475
+    },
+    "slop_placeholder_illustration": {
+      "type": "noul",
+      "noul": 0.028375
+    },
+    "slop_glow": {
+      "type": "noul",
+      "noul": 0.059899999999999995
+    },
+    "slop_ai_palette": {
+      "type": "noul",
+      "noul": 0.097725
+    },
+    "slop_dark_glow": {
+      "type": "noul",
+      "noul": 0.061399999999999996
+    },
+    "slop_gradient_text": {
+      "type": "noul",
+      "noul": 0.01465
+    },
+    "quality_gray_on_color": {
+      "type": "noul",
+      "noul": 0.07465
+    }
+  },
+  "usability": {
+    "focus_affordance": {
+      "type": "score",
+      "score": 1.5433750000000002,
+      "confidence": 0.2263,
+      "probabilities": {
+        "0": 0.083025,
+        "1": 0.290575,
+        "2": 0.6264000000000001
+      }
+    },
+    "status_items": {
+      "type": "score",
+      "score": 1.244525,
+      "confidence": 0.09525,
+      "probabilities": {
+        "0": 0.28515,
+        "1": 0.18519999999999998,
+        "2": 0.52965
+      }
+    },
+    "status_async": {
+      "type": "score",
+      "score": 1.49835,
+      "confidence": 0.34890000000000004,
+      "probabilities": {
+        "0": 0.217625,
+        "1": 0.06645000000000001,
+        "2": 0.715925
+      }
+    },
+    "status_attention": {
+      "type": "noul",
+      "noul": 0.1187
+    },
+    "status_consistent": {
+      "type": "noul",
+      "noul": 0.7977
+    },
+    "status_lifecycle": {
+      "type": "choice",
+      "choice": "bare",
+      "confidence": 0.513875,
+      "probabilities": {
+        "explains": 0.0664,
+        "bare": 0.80945,
+        "not_shown": 0.12415
+      }
+    },
+    "ai_steps": {
+      "type": "score",
+      "score": 1.1603999999999999,
+      "confidence": 0.24352500000000002,
+      "probabilities": {
+        "0": 0.4094,
+        "1": 0.0208,
+        "2": 0.5698000000000001
+      }
+    },
+    "ai_marked": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.38005,
+      "probabilities": {
+        "marked": 0.1081,
+        "unmarked": 0.14895,
+        "not_shown": 0.74295
+      }
+    },
+    "control_ask": {
+      "type": "choice",
+      "choice": "none",
+      "confidence": 0.17252499999999998,
+      "probabilities": {
+        "structured": 0.00845,
+        "free_text": 0.14615,
+        "none": 0.4238,
+        "not_shown": 0.4216
+      }
+    },
+    "control_diff": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.450525,
+      "probabilities": {
+        "shown": 0.063775,
+        "hidden": 0.161075,
+        "not_shown": 0.77515
+      }
+    },
+    "control_consent": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.907975,
+      "probabilities": {
+        "in_context": 0.019325000000000002,
+        "upfront": 0.012125,
+        "not_shown": 0.96855
+      }
+    },
+    "scan_rows": {
+      "type": "score",
+      "score": 1.5450000000000002,
+      "confidence": 0.332125,
+      "probabilities": {
+        "0": 0.17065000000000002,
+        "1": 0.1137,
+        "2": 0.71565
+      }
+    },
+    "scan_missing": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.32559999999999995,
+      "probabilities": {
+        "muted": 0.3176,
+        "raw": 0.014275,
+        "not_shown": 0.668125
+      }
+    },
+    "scan_overflow": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.59285,
+      "probabilities": {
+        "count": 0.0503,
+        "clipped": 0.10415,
+        "not_shown": 0.84555
+      }
+    },
+    "nav_current": {
+      "type": "noul",
+      "noul": 0.7578
+    },
+    "nav_groups": {
+      "type": "score",
+      "score": 1.497825,
+      "confidence": 0.24867499999999998,
+      "probabilities": {
+        "0": 0.16617500000000002,
+        "1": 0.169775,
+        "2": 0.66405
+      }
+    },
+    "nav_return": {
+      "type": "noul",
+      "noul": 0.79125
+    },
+    "nav_tabs_current": {
+      "type": "choice",
+      "choice": "clear",
+      "confidence": 0.82275,
+      "probabilities": {
+        "clear": 0.9375500000000001,
+        "weak": 0.052,
+        "not_shown": 0.01045
+      }
+    },
+    "speed_search": {
+      "type": "noul",
+      "noul": 0.916125
+    },
+    "states_empty": {
+      "type": "score",
+      "score": 0.5242,
+      "confidence": 0.1781,
+      "probabilities": {
+        "0": 0.591575,
+        "1": 0.292675,
+        "2": 0.11574999999999999
+      }
+    },
+    "states_errors": {
+      "type": "noul",
+      "noul": 0.032125
+    },
+    "states_disabled_clear": {
+      "type": "choice",
+      "choice": "clear",
+      "confidence": 0.11605,
+      "probabilities": {
+        "clear": 0.50285,
+        "confusing": 0.3779,
+        "not_shown": 0.11925
+      }
+    },
+    "copy_labels": {
+      "type": "score",
+      "score": 1.73275,
+      "confidence": 0.430175,
+      "probabilities": {
+        "0": 0.021374999999999998,
+        "1": 0.2245,
+        "2": 0.7541249999999999
+      }
+    },
+    "copy_status": {
+      "type": "noul",
+      "noul": 0.5805
+    },
+    "copy_controls_labeled": {
+      "type": "noul",
+      "noul": 0.62415
+    },
+    "trust_usage": {
+      "type": "noul",
+      "noul": 0.04855
+    },
+    "trust_onboarding": {
+      "type": "choice",
+      "choice": "none",
+      "confidence": 0.370975,
+      "probabilities": {
+        "light": 0.28285,
+        "blocking": 0.01115,
+        "none": 0.7060000000000001
+      }
+    },
+    "slop_em_dash": {
+      "type": "noul",
+      "noul": 0.025275
+    },
+    "slop_marketing_claims": {
+      "type": "noul",
+      "noul": 0.014075
+    },
+    "slop_forced_contrast": {
+      "type": "noul",
+      "noul": 0.016450000000000003
+    },
+    "slop_theater": {
+      "type": "noul",
+      "noul": 0.018125000000000002
+    },
+    "quality_repeated_text": {
+      "type": "noul",
+      "noul": 0.166875
+    },
+    "quality_repeated_identifier": {
+      "type": "noul",
+      "noul": 0.27985
+    }
+  },
+  "coverage": {
+    "speed_shortcuts": {
+      "type": "noul",
+      "noul": 0.099575
+    },
+    "speed_views": {
+      "type": "noul",
+      "noul": 0.357825
+    },
+    "ai_limits": {
+      "type": "noul",
+      "noul": 0.0529
+    },
+    "ai_feedback": {
+      "type": "noul",
+      "noul": 0.114725
+    },
+    "ai_evidence": {
+      "type": "noul",
+      "noul": 0.7406
+    },
+    "control_draft": {
+      "type": "noul",
+      "noul": 0.30105000000000004
+    },
+    "focus_space_fit": {
+      "type": "noul",
+      "noul": 0.20785
+    },
+    "overflow_scroll_cue": {
+      "type": "choice",
+      "choice": "no_cue",
+      "confidence": 0.14272500000000002,
+      "probabilities": {
+        "cue": 0.15155,
+        "no_cue": 0.5732250000000001,
+        "not_shown": 0.275225
+      }
+    }
+  },
+  "interaction-1": {
+    "states_feedback": {
+      "type": "score",
+      "score": 1.31945,
+      "confidence": 0.15375,
+      "probabilities": {
+        "0": 0.26475,
+        "1": 0.15105000000000002,
+        "2": 0.5842
+      }
+    },
+    "feedback_selected": {
+      "type": "noul",
+      "noul": 0.8953749999999999
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "noul": 0.181075
+    },
+    "feedback_focus_visible": {
+      "type": "choice",
+      "choice": "not_keyboard",
+      "confidence": 0.702225,
+      "probabilities": {
+        "visible": 0.037325,
+        "missing": 0.071175,
+        "not_keyboard": 0.8915
+      }
+    }
+  }
+}

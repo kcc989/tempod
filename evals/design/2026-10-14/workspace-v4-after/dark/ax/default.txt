@@ -1,0 +1,43 @@
+[0] AXButton/AXUnknown [230,8 23×23] "Toggle sidebar"
+[1] AXButton/AXUnknown [266,10 1094×20] "Rename branch"
+[2] AXButton/AXUnknown [1367,8 23×23] "Copy branch name"
+[3] AXButton/AXUnknown [1396,8 23×23] "Workspace info"
+[4] AXButton/AXUnknown [1427,8 23×23] "Toggle right side"
+[5] AXButton/AXUnknown [10,49 241×35] "New workspace"
+[6] AXButton/AXUnknown [10,87 241×35] "Search workspaces"
+[7] AXButton/AXUnknown [200,138 23×23] (title withheld)
+[8] AXButton/AXUnknown [226,138 23×23] "Add project"
+[9] AXButton/AXUnknown [10,177 214×35] (title withheld)
+[10] AXButton/AXUnknown [225,183 23×23] (title withheld)
+[11] AXImage/AXUnknown [19,225 14×14] "Sleeping"
+[12] AXButton/AXUnknown [10,263 214×35] (title withheld)
+[13] AXButton/AXUnknown [225,268 23×23] (title withheld)
+[14] AXImage/AXUnknown [19,349 14×14] "Sleeping"
+[15] AXImage/AXUnknown [19,387 14×14] "Sleeping"
+[16] AXButton/AXUnknown [10,664 241×35] "Repositories"
+[17] AXButton/AXUnknown [10,702 241×35] "Archived workspaces"
+[18] AXButton/AXUnknown [10,740 241×35] "Saved chats"
+[19] AXButton/AXUnknown [10,778 241×35] "Settings"
+[20] AXTabGroup/AXUnknown [272,39 1150×35]
+[21] AXRadioButton/AXTabButton [272,39 159×35] "Tempo README summary"
+[22] AXButton/AXUnknown [412,46 20×20] "Close chat"
+[23] AXButton/AXUnknown [1406,49 16×16]
+[24] AXButton/AXUnknown [1427,45 23×23] "New chat"
+[25] AXButton/AXUnknown [959,112 91×25] "Revert to here"
+[26] AXButton/AXUnknown [314,160 736×25] "Work"
+[27] AXTextArea/AXUnknown [316,719 733×47] "Message"
+[28] AXButton/AXUnknown [316,772 153×27] (title withheld)
+[29] AXButton/AXUnknown [926,772 60×27] (title withheld)
+[30] AXButton/AXUnknown [991,774 23×23] "Attach file"
+[31] AXButton/AXUnknown [1022,774 27×23] "Send"
+[32] AXButton/AXUnknown [1411,98 23×23] "Close Info"
+[33] AXButton/AXUnknown [1390,128 45×20] "Sleep"
+[34] AXButton/AXUnknown [1127,154 307×31] "Changes"
+[35] AXButton/AXUnknown [1127,191 307×31] "Guides"
+[36] AXButton/AXUnknown [1127,279 307×31] "Tempo README summary"
+[37] AXButton/AXUnknown [1127,367 307×31] (title withheld)
+[38] AXButton/AXUnknown [1127,455 307×31] (title withheld)
+[39] AXButton/AXUnknown [1127,493 307×31] (title withheld)
+[40] AXButton/AXCloseButton [8,8 16×16]
+[41] AXButton/AXFullScreenButton [53,8 16×16]
+[42] AXButton/AXMinimizeButton [30,8 16×16]

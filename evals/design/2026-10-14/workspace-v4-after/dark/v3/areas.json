@@ -1,0 +1,173 @@
+{
+  "layout": {
+    "status": "review",
+    "gate": "clef+measured",
+    "measured": {
+      "headerOneRow": true
+    },
+    "clefScore": 0.91,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.85,
+      "type": 0.77,
+      "overflow": 1,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [
+      {
+        "question": "type_mono",
+        "value": 0.3,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_content_share",
+      "layout:type_scale",
+      "layout:type_mono"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Set code, commands, IDs, and paths in one monospace font.",
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "spacing": {
+    "status": "fail",
+    "gate": "measured",
+    "measured": {
+      "specRowHeights": true,
+      "footerLeftAligned": true,
+      "spacingOnScale": true,
+      "chatBarInset": true,
+      "targetSize24px": false
+    },
+    "clefScore": 0.97,
+    "clefCounts": false,
+    "dimensions": {
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured targetSize24px: fail"
+    ],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "color-depth": {
+    "status": "pass",
+    "gate": "measured",
+    "measured": {
+      "textContrastAA": true,
+      "nonTextContrast3": true
+    },
+    "clefScore": 0.91,
+    "clefCounts": false,
+    "dimensions": {
+      "icons": 0.72,
+      "restraint": 0.84,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:restraint_noise",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make click and tap targets at least 24 by 24 px.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "gate": "clef",
+    "measured": {},
+    "clefScore": 0.8,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.75,
+      "status": 0.58,
+      "ai": 0.72,
+      "scan": 0.79,
+      "nav": 0.9,
+      "speed": 0.95,
+      "states": 0.73,
+      "copy": 0.69,
+      "consistency": 0.9,
+      "contrast": 1,
+      "craft": 0.83,
+      "slop": 1,
+      "quality": 0.8
+    },
+    "majors": [
+      "dimension status below 0.6",
+      "status_lifecycle = 0.3 (below 0.40)",
+      "quality_repeated_identifier = 0.215 (below 0.40)"
+    ],
+    "informational": [],
+    "lowAnswers": [
+      {
+        "question": "status_lifecycle",
+        "value": 0.3,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.215,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:status_consistent",
+      "usability:ai_steps",
+      "usability:scan_rows",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:copy_status",
+      "usability:copy_controls_labeled",
+      "usability:quality_repeated_text",
+      "interaction-1:states_feedback",
+      "interaction-1:feedback_selected",
+      "interaction-2:states_feedback",
+      "interaction-2:feedback_layout_shift"
+    ],
+    "missingEvidence": [],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.79
+      }
+    ],
+    "fixes": [
+      "Show a pressed or selected state at once, and confirm the result near the control.",
+      "Make all status signals agree. Remove spinners from work that is not running.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+      "When work sleeps or pauses, say what that means and how to resume.",
+      "Give each dropdown and selector a label that says what it sets.",
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  }
+}

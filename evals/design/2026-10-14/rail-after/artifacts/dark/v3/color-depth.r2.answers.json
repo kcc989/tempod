@@ -1,0 +1,115 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T18:38:11.768Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "restraint_noise": {
+          "type": "score",
+          "score": 1.7545,
+          "legend": {
+            "0": "Many borders, shadows, badges, illustrations, or glows compete with the content",
+            "1": "Some extra decoration, but the main content is still easy to find",
+            "2": "Flat surfaces, thin dividers, and few shadows; illustrations appear only in empty states or onboarding"
+          },
+          "probabilities": {
+            "0": 0.0292,
+            "1": 0.1871,
+            "2": 0.7837
+          },
+          "confidence": 0.4751
+        },
+        "icons_one_set": {
+          "type": "noul",
+          "noul": 0.8287
+        },
+        "icons_size": {
+          "type": "noul",
+          "noul": 0.7026
+        },
+        "icons_meaning": {
+          "type": "score",
+          "score": 1.203,
+          "legend": {
+            "0": "Icons are unusual or abstract, and they have no labels",
+            "1": "Most icons are common symbols, but some are unclear",
+            "2": "Every icon-only button is a common symbol, such as search, close, or add, or it has a label"
+          },
+          "probabilities": {
+            "0": 0.186,
+            "1": 0.425,
+            "2": 0.389
+          },
+          "confidence": 0.0498
+        },
+        "slop_grid_background": {
+          "type": "noul",
+          "noul": 0.0192
+        },
+        "slop_rounded_border_accent": {
+          "type": "noul",
+          "noul": 0.0292
+        },
+        "slop_side_stripe": {
+          "type": "noul",
+          "noul": 0.0357
+        },
+        "slop_border_and_shadow": {
+          "type": "noul",
+          "noul": 0.0462
+        },
+        "slop_glass": {
+          "type": "noul",
+          "noul": 0.0299
+        },
+        "slop_stripes": {
+          "type": "noul",
+          "noul": 0.0162
+        },
+        "slop_extreme_radius": {
+          "type": "noul",
+          "noul": 0.088
+        },
+        "slop_rough_illustration": {
+          "type": "noul",
+          "noul": 0.017
+        },
+        "slop_placeholder_illustration": {
+          "type": "noul",
+          "noul": 0.0251
+        },
+        "slop_glow": {
+          "type": "noul",
+          "noul": 0.1934
+        },
+        "slop_ai_palette": {
+          "type": "noul",
+          "noul": 0.112
+        },
+        "slop_dark_glow": {
+          "type": "noul",
+          "noul": 0.0659
+        },
+        "slop_gradient_text": {
+          "type": "noul",
+          "noul": 0.0146
+        },
+        "quality_gray_on_color": {
+          "type": "noul",
+          "noul": 0.0964
+        }
+      },
+      "usage": {
+        "input_tokens": 4343,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

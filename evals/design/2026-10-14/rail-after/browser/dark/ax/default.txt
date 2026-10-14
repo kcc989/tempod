@@ -1,0 +1,43 @@
+[0] AXButton/AXUnknown [230,8 23×23] "Toggle sidebar"
+[1] AXButton/AXUnknown [266,10 801×20] "Rename branch"
+[2] AXButton/AXUnknown [1074,8 23×23] "Copy branch name"
+[3] AXButton/AXUnknown [1104,8 23×23] "Workspace info"
+[4] AXButton/AXUnknown [1134,8 23×23] "Toggle right side"
+[5] AXTabGroup/AXUnknown [1164,0 292×39]
+[6] AXRadioButton/AXTabButton [1164,2 69×35] "Changes"
+[7] AXButton/AXUnknown [1214,9 20×20] "Close Changes"
+[8] AXRadioButton/AXTabButton [1249,2 67×35] "Terminal"
+[9] AXButton/AXUnknown [1297,9 20×20] "Close Terminal"
+[10] AXButton/AXUnknown [1433,8 23×23] "New tool tab"
+[11] AXButton/AXUnknown [10,49 241×35] "New workspace"
+[12] AXButton/AXUnknown [10,87 241×35] "Search workspaces"
+[13] AXButton/AXUnknown [200,138 23×23] (title withheld)
+[14] AXButton/AXUnknown [226,138 23×23] "Add project"
+[15] AXButton/AXUnknown [10,177 214×35] (title withheld)
+[16] AXButton/AXUnknown [225,183 23×23] (title withheld)
+[18] AXButton/AXUnknown [10,263 214×35] (title withheld)
+[19] AXButton/AXUnknown [225,268 23×23] (title withheld)
+[22] AXButton/AXUnknown [10,664 241×35] "Repositories"
+[23] AXButton/AXUnknown [10,702 241×35] "Archived workspaces"
+[24] AXButton/AXUnknown [10,740 241×35] "Saved chats"
+[25] AXButton/AXUnknown [10,778 241×35] "Settings"
+[26] AXTabGroup/AXUnknown [272,39 857×35]
+[27] AXRadioButton/AXTabButton [272,39 159×35] "Tempo README summary"
+[28] AXButton/AXUnknown [412,46 20×20] "Close chat"
+[29] AXButton/AXUnknown [1113,49 16×16]
+[30] AXButton/AXUnknown [1134,45 23×23] "New chat"
+[31] AXButton/AXUnknown [996,112 91×25] "Revert to here"
+[32] AXButton/AXUnknown [336,160 751×25] "Work"
+[33] AXTextArea/AXUnknown [338,719 748×47] "Message"
+[34] AXButton/AXUnknown [338,772 153×27] (title withheld)
+[35] AXButton/AXUnknown [963,772 60×27] (title withheld)
+[36] AXButton/AXUnknown [1029,774 23×23] "Attach file"
+[37] AXButton/AXUnknown [1059,774 27×23] "Send"
+[43] AXButton/AXCloseButton [8,8 16×16]
+[44] AXButton/AXFullScreenButton [53,8 16×16]
+[45] AXButton/AXMinimizeButton [30,8 16×16]
+[10] AXRadioButton/AXTabButton [1331,2 60×35] "Guides"
+[11] AXButton/AXUnknown [1371,9 20×20] "Close Guides"
+[12] AXRadioButton/AXTabButton [1406,2 51×35] "Activity"
+[13] AXButton/AXUnknown [1449,9 8×20] "Close Activity"
+[42] AXButton/AXUnknown [1170,42 49×20] "Reload"

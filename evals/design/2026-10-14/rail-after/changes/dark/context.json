@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Tempo",
+    "category": "Agent coding workspace",
+    "platform": "desktop",
+    "primary_user": "Developer",
+    "primary_job": "Direct coding agents in project workspaces and review their work"
+  },
+  "screen": {
+    "name": "Changes tool",
+    "purpose": "Review the workspace's uncommitted changes, then commit and push them"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the right tool pane",
+    "Image 3: crop of the header and tool tabs"
+  ],
+  "page_text": "Toggle sidebar\nRename branch\nCopy branch name\nWorkspace info\nToggle right side\nChanges\nClose Changes\nNew tool tab\nNew workspace\nSearch workspaces\nAdd project\nSleeping\nSleeping\nSleeping\nRepositories\nArchived workspaces\nSaved chats\nSettings\nTempo README summary\nClose chat\nNew chat\nRevert to here\nWork\nMessage\nAttach file\nSend\nChanges\nFiles\nChecks\nBranch\nGroup by folder\nRefresh\nOpen on GitHub\nCommit message\nCommit and push"
+}
