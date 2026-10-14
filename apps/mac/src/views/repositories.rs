@@ -21,6 +21,7 @@ enum RepositoryTab {
     Commits,
     PullRequests,
     Issues,
+    Checks,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -53,6 +54,9 @@ pub struct RepositoryView {
     pull_requests: Vec<p::RepositoryPullRequest>,
     pull_request: Option<p::RepositoryPullRequest>,
     issues: Option<Entity<super::issues::IssuesView>>,
+    checks: Option<Entity<super::repository_checks::ChecksView>>,
+    /// The newest check run of the open PR's head branch (10, Clients); `Some(None)` when none ran.
+    pr_check: Option<Option<p::CiRun>>,
     merge_workspace: Option<p::WorkspaceDetail>,
     workspace_loading: bool,
     tab: RepositoryTab,
@@ -128,6 +132,8 @@ impl RepositoryView {
             pull_requests: Vec::new(),
             pull_request: None,
             issues: None,
+            checks: None,
+            pr_check: None,
             merge_workspace: None,
             workspace_loading: false,
             tab: RepositoryTab::Code,
@@ -214,6 +220,7 @@ impl RepositoryView {
         self.pull_requests.clear();
         self.pull_request = None;
         self.issues = None;
+        self.checks = None;
         self.merge_workspace = None;
         self.workspace_loading = false;
         self.path.clear();
@@ -244,6 +251,7 @@ impl RepositoryView {
             1 => RepositoryTab::Commits,
             2 => RepositoryTab::PullRequests,
             3 => RepositoryTab::Issues,
+            4 => RepositoryTab::Checks,
             _ => RepositoryTab::Code,
         };
         self.file = None;
@@ -257,6 +265,18 @@ impl RepositoryView {
             let project_id = project.id.clone();
             self.issues =
                 Some(cx.new(|cx| super::issues::IssuesView::new(client, project_id, window, cx)));
+            self.loading = false;
+            self.error = None;
+            cx.notify();
+        } else if self.tab == RepositoryTab::Checks && self.checks.is_none() {
+            let Some(project) = &self.project else {
+                return;
+            };
+            let client = self.client.clone();
+            let project_id = project.id.clone();
+            self.checks = Some(cx.new(|cx| {
+                super::repository_checks::ChecksView::new(client, project_id, window, cx)
+            }));
             self.loading = false;
             self.error = None;
             cx.notify();
@@ -357,6 +377,12 @@ impl RepositoryView {
                 self.loading = false;
                 if let Some(issues) = &self.issues {
                     issues.update(cx, |issues, cx| issues.refresh(cx));
+                }
+            }
+            RepositoryTab::Checks => {
+                self.loading = false;
+                if let Some(checks) = &self.checks {
+                    checks.update(cx, |checks, cx| checks.refresh(cx));
                 }
             }
         }
@@ -579,6 +605,7 @@ impl RepositoryView {
                     Ok(pr) => {
                         this.pull_request = Some(pr);
                         this.load_pr_workspace(cx);
+                        this.load_pr_check(cx);
                     }
                     Err(error) => this.error = Some(error.to_string()),
                 }
@@ -794,6 +821,35 @@ impl RepositoryView {
         })
         .detach();
         cx.notify();
+    }
+
+    fn load_pr_check(&mut self, cx: &mut Context<Self>) {
+        self.pr_check = None;
+        let Some(pr) = &self.pull_request else {
+            return;
+        };
+        let Ok(branch) = pr.head_branch.parse() else {
+            return;
+        };
+        let generation = self.generation;
+        let request = self.client.call::<api::ListCiRuns>(p::ListCiRunsIn {
+            project_id: pr.project_id.clone(),
+            branch: Some(branch),
+            offset: Some(0.),
+        });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                if this.generation != generation {
+                    return;
+                }
+                if let Ok(runs) = result {
+                    this.pr_check = Some(runs.into_iter().next());
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn load_pr_workspace(&mut self, cx: &mut Context<Self>) {
@@ -1458,6 +1514,15 @@ impl RepositoryView {
                     "{} → {} · {}",
                     pr.head_branch, pr.base_branch, pr.state
                 ))
+                .children(self.pr_check.clone().map(|check| match check {
+                    Some(run) => format!(
+                        "Checks: {} · Run #{} on {}",
+                        super::ci_model::run_state(&run).0,
+                        run.number,
+                        super::ci_model::short_sha(&run.sha)
+                    ),
+                    None => format!("No checks have run for {}.", pr.head_branch),
+                }))
                 .child(pr.body.clone())
                 .child(
                     h_flex()
@@ -1599,6 +1664,14 @@ impl RepositoryView {
                     },
                     |issues| div().child(issues.clone()).into_any_element(),
                 ),
+                RepositoryTab::Checks => self.checks.as_ref().map_or_else(
+                    || {
+                        div()
+                            .child("Select Checks to load runs.")
+                            .into_any_element()
+                    },
+                    |checks| div().child(checks.clone()).into_any_element(),
+                ),
             }
         };
         let base_branch = project.default_branch.clone();
@@ -1679,12 +1752,13 @@ impl RepositoryView {
                         RepositoryTab::Commits => 1,
                         RepositoryTab::PullRequests => 2,
                         RepositoryTab::Issues => 3,
+                        RepositoryTab::Checks => 4,
                     })
                     .on_click(cx.listener(|this, index: &usize, window, cx| {
                         this.select_tab(*index, window, cx)
                     }))
                     .children(
-                        ["Code", "Commits", "Pull requests", "Issues"]
+                        ["Code", "Commits", "Pull requests", "Issues", "Checks"]
                             .map(|name| Tab::new().label(name)),
                     ),
             )
@@ -1930,6 +2004,10 @@ mod tests {
                         }
                         "listRepositoryPullRequests" => (200, json!([pr])),
                         "getRepositoryPullRequest" => (200, pr.clone()),
+                        "listCiRuns" => (
+                            200,
+                            json!([{"id":"run-1","projectId":"project-artifacts","number":7,"branch":input["branch"],"sha":"abcdef0123456789abcdef0123456789abcdef01","revision":1,"attempt":1,"trigger":"push","status":"completed","conclusion":"failure","createdAt":1,"startedAt":1,"completedAt":2,"url":"https://tempo.test/repositories?project=project-artifacts&tab=checks&run=run-1"}]),
+                        ),
                         "createRepositoryPullRequest" => {
                             pr["title"] = input["title"].clone();
                             pr["body"] = input["body"].clone();
@@ -2129,6 +2207,20 @@ mod tests {
         view.read_with(cx, |view, _| assert_eq!(view.pull_requests[0].number, 1.));
         view.update(cx, |view, cx| view.open_pull_request(1., cx));
         settle(cx, &view);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while view.read_with(cx, |view, _| view.pr_check.is_none()) {
+            assert!(Instant::now() < deadline, "PR checks did not load");
+            cx.run_until_parked();
+            std::thread::yield_now();
+        }
+        view.read_with(cx, |view, _| {
+            let run = view.pr_check.clone().flatten().unwrap();
+            assert_eq!(
+                (run.number, run.branch.as_str()),
+                (7., view.pull_request.as_ref().unwrap().head_branch.as_str())
+            );
+            assert_eq!(super::super::ci_model::run_state(&run).0, "Failed");
+        });
         view.update(cx, |view, cx| view.update_pull_request(true, cx));
         settle(cx, &view);
         view.read_with(cx, |view, _| {
