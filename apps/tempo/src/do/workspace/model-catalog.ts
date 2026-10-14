@@ -44,7 +44,8 @@ export const discoverModels = async (
 
   if (!container) throw new TempoError("CONTAINER_START_FAILED");
   const agentStatus = status.filter((entry) => Object.values(SECRET_KEYS).some((key) => key === entry.key));
-  const signature = JSON.stringify([container.images["workspace"], agentStatus]);
+  const cacheSignature = () => JSON.stringify([container.images["workspace"], agentStatus]);
+  const signature = cacheSignature();
   const cached = core.kv<{ signature: string; at: number; models: FnOutput<"listModels"> }>("catalogModels");
 
   if (cached?.signature === signature && Date.now() - cached.at < CACHE_MS) return cached.models;
@@ -82,8 +83,23 @@ export const discoverModels = async (
       () => undefined,
       {
         onEvent: async (event) => {
-          if (event.kind === "credential.changed")
-            await core.credentials().offerCodexAuth(event.content, event.lastRefresh, core.workspaceId);
+          if (event.kind !== "credential.changed") return;
+
+          const offered = await credentials.offerCodexAuth(
+            event.content,
+            event.lastRefresh,
+            core.workspaceId,
+          );
+
+          if (!offered.accepted) return;
+          const status = (await credentials.status()).find((entry) => entry.key === SECRET_KEYS.codex);
+          const auth = await credentials.getCodexAuth();
+
+          if (status && auth?.version === offered.version) {
+            const index = agentStatus.findIndex((entry) => entry.key === status.key);
+
+            if (index !== -1) agentStatus[index] = status;
+          }
         },
       },
     );
@@ -102,36 +118,45 @@ export const discoverModels = async (
       },
       env: {},
     });
-    const models: Array<FnOutput<"listModels">[number]> = [];
+    const discovery = client;
 
-    for (const agent of agents) {
-      const sessionId = newId();
-      const env = await agentEnv(core, agent);
+    const results = await Promise.allSettled(
+      agents.map(async (agent) => {
+        const sessionId = newId();
+        const env = await agentEnv(core, agent);
 
-      const session = await client.request("session.start", {
-        sessionId,
-        agent,
-        env,
-        browser: "local",
-        acpSessionId: null,
-      });
+        const session = await discovery.request("session.start", {
+          sessionId,
+          agent,
+          env,
+          browser: "local",
+          acpSessionId: null,
+        });
 
-      try {
-        const option = modelOption(session.configOptions);
+        try {
+          const option = modelOption(session.configOptions);
 
-        if (!option || !Schema.is(Schema.String)(option.currentValue))
-          throw new TempoError("AGENT_START_FAILED", `Could not load models from ${agent}.`);
-        const options = flattenConfigOptions(option);
+          if (!option || !Schema.is(Schema.String)(option.currentValue))
+            throw new TempoError("AGENT_START_FAILED", `Could not load models from ${agent}.`);
+          const options = flattenConfigOptions(option);
 
-        if (!options.length) throw new TempoError("AGENT_START_FAILED", `No models reported by ${agent}.`);
-        models.push({ agent, currentValue: option.currentValue, options });
-      } finally {
-        await client.request("session.close", { sessionId });
-      }
-    }
+          if (!options.length) throw new TempoError("AGENT_START_FAILED", `No models reported by ${agent}.`);
+
+          return { agent, currentValue: option.currentValue, options };
+        } finally {
+          await discovery.request("session.close", { sessionId });
+        }
+      }),
+    );
+
+    const models = results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+
+      return result.value;
+    });
 
     await client.drained();
-    core.setKv("catalogModels", { signature, at: Date.now(), models });
+    core.setKv("catalogModels", { signature: cacheSignature(), at: Date.now(), models });
 
     return models;
   } finally {

@@ -12,10 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { Switch } from "~/ui/components/ui/switch";
 import { Textarea } from "~/ui/components/ui/textarea";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
+import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { useAgents } from "~/ui/hooks/useAgents";
-import { agentLabel } from "~/ui/lib/agents";
+import { agentLabel, hasLogin } from "~/ui/lib/agents";
 import { cn } from "~/ui/lib/utils";
-import { CONFIRM_TEXT, confirm } from "~/ui/state/workspace-ui";
+import { CONFIRM_TEXT, confirm, openDialog } from "~/ui/state/workspace-ui";
 import {
   addTags,
   emptyForm,
@@ -31,6 +32,8 @@ import {
 /** Settings → Agents (04): the user's agents, with an editor (01, Agents). */
 export function LibraryTab() {
   const agents = useAgents();
+  const credentials = useCredentialStatus();
+  const available = AGENT_IDS.filter((a) => credentials.isSuccess && hasLogin(a, credentials.data));
   const [draft, setDraft] = useState(emptyForm());
   const [selected, setSelected] = useState<string | "new" | null>(null);
 
@@ -41,22 +44,37 @@ export function LibraryTab() {
   return (
     <div className="grid gap-6">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          A agent starts a chat with its own prompt, tools, MCP servers, model and reasoning level.
-        </p>
+        <Button size="sm" variant="ghost" onClick={() => openDialog({ kind: "settings", tab: "logins" })}>
+          Connect another agent
+        </Button>
         <Button
           size="sm"
+          variant={selected === null ? "default" : "ghost"}
+          disabled={available.length === 0}
           onClick={() => {
-            setDraft(emptyForm());
+            setDraft({ ...emptyForm(), baseAgent: available[0] ?? "auto" });
             setSelected("new");
           }}
         >
           <PlusIcon aria-hidden /> New agent
         </Button>
       </div>
+      {credentials.isPending && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Loading logins…
+        </p>
+      )}
+      {credentials.isError && (
+        <ErrorState error={credentials.error} onRetry={() => void credentials.refetch()} />
+      )}
+      {credentials.isSuccess && available.length === 0 && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Connect an agent in Logins to create an agent.
+        </p>
+      )}
       {agents.data.length === 0 && selected !== "new" && <EmptyState title="No agents yet." />}
       {agents.data.length > 0 && (
-        <ul className="flex flex-col divide-y rounded-lg border" aria-label="Agents">
+        <ul className="flex flex-col divide-y border-b" aria-label="Agents">
           {agents.data.map((a) => (
             <li key={a.id}>
               <button
@@ -75,9 +93,22 @@ export function LibraryTab() {
                     <span className="block truncate text-xs text-muted-foreground">{a.description}</span>
                   )}
                 </span>
-                <Badge variant="muted">
-                  {a.baseAgent === "auto" ? "Project default" : agentLabel(a.baseAgent)}
-                </Badge>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <Badge variant="muted">
+                    {a.baseAgent === "auto" ? "Project default" : agentLabel(a.baseAgent)}
+                  </Badge>
+                  {a.baseAgent !== "auto" && (
+                    <span className="text-xs text-muted-foreground">
+                      {credentials.isSuccess
+                        ? hasLogin(a.baseAgent, credentials.data)
+                          ? "Connected"
+                          : "Login required"
+                        : credentials.isError
+                          ? "Login unavailable"
+                          : "Checking login…"}
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           ))}
@@ -142,6 +173,10 @@ function AgentEditor({
 }) {
   const [form, setForm] = useState(initial);
   const [shown, setShown] = useState<FormErrors>({});
+  const credentials = useCredentialStatus();
+  const available = AGENT_IDS.filter((a) => credentials.isSuccess && hasLogin(a, credentials.data));
+  const connected = form.baseAgent === "auto" ? available.length > 0 : available.includes(form.baseAgent);
+  const canSave = Boolean(agentId) || connected;
   const change = (patch: Partial<AgentForm>) => setForm((f) => ({ ...f, ...patch }));
 
   const save = useCallMutation("saveAgent", {
@@ -161,6 +196,7 @@ function AgentEditor({
   });
 
   const submit = () => {
+    if (!canSave) return;
     const { errors, definition } = validateForm(form);
     setShown(errors);
 
@@ -178,7 +214,7 @@ function AgentEditor({
     <form
       noValidate
       aria-label={agentId ? `Edit ${initial.name}` : "New agent"}
-      className="grid gap-4 rounded-lg border p-4"
+      className="grid gap-5"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -228,24 +264,34 @@ function AgentEditor({
             onChange={(e) => change({ name: e.target.value })}
           />
         </Field>
-        <Field label="Base agent" htmlFor="ca-base" hint={note}>
+        <Field label="Base agent" htmlFor="ca-base">
           <Select
             value={form.baseAgent}
+            disabled={available.length === 0}
             onValueChange={(v) => {
               if (Schema.is(AgentBase)(v)) change({ baseAgent: v });
             }}
           >
             <SelectTrigger id="ca-base" className="w-full">
-              <SelectValue />
+              <SelectValue>
+                {form.baseAgent === "auto" ? "Project default" : agentLabel(form.baseAgent)}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {["auto", ...AGENT_IDS].map((a) => (
+              {["auto" as const, ...available].map((a) => (
                 <SelectItem key={a} value={a}>
-                  {a === "auto" ? "Project default" : a}
+                  {a === "auto" ? "Project default" : agentLabel(a)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <p className="min-h-5 text-xs text-muted-foreground">{note}</p>
+          {credentials.isSuccess && form.baseAgent !== "auto" && !connected && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {agentLabel(form.baseAgent)} is not connected. Its saved base agent is unchanged. Connect it in
+              Logins or choose a connected agent.
+            </p>
+          )}
         </Field>
       </div>
       <Field label="Description" htmlFor="ca-description" error={err("description")}>
@@ -317,8 +363,13 @@ function AgentEditor({
           onCheckedChange={(playwright) => change({ playwright })}
         />
       </div>
-      <fieldset className="grid gap-3">
+      <fieldset className="grid gap-3 border-t pt-4">
         <legend className="mb-2 text-sm font-medium">MCP servers</legend>
+        {form.servers.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Add a server to make its tools available to this agent.
+          </p>
+        )}
         {err("servers") && (
           <p role="alert" className="text-xs text-destructive">
             {err("servers")}
@@ -367,7 +418,7 @@ function AgentEditor({
           <Button type="button" size="sm" variant="ghost" onClick={() => onDone(agentId ?? null)}>
             Cancel
           </Button>
-          <Button type="submit" size="sm" disabled={save.isPending}>
+          <Button type="submit" size="sm" disabled={save.isPending || !canSave}>
             {save.isPending ? "Saving…" : "Save"}
             <SubmitKbd className="border-primary-foreground/30 bg-primary-foreground/15 text-primary-foreground" />
           </Button>
