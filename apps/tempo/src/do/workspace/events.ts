@@ -145,7 +145,7 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
             errorDetail: tail,
           })
         ) {
-          void afterTurnEnded(core, running.id);
+          core.ctx.waitUntil(afterTurnEnded(core, running.id));
         }
       }
 
@@ -286,7 +286,7 @@ const onTurnEnded = (rt: EventRuntime, event: TempodEventOf<"turn.ended">): void
     }
   }
 
-  void afterTurnEnded(core, turn.id);
+  core.ctx.waitUntil(afterTurnEnded(core, turn.id));
 };
 
 const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">): void => {

@@ -12,7 +12,11 @@ pub fn error_text(code: &str) -> &'static str {
         "VALIDATION_FAILED" => "Check the highlighted fields.",
         "PROJECT_EXISTS" => "This repo is already a project.",
         "PROJECT_HAS_WORKSPACES" => "Archive this project's workspaces first.",
-        "REPO_NOT_ACCESSIBLE" => "Install the GitHub App on this repo.",
+        "REPO_NOT_ACCESSIBLE" => "This repository is not accessible.",
+        "ARTIFACTS_NOT_CONFIGURED" => {
+            "Configure the Cloudflare Artifacts binding to host repositories."
+        }
+        "ARTIFACTS_API_ERROR" => "Cloudflare Artifacts could not complete the request.",
         "BRANCH_IN_USE" => "Another workspace uses this branch.",
         "BRANCH_INVALID" => "That branch name is not valid.",
         "BRANCH_ALREADY_PUSHED" => "You can't rename a branch after it is pushed.",
@@ -38,6 +42,9 @@ pub fn error_text(code: &str) -> &'static str {
         "NOT_PUSHED" => "Push the branch first.",
         "PR_EXISTS" => "A pull request already exists.",
         "PR_NOT_MERGEABLE" => "This pull request can't be merged yet.",
+        "CI_PIPELINE_INVALID" => "The CI pipeline is not valid.",
+        "CI_PIPELINE_CHANGED" => "The CI pipeline changed. Reload it and try again.",
+        "CI_NOT_CONFIGURED" => "Add a CI pipeline for this repository first.",
         "GITHUB_API_ERROR" => "GitHub returned an error.",
         "FILE_TOO_LARGE" => "This file is too large to show.",
         "PATH_OUTSIDE_WORKSPACE" => "That path is outside the workspace.",

@@ -1,3 +1,4 @@
+import { ISSUE_TOOL_NAMES } from "./issue-tools.ts";
 import { Schema } from "effect";
 import {
   AvailableCommand,
@@ -57,7 +58,7 @@ export type DoReq = typeof DoReq.Type;
 export const ToolReq = Schema.Struct({
   type: Schema.Literal("tool.req"),
   id: Schema.String,
-  op: Schema.Literals(["report_result", "list_agents", "propose_agent_change"]),
+  op: Schema.Literals(["report_result", "list_agents", "propose_agent_change", ...ISSUE_TOOL_NAMES]),
   sessionId: Schema.String,
   runId: Schema.optional(Schema.String),
   params: Schema.Json,
@@ -298,8 +299,14 @@ export const TEMPOD_REQUESTS = {
       author: Schema.Struct({ name: Schema.String, email: Schema.String }),
       /** Additive: "create" follows the 03 checkout per source; "wake" tracks origin/<branch> when it exists. */
       mode: Schema.optional(Schema.Literals(["create", "wake"])),
+      initializeEmpty: Schema.optional(Schema.Boolean),
     }),
     Schema.Struct({ headSha: Schema.String, remoteHeadSha: Schema.optional(Schema.NullOr(Schema.String)) }),
+    10 * 60_000,
+  ),
+  "ci.checkout": req(
+    Schema.Struct({ url: Schema.String, branch: Schema.String, sha: Schema.String }),
+    Schema.Struct({ sha: Schema.String }),
     10 * 60_000,
   ),
   "repo.applyCheckpoint": req(
@@ -431,6 +438,19 @@ export const TEMPOD_REQUESTS = {
     Empty,
     10_000,
   ),
+  "git.merge": req(
+    Schema.Struct({
+      baseBranch: Schema.String,
+      headBranch: Schema.String,
+      method: Schema.Literals(["merge", "squash"]),
+      headSha: Schema.String,
+      baseSha: Schema.String,
+      operationId: Schema.String,
+    }),
+    Schema.Struct({ commitSha: Schema.String }),
+    5 * 60_000,
+  ),
+  "git.deleteBranch": req(Schema.Struct({ branch: Schema.String }), Empty, 30_000),
   "fs.list": req(Empty, Schema.Struct({ paths: Schema.Array(Schema.String) }), 30_000),
   "fs.read": req(
     Schema.Struct({ path: Schema.String, maxBytes: Schema.Number }),

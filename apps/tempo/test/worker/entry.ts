@@ -3,6 +3,8 @@ export { WorkspaceDO } from "../../src/do/workspace/index.ts";
 
 export { UserHubDO } from "../../src/do/user-hub.ts";
 
+export { RepositoryCiDO } from "../../src/do/repository-ci.ts";
+
 export { CredentialDO } from "../../src/do/credential.ts";
 
 export { InjectorSecrets, TempoOutbound } from "../../src/egress/outbound.ts";

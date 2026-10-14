@@ -79,13 +79,13 @@ Every multi-step flow is an op in the WorkspaceDO `ops` table, run one step per 
 | `create` | `container.start` → `tempod.connect` → `repo.clone` → `settings.read` → `setup.run` → `done` |
 | `wake` | `container.start` → `tempod.connect` → if fresh disk: `repo.clone` → `repo.applyCheckpoint` → `home.restore` → `settings.read` → `setup.run`; then `sessions.markReload` → `artifacts.resume` → `done` |
 | `sleep` | `turns.check` → `git.checkpoint` (`pre_sleep`) → `bundle.upload` → `home.backup` → `artifacts.upload` → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `done` |
-| `archive` | `turns.cancel` → `script.archive` → `git.checkpoint` (`pre_archive`) → `bundle.upload` → `home.backup` → `artifacts.upload` → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `github.deleteBranch` → `done` |
+| `archive` | `turns.cancel` → `script.archive` → `git.checkpoint` (`pre_archive`) → `bundle.upload` → `home.backup` → `artifacts.upload` → `repo.deleteBranch` (native Git only) → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `github.deleteBranch` (GitHub only) → `done` |
 | `restore` | `branch.check` → `done` |
 | `revert` | `git.checkpoint` (`pre_revert`) → `bundle.upload` → `git.revert` → `transcript.mark` → `done` |
 | `commit_push` | `git.commitAndPush` → `done` |
 | `housekeeping` | `events.prune` → `r2.retention` → `egress.trim` → `done` |
 
-When the container is not running, `archive` skips every step that needs it and goes straight to `github.deleteBranch`.
+When the container is not running, GitHub `archive` skips every step that needs it and goes straight to `github.deleteBranch`. Native Artifacts archive with branch deletion enabled requires waking the workspace first (08); otherwise it fails before state mutation. Provider-specific clone, empty repo initialization and native pull request/merge behavior are defined in [09 Git Forge](09%20Git%20Forge.md).
 
 **Step limits**
 
@@ -110,6 +110,7 @@ When the container is not running, `archive` skips every step that needs it and 
 | `git.revert` | 2 min | 1 | `INTERNAL`; the safety checkpoint is kept |
 | `git.commitAndPush` | 5 min | 1 | `PUSH_REJECTED` or `INTERNAL` |
 | `github.deleteBranch` | 30 s | 3 | Skip; log `warn` |
+| `repo.deleteBranch` | 30 s | 3 | Native archive fails; deletion is never silently skipped |
 | Any other step | 30 s | 3 | `INTERNAL` |
 
 ## Create a workspace
@@ -355,3 +356,7 @@ Every known failure has one detector and one response. The user always sees the 
 | Staged artifact copy lost | `artifacts.resume` on a fresh disk | Row `lost`, item `failed` |
 | Outbox overflow | `outbox.overflow` | Notice item: some live events were lost; the transcript may have gaps |
 | Egress blocked | `TempoOutbound` rule 10 | 403 to the container; row in `egress_log` |
+
+## Request lifetime
+
+WorkspaceDO registers asynchronously scheduled queue startup, alarm arming and complete turn-end checkpoint/lifecycle/credential work with `ctx.waitUntil`, preserving that work when the initiating request ends. These tasks retain their existing error handling and timing.

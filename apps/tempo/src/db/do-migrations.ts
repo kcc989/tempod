@@ -578,6 +578,30 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       "ALTER TABLE sessions ADD COLUMN agent_version INTEGER",
     ],
   },
+  {
+    tag: "0013_repository_merge",
+    when: 1792785600000,
+    statements: [
+      `CREATE TABLE ops_new (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('create','wake','sleep','archive','restore','revert','commit_push','merge_pr','housekeeping')),
+  step TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending','running','done','failed','cancelled')),
+  attempt INTEGER NOT NULL DEFAULT 0,
+  next_run_at INTEGER NOT NULL,
+  input_json TEXT NOT NULL DEFAULT '{}',
+  state_json TEXT NOT NULL DEFAULT '{}',
+  error_code TEXT,
+  error_detail TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)`,
+      "INSERT INTO ops_new SELECT * FROM ops",
+      "DROP TABLE ops",
+      "ALTER TABLE ops_new RENAME TO ops",
+      "CREATE INDEX ops_due ON ops(status, next_run_at)",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [
@@ -610,6 +634,66 @@ export const USER_HUB_MIGRATIONS: Migrations = [
   workspace_id  TEXT PRIMARY KEY,
   summary_json  TEXT NOT NULL,
   rev           INTEGER NOT NULL
+)`,
+    ],
+  },
+];
+
+export const REPOSITORY_CI_MIGRATIONS: Migrations = [
+  {
+    tag: "0000_init",
+    when: 1792022400000,
+    statements: [
+      `CREATE TABLE pipelines (
+  revision    INTEGER PRIMARY KEY CHECK (revision >= 1),
+  source      TEXT NOT NULL,
+  spec_json   TEXT,
+  created_at  INTEGER NOT NULL
+)`,
+      `CREATE TABLE runs (
+  id             TEXT PRIMARY KEY,
+  number         INTEGER NOT NULL UNIQUE,
+  branch         TEXT NOT NULL,
+  sha            TEXT NOT NULL,
+  revision       INTEGER NOT NULL,
+  attempt        INTEGER NOT NULL CHECK (attempt >= 1),
+  trigger        TEXT NOT NULL CHECK (trigger IN ('push','manual','rerun')),
+  status         TEXT NOT NULL CHECK (status IN ('queued','running','completed')),
+  conclusion     TEXT CHECK (conclusion IN ('success','failure','cancelled')),
+  required_json  TEXT NOT NULL,
+  egress_json    TEXT NOT NULL,
+  created_at     INTEGER NOT NULL,
+  started_at     INTEGER,
+  completed_at   INTEGER,
+  UNIQUE (sha, revision, attempt)
+)`,
+      `CREATE INDEX runs_branch ON runs (branch, number)`,
+      `CREATE INDEX runs_status ON runs (status, number)`,
+      `CREATE TABLE jobs (
+  run_id           TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  key              TEXT NOT NULL,
+  position         INTEGER NOT NULL,
+  name             TEXT NOT NULL,
+  needs_json       TEXT NOT NULL,
+  command          TEXT NOT NULL,
+  timeout_minutes  INTEGER NOT NULL,
+  status           TEXT NOT NULL CHECK (status IN ('queued','running','completed')),
+  conclusion       TEXT CHECK (conclusion IN ('success','failure','cancelled','timed_out','skipped')),
+  exit_code        INTEGER,
+  summary          TEXT,
+  token            TEXT,
+  started_at       INTEGER,
+  completed_at     INTEGER,
+  PRIMARY KEY (run_id, key)
+)`,
+      `CREATE INDEX jobs_status ON jobs (status)`,
+      `CREATE TABLE branches (
+  name  TEXT PRIMARY KEY,
+  sha   TEXT NOT NULL
+)`,
+      `CREATE TABLE kv (
+  key         TEXT PRIMARY KEY,
+  value_json  TEXT NOT NULL
 )`,
     ],
   },

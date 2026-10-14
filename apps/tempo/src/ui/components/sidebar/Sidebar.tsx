@@ -153,6 +153,17 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
           variant="ghost"
           className="h-9 w-full justify-start gap-3 text-sm font-normal"
         >
+          <Link to="/repositories">
+            <FolderGit2Icon />
+            Repositories
+          </Link>
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          variant="ghost"
+          className="h-9 w-full justify-start gap-3 text-sm font-normal"
+        >
           <Link to="/history">
             <HistoryIcon />
             Archived workspaces

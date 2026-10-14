@@ -446,3 +446,20 @@ M3 rebases onto the owner's workspace-tools change (#44). Run activity uses that
 The sole owner waived legacy Artifacts definition imports on 2026-10-13. The binding, reader, writer, parsers and old editors are removed; old D1 pointer tables stay read-only until Gate I. Stored chat profiles and commit SHAs survive `0012_session_agents`. The owner approved flat Session fields `agentId`, `agentName`, `agentVersion` and `agentSha`; new library sessions freeze versions while older chats omit them and retain their model fallback. Empty models on new library sessions and runs select the adapter default.
 
 The owner allows redacted file-derived text in typed run results sent to Clef. The report schemas do not have a `snippet` field; unknown report fields remain errors. Decision state includes typed event results and changed paths, with no raw-file reads or env values. S20/S23 and deployed Gate I remain open pending real login setup.
+
+## Project CI (stage 5, 2026-10-14)
+
+The owner asked for stage 5 of `CLOUDFLARE-CODE-HOSTING-PLAN.md` on the Artifacts forge PR. Tab 10 defines the contracts. Choices and deviations from the plan:
+
+| Plan item | What the code does | Why |
+| --- | --- | --- |
+| Trusted CI Worker and Workflows | `RepositoryCiDO` (one per native project) coordinates runs with its own SQLite and alarm. Each job runs in a `WorkspaceDO` instance named `ci:<runId>:<jobKey>` with no workspace row, like model discovery. | Workflows and a second Worker are not in the D7 stack. Reusing `WorkspaceDO` keeps one container class and the Sandbox 1.0 path. |
+| `@cloudflare/ci` SDK | Not used. tempod adds `ci.checkout`; commands run through the existing `script.start` with kind `run` and `scriptId: "ci"`. | The SDK uses Sandbox 0.x APIs (rule 7) and injects credentials into commands. |
+| Push events (`cf.artifacts.repo.pushed`) | Not subscribed. Tempo pushes and merges call `ingest`; every 2 minutes the coordinator reconciles branch tips through Git ref advertisement. | Event subscriptions deliver to Queues, which are not in the stack. |
+| Custom CI images and runtime releases (stages 2 and 4) | Jobs use the deployment's pinned workspace image. | Those stages are separate. |
+| Dependency caches | None; every job checks out clean. | Cache correctness evidence is part of a later change. |
+| Merge-candidate checks (stage 6) | The gate checks the exact PR head SHA under the current pipeline revision. | Candidate refs need stage 6 decisions. |
+| Branch checks without a PR | The repository Checks tab shows them. Workspace check events still need a PR; native events add optional `commitSha`. | Changing event identity for PR-less workspaces needs an 08 decision. |
+| YAML parser | `parseCiPipeline` in `@tempo/settings`, with the already-approved `yaml` 2.9.1. Aliases are refused. | No new dependency. |
+
+Verification: Worker tests cover pipeline validation and revisions, ingestion dedupe, supersede and cancel, `needs`, the two-job limit, stale results, merge gating with workspace check events, runner launch/log/report, checkout failure, timeout, a lost container, a lost report and CI egress. tempod tests cover `ci.checkout`. Web model/component and Mac tests cover the Checks tab and PR checks. Live Artifacts, hosted container CI and native visual acceptance are not run.

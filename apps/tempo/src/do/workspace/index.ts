@@ -29,6 +29,7 @@ import type { EgressConfig } from "../../egress/rules.ts";
 import { BROWSER_APP_HEADER, BROWSER_CDP_HEADER, PREVIEW_HEADER } from "../../http/preview.ts";
 import { mcpToEgress } from "../../lib/mcp.ts";
 import { errorText, log } from "../../log.ts";
+import { assertArtifactRemote, assertArtifactRepositoryIdentity } from "../../artifacts/repositories.ts";
 import { openUiChannel } from "./channel.ts";
 import {
   connectTempod,
@@ -40,9 +41,12 @@ import {
 } from "./container.ts";
 import { CONVERSATION_INTERVAL_MS, markConversationDirty, saveConversation } from "./conversations.ts";
 import { discoverModels } from "./model-catalog.ts";
+import { ciAlarm, ciCancel, ciLog, ciStart } from "./ci-runner.ts";
+import type { CiJobStart } from "../../ci/types.ts";
+import { artifactToken } from "../../artifacts/repositories.ts";
 import { WorkspaceCore, type Author } from "./core.ts";
 import { applyTempodEvent, sendEnv, sendEnvironment } from "./events.ts";
-import { getGithubToken, pollPullRequestSafe } from "./git.ts";
+import { getGithubToken, getRepositoryToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { BROWSER_IDLE_MS, browserConnect, browserFetch, browserIdleCheck, closeBrowser } from "./browser.ts";
 import { newPreviewKey, previewEnter, previewFetch } from "./preview.ts";
@@ -352,8 +356,45 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       return null;
     }
   }
+  /** RepositoryCiDO: a run on this workspace's branch changed (10, Checks, merge and events). */
+  async ciChanged(): Promise<void> {
+    const row = this.core.wsOrNull();
+
+    if (!row || row.prNumber === null || row.archivedAt !== null) return;
+    await pollPullRequestSafe(this.core);
+  }
+  // ---------- CI runner (10, Execution) ----------
+  async ciStart(input: CiJobStart): Promise<Result<Record<string, never>>> {
+    return capture(async () => {
+      await ciStart(this.core, input);
+
+      return {};
+    });
+  }
+  async ciCancel(token: string): Promise<void> {
+    await ciCancel(this.core, token);
+  }
+  async ciLog(token: string): Promise<Result<{ text: string; truncated: boolean }>> {
+    return capture(() => ciLog(this.core, token));
+  }
   async getEgressConfig(): Promise<EgressConfig> {
+    const ci = this.ciJob();
+
+    if (ci)
+      return {
+        owner: "tempo",
+        repo: ci.repoName,
+        provider: "artifacts",
+        cloneUrl: assertArtifactRemote(ci.cloneUrl, ci.repoName).href,
+        policy: "allowlist",
+        allowlist: [...ci.egressAllowlist],
+        mcp: [],
+        ci: true,
+      };
     const project = await this.core.project();
+
+    if (project.provider === "artifacts")
+      await assertArtifactRepositoryIdentity(this.core.env, project.name, project.artifactRepoId);
     const environment = await this.core.environment();
     const settings = this.core.settings().environment;
     this.core.setKv("egressPolicy", environment?.egressPolicy ?? settings.egress_policy);
@@ -361,6 +402,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     return {
       owner: project.owner,
       repo: project.name,
+      provider: project.provider,
+      cloneUrl:
+        project.provider === "artifacts"
+          ? assertArtifactRemote(project.cloneUrl ?? "", project.name).href
+          : null,
       environmentId: environment?.id ?? null,
       policy: environment?.egressPolicy ?? settings.egress_policy,
       allowlist: environment?.egressAllowlist ?? settings.egress_allowlist,
@@ -368,6 +414,36 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       injectors: environment?.injectors ?? [],
       mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
     };
+  }
+
+  /** The job of a CI runner instance; never set on a workspace. */
+  private ciJob(): CiJobStart | null {
+    if (this.core.wsOrNull() || !this.ctx.id.name?.startsWith("ci:")) return null;
+
+    return this.core.kv<CiJobStart>("ciJob") ?? null;
+  }
+  async getRepositoryToken(): Promise<string | null> {
+    const ci = this.ciJob();
+
+    if (ci) {
+      try {
+        return await artifactToken(this.core.env, ci.repoName, "read", ci.artifactRepoId);
+      } catch {
+        log("warn", "ci repository credential unavailable", { runner: this.ctx.id.name });
+
+        return null;
+      }
+    }
+
+    if (!this.core.wsOrNull()) return null;
+
+    try {
+      return await getRepositoryToken(this.core);
+    } catch {
+      log("warn", "repository credential unavailable", { workspaceId: this.core.workspaceId });
+
+      return null;
+    }
   }
   async logEgress(row: {
     ts: number;
@@ -562,6 +638,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
         core.setKv("catalogToken", null);
       }
 
+      if (this.ciJob()) await ciAlarm(core);
+
       return;
     }
 
@@ -657,7 +735,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     this.alarmScheduled = true;
     queueMicrotask(() => {
       this.alarmScheduled = false;
-      void this.armAlarm().catch((e) => log("error", "arm alarm failed", { error: errorText(e) }));
+      this.ctx.waitUntil(
+        this.armAlarm().catch((e) => log("error", "arm alarm failed", { error: errorText(e) })),
+      );
     });
   }
   private scheduleHousekeeping(): void {
@@ -672,12 +752,14 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
       if (!this.core.wsOrNull()) return;
       this.core.lifecycle.kick();
-      void runQueue(
-        this.core,
-        () => this.runner.hasPendingOrRunning(),
-        () => applyPromptBranch(this.core, () => this.resendHello()),
-      ).catch((e) =>
-        log("error", "queue runner failed", { workspaceId: this.core.workspaceId, error: errorText(e) }),
+      this.ctx.waitUntil(
+        runQueue(
+          this.core,
+          () => this.runner.hasPendingOrRunning(),
+          () => applyPromptBranch(this.core, () => this.resendHello()),
+        ).catch((e) =>
+          log("error", "queue runner failed", { workspaceId: this.core.workspaceId, error: errorText(e) }),
+        ),
       );
     });
   }

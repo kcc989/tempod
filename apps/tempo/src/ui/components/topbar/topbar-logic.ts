@@ -6,7 +6,7 @@ import {
   type PrimaryAction,
   type PrimaryActionKind,
 } from "~/ui/lib/indicators";
-import { githubBranchUrl, githubPullUrl, githubRepoUrl } from "~/ui/lib/links";
+import { githubBranchUrl, githubPullUrl, githubRepoUrl, repositoryPath } from "~/ui/lib/links";
 import type { ActionId } from "~/ui/lib/shortcuts";
 
 export interface WorkspaceView {
@@ -113,10 +113,21 @@ export const powerAction = (state: WorkspaceState): PowerAction => {
 
 /** Open on GitHub: the PR, else the branch once pushed, else the repo. */
 export const githubUrlFor = (
-  project: { readonly owner: string; readonly name: string },
+  project: {
+    readonly owner: string;
+    readonly name: string;
+    readonly id?: string;
+    readonly provider?: string;
+  },
   w: Pick<WorkspaceSummary, "prNumber" | "branch">,
   pushed: boolean | undefined,
 ): string => {
+  if (project.provider === "artifacts" && project.id)
+    return repositoryPath(
+      project.id,
+      w.prNumber !== null ? { pull: w.prNumber } : pushed === false ? {} : { ref: w.branch },
+    );
+
   if (w.prNumber !== null) return githubPullUrl(project.owner, project.name, w.prNumber);
 
   if (pushed === false) return githubRepoUrl(project.owner, project.name);

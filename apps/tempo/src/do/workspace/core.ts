@@ -1,4 +1,5 @@
 import { proposalRecords } from "../../agents/proposals.ts";
+import type { CiCoordinator } from "../../ci/types.ts";
 import { Lifecycle } from "./lifecycle.ts";
 import type { OpResult } from "./runner.ts";
 import { and, asc, desc, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
@@ -62,8 +63,11 @@ export type DB = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
 export interface ProjectInfo {
   readonly id: string;
-  readonly installationId: number;
-  readonly repoId: number;
+  readonly installationId: number | null;
+  readonly repoId: number | null;
+  readonly provider: "github" | "artifacts";
+  readonly artifactRepoId: string | null;
+  readonly cloneUrl: string | null;
   readonly owner: string;
   readonly name: string;
   readonly defaultBranch: string;
@@ -180,6 +184,8 @@ export class WorkspaceCore {
         readonly devtools: Pick<BrowserRun["devtools"], "listTargets">;
       })
     | undefined;
+  /** The project's CI coordinator, for a CI runner's result (10); tests replace it. */
+  ciCoordinator = (projectId: string): CiCoordinator => this.env.REPOSITORY_CI.getByName(projectId);
   /** BrowserOutbound for this workspace: Browser Run's route to `localhost`. */
   browserOutbound: () => Fetcher = () =>
     this.ctx.exports.BrowserOutbound({ props: { workspaceId: this.workspaceId } });
@@ -212,7 +218,13 @@ export class WorkspaceCore {
     const userId = this.kv<string>("catalogUserId");
 
     if (userId && this.ctx.id.name === `models:${userId}`) return this.ctx.id.name;
+
+    if (this.ciUserId() && this.ctx.id.name?.startsWith("ci:")) return this.ctx.id.name;
     throw new TempoError("NOT_FOUND");
+  }
+  /** The owner of the CI job this instance runs (10, Components), if any. */
+  ciUserId(): string | undefined {
+    return this.kv<{ userId: string }>("ciJob")?.userId;
   }
   updateWs(patch: Partial<typeof workspace.$inferInsert>): void {
     this.db.update(workspace).set(patch).where(eq(workspace.id, 1)).run();
@@ -275,6 +287,9 @@ export class WorkspaceCore {
       id: row.id,
       installationId: row.installationId,
       repoId: row.repoId,
+      provider: row.provider,
+      artifactRepoId: row.artifactRepoId,
+      cloneUrl: row.cloneUrl,
       owner: row.repoOwner,
       name: row.repoName,
       defaultBranch: row.defaultBranch,
@@ -299,7 +314,7 @@ export class WorkspaceCore {
       .all();
   }
   credentials() {
-    const userId = this.wsOrNull()?.userId ?? this.kv<string>("catalogUserId");
+    const userId = this.wsOrNull()?.userId ?? this.kv<string>("catalogUserId") ?? this.ciUserId();
 
     if (!userId) throw new TempoError("NOT_FOUND");
 

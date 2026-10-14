@@ -14,6 +14,7 @@ export interface FirstRunInput {
   /** GET /api/setup/status → configured. */
   readonly configured: boolean;
   readonly installationCount: number;
+  readonly artifactProjectCount?: number;
   readonly credentials: CredentialStatus | undefined;
   readonly projectCount: number;
   /** Workspaces including archived ones. */
@@ -21,8 +22,16 @@ export interface FirstRunInput {
 }
 
 export const firstRunSteps = (i: FirstRunInput): FirstRunStep[] => [
-  { id: "createApp", label: "Create the GitHub App", done: i.configured },
-  { id: "installApp", label: "Install it on an account or org", done: i.installationCount > 0 },
+  {
+    id: "createApp",
+    label: "Create the GitHub App",
+    done: i.configured || (i.artifactProjectCount ?? 0) > 0,
+  },
+  {
+    id: "installApp",
+    label: "Install it on an account or org",
+    done: i.installationCount > 0 || (i.artifactProjectCount ?? 0) > 0,
+  },
   {
     id: "addLogin",
     label: "Add a Claude login, a Codex login, or an OpenRouter key",

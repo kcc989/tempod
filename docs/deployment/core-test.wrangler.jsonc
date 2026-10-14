@@ -50,6 +50,10 @@
       {
         "name": "CREDENTIALS",
         "class_name": "CredentialDO"
+      },
+      {
+        "name": "REPOSITORY_CI",
+        "class_name": "RepositoryCiDO"
       }
     ]
   },
@@ -63,6 +67,10 @@
       "storage": "sqlite"
     },
     "CredentialDO": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "RepositoryCiDO": {
       "type": "durable-object",
       "storage": "sqlite"
     }

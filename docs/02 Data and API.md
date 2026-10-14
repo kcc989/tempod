@@ -2,6 +2,8 @@
 
 This tab is the contract. Every table, column, message type and error code here is exact.
 
+[09 Git Forge](09%20Git%20Forge.md) extends these contracts with native repositories, nullable GitHub project identities, repository pull requests and issue/comment/label APIs.
+
 ## Conventions
 
 One set of rules for every store and every wire format.
@@ -38,8 +40,11 @@ CREATE TABLE github_installations (
 CREATE TABLE projects (
   id               TEXT PRIMARY KEY,
   user_id          TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
-  installation_id  INTEGER NOT NULL REFERENCES github_installations(installation_id),
-  repo_id          INTEGER NOT NULL,
+  installation_id  INTEGER REFERENCES github_installations(installation_id),
+  repo_id          INTEGER,
+  provider         TEXT NOT NULL DEFAULT 'github' CHECK (provider IN ('github','artifacts')),
+  artifact_repo_id TEXT,
+  clone_url        TEXT,
   repo_owner       TEXT NOT NULL,
   repo_name        TEXT NOT NULL,
   default_branch   TEXT NOT NULL,
@@ -48,7 +53,10 @@ CREATE TABLE projects (
   environment_id   TEXT REFERENCES environments(id) ON DELETE SET NULL,
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL,
-  UNIQUE (user_id, repo_id)
+  UNIQUE (user_id, repo_id),
+  UNIQUE (user_id, artifact_repo_id),
+  CHECK ((provider = 'github' AND installation_id IS NOT NULL AND repo_id IS NOT NULL)
+      OR (provider = 'artifacts' AND artifact_repo_id IS NOT NULL AND clone_url IS NOT NULL))
 );
 
 -- Named environments (01, Environments). No secret values: those live in CredentialDO.
@@ -547,6 +555,7 @@ One bucket, `tempo-data`, binding `DATA`. Keys are exact.
 | `homes/<workspaceId>/<recordId>.tar.zst` | `DirectoryBackup` of `/home/tempo` | `DirectoryBackup` | Newest 3 per workspace |
 | `attachments/<workspaceId>/<attachmentId>/<file name>` | Files the user attached to a prompt | Worker | Until the workspace is deleted |
 | `logs/<workspaceId>/<runId>.log` | Full script log, at most 50 MiB | WorkspaceDO | 30 days |
+| `ci/<projectId>/<runId>/<jobKey>.log` | Last 1 MiB of one CI job's output, redacted (10, Logs) | CI runner (WorkspaceDO `ci:` instance) | Newest 200 runs per project; deleted with the project |
 | `artifacts/<workspaceId>/<artifactId>/<version>/<name>` | One published artifact version, at most 25 MiB (01, Artifacts) | WorkspaceDO | Until the workspace is deleted |
 | `artifacts/projects/<projectId>/conversations/<workspaceId>.json` | Version 1 conversation artifact: project/workspace identity, title, branch, save time, sessions, turns and transcript items | WorkspaceDO | Indefinitely, including after workspace deletion |
 
@@ -935,6 +944,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `op` | `params` | `result` | Timeout |
 | --- | --- | --- | --- |
 | `repo.clone` | `{url, branch, baseBranch, source, author: {name, email}}` | `{headSha}` | 10 min |
+| `ci.checkout` | `{url, branch, sha}` | `{sha}` | 10 min (10, Execution) |
 | `repo.applyCheckpoint` | `{bundlePath, checkpointId, branch}` | `{headSha}` | 5 min |
 | `settings.read` | `{overrides}` | `{effective, warnings, errors}` | 10 s |
 | `env.set` | `{env}` | `{}` | 10 s |
@@ -1034,7 +1044,10 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `PUSH_REJECTED` | Remote refused the push | Push was rejected. Pull or rebase first. |
 | `NOT_PUSHED` | PR before the branch is pushed | Push the branch first. |
 | `PR_EXISTS` | A PR already exists for the branch | A pull request already exists. |
-| `PR_NOT_MERGEABLE` | GitHub says the PR cannot merge | This pull request can't be merged yet. |
+| `PR_NOT_MERGEABLE` | GitHub says the PR cannot merge, or native required checks have not passed (10) | This pull request can't be merged yet. |
+| `CI_PIPELINE_INVALID` | The project CI pipeline breaks a rule of 10; detail names the first problem | The CI pipeline is not valid. |
+| `CI_PIPELINE_CHANGED` | The pipeline revision changed since it was read | The CI pipeline changed. Reload it and try again. |
+| `CI_NOT_CONFIGURED` | A CI run needs an enabled pipeline | Add a CI pipeline for this repository first. |
 | `GITHUB_API_ERROR` | Any other GitHub API failure | GitHub returned an error. |
 | `FILE_TOO_LARGE` | File over the read limit | This file is too large to show. |
 | `PATH_OUTSIDE_WORKSPACE` | Path escapes the allowed folders | That path is outside the workspace. |

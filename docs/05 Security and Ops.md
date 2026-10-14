@@ -80,6 +80,7 @@ A container has no internet of its own. Every HTTP and HTTPS request goes throug
 - Policy `allowlist` (default): only the built-in agent hosts (01), the `egress_allowlist` patterns, and the hosts of the owner's enabled `http` and `sse` MCP servers pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
 - Every request is logged to `egress_log`: host, path without query, status, time, rule number. The WorkspaceDO keeps the newest 10,000 rows. Diagnostics searches all of them (Observability).
 - Cloud metadata addresses are not reachable from containers, so Tempo needs no rule for them.
+- CI job containers (10, Egress) use a separate, smaller rule set: read-only access to their own repository through a read token, no other credential or placeholder swap, and the built-in hosts plus the owner-approved pipeline `egress_allowlist`. Their requests are logged with `log()`, not stored in `egress_log`.
 
 ## Preview access
 
@@ -185,10 +186,10 @@ Every log line is structured JSON, and every workspace has a Diagnostics view th
 
 A deploy MUST NOT break running containers. Old `tempod` binaries keep running until their container is destroyed.
 
-- **Protocol changes are additive only** within protocol version 1: new ops, new events and new optional fields. The DO logs and ignores unknown event kinds. `tempod` answers unknown ops with `{ok: false, error: {code: "UNKNOWN_OP"}}`.
+- **Protocol changes are additive only** within protocol version 1: new ops, new events and new optional fields. The explicit native repository extension in 08 also permits nullable GitHub identities on Project and requires Mac client 0.2.0. The DO logs and ignores unknown event kinds. `tempod` answers unknown ops with `{ok: false, error: {code: "UNKNOWN_OP"}}`.
 - The DO reads `tempod`'s version from `/v1/health` and logs a `warn` when it differs from its own build.
 - **Image changes** make every snapshot unusable, so the next wake of each workspace takes the fresh path. Release notes MUST say when the image changed.
-- **Migrations** are forward only. Version 1 MUST NOT drop or rename a column; add new ones instead.
+- **Migrations** are forward only. Add columns by default. The preservation-tested `projects` and DO `ops` reconstructions in 08 are the permitted exceptions to relax GitHub-only NOT NULL constraints and extend the operation-kind CHECK without dropping existing data.
 - **Agent upgrades:** change `container/versions.json`, rebuild, run the adapter conformance tests (06), deploy.
 - **Rollback:** deploy the previous build. Containers started on the newer image keep it until they sleep.
 

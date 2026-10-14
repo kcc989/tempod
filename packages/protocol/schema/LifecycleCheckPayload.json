@@ -12,6 +12,16 @@
           "minimum": 0
         }
       ]
+    },
+    "commitSha": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["prNumber"],

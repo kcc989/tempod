@@ -2,7 +2,14 @@ import { Schema } from "effect";
 import { and, desc, eq, gt, inArray, isNotNull, lt, lte, ne } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { pickSlug } from "@tempo/cities";
-import { TempoError, newId, revertNote, type CheckpointReason, type OpKind } from "@tempo/protocol";
+import {
+  TempoError,
+  newId,
+  revertNote,
+  type CheckpointReason,
+  type OpKind,
+  type TempodParams,
+} from "@tempo/protocol";
 import { workspaces } from "../../db/d1.ts";
 import { json } from "../../db/json.ts";
 import {
@@ -20,6 +27,12 @@ import {
   type OpRow,
 } from "../../db/workspace-do.ts";
 import { github } from "../../github/provider.ts";
+import { assertArtifactRemote, assertArtifactRepositoryIdentity } from "../../artifacts/repositories.ts";
+import {
+  findArtifactOpenPullRequest,
+  prepareArtifactMerge,
+  completeArtifactMerge,
+} from "../../artifacts/pull-requests.ts";
 import { errorText, log } from "../../log.ts";
 import {
   connectTempod,
@@ -47,7 +60,13 @@ import {
 } from "./durability.ts";
 import { sendEnv } from "./events.ts";
 import { resumeArtifacts, uploadAllArtifacts } from "./artifacts.ts";
-import { getGithubToken, refreshChanges } from "./git.ts";
+import {
+  getGithubToken,
+  ingestCi,
+  refreshChanges,
+  refreshPullRequest,
+  repositoryBranchExists,
+} from "./git.ts";
 import { closeBrowser } from "./browser.ts";
 import { finishTurn } from "./queue.ts";
 import {
@@ -108,13 +127,7 @@ const checkPushedBranch = async (core: WorkspaceCore): Promise<void> => {
   if (row.pushed !== 1) return;
 
   try {
-    const project = await core.project();
-
-    const exists = await github.branchExists(
-      await getGithubToken(core),
-      { owner: project.owner, name: project.name },
-      row.branch,
-    );
+    const exists = await repositoryBranchExists(core, row.branch);
 
     if (!exists) markBranchGone(core);
   } catch (e) {
@@ -212,26 +225,43 @@ export const operationSteps = (handlers: ConnectHandlers) => {
       const source = json.source.read(row.sourceJson, { kind: "new" });
       const asCreate = firstStart(core, op);
 
-      const res = await (
-        await tempodFor(core, handlers)
-      ).request(
-        "repo.clone",
-        {
-          url: `https://github.com/${project.owner}/${project.name}.git`,
-          branch: row.branch,
-          baseBranch: row.baseBranch,
-          source,
-          author: core.author(),
-          mode: asCreate ? "create" : "wake",
-        },
-        { signal },
-      );
+      if (project.provider === "artifacts")
+        await assertArtifactRepositoryIdentity(core.env, project.name, project.artifactRepoId);
+
+      const cloneUrl =
+        project.provider === "artifacts"
+          ? assertArtifactRemote(project.cloneUrl ?? "", project.name).href
+          : `https://github.com/${project.owner}/${project.name}.git`;
+
+      let params: TempodParams<"repo.clone"> = {
+        url: cloneUrl,
+        branch: row.branch,
+        baseBranch: row.baseBranch,
+        source,
+        author: core.author(),
+        mode: asCreate ? "create" : "wake",
+      };
+
+      if (
+        project.provider === "artifacts" &&
+        asCreate &&
+        source.kind === "new" &&
+        row.baseBranch === project.defaultBranch
+      )
+        params = { ...params, initializeEmpty: true };
+
+      const res = await (await tempodFor(core, handlers)).request("repo.clone", params, { signal });
 
       if (asCreate) {
         if (source.kind !== "new" && res.remoteHeadSha)
           core.updateWs({ pushed: 1, lastPushedSha: res.remoteHeadSha });
       } else if (row.pushed === 1 && !res.remoteHeadSha) {
         markBranchGone(core);
+      }
+
+      if (project.provider === "artifacts" && source.kind === "pr") {
+        core.updateWs({ prNumber: source.number });
+        await refreshPullRequest(core);
       }
 
       return "next";
@@ -522,6 +552,30 @@ export const operationSteps = (handlers: ConnectHandlers) => {
 
       return "next";
     },
+
+    "repo.deleteBranch": async (sc) => {
+      const { core, signal } = sc;
+      const row = core.ws();
+      const project = await core.project();
+
+      if (
+        project.provider !== "artifacts" ||
+        !core.settings().git.delete_branch_on_archive ||
+        row.pushed !== 1 ||
+        row.prState === "open" ||
+        row.prState === "draft" ||
+        row.branch === project.defaultBranch ||
+        row.branch === row.baseBranch
+      )
+        return skip(sc);
+
+      if (await findArtifactOpenPullRequest(core.env, project, row.branch)) return skip(sc);
+      await (await tempodFor(core, handlers)).request("git.deleteBranch", { branch: row.branch }, { signal });
+      markBranchGone(core);
+
+      return "next";
+    },
+
     "github.deleteBranch": async (sc) => {
       const { core } = sc;
       const row = core.ws();
@@ -530,6 +584,13 @@ export const operationSteps = (handlers: ConnectHandlers) => {
 
       if (row.prState === "open" || row.prState === "draft") return skip(sc);
       const project = await core.project();
+
+      if (
+        project.provider === "artifacts" ||
+        row.branch === project.defaultBranch ||
+        row.branch === row.baseBranch
+      )
+        return skip(sc);
 
       try {
         await github.deleteBranch(
@@ -631,12 +692,72 @@ export const operationSteps = (handlers: ConnectHandlers) => {
 
       core.updateWs({ pushed: 1, lastPushedSha: res.commitSha, forcePushLease: 0 });
       core.setKv("hasUnpushedCommits", false);
+      ingestCi(core, row.branch, res.commitSha);
       core.publish();
       state["result"] = { commitSha: res.commitSha };
       core.ctx.waitUntil(refreshChanges(core).catch(() => undefined));
 
       return "next";
     },
+
+    "git.merge": async ({ core, op, input, state, signal }) => {
+      const project = await core.project();
+
+      if (project.provider !== "artifacts") throw new TempoError("PR_NOT_MERGEABLE");
+      const method = input["method"];
+
+      if (method !== "merge" && method !== "squash") throw new TempoError("PR_NOT_MERGEABLE");
+      const number = Number(input["number"]);
+      const pushedMergeSha = state["pushedMergeSha"] ?? input["pushedMergeSha"];
+
+      if (pushedMergeSha !== undefined) {
+        await completeArtifactMerge(core.env, project, number, pushedMergeSha);
+        core.updateWs({ prState: "merged", checksState: null });
+        core.publish();
+        state["result"] = {};
+
+        return "next";
+      }
+
+      const merge = await prepareArtifactMerge(core.env, project, number);
+
+      if (!("mergeSha" in merge)) {
+        const blocked = await core.env.REPOSITORY_CI.getByName(project.id).mergeBlock(merge.headSha);
+
+        if (blocked) throw new TempoError("PR_NOT_MERGEABLE", undefined, blocked);
+
+        const result = await (
+          await tempodFor(core, handlers)
+        ).request(
+          "git.merge",
+          {
+            baseBranch: merge.pullRequest.baseBranch,
+            headBranch: merge.pullRequest.headBranch,
+            headSha: merge.headSha,
+            baseSha: merge.baseSha,
+            operationId: merge.operationId,
+            method,
+          },
+          { signal },
+        );
+
+        state["pushedMergeSha"] = result.commitSha;
+        core.db
+          .update(ops)
+          .set({ stateJson: JSON.stringify(state), updatedAt: Date.now() })
+          .where(eq(ops.id, op.id))
+          .run();
+        await completeArtifactMerge(core.env, project, number, result.commitSha);
+        ingestCi(core, merge.pullRequest.baseBranch, result.commitSha);
+      }
+
+      core.updateWs({ prState: "merged", checksState: null });
+      core.publish();
+      state["result"] = {};
+
+      return "next";
+    },
+
     "events.prune": async ({ core }) => {
       core.db
         .delete(events)
@@ -806,6 +927,7 @@ export const operationHooks = (
   },
   revert: { onDone: () => undefined, onFailed: () => undefined },
   commit_push: { onDone: () => undefined, onFailed: () => undefined },
+  merge_pr: { onDone: () => undefined, onFailed: () => undefined },
   housekeeping: { onDone: () => scheduleHousekeeping(), onFailed: () => scheduleHousekeeping() },
 });
 

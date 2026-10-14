@@ -1,6 +1,6 @@
 # Rules for agents working on Tempo
 
-The Tempo Spec (tabs 00 to 07 in `docs/`) is the source of truth. Read the tab for the area you change before you write code.
+The Tempo Spec (tabs 00 to 09 in `docs/`) is the source of truth. Read the tab for the area you change before you write code.
 
 ## Never guess
 

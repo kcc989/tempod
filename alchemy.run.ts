@@ -79,6 +79,7 @@ export default Alchemy.Stack(
         APP_HOST,
         PREVIEW_DOMAIN,
         TEMPO_OWNER_GITHUB_ID,
+        TEMPO_ARTIFACTS_NAMESPACE: process.env.TEMPO_ARTIFACTS_NAMESPACE ?? "tempo-repos",
         TEMPO_D1_DATABASE_ID: db.databaseId,
         TEMPO_D1_DATABASE_NAME: db.databaseName,
         TEMPO_R2_BUCKET_NAME: data.bucketName,

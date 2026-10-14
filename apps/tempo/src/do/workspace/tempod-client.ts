@@ -1,3 +1,5 @@
+import { issueTool } from "../../agents/issues.ts";
+import { IssueToolName } from "@tempo/protocol";
 import { agentTool } from "../../agents/proposals.ts";
 import { toTurnUsage, type LifecycleEvent } from "@tempo/protocol";
 import {
@@ -30,6 +32,16 @@ const decodeEvent = Schema.decodeUnknownExit(TempodEvent);
 
 export type EventHandler = (event: TempodEvent, envelope: TempodEventEnvelope) => Promise<void> | void;
 
+/**
+ * A container with no workspace row: model discovery (01) or a CI job (10). Events go only to
+ * `onEvent`, in seq order, and are acked by seq; they are never stored as workspace events.
+ */
+export interface DetachedEvents {
+  readonly onEvent: (event: TempodEvent, seq: number) => Promise<void> | void;
+  /** The last seq already applied, so a replay after reconnect is skipped. */
+  readonly appliedSeq?: () => number;
+}
+
 interface Pending {
   readonly op: TempodOp;
   readonly complete: (response: TempodRes) => void;
@@ -50,14 +62,14 @@ export class TempodClient {
   private chain: Promise<void> = Promise.resolve();
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private unacked = 0;
-  private catalogAck = 0;
+  private detachedAck = 0;
   closed = false;
   constructor(
     private readonly core: WorkspaceCore,
     private readonly socket: Pick<WebSocket, "send" | "close" | "addEventListener">,
     private readonly onEvent: EventHandler,
     private readonly onClose: (client: TempodClient, code: number) => void,
-    private readonly catalogUserId?: string,
+    private readonly detached?: DetachedEvents,
   ) {
     socket.addEventListener("message", (e) => this.onMessage(e.data));
     socket.addEventListener("close", (e) => this.handleClose(e.code));
@@ -208,7 +220,7 @@ export class TempodClient {
     }
   }
   private async agentTool(request: ToolReq): Promise<Schema.Json> {
-    if (this.catalogUserId) throw new TempoError("NOT_FOUND");
+    if (this.detached) throw new TempoError("NOT_FOUND");
     const session = this.core.sessionRow(request.sessionId);
 
     if (request.op === "report_result") {
@@ -217,6 +229,8 @@ export class TempodClient {
       return this.core.lifecycle.runs.report(session.id, request.runId, request.params);
     }
 
+    if (Schema.is(IssueToolName)(request.op)) return issueTool(this.core, request);
+
     if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
 
     return agentTool(this.core, request);
@@ -224,16 +238,14 @@ export class TempodClient {
   private async applyEvent(envelope: TempodEventEnvelope): Promise<void> {
     if (this.closed) return;
 
-    if (this.catalogUserId) {
+    if (this.detached) {
       const decoded = decodeEvent(envelope.event);
+      const replay = envelope.seq <= (this.detached.appliedSeq?.() ?? 0);
 
-      if (Exit.isSuccess(decoded) && decoded.value.kind === "credential.changed") {
-        await this.core
-          .credentials()
-          .offerCodexAuth(decoded.value.content, decoded.value.lastRefresh, this.core.workspaceId);
-      }
+      if (Exit.isSuccess(decoded) && (!replay || decoded.value.kind === "incarnation.changed"))
+        await this.detached.onEvent(decoded.value, envelope.seq);
 
-      this.catalogAck = envelope.seq;
+      this.detachedAck = Math.max(this.detachedAck, envelope.seq);
       this.queueAck(true);
 
       return;
@@ -375,7 +387,7 @@ export class TempodClient {
       this.socket.send(
         JSON.stringify({
           type: "ack",
-          upTo: this.catalogUserId ? this.catalogAck : this.core.ws().tempodAckedSeq,
+          upTo: this.detached ? this.detachedAck : this.core.ws().tempodAckedSeq,
         }),
       );
     } catch {
@@ -403,7 +415,7 @@ export const tempodFetch = (core: WorkspaceCore, path: string, init: RequestInit
   const container = core.container;
 
   if (!container) throw new TempoError("CONTAINER_NOT_READY");
-  const token = core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken");
+  const token = core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken") ?? core.kv<string>("ciToken");
 
   if (!token) throw new TempoError("CONTAINER_NOT_READY");
   const headers = new Headers(init.headers);

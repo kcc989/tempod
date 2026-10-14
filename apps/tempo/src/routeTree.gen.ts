@@ -14,6 +14,8 @@ import { Route as DeviceRouteImport } from './routes/device'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
+import { Route as AppRepositoriesRouteImport } from './routes/_app/repositories'
+import { Route as AppWorkspacesRouteImport } from './routes/_app/workspaces'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/_app/w.$workspaceId'
 
 const AppRoute = AppRouteImport.update({
@@ -40,6 +42,16 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRepositoriesRoute = AppRepositoriesRouteImport.update({
+  id: '/repositories',
+  path: '/repositories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWorkspacesRoute = AppWorkspacesRouteImport.update({
+  id: '/workspaces',
+  path: '/workspaces',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppWWorkspaceIdRoute = AppWWorkspaceIdRouteImport.update({
   id: '/w/$workspaceId',
   path: '/w/$workspaceId',
@@ -51,12 +63,16 @@ export interface FileRoutesByFullPath {
   '/device': typeof DeviceRoute
   '/login': typeof LoginRoute
   '/history': typeof AppHistoryRoute
+  '/repositories': typeof AppRepositoriesRoute
+  '/workspaces': typeof AppWorkspacesRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
 export interface FileRoutesByTo {
   '/device': typeof DeviceRoute
   '/login': typeof LoginRoute
   '/history': typeof AppHistoryRoute
+  '/repositories': typeof AppRepositoriesRoute
+  '/workspaces': typeof AppWorkspacesRoute
   '/': typeof AppIndexRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
@@ -66,20 +82,38 @@ export interface FileRoutesById {
   '/device': typeof DeviceRoute
   '/login': typeof LoginRoute
   '/_app/history': typeof AppHistoryRoute
+  '/_app/repositories': typeof AppRepositoriesRoute
+  '/_app/workspaces': typeof AppWorkspacesRoute
   '/_app/': typeof AppIndexRoute
   '/_app/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/device' | '/login' | '/history' | '/w/$workspaceId'
+  fullPaths:
+    | '/'
+    | '/device'
+    | '/login'
+    | '/history'
+    | '/repositories'
+    | '/workspaces'
+    | '/w/$workspaceId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/device' | '/login' | '/history' | '/' | '/w/$workspaceId'
+  to:
+    | '/device'
+    | '/login'
+    | '/history'
+    | '/repositories'
+    | '/workspaces'
+    | '/'
+    | '/w/$workspaceId'
   id:
     | '__root__'
     | '/_app'
     | '/device'
     | '/login'
     | '/_app/history'
+    | '/_app/repositories'
+    | '/_app/workspaces'
     | '/_app/'
     | '/_app/w/$workspaceId'
   fileRoutesById: FileRoutesById
@@ -127,6 +161,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHistoryRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/repositories': {
+      id: '/_app/repositories'
+      path: '/repositories'
+      fullPath: '/repositories'
+      preLoaderRoute: typeof AppRepositoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/workspaces': {
+      id: '/_app/workspaces'
+      path: '/workspaces'
+      fullPath: '/workspaces'
+      preLoaderRoute: typeof AppWorkspacesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/w/$workspaceId': {
       id: '/_app/w/$workspaceId'
       path: '/w/$workspaceId'
@@ -139,12 +187,16 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppHistoryRoute: typeof AppHistoryRoute
+  AppRepositoriesRoute: typeof AppRepositoriesRoute
+  AppWorkspacesRoute: typeof AppWorkspacesRoute
   AppIndexRoute: typeof AppIndexRoute
   AppWWorkspaceIdRoute: typeof AppWWorkspaceIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppHistoryRoute: AppHistoryRoute,
+  AppRepositoriesRoute: AppRepositoriesRoute,
+  AppWorkspacesRoute: AppWorkspacesRoute,
   AppIndexRoute: AppIndexRoute,
   AppWWorkspaceIdRoute: AppWWorkspaceIdRoute,
 }

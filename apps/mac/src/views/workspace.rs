@@ -3554,7 +3554,7 @@ mod tests {
                 .unwrap()
                 .client(tempo_client::Token::new("test-token"));
             let (window, view) = mount(cx, state, client);
-            cx.update_window(window, |_, window, cx| {
+            cx.update_window(window, |_, _, cx| {
                 view.update(cx, |view, cx| {
                     view.tools.update(cx, |tools, cx| {
                         tools.info.update(cx, |info, cx| info.search_branches(cx))

@@ -1100,6 +1100,7 @@ describe("OP_STEPS", () => {
       "bundle.upload",
       "home.backup",
       "artifacts.upload",
+      "repo.deleteBranch",
       "tempod.shutdown",
       "container.snapshot",
       "container.destroy",
@@ -1108,6 +1109,7 @@ describe("OP_STEPS", () => {
     restore: ["branch.check"],
     revert: ["git.checkpoint", "bundle.upload", "git.revert", "transcript.mark"],
     commit_push: ["git.commitAndPush"],
+    merge_pr: ["git.merge"],
     housekeeping: ["events.prune", "r2.retention", "egress.trim"],
   } satisfies Record<string, string[]>;
 

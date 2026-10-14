@@ -33,7 +33,7 @@ import { Skeleton } from "~/ui/components/ui/skeleton";
 import { useCallQuery } from "~/ui/hooks/useCall";
 import { formatRelative } from "~/ui/lib/format";
 import { pillText, statusIndicator } from "~/ui/lib/indicators";
-import { githubChecksUrl } from "~/ui/lib/links";
+import { projectChecksUrl } from "~/ui/lib/links";
 import { cn } from "~/ui/lib/utils";
 import { setPhonePane } from "~/ui/state/workspace-ui";
 import { ChecksDot, PrBadge, StatusIcon } from "./indicators";
@@ -191,7 +191,7 @@ function RowMenu({
         <ContextMenuItem asChild>
           <a href={githubUrlFor(project, w, undefined)} target="_blank" rel="noopener noreferrer">
             <ExternalLinkIcon />
-            Open PR on GitHub
+            {project.provider === "artifacts" ? "Open pull request" : "Open PR on GitHub"}
           </a>
         </ContextMenuItem>
       )}
@@ -224,8 +224,7 @@ function RowHoverCard({
   const primary = detail.data ? topPrimary(view) : null;
   const power = powerAction(view.w.state);
 
-  const checksUrl =
-    project && w.prNumber !== null ? githubChecksUrl(project.owner, project.name, w.prNumber) : undefined;
+  const checksUrl = project && w.prNumber !== null ? projectChecksUrl(project, w.prNumber) : undefined;
 
   return (
     <div className="flex flex-col gap-2.5">

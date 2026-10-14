@@ -70,6 +70,9 @@ test.describe("AT-1 owner sign-in", () => {
 test("AT-2 link a repo, create a workspace with a prompt: first agent output under 120 s, branch tempo/<slug> in the container", async () => {
   await requireChannels();
   const project = await testProject();
+
+  if (project.installationId === null || project.repoId === null)
+    throw new Error("AT-2 requires a GitHub-linked test project.");
   const repos = await rpc("listInstallationRepos", { installationId: project.installationId });
   expect(repos.map((r) => r.repoId)).toContain(project.repoId);
 

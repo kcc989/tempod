@@ -35,6 +35,8 @@ export const AGENT_HOSTS = [
 export interface EgressConfig {
   readonly owner: string;
   readonly repo: string;
+  readonly provider?: "github" | "artifacts";
+  readonly cloneUrl?: string | null;
   readonly policy: EgressPolicy;
   readonly allowlist: ReadonlyArray<string>;
   readonly mcp: ReadonlyArray<McpEgress>;
@@ -42,6 +44,8 @@ export interface EgressConfig {
   readonly environmentId?: string | null;
   readonly secrets?: ReadonlyArray<SecretBinding>;
   readonly injectors?: ReadonlyArray<Injector>;
+  /** A CI job's container (10, Egress): read-only repository access and no credentials. */
+  readonly ci?: boolean;
 }
 
 export const isRepoPath = (path: string, owner: string, repo: string): boolean => {
@@ -137,7 +141,13 @@ export type Decision =
       readonly action: "forward";
       readonly set?: {
         readonly name: string;
-        readonly value: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai";
+        readonly value:
+          | "github-basic"
+          | "github-bearer"
+          | "artifact-bearer"
+          | "openrouter"
+          | "anthropic"
+          | "openai";
       };
       /** Rule 12: headers to replace with the CredentialDO value under `key`. */
       readonly mcp?: ReadonlyArray<{ readonly name: string; readonly key: string }>;
@@ -158,14 +168,32 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
 
   if (url.protocol === "http:") return policy(8, host, config);
 
+  if (config.ci) return decideForCi(url, headers, host, config);
+
+  if (config.provider === "artifacts" && config.cloneUrl) {
+    const remote = new URL(config.cloneUrl);
+    const endpoint = url.pathname.slice(remote.pathname.length);
+
+    if (
+      remote.protocol === "https:" &&
+      url.protocol === "https:" &&
+      url.origin === remote.origin &&
+      url.pathname.startsWith(remote.pathname) &&
+      ["", "/info/refs", "/git-upload-pack", "/git-receive-pack"].includes(endpoint)
+    ) {
+      return { rule: 2, action: "forward", set: { name: "authorization", value: "artifact-bearer" } };
+    }
+  }
+
   if (
+    config.provider !== "artifacts" &&
     (host === "github.com" || host === "codeload.github.com") &&
     isRepoPath(url.pathname, config.owner, config.repo)
   ) {
     return { rule: 2, action: "forward", set: { name: "authorization", value: "github-basic" } };
   }
 
-  if (host === "api.github.com" || host === "uploads.github.com") {
+  if (config.provider !== "artifacts" && (host === "api.github.com" || host === "uploads.github.com")) {
     return { rule: 3, action: "forward", set: { name: "authorization", value: "github-bearer" } };
   }
 
@@ -195,6 +223,30 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
   if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
 
   return policy(8, host, config);
+};
+
+/** 10, Egress: only fetches from the project's remote get a (read) token; nothing else gets a credential. */
+const decideForCi = (url: URL, headers: Headers, host: string, config: EgressConfig): Decision => {
+  if (config.cloneUrl) {
+    const remote = new URL(config.cloneUrl);
+
+    if (url.origin === remote.origin && url.pathname.startsWith(remote.pathname)) {
+      const endpoint = url.pathname.slice(remote.pathname.length);
+      const service = url.searchParams.get("service");
+
+      if (
+        url.protocol === "https:" &&
+        ((endpoint === "/info/refs" && service === "git-upload-pack") || endpoint === "/git-upload-pack")
+      )
+        return { rule: 2, action: "forward", set: { name: "authorization", value: "artifact-bearer" } };
+
+      return { rule: 2, action: "block", status: 403, body: "tempo: CI has read-only repository access" };
+    }
+  }
+
+  if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
+
+  return policy(8, host, { ...config, mcp: [] });
 };
 
 const PLACEHOLDER_REFUSED: Decision = {

@@ -137,9 +137,11 @@ describe("contract", () => {
     expect(TEMPOD_REQUESTS["environment.set"].timeoutMs).toBe(10_000);
     expect(TEMPOD_REQUESTS["git.readFile"].timeoutMs).toBe(10_000);
     expect(TEMPOD_REQUESTS["artifact.release"].timeoutMs).toBe(10_000);
+    expect(TEMPOD_REQUESTS["ci.checkout"].timeoutMs).toBe(600_000);
     expect(Object.keys(TEMPOD_REQUESTS).sort()).toEqual(
       [
         "repo.clone",
+        "ci.checkout",
         "repo.applyCheckpoint",
         "settings.read",
         "env.set",
@@ -163,6 +165,8 @@ describe("contract", () => {
         "git.renameBranch",
         "git.readFile",
         "artifact.release",
+        "git.merge",
+        "git.deleteBranch",
         "fs.list",
         "fs.read",
         "fs.search",

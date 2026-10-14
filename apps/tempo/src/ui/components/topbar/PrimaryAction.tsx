@@ -18,7 +18,7 @@ import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import type { PrimaryActionKind } from "~/ui/lib/indicators";
-import { githubChecksUrl } from "~/ui/lib/links";
+import { projectChecksUrl } from "~/ui/lib/links";
 import { isMacPlatform, matchesCombo } from "~/ui/lib/shortcuts";
 import { cn } from "~/ui/lib/utils";
 import {
@@ -80,9 +80,7 @@ export function PrimaryActionButton({ workspaceId, className }: { workspaceId: s
   const shortcut = PRIMARY_SHORTCUT[primary.kind];
 
   const checksUrl =
-    project && view.w.prNumber !== null
-      ? githubChecksUrl(project.owner, project.name, view.w.prNumber)
-      : undefined;
+    project && view.w.prNumber !== null ? projectChecksUrl(project, view.w.prNumber) : undefined;
 
   const run = () => {
     switch (primary.kind) {

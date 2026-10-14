@@ -15,6 +15,8 @@ import { resolveSettings } from "@tempo/settings";
 import { workspaces } from "../../db/d1.ts";
 import { getUserById } from "../../github/api.ts";
 import { github, prStateOf } from "../../github/provider.ts";
+import { artifactBranchExists, assertArtifactRepositoryIdentity } from "../../artifacts/repositories.ts";
+import { getArtifactPullRequest } from "../../artifacts/pull-requests.ts";
 import { getOwnedWorkspace } from "../../http/common.ts";
 import { summaryFromD1Row } from "../../lib/summary.ts";
 import { workspaceStub } from "../../do/workspace/stub.ts";
@@ -63,7 +65,13 @@ export const createWorkspace = async (
     ? await resolveLibraryProfile(env, user.id, agentId, defaults.agent.default, agent)
     : undefined;
 
-  const token = await projectToken(env, p);
+  if (p.provider === "artifacts") {
+    const info = await assertArtifactRepositoryIdentity(env, p.repoName, p.artifactRepoId);
+
+    if (info.readOnly) throw new TempoError("FORBIDDEN", "This repository is read-only.");
+  }
+
+  const token = p.provider === "github" ? await projectToken(env, p) : null;
   const repo = repoOf(p);
   let branch: string;
   let baseBranch: string;
@@ -75,26 +83,44 @@ export const createWorkspace = async (
     wsSource = { kind: "new" };
     branch = "";
   } else if (source.kind === "branch") {
-    if (!(await github.branchExists(token, repo, source.branch)))
-      throw new TempoError("NOT_FOUND", undefined, "branch not on origin");
+    const exists =
+      p.provider === "artifacts"
+        ? p.artifactRepoId !== null &&
+          (await artifactBranchExists(env, p.repoName, source.branch, p.artifactRepoId))
+        : await github.branchExists(token!, repo, source.branch);
+
+    if (!exists) throw new TempoError("NOT_FOUND", undefined, "branch not on origin");
     branch = source.branch;
     baseBranch = p.defaultBranch;
     wsSource = { kind: "branch" };
   } else {
-    const ghPr = await github.getPullRequest(token, repo, source.number);
+    if (p.provider === "artifacts") {
+      const nativePr = await getArtifactPullRequest(env, { ...p, name: p.repoName }, source.number);
+      branch = nativePr.headBranch;
+      baseBranch = nativePr.baseBranch;
+      pr = { number: nativePr.number, state: nativePr.state, title: nativePr.title };
+    } else {
+      const ghPr = await github.getPullRequest(token!, repo, source.number);
 
-    if (ghPr.head.repo?.id !== p.repoId) {
-      throw new TempoError("VALIDATION_FAILED", "Pull requests from forks are not supported.");
+      if (ghPr.head.repo?.id !== p.repoId) {
+        throw new TempoError("VALIDATION_FAILED", "Pull requests from forks are not supported.");
+      }
+
+      branch = ghPr.head.ref;
+      baseBranch = ghPr.base.ref || p.defaultBranch;
+      pr = { number: source.number, state: prStateOf(ghPr), title: ghPr.title };
     }
 
-    branch = ghPr.head.ref;
-    baseBranch = ghPr.base.ref || p.defaultBranch;
     wsSource = { kind: "pr", number: source.number };
-    pr = { number: source.number, state: prStateOf(ghPr), title: ghPr.title };
   }
 
   const db = d1(env);
-  const author = await authorFor(env, token, user.name);
+
+  const author =
+    p.provider === "artifacts"
+      ? { name: user.name.trim() || "Tempo", email: user.email.trim() || "tempo@localhost" }
+      : await authorFor(env, token!, user.name);
+
   const defaultAgent: AgentId = savedProfile?.agent ?? agent ?? defaults.agent.default;
   const now = Date.now();
   const id = newId();

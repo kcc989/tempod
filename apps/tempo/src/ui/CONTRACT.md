@@ -1,6 +1,6 @@
 # UI contract
 
-The foundation that the four region workers build on. Paths are relative to `apps/tempo/src/`; `~/` is the same folder in imports. Spec: `docs/04 UI.md`, plus 02, 03, 05 (UI rules) and the web items of 07.
+The foundation that the four region workers build on. Paths are relative to `apps/tempo/src/`; `~/` is the same folder in imports. Spec: `docs/04 UI.md`, plus 02, 03, 05 (UI rules) and the web items of 07, and the Git Forge extension.
 
 Rules for every region:
 
@@ -18,7 +18,7 @@ Rules for every region:
 | `login.tsx`               | `/login?redirect&error` | Sign in with GitHub. `?error=forbidden` shows `This Tempo belongs to someone else.` Shows a setup note when `/api/setup/status` says `configured: false`. Signed in → `redirect` (same-site paths only). |
 | `device.tsx`              | `/device?user_code`     | Tempo for Mac approval (07). Claims the code with `GET /api/auth/device`, then Approve or Deny. Signed out → `/login?redirect=…`.                                                                        |
 | `_app.tsx`                | layout                  | Session check (signed out → `/login?redirect=…`), then `AppShell`.                                                                                                                                       |
-| `_app/index.tsx`          | `/`                     | First-run checklist until all five steps are done, else `Link a repo to start.`, else `Start a workspace` per empty project, else `Pick a workspace.` Phone: the workspace list plus the checklist.      |
+| `_app/index.tsx`          | `/`                     | Repository dashboard with create/import/link actions; repository access does not require an agent login or GitHub installation.                                                                          |
 | `_app/w.$workspaceId.tsx` | `/w/$workspaceId`       | `<WorkspaceLayout workspaceId key={workspaceId}/>`.                                                                                                                                                      |
 | `_app/history.tsx`        | `/history`              | Archived workspaces with Restore and Delete (type the slug).                                                                                                                                             |
 
@@ -167,3 +167,13 @@ shadcn/ui new-york on Tailwind v4 and the `radix-ui` umbrella, sized for a 13 px
 ## Workspace tool area
 
 `ToolPanel {workspaceId}` owns the desktop right tab bar and full-height content area. `toolTabs` contains opened utility tools; `activeToolKey` selects a utility or an open document key, with null showing the launcher. Browser uses the existing `liveView` tab and `getBrowserLiveView`; it is Cloudflare Browser Run. The web-only preview tabs still use `browser`. File, diff, Guide and artifact document keys still use the existing registry. Chat selection and drafts stay independent. Run, Terminal and document bodies remain mounted while another tool is selected and their tabs stay open. Collapsing the whole tool area unmounts `ToolPanel`. `RightPanel` still renders the phone Changes pane. Legacy `bottomOpen` values remain readable; no lower process pane is rendered.
+
+## Repositories (`ui/components/repositories/`)
+
+`/_app/repositories.tsx` exposes `/repositories` with validated search fields `project`, `tab` (`code`, `commits`, `pulls`, `issues`), `ref`, `path`, `file`, `pull` and `issue`. `/_app/workspaces.tsx` exposes the workspace list at `/workspaces` for phone navigation.
+
+`RepositoryHub` lists projects and chooses the repository view. GitHub projects keep their external browsing link. Artifact repository code, bounded file previews and commit history use repository RPCs without a running workspace. An absent selected ref stays absent in requests so an empty repository can show its initial workspace action. The branch picker permits a tag or commit only when its `allowRef` option is true.
+
+`RepositoryForm` creates, publicly imports or links an existing Artifacts repository. `RepositoryPullRequests` provides local PR listing, creation, editing, draft state, close/reopen and workspace reuse/adoption for review and merge. Both forms submit with Command/Ctrl+Enter. Clone URL copying returns only a credential-free URL. `links.ts` routes Artifact project and PR links into Tempo while retaining existing GitHub links. Empty repository bootstrapping and PR review do not require an agent login. Read-only repositories disable editing workspace and PR creation while metadata edits remain available.
+
+`RepositoryIssues` lists, searches and filters owner-operated issues and opens issue details. `IssueForm` creates or edits title, Markdown body and label assignments. `RepositoryIssueComments` adds, edits and deletes comments, with chronological pages of 50 and mutation-driven page adjustment after adding or deleting the final comment on a page. `RepositoryLabelManager` creates, edits and deletes labels; label deletion clears an active filter for that label. All issue metadata functions remain available when Git storage is read-only or the Artifacts binding is unavailable. GitHub repository details link to GitHub issues instead.

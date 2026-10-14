@@ -19,6 +19,11 @@ import {
   Attention,
   CheckpointReason,
   ChecksState,
+  CiJobConclusion,
+  CiRunConclusion,
+  CiStatus,
+  CiTrigger,
+  IssueState,
   NoticeLevel,
   OpKind,
   OpStatus,
@@ -44,8 +49,11 @@ const Ms = Schema.Number;
 
 export const Project = Schema.Struct({
   id: Schema.String,
-  installationId: Schema.Number,
-  repoId: Schema.Number,
+  installationId: N(Schema.Number),
+  repoId: N(Schema.Number),
+  provider: Schema.optional(Schema.Literals(["github", "artifacts"])),
+  artifactRepoId: Schema.optional(N(Schema.String)),
+  cloneUrl: Schema.optional(N(Schema.String)),
   owner: Schema.String,
   name: Schema.String,
   defaultBranch: Schema.String,
@@ -55,6 +63,163 @@ export const Project = Schema.Struct({
 });
 
 export type Project = typeof Project.Type;
+
+export const RepositoryCommit = Schema.Struct({
+  hash: Schema.String,
+  treeHash: Schema.String,
+  message: Schema.String,
+  author: Schema.Struct({ name: Schema.String, email: Schema.String }),
+  committer: Schema.Struct({ name: Schema.String, email: Schema.String }),
+  parents: Schema.Array(Schema.String),
+  authoredAt: Schema.Number,
+  committedAt: Schema.Number,
+});
+
+export type RepositoryCommit = typeof RepositoryCommit.Type;
+
+export const RepositoryEntry = Schema.Struct({
+  name: Schema.String,
+  path: Schema.String,
+  hash: Schema.String,
+  type: Schema.Literals(["tree", "blob", "symlink", "gitlink", "exec"]),
+});
+
+export type RepositoryEntry = typeof RepositoryEntry.Type;
+
+export const RepositoryDetail = Schema.Struct({
+  projectId: Schema.String,
+  name: Schema.String,
+  description: N(Schema.String),
+  defaultBranch: Schema.String,
+  remote: Schema.String,
+  readOnly: Schema.Boolean,
+  ref: Schema.String,
+  empty: Schema.Boolean,
+  entries: Schema.Array(RepositoryEntry),
+  commit: N(RepositoryCommit),
+});
+
+export type RepositoryDetail = typeof RepositoryDetail.Type;
+
+export const RepositoryPullRequest = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  title: Schema.String,
+  body: Schema.String,
+  headBranch: Schema.String,
+  baseBranch: Schema.String,
+  state: PrState,
+  url: Schema.String,
+  headSha: N(Schema.String),
+  baseSha: N(Schema.String),
+  mergeSha: N(Schema.String),
+  createdAt: Schema.Number,
+  updatedAt: Schema.Number,
+  mergedAt: N(Schema.Number),
+});
+
+export type RepositoryPullRequest = typeof RepositoryPullRequest.Type;
+
+export const RepositoryLabel = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  name: Schema.String,
+  color: Schema.String,
+  description: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+});
+
+export type RepositoryLabel = typeof RepositoryLabel.Type;
+
+export const RepositoryIssue = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  title: Schema.String,
+  body: Schema.String,
+  state: IssueState,
+  authorId: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+  closedAt: N(Ms),
+  url: Schema.String,
+  labels: Schema.Array(RepositoryLabel),
+  commentCount: Schema.Number,
+});
+
+export type RepositoryIssue = typeof RepositoryIssue.Type;
+
+export const RepositoryIssueComment = Schema.Struct({
+  id: Schema.String,
+  issueId: Schema.String,
+  authorId: Schema.String,
+  body: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+});
+
+export type RepositoryIssueComment = typeof RepositoryIssueComment.Type;
+
+export const CiJobSpec = Schema.Struct({
+  key: Schema.String,
+  name: Schema.String,
+  needs: Schema.Array(Schema.String),
+  timeoutMinutes: Schema.Number,
+});
+
+export type CiJobSpec = typeof CiJobSpec.Type;
+
+export const CiPipeline = Schema.Struct({
+  projectId: Schema.String,
+  revision: Schema.Number,
+  source: Schema.String,
+  enabled: Schema.Boolean,
+  jobs: Schema.Array(CiJobSpec),
+  required: Schema.Array(Schema.String),
+  egressAllowlist: Schema.Array(Schema.String),
+  updatedAt: N(Ms),
+});
+
+export type CiPipeline = typeof CiPipeline.Type;
+
+export const CiRun = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  branch: Schema.String,
+  sha: Schema.String,
+  revision: Schema.Number,
+  attempt: Schema.Number,
+  trigger: CiTrigger,
+  status: CiStatus,
+  conclusion: N(CiRunConclusion),
+  createdAt: Ms,
+  startedAt: N(Ms),
+  completedAt: N(Ms),
+  url: Schema.String,
+});
+
+export type CiRun = typeof CiRun.Type;
+
+export const CiJob = Schema.Struct({
+  key: Schema.String,
+  name: Schema.String,
+  needs: Schema.Array(Schema.String),
+  status: CiStatus,
+  conclusion: N(CiJobConclusion),
+  exitCode: N(Schema.Number),
+  summary: N(Schema.String),
+  startedAt: N(Ms),
+  completedAt: N(Ms),
+});
+
+export type CiJob = typeof CiJob.Type;
+
+export const CiRunDetail = Schema.Struct({ run: CiRun, jobs: Schema.Array(CiJob) });
+
+export type CiRunDetail = typeof CiRunDetail.Type;
 
 export const WorkspaceSummary = Schema.Struct({
   id: Schema.String,

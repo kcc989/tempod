@@ -4,7 +4,7 @@ Oct 10, 2026 · @Casey Collins
 
 ## Summary
 
-Tempo runs Claude Code, Codex, OpenCode and Pi in parallel workspaces on your own Cloudflare account, with your own subscriptions. A workspace is one branch of a repo, one agent chat, and one Linux container that runs while the agent works and sleeps when it stops. The design copies SAM's control plane and orchestration, puts compute on Cloudflare Sandboxes in place of VMs, and copies Conductor's workspace UI.
+Tempo hosts Git repositories on Cloudflare Artifacts and runs Claude Code, Codex, OpenCode and Pi in parallel workspaces on your own Cloudflare account, with your own subscriptions. Repository browsing, Tempo pull requests and issue tracking are defined in [09 Git Forge](09%20Git%20Forge.md). GitHub-linked projects remain supported. A workspace is one branch of a repo, one agent chat, and one Linux container that runs while the agent works and sleeps when it stops.
 
 This version is for **one trusted user on their own Cloudflare account**. The schema allows many users. The code allows one.
 
@@ -14,7 +14,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | D2 | Agent protocol | ACP (Agent Client Protocol) over stdio, bridged by an in-container daemon, `tempod` | One protocol for all four agents. SAM uses the same approach. |
 | D3 | Source of truth | The transcript lives in WorkspaceDO SQLite. The container is disposable. | Work must survive the death of its container |
 | D4 | Resume | Three layers: a git checkpoint at each turn end, a container snapshot on sleep, and the agent's own session files backed up to R2 | Each layer has a fallback: no snapshot means clone plus setup script; no session files means a new session with a transcript handoff |
-| D5 | Repos | GitHub App. One branch per workspace: animal default, then first-prompt name (03) | Conductor model; works on existing repos |
+| D5 | Repos | Artifacts-hosted or GitHub-linked repositories. One branch per workspace: animal default, then first-prompt name (03) | Native hosting and existing repos; see 09 |
 | D6 | Browser testing | Chromium and Playwright inside the Sandbox image. Browser Run Live View is optional. | Tests reach `localhost` with no public exposure |
 | D7 | Stack | The standard stack: TanStack Start, shadcn/ui, Effect v4, Alchemy v2, Drizzle, D1, R2, Better Auth, Bun. Agents use D1 and decisions use the Workers AI `AI` binding (08) | Your standard stack for new products |
 | D8 | SAM code | Do not copy any SAM code. Use SAM as a design reference only. | SAM is AGPL-3.0 |
@@ -44,6 +44,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 06 Build Plan | Repo layout, phases, spikes, acceptance tests, rules for coding agents |
 | 07 Mac Client | Tempo for Mac on GPUI Kit: native API, device sign-in, layout, macOS integration, release, phase 4 and gate E |
 | 08 Events and Agents | Lifecycle events, agent libraries, attachments, decisions, runs, phase 7 and gate I |
+| 09 Git Forge | Artifacts-hosted repositories, browsing, pull requests, issues, comments and labels |
 
 ## Goals and non-goals
 
@@ -59,7 +60,7 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 | G4 | Work survives container death | Transcript: no loss. Files: loss limited to edits since the last turn ended. |
 | G5 | Conductor-style UI in the browser | Sidebar, chat tabs, diff review, terminal, preview |
 | G6 | Browser testing inside the workspace | Playwright with headless Chromium on `localhost` |
-| G7 | Pull requests on GitHub from a workspace | One action from the diff view |
+| G7 | Pull requests in Tempo for native repos, or GitHub for linked repos | One action from the diff view; see 08 |
 | G8 | Self-host from one repo | One Alchemy deploy on Workers Paid |
 | G9 | Fast start | New workspace to first agent output: under 120 s. Resume a sleeping workspace: under 30 s. |
 | G10 | Live output | Agent output in the UI within 1 s of `tempod` reading it (p95) |
@@ -75,7 +76,7 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 - Devcontainers. Version 1 uses one Tempo base image plus a per-project setup script.
 - Docker inside the container.
 - Approval policies. Version 1 runs each agent in its most permissive mode inside the container. It MUST still show any permission request an agent sends, such as a plan approval.
-- A self-hosted git backend. Version 1 uses GitHub through a `GitProvider` interface, so a second provider can come later.
+- A public multi-user Git hosting service. This deployment hosts the owner's native repositories; see 08.
 - Native mobile apps. The web UI MUST work at phone width for reading and sending prompts.
 
 ## Vocabulary
@@ -84,7 +85,7 @@ Use these words exactly, in code, UI and docs.
 
 | Term | Meaning | Code name |
 | --- | --- | --- |
-| Project | One GitHub repo linked to Tempo, with its settings (scripts, default agent, env vars) | `project` |
+| Project | One Artifacts-hosted or GitHub-linked repo in Tempo, with its settings (scripts, default agent, env vars) | `project` |
 | Environment | The template a container starts from: base image, setup script, env vars | `environment` |
 | Workspace | Stored work: one branch, its sessions, its checkpoints, its backup. It outlives every container. | `workspace` |
 | Container | One running Cloudflare Sandbox attached to one workspace. Temporary. | `container` |
@@ -194,15 +195,15 @@ All four agents speak ACP v1 to `tempod`. Claude Code and Codex use your subscri
 
 ## Git and repos
 
-Each workspace is one branch of one GitHub repo, and the container never holds a GitHub token. Flows are in 03 Lifecycles.
+Each workspace is one branch of one Artifacts-hosted or GitHub-linked repo. Repository tokens stay outside the container. Flows are in 03 Lifecycles and 09 Git Forge.
 
 - Repos come from a GitHub App that the owner creates and installs on their account or org.
 - A new workspace defaults to branch `tempo/<animal-slug>`, renamed from its first prompt unless manually overridden (03), created from `origin/<base_branch>` after a fetch. A workspace MAY instead check out an existing branch or a PR's head branch.
 - One branch belongs to at most one non-archived workspace.
 - At the end of each turn, `tempod` commits the full working tree to a hidden ref (`refs/tempo/checkpoints/<checkpointId>`) without touching the branch or the index, and uploads a git bundle of it to R2.
-- `TempoOutbound` adds a repo-scoped installation token to every HTTPS request for `github.com` and `api.github.com`.
-- The Worker opens, updates and merges pull requests through the GitHub REST API.
-- The repo provider sits behind a `GitProvider` interface. GitHub is the only provider in version 1.
+- `TempoOutbound` injects credentials only into the selected repository's supported HTTPS transport. Native tokens are scoped to one Artifacts repo; GitHub tokens are repo-scoped installation tokens.
+- Tempo stores native pull requests, issues, comments and labels in D1 and merges through a durable WorkspaceDO Git operation. GitHub projects use the GitHub REST API.
+- Repository operations select the backend recorded on the project. `GitProvider` remains the GitHub adapter; native repository and pull request services are defined in 08.
 
 ## Browser testing and previews
 

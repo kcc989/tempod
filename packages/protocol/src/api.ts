@@ -1,7 +1,15 @@
 import { Run } from "./runs.ts";
 import { LifecyclePage, LifecycleTrace } from "./lifecycle.ts";
 import { Schema } from "effect";
-import { AgentId, ApiKeyProvider, DiffScope, EgressStatusFilter, MergeMethod, ReviewSide } from "./enums.ts";
+import {
+  AgentId,
+  ApiKeyProvider,
+  DiffScope,
+  EgressStatusFilter,
+  MergeMethod,
+  ReviewSide,
+  IssueState,
+} from "./enums.ts";
 import { EgressPolicy } from "./enums.ts";
 import {
   EgressAllowlist,
@@ -25,6 +33,15 @@ import {
   Diagnostics,
   Mention,
   Project,
+  CiPipeline,
+  CiRun,
+  CiRunDetail,
+  RepositoryCommit,
+  RepositoryDetail,
+  RepositoryPullRequest,
+  RepositoryIssue,
+  RepositoryIssueComment,
+  RepositoryLabel,
   ReviewComment,
   ScriptRun,
   Session,
@@ -71,6 +88,133 @@ export type ScriptRunWithLog = typeof ScriptRunWithLog.Type;
 const NonEmpty = S.check(Schema.isMinLength(1));
 
 export const API = {
+  // Artifacts repositories and Tempo pull requests and issues (09).
+  createRepository: fn(
+    "POST",
+    Schema.Struct({ name: NonEmpty, description: opt(S), defaultBranch: opt(NonEmpty) }),
+    Project,
+  ),
+  importRepository: fn(
+    "POST",
+    Schema.Struct({ name: NonEmpty, url: NonEmpty, description: opt(S) }),
+    Project,
+  ),
+  linkArtifactRepository: fn("POST", Schema.Struct({ name: NonEmpty }), Project),
+  getRepository: fn("GET", Schema.Struct({ projectId: S, ref: opt(S), path: opt(S) }), RepositoryDetail),
+  getRepositoryFile: fn(
+    "GET",
+    Schema.Struct({ projectId: S, ref: NonEmpty, path: NonEmpty }),
+    Schema.Struct({ content: S, encoding: Schema.Literals(["utf8", "base64"]), size: N }),
+  ),
+  listRepositoryCommits: fn(
+    "GET",
+    Schema.Struct({ projectId: S, ref: opt(S), offset: opt(N) }),
+    Schema.Array(RepositoryCommit),
+  ),
+  listRepositoryPullRequests: fn(
+    "GET",
+    Schema.Struct({ projectId: S, state: opt(Schema.Literals(["open", "closed", "all"])) }),
+    Schema.Array(RepositoryPullRequest),
+  ),
+  getRepositoryPullRequest: fn("GET", Schema.Struct({ projectId: S, number: N }), RepositoryPullRequest),
+  createRepositoryPullRequest: fn(
+    "POST",
+    Schema.Struct({
+      projectId: S,
+      title: NonEmpty,
+      body: S,
+      headBranch: NonEmpty,
+      baseBranch: NonEmpty,
+      draft: B,
+    }),
+    RepositoryPullRequest,
+  ),
+  updateRepositoryPullRequest: fn(
+    "POST",
+    Schema.Struct({
+      projectId: S,
+      number: N,
+      title: opt(NonEmpty),
+      body: opt(S),
+      state: opt(Schema.Literals(["open", "closed"])),
+      draft: opt(B),
+    }),
+    RepositoryPullRequest,
+  ),
+  getCiPipeline: fn("GET", Schema.Struct({ projectId: S }), CiPipeline),
+  updateCiPipeline: fn("POST", Schema.Struct({ projectId: S, source: S, revision: N }), CiPipeline),
+  listCiRuns: fn(
+    "GET",
+    Schema.Struct({ projectId: S, branch: opt(NonEmpty), offset: opt(N) }),
+    Schema.Array(CiRun),
+  ),
+  getCiRun: fn("GET", Schema.Struct({ projectId: S, runId: NonEmpty }), CiRunDetail),
+  startCiRun: fn("POST", Schema.Struct({ projectId: S, branch: NonEmpty }), CiRun),
+  rerunCiRun: fn("POST", Schema.Struct({ projectId: S, runId: NonEmpty }), CiRun),
+  cancelCiRun: fn("POST", Schema.Struct({ projectId: S, runId: NonEmpty }), CiRun),
+  getCiJobLog: fn(
+    "GET",
+    Schema.Struct({ projectId: S, runId: NonEmpty, job: NonEmpty }),
+    Schema.Struct({ text: S, truncated: B }),
+  ),
+  listRepositoryIssues: fn(
+    "GET",
+    Schema.Struct({
+      projectId: S,
+      state: opt(Schema.Literals(["open", "closed", "all"])),
+      query: opt(S),
+      labelId: opt(S),
+      offset: opt(N),
+    }),
+    Schema.Array(RepositoryIssue),
+  ),
+  getRepositoryIssue: fn("GET", Schema.Struct({ projectId: S, number: N }), RepositoryIssue),
+  createRepositoryIssue: fn(
+    "POST",
+    Schema.Struct({ projectId: S, title: NonEmpty, body: opt(S), labelIds: opt(Schema.Array(S)) }),
+    RepositoryIssue,
+  ),
+  updateRepositoryIssue: fn(
+    "POST",
+    Schema.Struct({
+      projectId: S,
+      number: N,
+      title: opt(NonEmpty),
+      body: opt(S),
+      state: opt(IssueState),
+      labelIds: opt(Schema.Array(S)),
+    }),
+    RepositoryIssue,
+  ),
+  deleteRepositoryIssue: fn("POST", Schema.Struct({ projectId: S, number: N }), Empty),
+  listRepositoryIssueComments: fn(
+    "GET",
+    Schema.Struct({ projectId: S, number: N, offset: opt(N) }),
+    Schema.Array(RepositoryIssueComment),
+  ),
+  createRepositoryIssueComment: fn(
+    "POST",
+    Schema.Struct({ projectId: S, number: N, body: NonEmpty }),
+    RepositoryIssueComment,
+  ),
+  updateRepositoryIssueComment: fn(
+    "POST",
+    Schema.Struct({ projectId: S, number: N, commentId: S, body: NonEmpty }),
+    RepositoryIssueComment,
+  ),
+  deleteRepositoryIssueComment: fn("POST", Schema.Struct({ projectId: S, number: N, commentId: S }), Empty),
+  listRepositoryLabels: fn("GET", Schema.Struct({ projectId: S }), Schema.Array(RepositoryLabel)),
+  createRepositoryLabel: fn(
+    "POST",
+    Schema.Struct({ projectId: S, name: NonEmpty, color: S, description: opt(S) }),
+    RepositoryLabel,
+  ),
+  updateRepositoryLabel: fn(
+    "POST",
+    Schema.Struct({ projectId: S, labelId: S, name: opt(NonEmpty), color: opt(S), description: opt(S) }),
+    RepositoryLabel,
+  ),
+  deleteRepositoryLabel: fn("POST", Schema.Struct({ projectId: S, labelId: S }), Empty),
   listAgents: fn("GET", Empty, Schema.Array(AgentSummary)),
   getAgent: fn("GET", Schema.Struct({ agentId: S }), Agent),
   saveAgent: fn("POST", Schema.Struct({ agentId: opt(S), definition: AgentDefinition }), Agent),

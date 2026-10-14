@@ -6,6 +6,7 @@ import * as schema from "../../db/d1.ts";
 import type { Env } from "../../env.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
 import { mintInstallationToken } from "../../github/api.ts";
+import { artifactToken } from "../../artifacts/repositories.ts";
 
 export const d1 = (env: Env) => drizzle(env.DB, { schema });
 
@@ -18,6 +19,9 @@ export const projectToWire = (r: schema.ProjectRow): Project => {
     id: r.id,
     installationId: r.installationId,
     repoId: r.repoId,
+    provider: r.provider,
+    artifactRepoId: r.artifactRepoId,
+    cloneUrl: r.cloneUrl,
     owner: r.repoOwner,
     name: r.repoName,
     defaultBranch: r.defaultBranch,
@@ -96,7 +100,16 @@ export const installationToken = async (
   return token.token;
 };
 
-export const projectToken = (env: Env, p: schema.ProjectRow) =>
-  installationToken(env, p.installationId, p.repoId);
+export const projectToken = (env: Env, p: schema.ProjectRow) => {
+  if (p.provider === "artifacts") {
+    if (!p.artifactRepoId) throw new TempoError("REPO_NOT_ACCESSIBLE");
+
+    return artifactToken(env, p.repoName, "write", p.artifactRepoId);
+  }
+
+  if (p.installationId === null || p.repoId === null) throw new TempoError("REPO_NOT_ACCESSIBLE");
+
+  return installationToken(env, p.installationId, p.repoId);
+};
 
 export const repoOf = (p: schema.ProjectRow) => ({ owner: p.repoOwner, name: p.repoName });

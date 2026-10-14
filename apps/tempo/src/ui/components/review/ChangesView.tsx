@@ -126,7 +126,7 @@ export function ChangesView({
               href={githubUrlFor(project, workspace, pushed)}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Open on GitHub"
+              aria-label={project.provider === "artifacts" ? "Open repository" : "Open on GitHub"}
             >
               <ExternalLinkIcon />
             </a>

@@ -11,6 +11,8 @@ export interface OutboundProps {
   readonly workspaceId: string;
   readonly userId: string;
   readonly catalog?: boolean;
+  /** A CI job's container (10, Egress). */
+  readonly ci?: boolean;
   /** Set for a subrequest of this injector (01, rule 13). */
   readonly injector?: string;
 }
@@ -44,7 +46,9 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
 
       let decision: Decision;
 
-      if (injectorName) {
+      if (this.ctx.props.ci && !config.ci) {
+        decision = { rule: 10, action: "block", status: 403, body: "tempo: CI job not found" };
+      } else if (injectorName) {
         const injector = config.injectors?.find((i) => i.name === injectorName);
         decision = injector
           ? decideForInjector(url, request.headers, this.env.APP_HOST, config, injector)
@@ -65,7 +69,9 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
 
       return block(502, `tempo: upstream error for ${url.hostname}`);
     } finally {
-      if (!this.ctx.props.catalog)
+      if (this.ctx.props.ci)
+        log("info", "ci egress", { runner: workspaceId, host: url.hostname, status, rule });
+      else if (!this.ctx.props.catalog)
         this.ctx.waitUntil(
           workspace
             .logEgress({
@@ -117,6 +123,11 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         if (!decision.set && !decision.mcp) return { response: await fetch(request) };
         const headers = new Headers(request.headers);
 
+        if (decision.set?.value === "artifact-bearer") {
+          for (const name of ["authorization", "proxy-authorization", "cookie", "x-api-key"])
+            headers.delete(name);
+        }
+
         if (decision.set) {
           const value = await this.credential(decision.set.value, userId);
 
@@ -136,7 +147,11 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
           }
         }
 
-        return { response: await fetch(new Request(request, { headers })) };
+        const init: RequestInit = { headers };
+
+        if (decision.set?.value === "artifact-bearer") init.redirect = "manual";
+
+        return { response: await fetch(new Request(request, init)) };
       }
     }
   }
@@ -192,9 +207,15 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     return config;
   }
   private async credential(
-    kind: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai",
+    kind: "github-basic" | "github-bearer" | "artifact-bearer" | "openrouter" | "anthropic" | "openai",
     userId: string,
   ): Promise<string | null> {
+    if (kind === "artifact-bearer") {
+      const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getRepositoryToken();
+
+      return token === null ? null : `Bearer ${token}`;
+    }
+
     if (kind === "github-basic" || kind === "github-bearer") {
       const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getGithubToken();
 

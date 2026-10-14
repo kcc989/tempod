@@ -131,9 +131,11 @@ test(
     if (test.info().project.name.startsWith("phone")) {
       await page.getByRole("button", { name: "Switch tab" }).click();
       await page.getByRole("menuitem", { name: "Second chat" }).click();
+      await expect(page.getByRole("button", { name: "Switch tab" })).toBeFocused();
       await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeHidden();
       await page.getByRole("button", { name: "Switch tab" }).click();
       await page.getByRole("menuitem", { name: "Claude chat" }).click();
+      await expect(page.getByRole("button", { name: "Switch tab" })).toBeFocused();
     } else {
       await page.getByRole("tab", { name: "Second chat", exact: true }).click();
       await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeHidden();

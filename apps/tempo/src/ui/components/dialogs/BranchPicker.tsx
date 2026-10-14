@@ -26,6 +26,7 @@ export function BranchPicker({
   label,
   onChange,
   invalid,
+  allowRef = false,
 }: {
   id: string;
   projectId: string;
@@ -34,6 +35,7 @@ export function BranchPicker({
   label: string;
   onChange: (branch: string) => void;
   invalid?: boolean;
+  allowRef?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -61,6 +63,7 @@ export function BranchPicker({
             projectId={projectId}
             value={value}
             label={label}
+            allowRef={allowRef}
             onPick={(b) => {
               onChange(b);
               setOpen(false);
@@ -77,11 +80,13 @@ function BranchList({
   value,
   label,
   onPick,
+  allowRef,
 }: {
   projectId: string;
   value: string | null;
   label: string;
   onPick: (branch: string) => void;
+  allowRef: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -98,7 +103,11 @@ function BranchList({
 
   return (
     <Command shouldFilter={false} label={label}>
-      <CommandInput value={search} onValueChange={setSearch} placeholder="Search branches" />
+      <CommandInput
+        value={search}
+        onValueChange={setSearch}
+        placeholder={allowRef ? "Branch, tag or commit" : "Search branches"}
+      />
       <CommandList>
         {branches.isPending ? (
           <div aria-busy="true" aria-label="Loading" className="flex flex-col gap-1.5 p-2">
@@ -112,6 +121,11 @@ function BranchList({
           <>
             <CommandEmpty>No branches found.</CommandEmpty>
             <CommandGroup>
+              {allowRef && query && !branches.data.some((branch) => branch.name === query) && (
+                <CommandItem value={query} onSelect={() => onPick(query)}>
+                  Use ref: {query}
+                </CommandItem>
+              )}
               {branches.data.map((b) => (
                 <CommandItem
                   key={b.name}

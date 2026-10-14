@@ -43,3 +43,5 @@ export * from "./github.ts";
 export * from "./decisions.ts";
 
 export * from "./agent-proposals.ts";
+
+export * from "./issue-tools.ts";

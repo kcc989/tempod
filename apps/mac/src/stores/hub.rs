@@ -9,6 +9,7 @@ pub struct HubStore {
     pub projects: Vec<Project>,
     pub project_error: bool,
     pub projects_ready: bool,
+    pub projects_generation: u64,
     channel: Option<ChannelHandle>,
     task: Option<Task<()>>,
     projects_task: Option<Task<()>>,
@@ -23,6 +24,7 @@ impl HubStore {
             projects: Vec::new(),
             project_error: false,
             projects_ready: false,
+            projects_generation: 0,
             channel: None,
             task: None,
             projects_task: None,
@@ -111,10 +113,15 @@ impl HubStore {
                 }
             }
         }));
+        self.projects_generation += 1;
+        let generation = self.projects_generation;
         let request = client.call::<ListProjects>(Default::default());
         self.projects_task = Some(cx.spawn(async move |this, cx| {
             let result = request.await;
             let _ = this.update(cx, |hub, cx| {
+                if hub.projects_generation != generation {
+                    return;
+                }
                 match result {
                     Ok(projects) => hub.projects = projects,
                     Err(_) => hub.project_error = true,

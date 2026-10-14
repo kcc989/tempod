@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { sleep } from "./helpers.ts";
 
 describe.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")("workspace image", () => {
@@ -25,6 +25,8 @@ describe.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")("workspace image", () =
       "tmux",
     ])
       expect(Bun.which(binary)).not.toBeNull();
+
+    expect(() => accessSync("/opt/tempo/pi/tempo-profile.ts", constants.R_OK)).not.toThrow();
   });
 
   test("reaps an orphaned script child after it exits", async () => {

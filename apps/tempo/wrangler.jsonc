@@ -34,6 +34,7 @@
     "bindings": [
       { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
       { "name": "USER_HUB", "class_name": "UserHubDO" },
+      { "name": "REPOSITORY_CI", "class_name": "RepositoryCiDO" },
       { "name": "CREDENTIALS", "class_name": "CredentialDO" },
     ],
   },
@@ -41,6 +42,7 @@
     "WorkspaceDO": { "type": "durable-object", "storage": "sqlite" },
     "UserHubDO": { "type": "durable-object", "storage": "sqlite" },
     "CredentialDO": { "type": "durable-object", "storage": "sqlite" },
+    "RepositoryCiDO": { "type": "durable-object", "storage": "sqlite" },
   },
   "d1_databases": [
     {
@@ -54,4 +56,5 @@
   "browser": { "binding": "BROWSER" },
   "ai": { "binding": "AI" },
   "worker_loaders": [{ "binding": "LOADER" }],
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "tempo-repos", "remote": true }],
 }

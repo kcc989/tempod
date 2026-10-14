@@ -112,13 +112,23 @@ function NewWorkspaceForm({
   const selection = useLaunchModels(project.settings);
   const { credentials, models, available, selected, pickedAgent } = selection;
 
-  const input = pickedAgent
+  const repository = useCallQuery(
+    "getRepository",
+    { projectId: project.id },
+    { enabled: project.provider === "artifacts" },
+  );
+
+  const writable = project.provider !== "artifacts" || (!!repository.data && !repository.data.readOnly);
+
+  const requestedInput = pickedAgent
     ? createInput(project, source, pickedAgent.baseAgent, prompt, undefined, pickedAgent.id)
     : models.isSuccess && selected
       ? createInput(project, source, selected.agent, prompt, selected.model)
       : !prompt.trim()
         ? createInput(project, source, selection.fallbackAgent, prompt)
         : null;
+
+  const input = writable ? requestedInput : null;
 
   const create = useCallMutation("createWorkspace", {
     invalidates: ["listWorkspaces"],
@@ -185,6 +195,14 @@ function NewWorkspaceForm({
             submit();
           }}
         >
+          {repository.data?.readOnly && (
+            <p role="alert" className="pb-3 text-sm text-muted-foreground">
+              This repository is read-only.
+            </p>
+          )}
+          {project.provider === "artifacts" && repository.isError && (
+            <ErrorState error={repository.error} onRetry={() => void repository.refetch()} />
+          )}
           <div className="mb-3 flex items-center gap-2 border-b pb-2 pr-8">
             <Select
               value={project.id}

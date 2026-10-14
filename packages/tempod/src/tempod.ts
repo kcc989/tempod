@@ -1,3 +1,4 @@
+import { IssueToolName } from "@tempo/protocol";
 import type { ToolReq } from "@tempo/protocol";
 import { mkdirSync } from "node:fs";
 import {
@@ -229,8 +230,10 @@ export class Tempod {
           const runId = this.agents.toolRunId(input.sessionId);
 
           if (
-            (input.op === "report_result" && (!runId || runId !== input.runId)) ||
-            (input.op !== "report_result" && runId)
+            Schema.is(IssueToolName)(input.op)
+              ? runId !== input.runId
+              : (input.op === "report_result" && (!runId || runId !== input.runId)) ||
+                (input.op !== "report_result" && runId)
           )
             throw new TempoError("RUN_NOT_RUNNING");
 
@@ -302,6 +305,7 @@ export class Tempod {
 
         return r;
       },
+      "ci.checkout": (p) => this.git.checkoutCommit(p),
       "repo.applyCheckpoint": async (p) => {
         const r = await this.git.applyCheckpoint(p);
         void this.refresh();
@@ -374,6 +378,8 @@ export class Tempod {
         return r;
       },
       "git.commitAndPush": (p) => this.git.commitAndPush(p, this.baseBranch),
+      "git.merge": (p) => this.git.merge(p),
+      "git.deleteBranch": (p) => this.git.deleteBranch(p),
       "git.renameBranch": async (p) => {
         const r = await this.git.renameBranch(p);
 
