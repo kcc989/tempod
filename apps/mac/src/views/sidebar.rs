@@ -388,7 +388,14 @@ fn footer(cx: &App) -> impl IntoElement {
             Button::new("repositories")
                 .ghost()
                 .small()
-                .label("Repositories")
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .w_full()
+                .icon(gpui_kit::assets::IconName::FolderGit2)
+                .accessibility_label("Repositories")
+                .child(div().w_full().text_left().child("Repositories"))
                 .on_click(|_, window, cx| {
                     window.dispatch_action(Box::new(crate::actions::ShowRepositories), cx)
                 }),
