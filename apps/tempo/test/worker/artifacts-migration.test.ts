@@ -47,7 +47,33 @@ describe("Artifacts forward migration", () => {
     const attachmentsBefore = (await db.prepare("SELECT * FROM project_agents").all()).results;
     const receiptsBefore = (await db.prepare("SELECT * FROM agent_proposal_applications").all()).results;
     const environmentsBefore = (await db.prepare("SELECT * FROM environments").all()).results;
+    const counterIndex = migrations.findIndex((migration) => migration.name.includes("0009_issue_numbers"));
+
+    if (counterIndex < 0) throw new Error("Issue counter migration is missing");
+    await applyD1Migrations(db, migrations.slice(0, counterIndex));
+    await db
+      .prepare(
+        "INSERT INTO issues (id,project_id,number,title,body,state,author_id,created_at,updated_at) VALUES ('legacy-issue','project',37,'Preserve issue','Preserve body','open','owner',10,11)",
+      )
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO issue_comments (id,issue_id,author_id,body,created_at,updated_at) VALUES ('legacy-comment','legacy-issue','owner','Preserve reply',12,13)",
+      )
+      .run();
     await applyD1Migrations(db, migrations);
+    expect(
+      await db
+        .prepare("SELECT last_number FROM issue_numbers WHERE project_id='project'")
+        .first("last_number"),
+    ).toBe(37);
+    expect(await db.prepare("SELECT title,body FROM issues WHERE id='legacy-issue'").first()).toEqual({
+      title: "Preserve issue",
+      body: "Preserve body",
+    });
+    expect(await db.prepare("SELECT body FROM issue_comments WHERE id='legacy-comment'").first("body")).toBe(
+      "Preserve reply",
+    );
     expect((await db.prepare("SELECT * FROM workspaces ORDER BY id").all()).results).toEqual(
       workspacesBefore,
     );
@@ -83,6 +109,7 @@ describe("Artifacts forward migration", () => {
     ).rejects.toThrow();
     await db.prepare("DELETE FROM projects WHERE id='project'").run();
     expect((await db.prepare("SELECT * FROM workspaces").all()).results).toEqual([]);
+    expect(await db.prepare("SELECT count(*) AS n FROM issue_numbers").first("n")).toBe(0);
     await expect(db.prepare("SELECT * FROM projects_migration_workspaces").all()).rejects.toThrow();
   });
 });

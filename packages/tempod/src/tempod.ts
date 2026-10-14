@@ -1,3 +1,4 @@
+import { IssueToolName } from "@tempo/protocol";
 import type { ToolReq } from "@tempo/protocol";
 import { mkdirSync } from "node:fs";
 import {
@@ -229,8 +230,10 @@ export class Tempod {
           const runId = this.agents.toolRunId(input.sessionId);
 
           if (
-            (input.op === "report_result" && (!runId || runId !== input.runId)) ||
-            (input.op !== "report_result" && runId)
+            Schema.is(IssueToolName)(input.op)
+              ? runId !== input.runId
+              : (input.op === "report_result" && (!runId || runId !== input.runId)) ||
+                (input.op !== "report_result" && runId)
           )
             throw new TempoError("RUN_NOT_RUNNING");
 

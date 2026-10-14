@@ -4,6 +4,7 @@ import {
   createArtifactIssueComment,
   createArtifactLabel,
   deleteArtifactIssueComment,
+  deleteArtifactIssue,
   deleteArtifactLabel,
   getArtifactIssue,
   listArtifactIssueComments,
@@ -108,3 +109,9 @@ export const deleteRepositoryLabel = (
   { projectId, labelId }: FnInput<"deleteRepositoryLabel">,
 ): Promise<FnOutput<"deleteRepositoryLabel">> =>
   withOwnedRepository(ctx, projectId, (project) => deleteArtifactLabel(ctx.env, project, labelId));
+
+export const deleteRepositoryIssue = (
+  ctx: HandlerCtx,
+  { projectId, number }: FnInput<"deleteRepositoryIssue">,
+): Promise<FnOutput<"deleteRepositoryIssue">> =>
+  withOwnedRepository(ctx, projectId, (project) => deleteArtifactIssue(ctx.env, project, number));

@@ -1,3 +1,4 @@
+import { ISSUE_TOOL_NAMES, ToolReq, type TempodParams } from "@tempo/protocol";
 import { Schema } from "effect";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
@@ -54,6 +55,7 @@ describe("tempo MCP server (01, Environments)", () => {
       "environment_status",
       "propose_environment_change",
       "publish_artifact",
+      ...ISSUE_TOOL_NAMES,
       "list_agents",
       "propose_agent_change",
     ]);
@@ -293,5 +295,112 @@ describe("run MCP reports", () => {
       result: { isError: true, content: [{ type: "text", text: "The agent is not valid." }] },
     });
     expect(JSON.stringify(client.events)).not.toContain("private proposal");
+  });
+  test("issue tools forward chat and run identity, reject forged inputs, and keep content outside events and logs", async () => {
+    const config = testConfig();
+
+    const daemon = startTempod({
+      ...config,
+      agentCommands: { ...config.agentCommands, claude: fakeAgentCommand() },
+    });
+
+    h = daemon;
+    const client = new DoClient(daemon.base);
+    await client.hello();
+    await client.waitFor(() => existsSync(daemon.app.config.mcpSocket), 5000, "mcp socket");
+    const call = viaSocket(daemon.app.config.mcpSocket);
+
+    for (const identity of [
+      { sessionId: "issue-chat", runId: undefined },
+      { sessionId: "issue-run", runId: "actual-run" },
+    ]) {
+      let start: TempodParams<"session.start"> = {
+        sessionId: identity.sessionId,
+        agent: "claude",
+        env: { FAKE_STATE_DIR: daemon.app.config.stateDir },
+        browser: "local",
+      };
+
+      if (identity.runId)
+        start = {
+          ...start,
+          env: { ...start.env, TEMPO_RUN_ID: identity.runId, TEMPO_RUN_OUTPUT_KIND: "note" },
+        };
+      await client.ok("session.start", start);
+
+      const pending = handleMcpMessage(
+        {
+          id: 1,
+          method: "tools/call",
+          params: { name: "create_issue", arguments: { title: "Issue", body: "private MCP issue" } },
+        },
+        call,
+        identity.sessionId,
+        identity.runId,
+        "note",
+      );
+
+      await client.waitFor(
+        () => client.raw.some((frame) => frame.type === "tool.req" && frame.sessionId === identity.sessionId),
+        5000,
+        "issue request",
+      );
+
+      const frame = client.raw.find(
+        (entry) => entry.type === "tool.req" && entry.sessionId === identity.sessionId,
+      );
+
+      const parsed = Schema.decodeUnknownSync(ToolReq)(frame);
+      expect(parsed).toMatchObject({
+        op: "create_issue",
+        sessionId: identity.sessionId,
+        params: { title: "Issue", body: "private MCP issue" },
+      });
+      expect(parsed.runId).toBe(identity.runId);
+      client.send({ type: "tool.res", id: parsed.id, ok: true, result: { number: 1 } });
+      expect(await pending).toMatchObject({ result: { content: [{ type: "text", text: '{"number":1}' }] } });
+      expect(
+        await handleMcpMessage(
+          {
+            id: 2,
+            method: "tools/call",
+            params: { name: "create_issue", arguments: { title: "Forged", projectId: "foreign" } },
+          },
+          call,
+          identity.sessionId,
+          identity.runId,
+        ),
+      ).toMatchObject({ result: { isError: true } });
+
+      const forged = await call("/agent-tools", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          op: "delete_issue",
+          sessionId: identity.sessionId,
+          runId: "forged-run",
+          params: { number: 1 },
+        }),
+      });
+
+      expect(forged.status).toBe(400);
+      await client.ok("session.close", { sessionId: identity.sessionId });
+
+      const closed = await call("/agent-tools", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          op: "get_issue",
+          sessionId: identity.sessionId,
+          runId: identity.runId,
+          params: { number: 1 },
+        }),
+      });
+
+      expect(closed.status).toBe(400);
+    }
+
+    expect(JSON.stringify(client.events)).not.toContain("private MCP issue");
+    expect(daemon.log.lines.join("\n")).not.toContain("private MCP issue");
   });
 });

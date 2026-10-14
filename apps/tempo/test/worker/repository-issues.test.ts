@@ -7,6 +7,7 @@ import {
   createRepositoryIssueComment,
   createRepositoryLabel,
   deleteRepositoryIssueComment,
+  deleteRepositoryIssue,
   deleteRepositoryLabel,
   getRepositoryIssue,
   listRepositoryIssueComments,
@@ -80,6 +81,56 @@ const seedLabels = async (s: Fixture, count: number): Promise<RepositoryLabelRow
 };
 
 describe("repository issues (09, Git Forge)", () => {
+  it.concurrent("guards issue deletion by ownership and rolls back counter allocation when creation fails", async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const s = await setup();
+    const other = await setup();
+
+    const first = await createRepositoryIssue(s.ctx, {
+      projectId: s.projectId,
+      title: "Preserve until authorized",
+    });
+
+    await expect(
+      deleteRepositoryIssue(other.ctx, { projectId: s.projectId, number: first.number }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(deleteRepositoryIssue(s.ctx, { projectId: s.projectId, number: 0 })).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+    });
+    expect(await getRepositoryIssue(s.ctx, { projectId: s.projectId, number: first.number })).toEqual(first);
+    const trigger = `reject_issue_create_${newId()}`;
+    await env.DB.exec(
+      `CREATE TRIGGER ${trigger} BEFORE INSERT ON issues WHEN NEW.project_id = '${s.projectId}' BEGIN SELECT RAISE(ABORT, 'private trigger body'); END`,
+    );
+    onTestFinished(async () => {
+      await env.DB.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
+    });
+
+    const rejected = await capture(() =>
+      createRepositoryIssue(s.ctx, { projectId: s.projectId, title: "Rejected", body: "private issue body" }),
+    );
+
+    expect(rejected).toMatchObject({ ok: false, error: { code: "INTERNAL" } });
+    expect(JSON.stringify(rejected)).not.toContain("private");
+    expect(
+      await env.DB.prepare("SELECT last_number FROM issue_numbers WHERE project_id=?")
+        .bind(s.projectId)
+        .first("last_number"),
+    ).toBe(1);
+    await env.DB.exec(`DROP TRIGGER ${trigger}`);
+    expect(await deleteRepositoryIssue(s.ctx, { projectId: s.projectId, number: first.number })).toEqual({});
+
+    const created = await Promise.all(
+      Array.from({ length: 4 }, (_, i) =>
+        createRepositoryIssue(s.ctx, { projectId: s.projectId, title: `Concurrent ${i}` }),
+      ),
+    );
+
+    expect(created.map((row) => row.number).sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
+  });
+
   it.concurrent("creates, edits, closes and reopens owner metadata without Artifacts or a container", async ({
     expect,
   }) => {

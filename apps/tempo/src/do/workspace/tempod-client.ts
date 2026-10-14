@@ -1,3 +1,5 @@
+import { issueTool } from "../../agents/issues.ts";
+import { IssueToolName } from "@tempo/protocol";
 import { agentTool } from "../../agents/proposals.ts";
 import { toTurnUsage, type LifecycleEvent } from "@tempo/protocol";
 import {
@@ -216,6 +218,8 @@ export class TempodClient {
 
       return this.core.lifecycle.runs.report(session.id, request.runId, request.params);
     }
+
+    if (Schema.is(IssueToolName)(request.op)) return issueTool(this.core, request);
 
     if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
 

@@ -167,6 +167,7 @@ export const API = {
     }),
     RepositoryIssue,
   ),
+  deleteRepositoryIssue: fn("POST", Schema.Struct({ projectId: S, number: N }), Empty),
   listRepositoryIssueComments: fn(
     "GET",
     Schema.Struct({ projectId: S, number: N, offset: opt(N) }),

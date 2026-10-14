@@ -206,13 +206,19 @@ export const createArtifactIssue = async (
   const id = newId();
   const now = Date.now();
 
+  const allocate = env.DB.prepare(`
+    INSERT INTO issue_numbers (project_id, last_number)
+    VALUES (?, COALESCE((SELECT MAX(number) FROM issues WHERE project_id = ?), 0) + 1)
+    ON CONFLICT(project_id) DO UPDATE SET last_number = last_number + 1
+  `).bind(project.id, project.id);
+
   const insert = env.DB.prepare(`
     INSERT INTO issues (id, project_id, number, title, body, state, author_id, created_at, updated_at)
-    SELECT ?, ?, COALESCE((SELECT MAX(number) FROM issues WHERE project_id = ?), 0) + 1,
+    SELECT ?, ?, (SELECT last_number FROM issue_numbers WHERE project_id = ?),
       ?, ?, 'open', ?, ?, ?
   `).bind(id, project.id, project.id, input.title.trim(), input.body ?? "", authorId, now, now);
 
-  await env.DB.batch([insert, ...labelStatements(env, id, labels)]);
+  await env.DB.batch([allocate, insert, ...labelStatements(env, id, labels)]);
 
   const row = await dbOf(env)
     .select()
@@ -505,6 +511,24 @@ export const deleteArtifactLabel = async (
     .delete(repositoryLabels)
     .where(and(eq(repositoryLabels.id, labelId), eq(repositoryLabels.projectId, project.id)))
     .returning()
+    .get();
+
+  if (!removed) throw new TempoError("NOT_FOUND");
+
+  return {};
+};
+
+export const deleteArtifactIssue = async (
+  env: Env,
+  project: ProjectRow,
+  number: number,
+): Promise<FnOutput<"deleteRepositoryIssue">> => {
+  validateNumber(number);
+
+  const removed = await dbOf(env)
+    .delete(issues)
+    .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
+    .returning({ id: issues.id })
     .get();
 
   if (!removed) throw new TempoError("NOT_FOUND");

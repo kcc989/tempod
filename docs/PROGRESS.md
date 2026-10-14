@@ -66,6 +66,17 @@ Both clients now support issue creation/editing, close/reopen, comment creation/
 - The rebase exposed detached WorkspaceDO work during test teardown. Queue startup, alarm arming and turn-end processing now register their complete promises with `waitUntil`. The request-lifetime regression passes with tracking and fails when it is removed. Legacy migration coverage explicitly excludes the new migration from the old-release fixture before verifying the complete upgrade.
 - No deployment, external repository mutation, hosted Artifacts acceptance or macOS visual acceptance was performed.
 
+## Agent issue integration
+
+The `tempo` MCP server now exposes ten project-scoped issue tools in chat and run sessions: issue listing/reading/creation/editing/deletion, comment listing/creation/editing/deletion and label discovery. Interactive chats and write runs can mutate metadata; read-only runs cannot. The Worker enforces frozen tool allow/deny patterns and rejects closed sessions, stale runs and forged project/author/run identities. Known credentials are redacted from agent-written titles and bodies before storage; issue content stays outside raw events and lifecycle logs. Large list responses expose a continuation offset and remain below the daemon frame limit.
+
+Issue deletion cascades comments and assignments while preserving labels. Migration `0009_issue_numbers` backfills existing project counters; creation allocates numbers transactionally without reusing deleted numbers or consuming numbers on failed inserts. The migration preserves existing issue/comment data. Shared inputs and the delete API regenerate the native contracts without changing human client flows.
+
+- Complete local forced-task CI passes in 119.0 seconds for checks and the setup-inclusive summary: 1,012 Worker, 365 UI model, 178 component, 364 protocol and 28 browser cases. Installed prerequisites were reused. Detailed timings and the corrected mobile focus wait are in `CI.md`; concurrency and deadlines are unchanged.
+- All 648 generated outputs are current. Rust workspace tests pass 397 cases, including 276 Mac cases, and strict all-targets Clippy passes.
+- The updated pinned image passes all 173 daemon/image tests, 922 assertions, in 12.00 seconds. Image size is 4,061,880,709 bytes, below 6 GB. Executable temporary fixtures correct the validation mount's initial `noexec` failure; production image pins are unchanged.
+- No deployment, external repository mutation or hosted agent/Artifacts acceptance was performed.
+
 The continuation notes below describe the earlier workspace baseline; their percentages are not measurements of this forge extension.
 
 ## Current state

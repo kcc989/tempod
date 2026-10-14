@@ -107,6 +107,18 @@ export const pullRequests = sqliteTable(
   ],
 );
 
+export const issueNumbers = sqliteTable(
+  "issue_numbers",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    lastNumber: integer("last_number").notNull(),
+  },
+  (t) => [check("issue_numbers_nonnegative", sql`${t.lastNumber} >= 0`)],
+);
+
 export const issues = sqliteTable(
   "issues",
   {

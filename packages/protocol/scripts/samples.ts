@@ -744,6 +744,7 @@ export const INPUT_SAMPLES = {
     { projectId: PROJECT_ID, number: 1, state: "closed" },
     { projectId: PROJECT_ID, number: 1, title: "Updated title", body: "Updated description", labelIds: [] },
   ],
+  deleteRepositoryIssue: [{ projectId: PROJECT_ID, number: 1 }],
   listRepositoryIssueComments: [{ projectId: PROJECT_ID, number: 1, offset: 0 }],
   createRepositoryIssueComment: [{ projectId: PROJECT_ID, number: 1, body: "I can reproduce this." }],
   updateRepositoryIssueComment: [

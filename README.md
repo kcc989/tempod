@@ -6,6 +6,8 @@ The spec in [`docs/`](docs/00%20Overview.md) is the source of truth. [`09 Git Fo
 
 Open **Repositories** to create a repo, import a public HTTPS Git remote, or link an existing Artifacts repo. Native repos support folder and file browsing, branch/tag/commit refs, commit history, and pull request creation, editing, closing and reopening. Issues support creation and editing, close/reopen, comments, and colored labels in both clients. Open a PR in a workspace to review its diff and merge or squash it. Native merges preserve workspace edits and reject conflicts or concurrent remote changes. Artifacts repositories have no CI checks integration yet.
 
+Agents can read, create, update, delete and comment on the workspace repository's issues through the `tempo` MCP tools. Write runs and interactive chats can change metadata; read-only runs can read it. Frozen tool permissions apply, and agents cannot override the project or author. Deleted issue numbers are never reused.
+
 Deployment binds `ARTIFACTS` to `tempo-repos`; set `TEMPO_ARTIFACTS_NAMESPACE` to use another namespace. Artifacts requires Workers Paid. Apply the preservation-tested D1 and DO migrations and use Tempo for Mac 0.2.0 or newer. GitHub remains the owner sign-in provider, while native repo storage and PR operations do not require a GitHub repository or installation.
 
 ## Local development

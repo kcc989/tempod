@@ -2700,6 +2700,13 @@ pub struct DeleteRepositoryIssueCommentIn {
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
 }
+///`DeleteRepositoryIssueIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeleteRepositoryIssueIn {
+    pub number: f64,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
 ///`DeleteRepositoryLabelIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeleteRepositoryLabelIn {
@@ -12280,6 +12287,15 @@ pub mod api {
         type Input = crate::DeleteQueuedTurnIn;
         type Output = crate::Empty;
     }
+    /// `deleteRepositoryIssue`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DeleteRepositoryIssue;
+    impl crate::Function for DeleteRepositoryIssue {
+        const NAME: &'static str = "deleteRepositoryIssue";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::DeleteRepositoryIssueIn;
+        type Output = crate::Empty;
+    }
     /// `deleteRepositoryIssueComment`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteRepositoryIssueComment;
@@ -13180,6 +13196,7 @@ pub mod api {
         ("deleteProjectAgent", crate::Method::Post),
         ("deleteProjectSecret", crate::Method::Post),
         ("deleteQueuedTurn", crate::Method::Post),
+        ("deleteRepositoryIssue", crate::Method::Post),
         ("deleteRepositoryIssueComment", crate::Method::Post),
         ("deleteRepositoryLabel", crate::Method::Post),
         ("deleteReviewComment", crate::Method::Post),
@@ -13356,6 +13373,7 @@ pub mod wire {
         "DeleteProjectSecretIn",
         "DeleteQueuedTurnIn",
         "DeleteRepositoryIssueCommentIn",
+        "DeleteRepositoryIssueIn",
         "DeleteRepositoryLabelIn",
         "DeleteReviewCommentIn",
         "DeleteWorkspaceIn",
@@ -13690,6 +13708,7 @@ pub mod wire {
             "DeleteRepositoryIssueCommentIn" => {
                 crate::roundtrip::<crate::DeleteRepositoryIssueCommentIn>(text)
             }
+            "DeleteRepositoryIssueIn" => crate::roundtrip::<crate::DeleteRepositoryIssueIn>(text),
             "DeleteRepositoryLabelIn" => crate::roundtrip::<crate::DeleteRepositoryLabelIn>(text),
             "DeleteReviewCommentIn" => crate::roundtrip::<crate::DeleteReviewCommentIn>(text),
             "DeleteWorkspaceIn" => crate::roundtrip::<crate::DeleteWorkspaceIn>(text),

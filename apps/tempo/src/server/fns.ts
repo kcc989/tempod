@@ -68,6 +68,10 @@ export const updateRepositoryIssue = createServerFn({ method: "POST" })
   .validator((data: FnInput<"updateRepositoryIssue">) => data)
   .handler(({ data }) => run("updateRepositoryIssue", data));
 
+export const deleteRepositoryIssue = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteRepositoryIssue">) => data)
+  .handler(({ data }) => run("deleteRepositoryIssue", data));
+
 export const listRepositoryIssueComments = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listRepositoryIssueComments">) => data)
   .handler(({ data }) => run("listRepositoryIssueComments", data));

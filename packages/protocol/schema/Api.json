@@ -237,6 +237,22 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "deleteRepositoryIssue": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteRepositoryIssueIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listRepositoryIssueComments": {
       "type": "object",
       "properties": {
@@ -2044,6 +2060,7 @@
     "getRepositoryIssue",
     "createRepositoryIssue",
     "updateRepositoryIssue",
+    "deleteRepositoryIssue",
     "listRepositoryIssueComments",
     "createRepositoryIssueComment",
     "updateRepositoryIssueComment",

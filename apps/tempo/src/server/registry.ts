@@ -34,6 +34,7 @@ const own = {
   getRepositoryIssue: issues.getRepositoryIssue,
   createRepositoryIssue: issues.createRepositoryIssue,
   updateRepositoryIssue: issues.updateRepositoryIssue,
+  deleteRepositoryIssue: issues.deleteRepositoryIssue,
   listRepositoryIssueComments: issues.listRepositoryIssueComments,
   createRepositoryIssueComment: issues.createRepositoryIssueComment,
   updateRepositoryIssueComment: issues.updateRepositoryIssueComment,

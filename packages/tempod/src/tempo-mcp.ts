@@ -10,7 +10,10 @@ import {
   RUN_REPORTS,
   TEMPO_RUN_ID_ENV,
   TEMPO_RUN_OUTPUT_KIND_ENV,
-  type ToolReq,
+  ToolReq,
+  IssueToolName,
+  ISSUE_TOOL_NAMES,
+  ISSUE_TOOLS,
   PublishArtifactRequest,
   TEMPO_SESSION_ID_ENV,
   EnvironmentSummary,
@@ -156,7 +159,7 @@ export const startMcpSocket = (path: string, backend: McpBackend) => {
         try {
           const input = Schema.decodeUnknownSync(
             Schema.Struct({
-              op: Schema.Literals(["report_result", "list_agents", "propose_agent_change"]),
+              op: ToolReq.fields.op,
               sessionId: Schema.String,
               runId: Schema.optional(Schema.String),
               params: Schema.Json,
@@ -245,6 +248,13 @@ export const handleMcpMessage = async (
       return reply({
         tools: [
           ...TOOLS,
+          ...ISSUE_TOOL_NAMES.map((name) => ({
+            name,
+            description: ISSUE_TOOLS[name].description,
+            inputSchema: JsonSchema.toDocumentDraft07(
+              Schema.toJsonSchemaDocument(ISSUE_TOOLS[name].input, { onExcessProperty: "error" }),
+            ).schema,
+          })),
           ...(!runId
             ? [
                 {
@@ -324,6 +334,38 @@ export const handleMcpMessage = async (
           if (!res.ok) return reply(text(body.error ?? `tempod answered ${res.status}`, true));
 
           return reply(text(body.text ?? ""));
+        }
+
+        if (Schema.is(IssueToolName)(params["name"])) {
+          const name = Schema.decodeUnknownSync(IssueToolName)(params["name"]);
+
+          const decoded = Schema.decodeUnknownExit(ISSUE_TOOLS[name].input, {
+            onExcessProperty: "error",
+          })(params["arguments"] ?? {});
+
+          if (Exit.isFailure(decoded)) return reply(text("Invalid issue tool arguments.", true));
+
+          const res = await call("/agent-tools", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              op: params["name"],
+              sessionId: sessionId ?? "",
+              runId,
+              params: decoded.value,
+            }),
+          });
+
+          const body = Schema.decodeUnknownSync(
+            Schema.Struct({
+              result: Schema.optionalKey(Schema.Json),
+              error: Schema.optionalKey(Schema.String),
+            }),
+          )(await res.json());
+
+          return reply(
+            text(res.ok ? JSON.stringify(body.result) : (body.error ?? "Issue tool rejected."), !res.ok),
+          );
         }
 
         if (!runId && (params["name"] === "list_agents" || params["name"] === "propose_agent_change")) {
