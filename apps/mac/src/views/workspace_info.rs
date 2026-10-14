@@ -349,7 +349,7 @@ impl WorkspaceInfo {
     }
 }
 impl Render for WorkspaceInfo {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (workspace, mut chats, runs, changes) = {
             let s = &self.store.read(cx).state;
             (
@@ -393,9 +393,7 @@ impl Render for WorkspaceInfo {
         let body = v_flex()
             .id("workspace-info")
             .w_full()
-            .max_h(gpui_kit::px(
-                (f32::from(window.viewport_size().height) - 48.).max(200.),
-            ))
+            .max_h(gpui_kit::relative(1.))
             .p_4()
             .rounded(gpui_kit::px(16.))
             .bg(color(Token::Muted, cx))

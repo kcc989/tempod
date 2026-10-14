@@ -338,11 +338,12 @@ impl MainWindow {
         match self.live_active(cx) {
             Some(view) => {
                 let view = view.read(cx);
-                right_side_open(
-                    self.layout_right(),
-                    view.right_starts_closed(cx),
-                    view.right_opened,
-                )
+                !view.tools.read(cx).info_open
+                    && right_side_open(
+                        self.layout_right(),
+                        view.right_starts_closed(cx),
+                        view.right_opened,
+                    )
             }
             None => self.layout_right(),
         }
@@ -352,7 +353,10 @@ impl MainWindow {
         self.panes.right = true;
         self.panes.right_when_narrow = true;
         if let Some(view) = self.live_active(cx) {
-            view.update(cx, |v, _| v.right_opened = true);
+            view.update(cx, |v, cx| {
+                v.tools.update(cx, |tools, cx| tools.close_info(cx));
+                v.right_opened = true;
+            });
         }
         cx.notify();
     }
@@ -454,6 +458,19 @@ impl MainWindow {
                             cx.notify();
                         });
                     self.live_subscriptions.push((view.entity_id(), reveal));
+                    let tools = view.read(cx).tools.clone();
+                    let info_changed = cx.subscribe(
+                        &tools,
+                        |this, tools, _: &super::tools::InfoVisibilityChanged, cx| {
+                            if tools.read(cx).info_open {
+                                this.panes.right = false;
+                                this.panes.right_when_narrow = false;
+                            }
+                            cx.notify();
+                        },
+                    );
+                    self.live_subscriptions
+                        .push((view.entity_id(), info_changed));
                     self.live_workspaces.push(view.clone());
                     if let Some(action) = self.pending_action.take() {
                         Self::apply(&view, action.as_ref(), window, cx);
@@ -675,10 +692,11 @@ impl Render for MainWindow {
             !self.panes.sidebar && !window.is_fullscreen(),
             cx,
         );
-        let info_mode = self
+        let info_open = self
             .live_active(cx)
             .is_some_and(|v| v.read(cx).tools.read(cx).info_open);
-        let mut right = Some(self.render_right(cx));
+        let show_right = show_right && !info_open;
+        let right = self.render_right(cx);
         let reconnecting = crate::app::AppState::try_global(cx).is_some_and(|app| {
             let app = app.read(cx);
             let workspace = app.active_workspace.as_ref().and_then(|id| {
@@ -857,75 +875,57 @@ impl Render for MainWindow {
             )
             .child(
                 div().flex_1().min_h_0().child(
-                    h_flex()
-                        .size_full()
-                        .child(
-                            div().h_full().flex_1().min_w_0().child(
-                                h_resizable("main-panes")
-                                    .on_resize(move |state, _, cx| {
-                                        let sizes = state.read(cx).sizes();
-                                        let sidebar = sizes.first().map(|s| f32::from(*s));
-                                        let right = sizes.get(2).map(|s| f32::from(*s));
-                                        cx.global_mut::<crate::storage::Local>().update_state(
-                                            |s| {
-                                                s.panes.sidebar = sidebar;
-                                                if !info_mode {
-                                                    s.panes.right = right;
-                                                }
-                                            },
-                                        );
-                                    })
-                                    .child(
-                                        resizable_panel()
-                                            .flex_none()
-                                            .size(px(pane_sizes
-                                                .sidebar
-                                                .unwrap_or(sidebar::DEFAULT_WIDTH)
-                                                .clamp(sidebar::MIN_WIDTH, sidebar_max)))
-                                            .size_range(px(sidebar::MIN_WIDTH)..px(sidebar_max))
-                                            .visible(self.panes.sidebar)
-                                            .child(
-                                                v_flex()
-                                                    .size_full()
-                                                    .children((!window.is_fullscreen()).then(
-                                                        || {
-                                                            TitleBar::new()
-                                                                .border_b_0()
-                                                                .bg(color(Token::Sidebar, cx))
-                                                        },
-                                                    ))
-                                                    .child(div().flex_1().min_h_0().child(sidebar)),
-                                            ),
-                                    )
-                                    .child(resizable_panel().child(center))
-                                    .child(
-                                        resizable_panel()
-                                            .flex_none()
-                                            .size(px(pane_sizes
-                                                .right
-                                                .unwrap_or((width - 280.) / 2.)
-                                                .clamp(300., (width - 600.).max(300.))))
-                                            .size_range(px(300.)..px(600.))
-                                            .visible(show_right && !info_mode)
-                                            .child(
-                                                div()
-                                                    .size_full()
-                                                    .bg(color(Token::Panel, cx))
-                                                    .children(
-                                                        (!info_mode).then(|| right.take().unwrap()),
-                                                    ),
-                                            ),
-                                    ),
-                            ),
-                        )
-                        .children((show_right && info_mode).then(|| {
-                            div()
-                                .w(px(360.))
-                                .h_full()
-                                .flex_none()
-                                .min_h_0()
-                                .child(right.take().unwrap())
-                        })),
+                    h_flex().size_full().child(
+                        div().h_full().flex_1().min_w_0().child(
+                            h_resizable("main-panes")
+                                .on_resize(move |state, _, cx| {
+                                    let sizes = state.read(cx).sizes();
+                                    let sidebar = sizes.first().map(|s| f32::from(*s));
+                                    let right = sizes.get(2).map(|s| f32::from(*s));
+                                    cx.global_mut::<crate::storage::Local>().update_state(|s| {
+                                        s.panes.sidebar = sidebar;
+                                        s.panes.right = right;
+                                    });
+                                })
+                                .child(
+                                    resizable_panel()
+                                        .flex_none()
+                                        .size(px(pane_sizes
+                                            .sidebar
+                                            .unwrap_or(sidebar::DEFAULT_WIDTH)
+                                            .clamp(sidebar::MIN_WIDTH, sidebar_max)))
+                                        .size_range(px(sidebar::MIN_WIDTH)..px(sidebar_max))
+                                        .visible(self.panes.sidebar)
+                                        .child(
+                                            v_flex()
+                                                .size_full()
+                                                .children((!window.is_fullscreen()).then(|| {
+                                                    TitleBar::new()
+                                                        .border_b_0()
+                                                        .bg(color(Token::Sidebar, cx))
+                                                }))
+                                                .child(div().flex_1().min_h_0().child(sidebar)),
+                                        ),
+                                )
+                                .child(resizable_panel().child(center))
+                                .child(
+                                    resizable_panel()
+                                        .flex_none()
+                                        .size(px(pane_sizes
+                                            .right
+                                            .unwrap_or((width - 280.) / 2.)
+                                            .clamp(300., (width - 600.).max(300.))))
+                                        .size_range(px(300.)..px(600.))
+                                        .visible(show_right)
+                                        .child(
+                                            div()
+                                                .size_full()
+                                                .bg(color(Token::Panel, cx))
+                                                .child(right),
+                                        ),
+                                ),
+                        ),
+                    ),
                 ),
             )
             .into_any_element()

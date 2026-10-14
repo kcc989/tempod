@@ -122,7 +122,7 @@ describe("workspace controls on a phone", () => {
     fireEvent.click(screen.getByRole("button", { name: "Workspace info" }));
     expect(getWorkspaceUi(WS).infoOpen).toBe(true);
     expect(getWorkspaceUi(WS).toolTabs).not.toContain("info");
-    expect(getLayout().phonePane).toBe("tools");
+    expect(getLayout().phonePane).toBe("info");
     expect(call).not.toHaveBeenCalled();
   });
 });

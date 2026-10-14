@@ -245,3 +245,9 @@
   height: 100%;
   padding: 4px;
 }
+
+.workspace-info-rail {
+  flex: none;
+  width: min(360px, 40%);
+  height: 100%;
+}

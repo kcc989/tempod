@@ -98,13 +98,13 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
   const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
-  const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned });
   const infoOpen = useWorkspaceUiSelector(workspaceId, (ui) => ui.infoOpen);
-  const toolsOpen = rightOpen && !infoOpen;
+  const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned, infoOpen });
+  const toolsOpen = rightOpen;
   const chatStyle = { minWidth: 0, "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 2vw, 24px)" };
 
   const horizontal = useDefaultLayout({
-    id: infoOpen ? "workspace-info" : "workspace",
+    id: "workspace",
     panelIds: toolsOpen ? ["center", "right"] : ["center"],
     storage: safeLayoutStorage,
   });
@@ -114,7 +114,7 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
       <TopBar workspaceId={workspaceId} variant="desktop" />
       <div className="flex min-h-0 flex-1">
         <ResizablePanelGroup
-          id={infoOpen ? "workspace-info" : "workspace"}
+          id="workspace"
           className="min-w-0 flex-1"
           orientation="horizontal"
           defaultLayout={horizontal.defaultLayout}
@@ -124,7 +124,15 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
             <section aria-label="Chat" className="flex h-full min-h-0 flex-col" style={chatStyle}>
               <WorkspaceBanners workspaceId={workspaceId} />
               <div className="min-h-0 flex-1">
-                <ChatTabs workspaceId={workspaceId} variant="desktop" />
+                <ChatTabs
+                  workspaceId={workspaceId}
+                  variant="desktop"
+                  aside={infoOpen ? (
+                    <aside aria-label="Workspace info" className="workspace-info-rail min-h-0 p-3">
+                      <WorkspaceInfo workspaceId={workspaceId} />
+                    </aside>
+                  ) : undefined}
+                />
               </div>
             </section>
           </ResizablePanel>
@@ -137,26 +145,13 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
             </>
           )}
         </ResizablePanelGroup>
-        {rightOpen && infoOpen && (
-          <aside aria-label="Workspace info" className="h-full min-h-0 w-[360px] shrink-0 p-3">
-            <WorkspaceInfo workspaceId={workspaceId} />
-          </aside>
-        )}
       </div>
     </div>
   );
 }
 
 function RightSide({ workspaceId, phone = false }: { workspaceId: string; phone?: boolean }) {
-  const infoOpen = useWorkspaceUiSelector(workspaceId, (ui) => ui.infoOpen);
-
-  return infoOpen ? (
-    <div className="h-full min-h-0 p-3">
-      <WorkspaceInfo workspaceId={workspaceId} phone={phone} />
-    </div>
-  ) : (
-    <ToolPanel workspaceId={workspaceId} phone={phone} />
-  );
+  return <ToolPanel workspaceId={workspaceId} phone={phone} />;
 }
 
 function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
@@ -166,6 +161,19 @@ function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
     <div className="flex h-full min-h-0 flex-col">
       <TopBar workspaceId={workspaceId} variant="phone" />
       {Match.value(phonePane).pipe(
+        Match.when("info", () => (
+          <section aria-label="Workspace info" className="flex min-h-0 flex-1 flex-col">
+            <div className="border-b px-2 py-1">
+              <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
+                <ChevronLeftIcon aria-hidden />
+                Back to chat
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 p-3">
+              <WorkspaceInfo workspaceId={workspaceId} phone />
+            </div>
+          </section>
+        )),
         Match.when("tools", () => (
           <section aria-label="Workspace tools" className="flex min-h-0 flex-1 flex-col">
             <div className="border-b px-2 py-1">

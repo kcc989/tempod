@@ -1,6 +1,6 @@
 import { useApiCall } from "~/ui/hooks/useCall";
 import { ChevronDownIcon, HistoryIcon, PlusIcon, ShieldQuestionIcon, XIcon } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { CENTER_TAB_KINDS, CenterTabPart } from "~/ui/components/chat/tab-kinds";
 import { EmptyState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -54,13 +54,14 @@ export interface ChatTabsProps {
   readonly workspaceId: string;
   /** `phone`: one chat at a time with a menu at the top to switch (04, Phone width). */
   readonly variant?: "desktop" | "phone";
+  readonly aside?: ReactNode;
 }
 
 /** How long to wait for a cancelled turn to end before closing its chat. */
 const CANCEL_WAIT_MS = 30_000;
 
 /** The center tab host: chat, file, diff and browser tabs (04, Center: chat tabs and composer). */
-export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
+export function ChatTabs({ workspaceId, variant = "desktop", aside }: ChatTabsProps) {
   const call = useApiCall();
 
   const store = useWorkspaceStore(workspaceId);
@@ -422,13 +423,16 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         {newChatMenu}
         <div className="ml-auto flex items-center">{closedMenu}</div>
       </div>
-      <div
-        role="tabpanel"
-        id={`${baseId}-panel`}
-        aria-labelledby={active ? `${baseId}-tab-${ui.tabs.indexOf(active)}` : undefined}
-        className="min-h-0 flex-1"
-      >
-        {body}
+      <div className="flex min-h-0 flex-1">
+        <div
+          role="tabpanel"
+          id={`${baseId}-panel`}
+          aria-labelledby={active ? `${baseId}-tab-${ui.tabs.indexOf(active)}` : undefined}
+          className="min-h-0 min-w-0 flex-1"
+        >
+          {body}
+        </div>
+        {aside}
       </div>
     </div>
   );

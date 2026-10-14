@@ -66,6 +66,9 @@ const PROCESSES: [Tool; 3] = [Tool::Setup, Tool::Run, Tool::Terminal];
 #[derive(Clone)]
 pub struct RevealTools;
 impl EventEmitter<RevealTools> for ToolPanel {}
+#[derive(Clone)]
+pub struct InfoVisibilityChanged;
+impl EventEmitter<InfoVisibilityChanged> for ToolPanel {}
 impl EventEmitter<super::workspace_info::InfoAction> for ToolPanel {}
 
 pub struct ToolPanel {
@@ -123,7 +126,6 @@ impl ToolPanel {
                     }
                 }
                 ReviewEvent::Document => {
-                    this.info_open = false;
                     this.active = None;
                     cx.emit(RevealTools);
                 }
@@ -178,7 +180,6 @@ impl ToolPanel {
         }
     }
     fn activate(&mut self, tool: Tool, cx: &mut Context<Self>) {
-        self.info_open = false;
         if !self.tabs.contains(&tool) {
             self.tabs.push(tool);
         }
@@ -211,8 +212,20 @@ impl ToolPanel {
         self.info_open = true;
         self.hide_browser();
         self.info.update(cx, |i, cx| i.refresh(cx));
-        cx.emit(RevealTools);
+        cx.emit(InfoVisibilityChanged);
         cx.notify();
+    }
+    pub fn close_info(&mut self, cx: &mut Context<Self>) {
+        self.info_open = false;
+        cx.emit(InfoVisibilityChanged);
+        cx.notify();
+    }
+    pub fn toggle_info(&mut self, chat: Option<String>, cx: &mut Context<Self>) {
+        if self.info_open {
+            self.close_info(cx);
+        } else {
+            self.show_info(chat, cx);
+        }
     }
     pub fn set_chat(&mut self, chat: Option<String>, cx: &mut Context<Self>) {
         self.guides.update(cx, |g, cx| {
@@ -339,15 +352,6 @@ impl ToolPanel {
 }
 impl Render for ToolPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.info_open {
-            self.hide_browser();
-            return div()
-                .size_full()
-                .p_3()
-                .bg(color(Token::Background, cx))
-                .child(self.info.clone())
-                .into_any_element();
-        }
         let documents = self.review.read(cx).document_tabs();
         let document_open = self.review.read(cx).document_open;
         if document_open || self.active != Some(Tool::Browser) {

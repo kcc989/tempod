@@ -12,7 +12,7 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
     Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
@@ -61,6 +61,7 @@ pub struct WorkspaceView {
     pub tools: Entity<super::tools::ToolPanel>,
     _tool_events: Subscription,
     _info_events: Subscription,
+    _info_changed: Subscription,
     review_comments: Vec<String>,
     _review_events: Subscription,
     _review_changed: Subscription,
@@ -149,6 +150,7 @@ impl WorkspaceView {
         let tool_events = cx.subscribe(&tools, |this, _, _: &super::tools::RevealTools, cx| {
             this.reveal_right(cx)
         });
+        let info_changed = cx.subscribe(&tools, |_, _, _: &super::tools::InfoVisibilityChanged, cx| cx.notify());
         let info_events = cx.subscribe_in(
             &tools,
             window,
@@ -156,7 +158,7 @@ impl WorkspaceView {
                 use super::workspace_info::InfoAction;
                 let id = this.store.read(cx).workspace_id.clone();
                 match event {
-                    InfoAction::Close => window.dispatch_action(Box::new(ToggleRightSide), cx),
+                    InfoAction::Close => this.tools.update(cx, |tools, cx| tools.close_info(cx)),
                     InfoAction::Wake => this
                         .mutate::<api::WakeWorkspace>(p::WakeWorkspaceIn { workspace_id: id }, cx),
                     InfoAction::Sleep => this.mutate::<api::SleepWorkspace>(
@@ -275,6 +277,7 @@ impl WorkspaceView {
             tools,
             _tool_events: tool_events,
             _info_events: info_events,
+            _info_changed: info_changed,
             chat_inset: 16.,
             show_window_controls: false,
             _detail_changed: detail_changed,
@@ -1253,11 +1256,12 @@ impl WorkspaceView {
             .child(
                 Button::new("workspace-info")
                     .icon(gpui_kit::assets::IconName::Info)
+                    .selected(self.tools.read(cx).info_open)
                     .accessibility_label("Workspace info")
                     .tooltip("Workspace info")
                     .on_click(cx.listener(|this, _, _, cx| {
                         let chat=this.active.clone();
-                        this.tools.update(cx, |tools,cx|tools.show_info(chat,cx));
+                        this.tools.update(cx, |tools,cx|tools.toggle_info(chat,cx));
                     })),
             )
             .child(
@@ -1528,6 +1532,7 @@ impl WorkspaceView {
     }
 
     pub fn reveal_right(&mut self, cx: &mut Context<Self>) {
+        self.tools.update(cx, |tools, cx| tools.close_info(cx));
         self.right_opened = true;
         cx.emit(RevealRight);
         cx.notify();
@@ -3062,7 +3067,21 @@ impl Render for WorkspaceView {
                     .child(new_chat)
                     .children(has_closed.then_some(closed_menu)),
             )
-            .child(div().flex_1().min_h_0().child(content))
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .child(div().h_full().flex_1().min_w_0().child(content))
+                    .children(self.tools.read(cx).info_open.then(|| {
+                        div()
+                            .w(gpui_kit::relative(0.4))
+                            .max_w(gpui_kit::px(360.))
+                            .h_full()
+                            .flex_none()
+                            .p_3()
+                            .child(self.tools.read(cx).info.clone())
+                    })),
+            )
             .into_any_element()
     }
 }

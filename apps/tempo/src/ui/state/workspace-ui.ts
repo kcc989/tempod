@@ -204,15 +204,16 @@ const update = (workspaceId: string, f: (s: WorkspaceUiState) => WorkspaceUiStat
 const withActive = (s: WorkspaceUiState, key: string | null): WorkspaceUiState => {
   const open = key === null ? undefined : s.tabs.find((t) => t.key === key);
   const lastChatSessionId = open?.tab.kind === "chat" ? open.tab.sessionId : s.lastChatSessionId;
+  const infoOpen = open && open.tab.kind !== "chat" ? false : s.infoOpen;
 
-  if (s.activeKey === key && s.lastChatSessionId === lastChatSessionId) return s;
+  if (s.activeKey === key && s.lastChatSessionId === lastChatSessionId && s.infoOpen === infoOpen) return s;
 
   return {
     ...s,
     activeKey: key,
     lastChatSessionId,
+    infoOpen,
     activeToolKey: open && open.tab.kind !== "chat" ? key : s.activeToolKey,
-    infoOpen: open && open.tab.kind !== "chat" ? false : s.infoOpen,
   };
 };
 
@@ -236,6 +237,7 @@ export const openTab = (
   });
 
   if (tab.kind !== "chat" && activate) {
+    closeWorkspaceInfo(workspaceId);
     pinRight(workspaceId);
     setLayout({ rightOpen: true });
   }
@@ -440,18 +442,24 @@ export const setBottomTab = (workspaceId: string, bottomTab: BottomTab): void =>
 
 export const showWorkspaceInfo = (workspaceId: string): void => {
   update(workspaceId, (s) => ({ ...s, infoOpen: true }));
-  pinRight(workspaceId);
-  setLayout({ rightOpen: true });
+  setLayout({ rightOpen: false });
 };
 
-export const closeWorkspaceInfo = (): void => {
-  setLayout({ rightOpen: false, phonePane: "chat" });
+export const toggleWorkspaceInfo = (workspaceId: string): void => {
+  if (getWorkspaceUi(workspaceId).infoOpen) closeWorkspaceInfo(workspaceId);
+  else showWorkspaceInfo(workspaceId);
+};
+
+export const closeWorkspaceInfo = (workspaceId: string): void => {
+  update(workspaceId, (s) => ({ ...s, infoOpen: false }));
+
+  if (getLayout().phonePane === "info") setPhonePane("chat");
 };
 
 export const selectTool = (workspaceId: string, key: UtilityTab | null): void => {
+  closeWorkspaceInfo(workspaceId);
   update(workspaceId, (s) => ({
     ...s,
-    infoOpen: false,
     toolTabs: key && !s.toolTabs.includes(key) ? [...s.toolTabs, key] : s.toolTabs,
     activeToolKey: key,
   }));
@@ -476,8 +484,8 @@ const pinRight = (workspaceId: string | null): void => {
 /** Whether the right side shows for this workspace: the layout choice, unless it starts closed. */
 export const isRightOpen = (
   layout: Pick<LayoutState, "rightOpen">,
-  ui: Pick<WorkspaceUiState, "rightQuiet" | "rightPinned">,
-): boolean => layout.rightOpen && (ui.rightPinned || !ui.rightQuiet);
+  ui: Pick<WorkspaceUiState, "rightQuiet" | "rightPinned"> & { readonly infoOpen?: boolean },
+): boolean => !ui.infoOpen && layout.rightOpen && (ui.rightPinned || !ui.rightQuiet);
 
 /** Selects a right-panel tab and makes sure the right side is open. */
 export const showRightTab = (workspaceId: string, tab: RightTab): void => {
@@ -503,7 +511,7 @@ export const showBottomTab = (workspaceId: string, tab: BottomTab): void => {
 // ---------------------------------------------------------------------------------------------
 // Layout (global, kept in localStorage)
 /** `setup` has no bottom-navigation entry; the Setup banners open it. */
-export type PhonePane = "chat" | "changes" | "setup" | "tools";
+export type PhonePane = "chat" | "changes" | "setup" | "tools" | "info";
 
 export interface LayoutState {
   readonly sidebarOpen: boolean;
@@ -588,6 +596,7 @@ export const toggleRight = (): void => {
 
   if (shownRight(l)) setLayout({ rightOpen: false });
   else {
+    if (l.lastWorkspaceId) closeWorkspaceInfo(l.lastWorkspaceId);
     pinRight(l.lastWorkspaceId);
     setLayout({ rightOpen: true });
   }

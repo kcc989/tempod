@@ -29,6 +29,7 @@ import { useWorkspaceUi } from "~/ui/hooks/useWorkspaceUi";
 import {
   activateTab,
   showWorkspaceInfo,
+  setPhonePane,
   closeTab,
   closeTool,
   openLiveView,
@@ -139,7 +140,11 @@ export function ToolPanel({ workspaceId, phone = false }: { workspaceId: string;
             <Button
               variant="outline"
               className="h-11 justify-start"
-              onClick={() => showWorkspaceInfo(workspaceId)}
+              onClick={() => {
+                showWorkspaceInfo(workspaceId);
+
+                if (phone) setPhonePane("info");
+              }}
             >
               <InfoIcon aria-hidden />
               Workspace info
