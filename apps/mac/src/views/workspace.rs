@@ -2,6 +2,7 @@ use super::chat::{TranscriptEvent, TranscriptRow, TranscriptView};
 use super::chat_model;
 use super::composer::{Composer, ComposerEvent};
 use super::indicators::PreviewLink;
+use super::tokens::ToggleOn as _;
 use super::tokens::{Token, color};
 use crate::actions::*;
 use crate::stores::workspace::WorkspaceStore;
@@ -1077,7 +1078,7 @@ impl WorkspaceView {
                 .child(div().h(gpui_kit::px(440.)).child(view.clone()))
         });
     }
-    pub(super) fn top_bar(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    pub(super) fn top_bar(&self, tools_open: bool, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let Some(w) = self.store.read(cx).state.workspace.clone() else {
             return div().into_any_element();
         };
@@ -1169,7 +1170,7 @@ impl WorkspaceView {
                     }))
                     .into_any_element()
             })
-            .child(Button::new("copy-branch").ghost().small().icon(gpui_kit::assets::IconName::Copy)
+            .child(Button::new("copy-branch").ghost().small().size(gpui_kit::px(super::tokens::ICON_BUTTON)).icon(gpui_kit::assets::IconName::Copy)
                 .opacity(0.).group_hover("workspace-branch", |style| style.opacity(1.)).focus_visible(|style| style.opacity(1.))
                 .accessibility_label("Copy branch name").tooltip("Copy branch name")
                 .on_click(move |_, _, cx| cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()))))
@@ -1257,8 +1258,10 @@ impl WorkspaceView {
                 Button::new("workspace-info")
                     .ghost()
                     .small()
+                    .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                     .icon(gpui_kit::assets::IconName::Info)
                     .selected(self.tools.read(cx).info_open)
+                    .toggle_on(self.tools.read(cx).info_open, cx)
                     .accessibility_label("Workspace info")
                     .tooltip("Workspace info")
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -1270,7 +1273,10 @@ impl WorkspaceView {
                 Button::new("toggle-right-side")
                     .ghost()
                     .small()
+                    .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                     .icon(gpui_kit::assets::IconName::PanelRight)
+                    .selected(tools_open)
+                    .toggle_on(tools_open, cx)
                     .accessibility_label("Toggle right side")
                     .tooltip("Toggle right side (⌘⌥B)")
                     .on_click(|_, window, cx| {
@@ -2721,6 +2727,7 @@ impl Render for WorkspaceView {
         let new_chat = Button::new("new-chat")
             .ghost()
             .small()
+            .size(gpui_kit::px(super::tokens::ICON_BUTTON))
             .icon(gpui_kit::assets::IconName::Plus)
             .accessibility_label("New chat")
             .tooltip("New chat (⌘T)")
@@ -2976,7 +2983,7 @@ impl Render for WorkspaceView {
                 this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.request_commit(window, cx))
             }))
-            .children((!self.shared_header).then(|| self.top_bar(cx)))
+            .children((!self.shared_header).then(|| self.top_bar(false, cx)))
             .on_action(
                 cx.listener(|this, _: &CreatePr, window, cx| {
                     this.operation("Create PR", window, cx)
@@ -3070,7 +3077,8 @@ impl Render for WorkspaceView {
                                 },
                             )),
                     )
-                    .child(new_chat)
+                    // Clears the TabBar's 16 pt list chevron (WCAG 2.5.8 spacing).
+                    .child(div().pl_1p5().child(new_chat))
                     .children(has_closed.then_some(closed_menu)),
             )
             .child(

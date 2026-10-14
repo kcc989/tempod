@@ -406,6 +406,7 @@ impl Render for WorkspaceInfo {
                         Button::new("close-workspace-info")
                             .ghost()
                             .small()
+                            .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                             .icon(gpui_kit::assets::IconName::X)
                             .accessibility_label("Close Info")
                             .tooltip("Close Info")

@@ -811,7 +811,7 @@ impl Render for MainWindow {
             .unwrap_or((width - 280.) / 2.)
             .clamp(300., 600.);
         let shared_header = active_view.as_ref().map(|view| {
-            let workspace_header = view.update(cx, |view, cx| view.top_bar(cx));
+            let workspace_header = view.update(cx, |view, cx| view.top_bar(show_right, cx));
             let tools = view.read(cx).tools.clone();
             let tool_header = show_right.then(|| tools.update(cx, |tools, cx| tools.tab_bar(cx)));
             let leading_width = if self.panes.sidebar {
@@ -824,6 +824,7 @@ impl Render for MainWindow {
             let sidebar_toggle = Button::new("header-toggle-sidebar")
                 .ghost()
                 .small()
+                .size(px(super::tokens::ICON_BUTTON))
                 .icon(gpui_kit::assets::IconName::PanelLeft)
                 .accessibility_label("Toggle sidebar")
                 .tooltip("Toggle sidebar (⌘B)")

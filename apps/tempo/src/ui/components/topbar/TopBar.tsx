@@ -12,7 +12,8 @@ import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
 import { pillText } from "~/ui/lib/indicators";
 import { cn } from "~/ui/lib/utils";
-import { toggleRight } from "~/ui/state/workspace-ui";
+import { useLayout, useWorkspaceUiSelector } from "~/ui/hooks/useWorkspaceUi";
+import { isRightOpen, toggleRight } from "~/ui/state/workspace-ui";
 import { requestCommit } from "./commit-request";
 import { EditableBranch } from "./EditableBranch";
 import { InlineEdit } from "./InlineEdit";
@@ -81,6 +82,8 @@ function pillFor({ w, d }: WorkspaceView) {
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
   const sharedHeader = useAppHeader();
+  const layout = useLayout();
+  const rightOpen = useWorkspaceUiSelector(w.id, (ui) => isRightOpen(layout, ui));
 
   return (
     <header
@@ -97,7 +100,7 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
             variant="ghost"
             size="icon-sm"
             aria-label="Copy branch name"
-            className="size-5 opacity-0 group-hover/branch:opacity-100 group-focus-within/branch:opacity-100 focus-visible:opacity-100"
+            className="size-6 opacity-0 group-hover/branch:opacity-100 group-focus-within/branch:opacity-100 focus-visible:opacity-100"
             onClick={() => void actions.copyBranch(w.branch)}
           >
             <CopyIcon className="size-3" />
@@ -116,7 +119,13 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
         <PrimaryActionButton workspaceId={w.id} />
         <WorkspaceInfoButton view={view} />
         <SimpleTooltip label="Toggle right side (⌘⌥B)">
-          <Button size="icon-sm" variant="ghost" aria-label="Toggle right side" onClick={toggleRight}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Toggle right side"
+            aria-pressed={rightOpen}
+            onClick={toggleRight}
+          >
             <PanelRightIcon />
           </Button>
         </SimpleTooltip>

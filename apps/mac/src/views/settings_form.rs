@@ -1,6 +1,7 @@
 //! Settings pages (04, Settings): General, Logins, Environments, MCP servers, Project and
 //! Appearance. Server data changes with the same functions as the web (07, Local storage and
 //! settings).
+use super::tokens::ToggleOn as _;
 use super::environments::{self, EnvironmentSelect};
 use super::environments_model as env_model;
 use super::mcp_model::{self, McpForm};
@@ -1814,6 +1815,7 @@ impl SettingsForm {
                     .outline()
                     .label(t.to_string())
                     .selected(e.transport == t)
+                    .toggle_on(e.transport == t, cx)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(e) = &mut this.mcp_editor {
                             e.transport = t;
@@ -2226,6 +2228,7 @@ impl SettingsForm {
                         .outline()
                         .label(*label)
                         .selected(*value == option)
+                        .toggle_on(*value == option, cx)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.fields[ix].set = true;
                     this.fields[ix].editor = Editor::Choice(option.clone());
@@ -2266,6 +2269,7 @@ impl SettingsForm {
                                         option
                                     })
                                     .selected(preset == option)
+                                    .toggle_on(preset == option, cx)
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.fields[ix].set = true;
                                         if let Editor::Instance { preset, .. } =
@@ -2723,6 +2727,7 @@ impl Render for SettingsForm {
                                 Button::new(label)
                                     .label(label)
                                     .selected(current == theme)
+                                    .toggle_on(current == theme, cx)
                                     .on_click(move |_, window, cx| {
                                         cx.global_mut::<Local>().update_config(|c| c.theme = theme);
                                         match theme {
@@ -2750,6 +2755,7 @@ impl Render for SettingsForm {
                                 Button::new(SharedString::from(format!("detail-{label}")))
                                     .label(label)
                                     .selected(detail == value)
+                                    .toggle_on(detail == value, cx)
                                     .on_click(move |_, _, cx| {
                                         cx.global_mut::<Local>()
                                             .update_config(|c| c.transcript_detail = value);

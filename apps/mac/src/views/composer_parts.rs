@@ -38,7 +38,7 @@ pub(crate) fn surface(cx: &App) -> Div {
         .rounded(px(16.))
         .shadow_md()
         .border_1()
-        .border_color(color(Token::Border, cx))
+        .border_color(color(Token::Input, cx))
         .bg(color(Token::Muted, cx))
 }
 pub(crate) fn input(state: &Entity<TextareaState>, label: &'static str) -> Textarea {

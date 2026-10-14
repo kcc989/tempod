@@ -1155,6 +1155,7 @@ impl Render for Composer {
                         Button::new("attach-file")
                             .ghost()
                             .small()
+                            .size(px(super::tokens::ICON_BUTTON))
                             .icon(IconName::Plus)
                             .accessibility_label("Attach file")
                             .tooltip("Attach file (⌘U)")
@@ -1170,6 +1171,7 @@ impl Render for Composer {
                             .small()
                             .accessibility_label(if self.working { "Queue" } else { "Send" })
                             .w(px(28.))
+                            .h(px(super::tokens::ICON_BUTTON))
                             .rounded(px(8.))
                             .disabled(
                                 self.read_only

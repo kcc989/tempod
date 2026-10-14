@@ -420,6 +420,7 @@ impl ToolPanel {
                         Button::new("new-tool-tab")
                             .ghost()
                             .small()
+                            .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                             .icon(gpui_kit::assets::IconName::Plus)
                             .accessibility_label("New tool tab")
                             .tooltip("Open a tool")

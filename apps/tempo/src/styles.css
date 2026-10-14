@@ -28,7 +28,9 @@
   --merged: oklch(0.56 0.2 300);
   --merged-foreground: oklch(0.985 0 0);
   --border: oklch(0.922 0 0);
-  --input: oklch(0.9 0 0);
+  /* Edges of inputs and controls: at least 3:1 on every surface (WCAG 1.4.11). */
+  --input: oklch(0.62 0 0);
+  --input-fill: oklch(0.9 0 0);
   --ring: oklch(0.546 0.215 262.88);
   --sidebar: oklch(0.982 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -64,7 +66,8 @@
   --merged: oklch(0.68 0.17 300);
   --merged-foreground: oklch(0.145 0 0);
   --border: oklch(1 0 0 / 11%);
-  --input: oklch(1 0 0 / 15%);
+  --input: oklch(0.55 0 0);
+  --input-fill: oklch(1 0 0 / 15%);
   --ring: oklch(0.65 0.18 259.8);
   --sidebar: oklch(0.195 0 0);
   --sidebar-foreground: oklch(0.96 0 0);
@@ -114,6 +117,7 @@
   --color-merged-foreground: var(--merged-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-input-fill: var(--input-fill);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

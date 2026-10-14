@@ -272,6 +272,7 @@ fn header(cx: &App) -> impl IntoElement {
             Button::new("sidebar-sort")
                 .ghost()
                 .small()
+                .size(px(super::tokens::ICON_BUTTON))
                 .icon(IconName::SortAscending)
                 .accessibility_label(format!("Sort workspaces: {label}"))
                 .tooltip("Sort by")
@@ -297,6 +298,7 @@ fn header(cx: &App) -> impl IntoElement {
             Button::new("add-project-header")
                 .ghost()
                 .small()
+                .size(px(super::tokens::ICON_BUTTON))
                 .icon(gpui_kit::assets::IconName::FolderPlus)
                 .accessibility_label("Add project")
                 .tooltip("Add project")
@@ -591,6 +593,7 @@ fn render_section(
             Button::new(SharedString::from(format!("new-in-{project_id}")))
                 .ghost()
                 .small()
+                .size(px(super::tokens::ICON_BUTTON))
                 .icon(IconName::Plus)
                 .accessibility_label(format!("New workspace in {label}"))
                 .on_click(move |_, window, cx| {
