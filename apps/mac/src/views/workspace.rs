@@ -1111,7 +1111,8 @@ impl WorkspaceView {
             .overflow_hidden()
             .bg(color(if self.shared_header { Token::Muted } else { Token::Panel }, cx))
             .gap_2()
-            .px_2()
+            .pl_2()
+            .pr(gpui_kit::px(super::tools::HEADER_INSET))
             .py_1()
             .border_b(gpui_kit::px(if self.shared_header { 0. } else { 1. }))
             .border_color(color(Token::Border, cx))
@@ -4574,5 +4575,148 @@ mod tests {
             .unwrap();
         assert_eq!(call.1, serde_json::json!({"workspaceId": id}));
         assert!(view.read_with(cx, |view, _| view.operation.is_none()));
+    }
+
+    fn mount_tools(
+        cx: &mut TestAppContext,
+    ) -> (
+        AnyWindowHandle,
+        Entity<WorkspaceView>,
+        Entity<super::super::tools::ToolPanel>,
+        tempo_client::Runtime,
+    ) {
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client =
+            tempo_client::Server::new(&runtime.handle(), "http://127.0.0.1:9", crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+        let (_, view) = mount(cx, fixture(), client);
+        let tools = view.read_with(cx, |view, _| view.tools.clone());
+        let handle = cx.update(|cx| {
+            gpui_kit::open_window(Default::default(), cx, |_, _| tools.clone())
+                .unwrap()
+                .0
+        });
+        (handle, view, tools, runtime)
+    }
+
+    #[gpui_kit::test]
+    fn tools_grid_opens_each_terminal_as_its_own_tab_up_to_nine(cx: &mut TestAppContext) {
+        use super::super::tools::ToolTab::Terminal;
+        let (handle, _, tools, _runtime) = mount_tools(cx);
+        let open_from_grid = |cx: &mut TestAppContext| {
+            tools.update(cx, |tools, cx| tools.show_launcher(cx));
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click("open-tool-Terminal", cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("open-tool-Changes").is_none());
+            for tool in [
+                "Terminal",
+                "Run",
+                "Browser",
+                "Guides",
+                "Artifacts",
+                "Activity",
+            ] {
+                assert!(
+                    window.try_find(format!("open-tool-{tool}")).is_some(),
+                    "{tool}"
+                );
+            }
+        })
+        .unwrap();
+        open_from_grid(cx);
+        open_from_grid(cx);
+        assert_eq!(
+            tools.read_with(cx, |tools, _| tools.open_tabs()),
+            (vec![Terminal(1), Terminal(2)], Some(Terminal(2)))
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("terminal-tabs").is_none());
+            assert!(window.try_find("close-tool-Terminal 2").is_some());
+        })
+        .unwrap();
+        for _ in 3..=9 {
+            open_from_grid(cx);
+        }
+        open_from_grid(cx);
+        let (tabs, active) = tools.read_with(cx, |tools, _| tools.open_tabs());
+        assert_eq!(tabs.len(), 9);
+        assert_eq!(active, None);
+        tools.update(cx, |tools, cx| tools.close_tab(Terminal(3), cx));
+        open_from_grid(cx);
+        let (tabs, active) = tools.read_with(cx, |tools, _| tools.open_tabs());
+        assert_eq!(tabs.len(), 9);
+        assert_eq!(tabs.last(), Some(&Terminal(3)));
+        assert_eq!(active, Some(Terminal(3)));
+    }
+
+    #[gpui_kit::test]
+    fn terminal_shortcut_selects_the_recent_tab_opens_one_or_returns_to_the_launcher(
+        cx: &mut TestAppContext,
+    ) {
+        use super::super::tools::ToolTab::Terminal;
+        let (_, _, tools, _runtime) = mount_tools(cx);
+        let toggle = |cx: &mut TestAppContext| {
+            tools.update(cx, |tools, cx| tools.toggle_terminal(cx));
+            tools.read_with(cx, |tools, _| tools.open_tabs())
+        };
+        assert_eq!(toggle(cx), (vec![Terminal(1)], Some(Terminal(1))));
+        assert_eq!(toggle(cx), (vec![Terminal(1)], None));
+        tools.update(cx, |tools, cx| tools.open_terminal(cx));
+        tools.update(cx, |tools, cx| tools.show_launcher(cx));
+        assert_eq!(
+            toggle(cx),
+            (vec![Terminal(1), Terminal(2)], Some(Terminal(2)))
+        );
+        tools.update(cx, |tools, cx| tools.close_tab(Terminal(2), cx));
+        assert_eq!(toggle(cx), (vec![Terminal(1)], Some(Terminal(1))));
+        tools.update(cx, |tools, cx| tools.close_tab(Terminal(1), cx));
+        assert_eq!(toggle(cx), (vec![Terminal(1)], Some(Terminal(1))));
+    }
+
+    struct SharedHeader(Entity<WorkspaceView>);
+    impl Render for SharedHeader {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let workspace = self.0.update(cx, |view, cx| view.top_bar(true, cx));
+            let tools = self.0.read(cx).tools.clone();
+            let tabs = tools.update(cx, |tools, cx| tools.tab_bar(cx));
+            super::super::main_window::header_row(
+                (div().into_any_element(), 200.),
+                workspace,
+                Some((tabs, 400.)),
+                cx,
+            )
+        }
+    }
+
+    #[gpui_kit::test]
+    fn shared_header_insets_controls_and_tabs_from_the_right_pane_edge(cx: &mut TestAppContext) {
+        let (_, view, tools, _runtime) = mount_tools(cx);
+        tools.update(cx, |tools, cx| tools.open_terminal(cx));
+        let handle = cx.update(|cx| {
+            gpui_kit::open_window(Default::default(), cx, |_, cx| {
+                cx.new(|_| SharedHeader(view.clone()))
+            })
+            .unwrap()
+            .0
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let edge = window.viewport_size().width - gpui_kit::px(400.);
+            let toggle = window.find("toggle-right-side").bounds();
+            let tab = window.within("tool-tabs").find(0usize).bounds();
+            assert_eq!(edge - toggle.right(), gpui_kit::px(12.));
+            // The pane's 1 pt left border sits between the edge and the tab bar.
+            assert_eq!(tab.left() - edge, gpui_kit::px(13.));
+        })
+        .unwrap();
     }
 }

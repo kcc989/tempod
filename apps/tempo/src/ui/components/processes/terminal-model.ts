@@ -25,14 +25,7 @@ export type TerminalId = (typeof TERMINAL_IDS)[number];
 
 export const isTerminalId = (s: string): s is TerminalId => /^t[1-9]$/.test(s);
 
-/** The tabs to show: tmux sessions from listTerminals plus the ones opened here, t1 to t9 in order. */
-export const terminalTabs = (listed: ReadonlyArray<string>, opened: ReadonlyArray<string>): TerminalId[] => {
-  const all = new Set([...listed, ...opened].filter(isTerminalId));
-
-  return TERMINAL_IDS.filter((id) => all.has(id));
-};
-
-/** The lowest free id for `+`, or null when all nine are open. */
+/** The lowest id with no open tab, or null when all nine are open. */
 export const nextTerminalId = (tabs: ReadonlyArray<string>): TerminalId | null =>
   TERMINAL_IDS.find((id) => !tabs.includes(id)) ?? null;
 

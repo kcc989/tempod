@@ -1,5 +1,11 @@
 import { Schema } from "effect";
 import type { DiffScope } from "@tempo/protocol";
+import {
+  isTerminalId,
+  nextTerminalId,
+  TERMINAL_IDS,
+  type TerminalId,
+} from "~/ui/components/processes/terminal-model";
 import { readJson, writeJson } from "~/ui/lib/storage";
 import { Store } from "~/ui/lib/store";
 
@@ -130,9 +136,10 @@ export interface OpenTab {
 
 export type RightTab = "changes" | "files" | "checks" | "artifacts" | "activity";
 
+/** `terminal` selects the most recently used terminal tab, or opens one (04, Right tool area). */
 export type BottomTab = "setup" | "run" | "terminal";
 
-export type UtilityTab = RightTab | BottomTab;
+export type UtilityTab = RightTab | BottomTab | TerminalId;
 
 export const toolGroup = <T extends string | null>(key: T) =>
   key === "files" || key === "checks" ? "changes" : key === "setup" ? "run" : key;
@@ -161,6 +168,8 @@ export interface WorkspaceUiState {
   readonly infoOpen: boolean;
   readonly toolTabs: ReadonlyArray<UtilityTab>;
   readonly activeToolKey: string | null;
+  /** Open terminal tabs, most recently used last. */
+  readonly terminalRecency: ReadonlyArray<TerminalId>;
   readonly rightTab: RightTab;
   readonly bottomTab: BottomTab;
   readonly changesSection: Exclude<RightTab, "artifacts">;
@@ -181,6 +190,7 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   infoOpen: true,
   toolTabs: [],
   activeToolKey: null,
+  terminalRecency: [],
   rightTab: "changes",
   bottomTab: "setup",
   changesSection: "changes",
@@ -463,15 +473,26 @@ export const closeWorkspaceInfo = (workspaceId: string): void => {
   if (getLayout().phonePane === "info") setPhonePane("chat");
 };
 
-export const selectTool = (workspaceId: string, key: UtilityTab | null): void => {
+export const openTerminals = (s: Pick<WorkspaceUiState, "toolTabs">): TerminalId[] =>
+  TERMINAL_IDS.filter((id) => s.toolTabs.includes(id));
+
+const recentTerminal = (s: WorkspaceUiState): TerminalId | null =>
+  s.terminalRecency.at(-1) ?? nextTerminalId(openTerminals(s));
+
+export const selectTool = (workspaceId: string, requested: UtilityTab | null): void => {
+  const key = requested === "terminal" ? recentTerminal(getWorkspaceUi(workspaceId)) : requested;
+
+  if (requested === "terminal" && key === null) return;
   closeWorkspaceInfo(workspaceId);
   update(workspaceId, (s) => ({
     ...s,
     toolTabs: key && !s.toolTabs.includes(toolGroup(key)) ? [...s.toolTabs, toolGroup(key)] : s.toolTabs,
     activeToolKey: key,
+    terminalRecency:
+      key && isTerminalId(key) ? [...s.terminalRecency.filter((id) => id !== key), key] : s.terminalRecency,
     rightTab:
       key === "changes" || key === "files" || key === "checks" || key === "artifacts" ? key : s.rightTab,
-    bottomTab: key === "setup" || key === "run" || key === "terminal" ? key : s.bottomTab,
+    bottomTab: key === "setup" || key === "run" ? key : key && isTerminalId(key) ? "terminal" : s.bottomTab,
     changesSection: key === "changes" || key === "files" || key === "checks" ? key : s.changesSection,
     runSection: key === "setup" || key === "run" ? key : s.runSection,
   }));
@@ -479,11 +500,19 @@ export const selectTool = (workspaceId: string, key: UtilityTab | null): void =>
   setLayout({ rightOpen: true });
 };
 
+/** The Tools grid's Terminal: a new tab for the lowest free id; nothing when nine are open. */
+export const newTerminal = (workspaceId: string): void => {
+  const id = nextTerminalId(openTerminals(getWorkspaceUi(workspaceId)));
+
+  if (id) selectTool(workspaceId, id);
+};
+
 export const closeTool = (workspaceId: string, key: UtilityTab): void =>
   update(workspaceId, (s) => ({
     ...s,
     toolTabs: s.toolTabs.filter((t) => toolGroup(t) !== toolGroup(key)),
     activeToolKey: toolGroup(s.activeToolKey) === toolGroup(key) ? null : s.activeToolKey,
+    terminalRecency: s.terminalRecency.filter((id) => id !== key),
   }));
 
 export const setRightQuiet = (workspaceId: string, rightQuiet: boolean): void =>
@@ -619,7 +648,10 @@ export const toggleRight = (): void => {
   }
 };
 
-/** ⌥J: Terminal, then the tool launcher. Legacy bottomOpen remains readable in saved layouts. */
+/**
+ * ⌥J: the most recently used terminal tab (a new one when none is open), then the tool launcher.
+ * Legacy bottomOpen remains readable in saved layouts.
+ */
 export const toggleBottom = (): void => {
   const l = getLayout();
 
@@ -629,7 +661,9 @@ export const toggleBottom = (): void => {
     return;
   }
 
-  const terminalSelected = shownRight(l) && getWorkspaceUi(l.lastWorkspaceId).activeToolKey === "terminal";
+  const terminalSelected =
+    shownRight(l) && isTerminalId(getWorkspaceUi(l.lastWorkspaceId).activeToolKey ?? "");
+
   selectTool(l.lastWorkspaceId, terminalSelected ? null : "terminal");
   setLayout({ bottomOpen: !terminalSelected });
 };

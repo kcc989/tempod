@@ -339,7 +339,10 @@ test("desktop shortcuts, settings, live scripts and terminal", async ({ page, fi
   await expect.poll(() => fixture.inputs("stopScript").length).toBe(1);
   await page.getByRole("button", { name: "New tool tab" }).click();
   await page.getByRole("button", { name: "Terminal", exact: true }).click();
-  await expect(page.getByRole("button", { name: /New terminal/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Terminal 1", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page.locator(".xterm-screen")).toBeVisible();
 });
 
@@ -402,7 +405,8 @@ test("tool tabs keep the chat and draft visible beside files and Browser Run", a
   await message.fill("Keep this draft");
   await page.getByRole("button", { name: "Toggle right side", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Tools", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await page.getByRole("button", { name: "Workspace info", exact: true }).click();
+  await page.getByRole("button", { name: /^Changes\b/ }).click();
   await page.getByRole("tab", { name: "Files", exact: true }).click();
   await page.getByRole("treeitem", { name: "README.md", exact: true }).click();
   await expect(page.getByText("export const keeled = true;", { exact: false })).toBeVisible();

@@ -88,7 +88,7 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
   return (
     <header
       className={cn(
-        "flex h-10 min-w-0 shrink-0 items-center gap-3 px-2 py-1",
+        "flex h-10 min-w-0 shrink-0 items-center gap-3 py-1 pr-3 pl-2",
         sharedHeader ? "bg-transparent" : "border-b bg-card",
       )}
     >

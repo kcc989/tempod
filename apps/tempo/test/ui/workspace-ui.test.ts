@@ -16,6 +16,7 @@ import {
   insertIntoComposer,
   isRightOpen,
   moveTab,
+  newTerminal,
   openDialog,
   openDiff,
   openFile,
@@ -250,15 +251,30 @@ describe("panels and layout", () => {
     expect(getLayout()).toMatchObject({ sidebarOpen: false, rightOpen: false, phonePane: "chat" });
   });
 
-  it("⌥J opens the right side when it is closed", () => {
+  it("⌥J opens a terminal tab when none is open, then returns to the launcher", () => {
     setLayout({ lastWorkspaceId: W });
     toggleRight();
     toggleBottom();
-    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
+    expect(getWorkspaceUi(W)).toMatchObject({ activeToolKey: "t1", toolTabs: ["t1"] });
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: true });
     toggleBottom();
-    expect(getWorkspaceUi(W).activeToolKey).toBeNull();
+    expect(getWorkspaceUi(W)).toMatchObject({ activeToolKey: null, toolTabs: ["t1"] });
     expect(getLayout()).toMatchObject({ rightOpen: true, bottomOpen: false });
+  });
+
+  it("⌥J selects the most recently used terminal tab", () => {
+    setLayout({ lastWorkspaceId: W });
+    newTerminal(W);
+    newTerminal(W);
+    newTerminal(W);
+    selectTool(W, "t2");
+    selectTool(W, "changes");
+    toggleBottom();
+    expect(getWorkspaceUi(W).activeToolKey).toBe("t2");
+    closeTool(W, "t2");
+    toggleBottom();
+    expect(getWorkspaceUi(W).activeToolKey).toBe("t3");
+    expect(getWorkspaceUi(W).toolTabs).toEqual(["t1", "t3", "changes"]);
   });
 
   it("showing a panel tab opens its panel", () => {
@@ -372,12 +388,27 @@ describe("independent tools", () => {
     expect(getLayout().rightOpen).toBe(true);
     selectTool(W, "terminal");
     expect(targetChatSession(getWorkspaceUi(W))).toBe("s2");
-    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
+    expect(getWorkspaceUi(W).activeToolKey).toBe("t1");
     activateTab(W, "chat:s1");
-    expect(getWorkspaceUi(W).activeToolKey).toBe("terminal");
+    expect(getWorkspaceUi(W).activeToolKey).toBe("t1");
     expect(targetChatSession(getWorkspaceUi(W))).toBe("s1");
-    closeTool(W, "terminal");
+    closeTool(W, "t1");
     expect(getWorkspaceUi(W).activeToolKey).toBeNull();
     expect(keys()).toContain("file:README.md");
+  });
+
+  it("opens each terminal as its own tab with the lowest free id, up to nine", () => {
+    newTerminal(W);
+    newTerminal(W);
+    expect(getWorkspaceUi(W)).toMatchObject({ toolTabs: ["t1", "t2"], activeToolKey: "t2" });
+
+    for (let i = 0; i < 8; i++) newTerminal(W);
+    expect(getWorkspaceUi(W).toolTabs).toEqual(["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9"]);
+    expect(getWorkspaceUi(W).activeToolKey).toBe("t9");
+    closeTool(W, "t4");
+    expect(getWorkspaceUi(W).activeToolKey).toBe("t9");
+    newTerminal(W);
+    expect(getWorkspaceUi(W).activeToolKey).toBe("t4");
+    expect(getWorkspaceUi(W).toolTabs).toHaveLength(9);
   });
 });

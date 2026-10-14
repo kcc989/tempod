@@ -10,7 +10,6 @@ import {
   terminalAvailability,
   terminalCloseAction,
   terminalPath,
-  terminalTabs,
 } from "~/ui/components/processes/terminal-model";
 
 describe("terminal ids (02: ^t[1-9]$)", () => {
@@ -23,12 +22,7 @@ describe("terminal ids (02: ^t[1-9]$)", () => {
     expect(isTerminalId("main")).toBe(false);
   });
 
-  it("joins listed and opened tabs in order, dropping other tmux sessions", () => {
-    expect(terminalTabs(["t3", "main", "t1"], ["t2", "t3"])).toEqual(["t1", "t2", "t3"]);
-    expect(terminalTabs([], [])).toEqual([]);
-  });
-
-  it("picks the lowest free id for +, none after nine", () => {
+  it("picks the lowest id with no open tab, none after nine", () => {
     expect(nextTerminalId([])).toBe("t1");
     expect(nextTerminalId(["t1", "t3"])).toBe("t2");
     expect(nextTerminalId(TERMINAL_IDS)).toBeNull();

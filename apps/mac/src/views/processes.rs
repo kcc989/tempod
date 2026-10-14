@@ -1,25 +1,17 @@
 use crate::stores::workspace::WorkspaceStore;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
-    AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString,
-    Styled as _, Subscription, Task, Window, div, uniform_list,
+    Context, Entity, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
+    Subscription, Window, div, uniform_list,
 };
-use std::collections::BTreeMap;
-use tempo_client::{ChannelEvent, Client, TerminalFrame, TerminalHandle};
+use tempo_client::Client;
 use tempo_protocol::{self as p, api};
 
 #[derive(Clone)]
 pub struct ProcessSelected(pub usize);
 impl gpui_kit::EventEmitter<ProcessSelected> for ProcessPanel {}
 
-struct RemoteTerminal {
-    view: Entity<tempo_terminal::TerminalView>,
-    _channel: TerminalHandle,
-    _output: Task<()>,
-    _input: Task<()>,
-}
 pub struct ProcessPanel {
     store: Entity<WorkspaceStore>,
     client: Client,
@@ -29,9 +21,6 @@ pub struct ProcessPanel {
     pending: bool,
     history: Vec<p::ScriptRunWithLog>,
     error: Option<String>,
-    terminals: BTreeMap<String, RemoteTerminal>,
-    terminal: Option<String>,
-    terminal_ids: Vec<String>,
     _changed: Subscription,
 }
 impl ProcessPanel {
@@ -46,13 +35,9 @@ impl ProcessPanel {
             pending: false,
             history: vec![],
             error: None,
-            terminals: BTreeMap::new(),
-            terminal: None,
-            terminal_ids: vec![],
             _changed: changed,
         };
         this.refresh(cx);
-        this.discover_terminals(cx);
         this
     }
     fn id(&self, cx: &gpui_kit::App) -> String {
@@ -62,12 +47,6 @@ impl ProcessPanel {
         self.tab = tab;
         self.run = None;
         self.refresh(cx);
-        if tab == 2 && self.terminal.is_none() {
-            match self.terminal_ids.first().cloned() {
-                Some(id) => self.open_terminal(id, cx),
-                None => self.add_terminal(cx),
-            }
-        }
         cx.emit(ProcessSelected(tab));
         cx.notify();
     }
@@ -227,140 +206,6 @@ impl ProcessPanel {
         })
         .detach();
     }
-    fn discover_terminals(&mut self, cx: &mut Context<Self>) {
-        let request = self.client.call::<api::ListTerminals>(p::ListTerminalsIn {
-            workspace_id: self.id(cx),
-        });
-        cx.spawn(async move |this, cx| {
-            let result = request.await;
-            let _ = this.update(cx, |this, cx| {
-                if let Ok(rows) = result {
-                    for row in rows {
-                        if tempo_client::TERMINAL_IDS.contains(&row.terminal_id.as_str())
-                            && !this.terminal_ids.contains(&row.terminal_id)
-                        {
-                            this.terminal_ids.push(row.terminal_id);
-                        }
-                    }
-                    this.terminal_ids.sort();
-                }
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-    fn close_terminal(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.terminals.remove(id);
-        self.terminal_ids.retain(|s| s != id);
-        if self.terminal.as_deref() == Some(id) {
-            self.terminal = self.terminal_ids.first().cloned();
-        }
-        if let Some(id) = self.terminal.clone() {
-            self.open_terminal(id, cx);
-        }
-        cx.notify();
-    }
-    fn open_terminal(&mut self, id: String, cx: &mut Context<Self>) {
-        if !self.terminal_ids.contains(&id) {
-            self.terminal_ids.push(id.clone());
-            self.terminal_ids.sort();
-        }
-        self.terminal = Some(id.clone());
-        if self.terminals.contains_key(&id) {
-            cx.notify();
-            return;
-        }
-        let Ok((events, channel)) = self.client.open_terminal(&self.id(cx), &id, 80, 24) else {
-            return;
-        };
-        let input = channel.input();
-        let (io, remote) = tempo_terminal::TerminalIo::pair();
-        let view = cx.new(|cx| tempo_terminal::TerminalView::new(io, cx));
-        let ready_id = id.clone();
-        let output = cx.spawn(async move |this, cx| {
-            while let Ok(event) = events.recv().await {
-                match event {
-                    ChannelEvent::Message(TerminalFrame::Output(bytes)) => {
-                        if remote.output.send(bytes).await.is_err() {
-                            break;
-                        }
-                    }
-                    // The server ignores a resize sent before the process starts, so send the size again.
-                    ChannelEvent::Message(TerminalFrame::Ready) => {
-                        let _ = this.update(cx, |p, cx| {
-                            if let Some(t) = p.terminals.get(&ready_id) {
-                                let (cols, rows) = t.view.read(cx).state.size();
-                                t._channel.resize(cols, rows);
-                            }
-                        });
-                    }
-                    ChannelEvent::Status(status)
-                        if this
-                            .update(cx, |this, cx| {
-                                this.error = match status {
-                                    tempo_client::Status::Down { .. } => {
-                                        Some("Reconnecting…".into())
-                                    }
-                                    tempo_client::Status::Closed(_) => {
-                                        Some("Terminal disconnected.".into())
-                                    }
-                                    _ => None,
-                                };
-                                cx.notify();
-                            })
-                            .is_err() =>
-                    {
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-        });
-        let terminal_id = id.clone();
-        let input_task = cx.spawn(async move |this, cx| {
-            while let Ok(event) = remote.input.recv().await {
-                let frame = match event {
-                    tempo_terminal::TerminalInput::Bytes(bytes) => {
-                        tempo_client::TerminalInput::Keys(bytes)
-                    }
-                    tempo_terminal::TerminalInput::Resize { cols, rows } => {
-                        let queued = this
-                            .update(cx, |p, _| {
-                                p.terminals
-                                    .get(&terminal_id)
-                                    .is_some_and(|t| t._channel.resize(cols, rows))
-                            })
-                            .unwrap_or(false);
-                        if queued {
-                            continue;
-                        }
-                        tempo_client::TerminalInput::Resize { cols, rows }
-                    }
-                };
-                if input.send(frame).await.is_err() {
-                    break;
-                }
-            }
-        });
-        self.terminals.insert(
-            id,
-            RemoteTerminal {
-                view,
-                _channel: channel,
-                _output: output,
-                _input: input_task,
-            },
-        );
-        cx.notify();
-    }
-    fn add_terminal(&mut self, cx: &mut Context<Self>) {
-        if let Some(id) = tempo_client::TERMINAL_IDS
-            .iter()
-            .find(|id| !self.terminal_ids.iter().any(|s| s == *id))
-        {
-            self.open_terminal((*id).into(), cx);
-        }
-    }
 }
 impl Render for ProcessPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -452,67 +297,6 @@ impl Render for ProcessPanel {
                         .on_click(|_, window, cx| {
                             window.dispatch_action(Box::new(crate::actions::OpenSettings), cx)
                         }),
-                )
-                .into_any_element()
-        } else if self.tab == 2 {
-            let ids = self.terminal_ids.clone();
-            let selected = self
-                .terminal
-                .as_ref()
-                .and_then(|id| ids.iter().position(|t| t == id))
-                .unwrap_or(0);
-            let full = self.terminal_ids.len() >= tempo_client::TERMINAL_IDS.len();
-            v_flex()
-                .size_full()
-                .child(
-                    div().px_3().child(
-                        TabBar::new("terminal-tabs")
-                            .underline()
-                            .selected_index(selected)
-                            .on_click(cx.listener(move |this, ix: &usize, _, cx| {
-                                if let Some(id) = ids.get(*ix) {
-                                    this.open_terminal(id.clone(), cx);
-                                }
-                            }))
-                            .children(self.terminal_ids.iter().map(|id| {
-                                let close = id.clone();
-                                Tab::new().label(id.clone()).suffix(
-                                    Button::new(SharedString::from(format!("close-{id}")))
-                                        .ghost()
-                                        .small()
-                                        .size(gpui_kit::px(super::tokens::ICON_BUTTON))
-                                        .icon(gpui_kit::assets::IconName::X)
-                                        .accessibility_label(format!("Close {id}"))
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            this.close_terminal(&close, cx);
-                                        })),
-                                )
-                            }))
-                            .suffix(
-                                Button::new("add-terminal")
-                                    .ghost()
-                                    .small()
-                                    .size(gpui_kit::px(super::tokens::ICON_BUTTON))
-                                    .icon(gpui_kit::assets::IconName::Plus)
-                                    .accessibility_label("New terminal")
-                                    .tooltip(if full {
-                                        "Nine terminals are open"
-                                    } else {
-                                        "New terminal"
-                                    })
-                                    .disabled(full)
-                                    .on_click(cx.listener(|this, _, _, cx| this.add_terminal(cx))),
-                            ),
-                    ),
-                )
-                .child(
-                    div().flex_1().min_h_0().px_3().py_2().children(
-                        self.terminal
-                            .as_ref()
-                            .and_then(|id| self.terminals.get(id))
-                            .map(|t| t.view.clone()),
-                    ),
                 )
                 .into_any_element()
         } else {

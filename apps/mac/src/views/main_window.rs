@@ -25,7 +25,7 @@ pub const MIN_SIZE: (f32, f32) = (900., 600.);
 pub const RIGHT_COLLAPSE_WIDTH: f32 = 1100.;
 
 pub const REVIEW_TABS: [&str; 4] = ["Changes", "All files", "Checks", "Artifacts"];
-pub const PROCESS_TABS: [&str; 3] = ["Setup", "Run", "Terminal"];
+pub const PROCESS_TABS: [&str; 2] = ["Setup", "Run"];
 
 /// Below the collapse width the right side keeps its own toggle state, closed by default.
 pub fn right_side_visible(width: f32, open: bool, open_when_narrow: bool) -> bool {
@@ -697,6 +697,39 @@ impl MainWindow {
     }
 }
 
+/// The shared 40 pt top bar: leading controls, workspace controls, and tool tabs over the right pane.
+pub(super) fn header_row(
+    (leading, leading_width): (AnyElement, f32),
+    workspace_header: AnyElement,
+    tool_header: Option<(AnyElement, f32)>,
+    cx: &App,
+) -> gpui_kit::Div {
+    h_flex()
+        .h(px(40.))
+        .w_full()
+        .flex_none()
+        .bg(color(Token::Muted, cx))
+        .border_b_1()
+        .border_color(color(Token::Border, cx))
+        .child(
+            div()
+                .w(px(leading_width))
+                .h_full()
+                .flex_none()
+                .child(leading),
+        )
+        .child(div().flex_1().min_w_0().h_full().child(workspace_header))
+        .children(tool_header.map(|(header, width)| {
+            div()
+                .w(px(width))
+                .h_full()
+                .flex_none()
+                .border_l_1()
+                .border_color(color(Token::Border, cx))
+                .child(header)
+        }))
+}
+
 impl Focusable for MainWindow {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -844,30 +877,12 @@ impl Render for MainWindow {
                     .child(leading)
                     .into_any_element()
             };
-            h_flex()
-                .h(px(40.))
-                .w_full()
-                .flex_none()
-                .bg(color(Token::Muted, cx))
-                .border_b_1()
-                .border_color(color(Token::Border, cx))
-                .child(
-                    div()
-                        .w(px(leading_width))
-                        .h_full()
-                        .flex_none()
-                        .child(leading),
-                )
-                .child(div().flex_1().min_w_0().h_full().child(workspace_header))
-                .children(tool_header.map(|header| {
-                    div()
-                        .w(px(right_width))
-                        .h_full()
-                        .flex_none()
-                        .border_l_1()
-                        .border_color(color(Token::Border, cx))
-                        .child(header)
-                }))
+            header_row(
+                (leading, leading_width),
+                workspace_header,
+                tool_header.map(|header| (header, right_width)),
+                cx,
+            )
         });
         let shared_header_visible = shared_header.is_some();
         let main_id = cx.entity_id();
