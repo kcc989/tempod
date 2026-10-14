@@ -14,7 +14,13 @@ test(
   "renders live workspace state and keeps chat drafts across tabs and reloads",
   { tag: "@mobile" },
   async ({ page, fixture }) => {
-    await expect(page.getByRole("heading", { name: "Build keeled" })).toBeVisible();
+    // The phone bar names the workspace; on desktop the sidebar row does.
+    const workspaceTitle = (name: string) =>
+      test.info().project.name.startsWith("phone")
+        ? page.getByRole("heading", { name })
+        : page.getByRole("navigation", { name: "Workspaces" }).getByText(name, { exact: true });
+
+    await expect(workspaceTitle("Build keeled")).toBeVisible();
     await expect(
       page.getByLabel("Transcript", { exact: true }).getByText("Ready to review keeled."),
     ).toBeVisible();
@@ -30,7 +36,7 @@ test(
     await page.reload();
     await expect(message).toHaveValue("Draft for Claude");
     fixture.updateWorkspace({ title: "Keeled ready" });
-    await expect(page.getByRole("heading", { name: "Keeled ready" })).toBeVisible();
+    await expect(workspaceTitle("Keeled ready")).toBeVisible();
   },
 );
 

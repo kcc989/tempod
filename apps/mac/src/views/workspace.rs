@@ -1135,27 +1135,15 @@ impl WorkspaceView {
         };
         let bar = h_flex()
             .group("workspace-branch")
-            .flex_wrap()
-            .min_h(gpui_kit::px(40.))
+            .h(gpui_kit::px(40.))
+            .min_w_0()
+            .overflow_hidden()
             .bg(color(if self.shared_header { Token::Muted } else { Token::Panel }, cx))
             .gap_2()
             .px_2()
             .py_1()
             .border_b(gpui_kit::px(if self.shared_header { 0. } else { 1. }))
             .border_color(color(Token::Border, cx))
-            .children(
-                (w.title != w.slug && w.branch.rsplit('/').next() != Some(w.title.as_str())).then(
-                    || {
-                        Button::new("workspace-title")
-                            .ghost()
-                            .small()
-                            .label(w.title)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.operation("Rename", window, cx)
-                            }))
-                    },
-                ),
-            )
             .child(if let Some(input) = &self.branch_editor {
                 div().id("branch-editor").w(gpui_kit::px(220.))
                     .capture_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
@@ -1169,7 +1157,8 @@ impl WorkspaceView {
                     .into_any_element()
             } else {
                 Button::new("branch-name").ghost().small()
-                    .label(w.branch.clone())
+                    .min_w_0().flex_shrink_1()
+                    .child(div().min_w_0().truncate().child(w.branch.clone()))
                     .accessibility_label("Rename branch")
                     .tooltip("Double-click to rename branch")
                     .disabled(self.branch_pending || w.pushed || !matches!(w.state, p::WorkspaceState::Ready | p::WorkspaceState::Working | p::WorkspaceState::Sleeping))
@@ -1234,6 +1223,8 @@ impl WorkspaceView {
                     .into_any_element()
             } else {
                 div()
+                    .flex_shrink_0()
+                    .whitespace_nowrap()
                     .text_color(color(
                         if w.state == p::WorkspaceState::Error {
                             Token::Destructive

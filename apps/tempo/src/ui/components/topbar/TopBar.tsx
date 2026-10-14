@@ -29,7 +29,7 @@ export interface TopBarProps {
 }
 
 /**
- * 04, Top bar. Left: title, branch with copy on hover or focus, and the PR link. Middle: preview
+ * 04, Top bar, one row. Left: branch with copy on hover or focus, and the PR link. Middle: preview
  * ports, then `Live` during a Browser Run session. Right: container pill, the primary git action, the
  * Info button and the right-side toggle.
  */
@@ -81,23 +81,15 @@ function pillFor({ w, d }: WorkspaceView) {
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
   const sharedHeader = useAppHeader();
-  const [renamingTitle, setRenamingTitle] = useState(false);
 
   return (
     <header
       className={cn(
-        "flex min-h-10 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1",
+        "flex h-10 shrink-0 items-center gap-x-3 overflow-hidden px-2",
         sharedHeader ? "bg-transparent" : "border-b bg-card",
       )}
     >
-      <div className="flex min-w-0 shrink flex-wrap items-center gap-1.5">
-        <EditableTitle
-          title={w.title}
-          onSave={actions.rename}
-          show={w.title !== w.slug && w.branch.split("/").at(-1) !== w.title}
-          editing={renamingTitle}
-          onEditingChange={setRenamingTitle}
-        />
+      <div className="flex min-w-0 shrink items-center gap-1.5">
         <span className="group/branch flex min-w-0 items-center gap-0.5 font-mono text-xs text-muted-foreground">
           <GitBranchIcon aria-hidden className="size-3 shrink-0" />
           <EditableBranch view={view} onSave={actions.renameBranch} />
@@ -178,22 +170,8 @@ function PhoneTopBar({ view, actions }: { view: WorkspaceView; actions: Workspac
   );
 }
 
-function EditableTitle({
-  title,
-  onSave,
-  show = true,
-  editing: controlledEditing,
-  onEditingChange,
-}: {
-  title: string;
-  onSave: (title: string) => void;
-  show?: boolean;
-  editing?: boolean;
-  onEditingChange?: (editing: boolean) => void;
-}) {
-  const [localEditing, setLocalEditing] = useState(false);
-  const editing = controlledEditing ?? localEditing;
-  const setEditing = onEditingChange ?? setLocalEditing;
+function EditableTitle({ title, onSave }: { title: string; onSave: (title: string) => void }) {
+  const [editing, setEditing] = useState(false);
 
   if (editing) {
     return (
@@ -206,8 +184,6 @@ function EditableTitle({
       />
     );
   }
-
-  if (!show) return null;
 
   return (
     <h1 className="flex min-w-0">
