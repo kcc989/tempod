@@ -257,6 +257,35 @@ export class WebFixture {
         return this.runs.map((r) => ({ ...r, logTail: "" }));
       case "listTerminals":
         return [];
+      case "getProject":
+        return {
+          id: "p-public",
+          namespace: "acme",
+          slug: "site",
+          organizationId: null,
+          visibility: "public",
+          provider: "artifacts",
+          owner: "tempo",
+          name: "site",
+          defaultBranch: "main",
+          stars: 3,
+          starred: false,
+          role: null,
+          updatedAt: 1,
+        };
+      case "getRepository":
+        return {
+          projectId: "p-public",
+          name: "site",
+          description: "A public site",
+          defaultBranch: "main",
+          remote: "https://git.test/site.git",
+          readOnly: false,
+          ref: "main",
+          empty: false,
+          entries: [{ name: "README.md", path: "README.md", hash: "blob", type: "blob" }],
+          commit: null,
+        };
       case "listBranches":
         return [{ name: "main" }, { name: "feature" }];
       case "listOpenPullRequests":

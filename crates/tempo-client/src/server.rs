@@ -696,7 +696,7 @@ impl Client {
         })
     }
 
-    fn send<T: Send + 'static>(
+    pub(crate) fn send<T: Send + 'static>(
         &self,
         fut: impl Future<Output = Result<T, ApiError>> + Send + 'static,
     ) -> impl Future<Output = Result<T, ApiError>> + Send + 'static {
@@ -741,7 +741,7 @@ where
     }
 }
 
-fn with_bearer(request: RequestBuilder, token: &Token) -> RequestBuilder {
+pub(crate) fn with_bearer(request: RequestBuilder, token: &Token) -> RequestBuilder {
     match HeaderValue::from_str(&token.bearer()) {
         Ok(mut value) => {
             value.set_sensitive(true);

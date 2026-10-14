@@ -10,7 +10,12 @@ import type {
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RepositoryForm } from "~/ui/components/repositories/RepositoryForm";
-import { RepositoryHub } from "~/ui/components/repositories/RepositoryHub";
+import {
+  RepositoryDetail as RepositoryDetailView,
+  RepositoryHub,
+} from "~/ui/components/repositories/RepositoryHub";
+import { ProjectAccess } from "~/ui/components/social/ProjectAccess";
+import { StarButton } from "~/ui/components/social/StarButton";
 import { PullRequestForm } from "~/ui/components/repositories/RepositoryPullRequests";
 import { resetUiState } from "~/ui/state/workspace-ui";
 import { elementOf } from "../elements";
@@ -153,6 +158,12 @@ beforeEach(() => {
         return summary();
       case "createPullRequest":
         return { number: currentPull.number, url: currentPull.url };
+      case "starProject":
+        return { stars: 4, starred: true };
+      case "listProjectMembers":
+        return [{ userId: "u2", username: "octo", name: "Octo", image: null, role: "read" }];
+      case "putProjectMember":
+        return { userId: "u3", username: "kit", name: "Kit", image: null, role: "write" };
       default:
         throw new Error("Unexpected repository request: " + name);
     }
@@ -374,5 +385,46 @@ describe("repository workflows", () => {
       draft: false,
     });
     expect(request).not.toHaveBeenCalledWith("createWorkspace", expect.anything());
+  });
+
+  it("shows a public visitor no write controls, no Checks and no member-only checks (11)", async () => {
+    const access = { role: null, userId: null };
+
+    show(
+      <RepositoryDetailView
+        project={project}
+        access={access}
+        search={{ project: "p1", tab: "pulls", pull: 1 }}
+        onNavigate={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    await screen.findByText("Description");
+    expect(screen.queryByRole("button", { name: "New workspace" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Checks" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close pull request" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review and merge in workspace" })).toBeNull();
+    expect(request).not.toHaveBeenCalledWith("listCiRuns", expect.anything());
+  });
+
+  it("stars a project and shows the count the server returns", async () => {
+    show(<StarButton projectId="p1" initial={{ stars: 3, starred: false }} signedIn />);
+    fireEvent.click(screen.getByRole("button", { name: /Star\s*3/ }));
+    await screen.findByRole("button", { name: /Starred\s*4/ });
+    expect(request).toHaveBeenCalledWith("starProject", { projectId: "p1" });
+  });
+
+  it("lists project members for an admin and adds one by username", async () => {
+    show(<ProjectAccess project={{ ...project, role: "admin", visibility: "private" }} />);
+    await screen.findByText("octo");
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: " kit " } });
+    fireEvent.click(screen.getByRole("button", { name: "Add member" }));
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith("putProjectMember", {
+        projectId: "p1",
+        username: "kit",
+        role: "write",
+      }),
+    );
   });
 });

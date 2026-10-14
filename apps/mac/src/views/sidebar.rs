@@ -394,6 +394,33 @@ fn footer(cx: &App) -> impl IntoElement {
                 }),
         )
         .child(
+            Button::new("explore")
+                .ghost()
+                .small()
+                .label("Explore")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::ShowExplore), cx)
+                }),
+        )
+        .child(
+            Button::new("stars")
+                .ghost()
+                .small()
+                .label("Stars")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::ShowStars), cx)
+                }),
+        )
+        .child(
+            Button::new("organizations")
+                .ghost()
+                .small()
+                .label("Organizations")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::ShowOrganizations), cx)
+                }),
+        )
+        .child(
             Button::new("history")
                 .ghost()
                 .small()

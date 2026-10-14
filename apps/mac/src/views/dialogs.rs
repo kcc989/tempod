@@ -442,6 +442,10 @@ impl Dialogs {
                         }
                         this.installations = out;
                     }
+                    // 11: only the instance admin may use the GitHub App.
+                    Err(e) if e.code() == Some(p::ErrorCode::Forbidden) => {
+                        this.error = Some(super::social_model::ASK_ADMIN_FOR_GITHUB.into())
+                    }
                     Err(e) => this.error = Some(super::toast::error_text(&e, None)),
                 }
                 cx.notify();

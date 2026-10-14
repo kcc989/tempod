@@ -127,7 +127,8 @@ describe("row indicators", () => {
     expect(isBold({ attention: "none" })).toBe(false);
   });
 
-  it("names projects owner/name", () => {
+  it("names projects namespace/slug, or owner/name before namespaces (11)", () => {
     expect(projectLabel({ owner: "acme", name: "app" })).toBe("acme/app");
+    expect(projectLabel({ owner: "tempo", name: "app", namespace: "octo", slug: "site" })).toBe("octo/site");
   });
 });

@@ -59,7 +59,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Organizations page: list, New organization, invitations with Accept and Decline | Same | Calls the Better Auth organization endpoints with the bearer token |
 | `/:namespace` pages and organization Members | Default browser | A namespace link opens `<Tempo URL>/<namespace>` |
 | Settings → project → Access, Leave project | Same |  |
-| Add project Owner and Visibility selects | Same | The Mac app already shows the GitHub list only when `listInstallations` succeeds |
+| Add project Owner and Visibility choices | Same | Owner and Visibility are segmented choices in Add repository. When `listInstallations` returns `FORBIDDEN`, Add project shows `Ask the Tempo admin to link GitHub repositories.` |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |

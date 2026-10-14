@@ -7,6 +7,7 @@ import {
   safeRedirect,
   sessionLabel,
 } from "~/ui/auth";
+import { canManage, slugFromName } from "~/ui/organizations";
 
 describe("auth helpers", () => {
   it("follows only same-site paths after sign-in", () => {
@@ -50,5 +51,17 @@ describe("auth helpers", () => {
       sessionLabel("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36"),
     ).toBe("Chrome on Linux");
     expect(sessionLabel("Tempo/1.0 (Mac OS X 15.0)")).toBe("Tempo for Mac");
+  });
+});
+
+describe("organization helpers (04, /organizations)", () => {
+  it("suggests a slug the server accepts and recognizes managing roles", () => {
+    expect(slugFromName("Acme Labs!")).toBe("acme-labs");
+    expect(slugFromName("  --Ünïcode  Team--")).toBe("n-code-team");
+    expect(slugFromName("a".repeat(50))).toBe("a".repeat(39));
+    expect(slugFromName(`${"a".repeat(38)}-b`)).toBe("a".repeat(38));
+    expect(canManage("member, admin")).toBe(true);
+    expect(canManage("member")).toBe(false);
+    expect(canManage(undefined)).toBe(false);
   });
 });
