@@ -467,3 +467,11 @@ Verification: Worker tests cover pipeline validation and revisions, ingestion de
 ## Local Mac terminal bridge
 
 The user approved a bundled `tempo terminal <workspace-id-or-slug> [t1..t9]` helper and Terminal.app/iTerm launch buttons. This adds an external terminal option to the current native process panel and preserves its embedded terminal. Credentials reuse the saved host's stable Keychain helper, and the cloud terminal protocol is unchanged. Both development and release packaging include/sign the CLI and Keychain helper. Actual macOS launch and signing remain platform acceptance checks.
+
+## Connected base agents in Settings (2026-10-14)
+
+The connected-base editor changes were rebased onto the current agent library. Web and Mac keep Project default and saved disconnected bases, hide unconnected concrete choices, and require confirmed credentials for a new definition. A new definition selects the first connected concrete base. Loading/error states provide recovery; native editor scrolling keeps Save reachable. The former custom-agent and Roles APIs remain removed.
+
+Model discovery starts configured adapters concurrently and preserves result order. The existing detached-event callback accepts Codex auth refreshes and updates only matching credential-version metadata in the cache signature. Secrets remain outside workspace event storage; CI detached events retain their replay owner.
+
+Pre-rebase historical validation and native observations are not acceptance evidence for this revision. Current validation is recorded in the PR; no local test suite is run during this design pass. Native visual acceptance and the four-area calibration remain incomplete.

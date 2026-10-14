@@ -1,7 +1,8 @@
 //! Settings → Agents (04; 07 "Same"): the user's agents and an editor (01, Agent profiles).
 use super::agents_model::{self, AgentForm, ServerForm};
-use super::chat_model::{AGENTS, agent_label};
+use super::chat_model::{agent_label, new_chat_agents};
 use super::tokens::{Token, color};
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
 use gpui_kit::component::switch::Switch;
@@ -9,8 +10,8 @@ use gpui_kit::component::{
     Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::{
-    AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString,
-    Styled as _, Window, div,
+    AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 use std::collections::BTreeMap;
 use tempo_protocol::{self as p, AgentId, api};
@@ -34,6 +35,9 @@ enum Selected {
 pub struct AgentsSettings {
     client: Option<tempo_client::Client>,
     agents: Vec<p::AgentSummary>,
+    credentials: Option<p::CredentialStatus>,
+    credentials_rev: u64,
+    login_error: Option<String>,
     selected: Selected,
     loaded: Option<String>,
     name: Entity<InputState>,
@@ -64,6 +68,9 @@ impl AgentsSettings {
         let mut this = Self {
             client,
             agents: vec![],
+            credentials: None,
+            credentials_rev: 0,
+            login_error: None,
             selected: Selected::None,
             loaded: None,
             name: input("Name", window, cx),
@@ -85,7 +92,42 @@ impl AgentsSettings {
             error: None,
         };
         this.refresh(cx);
+        if let Some(app) = crate::app::AppState::try_global(cx) {
+            this.credentials_rev = app.read(cx).credentials_rev;
+            cx.observe(&app, |this, app, cx| {
+                let rev = app.read(cx).credentials_rev;
+                if this.credentials_rev != rev {
+                    this.credentials_rev = rev;
+                    this.refresh_credentials(cx);
+                }
+            })
+            .detach();
+        }
+        this.refresh_credentials(cx);
         this
+    }
+
+    fn refresh_credentials(&mut self, cx: &mut Context<Self>) {
+        let Some(client) = &self.client else { return };
+        self.credentials = None;
+        self.login_error = None;
+        let rev = self.credentials_rev;
+        let request = client.call::<api::GetCredentialStatus>(p::Empty {});
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                if this.credentials_rev != rev {
+                    return;
+                }
+                match result {
+                    Ok(status) => this.credentials = Some(status),
+                    Err(error) => this.login_error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
@@ -195,8 +237,11 @@ impl AgentsSettings {
         self.handle.update(cx, |i, cx| i.set_value("", window, cx));
         self.access = p::AgentAccess::ReadOnly;
         self.output_kind = p::OutputKind::Note;
-        self.project_default = true;
+        self.project_default = false;
         self.fill(&AgentForm::default(), window, cx);
+        if let Some(agent) = new_chat_agents(self.credentials.as_ref()).first() {
+            self.base_agent = *agent;
+        }
         cx.notify();
     }
 
@@ -241,8 +286,23 @@ impl AgentsSettings {
         }
     }
 
+    fn can_save(&self) -> bool {
+        if self.selected != Selected::New {
+            return true;
+        }
+        let available = new_chat_agents(self.credentials.as_ref());
+        if self.project_default {
+            !available.is_empty()
+        } else {
+            available.contains(&self.base_agent)
+        }
+    }
+
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.pending {
+            return;
+        }
+        if !self.can_save() {
             return;
         }
         let Some(client) = self.client.clone() else {
@@ -436,13 +496,52 @@ impl AgentsSettings {
                 ))
         });
         let is_existing = matches!(self.selected, Selected::Agent(_));
+        let available = new_chat_agents(self.credentials.as_ref());
+        let base = self.field(
+            "Base agent",
+            "baseAgent",
+            None,
+            v_flex().gap_1()
+                .child(h_flex().gap_1().flex_wrap().child(
+                    Button::new("project-default").label("Project default")
+                        .selected(self.project_default)
+                        .on_click(cx.listener(|this, _, _, cx| { this.project_default = true; cx.notify(); }))
+                ).children(available.iter().copied().map(|agent| {
+                    let selected = !self.project_default && self.base_agent == agent;
+                    Button::new(SharedString::from(format!("base-{agent}")))
+                        .label(agent_label(agent))
+                        .with_variant(if selected { ButtonVariant::Primary } else { ButtonVariant::Default })
+                        .selected(selected)
+                        .accessibility_label(format!("{}{}", agent_label(agent), if selected { " (selected)" } else { "" }))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.project_default = false;
+                        this.base_agent = agent;
+                            cx.notify();
+                        }))
+                })))
+                .child(div().min_h(px(20.)).text_sm().text_color(color(Token::MutedForeground, cx))
+                    .children(agents_model::unsupported_note(self.base_agent)))
+                .children((self.credentials.is_some() && !available.contains(&self.base_agent)).then(|| {
+                    div().text_sm().text_color(color(Token::MutedForeground, cx)).child(format!("{} is not connected. Its saved base agent is unchanged. Connect it in Logins or choose a connected agent.", agent_label(self.base_agent)))
+                })),
+            cx,
+        );
         v_flex()
-            .gap_3()
-            .p_3()
-            .border_1()
-            .rounded_md()
-            .border_color(color(Token::Border, cx))
-            .child(self.field("Name", "name", None, Input::new(&self.name), cx))
+            .flex_shrink_0()
+            .gap_4()
+            .child(
+                h_flex()
+                    .items_start()
+                    .gap_4()
+                    .child(div().flex_1().min_w_0().child(self.field(
+                        "Name",
+                        "name",
+                        None,
+                        Input::new(&self.name),
+                        cx,
+                    )))
+                    .child(div().flex_1().min_w_0().child(base)),
+            )
             .child(self.field("Handle", "handle", None, Input::new(&self.handle), cx))
             .child(h_flex().gap_1().children(
                 [p::AgentAccess::ReadOnly, p::AgentAccess::Write].map(|value| {
@@ -512,35 +611,6 @@ impl AgentsSettings {
                         cx.notify();
                     }))
             }))
-            .child(
-                self.field(
-                    "Base agent",
-                    "baseAgent",
-                    agents_model::unsupported_note(self.base_agent),
-                    h_flex()
-                        .gap_1()
-                        .child(
-                            Button::new("project-default")
-                                .label("Project default")
-                                .selected(self.project_default)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.project_default = true;
-                                    cx.notify();
-                                })),
-                        )
-                        .children(AGENTS.map(|agent| {
-                            Button::new(SharedString::from(format!("base-{agent}")))
-                                .label(agent_label(agent))
-                                .selected(!self.project_default && self.base_agent == agent)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.project_default = false;
-                                    this.base_agent = agent;
-                                    cx.notify();
-                                }))
-                        })),
-                    cx,
-                ),
-            )
             .child(self.field(
                 "Description",
                 "description",
@@ -573,20 +643,24 @@ impl AgentsSettings {
                 Textarea::new(&self.prompt),
                 cx,
             ))
-            .child(self.field(
-                "Allowed tools",
-                "allow",
-                Some("Empty allows every built-in tool. Denied wins."),
-                Input::new(&self.allow),
-                cx,
-            ))
-            .child(self.field(
-                "Denied tools",
-                "deny",
-                Some("Use the base agent's tool names, for example Edit."),
-                Input::new(&self.deny),
-                cx,
-            ))
+            .child(
+                h_flex()
+                    .gap_4()
+                    .child(div().flex_1().min_w_0().child(self.field(
+                        "Allowed tools",
+                        "allow",
+                        Some("Empty allows every built-in tool. Denied wins."),
+                        Input::new(&self.allow),
+                        cx,
+                    )))
+                    .child(div().flex_1().min_w_0().child(self.field(
+                        "Denied tools",
+                        "deny",
+                        Some("Use the base agent's tool names, for example Edit."),
+                        Input::new(&self.deny),
+                        cx,
+                    ))),
+            )
             .child(
                 Switch::new("playwright")
                     .label("Playwright browser")
@@ -596,7 +670,14 @@ impl AgentsSettings {
                         cx.notify();
                     })),
             )
-            .child(div().text_sm().child("MCP servers"))
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(color(Token::Border, cx))
+                    .pt_4()
+                    .text_sm()
+                    .child("MCP servers"),
+            )
             .children(self.errors.get("servers").map(|e| {
                 div()
                     .text_sm()
@@ -615,6 +696,9 @@ impl AgentsSettings {
             )
             .child(
                 h_flex()
+                    .border_t_1()
+                    .border_color(color(Token::Border, cx))
+                    .pt_3()
                     .gap_2()
                     .children(is_existing.then(|| {
                         Button::new("delete-agent")
@@ -637,7 +721,7 @@ impl AgentsSettings {
                         Button::new("save-agent")
                             .primary()
                             .label(if self.pending { "Saving…" } else { "Save" })
-                            .disabled(self.pending)
+                            .disabled(self.pending || !self.can_save())
                             .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                     ),
             )
@@ -649,35 +733,144 @@ impl Render for AgentsSettings {
         let muted = color(Token::MutedForeground, cx);
         let list = self.agents.iter().map(|a| {
             let id = a.id.clone();
+            let concrete_base = a.base_agent.to_string().parse::<p::AgentId>().ok();
+            let base_label = concrete_base.map(agent_label).unwrap_or("Project default");
+            let login = match self.credentials.as_ref() {
+                _ if concrete_base.is_none() => "",
+                Some(credentials)
+                    if concrete_base
+                        .is_some_and(|base| new_chat_agents(Some(credentials)).contains(&base)) =>
+                {
+                    "Connected"
+                }
+                Some(_) => "Login required",
+                None if self.login_error.is_some() => "Login unavailable",
+                None => "Checking login…",
+            };
             Button::new(SharedString::from(format!("library-agent-{}", a.id)))
                 .ghost()
+                .w_full()
+                .h_auto()
+                .py_2()
+                .px_3()
                 .selected(self.selected == Selected::Agent(a.id.clone()))
-                .label(format!(
+                .accessibility_label(format!(
                     "{} · {}",
                     a.name.as_str(),
                     a.base_agent.to_string().as_str()
                 ))
+                .child(
+                    h_flex()
+                        .w_full()
+                        .gap_3()
+                        .items_center()
+                        .child(
+                            gpui_kit::component::Icon::new(IconName::Bot)
+                                .size(px(16.))
+                                .text_color(muted),
+                        )
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_1()
+                                .text_left()
+                                .child(
+                                    div()
+                                        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                        .truncate()
+                                        .child(a.name.to_string()),
+                                )
+                                .children((!a.description.is_empty()).then(|| {
+                                    div()
+                                        .text_sm()
+                                        .text_color(muted)
+                                        .truncate()
+                                        .child(a.description.to_string())
+                                })),
+                        )
+                        .child(
+                            v_flex()
+                                .items_end()
+                                .gap_1()
+                                .text_sm()
+                                .text_color(muted)
+                                .child(base_label)
+                                .children((!login.is_empty()).then(|| div().child(login))),
+                        ),
+                )
                 .on_click(
                     cx.listener(move |this, _, window, cx| this.select(id.clone(), window, cx)),
                 )
         });
         v_flex()
+            .id("agents-settings")
+            .h_full()
+            .overflow_y_scroll()
             .gap_3()
             .child(
                 h_flex()
                     .justify_between()
-                    .child(div().text_sm().text_color(muted).child(
-                        "An agent starts a chat with its own prompt, tools, MCP servers, model and reasoning level.",
-                    ))
+                    .child(
+                        Button::new("connect-agent")
+                            .ghost()
+                            .label("Connect another agent")
+                            .on_click(cx.listener(|_, _, _, cx| super::settings::open_logins(cx))),
+                    )
                     .child(
                         Button::new("new-agent")
+                            .with_variant(if self.selected == Selected::None {
+                                ButtonVariant::Primary
+                            } else {
+                                ButtonVariant::Ghost
+                            })
+                            .icon(IconName::Plus)
                             .label("New agent")
-                            .on_click(cx.listener(|this, _, window, cx| this.select_new(window, cx))),
+                            .disabled(new_chat_agents(self.credentials.as_ref()).is_empty())
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.select_new(window, cx)),
+                            ),
                     ),
             )
-            .children(self.error.clone().map(|e| div().text_sm().text_color(color(Token::Destructive, cx)).child(e)))
-            .children((self.agents.is_empty() && self.selected != Selected::New).then(|| div().text_color(muted).child("No agents yet.")))
-            .child(v_flex().children(list))
+            .children(
+                (self.credentials.is_none() && self.login_error.is_none())
+                    .then(|| div().text_sm().text_color(muted).child("Loading logins…")),
+            )
+            .children(self.login_error.clone().map(|error| {
+                h_flex().gap_2().child(div().text_sm().child(error)).child(
+                    Button::new("retry-agent-logins")
+                        .ghost()
+                        .label("Retry loading logins")
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh_credentials(cx))),
+                )
+            }))
+            .children(
+                (self.credentials.is_some()
+                    && new_chat_agents(self.credentials.as_ref()).is_empty())
+                .then(|| {
+                    div()
+                        .text_sm()
+                        .text_color(muted)
+                        .child("Connect an agent in Logins to create an agent.")
+                }),
+            )
+            .children(self.error.clone().map(|e| {
+                div()
+                    .text_sm()
+                    .text_color(color(Token::Destructive, cx))
+                    .child(e)
+            }))
+            .children(
+                (self.agents.is_empty() && self.selected != Selected::New)
+                    .then(|| div().text_color(muted).child("No agents yet.")),
+            )
+            .child(
+                v_flex()
+                    .flex_shrink_0()
+                    .border_b_1()
+                    .border_color(color(Token::Border, cx))
+                    .children(list),
+            )
             .children((self.selected != Selected::None).then(|| self.editor(cx)))
     }
 }

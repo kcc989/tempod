@@ -333,6 +333,7 @@ impl Render for SettingsView {
                                                     "Manage shared project environments."
                                                 }
                                                 TAB_MCP => "Manage MCP servers for your agents.",
+                                                TAB_AGENTS => "Manage agents and their defaults.",
                                                 2 => "Set your theme and transcript detail.",
                                                 _ => "Keyboard shortcuts for Tempo.",
                                             },
