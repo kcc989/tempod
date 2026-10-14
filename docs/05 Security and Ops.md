@@ -80,6 +80,7 @@ A container has no internet of its own. Every HTTP and HTTPS request goes throug
 - Policy `allowlist` (default): only the built-in agent hosts (01), the `egress_allowlist` patterns, and the hosts of the owner's enabled `http` and `sse` MCP servers pass. A pattern is a host or `*.` plus a domain; `*.example.com` matches `a.example.com` but not `example.com`.
 - Every request is logged to `egress_log`: host, path without query, status, time, rule number. The WorkspaceDO keeps the newest 10,000 rows. Diagnostics searches all of them (Observability).
 - Cloud metadata addresses are not reachable from containers, so Tempo needs no rule for them.
+- CI job containers (10, Egress) use a separate, smaller rule set: read-only access to their own repository through a read token, no other credential or placeholder swap, and the built-in hosts plus the owner-approved pipeline `egress_allowlist`. Their requests are logged with `log()`, not stored in `egress_log`.
 
 ## Preview access
 

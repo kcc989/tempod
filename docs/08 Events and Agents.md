@@ -72,11 +72,11 @@ A change is one user prompt or agent request, and every turn and run it causes. 
 | `run.decided` | `tempo` | A hook decision is recorded | `attachmentId, agentId, handle, hookIndex, hookEvent, outcome, p?, threshold` | The hook event |
 | `tempo.change.ended` | `tempo` | The change has no queued or running turn or run, and all its events are dispatched | `status: "done", "failed" or "cancelled"` | The change's last event |
 | `tempo.branch.pushed` | `tempo` | A `commit_push` op ends `done` | `branch, commitSha` | — |
-| `tempo.check.passed`, `tempo.check.failed` | `tempo` | `checks_state` changes to `success` or `failure` (03, Status polling) | `prNumber` | — |
+| `tempo.check.passed`, `tempo.check.failed` | `tempo` | `checks_state` changes to `success` or `failure` (03, Status polling; 10 for native project CI) | `prNumber`, optional `commitSha` (native projects) | — |
 
 - `status` in `agent.turn.ended` uses the turn status rules in 03.
 - `tempo.change.ended` status: `cancelled` if the user cancelled the change's last run; else `failed` if its last run failed; else `done`.
-- Status polling runs only while a UI socket is open (03), so `tempo.check.*` arrives only then.
+- Status polling runs only while a UI socket is open (03), so GitHub `tempo.check.*` arrives only then. Native project CI also refreshes a workspace's checks when one of its branch runs changes (10).
 - `tempo.branch.pushed` and `tempo.check.*` belong to the newest open change. If none exists and an enabled attachment matches, create a change with `origin: "event"` in the same transaction, and use its created event as the cause.
 
 **Dedupe keys**

@@ -43,6 +43,7 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
 | Checks | Same |  |
+| Repository Checks tab (10): runs, run detail, job logs, run/cancel/rerun, pipeline editor, PR head checks | Same | Unfinished runs refresh every 5 seconds while open |
 | Setup, Run and Terminal tabs | Same |  |
 | Workspace startup status | Same | Compact spinner and current op step; fall back to the workspace status before a step is available. No step list, timings or queue explanation. |
 | Previews | Different | Open in the default browser; no Browser tab |

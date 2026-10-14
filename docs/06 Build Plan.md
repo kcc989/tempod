@@ -252,3 +252,15 @@ Tab 06 rules: deployed, real logins, three runs in a row.
 7. `propose_agent_change` from a chat ends with an applied agent. A rejected proposal changes nothing.
 8. Kill the container during a run: the run fails with `RUN_TURN_FAILED`, no event is lost, and dispatch resumes after the DO restarts.
 9. A grep of lifecycle events, run results and decision logs for the test credentials finds nothing.
+
+## Project CI (10)
+
+Built with the Artifacts forge (09). Local gates: Worker, tempod, web and Mac tests listed in 10, Deployment and validation.
+
+Hosted gate J (not run; needs the owner's account and approval):
+
+1. Save a two-job pipeline with `needs` for a native repository. A push from a workspace starts one run on the exact pushed SHA; both jobs pass and their logs show in web and Mac.
+2. A push from outside Tempo starts a run within one reconciliation interval.
+3. A job that runs `git push` and a request to a host outside the allowlist both fail; the job log shows the 403s.
+4. A failing required job blocks the PR merge with `PR_NOT_MERGEABLE`; a rerun that passes allows it.
+5. Cancel stops the job containers; a late result does not change the run.
