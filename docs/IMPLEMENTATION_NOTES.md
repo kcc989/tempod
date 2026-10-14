@@ -481,3 +481,7 @@ Pre-rebase historical validation and native observations are not acceptance evid
 The owner changed the Claude default mode from `bypassPermissions` to `auto` (01, Agents table). `claude-agent-acp` 0.89.1 advertises `auto` (evidence `docs/evidence/core/claude.json`). If an adapter does not offer it, `tempod` logs the failed mode change and the session keeps the agent's current mode. Leaving plan mode in web and Mac returns to `auto`. Codex, OpenCode and Pi are unchanged.
 
 The turn-summary rule (01, Send a prompt) now asks the agent to report changes and checks only when it made them. The old text made agents end question-only turns with "I changed no files and ran no checks".
+
+## Deploy pins the workspace image (2026-10-14)
+
+A deploy updated the Worker but new workspaces kept the previous image: tempod reported `0.1.0`, so native repos could not bootstrap (`CLONE_FAILED`). `scripts/deploy-worker.ts` now always builds and pushes the image and pins its digest; `TEMPO_BUILD_CA` only adds the CA secret. The deploy fails if the image's tempod does not contain the deploy's build id. tempod read `process.env["TEMPO_BUILD_ID"]`, which `bun build --env` does not inline, so every image reported the `package.json` version; it now reads `process.env.TEMPO_BUILD_ID`. `--prepare` still writes the Dockerfile-based config without building.

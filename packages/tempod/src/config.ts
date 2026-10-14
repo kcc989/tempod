@@ -3,7 +3,7 @@ import type { AgentId } from "@tempo/protocol";
 import pkg from "../package.json" with { type: "json" };
 
 /** The deploy's build id, inlined at build time, so the WorkspaceDO can tell builds apart (05, Upgrades). */
-export const VERSION: string = process.env["TEMPO_BUILD_ID"] || pkg.version;
+export const VERSION: string = process.env.TEMPO_BUILD_ID || pkg.version;
 
 export interface Config {
   readonly token: string;
