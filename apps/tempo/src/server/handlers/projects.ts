@@ -193,7 +193,7 @@ export const unlinkProject = async (
   { env, user }: HandlerCtx,
   { projectId }: FnInput<"unlinkProject">,
 ): Promise<FnOutput<"unlinkProject">> => {
-  await requireProject(env, user.id, projectId);
+  const project = await requireProject(env, user.id, projectId);
 
   if ((await activeWorkspaceIds(env, projectId)).length > 0) throw new TempoError("PROJECT_HAS_WORKSPACES");
 
@@ -209,6 +209,8 @@ export const unlinkProject = async (
   }
 
   await env.CREDENTIALS.getByName(user.id).deleteProjectEnv(projectId);
+
+  if (project.provider === "artifacts") await env.REPOSITORY_CI.getByName(projectId).destroy();
   await d1(env).delete(projects).where(eq(projects.id, projectId)).run();
 
   return {};

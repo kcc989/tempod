@@ -170,6 +170,137 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getCiPipeline": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCiPipelineIn.json"
+        },
+        "output": {
+          "$ref": "CiPipeline.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateCiPipeline": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateCiPipelineIn.json"
+        },
+        "output": {
+          "$ref": "CiPipeline.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listCiRuns": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListCiRunsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "CiRun.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRunDetail.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "startCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "StartCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRun.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rerunCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RerunCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRun.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelCiRun": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelCiRunIn.json"
+        },
+        "output": {
+          "$ref": "CiRun.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getCiJobLog": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetCiJobLogIn.json"
+        },
+        "output": {
+          "$ref": "GetCiJobLogOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listRepositoryIssues": {
       "type": "object",
       "properties": {
@@ -2056,6 +2187,14 @@
     "getRepositoryPullRequest",
     "createRepositoryPullRequest",
     "updateRepositoryPullRequest",
+    "getCiPipeline",
+    "updateCiPipeline",
+    "listCiRuns",
+    "getCiRun",
+    "startCiRun",
+    "rerunCiRun",
+    "cancelCiRun",
+    "getCiJobLog",
     "listRepositoryIssues",
     "getRepositoryIssue",
     "createRepositoryIssue",

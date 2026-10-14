@@ -1,12 +1,18 @@
 import { lifecycleRedactor } from "../../agents/secrets.ts";
 import { desc } from "drizzle-orm";
-import { TempoError, type ChangedFile, type ChangesSummary, type FnOutput } from "@tempo/protocol";
+import {
+  TempoError,
+  type ChangedFile,
+  type ChangesSummary,
+  type CheckRun,
+  type FnOutput,
+} from "@tempo/protocol";
 import { EMPTY_PROMPT, json } from "../../db/json.ts";
 import { turns } from "../../db/workspace-do.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
 import { mintInstallationToken } from "../../github/api.ts";
 import { checksStateOf, github, prStateOf } from "../../github/provider.ts";
-import { artifactBranchExists, artifactToken } from "../../artifacts/repositories.ts";
+import { artifactBranchExists, artifactHeadSha, artifactToken } from "../../artifacts/repositories.ts";
 import { getArtifactPullRequest } from "../../artifacts/pull-requests.ts";
 import { errorText, log } from "../../log.ts";
 import { requireTempod } from "./container.ts";
@@ -89,14 +95,35 @@ export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<
     const pr = await getArtifactPullRequest(core.env, project, row.prNumber);
     const titleChanged = core.kv<string>("prTitle") !== pr.title;
     core.setKv("prTitle", pr.title);
-    core.setKv("checkRuns", []);
+    const native = await nativeChecks(core, project, pr.headBranch);
+    const runs = native?.runs ?? [];
+    const checksState = checksStateOf(runs);
+    core.setKv("checkRuns", runs);
 
-    if (pr.state !== row.prState || titleChanged || row.checksState !== null) {
-      core.updateWs({ prState: pr.state, checksState: null });
+    if (pr.state !== row.prState || titleChanged || row.checksState !== checksState) {
+      core.ctx.storage.transactionSync(() => {
+        core.updateWs({ prState: pr.state, checksState });
+
+        if (
+          native &&
+          checksState !== row.checksState &&
+          (checksState === "success" || checksState === "failure")
+        ) {
+          const type = checksState === "success" ? "tempo.check.passed" : "tempo.check.failed";
+          core.lifecycle.recordCause({
+            type,
+            source: "tempo",
+            changeId: core.lifecycle.newestOpenChange(),
+            dedupeKey: `checks:${row.prNumber}:${native.sha}:${type}`,
+            payload: { prNumber: row.prNumber!, commitSha: native.sha },
+          });
+        }
+      });
+      core.lifecycle.kick();
       core.publish();
     }
 
-    return { prNumber: row.prNumber, prState: pr.state, prTitle: pr.title, checksState: null };
+    return { prNumber: row.prNumber, prState: pr.state, prTitle: pr.title, checksState };
   }
 
   const token = await getGithubToken(core);
@@ -169,4 +196,33 @@ export const defaultPrBody = (core: WorkspaceCore): string => {
 
 export const requirePushed = (core: WorkspaceCore): void => {
   if (core.ws().pushed !== 1) throw new TempoError("NOT_PUSHED");
+};
+
+/** 10, Checks: the project CI runs for the current tip of a native branch; null without a run. */
+export const nativeChecks = async (
+  core: WorkspaceCore,
+  project: { id: string; name: string; artifactRepoId: string | null },
+  branch: string,
+): Promise<{ sha: string; runs: CheckRun[] } | null> => {
+  if (!project.artifactRepoId) return null;
+  const sha = await artifactHeadSha(core.env, project.name, branch, project.artifactRepoId);
+
+  if (!sha) return null;
+  const runs = await core.env.REPOSITORY_CI.getByName(project.id).checksFor(sha);
+
+  return runs ? { sha, runs } : null;
+};
+
+/** 10, Ingestion: a Tempo push or merge of a native branch. Never fails the caller. */
+export const ingestCi = (core: WorkspaceCore, branch: string, sha: string): void => {
+  const work = core
+    .project()
+    .then((project) =>
+      project.provider === "artifacts"
+        ? core.env.REPOSITORY_CI.getByName(project.id).ingest({ branch, sha })
+        : undefined,
+    )
+    .catch((e) => log("warn", "ci ingest failed", { workspaceId: core.workspaceId, error: errorText(e) }));
+
+  core.ctx.waitUntil(work);
 };

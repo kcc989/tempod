@@ -19,6 +19,10 @@ import {
   Attention,
   CheckpointReason,
   ChecksState,
+  CiJobConclusion,
+  CiRunConclusion,
+  CiStatus,
+  CiTrigger,
   IssueState,
   NoticeLevel,
   OpKind,
@@ -157,6 +161,65 @@ export const RepositoryIssueComment = Schema.Struct({
 });
 
 export type RepositoryIssueComment = typeof RepositoryIssueComment.Type;
+
+export const CiJobSpec = Schema.Struct({
+  key: Schema.String,
+  name: Schema.String,
+  needs: Schema.Array(Schema.String),
+  timeoutMinutes: Schema.Number,
+});
+
+export type CiJobSpec = typeof CiJobSpec.Type;
+
+export const CiPipeline = Schema.Struct({
+  projectId: Schema.String,
+  revision: Schema.Number,
+  source: Schema.String,
+  enabled: Schema.Boolean,
+  jobs: Schema.Array(CiJobSpec),
+  required: Schema.Array(Schema.String),
+  egressAllowlist: Schema.Array(Schema.String),
+  updatedAt: N(Ms),
+});
+
+export type CiPipeline = typeof CiPipeline.Type;
+
+export const CiRun = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  branch: Schema.String,
+  sha: Schema.String,
+  revision: Schema.Number,
+  attempt: Schema.Number,
+  trigger: CiTrigger,
+  status: CiStatus,
+  conclusion: N(CiRunConclusion),
+  createdAt: Ms,
+  startedAt: N(Ms),
+  completedAt: N(Ms),
+  url: Schema.String,
+});
+
+export type CiRun = typeof CiRun.Type;
+
+export const CiJob = Schema.Struct({
+  key: Schema.String,
+  name: Schema.String,
+  needs: Schema.Array(Schema.String),
+  status: CiStatus,
+  conclusion: N(CiJobConclusion),
+  exitCode: N(Schema.Number),
+  summary: N(Schema.String),
+  startedAt: N(Ms),
+  completedAt: N(Ms),
+});
+
+export type CiJob = typeof CiJob.Type;
+
+export const CiRunDetail = Schema.Struct({ run: CiRun, jobs: Schema.Array(CiJob) });
+
+export type CiRunDetail = typeof CiRunDetail.Type;
 
 export const WorkspaceSummary = Schema.Struct({
   id: Schema.String,

@@ -304,6 +304,11 @@ export const TEMPOD_REQUESTS = {
     Schema.Struct({ headSha: Schema.String, remoteHeadSha: Schema.optional(Schema.NullOr(Schema.String)) }),
     10 * 60_000,
   ),
+  "ci.checkout": req(
+    Schema.Struct({ url: Schema.String, branch: Schema.String, sha: Schema.String }),
+    Schema.Struct({ sha: Schema.String }),
+    10 * 60_000,
+  ),
   "repo.applyCheckpoint": req(
     Schema.Struct({ bundlePath: Schema.String, checkpointId: Schema.String, branch: Schema.String }),
     Schema.Struct({ headSha: Schema.String }),

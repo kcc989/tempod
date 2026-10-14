@@ -86,7 +86,7 @@ export const LifecycleChangeEndedPayload = Schema.Struct({
 
 export const LifecycleBranchPushedPayload = Schema.Struct({ branch: S, commitSha: S });
 
-export const LifecycleCheckPayload = Schema.Struct({ prNumber: Int });
+export const LifecycleCheckPayload = Schema.Struct({ prNumber: Int, commitSha: Schema.optional(S) });
 
 const event = <T extends string, Source extends keyof typeof sources, P extends Schema.Top>(
   type: T,

@@ -80,7 +80,12 @@ export const discoverModels = async (
       await openTempodSocket(core),
       () => undefined,
       () => undefined,
-      userId,
+      {
+        onEvent: async (event) => {
+          if (event.kind === "credential.changed")
+            await core.credentials().offerCodexAuth(event.content, event.lastRefresh, core.workspaceId);
+        },
+      },
     );
     core.tempod = client;
     client.sendHello({

@@ -8,6 +8,7 @@ import * as projects from "./handlers/projects.ts";
 import * as repositories from "./handlers/repositories.ts";
 import * as issues from "./handlers/issues.ts";
 import * as pullRequests from "./handlers/pull-requests.ts";
+import * as ci from "./handlers/ci.ts";
 import {
   createSession,
   createWorkspace,
@@ -30,6 +31,14 @@ const own = {
   getRepositoryPullRequest: pullRequests.getRepositoryPullRequest,
   createRepositoryPullRequest: pullRequests.createRepositoryPullRequest,
   updateRepositoryPullRequest: pullRequests.updateRepositoryPullRequest,
+  getCiPipeline: ci.getCiPipeline,
+  updateCiPipeline: ci.updateCiPipeline,
+  listCiRuns: ci.listCiRuns,
+  getCiRun: ci.getCiRun,
+  startCiRun: ci.startCiRun,
+  rerunCiRun: ci.rerunCiRun,
+  cancelCiRun: ci.cancelCiRun,
+  getCiJobLog: ci.getCiJobLog,
   listRepositoryIssues: issues.listRepositoryIssues,
   getRepositoryIssue: issues.getRepositoryIssue,
   createRepositoryIssue: issues.createRepositoryIssue,

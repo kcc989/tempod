@@ -12,6 +12,7 @@ import { githubRepoUrl } from "~/ui/lib/links";
 import { openDialog } from "~/ui/state/workspace-ui";
 import { RepositoryCode, RepositoryCommits } from "./RepositoryCode";
 import { RepositoryPullRequests } from "./RepositoryPullRequests";
+import { RepositoryChecks } from "./RepositoryChecks";
 import { RepositoryIssues } from "./RepositoryIssues";
 import { isRepositoryTab, repositoryInput, type RepositorySearch } from "./model";
 
@@ -132,7 +133,7 @@ function RepositoryDetail({ project, search, onNavigate }: RepositoryHubProps & 
       tab === "code" ? search.ref : undefined,
       tab === "code" ? (search.path ?? "") : undefined,
     ),
-    { enabled: project.provider === "artifacts" && tab !== "issues" },
+    { enabled: project.provider === "artifacts" && tab !== "issues" && tab !== "checks" },
   );
 
   const canWrite = project.provider !== "artifacts" || (!!metadata.data && !metadata.data.readOnly);
@@ -193,7 +194,7 @@ function RepositoryDetail({ project, search, onNavigate }: RepositoryHubProps & 
               This repository is read-only.
             </p>
           )}
-          {metadata.isError && tab !== "code" && tab !== "issues" && (
+          {metadata.isError && tab !== "code" && tab !== "issues" && tab !== "checks" && (
             <ErrorState error={metadata.error} onRetry={() => void metadata.refetch()} />
           )}
           <div className="border-b px-5 py-2">
@@ -214,6 +215,7 @@ function RepositoryDetail({ project, search, onNavigate }: RepositoryHubProps & 
                 <TabsTrigger value="commits">Commits</TabsTrigger>
                 <TabsTrigger value="pulls">Pull requests</TabsTrigger>
                 <TabsTrigger value="issues">Issues</TabsTrigger>
+                <TabsTrigger value="checks">Checks</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -237,6 +239,9 @@ function RepositoryDetail({ project, search, onNavigate }: RepositoryHubProps & 
             {tab === "code" && <RepositoryCode project={project} search={search} onNavigate={onNavigate} />}
             {tab === "issues" && (
               <RepositoryIssues project={project} search={search} onNavigate={onNavigate} />
+            )}
+            {tab === "checks" && (
+              <RepositoryChecks project={project} search={search} onNavigate={onNavigate} />
             )}
           </div>
         </>

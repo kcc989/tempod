@@ -60,7 +60,13 @@ import {
 } from "./durability.ts";
 import { sendEnv } from "./events.ts";
 import { resumeArtifacts, uploadAllArtifacts } from "./artifacts.ts";
-import { getGithubToken, refreshChanges, refreshPullRequest, repositoryBranchExists } from "./git.ts";
+import {
+  getGithubToken,
+  ingestCi,
+  refreshChanges,
+  refreshPullRequest,
+  repositoryBranchExists,
+} from "./git.ts";
 import { closeBrowser } from "./browser.ts";
 import { finishTurn } from "./queue.ts";
 import {
@@ -686,6 +692,7 @@ export const operationSteps = (handlers: ConnectHandlers) => {
 
       core.updateWs({ pushed: 1, lastPushedSha: res.commitSha, forcePushLease: 0 });
       core.setKv("hasUnpushedCommits", false);
+      ingestCi(core, row.branch, res.commitSha);
       core.publish();
       state["result"] = { commitSha: res.commitSha };
       core.ctx.waitUntil(refreshChanges(core).catch(() => undefined));
@@ -715,6 +722,10 @@ export const operationSteps = (handlers: ConnectHandlers) => {
       const merge = await prepareArtifactMerge(core.env, project, number);
 
       if (!("mergeSha" in merge)) {
+        const blocked = await core.env.REPOSITORY_CI.getByName(project.id).mergeBlock(merge.headSha);
+
+        if (blocked) throw new TempoError("PR_NOT_MERGEABLE", undefined, blocked);
+
         const result = await (
           await tempodFor(core, handlers)
         ).request(
@@ -737,6 +748,7 @@ export const operationSteps = (handlers: ConnectHandlers) => {
           .where(eq(ops.id, op.id))
           .run();
         await completeArtifactMerge(core.env, project, number, result.commitSha);
+        ingestCi(core, merge.pullRequest.baseBranch, result.commitSha);
       }
 
       core.updateWs({ prState: "merged", checksState: null });

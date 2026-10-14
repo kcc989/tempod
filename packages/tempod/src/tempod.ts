@@ -305,6 +305,7 @@ export class Tempod {
 
         return r;
       },
+      "ci.checkout": (p) => this.git.checkoutCommit(p),
       "repo.applyCheckpoint": async (p) => {
         const r = await this.git.applyCheckpoint(p);
         void this.refresh();

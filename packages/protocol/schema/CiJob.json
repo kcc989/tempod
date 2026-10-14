@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CiJob",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "needs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "running", "completed"]
+    },
+    "conclusion": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["success", "failure", "cancelled", "timed_out", "skipped"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "exitCode": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "startedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "completedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "key",
+    "name",
+    "needs",
+    "status",
+    "conclusion",
+    "exitCode",
+    "summary",
+    "startedAt",
+    "completedAt"
+  ],
+  "additionalProperties": true
+}

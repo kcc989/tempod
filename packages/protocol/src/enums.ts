@@ -39,6 +39,22 @@ export const IssueState = Schema.Literals(["open", "closed"]);
 
 export type IssueState = typeof IssueState.Type;
 
+export const CiTrigger = Schema.Literals(["push", "manual", "rerun"]);
+
+export type CiTrigger = typeof CiTrigger.Type;
+
+export const CiStatus = Schema.Literals(["queued", "running", "completed"]);
+
+export type CiStatus = typeof CiStatus.Type;
+
+export const CiRunConclusion = Schema.Literals(["success", "failure", "cancelled"]);
+
+export type CiRunConclusion = typeof CiRunConclusion.Type;
+
+export const CiJobConclusion = Schema.Literals(["success", "failure", "cancelled", "timed_out", "skipped"]);
+
+export type CiJobConclusion = typeof CiJobConclusion.Type;
+
 export const CHECKS_STATES = ["pending", "success", "failure"] as const;
 
 export const ChecksState = Schema.Literals(CHECKS_STATES);

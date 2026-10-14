@@ -11,6 +11,8 @@ export interface OutboundProps {
   readonly workspaceId: string;
   readonly userId: string;
   readonly catalog?: boolean;
+  /** A CI job's container (10, Egress). */
+  readonly ci?: boolean;
   /** Set for a subrequest of this injector (01, rule 13). */
   readonly injector?: string;
 }
@@ -44,7 +46,9 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
 
       let decision: Decision;
 
-      if (injectorName) {
+      if (this.ctx.props.ci && !config.ci) {
+        decision = { rule: 10, action: "block", status: 403, body: "tempo: CI job not found" };
+      } else if (injectorName) {
         const injector = config.injectors?.find((i) => i.name === injectorName);
         decision = injector
           ? decideForInjector(url, request.headers, this.env.APP_HOST, config, injector)
@@ -65,7 +69,9 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
 
       return block(502, `tempo: upstream error for ${url.hostname}`);
     } finally {
-      if (!this.ctx.props.catalog)
+      if (this.ctx.props.ci)
+        log("info", "ci egress", { runner: workspaceId, host: url.hostname, status, rule });
+      else if (!this.ctx.props.catalog)
         this.ctx.waitUntil(
           workspace
             .logEgress({

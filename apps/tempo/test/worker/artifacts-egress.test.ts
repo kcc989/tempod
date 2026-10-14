@@ -55,3 +55,35 @@ describe("native repository egress", () => {
       expect(decision(url)).toEqual({ rule: 9, action: "forward" });
   });
 });
+
+describe("CI job egress (10, Egress)", () => {
+  const ci: EgressConfig = { ...config, ci: true, allowlist: ["*.example.com"] };
+
+  const ciDecision = (url: string, headers: Record<string, string> = {}) =>
+    decide(new URL(url), new Headers(headers), "tempo.test", ci);
+
+  it("gives only fetch endpoints of its own remote a credential", () => {
+    for (const suffix of ["/info/refs?service=git-upload-pack", "/git-upload-pack"])
+      expect(ciDecision(remote + suffix)).toEqual({
+        rule: 2,
+        action: "forward",
+        set: { name: "authorization", value: "artifact-bearer" },
+      });
+
+    for (const suffix of ["/info/refs?service=git-receive-pack", "/git-receive-pack", "", "/objects/x"])
+      expect(ciDecision(remote + suffix)).toMatchObject({ rule: 2, action: "block", status: 403 });
+  });
+
+  it("adds no other credential and follows the CI allowlist", () => {
+    expect(
+      ciDecision("https://openrouter.ai/api", { authorization: "Bearer tempo-placeholder" }),
+    ).toMatchObject({
+      rule: 7,
+      action: "block",
+    });
+    expect(ciDecision("https://api.github.com/repos/tempo/app")).toEqual({ rule: 9, action: "forward" });
+    expect(ciDecision("https://pkg.example.com/x")).toEqual({ rule: 9, action: "forward" });
+    expect(ciDecision("https://other.test/x")).toMatchObject({ rule: 10, action: "block" });
+    expect(ciDecision("https://tempo.test/api")).toMatchObject({ rule: 0, action: "block" });
+  });
+});

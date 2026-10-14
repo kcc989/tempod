@@ -225,7 +225,7 @@ export const artifactToken = async (
   });
 };
 
-const readRefs = async (response: Response): Promise<string[]> => {
+const readRefs = async (response: Response): Promise<BranchTip[]> => {
   if (!response.body) throw new TempoError("ARTIFACTS_API_ERROR");
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -258,7 +258,7 @@ const readRefs = async (response: Response): Promise<string[]> => {
   }
 
   const decoder = new TextDecoder("utf-8", { fatal: true });
-  const refs: string[] = [];
+  const refs = new Map<string, string>();
   offset = 0;
   let serviceSeen = false;
 
@@ -283,17 +283,25 @@ const readRefs = async (response: Response): Promise<string[]> => {
     }
 
     if (!/^[a-f0-9]{40} [^\0\n]+(?:\0[^\n]*)?\n?$/.test(line)) throw new TempoError("ARTIFACTS_API_ERROR");
-    const match = /^[a-f0-9]{40} (refs\/heads\/[^\0\n]+)(?:\0[^\n]*)?\n?$/.exec(line);
+    const match = /^([a-f0-9]{40}) (refs\/heads\/[^\0\n]+)(?:\0[^\n]*)?\n?$/.exec(line);
 
-    if (match) refs.push(match[1]!.slice("refs/heads/".length));
+    if (match) refs.set(match[2]!.slice("refs/heads/".length), match[1]!);
   }
 
   if (!serviceSeen) throw new TempoError("ARTIFACTS_API_ERROR");
 
-  return [...new Set(refs)].sort();
+  return [...refs]
+    .map(([name, sha]) => ({ name, sha }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 };
 
-const artifactBranches = (env: Env, name: string, expectedId?: string): Promise<string[]> =>
+export interface BranchTip {
+  readonly name: string;
+  readonly sha: string;
+}
+
+/** Every branch and its tip, from Git ref advertisement (09). */
+export const artifactBranchTips = (env: Env, name: string, expectedId?: string): Promise<BranchTip[]> =>
   artifactCall(async () => {
     const info = await repoInfo(env, name, expectedId);
     const url = assertArtifactRemote(info.remote, name);
@@ -331,10 +339,10 @@ export const listArtifactBranches = async (
 ): Promise<{ name: string }[]> => {
   const q = query?.toLowerCase() ?? "";
 
-  return (await artifactBranches(env, name, expectedId))
-    .filter((branch) => branch.toLowerCase().includes(q))
+  return (await artifactBranchTips(env, name, expectedId))
+    .filter((branch) => branch.name.toLowerCase().includes(q))
     .slice(0, 100)
-    .map((branch) => ({ name: branch }));
+    .map((branch) => ({ name: branch.name }));
 };
 
 export const artifactBranchExists = async (
@@ -342,4 +350,4 @@ export const artifactBranchExists = async (
   name: string,
   branch: string,
   expectedId?: string,
-): Promise<boolean> => (await artifactBranches(env, name, expectedId)).includes(branch);
+): Promise<boolean> => (await artifactBranchTips(env, name, expectedId)).some((tip) => tip.name === branch);

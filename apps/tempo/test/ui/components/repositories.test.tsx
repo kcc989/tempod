@@ -109,6 +109,8 @@ beforeEach(() => {
         return commits;
       case "listRepositoryPullRequests":
         return [currentPull];
+      case "listCiRuns":
+        return [];
       case "getRepositoryPullRequest":
         return currentPull;
       case "createRepositoryPullRequest": {

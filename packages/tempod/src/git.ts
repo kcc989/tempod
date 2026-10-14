@@ -243,6 +243,48 @@ export class Git {
     });
   }
 
+  /** 10, Execution: an empty workspace at exactly `sha`, detached, for one CI job. */
+  checkoutCommit(p: { url: string; branch: string; sha: string }): Promise<{ sha: string }> {
+    return this.op("clone", true, async () => {
+      if (!/^[0-9a-f]{40}$/.test(p.sha) || !(await this.validBranch(p.branch)))
+        throw new TempoError("VALIDATION_FAILED", "Branch or commit is not valid.");
+      const ws = this.deps.workspace;
+
+      try {
+        mkdirSync(this.deps.stateDir, { recursive: true });
+        mkdirSync(ws, { recursive: true });
+
+        if (ws !== "/" && ws !== "") {
+          for (const entry of readdirSync(ws)) rmSync(join(ws, entry), { recursive: true, force: true });
+        }
+
+        rmSync(this.cloneMarker, { force: true });
+
+        const cloned = await this.git(
+          ["clone", "--quiet", "--no-checkout", "--single-branch", "--branch", p.branch, "--", p.url, ws],
+          { cwd: this.deps.stateDir },
+        );
+
+        if (cloned.code !== 0) throw new ExecError(["git", "clone"], cloned);
+        const found = await this.git(["cat-file", "-e", `${p.sha}^{commit}`]);
+
+        if (found.code !== 0) throw new TempoError("CLONE_FAILED", "The commit is not on the branch.");
+        await this.gitOk(["checkout", "--quiet", "--detach", "--force", p.sha]);
+        const head = await this.headSha();
+
+        if (head !== p.sha) throw new TempoError("CLONE_FAILED", "The checkout is not the requested commit.");
+
+        return { sha: head };
+      } catch (e) {
+        if (e instanceof TempoError) throw e;
+
+        const detail = e instanceof ExecError ? tail(e.result.stderr || e.result.stdout, 2000) : String(e);
+
+        throw new TempoError("CLONE_FAILED", detail || "Could not check out the commit.");
+      }
+    });
+  }
+
   private async initializeEmpty(baseBranch: string): Promise<void> {
     const refs = await this.git(["ls-remote", "origin"]);
 

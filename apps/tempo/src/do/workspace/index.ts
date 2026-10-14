@@ -41,6 +41,9 @@ import {
 } from "./container.ts";
 import { CONVERSATION_INTERVAL_MS, markConversationDirty, saveConversation } from "./conversations.ts";
 import { discoverModels } from "./model-catalog.ts";
+import { ciAlarm, ciCancel, ciLog, ciStart } from "./ci-runner.ts";
+import type { CiJobStart } from "../../ci/types.ts";
+import { artifactToken } from "../../artifacts/repositories.ts";
 import { WorkspaceCore, type Author } from "./core.ts";
 import { applyTempodEvent, sendEnv, sendEnvironment } from "./events.ts";
 import { getGithubToken, getRepositoryToken, pollPullRequestSafe } from "./git.ts";
@@ -353,7 +356,41 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       return null;
     }
   }
+  /** RepositoryCiDO: a run on this workspace's branch changed (10, Checks, merge and events). */
+  async ciChanged(): Promise<void> {
+    const row = this.core.wsOrNull();
+
+    if (!row || row.prNumber === null || row.archivedAt !== null) return;
+    await pollPullRequestSafe(this.core);
+  }
+  // ---------- CI runner (10, Execution) ----------
+  async ciStart(input: CiJobStart): Promise<Result<Record<string, never>>> {
+    return capture(async () => {
+      await ciStart(this.core, input);
+
+      return {};
+    });
+  }
+  async ciCancel(token: string): Promise<void> {
+    await ciCancel(this.core, token);
+  }
+  async ciLog(token: string): Promise<Result<{ text: string; truncated: boolean }>> {
+    return capture(() => ciLog(this.core, token));
+  }
   async getEgressConfig(): Promise<EgressConfig> {
+    const ci = this.ciJob();
+
+    if (ci)
+      return {
+        owner: "tempo",
+        repo: ci.repoName,
+        provider: "artifacts",
+        cloneUrl: assertArtifactRemote(ci.cloneUrl, ci.repoName).href,
+        policy: "allowlist",
+        allowlist: [...ci.egressAllowlist],
+        mcp: [],
+        ci: true,
+      };
     const project = await this.core.project();
 
     if (project.provider === "artifacts")
@@ -379,7 +416,25 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     };
   }
 
+  /** The job of a CI runner instance; never set on a workspace. */
+  private ciJob(): CiJobStart | null {
+    if (this.core.wsOrNull() || !this.ctx.id.name?.startsWith("ci:")) return null;
+
+    return this.core.kv<CiJobStart>("ciJob") ?? null;
+  }
   async getRepositoryToken(): Promise<string | null> {
+    const ci = this.ciJob();
+
+    if (ci) {
+      try {
+        return await artifactToken(this.core.env, ci.repoName, "read", ci.artifactRepoId);
+      } catch {
+        log("warn", "ci repository credential unavailable", { runner: this.ctx.id.name });
+
+        return null;
+      }
+    }
+
     if (!this.core.wsOrNull()) return null;
 
     try {
@@ -582,6 +637,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
         await core.credentials().dropCodexLease(core.workspaceId);
         core.setKv("catalogToken", null);
       }
+
+      if (this.ciJob()) await ciAlarm(core);
 
       return;
     }

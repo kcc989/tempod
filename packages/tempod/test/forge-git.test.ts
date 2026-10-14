@@ -392,3 +392,36 @@ describe("native pull request Git operations", () => {
     T,
   );
 });
+
+describe("CI checkout", () => {
+  test(
+    "ci.checkout leaves exactly the requested commit, detached, and refuses a commit off the branch",
+    async () => {
+      const origin = await makeOrigin();
+      const first = await push(origin, "feature/ci", "ci.txt", "first\n");
+      writeFileSync(join(origin.seed, "later.txt"), "later\n");
+      await git(origin.seed, "add", "-A");
+      await git(origin.seed, "commit", "-q", "-m", "later");
+      await git(origin.seed, "push", "-q", "origin", "feature/ci");
+      const other = await push(origin, "other", "other.txt", "other\n");
+      const { c, g, ws } = await boot(origin);
+      writeFileSync(join(ws, "stale.txt"), "left by an earlier job\n");
+
+      expect(await c.ok("ci.checkout", { url: origin.url, branch: "feature/ci", sha: first })).toEqual({
+        sha: first,
+      });
+      expect(await g("rev-parse", "HEAD")).toBe(first);
+      expect(await g("status", "--porcelain")).toBe("");
+      expect((await g("rev-parse", "--abbrev-ref", "HEAD")).trim()).toBe("HEAD");
+      expect(readFileSync(join(ws, "ci.txt"), "utf8")).toBe("first\n");
+      expect(() => readFileSync(join(ws, "later.txt"))).toThrow();
+      expect(() => readFileSync(join(ws, "stale.txt"))).toThrow();
+
+      const missing = await c.req("ci.checkout", { url: origin.url, branch: "feature/ci", sha: other });
+      expect(missing.ok ? null : missing.error.code).toBe("CLONE_FAILED");
+      const invalid = await c.req("ci.checkout", { url: origin.url, branch: "feature/ci", sha: "HEAD~1" });
+      expect(invalid.ok ? null : invalid.error.code).toBe("VALIDATION_FAILED");
+    },
+    T,
+  );
+});

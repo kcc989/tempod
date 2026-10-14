@@ -52,6 +52,38 @@ export const updateRepositoryPullRequest = createServerFn({ method: "POST" })
   .validator((data: FnInput<"updateRepositoryPullRequest">) => data)
   .handler(({ data }) => run("updateRepositoryPullRequest", data));
 
+export const getCiPipeline = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getCiPipeline">) => data)
+  .handler(({ data }) => run("getCiPipeline", data));
+
+export const updateCiPipeline = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"updateCiPipeline">) => data)
+  .handler(({ data }) => run("updateCiPipeline", data));
+
+export const listCiRuns = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listCiRuns">) => data)
+  .handler(({ data }) => run("listCiRuns", data));
+
+export const getCiRun = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getCiRun">) => data)
+  .handler(({ data }) => run("getCiRun", data));
+
+export const startCiRun = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"startCiRun">) => data)
+  .handler(({ data }) => run("startCiRun", data));
+
+export const rerunCiRun = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"rerunCiRun">) => data)
+  .handler(({ data }) => run("rerunCiRun", data));
+
+export const cancelCiRun = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"cancelCiRun">) => data)
+  .handler(({ data }) => run("cancelCiRun", data));
+
+export const getCiJobLog = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getCiJobLog">) => data)
+  .handler(({ data }) => run("getCiJobLog", data));
+
 export const listRepositoryIssues = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listRepositoryIssues">) => data)
   .handler(({ data }) => run("listRepositoryIssues", data));

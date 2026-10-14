@@ -1361,6 +1361,64 @@ pub struct AvailableCommand {
     pub input: ::std::option::Option<::serde_json::Value>,
     pub name: ::std::string::String,
 }
+///`CancelCiRunIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CancelCiRunIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    #[serde(rename = "runId")]
+    pub run_id: CancelCiRunInRunId,
+}
+///`CancelCiRunInRunId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CancelCiRunInRunId(::std::string::String);
+impl ::std::ops::Deref for CancelCiRunInRunId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CancelCiRunInRunId> for ::std::string::String {
+    fn from(value: CancelCiRunInRunId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CancelCiRunInRunId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CancelCiRunInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CancelCiRunInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CancelCiRunInRunId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`CancelCodexLoginIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CancelCodexLoginIn {
@@ -1621,6 +1679,378 @@ impl ::std::convert::TryFrom<&str> for ChecksState {
     }
 }
 impl ::std::convert::TryFrom<::std::string::String> for ChecksState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CiJob`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CiJob {
+    #[serde(
+        rename = "completedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub completed_at: ::std::option::Option<f64>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub conclusion: ::std::option::Option<CiJobConclusion>,
+    #[serde(
+        rename = "exitCode",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub exit_code: ::std::option::Option<f64>,
+    pub key: ::std::string::String,
+    pub name: ::std::string::String,
+    pub needs: ::std::vec::Vec<::std::string::String>,
+    #[serde(
+        rename = "startedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub started_at: ::std::option::Option<f64>,
+    pub status: CiJobStatus,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub summary: ::std::option::Option<::std::string::String>,
+}
+///`CiJobConclusion`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CiJobConclusion {
+    #[serde(rename = "success")]
+    Success,
+    #[serde(rename = "failure")]
+    Failure,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "timed_out")]
+    TimedOut,
+    #[serde(rename = "skipped")]
+    Skipped,
+}
+impl ::std::fmt::Display for CiJobConclusion {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Success => f.write_str("success"),
+            Self::Failure => f.write_str("failure"),
+            Self::Cancelled => f.write_str("cancelled"),
+            Self::TimedOut => f.write_str("timed_out"),
+            Self::Skipped => f.write_str("skipped"),
+        }
+    }
+}
+impl ::std::str::FromStr for CiJobConclusion {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "success" => Ok(Self::Success),
+            "failure" => Ok(Self::Failure),
+            "cancelled" => Ok(Self::Cancelled),
+            "timed_out" => Ok(Self::TimedOut),
+            "skipped" => Ok(Self::Skipped),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CiJobConclusion {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CiJobConclusion {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CiJobSpec`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CiJobSpec {
+    pub key: ::std::string::String,
+    pub name: ::std::string::String,
+    pub needs: ::std::vec::Vec<::std::string::String>,
+    #[serde(rename = "timeoutMinutes")]
+    pub timeout_minutes: f64,
+}
+///`CiJobStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CiJobStatus {
+    #[serde(rename = "queued")]
+    Queued,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "completed")]
+    Completed,
+}
+impl ::std::fmt::Display for CiJobStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Queued => f.write_str("queued"),
+            Self::Running => f.write_str("running"),
+            Self::Completed => f.write_str("completed"),
+        }
+    }
+}
+impl ::std::str::FromStr for CiJobStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "running" => Ok(Self::Running),
+            "completed" => Ok(Self::Completed),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CiJobStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CiJobStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CiPipeline`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CiPipeline {
+    #[serde(rename = "egressAllowlist")]
+    pub egress_allowlist: ::std::vec::Vec<::std::string::String>,
+    pub enabled: bool,
+    pub jobs: ::std::vec::Vec<CiJobSpec>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub required: ::std::vec::Vec<::std::string::String>,
+    pub revision: f64,
+    pub source: ::std::string::String,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
+///`CiRun`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CiRun {
+    pub attempt: f64,
+    pub branch: ::std::string::String,
+    #[serde(
+        rename = "completedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub completed_at: ::std::option::Option<f64>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub conclusion: ::std::option::Option<CiRunConclusion>,
+    #[serde(rename = "createdAt")]
+    pub created_at: f64,
+    pub id: ::std::string::String,
+    pub number: f64,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub revision: f64,
+    pub sha: ::std::string::String,
+    #[serde(
+        rename = "startedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub started_at: ::std::option::Option<f64>,
+    pub status: CiRunStatus,
+    pub trigger: CiRunTrigger,
+    pub url: ::std::string::String,
+}
+///`CiRunConclusion`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CiRunConclusion {
+    #[serde(rename = "success")]
+    Success,
+    #[serde(rename = "failure")]
+    Failure,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+}
+impl ::std::fmt::Display for CiRunConclusion {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Success => f.write_str("success"),
+            Self::Failure => f.write_str("failure"),
+            Self::Cancelled => f.write_str("cancelled"),
+        }
+    }
+}
+impl ::std::str::FromStr for CiRunConclusion {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "success" => Ok(Self::Success),
+            "failure" => Ok(Self::Failure),
+            "cancelled" => Ok(Self::Cancelled),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CiRunConclusion {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CiRunConclusion {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CiRunDetail`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CiRunDetail {
+    pub jobs: ::std::vec::Vec<CiJob>,
+    pub run: CiRun,
+}
+///`CiRunStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CiRunStatus {
+    #[serde(rename = "queued")]
+    Queued,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "completed")]
+    Completed,
+}
+impl ::std::fmt::Display for CiRunStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Queued => f.write_str("queued"),
+            Self::Running => f.write_str("running"),
+            Self::Completed => f.write_str("completed"),
+        }
+    }
+}
+impl ::std::str::FromStr for CiRunStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "running" => Ok(Self::Running),
+            "completed" => Ok(Self::Completed),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CiRunStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CiRunStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CiRunTrigger`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CiRunTrigger {
+    #[serde(rename = "push")]
+    Push,
+    #[serde(rename = "manual")]
+    Manual,
+    #[serde(rename = "rerun")]
+    Rerun,
+}
+impl ::std::fmt::Display for CiRunTrigger {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Push => f.write_str("push"),
+            Self::Manual => f.write_str("manual"),
+            Self::Rerun => f.write_str("rerun"),
+        }
+    }
+}
+impl ::std::str::FromStr for CiRunTrigger {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "push" => Ok(Self::Push),
+            "manual" => Ok(Self::Manual),
+            "rerun" => Ok(Self::Rerun),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CiRunTrigger {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CiRunTrigger {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -3201,6 +3631,12 @@ pub enum ErrorCode {
     PrExists,
     #[serde(rename = "PR_NOT_MERGEABLE")]
     PrNotMergeable,
+    #[serde(rename = "CI_PIPELINE_INVALID")]
+    CiPipelineInvalid,
+    #[serde(rename = "CI_PIPELINE_CHANGED")]
+    CiPipelineChanged,
+    #[serde(rename = "CI_NOT_CONFIGURED")]
+    CiNotConfigured,
     #[serde(rename = "GITHUB_API_ERROR")]
     GithubApiError,
     #[serde(rename = "FILE_TOO_LARGE")]
@@ -3285,6 +3721,9 @@ impl ::std::fmt::Display for ErrorCode {
             Self::NotPushed => f.write_str("NOT_PUSHED"),
             Self::PrExists => f.write_str("PR_EXISTS"),
             Self::PrNotMergeable => f.write_str("PR_NOT_MERGEABLE"),
+            Self::CiPipelineInvalid => f.write_str("CI_PIPELINE_INVALID"),
+            Self::CiPipelineChanged => f.write_str("CI_PIPELINE_CHANGED"),
+            Self::CiNotConfigured => f.write_str("CI_NOT_CONFIGURED"),
             Self::GithubApiError => f.write_str("GITHUB_API_ERROR"),
             Self::FileTooLarge => f.write_str("FILE_TOO_LARGE"),
             Self::PathOutsideWorkspace => f.write_str("PATH_OUTSIDE_WORKSPACE"),
@@ -3351,6 +3790,9 @@ impl ::std::str::FromStr for ErrorCode {
             "NOT_PUSHED" => Ok(Self::NotPushed),
             "PR_EXISTS" => Ok(Self::PrExists),
             "PR_NOT_MERGEABLE" => Ok(Self::PrNotMergeable),
+            "CI_PIPELINE_INVALID" => Ok(Self::CiPipelineInvalid),
+            "CI_PIPELINE_CHANGED" => Ok(Self::CiPipelineChanged),
+            "CI_NOT_CONFIGURED" => Ok(Self::CiNotConfigured),
             "GITHUB_API_ERROR" => Ok(Self::GithubApiError),
             "FILE_TOO_LARGE" => Ok(Self::FileTooLarge),
             "PATH_OUTSIDE_WORKSPACE" => Ok(Self::PathOutsideWorkspace),
@@ -3430,6 +3872,185 @@ pub struct GetChangesOut {
     pub files: ::std::vec::Vec<ChangedFile>,
     #[serde(rename = "headSha")]
     pub head_sha: ::std::string::String,
+}
+///`GetCiJobLogIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetCiJobLogIn {
+    pub job: GetCiJobLogInJob,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    #[serde(rename = "runId")]
+    pub run_id: GetCiJobLogInRunId,
+}
+///`GetCiJobLogInJob`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct GetCiJobLogInJob(::std::string::String);
+impl ::std::ops::Deref for GetCiJobLogInJob {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<GetCiJobLogInJob> for ::std::string::String {
+    fn from(value: GetCiJobLogInJob) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for GetCiJobLogInJob {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for GetCiJobLogInJob {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for GetCiJobLogInJob {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for GetCiJobLogInJob {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`GetCiJobLogInRunId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct GetCiJobLogInRunId(::std::string::String);
+impl ::std::ops::Deref for GetCiJobLogInRunId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<GetCiJobLogInRunId> for ::std::string::String {
+    fn from(value: GetCiJobLogInRunId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for GetCiJobLogInRunId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for GetCiJobLogInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for GetCiJobLogInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for GetCiJobLogInRunId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`GetCiJobLogOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetCiJobLogOut {
+    pub text: ::std::string::String,
+    pub truncated: bool,
+}
+///`GetCiPipelineIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetCiPipelineIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`GetCiRunIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetCiRunIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    #[serde(rename = "runId")]
+    pub run_id: GetCiRunInRunId,
+}
+///`GetCiRunInRunId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct GetCiRunInRunId(::std::string::String);
+impl ::std::ops::Deref for GetCiRunInRunId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<GetCiRunInRunId> for ::std::string::String {
+    fn from(value: GetCiRunInRunId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for GetCiRunInRunId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for GetCiRunInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for GetCiRunInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for GetCiRunInRunId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`GetDiagnosticsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4615,6 +5236,11 @@ impl ::std::convert::TryFrom<::std::string::String> for LifecycleChangeEndedPayl
 ///`LifecycleCheckPayload`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct LifecycleCheckPayload {
+    #[serde(
+        rename = "commitSha",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub commit_sha: ::std::option::Option<::std::string::String>,
     #[serde(rename = "prNumber")]
     pub pr_number: i64,
 }
@@ -5423,6 +6049,66 @@ pub struct ListCheckRunsIn {
 pub struct ListCheckpointsIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`ListCiRunsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListCiRunsIn {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub branch: ::std::option::Option<ListCiRunsInBranch>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub offset: ::std::option::Option<f64>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`ListCiRunsInBranch`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ListCiRunsInBranch(::std::string::String);
+impl ::std::ops::Deref for ListCiRunsInBranch {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ListCiRunsInBranch> for ::std::string::String {
+    fn from(value: ListCiRunsInBranch) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ListCiRunsInBranch {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ListCiRunsInBranch {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ListCiRunsInBranch {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ListCiRunsInBranch {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`ListFilesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -8039,6 +8725,64 @@ pub struct RequestAgentOut {
     #[serde(rename = "runId")]
     pub run_id: ::std::string::String,
 }
+///`RerunCiRunIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RerunCiRunIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    #[serde(rename = "runId")]
+    pub run_id: RerunCiRunInRunId,
+}
+///`RerunCiRunInRunId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct RerunCiRunInRunId(::std::string::String);
+impl ::std::ops::Deref for RerunCiRunInRunId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RerunCiRunInRunId> for ::std::string::String {
+    fn from(value: RerunCiRunInRunId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for RerunCiRunInRunId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for RerunCiRunInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RerunCiRunInRunId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for RerunCiRunInRunId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`RerunSetupIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct RerunSetupIn {
@@ -9946,6 +10690,63 @@ pub struct SleepWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`StartCiRunIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StartCiRunIn {
+    pub branch: StartCiRunInBranch,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`StartCiRunInBranch`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct StartCiRunInBranch(::std::string::String);
+impl ::std::ops::Deref for StartCiRunInBranch {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<StartCiRunInBranch> for ::std::string::String {
+    fn from(value: StartCiRunInBranch) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for StartCiRunInBranch {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for StartCiRunInBranch {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for StartCiRunInBranch {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for StartCiRunInBranch {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`StartCodexLoginOut`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct StartCodexLoginOut {
@@ -10264,6 +11065,14 @@ pub struct TurnUsage {
 pub struct UnlinkProjectIn {
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
+}
+///`UpdateCiPipelineIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct UpdateCiPipelineIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub revision: f64,
+    pub source: ::std::string::String,
 }
 ///`UpdateEnvironmentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -12080,6 +12889,15 @@ pub mod api {
         type Input = crate::ArchiveWorkspaceIn;
         type Output = crate::Empty;
     }
+    /// `cancelCiRun`
+    #[derive(Clone, Copy, Debug)]
+    pub struct CancelCiRun;
+    impl crate::Function for CancelCiRun {
+        const NAME: &'static str = "cancelCiRun";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::CancelCiRunIn;
+        type Output = crate::CiRun;
+    }
     /// `cancelCodexLogin`
     #[derive(Clone, Copy, Debug)]
     pub struct CancelCodexLogin;
@@ -12368,6 +13186,33 @@ pub mod api {
         type Input = crate::GetChangesIn;
         type Output = crate::GetChangesOut;
     }
+    /// `getCiJobLog`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetCiJobLog;
+    impl crate::Function for GetCiJobLog {
+        const NAME: &'static str = "getCiJobLog";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetCiJobLogIn;
+        type Output = crate::GetCiJobLogOut;
+    }
+    /// `getCiPipeline`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetCiPipeline;
+    impl crate::Function for GetCiPipeline {
+        const NAME: &'static str = "getCiPipeline";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetCiPipelineIn;
+        type Output = crate::CiPipeline;
+    }
+    /// `getCiRun`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetCiRun;
+    impl crate::Function for GetCiRun {
+        const NAME: &'static str = "getCiRun";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetCiRunIn;
+        type Output = crate::CiRunDetail;
+    }
     /// `getCredentialStatus`
     #[derive(Clone, Copy, Debug)]
     pub struct GetCredentialStatus;
@@ -12529,6 +13374,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListCheckpointsIn;
         type Output = ::std::vec::Vec<crate::CheckpointInfo>;
+    }
+    /// `listCiRuns`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListCiRuns;
+    impl crate::Function for ListCiRuns {
+        const NAME: &'static str = "listCiRuns";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListCiRunsIn;
+        type Output = ::std::vec::Vec<crate::CiRun>;
     }
     /// `listEnvironments`
     #[derive(Clone, Copy, Debug)]
@@ -12854,6 +13708,15 @@ pub mod api {
         type Input = crate::RequestAgentIn;
         type Output = crate::RequestAgentOut;
     }
+    /// `rerunCiRun`
+    #[derive(Clone, Copy, Debug)]
+    pub struct RerunCiRun;
+    impl crate::Function for RerunCiRun {
+        const NAME: &'static str = "rerunCiRun";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::RerunCiRunIn;
+        type Output = crate::CiRun;
+    }
     /// `rerunSetup`
     #[derive(Clone, Copy, Debug)]
     pub struct RerunSetup;
@@ -13079,6 +13942,15 @@ pub mod api {
         type Input = crate::SleepWorkspaceIn;
         type Output = crate::Empty;
     }
+    /// `startCiRun`
+    #[derive(Clone, Copy, Debug)]
+    pub struct StartCiRun;
+    impl crate::Function for StartCiRun {
+        const NAME: &'static str = "startCiRun";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::StartCiRunIn;
+        type Output = crate::CiRun;
+    }
     /// `startCodexLogin`
     #[derive(Clone, Copy, Debug)]
     pub struct StartCodexLogin;
@@ -13105,6 +13977,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::UnlinkProjectIn;
         type Output = crate::Empty;
+    }
+    /// `updateCiPipeline`
+    #[derive(Clone, Copy, Debug)]
+    pub struct UpdateCiPipeline;
+    impl crate::Function for UpdateCiPipeline {
+        const NAME: &'static str = "updateCiPipeline";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::UpdateCiPipelineIn;
+        type Output = crate::CiPipeline;
     }
     /// `updateEnvironment`
     #[derive(Clone, Copy, Debug)]
@@ -13173,6 +14054,7 @@ pub mod api {
     pub const ALL: &[(&str, crate::Method)] = &[
         ("addReviewComment", crate::Method::Post),
         ("archiveWorkspace", crate::Method::Post),
+        ("cancelCiRun", crate::Method::Post),
         ("cancelCodexLogin", crate::Method::Post),
         ("cancelRun", crate::Method::Post),
         ("cancelTurn", crate::Method::Post),
@@ -13205,6 +14087,9 @@ pub mod api {
         ("getAgent", crate::Method::Get),
         ("getBrowserLiveView", crate::Method::Post),
         ("getChanges", crate::Method::Get),
+        ("getCiJobLog", crate::Method::Get),
+        ("getCiPipeline", crate::Method::Get),
+        ("getCiRun", crate::Method::Get),
         ("getCredentialStatus", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
@@ -13223,6 +14108,7 @@ pub mod api {
         ("listBranches", crate::Method::Get),
         ("listCheckRuns", crate::Method::Get),
         ("listCheckpoints", crate::Method::Get),
+        ("listCiRuns", crate::Method::Get),
         ("listEnvironments", crate::Method::Get),
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
@@ -13259,6 +14145,7 @@ pub mod api {
         ("renameWorkspace", crate::Method::Post),
         ("reorderQueue", crate::Method::Post),
         ("requestAgent", crate::Method::Post),
+        ("rerunCiRun", crate::Method::Post),
         ("rerunSetup", crate::Method::Post),
         ("resolveAgentProposal", crate::Method::Post),
         ("resolveEnvironmentProposal", crate::Method::Post),
@@ -13284,9 +14171,11 @@ pub mod api {
         ("setSessionMode", crate::Method::Post),
         ("setWorkspaceEnvironment", crate::Method::Post),
         ("sleepWorkspace", crate::Method::Post),
+        ("startCiRun", crate::Method::Post),
         ("startCodexLogin", crate::Method::Post),
         ("stopScript", crate::Method::Post),
         ("unlinkProject", crate::Method::Post),
+        ("updateCiPipeline", crate::Method::Post),
         ("updateEnvironment", crate::Method::Post),
         ("updateProjectSettings", crate::Method::Post),
         ("updateRepositoryIssue", crate::Method::Post),
@@ -13329,6 +14218,7 @@ pub mod wire {
         "AttachmentHook",
         "Attention",
         "AvailableCommand",
+        "CancelCiRunIn",
         "CancelCodexLoginIn",
         "CancelRunIn",
         "CancelTurnIn",
@@ -13339,6 +14229,11 @@ pub mod wire {
         "CheckpointInfo",
         "CheckpointReason",
         "ChecksState",
+        "CiJob",
+        "CiJobSpec",
+        "CiPipeline",
+        "CiRun",
+        "CiRunDetail",
         "ClientPing",
         "CloseSessionIn",
         "CommitAndPushIn",
@@ -13394,6 +14289,10 @@ pub mod wire {
         "GetBrowserLiveViewOut",
         "GetChangesIn",
         "GetChangesOut",
+        "GetCiJobLogIn",
+        "GetCiJobLogOut",
+        "GetCiPipelineIn",
+        "GetCiRunIn",
         "GetDiagnosticsIn",
         "GetFileDiffIn",
         "GetFileDiffOut",
@@ -13443,6 +14342,7 @@ pub mod wire {
         "ListBranchesItem",
         "ListCheckRunsIn",
         "ListCheckpointsIn",
+        "ListCiRunsIn",
         "ListFilesIn",
         "ListFilesOut",
         "ListInstallationReposIn",
@@ -13527,6 +14427,7 @@ pub mod wire {
         "RepositoryPullRequest",
         "RequestAgentIn",
         "RequestAgentOut",
+        "RerunCiRunIn",
         "RerunSetupIn",
         "ResolveAgentProposalIn",
         "ResolveEnvironmentProposalIn",
@@ -13578,6 +14479,7 @@ pub mod wire {
         "SettingsSource",
         "SetupStatus",
         "SleepWorkspaceIn",
+        "StartCiRunIn",
         "StartCodexLoginOut",
         "StopScriptIn",
         "TerminalReady",
@@ -13589,6 +14491,7 @@ pub mod wire {
         "TurnStatus",
         "TurnUsage",
         "UnlinkProjectIn",
+        "UpdateCiPipelineIn",
         "UpdateEnvironmentIn",
         "UpdateProjectSettingsIn",
         "UpdateRepositoryIssueCommentIn",
@@ -13654,6 +14557,7 @@ pub mod wire {
             "AttachmentHook" => crate::roundtrip::<crate::AttachmentHook>(text),
             "Attention" => crate::roundtrip::<crate::Attention>(text),
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
+            "CancelCiRunIn" => crate::roundtrip::<crate::CancelCiRunIn>(text),
             "CancelCodexLoginIn" => crate::roundtrip::<crate::CancelCodexLoginIn>(text),
             "CancelRunIn" => crate::roundtrip::<crate::CancelRunIn>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
@@ -13664,6 +14568,11 @@ pub mod wire {
             "CheckpointInfo" => crate::roundtrip::<crate::CheckpointInfo>(text),
             "CheckpointReason" => crate::roundtrip::<crate::CheckpointReason>(text),
             "ChecksState" => crate::roundtrip::<crate::ChecksState>(text),
+            "CiJob" => crate::roundtrip::<crate::CiJob>(text),
+            "CiJobSpec" => crate::roundtrip::<crate::CiJobSpec>(text),
+            "CiPipeline" => crate::roundtrip::<crate::CiPipeline>(text),
+            "CiRun" => crate::roundtrip::<crate::CiRun>(text),
+            "CiRunDetail" => crate::roundtrip::<crate::CiRunDetail>(text),
             "ClientPing" => crate::roundtrip::<crate::ClientPing>(text),
             "CloseSessionIn" => crate::roundtrip::<crate::CloseSessionIn>(text),
             "CommitAndPushIn" => crate::roundtrip::<crate::CommitAndPushIn>(text),
@@ -13729,6 +14638,10 @@ pub mod wire {
             "GetBrowserLiveViewOut" => crate::roundtrip::<crate::GetBrowserLiveViewOut>(text),
             "GetChangesIn" => crate::roundtrip::<crate::GetChangesIn>(text),
             "GetChangesOut" => crate::roundtrip::<crate::GetChangesOut>(text),
+            "GetCiJobLogIn" => crate::roundtrip::<crate::GetCiJobLogIn>(text),
+            "GetCiJobLogOut" => crate::roundtrip::<crate::GetCiJobLogOut>(text),
+            "GetCiPipelineIn" => crate::roundtrip::<crate::GetCiPipelineIn>(text),
+            "GetCiRunIn" => crate::roundtrip::<crate::GetCiRunIn>(text),
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
@@ -13796,6 +14709,7 @@ pub mod wire {
             "ListBranchesItem" => crate::roundtrip::<crate::ListBranchesItem>(text),
             "ListCheckRunsIn" => crate::roundtrip::<crate::ListCheckRunsIn>(text),
             "ListCheckpointsIn" => crate::roundtrip::<crate::ListCheckpointsIn>(text),
+            "ListCiRunsIn" => crate::roundtrip::<crate::ListCiRunsIn>(text),
             "ListFilesIn" => crate::roundtrip::<crate::ListFilesIn>(text),
             "ListFilesOut" => crate::roundtrip::<crate::ListFilesOut>(text),
             "ListInstallationReposIn" => crate::roundtrip::<crate::ListInstallationReposIn>(text),
@@ -13894,6 +14808,7 @@ pub mod wire {
             "RepositoryPullRequest" => crate::roundtrip::<crate::RepositoryPullRequest>(text),
             "RequestAgentIn" => crate::roundtrip::<crate::RequestAgentIn>(text),
             "RequestAgentOut" => crate::roundtrip::<crate::RequestAgentOut>(text),
+            "RerunCiRunIn" => crate::roundtrip::<crate::RerunCiRunIn>(text),
             "RerunSetupIn" => crate::roundtrip::<crate::RerunSetupIn>(text),
             "ResolveAgentProposalIn" => crate::roundtrip::<crate::ResolveAgentProposalIn>(text),
             "ResolveEnvironmentProposalIn" => {
@@ -13949,6 +14864,7 @@ pub mod wire {
             "SettingsSource" => crate::roundtrip::<crate::SettingsSource>(text),
             "SetupStatus" => crate::roundtrip::<crate::SetupStatus>(text),
             "SleepWorkspaceIn" => crate::roundtrip::<crate::SleepWorkspaceIn>(text),
+            "StartCiRunIn" => crate::roundtrip::<crate::StartCiRunIn>(text),
             "StartCodexLoginOut" => crate::roundtrip::<crate::StartCodexLoginOut>(text),
             "StopScriptIn" => crate::roundtrip::<crate::StopScriptIn>(text),
             "TerminalReady" => crate::roundtrip::<crate::TerminalReady>(text),
@@ -13960,6 +14876,7 @@ pub mod wire {
             "TurnStatus" => crate::roundtrip::<crate::TurnStatus>(text),
             "TurnUsage" => crate::roundtrip::<crate::TurnUsage>(text),
             "UnlinkProjectIn" => crate::roundtrip::<crate::UnlinkProjectIn>(text),
+            "UpdateCiPipelineIn" => crate::roundtrip::<crate::UpdateCiPipelineIn>(text),
             "UpdateEnvironmentIn" => crate::roundtrip::<crate::UpdateEnvironmentIn>(text),
             "UpdateProjectSettingsIn" => crate::roundtrip::<crate::UpdateProjectSettingsIn>(text),
             "UpdateRepositoryIssueCommentIn" => {

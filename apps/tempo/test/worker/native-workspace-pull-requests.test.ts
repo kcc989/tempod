@@ -8,6 +8,8 @@ import {
   type ArtifactProject,
 } from "../../src/artifacts/pull-requests.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
+import type { CiRunner, RepositoryCiDO } from "../../src/do/repository-ci.ts";
+import type { CiJobStart } from "../../src/ci/types.ts";
 import type { Env } from "../../src/env.ts";
 import { createWorkspace } from "../../src/server/handlers/workspaces.ts";
 import type { HandlerCtx } from "../../src/server/run.ts";
@@ -389,5 +391,74 @@ describe("native workspace pull request lifecycle (08, Git Forge)", () => {
       baseSha: BASE,
       headSha: HEAD,
     });
+  });
+
+  it("blocks merges until project CI passes and records native check events (10)", async () => {
+    const f = await pushedPullRequest();
+    const ci = env.REPOSITORY_CI.getByName(f.project.id);
+    const starts: CiJobStart[] = [];
+
+    await runInDurableObject(ci, (instance: RepositoryCiDO) => {
+      const runner: CiRunner = {
+        ciStart: async (job) => {
+          starts.push(job);
+
+          return { ok: true, value: {} };
+        },
+        ciCancel: async () => undefined,
+        ciLog: async () => ({ ok: true, value: { text: "", truncated: false } }),
+        ciChanged: async () => undefined,
+      };
+
+      instance.runners = {
+        getByName: (name: string) => (name.startsWith("ci:") ? runner : env.WORKSPACE.getByName(name)),
+      };
+      instance.branchTips = async () => [...f.refs].map(([name, sha]) => ({ name, sha }));
+      instance.headSha = async (_project, branch) => f.refs.get(branch) ?? null;
+    });
+    unwrap(
+      await ci.updatePipeline({ source: "version: 1\njobs:\n  test:\n    run: bun test\n", revision: 0 }),
+    );
+
+    expect(await f.stub.mergePullRequest({ method: "squash" })).toMatchObject({
+      ok: false,
+      error: { code: "PR_NOT_MERGEABLE", detail: `Required checks have not passed for ${HEAD.slice(0, 7)}.` },
+    });
+
+    await ci.ingest({ branch: f.workspace.branch, sha: HEAD });
+    await waitFor(
+      async () =>
+        (await sqlRows(f.stub, "SELECT checks_state FROM workspace"))[0]?.["checks_state"] === "pending",
+    );
+    await ci.jobFinished({
+      runId: starts[0]!.runId,
+      jobKey: "test",
+      token: starts[0]!.token,
+      conclusion: "success",
+      exitCode: 0,
+      summary: null,
+    });
+    await waitFor(
+      async () =>
+        (await sqlRows(f.stub, "SELECT checks_state FROM workspace"))[0]?.["checks_state"] === "success",
+    );
+    expect(unwrap(await f.stub.listCheckRuns({}))).toMatchObject([
+      { name: "test", status: "completed", conclusion: "success" },
+    ]);
+    expect(
+      await sqlRows(
+        f.stub,
+        "SELECT type, dedupe_key, payload_json FROM lifecycle_events WHERE type LIKE 'tempo.check.%'",
+      ),
+    ).toEqual([
+      {
+        type: "tempo.check.passed",
+        dedupe_key: `checks:${f.pr.number}:${HEAD}:tempo.check.passed`,
+        payload_json: JSON.stringify({ prNumber: f.pr.number, commitSha: HEAD }),
+      },
+    ]);
+
+    unwrap(await f.stub.mergePullRequest({ method: "squash" }));
+    await waitFor(() => starts.some((job) => job.branch === "main" && job.sha === MERGED));
   });
 });

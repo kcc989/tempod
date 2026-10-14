@@ -638,3 +638,63 @@ export const USER_HUB_MIGRATIONS: Migrations = [
     ],
   },
 ];
+
+export const REPOSITORY_CI_MIGRATIONS: Migrations = [
+  {
+    tag: "0000_init",
+    when: 1792022400000,
+    statements: [
+      `CREATE TABLE pipelines (
+  revision    INTEGER PRIMARY KEY CHECK (revision >= 1),
+  source      TEXT NOT NULL,
+  spec_json   TEXT,
+  created_at  INTEGER NOT NULL
+)`,
+      `CREATE TABLE runs (
+  id             TEXT PRIMARY KEY,
+  number         INTEGER NOT NULL UNIQUE,
+  branch         TEXT NOT NULL,
+  sha            TEXT NOT NULL,
+  revision       INTEGER NOT NULL,
+  attempt        INTEGER NOT NULL CHECK (attempt >= 1),
+  trigger        TEXT NOT NULL CHECK (trigger IN ('push','manual','rerun')),
+  status         TEXT NOT NULL CHECK (status IN ('queued','running','completed')),
+  conclusion     TEXT CHECK (conclusion IN ('success','failure','cancelled')),
+  required_json  TEXT NOT NULL,
+  egress_json    TEXT NOT NULL,
+  created_at     INTEGER NOT NULL,
+  started_at     INTEGER,
+  completed_at   INTEGER,
+  UNIQUE (sha, revision, attempt)
+)`,
+      `CREATE INDEX runs_branch ON runs (branch, number)`,
+      `CREATE INDEX runs_status ON runs (status, number)`,
+      `CREATE TABLE jobs (
+  run_id           TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  key              TEXT NOT NULL,
+  position         INTEGER NOT NULL,
+  name             TEXT NOT NULL,
+  needs_json       TEXT NOT NULL,
+  command          TEXT NOT NULL,
+  timeout_minutes  INTEGER NOT NULL,
+  status           TEXT NOT NULL CHECK (status IN ('queued','running','completed')),
+  conclusion       TEXT CHECK (conclusion IN ('success','failure','cancelled','timed_out','skipped')),
+  exit_code        INTEGER,
+  summary          TEXT,
+  token            TEXT,
+  started_at       INTEGER,
+  completed_at     INTEGER,
+  PRIMARY KEY (run_id, key)
+)`,
+      `CREATE INDEX jobs_status ON jobs (status)`,
+      `CREATE TABLE branches (
+  name  TEXT PRIMARY KEY,
+  sha   TEXT NOT NULL
+)`,
+      `CREATE TABLE kv (
+  key         TEXT PRIMARY KEY,
+  value_json  TEXT NOT NULL
+)`,
+    ],
+  },
+];

@@ -150,10 +150,11 @@ const config = {
     bindings: [
       { name: "WORKSPACE", class_name: "WorkspaceDO" },
       { name: "USER_HUB", class_name: "UserHubDO" },
+      { name: "REPOSITORY_CI", class_name: "RepositoryCiDO" },
       { name: "CREDENTIALS", class_name: "CredentialDO" },
     ],
   },
-  exports: { WorkspaceDO: DO, UserHubDO: DO, CredentialDO: DO },
+  exports: { WorkspaceDO: DO, UserHubDO: DO, CredentialDO: DO, RepositoryCiDO: DO },
   d1_databases: [
     { binding: "DB", database_name: env("TEMPO_D1_DATABASE_NAME"), database_id: env("TEMPO_D1_DATABASE_ID") },
   ],

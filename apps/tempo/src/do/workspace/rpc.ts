@@ -41,7 +41,11 @@ import {
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import { github } from "../../github/provider.ts";
 import { artifactHeadSha } from "../../artifacts/repositories.ts";
-import { createArtifactPullRequest, findArtifactOpenPullRequest } from "../../artifacts/pull-requests.ts";
+import {
+  createArtifactPullRequest,
+  findArtifactOpenPullRequest,
+  getArtifactPullRequest,
+} from "../../artifacts/pull-requests.ts";
 import { errorText, log } from "../../log.ts";
 import { containerRunning, requireTempod } from "./container.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
@@ -50,6 +54,7 @@ import { sendEnv } from "./events.ts";
 import {
   defaultPrBody,
   getGithubToken,
+  nativeChecks,
   refreshPullRequest,
   requirePushed,
   repositoryBranchExists,
@@ -1200,7 +1205,12 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       if (row.prNumber === null) return [];
       const project = await core.project();
 
-      if (project.provider === "artifacts") return [];
+      if (project.provider === "artifacts") {
+        const pr = await getArtifactPullRequest(core.env, project, row.prNumber);
+
+        return (await nativeChecks(core, project, pr.headBranch))?.runs ?? [];
+      }
+
       const token = await getGithubToken(core);
       const repo = { owner: project.owner, name: project.name };
       const pr = await github.getPullRequest(token, repo, row.prNumber);

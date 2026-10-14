@@ -421,7 +421,8 @@ export const installFakes = async (
     const core = internals(instance).core;
     container = new FakeContainer(
       tempod,
-      () => core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken") ?? null,
+      () =>
+        core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken") ?? core.kv<string>("ciToken") ?? null,
     );
     core.container = container;
   });

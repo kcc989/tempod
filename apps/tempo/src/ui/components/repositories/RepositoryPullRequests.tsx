@@ -25,7 +25,7 @@ import { toastError } from "~/ui/lib/toast";
 import { getHubStore } from "~/ui/stores/hub-store";
 import { setPhonePane } from "~/ui/state/workspace-ui";
 import type { RepositoryHubProps } from "./RepositoryHub";
-import { isSubmitShortcut } from "./model";
+import { ciState, isSubmitShortcut, shortSha } from "./model";
 
 type Props = RepositoryHubProps & { project: Project; canWrite?: boolean };
 
@@ -316,6 +316,7 @@ function PullRequestDetail({
           <span className="text-xs text-muted-foreground">Updated {formatRelative(p.updatedAt)}</span>
         </div>
       </div>
+      <PullRequestChecks project={project} branch={p.headBranch} onNavigate={onNavigate} />
       <div className="flex flex-wrap gap-2">
         {open && (
           <Button size="sm" disabled={workspace.isPending || !canWrite} onClick={() => workspace.mutate()}>
@@ -399,6 +400,46 @@ function PullRequestDetail({
           Merged{p.mergeSha ? ` as ${p.mergeSha.slice(0, 7)}` : ""}.
         </p>
       )}
+    </div>
+  );
+}
+
+/** 10, Clients: the newest check run of the PR head branch. */
+function PullRequestChecks({
+  project,
+  branch,
+  onNavigate,
+}: {
+  project: Project;
+  branch: string;
+  onNavigate: RepositoryHubProps["onNavigate"];
+}) {
+  const runs = useCallQuery("listCiRuns", { projectId: project.id, branch, offset: 0 });
+  const run = runs.data?.[0];
+
+  if (runs.isPending || runs.isError) return null;
+
+  if (!run) return <p className="text-sm text-muted-foreground">No checks have run for {branch}.</p>;
+  const state = ciState(run);
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-lg border px-4 py-2.5 text-sm"
+      aria-label="Checks"
+    >
+      <span className="font-medium">Checks</span>
+      <Badge variant={state.tone}>{state.label}</Badge>
+      <span className="text-muted-foreground">
+        Run #{run.number} on {shortSha(run.sha)}
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="ml-auto"
+        onClick={() => onNavigate({ project: project.id, tab: "checks", run: run.id })}
+      >
+        View run
+      </Button>
     </div>
   );
 }

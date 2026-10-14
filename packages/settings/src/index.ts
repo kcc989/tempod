@@ -298,3 +298,5 @@ export const defaultRunScriptId = (settings: Settings): string | null => {
 
   return entries.find(([, s]) => s.default)?.[0] ?? null;
 };
+
+export { CI_LIMITS, parseCiPipeline, type CiJobDefinition, type CiPipelineSpec } from "./ci.ts";

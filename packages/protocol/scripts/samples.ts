@@ -149,6 +149,46 @@ const repositoryIssueComment: P.RepositoryIssueComment = {
   updatedAt: at(1),
 };
 
+const ciPipeline: P.CiPipeline = {
+  projectId: PROJECT_ID,
+  revision: 2,
+  source: "version: 1\njobs:\n  test:\n    run: bun test\n",
+  enabled: true,
+  jobs: [{ key: "test", name: "test", needs: [], timeoutMinutes: 20 }],
+  required: ["test"],
+  egressAllowlist: [],
+  updatedAt: at(1),
+};
+
+const ciRun: P.CiRun = {
+  id: uid(120),
+  projectId: PROJECT_ID,
+  number: 1,
+  branch: "main",
+  sha: "c".repeat(40),
+  revision: 2,
+  attempt: 1,
+  trigger: "push",
+  status: "completed",
+  conclusion: "success",
+  createdAt: at(0),
+  startedAt: at(1),
+  completedAt: at(2),
+  url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=checks&run=${uid(120)}`,
+};
+
+const ciJob: P.CiJob = {
+  key: "test",
+  name: "test",
+  needs: [],
+  status: "completed",
+  conclusion: "success",
+  exitCode: 0,
+  summary: null,
+  startedAt: at(1),
+  completedAt: at(2),
+};
+
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 const ENV_ID = uid(901);
 
@@ -313,6 +353,7 @@ export const SHARED_SAMPLES = {
     },
     { ...LIFE_EVENT, type: "tempo.check.passed", payload: { prNumber: 25 } },
     { ...LIFE_EVENT, type: "tempo.check.failed", payload: { prNumber: 25 } },
+    { ...LIFE_EVENT, type: "tempo.check.failed", payload: { prNumber: 25, commitSha: "c".repeat(40) } },
   ],
   LifecycleChangeCreatedPayload: [LIFE_EVENT.payload],
   LifecycleTurnEndedPayload: [
@@ -430,6 +471,29 @@ export const SHARED_SAMPLES = {
   RepositoryLabel: [repositoryLabel],
   RepositoryIssue: [repositoryIssue, { ...repositoryIssue, state: "closed", closedAt: at(2) }],
   RepositoryIssueComment: [repositoryIssueComment],
+  CiJobSpec: ciPipeline.jobs,
+  CiPipeline: [
+    ciPipeline,
+    { ...ciPipeline, revision: 0, source: "", enabled: false, jobs: [], required: [], updatedAt: null },
+  ],
+  CiRun: [
+    ciRun,
+    { ...ciRun, status: "queued", conclusion: null, startedAt: null, completedAt: null, trigger: "manual" },
+  ],
+  CiJob: [
+    ciJob,
+    {
+      ...ciJob,
+      key: "lint",
+      status: "running",
+      conclusion: null,
+      exitCode: null,
+      completedAt: null,
+      needs: [],
+    },
+    { ...ciJob, conclusion: "timed_out", exitCode: null, summary: "The job ran out of time." },
+  ],
+  CiRunDetail: [{ run: ciRun, jobs: [ciJob] }],
   WorkspaceSummary: [w.lisbon, w.oslo, w.kyoto],
   OpProgress: [w.opProgress],
   ChangedFile: w.changedFiles,
@@ -752,6 +816,14 @@ export const INPUT_SAMPLES = {
   ],
   deleteRepositoryIssueComment: [{ projectId: PROJECT_ID, number: 1, commentId: repositoryIssueComment.id }],
   listRepositoryLabels: [{ projectId: PROJECT_ID }],
+  getCiPipeline: [{ projectId: PROJECT_ID }],
+  updateCiPipeline: [{ projectId: PROJECT_ID, source: ciPipeline.source, revision: 1 }],
+  listCiRuns: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, branch: "main", offset: 50 }],
+  getCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
+  startCiRun: [{ projectId: PROJECT_ID, branch: "main" }],
+  rerunCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
+  cancelCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
+  getCiJobLog: [{ projectId: PROJECT_ID, runId: ciRun.id, job: "test" }],
   createRepositoryLabel: [
     { projectId: PROJECT_ID, name: "bug", color: "d73a4a", description: "Something is broken" },
   ],
@@ -984,6 +1056,10 @@ export const OUTPUT_SAMPLES = {
   ],
   PollCodexLoginOut: [{ status: "pending" }, { status: "connected" }, { status: "expired" }],
   GetRepositoryFileOut: [{ content: "# Native repository\n", encoding: "utf8", size: 20 }],
+  GetCiJobLogOut: [
+    { text: "$ bun test\n12 pass\n", truncated: false },
+    { text: "[tempo: earlier output dropped]\nok\n", truncated: true },
+  ],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },
     { repoId: 812345679, owner: "acme", name: "docs", defaultBranch: "trunk", private: false },

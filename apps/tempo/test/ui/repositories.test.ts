@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ciDuration,
+  ciRunsInput,
+  ciState,
+  selectedJob,
   commitTitle,
   importUrlError,
   parentPath,
@@ -92,5 +96,58 @@ describe("repository navigation", () => {
     ]) {
       expect(importUrlError(url)).not.toBeNull();
     }
+  });
+});
+
+describe("repository checks model (10, Clients)", () => {
+  it("parses check run and job links and builds run list input", () => {
+    expect(repositorySearch({ project: "p1", tab: "checks", run: "r1", job: "test" })).toEqual({
+      project: "p1",
+      tab: "checks",
+      run: "r1",
+      job: "test",
+    });
+    expect(ciRunsInput("p1", null, 0)).toEqual({ projectId: "p1", offset: 0 });
+    expect(ciRunsInput("p1", "feature/x", 50)).toEqual({ projectId: "p1", offset: 50, branch: "feature/x" });
+  });
+
+  it("never labels unfinished work as passed and formats durations", () => {
+    expect(ciState({ status: "queued", conclusion: null })).toEqual({ label: "Queued", tone: "muted" });
+    expect(ciState({ status: "running", conclusion: null })).toEqual({ label: "Running", tone: "warning" });
+    expect(ciState({ status: "running", conclusion: "success" }).label).toBe("Running");
+    expect(ciState({ status: "completed", conclusion: "success" })).toEqual({
+      label: "Passed",
+      tone: "success",
+    });
+    expect(ciState({ status: "completed", conclusion: "timed_out" })).toEqual({
+      label: "Timed out",
+      tone: "danger",
+    });
+    expect(ciState({ status: "completed", conclusion: null }).label).toBe("Completed");
+    expect(ciDuration(null, null)).toBe("");
+    expect(ciDuration(1_000, 6_000)).toBe("5s");
+    expect(ciDuration(0, 125_000)).toBe("2m 05s");
+    expect(ciDuration(0, null, 61_000)).toBe("1m 01s");
+  });
+
+  it("selects the requested job, else the first that started", () => {
+    const job = (key: string, startedAt: number | null) => ({
+      key,
+      name: key,
+      needs: [],
+      status: "queued" as const,
+      conclusion: null,
+      exitCode: null,
+      summary: null,
+      startedAt,
+      completedAt: null,
+    });
+
+    const jobs = [job("a", null), job("b", 5), job("c", 6)];
+
+    expect(selectedJob(jobs, "c")?.key).toBe("c");
+    expect(selectedJob(jobs, "missing")?.key).toBe("b");
+    expect(selectedJob([job("a", null)], undefined)?.key).toBe("a");
+    expect(selectedJob([], undefined)).toBeUndefined();
   });
 });
