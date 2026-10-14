@@ -106,7 +106,7 @@ impl Dialogs {
                         .iter()
                         .find(|a| format!("custom:{}", a.id) == *value)
                     {
-                        this.agent = agent.base_agent.to_string().parse::<p::AgentId>().ok();
+                        this.agent = Some(this.library_base(agent.base_agent));
                         this.library_agent = Some(agent.id.clone());
                         cx.notify();
                     }
@@ -771,6 +771,26 @@ impl Dialogs {
             )
             .into_any_element()
     }
+    fn library_base(&self, agent: p::AgentBase) -> p::AgentId {
+        let project_default = if self.kind == Some("New chat") {
+            self.library_default_agent
+        } else {
+            self.projects
+                .iter()
+                .find(|p| Some(&p.id) == self.project.as_ref())
+                .and_then(|p| p.settings.agent.as_ref())
+                .and_then(|a| a.default)
+                .unwrap_or(p::AgentId::Claude)
+        };
+        match agent {
+            p::AgentBase::Auto => project_default,
+            p::AgentBase::Claude => p::AgentId::Claude,
+            p::AgentBase::Codex => p::AgentId::Codex,
+            p::AgentBase::Opencode => p::AgentId::Opencode,
+            p::AgentBase::Pi => p::AgentId::Pi,
+        }
+    }
+
     fn mutate<F: p::Function>(&mut self, input: F::Input, cx: &mut Context<Self>) {
         if self.pending {
             return;
@@ -823,23 +843,7 @@ impl Render for Dialogs {
                 })
             })
             .collect();
-        let project_default = if self.kind == Some("New chat") {
-            self.library_default_agent
-        } else {
-            self.projects
-                .iter()
-                .find(|p| Some(&p.id) == self.project.as_ref())
-                .and_then(|p| p.settings.agent.as_ref())
-                .and_then(|a| a.default)
-                .unwrap_or(p::AgentId::Claude)
-        };
-        let base = |agent: p::AgentBase| match agent {
-            p::AgentBase::Auto => project_default,
-            p::AgentBase::Claude => p::AgentId::Claude,
-            p::AgentBase::Codex => p::AgentId::Codex,
-            p::AgentBase::Opencode => p::AgentId::Opencode,
-            p::AgentBase::Pi => p::AgentId::Pi,
-        };
+        let base = |agent| self.library_base(agent);
         let custom: Vec<(p::AgentId, String, String)> = self
             .library_agents
             .iter()
@@ -1406,7 +1410,7 @@ mod tests {
                     {"agent":"codex", "currentValue":"careful", "options":[{"value":"careful","name":"Careful"},{"value":"fast","name":"Fast"}]}
                 ])).unwrap();
                 this.library_agents = serde_json::from_value(serde_json::json!([
-                    {"id":"reviewer", "name":"Reviewer", "description":"Reviews", "baseAgent":"codex", "updatedAt":1}
+                    {"id":"reviewer", "name":"Reviewer", "description":"Reviews", "baseAgent":"codex", "handle":"reviewer", "access":"read-only", "outputKind":"review", "sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "starter":null, "version":1, "updatedAt":1}
                 ])).unwrap();
                 cx.notify();
             });
