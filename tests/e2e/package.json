@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "test:demo": "playwright test tests/forge-demo.spec.ts",
     "test:browser": "playwright test -c playwright.browser.config.ts",
     "typecheck": "tsc --checkers 2 -p tsconfig.json",
     "test:web": "playwright test -c playwright.web.config.ts",

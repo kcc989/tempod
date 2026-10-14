@@ -15,6 +15,7 @@ Without `TEMPO_E2E_URL` every test is skipped, so `bun run test:e2e` is safe any
 | `tests/gate-c.spec.ts`        | AT-9 to AT-16                                                                                                                                                               |
 | `tests/gate-d.spec.ts`        | AT-17 to AT-22, and the credential grep                                                                                                                                     |
 | `tests/gate-e-server.spec.ts` | AT-23 to AT-25 (`/api/v1`, device sign-in, channel upgrades)                                                                                                                |
+| `tests/forge-demo.spec.ts`    | Native forge demo (09, 10): create an Artifacts repo, build in a workspace, CI on push, Tempo PR, CI-gated squash merge, CI on the base branch                              |
 | `tests/lib/api.ts`            | Typed `rpc(name, input)` over `POST /api/v1/rpc/<fn>` (types from `@tempo/protocol`), attachments, preview URLs, WebSocket channels with a bearer token, raw upgrade status |
 | `tests/lib/channels.ts`       | Workspace and hub channel clients, with the apply rules of 02 and timestamps                                                                                                |
 | `tests/lib/terminal.ts`       | Terminal channel: runs shell scripts in the container, tree hashes, stopping the container                                                                                  |
@@ -30,20 +31,21 @@ app use. Tests marked `(browser)` drive the web UI and need `TEMPO_E2E_STORAGE_S
 
 ## Environment
 
-| Variable                                                                  | Needed for                                                   | Value                                                                                                  |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `TEMPO_E2E_URL`                                                           | everything                                                   | `https://<APP_HOST>` of the test deployment                                                            |
-| `TEMPO_E2E_TOKEN`                                                         | everything                                                   | A Better Auth session token of the owner, sent as `Authorization: Bearer` (see below)                  |
-| `TEMPO_E2E_PROJECT_ID`                                                    | every test that creates a workspace                          | Id of the linked test repo's project (`listProjects`)                                                  |
-| `TEMPO_E2E_STORAGE_STATE`                                                 | `(browser)` tests, AT-24 cookie check, AT-25 cookie upgrades | Path to a Playwright storage state of the signed-in owner                                              |
-| `TEMPO_E2E_PREVIEW_DOMAIN`                                                | AT-16 URL format check                                       | The deployment's `PREVIEW_DOMAIN`                                                                      |
-| `E2E_REPEAT`                                                              | gate runs                                                    | Runs of each test, default `1`; use `3` for a gate                                                     |
-| `TEMPO_E2E_MODEL_CODEX`, `TEMPO_E2E_MODEL_OPENCODE`, `TEMPO_E2E_MODEL_PI` | AT-10 (optional)                                             | Model config value passed to `createSession` (01: OpenCode and Pi need one unless the project sets it) |
-| `TEMPO_E2E_CODEX_AUTH_FILE`                                               | AT-11                                                        | Path to a fresh `~/.codex/auth.json` of the test account (below)                                       |
-| `TEMPO_E2E_SECRETS_FILE`                                                  | credential grep                                              | Path to a file with one test credential value per line                                                 |
-| `TEMPO_E2E_WORKER_LOG`                                                    | credential grep                                              | Path to the `wrangler tail` output of the run                                                          |
-| `TEMPO_E2E_R2_DUMP`                                                       | credential grep                                              | Path to an unpacked copy of the `tempo-data` bucket                                                    |
-| `TEMPO_E2E_KEEP`                                                          | debugging                                                    | `1` keeps the workspaces a test creates                                                                |
+| Variable                                                                  | Needed for                                                   | Value                                                                                                                           |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `TEMPO_E2E_URL`                                                           | everything                                                   | `https://<APP_HOST>` of the test deployment                                                                                     |
+| `TEMPO_E2E_TOKEN`                                                         | everything                                                   | A Better Auth session token of the owner, sent as `Authorization: Bearer` (see below)                                           |
+| `TEMPO_E2E_PROJECT_ID`                                                    | every test that creates a workspace                          | Id of the linked test repo's project (`listProjects`)                                                                           |
+| `TEMPO_E2E_STORAGE_STATE`                                                 | `(browser)` tests, AT-24 cookie check, AT-25 cookie upgrades | Path to a Playwright storage state of the signed-in owner                                                                       |
+| `TEMPO_E2E_PREVIEW_DOMAIN`                                                | AT-16 URL format check                                       | The deployment's `PREVIEW_DOMAIN`                                                                                               |
+| `E2E_REPEAT`                                                              | gate runs                                                    | Runs of each test, default `1`; use `3` for a gate                                                                              |
+| `TEMPO_E2E_MODEL_CODEX`, `TEMPO_E2E_MODEL_OPENCODE`, `TEMPO_E2E_MODEL_PI` | AT-10 (optional)                                             | Model config value passed to `createSession` (01: OpenCode and Pi need one unless the project sets it)                          |
+| `TEMPO_E2E_CODEX_AUTH_FILE`                                               | AT-11                                                        | Path to a fresh `~/.codex/auth.json` of the test account (below)                                                                |
+| `TEMPO_E2E_SECRETS_FILE`                                                  | credential grep                                              | Path to a file with one test credential value per line                                                                          |
+| `TEMPO_E2E_WORKER_LOG`                                                    | credential grep                                              | Path to the `wrangler tail` output of the run                                                                                   |
+| `TEMPO_E2E_R2_DUMP`                                                       | credential grep                                              | Path to an unpacked copy of the `tempo-data` bucket                                                                             |
+| `TEMPO_E2E_DEMO_AGENT`                                                    | forge demo (optional)                                        | `claude` or `codex` builds the module with that agent; unset writes the files through the terminal, so no agent login is needed |
+| `TEMPO_E2E_KEEP`                                                          | debugging                                                    | `1` keeps the workspaces a test creates                                                                                         |
 
 **Session token.** Sign in the way the Mac app does (07, Sign-in and first run):
 
@@ -74,6 +76,12 @@ skipped with that reason.
   suites against the same project at once.
 - AT-17 and AT-18 push `e2e-tempo/last-run.md` and squash-merge it into the default branch on every run.
 - Every test archives and deletes the workspaces it created.
+
+## Forge demo
+
+`bun run test:demo` in `tests/e2e` runs `tests/forge-demo.spec.ts`. It needs only `TEMPO_E2E_URL` and
+`TEMPO_E2E_TOKEN`; it creates its own repository `tempo-demo-<tag>` and leaves it in place so you can open
+it in Repositories. The workspace is archived and deleted afterwards unless `TEMPO_E2E_KEEP=1`.
 
 ## Running
 

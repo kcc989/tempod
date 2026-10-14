@@ -31,6 +31,11 @@ const perTest = new Set<string>();
 
 const perFile = new Set<string>();
 
+/** Archives and deletes a workspace after the test, like the ones newWorkspace creates. */
+export const trackWorkspace = (workspaceId: string): void => {
+  perTest.add(workspaceId);
+};
+
 export interface NewWorkspace {
   readonly summary: WorkspaceSummary;
   readonly watch: WorkspaceWatch;

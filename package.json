@@ -18,6 +18,7 @@
     "test": "bun scripts/test.ts",
     "test:conformance": "bun run --cwd tests/conformance test",
     "test:e2e": "bun run --cwd tests/e2e test",
+    "test:demo": "bun run --cwd tests/e2e test:demo",
     "check:versions": "bun container/check-versions.ts",
     "deploy": "bun scripts/deploy.ts",
     "build:tempod": "turbo run build --filter=@tempo/tempod",
