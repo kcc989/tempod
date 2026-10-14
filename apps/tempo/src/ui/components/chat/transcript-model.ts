@@ -473,4 +473,6 @@ export const turnTokens = (turn: Pick<Turn, "usage">): string | null =>
 
 /** The input/output split shown on hover over the token total. */
 export const turnTokenSplit = (turn: Pick<Turn, "usage">): string | null =>
-  turn.usage ? `${formatTokens(turn.usage.inputTokens)} in, ${formatTokens(turn.usage.outputTokens)} out` : null;
+  turn.usage
+    ? `${formatTokens(turn.usage.inputTokens)} in, ${formatTokens(turn.usage.outputTokens)} out`
+    : null;
