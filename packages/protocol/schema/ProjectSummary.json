@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectSummary",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "username": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["github", "artifacts"]
+    },
+    "owner": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "defaultBranch": {
+      "type": "string"
+    },
+    "pinned": {
+      "type": "boolean"
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": ["id", "username", "slug", "provider", "owner", "name", "defaultBranch", "pinned", "updatedAt"],
+  "additionalProperties": true
+}

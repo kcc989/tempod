@@ -54,6 +54,8 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Command palette | Same |  |
 | Environment… dialog and environment proposal review | Same |  |
 | Settings: General, Shell, Logins, Agents, Environments, MCP servers, Project, Appearance, Shortcuts | Same | Base agent choices hide unconnected harnesses, show the selected choice clearly, and preserve a saved disconnected base as in 04. Codex requests and polls device sign-in directly from OpenAI on the tokio runtime and opens the verification page in the default browser. On approval it uploads the completed auth.json through `setCodexAuth`; CredentialDO encrypts and distributes it. Cancel drops the local task, including an in-flight OpenAI exchange. Attempts expire after 15 minutes. Safe sign-in errors retain the failed stage and HTTP status. Notifications are macOS notifications |
+| Repository header visibility, Pin and Public page (04, Public profile) | Same | Visibility is a `Private` / `Public` segmented choice; `Public` shows the 04 confirmation inline. `Public page` opens `<Tempo URL>/<username>/<slug>` in the default browser |
+| Sidebar `Profile`, `/:username` and `/:username/:slug` pages | Default browser | `Profile` opens `<Tempo URL>/<username>`. The username comes from `Project.username` in `listProjects`, so `Profile` hides while the owner has no projects |
 | Settings: Devices | Web only | The owner revokes Mac sign-ins from the web |
 | First-run setup (GitHub App) | Web only | The Mac app needs a Tempo that is already set up |
 | Device approval page `/device` | Web only | Part of Mac sign-in |

@@ -9,6 +9,7 @@ export const auth = betterAuth({
     secret: "cli-only-cli-only-cli-only-cli-only",
     ownerGithubId: "0",
     github: { clientId: "x", clientSecret: "x" },
+    usernameTaken: async () => false,
   }),
   database: drizzleAdapter({}, { provider: "sqlite" }),
 });

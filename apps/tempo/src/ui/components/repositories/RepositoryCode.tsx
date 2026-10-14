@@ -21,9 +21,13 @@ import {
 } from "./model";
 import type { RepositoryHubProps } from "./RepositoryHub";
 
-type Props = RepositoryHubProps & { project: Project };
+type Props = RepositoryHubProps & {
+  project: Pick<Project, "id" | "name" | "defaultBranch">;
+  /** 11: a visitor's read-only view, without workspace or clone actions. */
+  publicView?: boolean;
+};
 
-export function RepositoryCode({ project, search, onNavigate }: Props) {
+export function RepositoryCode({ project, search, onNavigate, publicView = false }: Props) {
   const navigate = useNavigate();
   const ref = search.ref || project.defaultBranch;
   const path = search.path || "";
@@ -75,7 +79,7 @@ export function RepositoryCode({ project, search, onNavigate }: Props) {
             ))}
           {search.file && <span className="truncate">/ {search.file.split("/").at(-1)}</span>}
         </nav>
-        {repo.data && (
+        {repo.data && !publicView && (
           <Button
             size="sm"
             variant="outline"
@@ -99,19 +103,25 @@ export function RepositoryCode({ project, search, onNavigate }: Props) {
         <EmptyState
           icon={GitCommitHorizontalIcon}
           title="This repository is empty."
-          description="Start a workspace to create the first commit, or push existing code to the clone URL."
+          description={
+            publicView
+              ? undefined
+              : "Start a workspace to create the first commit, or push existing code to the clone URL."
+          }
           action={
-            <Button
-              disabled={repo.data.readOnly || bootstrap.isPending}
-              onClick={() =>
-                bootstrap.mutate({
-                  projectId: project.id,
-                  source: { kind: "new", baseBranch: project.defaultBranch },
-                })
-              }
-            >
-              {bootstrap.isPending ? "Starting…" : "Start a workspace"}
-            </Button>
+            !publicView && (
+              <Button
+                disabled={repo.data.readOnly || bootstrap.isPending}
+                onClick={() =>
+                  bootstrap.mutate({
+                    projectId: project.id,
+                    source: { kind: "new", baseBranch: project.defaultBranch },
+                  })
+                }
+              >
+                {bootstrap.isPending ? "Starting…" : "Start a workspace"}
+              </Button>
+            )
           }
         />
       ) : search.file ? (

@@ -9,15 +9,18 @@ import { GithubHttpError } from "../../github/client.ts";
 import { github } from "../../github/provider.ts";
 import { listArtifactBranches } from "../../artifacts/repositories.ts";
 import { listArtifactPullRequests } from "../../artifacts/pull-requests.ts";
-import type { HandlerCtx } from "../run.ts";
+import type { HandlerCtx, VisitorCtx } from "../run.ts";
 import {
   d1,
+  insertProject,
   installationToken,
   projectToWire,
   projectToken,
   repoOf,
   requireInstallation,
   requireProject,
+  requireReadableProject,
+  usernameOf,
 } from "./common.ts";
 
 /** Syncs D1 with GET /app/installations (05), then lists them. */
@@ -118,12 +121,12 @@ export const linkProject = async (
 
   const now = Date.now();
 
-  const row = {
+  const row = await insertProject(env, {
     id: newId(),
     userId: user.id,
     installationId,
     repoId,
-    provider: "github" as const,
+    provider: "github",
     artifactRepoId: null,
     cloneUrl: null,
     repoOwner: repo.owner.login,
@@ -134,22 +137,20 @@ export const linkProject = async (
     environmentId: null,
     createdAt: now,
     updatedAt: now,
-  };
+  });
 
-  await db.insert(projects).values(row).run();
+  if (!row) throw new TempoError("PROJECT_EXISTS");
 
   return projectToWire(row);
 };
 
 export const listProjects = async ({ env, user }: HandlerCtx): Promise<FnOutput<"listProjects">> => {
-  const rows = await d1(env)
-    .select()
-    .from(projects)
-    .where(eq(projects.userId, user.id))
-    .orderBy(projects.sortOrder)
-    .all();
+  const [rows, username] = await Promise.all([
+    d1(env).select().from(projects).where(eq(projects.userId, user.id)).orderBy(projects.sortOrder).all(),
+    usernameOf(env, user.id),
+  ]);
 
-  return rows.map(projectToWire);
+  return rows.map((row) => ({ ...projectToWire(row), username }));
 };
 
 const activeWorkspaceIds = async (env: HandlerCtx["env"], projectId: string): Promise<string[]> =>
@@ -217,10 +218,14 @@ export const unlinkProject = async (
 };
 
 export const listBranches = async (
-  { env, user }: HandlerCtx,
+  { env, user }: VisitorCtx,
   { projectId, query }: FnInput<"listBranches">,
 ): Promise<FnOutput<"listBranches">> => {
-  const p = await requireProject(env, user.id, projectId);
+  const p = await requireReadableProject(env, user, projectId);
+
+  // 11: visitors never cause GitHub API calls.
+  if (p.provider === "github" && p.userId !== user?.id)
+    throw new TempoError("NOT_FOUND", undefined, "project not found");
 
   if (p.provider === "artifacts") {
     if (!p.artifactRepoId) throw new TempoError("REPO_NOT_ACCESSIBLE");

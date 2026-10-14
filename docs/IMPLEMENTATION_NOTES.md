@@ -481,3 +481,21 @@ Pre-rebase historical validation and native observations are not acceptance evid
 The owner changed the Claude default mode from `bypassPermissions` to `auto` (01, Agents table). `claude-agent-acp` 0.89.1 advertises `auto` (evidence `docs/evidence/core/claude.json`). If an adapter does not offer it, `tempod` logs the failed mode change and the session keeps the agent's current mode. Leaving plan mode in web and Mac returns to `auto`. Codex, OpenCode and Pi are unchanged.
 
 The turn-summary rule (01, Send a prompt) now asks the agent to report changes and checks only when it made them. The old text made agents end question-only turns with "I changed no files and ran no checks".
+
+## Public profile (2026-10-14)
+
+The owner asked for a fork of the organizations and social work (PR #56) for a solo builder. They chose: public code only, a profile page and pinned projects instead of organizations and stars, `/:username/:slug` URLs, and spec, server, web and Mac in one change. Tab 11 Public Profile defines the contracts. Choices:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Access policy | `runFn` reads an optional session. `VISITOR_FNS` in `src/server/policy.ts` run for visitors; every other function keeps the owner check. A non-owner session is a visitor for those functions. | One closed list (11, Function access) |
+| Project lookups | `requireReadableProject` returns the caller's own project or a public one, else `NOT_FOUND` | Private projects stay hidden |
+| D1 migration | `0011_public_profile` is additive (`ALTER TABLE ADD`). `slug` has a database default `''` that the Drizzle schema omits, so `ADD COLUMN NOT NULL` works on existing rows. The expression index `projects_user_slug` was written by hand. | No rebuild of `projects` and its dependants |
+| Slugs on insert | `insertProject` tries the 11 candidates in order with `ON CONFLICT DO NOTHING`; a conflict on the repository key returns null, so linkProject keeps `PROJECT_EXISTS` and Artifacts retries keep their recovery | One rule for both insert sites |
+| Pin limit | One conditional `UPDATE` checks the count of pins and pins | Two concurrent pins cannot pass 6 |
+| Username and bio | Better Auth `additionalFields` with `input: false`, set by `mapProfileToUser` at each sign-in; `/update-user` is disabled | 11, Identity |
+| Web session | `AuthUser.username` is decoded from the Better Auth session user | Sidebar `Profile` |
+| Mac username | From `Project.username` in `listProjects` | Avoids changing the sign-in token check; recorded in 07, Scope |
+| Mac visibility | A segmented `Private` / `Public` choice with an inline confirmation | GPUI Kit has no compact select in the repository header |
+
+Verification: four Worker cases in `public-profile.cases.ts` (visitor reads and refusals, pins and profile order, slugs on insert, usernames and bios). The forward-migration case also checks slugs, duplicate names and the case-insensitive unique index. Removing the public check from `requireReadableProject` made the visitor case fail. Web component cases for the visibility control, the profile and the public project page; Mac `profile_model` unit cases and a repository view case for confirm, pin and unpin on `private`. Hosted sign-in to set a real username, and visitor browsing of a deployed Tempo, have not been run.

@@ -20,6 +20,8 @@ export interface AuthUser {
   readonly name: string;
   readonly email: string;
   readonly image: string | null;
+  /** 11, Identity: null until the owner's first sign-in with usernames. */
+  readonly username: string | null;
 }
 
 export interface AuthSession {
@@ -36,6 +38,10 @@ const FetchError = Schema.Struct({
 
 const decodeFetchError = Schema.decodeUnknownOption(FetchError);
 
+const decodeUsername = Schema.decodeUnknownOption(
+  Schema.Struct({ username: Schema.optional(Schema.NullOr(Schema.String)) }),
+);
+
 const fetchSession = async (): Promise<AuthSession | null> => {
   const { data, error } = await authClient().getSession();
 
@@ -46,9 +52,11 @@ const fetchSession = async (): Promise<AuthSession | null> => {
 
   if (!data) return null;
   const u = data.user;
+  const extra = decodeUsername(u);
+  const username = Option.isSome(extra) ? (extra.value.username ?? null) : null;
 
   return {
-    user: { id: u.id, name: u.name, email: u.email, image: u.image ?? null },
+    user: { id: u.id, name: u.name, email: u.email, image: u.image ?? null, username },
     sessionId: data.session.id,
   };
 };

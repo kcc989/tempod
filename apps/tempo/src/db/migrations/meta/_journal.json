@@ -78,6 +78,13 @@
       "when": 1792005007957,
       "tag": "0010_dotfiles",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792011455970,
+      "tag": "0011_public_profile",
+      "breakpoints": true
     }
   ]
 }

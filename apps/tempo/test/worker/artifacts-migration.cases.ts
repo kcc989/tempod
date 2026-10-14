@@ -61,7 +61,22 @@ describe("Artifacts forward migration", () => {
         "INSERT INTO issue_comments (id,issue_id,author_id,body,created_at,updated_at) VALUES ('legacy-comment','legacy-issue','owner','Preserve reply',12,13)",
       )
       .run();
+    // 11, migration: later rows with a taken name get `<repo_owner>-<repo_name>`, then `-<id>`.
+    await db.batch([
+      db.prepare(
+        "INSERT INTO projects (id,user_id,installation_id,repo_id,repo_owner,repo_name,default_branch,created_at,updated_at) VALUES ('same-name','owner',42,100,'fork','REPO','main',6,6)",
+      ),
+      db.prepare(
+        "INSERT INTO projects (id,user_id,installation_id,repo_id,repo_owner,repo_name,default_branch,created_at,updated_at) VALUES ('third','owner',42,101,'fork','Repo','main',7,7)",
+      ),
+    ]);
     await applyD1Migrations(db, migrations);
+    expect(
+      (await db.prepare("SELECT id,slug FROM projects WHERE id <> 'project' ORDER BY id").all()).results,
+    ).toEqual([
+      { id: "same-name", slug: "fork-REPO" },
+      { id: "third", slug: "fork-Repo-third" },
+    ]);
     expect(
       await db
         .prepare("SELECT last_number FROM issue_numbers WHERE project_id='project'")
@@ -77,9 +92,17 @@ describe("Artifacts forward migration", () => {
     expect((await db.prepare("SELECT * FROM workspaces ORDER BY id").all()).results).toEqual(
       workspacesBefore,
     );
-    const projectsAfter = (await db.prepare("SELECT * FROM projects ORDER BY id").all()).results;
+    const projectsAfter = (await db.prepare("SELECT * FROM projects WHERE id = 'project'").all()).results;
     expect(projectsAfter).toEqual(
-      projectsBefore.map((p) => ({ ...p, provider: "github", artifact_repo_id: null, clone_url: null })),
+      projectsBefore.map((p) => ({
+        ...p,
+        provider: "github",
+        artifact_repo_id: null,
+        clone_url: null,
+        slug: "repo",
+        visibility: "private",
+        pinned_at: null,
+      })),
     );
     expect((await db.prepare("SELECT * FROM project_agents").all()).results).toEqual(attachmentsBefore);
     expect((await db.prepare("SELECT * FROM agent_proposal_applications").all()).results).toEqual(
@@ -89,9 +112,16 @@ describe("Artifacts forward migration", () => {
     expect((await db.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
     await db
       .prepare(
-        "INSERT INTO projects (id,user_id,provider,artifact_repo_id,clone_url,repo_owner,repo_name,default_branch,created_at,updated_at) VALUES ('native','owner','artifacts','artifact-id','https://git.example/repo.git','tempo','native','main',11,11)",
+        "INSERT INTO projects (id,user_id,provider,artifact_repo_id,clone_url,repo_owner,repo_name,slug,default_branch,created_at,updated_at) VALUES ('native','owner','artifacts','artifact-id','https://git.example/repo.git','tempo','native','native','main',11,11)",
       )
       .run();
+    await expect(
+      db
+        .prepare(
+          "INSERT INTO projects (id,user_id,installation_id,repo_id,repo_owner,repo_name,slug,default_branch,created_at,updated_at) VALUES ('clash','owner',42,102,'x','y','Native','main',11,11)",
+        )
+        .run(),
+    ).rejects.toThrow();
     expect(
       await db.prepare("SELECT installation_id,repo_id FROM projects WHERE id='native'").first(),
     ).toEqual({ installation_id: null, repo_id: null });
@@ -107,7 +137,7 @@ describe("Artifacts forward migration", () => {
         )
         .run(),
     ).rejects.toThrow();
-    await db.prepare("DELETE FROM projects WHERE id='project'").run();
+    await db.prepare("DELETE FROM projects WHERE id IN ('project','same-name','third')").run();
     expect((await db.prepare("SELECT * FROM workspaces").all()).results).toEqual([]);
     expect(await db.prepare("SELECT count(*) AS n FROM issue_numbers").first("n")).toBe(0);
     await expect(db.prepare("SELECT * FROM projects_migration_workspaces").all()).rejects.toThrow();
