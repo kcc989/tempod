@@ -475,3 +475,9 @@ The connected-base editor changes were rebased onto the current agent library. W
 Model discovery starts configured adapters concurrently and preserves result order. The existing detached-event callback accepts Codex auth refreshes and updates only matching credential-version metadata in the cache signature. Secrets remain outside workspace event storage; CI detached events retain their replay owner.
 
 Pre-rebase historical validation and native observations are not acceptance evidence for this revision. Current validation is recorded in the PR; no local test suite is run during this design pass. Native visual acceptance and the four-area calibration remain incomplete.
+
+## Claude auto mode and turn summary (2026-10-14)
+
+The owner changed the Claude default mode from `bypassPermissions` to `auto` (01, Agents table). `claude-agent-acp` 0.89.1 advertises `auto` (evidence `docs/evidence/core/claude.json`). If an adapter does not offer it, `tempod` logs the failed mode change and the session keeps the agent's current mode. Leaving plan mode in web and Mac returns to `auto`. Codex, OpenCode and Pi are unchanged.
+
+The turn-summary rule (01, Send a prompt) now asks the agent to report changes and checks only when it made them. The old text made agents end question-only turns with "I changed no files and ran no checks".

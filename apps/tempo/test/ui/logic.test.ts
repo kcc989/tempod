@@ -123,13 +123,13 @@ describe("agents", () => {
   it("toggles plan mode with the agent's plan id", () => {
     const modes = [
       { id: "default", name: "Default" },
-      { id: "bypassPermissions", name: "Bypass" },
+      { id: "auto", name: "Auto" },
       { id: "plan", name: "Plan" },
     ];
 
-    expect(togglePlanTarget(session({ modes, modeId: "bypassPermissions" }), null)).toBe("plan");
+    expect(togglePlanTarget(session({ modes, modeId: "auto" }), null)).toBe("plan");
     expect(togglePlanTarget(session({ modes, modeId: "plan" }), "default")).toBe("default");
-    expect(togglePlanTarget(session({ modes, modeId: "plan" }), null)).toBe("bypassPermissions");
+    expect(togglePlanTarget(session({ modes, modeId: "plan" }), null)).toBe("auto");
     expect(togglePlanTarget(session({ agent: "pi", modes: [], modeId: null }), null)).toBeNull();
     expect(
       togglePlanTarget(

@@ -85,8 +85,8 @@ export const AGENTS: Record<AgentId, AgentSpec> = {
     bin: "claude-agent-acp",
     command: () => ["claude-agent-acp"],
     env: () => ({ ...keep("CLAUDE_CONFIG_DIR", join(home(), ".claude")) }),
-    requiredModes: ["bypassPermissions", "plan"],
-    defaultMode: "bypassPermissions",
+    requiredModes: ["auto", "plan"],
+    defaultMode: "auto",
     loadSession: true,
   },
   codex: {

@@ -50,7 +50,7 @@ export const PLAN_MODE: Record<AgentId, string | null> = {
 
 /** Default mode ids from 01, Agents, used when leaving plan mode. */
 const DEFAULT_MODE: Record<AgentId, string | null> = {
-  claude: "bypassPermissions",
+  claude: "auto",
   codex: "agent-full-access",
   opencode: "build",
   pi: null,
