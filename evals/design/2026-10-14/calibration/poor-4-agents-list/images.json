@@ -1,0 +1,14 @@
+{
+  "full.png": {
+    "bytes": 256698,
+    "sha256": "e8097e88700748861f7ce82e1dc98475cb4cfb3a084c698f94fe590aee37f1d2"
+  },
+  "sidebar.png": {
+    "bytes": 111667,
+    "sha256": "eb7b250c779e1c4528bb81d78d209ac94024cbeaacbc6ce90943015d1195f85a"
+  },
+  "content.png": {
+    "bytes": 92245,
+    "sha256": "5c7c8e55151c61039fb819098c6a6c2ff83ba0984ef482c3aa49eac94d39ac42"
+  }
+}

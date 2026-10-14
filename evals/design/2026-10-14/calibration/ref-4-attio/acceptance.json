@@ -1,0 +1,88 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "score 0.69 < 0.8",
+    "weak dimension: ai",
+    "weak dimension: control",
+    "weak dimension: overflow",
+    "verdict is review",
+    "answer below 0.40: ai_steps = 0.042",
+    "answer below 0.40: ai_evidence = 0.076",
+    "answer below 0.40: ai_limits = 0.027",
+    "answer below 0.40: ai_feedback = 0.023",
+    "answer below 0.40: speed_shortcuts = 0.221",
+    "area layout: fail",
+    "area color-depth: review",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.366,
+      "uncertain": true,
+      "source": "layout"
+    },
+    {
+      "question": "overflow_scroll_cue",
+      "value": 0,
+      "uncertain": true,
+      "source": "layout"
+    },
+    {
+      "question": "ai_steps",
+      "value": 0.042,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "ai_evidence",
+      "value": 0.076,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "ai_limits",
+      "value": 0.027,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "ai_feedback",
+      "value": 0.023,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "control_diff",
+      "value": 0,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "scan_overflow",
+      "value": 0,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "nav_return",
+      "value": 0.366,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "speed_shortcuts",
+      "value": 0.221,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "states_empty",
+      "value": 0.276,
+      "uncertain": true,
+      "source": "usability"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "left.png",
+    "info.png"
+  ],
+  "known": {
+    "ai": false,
+    "async": false,
+    "collection": true,
+    "editing": true,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Composer and open chats list visible; transcript not visible. Label basis: rejected build where the workspace shrank and left a blank area above it."
+}

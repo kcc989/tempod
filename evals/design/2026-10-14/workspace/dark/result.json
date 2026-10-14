@@ -1,0 +1,66 @@
+{
+  "verdict": "needs_work",
+  "score": 0.73,
+  "dimensions": {
+    "focus": 0.76,
+    "status": 0.75,
+    "ai": 0.42,
+    "control": 0.22,
+    "scan": 0.89,
+    "nav": 0.9,
+    "speed": 0.64,
+    "states": 0.58,
+    "copy": 0.72,
+    "color": 0.9,
+    "spacing": 0.9,
+    "type": 0.79,
+    "icons": 0.79,
+    "contrast": 0.77,
+    "restraint": 0.86,
+    "overflow": 0.5,
+    "consistency": 0.85,
+    "slop": 1,
+    "quality": 0.8
+  },
+  "blockers": [
+    "An action gives no visible feedback near the control."
+  ],
+  "weakDimensions": [
+    "ai",
+    "control",
+    "states",
+    "overflow"
+  ],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.8
+    }
+  ],
+  "fixes": [
+    "Let the user save a draft or undo before work is final.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "State the limits of the AI near its output.",
+    "Let the user rate or correct AI output, and confirm the rating.",
+    "Show a pressed or selected state at once, and confirm the result near the control.",
+    "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "focus_space_fit",
+    "ai_steps",
+    "states_disabled_clear",
+    "states_feedback",
+    "feedback_selected",
+    "copy_labels",
+    "copy_controls_labeled",
+    "type_scale",
+    "type_mono",
+    "icons_meaning",
+    "contrast_secondary",
+    "contrast_boundaries",
+    "overflow_scroll_cue"
+  ]
+}

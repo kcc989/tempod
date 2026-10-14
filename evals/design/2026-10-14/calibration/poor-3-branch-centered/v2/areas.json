@@ -1,0 +1,192 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.81,
+    "dimensions": {
+      "focus": 0.54,
+      "type": 0.88,
+      "overflow": 1,
+      "slop": 1,
+      "quality": 0.82
+    },
+    "blockers": [
+      "Text covered by another element."
+    ],
+    "weakDimensions": [
+      "focus"
+    ],
+    "majors": [
+      "Text covered by another element.",
+      "dimension focus below 0.6",
+      "focus_space_fit = 0.116 (below 0.4)",
+      "quality_text_covered = 0.293 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.116,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "quality_text_covered",
+        "value": 0.293,
+        "uncertain": false,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:focus_reading_order",
+      "layout:overflow_long_text",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale",
+      "layout:type_mono"
+    ],
+    "missingEvidence": [],
+    "issues": [
+      {
+        "rule": "Text covered by another element",
+        "kind": "quality",
+        "p": 0.71
+      }
+    ],
+    "fixes": [
+      "Make each panel only as wide as its content needs.",
+      "Use one reading order: navigation at one edge, then a page title, then the content.",
+      "Text covered by another element: Move the layer, or give the text clear space.",
+      "Give the user's content most of the screen. Move controls to the edges."
+    ]
+  },
+  "spacing": {
+    "status": "review",
+    "score": 0.93,
+    "dimensions": {
+      "spacing": 0.77,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "spacing:spacing_grouping"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.88,
+    "dimensions": {
+      "color": 0.9,
+      "icons": 0.81,
+      "contrast": 0.62,
+      "restraint": 0.85,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:contrast_secondary",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.68,
+    "dimensions": {
+      "focus": 0.66,
+      "status": 0.88,
+      "ai": 0.19,
+      "control": 0,
+      "scan": 0.72,
+      "nav": 0.89,
+      "speed": 0.49,
+      "states": 1,
+      "copy": 0.74,
+      "slop": 1,
+      "quality": 0.81
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "ai",
+      "control",
+      "speed"
+    ],
+    "majors": [
+      "dimension ai below 0.6",
+      "dimension control below 0.6",
+      "dimension speed below 0.6",
+      "ai_steps = 0.191 (below 0.4)",
+      "speed_views = 0.027 (below 0.4)",
+      "quality_repeated_identifier = 0.259 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "ai_steps",
+        "value": 0.191,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "control_diff",
+        "value": 0,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.027,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.259,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:status_lifecycle",
+      "usability:control_diff",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:copy_controls_labeled"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.74
+      }
+    ],
+    "fixes": [
+      "Show each AI step as one short line that the user can expand.",
+      "Show changes as before and after.",
+      "Make actions look clickable with a button shape, an icon, or a link color. Keep static text plain.",
+      "Let the user sort, filter, and change the view of the collection.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+      "Give each dropdown and selector a label that says what it sets."
+    ]
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.76,
+    "dimensions": {
+      "focus": 0.71,
+      "type": 0.87,
+      "overflow": 0,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.38,
+        "uncertain": true,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:focus_space_fit",
+      "layout:overflow_scroll_cue"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs.",
+      "Give the user's content most of the screen. Move controls to the edges."
+    ]
+  },
+  "spacing": {
+    "status": "review",
+    "score": 0.95,
+    "dimensions": {
+      "spacing": 0.81,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "spacing:spacing_grouping"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.89,
+    "dimensions": {
+      "color": 0.9,
+      "icons": 0.82,
+      "contrast": 0.65,
+      "restraint": 0.88,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:contrast_secondary",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.61,
+    "dimensions": {
+      "focus": 0.75,
+      "status": 0.63,
+      "control": 0,
+      "scan": 0.82,
+      "nav": 0.81,
+      "speed": 0.02,
+      "states": 0,
+      "copy": 0.76,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "control",
+      "speed",
+      "states"
+    ],
+    "majors": [
+      "dimension control below 0.6",
+      "dimension speed below 0.6",
+      "dimension states below 0.6",
+      "speed_search = 0.019 (below 0.4)",
+      "speed_views = 0.024 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "status_items",
+        "value": 0.352,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "control_diff",
+        "value": 0,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "speed_search",
+        "value": 0.019,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.024,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "states_disabled_clear",
+        "value": 0,
+        "uncertain": true,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:control_diff",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:nav_return",
+      "usability:nav_tabs_current",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:copy_status"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [],
+    "fixes": [
+      "Fade only disabled controls. Give enabled controls full contrast.",
+      "Show changes as before and after.",
+      "Show the state of each item inline with an icon, a label, or a count.",
+      "Add search or a command menu that opens from the keyboard.",
+      "Let the user sort, filter, and change the view of the collection.",
+      "Give each row one bold main field, aligned grey secondary fields, and truncation."
+    ]
+  }
+}

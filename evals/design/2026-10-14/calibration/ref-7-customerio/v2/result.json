@@ -1,0 +1,59 @@
+{
+  "verdict": "review",
+  "score": 0.76,
+  "dimensions": {
+    "focus": 0.76,
+    "status": 0.72,
+    "ai": 0.95,
+    "control": 0,
+    "scan": 0.79,
+    "nav": 0.9,
+    "speed": 0.49,
+    "states": 0.91,
+    "copy": 0.77,
+    "trust": 1,
+    "color": 0.86,
+    "spacing": 0.78,
+    "type": 0.9,
+    "icons": 0.81,
+    "contrast": 0.71,
+    "restraint": 0.85,
+    "overflow": 0,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "control",
+    "speed",
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "When the AI needs a decision, ask one question with options, a free-text field, and Skip.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Show the state of each item inline with an icon, a label, or a count.",
+    "Let the user sort, filter, and change the view of the collection.",
+    "Make each panel only as wide as its content needs.",
+    "Give each dropdown and selector a label that says what it sets."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_content_share",
+    "focus_affordance",
+    "focus_space_fit",
+    "status_items",
+    "control_ask",
+    "scan_rows",
+    "states_disabled_clear",
+    "trust_onboarding",
+    "color_role",
+    "spacing_grouping",
+    "type_scale",
+    "icons_meaning",
+    "contrast_secondary",
+    "restraint_noise",
+    "overflow_scroll_cue",
+    "quality_text_covered"
+  ]
+}

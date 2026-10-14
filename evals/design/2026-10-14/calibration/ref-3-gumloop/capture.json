@@ -1,0 +1,18 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "table.png"
+  ],
+  "known": {
+    "ai": false,
+    "async": false,
+    "collection": true,
+    "editing": false,
+    "empty": false,
+    "errors": false,
+    "limits": true
+  },
+  "knownSource": "Agent table; credits remaining meter; no AI output, running work, editor, empty area or error."
+}

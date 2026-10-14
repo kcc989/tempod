@@ -1,0 +1,50 @@
+{
+  "verdict": "review",
+  "score": 0.83,
+  "dimensions": {
+    "focus": 0.78,
+    "status": 0.81,
+    "scan": 0.96,
+    "nav": 0.8,
+    "speed": 0.92,
+    "copy": 0.68,
+    "trust": 0.94,
+    "color": 0.81,
+    "spacing": 0.8,
+    "type": 0.92,
+    "icons": 0.78,
+    "contrast": 0.73,
+    "restraint": 0.84,
+    "overflow": 0.5,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Make each panel only as wide as its content needs.",
+    "Give each dropdown and selector a label that says what it sets.",
+    "Use status labels that a new user understands.",
+    "Let the user go back to recent or pinned work in one click.",
+    "Use common symbols for icon-only buttons, or add a label."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "status_items",
+    "nav_groups",
+    "nav_return",
+    "copy_status",
+    "copy_controls_labeled",
+    "color_role",
+    "spacing_grouping",
+    "icons_meaning",
+    "contrast_secondary",
+    "restraint_noise",
+    "overflow_scroll_cue"
+  ]
+}

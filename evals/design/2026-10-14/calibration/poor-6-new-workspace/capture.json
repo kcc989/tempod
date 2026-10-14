@@ -1,0 +1,18 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "header.png",
+    "dialog.png"
+  ],
+  "known": {
+    "ai": true,
+    "async": false,
+    "collection": true,
+    "editing": true,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Dialog over transcript. Label basis: user reported excess top-bar actions (rename, guide create/open, base) in this header."
+}

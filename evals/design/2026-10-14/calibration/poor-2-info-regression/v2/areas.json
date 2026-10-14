@@ -1,0 +1,177 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.78,
+    "dimensions": {
+      "focus": 0.57,
+      "type": 0.86,
+      "overflow": 0.5,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "focus",
+      "overflow"
+    ],
+    "majors": [
+      "dimension focus below 0.6",
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.083 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.083,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs.",
+      "Give the user's content most of the screen. Move controls to the edges."
+    ]
+  },
+  "spacing": {
+    "status": "review",
+    "score": 0.94,
+    "dimensions": {
+      "spacing": 0.8,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "spacing:spacing_grouping"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "fail",
+    "score": 0.86,
+    "dimensions": {
+      "color": 0.88,
+      "icons": 0.76,
+      "contrast": 0.55,
+      "restraint": 0.84,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "contrast"
+    ],
+    "majors": [
+      "dimension contrast below 0.6"
+    ],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:contrast_boundaries",
+      "color-depth:restraint_noise",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Give inputs, buttons, and selected items edges with at least 3:1 contrast.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.81,
+    "dimensions": {
+      "focus": 0.73,
+      "status": 0.84,
+      "scan": 0.77,
+      "nav": 0.53,
+      "speed": 0.49,
+      "states": 1,
+      "copy": 0.8,
+      "slop": 1,
+      "quality": 0.86
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "nav",
+      "speed"
+    ],
+    "majors": [
+      "dimension nav below 0.6",
+      "dimension speed below 0.6",
+      "nav_current = 0.322 (below 0.4)",
+      "speed_views = 0.029 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "nav_current",
+        "value": 0.322,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "nav_return",
+        "value": 0.38,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.029,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:status_lifecycle",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:nav_return",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:quality_repeated_identifier"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.57
+      }
+    ],
+    "fixes": [
+      "Let the user sort, filter, and change the view of the collection.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+      "Show the current location with a visible selected state.",
+      "Let the user go back to recent or pinned work in one click.",
+      "Put navigation in short groups with clear names. Add counts where they help."
+    ]
+  }
+}

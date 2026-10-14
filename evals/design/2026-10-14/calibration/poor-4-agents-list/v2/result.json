@@ -1,0 +1,49 @@
+{
+  "verdict": "review",
+  "score": 0.67,
+  "dimensions": {
+    "focus": 0.62,
+    "status": 0.5,
+    "scan": 0.35,
+    "nav": 0.72,
+    "speed": 0.02,
+    "copy": 0.65,
+    "color": 0.88,
+    "spacing": 0.75,
+    "type": 0.91,
+    "icons": 0.8,
+    "contrast": 0.66,
+    "restraint": 0.91,
+    "overflow": 0,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "status",
+    "scan",
+    "speed",
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Give each row one bold main field, aligned grey secondary fields, and truncation.",
+    "Show the state of each item inline with an icon, a label, or a count.",
+    "Let the user sort, filter, and change the view of the collection.",
+    "Add search or a command menu that opens from the keyboard.",
+    "Make secondary text, placeholders, and metadata darker until they are easy to read."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "scan_rows",
+    "nav_groups",
+    "nav_tabs_current",
+    "color_role",
+    "spacing_grouping",
+    "icons_meaning",
+    "contrast_secondary",
+    "overflow_scroll_cue"
+  ]
+}

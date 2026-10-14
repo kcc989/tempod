@@ -1,0 +1,178 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.74,
+    "dimensions": {
+      "focus": 0.63,
+      "type": 0.91,
+      "overflow": 0,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.063 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.063,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_content_share",
+      "layout:overflow_scroll_cue"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs.",
+      "Give the user's content most of the screen. Move controls to the edges."
+    ]
+  },
+  "spacing": {
+    "status": "review",
+    "score": 0.93,
+    "dimensions": {
+      "spacing": 0.75,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "spacing:spacing_grouping"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.89,
+    "dimensions": {
+      "color": 0.88,
+      "icons": 0.8,
+      "contrast": 0.66,
+      "restraint": 0.91,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.64,
+    "dimensions": {
+      "focus": 0.62,
+      "status": 0.5,
+      "scan": 0.35,
+      "nav": 0.72,
+      "speed": 0.02,
+      "copy": 0.65,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "status",
+      "scan",
+      "speed"
+    ],
+    "majors": [
+      "dimension status below 0.6",
+      "dimension scan below 0.6",
+      "dimension speed below 0.6",
+      "status_items = 0.101 (below 0.4)",
+      "nav_return = 0.327 (below 0.4)",
+      "speed_search = 0.017 (below 0.4)",
+      "speed_views = 0.016 (below 0.4)",
+      "copy_status = 0.304 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "status_items",
+        "value": 0.101,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "scan_rows",
+        "value": 0.354,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "nav_return",
+        "value": 0.327,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_search",
+        "value": 0.017,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.016,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "copy_status",
+        "value": 0.304,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:nav_tabs_current"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [],
+    "fixes": [
+      "Make actions look clickable with a button shape, an icon, or a link color. Keep static text plain.",
+      "Give each row one bold main field, aligned grey secondary fields, and truncation.",
+      "Show the state of each item inline with an icon, a label, or a count.",
+      "Let the user sort, filter, and change the view of the collection.",
+      "Add search or a command menu that opens from the keyboard.",
+      "Use status labels that a new user understands."
+    ]
+  }
+}

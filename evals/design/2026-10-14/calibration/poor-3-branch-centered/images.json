@@ -1,0 +1,14 @@
+{
+  "full.png": {
+    "bytes": 742879,
+    "sha256": "f060b2da38fccfe5496247e9d3297a9770e5ebc4b30de55bd289d65c2cd4ecca"
+  },
+  "sidebar.png": {
+    "bytes": 75003,
+    "sha256": "d997c11d02bdfa00e233799f85156f1feaa9fe0b3029a6b37231a676764737a5"
+  },
+  "dialog.png": {
+    "bytes": 255324,
+    "sha256": "664226d73da56d704ce446ce6933b5f69867452edd5c346f3d3e775d0fca9068"
+  }
+}

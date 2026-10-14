@@ -1,0 +1,34 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "weak dimension: overflow",
+    "answer below 0.40: focus_space_fit = 0.118",
+    "answer below 0.40: overflow_scroll_cue = 0",
+    "answer below 0.40: status_lifecycle = 0.3",
+    "area layout: fail",
+    "area color-depth: review",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.118,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "overflow_scroll_cue",
+      "value": 0,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "status_lifecycle",
+      "value": 0.3,
+      "uncertain": false,
+      "source": "usability"
+    }
+  ]
+}

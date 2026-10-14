@@ -1,0 +1,170 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.84,
+    "dimensions": {
+      "focus": 0.73,
+      "type": 0.91,
+      "overflow": 0.5,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.267 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.267,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.97,
+    "dimensions": {
+      "spacing": 0.89,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.88,
+    "dimensions": {
+      "color": 0.89,
+      "icons": 0.76,
+      "contrast": 0.65,
+      "restraint": 0.87,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:contrast_secondary",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.74,
+    "dimensions": {
+      "focus": 0.72,
+      "status": 0.9,
+      "ai": 0.27,
+      "control": 0.41,
+      "scan": 0.79,
+      "nav": 0.84,
+      "speed": 0.82,
+      "states": 0.73,
+      "copy": 0.84,
+      "trust": 1,
+      "slop": 1,
+      "quality": 0.82
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "ai",
+      "control"
+    ],
+    "majors": [
+      "dimension ai below 0.6",
+      "dimension control below 0.6",
+      "ai_limits = 0.021 (below 0.4)",
+      "ai_feedback = 0.027 (below 0.4)",
+      "quality_repeated_identifier = 0.269 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "ai_limits",
+        "value": 0.021,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "ai_feedback",
+        "value": 0.027,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.269,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_lifecycle",
+      "usability:ai_steps",
+      "usability:ai_evidence",
+      "usability:control_draft",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:speed_views",
+      "usability:states_empty",
+      "usability:states_disabled_clear",
+      "usability:trust_onboarding"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.73
+      }
+    ],
+    "fixes": [
+      "Let the user save a draft or undo before work is final.",
+      "State the limits of the AI near its output.",
+      "Let the user rate or correct AI output, and confirm the rating.",
+      "In empty states, say what will appear and why, and offer one action.",
+      "Show each AI step as one short line that the user can expand.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing."
+    ]
+  }
+}

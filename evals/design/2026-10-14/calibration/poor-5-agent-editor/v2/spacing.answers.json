@@ -1,0 +1,56 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T15:27:01.016Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "spacing_grouping": {
+          "type": "score",
+          "score": 1.6041,
+          "legend": {
+            "0": "Headings, rows, and controls sit at equal gaps, or a heading sits as close to the section above it as to its own items",
+            "1": "Sections are separated, but at least one region packs rows tightly against each other or leaves a large gap inside one group",
+            "2": "In every region, rows inside a group share one small gap, groups are separated by a clearly larger gap, and headings sit closer to their own items than to the group above"
+          },
+          "probabilities": {
+            "0": 0.1331,
+            "1": 0.1297,
+            "2": 0.7372
+          },
+          "confidence": 0.367
+        },
+        "spacing_alignment": {
+          "type": "noul",
+          "noul": 0.838
+        },
+        "spacing_consistent": {
+          "type": "noul",
+          "noul": 0.8156
+        },
+        "slop_monotonous_spacing": {
+          "type": "noul",
+          "noul": 0.1177
+        },
+        "quality_cramped": {
+          "type": "noul",
+          "noul": 0.0476
+        },
+        "quality_heading_spacing": {
+          "type": "noul",
+          "noul": 0.2146
+        }
+      },
+      "usage": {
+        "input_tokens": 3741,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

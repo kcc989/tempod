@@ -1,0 +1,51 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "score 0.75 < 0.8",
+    "weak dimension: ai",
+    "weak dimension: control",
+    "weak dimension: overflow",
+    "verdict is review",
+    "answer below 0.40: focus_space_fit = 0.267",
+    "answer below 0.40: ai_limits = 0.021",
+    "answer below 0.40: ai_feedback = 0.027",
+    "answer below 0.40: quality_repeated_identifier = 0.269",
+    "area layout: fail",
+    "area color-depth: review",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.267,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "overflow_scroll_cue",
+      "value": 0,
+      "uncertain": true,
+      "source": "layout"
+    },
+    {
+      "question": "ai_limits",
+      "value": 0.021,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "ai_feedback",
+      "value": 0.027,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "quality_repeated_identifier",
+      "value": 0.269,
+      "uncertain": false,
+      "source": "usability"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "full.png": {
+    "bytes": 520761,
+    "sha256": "59a124f989da0974975294a1feccd71a8a61d6591ca4fc034e3f0b6e7d4de93b"
+  },
+  "sidebar.png": {
+    "bytes": 69744,
+    "sha256": "c8ac8574f6bf13805b67c29b97dbadd09261fbd79dd727ceb9eb85cb557048f7"
+  },
+  "header.png": {
+    "bytes": 153348,
+    "sha256": "049e1d7104243ed9e93eb9b120a51c997a5093bcbdd3850b1a120ade28d286f9"
+  },
+  "composer.png": {
+    "bytes": 30837,
+    "sha256": "c94de5acc50cd8265f572ddc23df0211f6203421c181fa708f94a15769d3284b"
+  }
+}

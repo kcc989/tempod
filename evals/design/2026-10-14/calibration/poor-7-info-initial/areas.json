@@ -1,0 +1,195 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.77,
+    "dimensions": {
+      "focus": 0.72,
+      "type": 0.91,
+      "overflow": 0,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.249 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.249,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale",
+      "layout:type_mono"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.97,
+    "dimensions": {
+      "spacing": 0.91,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "fail",
+    "score": 0.86,
+    "dimensions": {
+      "color": 0.86,
+      "icons": 0.77,
+      "contrast": 0.56,
+      "restraint": 0.87,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "contrast"
+    ],
+    "majors": [
+      "dimension contrast below 0.6"
+    ],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:contrast_boundaries",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Give inputs, buttons, and selected items edges with at least 3:1 contrast.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.65,
+    "dimensions": {
+      "focus": 0.63,
+      "status": 0.89,
+      "ai": 0.21,
+      "control": 0.15,
+      "scan": 0.57,
+      "nav": 0.86,
+      "speed": 0.61,
+      "copy": 0.72,
+      "slop": 1,
+      "quality": 0.81
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "ai",
+      "control",
+      "scan"
+    ],
+    "majors": [
+      "dimension ai below 0.6",
+      "dimension control below 0.6",
+      "dimension scan below 0.6",
+      "ai_limits = 0.023 (below 0.4)",
+      "ai_feedback = 0.022 (below 0.4)",
+      "control_draft = 0.151 (below 0.4)",
+      "speed_views = 0.034 (below 0.4)",
+      "quality_repeated_identifier = 0.227 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "ai_steps",
+        "value": 0.29,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "ai_limits",
+        "value": 0.023,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "ai_feedback",
+        "value": 0.022,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "control_draft",
+        "value": 0.151,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.034,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.227,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:status_lifecycle",
+      "usability:ai_steps",
+      "usability:ai_evidence",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:copy_labels"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.77
+      }
+    ],
+    "fixes": [
+      "Let the user save a draft or undo before work is final.",
+      "Make actions look clickable with a button shape, an icon, or a link color. Keep static text plain.",
+      "Give each row one bold main field, aligned grey secondary fields, and truncation.",
+      "Let the user rate or correct AI output, and confirm the rating.",
+      "State the limits of the AI near its output.",
+      "Show each AI step as one short line that the user can expand."
+    ]
+  }
+}

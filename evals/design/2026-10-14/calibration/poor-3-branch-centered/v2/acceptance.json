@@ -1,0 +1,61 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "score 0.71 < 0.8",
+    "blocker: Text covered by another element.",
+    "weak dimension: focus",
+    "weak dimension: ai",
+    "weak dimension: control",
+    "weak dimension: speed",
+    "verdict is review",
+    "answer below 0.40: focus_space_fit = 0.116",
+    "answer below 0.40: quality_text_covered = 0.293",
+    "answer below 0.40: ai_steps = 0.191",
+    "answer below 0.40: speed_views = 0.027",
+    "answer below 0.40: quality_repeated_identifier = 0.259",
+    "area layout: fail",
+    "area spacing: review",
+    "area color-depth: review",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.116,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "quality_text_covered",
+      "value": 0.293,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "ai_steps",
+      "value": 0.191,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "control_diff",
+      "value": 0,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "speed_views",
+      "value": 0.027,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "quality_repeated_identifier",
+      "value": 0.259,
+      "uncertain": false,
+      "source": "usability"
+    }
+  ]
+}

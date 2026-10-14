@@ -1,0 +1,18 @@
+{
+  "full.png": {
+    "bytes": 373242,
+    "sha256": "bba3144b88768445ec803615fe9e1a69230efee79098503604bb13e1b6c0f86a"
+  },
+  "sidebar.png": {
+    "bytes": 102785,
+    "sha256": "ddfea0912058ce6c9666c7830b6885e301cd37ca6e9d6f918affbe7b28777a76"
+  },
+  "top.png": {
+    "bytes": 121578,
+    "sha256": "f875f0fbcb880345b80fcb437728f0169b4787baa90716c9fb865b4ea85a519f"
+  },
+  "question.png": {
+    "bytes": 65275,
+    "sha256": "2ff5d90fb8329ebe3b895fdf327e7e5e0c173dbce066a948066f2a800f1ffdf1"
+  }
+}

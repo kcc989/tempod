@@ -1,0 +1,38 @@
+{
+  "full.png": {
+    "bytes": 613315,
+    "sha256": "bb7c35ae4c74b9f84c474bed3aca8823798b867ee5c77e77082adde32718c224"
+  },
+  "sidebar.png": {
+    "bytes": 160051,
+    "sha256": "300291b3205f0ccd4d9750fc6daab4dae904bb3890501666e8e80b5c80305ef0"
+  },
+  "header.png": {
+    "bytes": 210519,
+    "sha256": "2944a41c29de412d21486e654c083558779128e5733ef750fe4556a5ca0d6ef4"
+  },
+  "composer.png": {
+    "bytes": 29350,
+    "sha256": "cf901c79bb194e4421271ff4692fe382dc5105aec63729ca411304323d749354"
+  },
+  "interactions/info-before.jpg": {
+    "bytes": 99203,
+    "sha256": "a8d29b8650d63ccb63b2e43fdeaefbba3600b850a500c4bcdb87117ea0f73c52"
+  },
+  "interactions/info-after.jpg": {
+    "bytes": 108266,
+    "sha256": "183263668395358c4c5fede36ca9183eedf65567adb5ce5faec018e96b6e81de"
+  },
+  "interactions/changes-after.jpg": {
+    "bytes": 106755,
+    "sha256": "57853447e671c203424c541cfc6850b03046c0c44d1d3cae593a91a55c54d0df"
+  },
+  "interactions/tab-before.jpg": {
+    "bytes": 103036,
+    "sha256": "0b6d9961f79ecfd996daaac9654edfafba862b68584b79a26064b7b7d1dc8913"
+  },
+  "interactions/tab-after.jpg": {
+    "bytes": 103327,
+    "sha256": "27bfd974a227c74f7c9909b25af406b0ca5667a322a270a80340781120e1333b"
+  }
+}

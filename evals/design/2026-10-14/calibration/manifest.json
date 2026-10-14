@@ -1,0 +1,104 @@
+{
+  "version": "calibration-2026-10-14",
+  "groundTruthSentToProvider": false,
+  "cases": [
+    {
+      "id": "ref-1-claude",
+      "label": "reference",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/images/1.png",
+      "footerCut": null,
+      "labelBasis": "Assistant reply running with elapsed time; conversation list; reply composer; no empty area, error or usage limit."
+    },
+    {
+      "id": "ref-2-codex",
+      "label": "reference",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/images/2.png",
+      "footerCut": null,
+      "labelBasis": "Agent steps and a running command; project and thread lists with spinners; question form and composer."
+    },
+    {
+      "id": "ref-3-gumloop",
+      "label": "reference",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/images/3.png",
+      "footerCut": 842,
+      "labelBasis": "Agent table; credits remaining meter; no AI output, running work, editor, empty area or error."
+    },
+    {
+      "id": "ref-4-attio",
+      "label": "reference",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/images/4.png",
+      "footerCut": 842,
+      "labelBasis": "Company table with AI-filled columns marked by sparkle icons; 'No favorites' empty group; trial days remaining."
+    },
+    {
+      "id": "ref-5-linear",
+      "label": "reference",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/images/5.png",
+      "footerCut": 842,
+      "labelBasis": "Update editor dialog over the empty Pulse page; no AI output, running work, item list, error or limit."
+    },
+    {
+      "id": "ref-6-plain",
+      "label": "reference",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/images/6.png",
+      "footerCut": 842,
+      "labelBasis": "Thread list with queue counts; no AI output, running work, editor, empty area, error or limit."
+    },
+    {
+      "id": "ref-7-customerio",
+      "label": "reference",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/images/7.png",
+      "footerCut": 842,
+      "labelBasis": "Agent answer with collapsed steps; recent chats list; message field; account review banner."
+    },
+    {
+      "id": "poor-1-workspace",
+      "label": "known_problems",
+      "source": "evals/design/2026-10-13/calibration-pilot/workspace-known-problems/full.png",
+      "footerCut": null,
+      "labelBasis": "Assistant transcript; workspace list; composer; 'No changes.' and 'No setup script.' empty areas. Label basis: user reported excess top bars, persistent copy/base/guide actions and a narrow centered conversation."
+    },
+    {
+      "id": "poor-2-info-regression",
+      "label": "known_problems",
+      "source": "evals/design/2026-10-13/dark/info-height-regression/full.png",
+      "footerCut": null,
+      "labelBasis": "Composer and open chats list visible; transcript not visible. Label basis: rejected build where the workspace shrank and left a blank area above it."
+    },
+    {
+      "id": "poor-3-branch-centered",
+      "label": "known_problems",
+      "source": "evals/design/2026-10-13/dark/branch-option-alignment/before/full.png",
+      "footerCut": null,
+      "labelBasis": "Dialog with branch list over the transcript; workspace list; composer. Label basis: user requested left-aligned base-branch rows; this capture shows them centered."
+    },
+    {
+      "id": "poor-4-agents-list",
+      "label": "known_problems",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/scratchpad/prior/base/baseline-agents-list.jpg",
+      "footerCut": null,
+      "labelBasis": "Settings navigation and one custom agent. Label basis: visible focus ring on General while Agents is current, and the only agent shown as centered text with no row state."
+    },
+    {
+      "id": "poor-5-agent-editor",
+      "label": "known_problems",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/scratchpad/prior/base/baseline-agent-codex.jpg",
+      "footerCut": null,
+      "labelBasis": "Agent form with base agent choice. Label basis: user reported no clear selected state after choosing a base agent, and base agents shown without a login."
+    },
+    {
+      "id": "poor-6-new-workspace",
+      "label": "known_problems",
+      "source": "/private/tmp/claude-501/-Users-caseycollins-projects-tempod--claude-worktrees-tempod-design-eval-clef-31ab89/30fc95e7-25c9-4e31-955d-1a1eaea350b1/scratchpad/prior/base/baseline-new-workspace.jpg",
+      "footerCut": null,
+      "labelBasis": "Dialog over transcript. Label basis: user reported excess top-bar actions (rename, guide create/open, base) in this header."
+    },
+    {
+      "id": "poor-7-info-initial",
+      "label": "known_problems",
+      "source": "evals/design/2026-10-13/dark/info-initial/full.png",
+      "footerCut": null,
+      "labelBasis": "Transcript, workspace list, composer, Info tool tab. Label basis: user replaced this full-height Info tool tab with a freestanding panel."
+    }
+  ]
+}

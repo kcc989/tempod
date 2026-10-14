@@ -1,0 +1,18 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "content.png"
+  ],
+  "known": {
+    "ai": false,
+    "async": false,
+    "collection": true,
+    "editing": false,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Settings navigation and one custom agent. Label basis: visible focus ring on General while Agents is current, and the only agent shown as centered text with no row state."
+}

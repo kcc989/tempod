@@ -1,0 +1,195 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.81,
+    "dimensions": {
+      "focus": 0.71,
+      "type": 0.79,
+      "overflow": 0.5,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.148 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.148,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      },
+      {
+        "question": "type_mono",
+        "value": 0.3,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_content_share",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale",
+      "layout:type_mono"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs.",
+      "Set code, commands, IDs, and paths in one monospace font."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.95,
+    "dimensions": {
+      "spacing": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.89,
+    "dimensions": {
+      "color": 0.87,
+      "icons": 0.81,
+      "contrast": 0.7,
+      "restraint": 0.86,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:contrast_boundaries",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Give inputs, buttons, and selected items edges with at least 3:1 contrast.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.78,
+    "dimensions": {
+      "focus": 0.73,
+      "status": 0.78,
+      "ai": 0.65,
+      "scan": 0.86,
+      "nav": 0.89,
+      "speed": 0.49,
+      "states": 0.56,
+      "copy": 0.7,
+      "consistency": 0.91,
+      "contrast": 1,
+      "slop": 1,
+      "quality": 0.8
+    },
+    "blockers": [
+      "An action gives no visible feedback near the control."
+    ],
+    "weakDimensions": [
+      "speed",
+      "states"
+    ],
+    "majors": [
+      "An action gives no visible feedback near the control.",
+      "dimension speed below 0.6",
+      "dimension states below 0.6",
+      "status_lifecycle = 0.3 (below 0.4)",
+      "speed_views = 0.024 (below 0.4)",
+      "quality_repeated_identifier = 0.206 (below 0.4)",
+      "feedback_selected = 0.153 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "status_lifecycle",
+        "value": 0.3,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.024,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.206,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "states_feedback",
+        "value": 0.306,
+        "uncertain": true,
+        "source": "interaction-3"
+      },
+      {
+        "question": "feedback_selected",
+        "value": 0.153,
+        "uncertain": false,
+        "source": "interaction-3"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:ai_steps",
+      "usability:nav_groups",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:copy_controls_labeled",
+      "usability:quality_repeated_text",
+      "interaction-1:states_feedback",
+      "interaction-1:feedback_selected",
+      "interaction-2:states_feedback",
+      "interaction-2:feedback_selected",
+      "interaction-3:states_feedback"
+    ],
+    "missingEvidence": [],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.79
+      }
+    ],
+    "fixes": [
+      "Show each AI step as one short line that the user can expand.",
+      "Show a pressed or selected state at once, and confirm the result near the control.",
+      "Let the user sort, filter, and change the view of the collection.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+      "When work sleeps or pauses, say what that means and how to resume.",
+      "Give the control a visible pressed or selected state."
+    ]
+  }
+}

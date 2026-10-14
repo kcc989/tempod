@@ -1,0 +1,389 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T15:34:45.428Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "focus_affordance": {
+          "type": "score",
+          "score": 1.4768,
+          "legend": {
+            "0": {
+              "what": "Actions and static text look the same",
+              "examples": [
+                "A header row where a branch name, a path, and 'Rename branch' all use the same plain text style"
+              ]
+            },
+            "1": {
+              "what": "Most actions look clickable, but some look like labels or labels look like buttons",
+              "examples": [
+                "Buttons have borders, but one text action in the header has no style"
+              ]
+            },
+            "2": {
+              "what": "Every action looks clickable through a button shape, an icon, a link color, or a chevron, and static text never does",
+              "examples": [
+                "'Filters' and 'Display' are text buttons with icons and shortcut hints, and the page title is plain bold text"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.1411,
+            "1": 0.2409,
+            "2": 0.618
+          },
+          "confidence": 0.1897
+        },
+        "status_items": {
+          "type": "score",
+          "score": 1.8354,
+          "legend": {
+            "0": {
+              "what": "Items show no state; the user must open each item to learn it",
+              "examples": [
+                "A list of project names with no status, owner, or date"
+              ]
+            },
+            "1": {
+              "what": "Some items show state, or state uses color only, with no icon, label, or count",
+              "examples": [
+                "Rows have a colored left border but no label"
+              ]
+            },
+            "2": {
+              "what": "Each item that can change shows its state inline with an icon, a label, or a count",
+              "examples": [
+                "Sidebar threads show a spinner while running and a 'Needs input' badge when blocked",
+                "Each queue in the sidebar shows a count, such as 'First response 4'",
+                "A project chip shows 'On track' with a green icon"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.0325,
+            "1": 0.0996,
+            "2": 0.8679
+          },
+          "confidence": 0.6463
+        },
+        "status_async": {
+          "type": "score",
+          "score": 1.8302,
+          "legend": {
+            "0": {
+              "what": "No sign that work is running",
+              "examples": [
+                "The button returns to normal and nothing else changes until the result appears"
+              ]
+            },
+            "1": {
+              "what": "A generic spinner or 'Loading' with no detail",
+              "examples": [
+                "A full-page spinner with no text"
+              ]
+            },
+            "2": {
+              "what": "A live line says what is happening now, with elapsed time or steps, and the item shows its state in the navigation so the user can leave and come back",
+              "examples": [
+                "'Naming a page about restructuring agent roles 8s' while the conversation shows a running dot in the sidebar",
+                "'Running bun run test' under a collapsed list of finished steps"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.0535,
+            "1": 0.0628,
+            "2": 0.8837
+          },
+          "confidence": 0.6817
+        },
+        "status_attention": {
+          "type": "noul",
+          "noul": 0.1873
+        },
+        "status_consistent": {
+          "type": "noul",
+          "noul": 0.8689
+        },
+        "status_lifecycle": {
+          "type": "choice",
+          "choice": "bare",
+          "probabilities": {
+            "explains": 0.0586,
+            "bare": 0.9208,
+            "not_shown": 0.0206
+          },
+          "confidence": 0.7776
+        },
+        "ai_steps": {
+          "type": "score",
+          "score": 1.3054,
+          "legend": {
+            "0": "Only the final result appears; the steps are hidden",
+            "1": "The steps appear as long raw logs or full tool output that push the result out of view",
+            "2": "Each step appears as one short line that the user can expand, such as 'Searched docs', 'Thought for 2 seconds', or 'Ran commands'"
+          },
+          "probabilities": {
+            "0": 0.3349,
+            "1": 0.0247,
+            "2": 0.6404
+          },
+          "confidence": 0.2843
+        },
+        "ai_evidence": {
+          "type": "noul",
+          "noul": 0.8894
+        },
+        "ai_marked": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "marked": 0.1086,
+            "unmarked": 0.1896,
+            "not_shown": 0.7018
+          },
+          "confidence": 0.3104
+        },
+        "ai_limits": {
+          "type": "noul",
+          "noul": 0.0187
+        },
+        "ai_feedback": {
+          "type": "noul",
+          "noul": 0.0257
+        },
+        "control_ask": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "structured": 0.0132,
+            "free_text": 0.1617,
+            "none": 0.377,
+            "not_shown": 0.4481
+          },
+          "confidence": 0.159
+        },
+        "control_draft": {
+          "type": "noul",
+          "noul": 0.2452
+        },
+        "control_diff": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "shown": 0.0983,
+            "hidden": 0.2483,
+            "not_shown": 0.6534
+          },
+          "confidence": 0.2473
+        },
+        "control_consent": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "in_context": 0.0178,
+            "upfront": 0.0095,
+            "not_shown": 0.9727
+          },
+          "confidence": 0.9197
+        },
+        "scan_rows": {
+          "type": "score",
+          "score": 1.7078,
+          "legend": {
+            "0": "Rows mix layouts, values do not line up, and long text wraps freely",
+            "1": "Columns line up, but rows carry too much text or have no clear main field",
+            "2": "Each row has one bold main field, aligned secondary fields in grey, long text cut with an ellipsis, and short relative times such as '11h ago'"
+          },
+          "probabilities": {
+            "0": 0.0937,
+            "1": 0.1048,
+            "2": 0.8015
+          },
+          "confidence": 0.4932
+        },
+        "scan_missing": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "muted": 0.043,
+            "raw": 0.0147,
+            "not_shown": 0.9423
+          },
+          "confidence": 0.835
+        },
+        "scan_overflow": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "count": 0.061,
+            "clipped": 0.1089,
+            "not_shown": 0.8301
+          },
+          "confidence": 0.5569
+        },
+        "nav_current": {
+          "type": "noul",
+          "noul": 0.9418
+        },
+        "nav_groups": {
+          "type": "score",
+          "score": 1.6897,
+          "legend": {
+            "0": "One long flat list, or items with no clear groups",
+            "1": "Groups exist, but names are vague or items repeat",
+            "2": "Short groups with clear names, such as pinned items, recent items by day, records, or workflow states, with counts where they help"
+          },
+          "probabilities": {
+            "0": 0.0808,
+            "1": 0.1486,
+            "2": 0.7706
+          },
+          "confidence": 0.4336
+        },
+        "nav_return": {
+          "type": "noul",
+          "noul": 0.8477
+        },
+        "nav_tabs_current": {
+          "type": "choice",
+          "choice": "clear",
+          "probabilities": {
+            "clear": 0.9687,
+            "weak": 0.0202,
+            "not_shown": 0.0111
+          },
+          "confidence": 0.9083
+        },
+        "speed_search": {
+          "type": "noul",
+          "noul": 0.9535
+        },
+        "speed_shortcuts": {
+          "type": "noul",
+          "noul": 0.9273
+        },
+        "speed_views": {
+          "type": "noul",
+          "noul": 0.0267
+        },
+        "states_empty": {
+          "type": "score",
+          "score": 0.6534,
+          "legend": {
+            "0": {
+              "what": "A blank area, or only 'No data'",
+              "examples": [
+                "An empty table with column headers and no rows"
+              ]
+            },
+            "1": {
+              "what": "Says that nothing is here and offers an action, but does not say what will appear",
+              "examples": [
+                "'No items yet' with a 'Create' button"
+              ]
+            },
+            "2": {
+              "what": "Says what will appear here and why, and offers one clear action to start",
+              "examples": [
+                "'Updates from projects you are part of will show here' with one 'New update' button"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.4587,
+            "1": 0.4292,
+            "2": 0.1121
+          },
+          "confidence": 0.1108
+        },
+        "states_errors": {
+          "type": "noul",
+          "noul": 0.0223
+        },
+        "states_disabled_clear": {
+          "type": "choice",
+          "choice": "clear",
+          "probabilities": {
+            "clear": 0.5079,
+            "confusing": 0.3419,
+            "not_shown": 0.1502
+          },
+          "confidence": 0.0961
+        },
+        "copy_labels": {
+          "type": "score",
+          "score": 1.607,
+          "legend": {
+            "0": "Vague, clever, or jargon words; buttons say 'Submit', 'OK', or 'Click here'",
+            "1": "Mostly clear, with some vague labels or mixed capitalization",
+            "2": "Plain, specific words; buttons start with a verb that names the result, such as 'Post update' or 'Add billing'; capitalization is consistent"
+          },
+          "probabilities": {
+            "0": 0.0301,
+            "1": 0.3328,
+            "2": 0.6371
+          },
+          "confidence": 0.2763
+        },
+        "copy_status": {
+          "type": "noul",
+          "noul": 0.7905
+        },
+        "copy_controls_labeled": {
+          "type": "noul",
+          "noul": 0.6803
+        },
+        "trust_usage": {
+          "type": "noul",
+          "noul": 0.0546
+        },
+        "trust_onboarding": {
+          "type": "choice",
+          "choice": "none",
+          "probabilities": {
+            "light": 0.2339,
+            "blocking": 0.0134,
+            "none": 0.7527
+          },
+          "confidence": 0.4323
+        },
+        "slop_em_dash": {
+          "type": "noul",
+          "noul": 0.0198
+        },
+        "slop_marketing_claims": {
+          "type": "noul",
+          "noul": 0.0133
+        },
+        "slop_forced_contrast": {
+          "type": "noul",
+          "noul": 0.014
+        },
+        "slop_theater": {
+          "type": "noul",
+          "noul": 0.0154
+        },
+        "quality_repeated_text": {
+          "type": "noul",
+          "noul": 0.2667
+        },
+        "quality_repeated_identifier": {
+          "type": "noul",
+          "noul": 0.7509
+        }
+      },
+      "usage": {
+        "input_tokens": 8373,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

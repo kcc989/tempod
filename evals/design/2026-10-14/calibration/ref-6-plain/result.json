@@ -1,0 +1,46 @@
+{
+  "verdict": "needs_work",
+  "score": 0.8,
+  "dimensions": {
+    "focus": 0.81,
+    "status": 0.76,
+    "control": 0,
+    "scan": 0.95,
+    "nav": 0.85,
+    "speed": 0.81,
+    "copy": 0.86,
+    "color": 0.87,
+    "spacing": 0.92,
+    "type": 0.87,
+    "icons": 0.81,
+    "contrast": 0.74,
+    "restraint": 0.89,
+    "overflow": 0.5,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "control",
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "Show changes as before and after.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "When work sleeps or pauses, say what that means and how to resume.",
+    "Make each panel only as wide as its content needs.",
+    "Add search or a command menu that opens from the keyboard.",
+    "Let the user go back to recent or pinned work in one click."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "status_items",
+    "control_diff",
+    "nav_return",
+    "speed_search",
+    "color_role",
+    "icons_meaning",
+    "contrast_secondary"
+  ]
+}

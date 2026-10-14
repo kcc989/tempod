@@ -1,0 +1,129 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.84,
+    "dimensions": {
+      "focus": 0.76,
+      "type": 0.87,
+      "overflow": 0.5,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.118 (below 0.4)",
+      "overflow_scroll_cue = 0 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.118,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": false,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_content_share"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.95,
+    "dimensions": {
+      "spacing": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.9,
+    "dimensions": {
+      "color": 0.87,
+      "icons": 0.81,
+      "contrast": 0.74,
+      "restraint": 0.89,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.88,
+    "dimensions": {
+      "focus": 0.85,
+      "status": 0.75,
+      "scan": 0.95,
+      "nav": 0.82,
+      "speed": 0.78,
+      "copy": 0.82,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [
+      "status_lifecycle = 0.3 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "status_lifecycle",
+        "value": 0.3,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:nav_groups",
+      "usability:nav_return",
+      "usability:speed_search"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [],
+    "fixes": [
+      "When work sleeps or pauses, say what that means and how to resume.",
+      "Add search or a command menu that opens from the keyboard.",
+      "Let the user go back to recent or pinned work in one click."
+    ]
+  }
+}

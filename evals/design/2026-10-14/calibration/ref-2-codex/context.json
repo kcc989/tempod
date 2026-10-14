@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Codex",
+    "category": "Coding agent",
+    "platform": "desktop",
+    "primary_user": "Developer",
+    "primary_job": "Direct coding agents on project tasks"
+  },
+  "screen": {
+    "name": "Agent thread",
+    "purpose": "Follow the agent's work and answer its question"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar",
+    "Image 3: crop of the top of the thread",
+    "Image 4: crop of the agent question and the message field"
+  ]
+}

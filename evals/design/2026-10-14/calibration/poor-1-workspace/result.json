@@ -1,0 +1,64 @@
+{
+  "verdict": "review",
+  "score": 0.75,
+  "dimensions": {
+    "focus": 0.73,
+    "status": 0.9,
+    "ai": 0.27,
+    "control": 0.41,
+    "scan": 0.79,
+    "nav": 0.84,
+    "speed": 0.82,
+    "states": 0.73,
+    "copy": 0.84,
+    "trust": 1,
+    "color": 0.89,
+    "spacing": 0.89,
+    "type": 0.91,
+    "icons": 0.76,
+    "contrast": 0.65,
+    "restraint": 0.87,
+    "overflow": 0.5,
+    "slop": 1,
+    "quality": 0.82
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "ai",
+    "control",
+    "overflow"
+  ],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.73
+    }
+  ],
+  "fixes": [
+    "Let the user save a draft or undo before work is final.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "State the limits of the AI near its output.",
+    "Let the user rate or correct AI output, and confirm the rating.",
+    "In empty states, say what will appear and why, and offer one action.",
+    "Make secondary text, placeholders, and metadata darker until they are easy to read."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_affordance",
+    "status_lifecycle",
+    "ai_steps",
+    "ai_evidence",
+    "control_draft",
+    "scan_rows",
+    "nav_groups",
+    "speed_views",
+    "states_empty",
+    "states_disabled_clear",
+    "trust_onboarding",
+    "type_scale",
+    "icons_meaning",
+    "contrast_secondary",
+    "overflow_scroll_cue"
+  ]
+}

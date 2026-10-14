@@ -1,0 +1,59 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "score 0.75 < 0.8",
+    "weak dimension: control",
+    "weak dimension: nav",
+    "weak dimension: contrast",
+    "weak dimension: overflow",
+    "verdict is review",
+    "answer below 0.40: focus_space_fit = 0.313",
+    "answer below 0.40: control_draft = 0.097",
+    "answer below 0.40: nav_current = 0.221",
+    "answer below 0.40: nav_return = 0.339",
+    "answer below 0.40: speed_views = 0.028",
+    "area layout: fail",
+    "area color-depth: fail",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.313,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "overflow_scroll_cue",
+      "value": 0,
+      "uncertain": true,
+      "source": "layout"
+    },
+    {
+      "question": "control_draft",
+      "value": 0.097,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "nav_current",
+      "value": 0.221,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "nav_return",
+      "value": 0.339,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "speed_views",
+      "value": 0.028,
+      "uncertain": false,
+      "source": "usability"
+    }
+  ]
+}

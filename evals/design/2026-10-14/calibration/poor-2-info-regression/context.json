@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Tempo",
+    "category": "Agent coding workspace",
+    "platform": "desktop",
+    "primary_user": "Developer",
+    "primary_job": "Direct coding agents in project workspaces and review their work"
+  },
+  "screen": {
+    "name": "Workspace info",
+    "purpose": "Read an agent conversation and inspect workspace information"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar and the workspace",
+    "Image 3: crop of the Info panel"
+  ]
+}

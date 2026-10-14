@@ -1,0 +1,18 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "form.png"
+  ],
+  "known": {
+    "ai": false,
+    "async": false,
+    "collection": true,
+    "editing": true,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Agent form with base agent choice. Label basis: user reported no clear selected state after choosing a base agent, and base agents shown without a login."
+}

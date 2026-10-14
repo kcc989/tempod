@@ -1,0 +1,46 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "weak dimension: control",
+    "verdict is review",
+    "answer below 0.40: focus_space_fit = 0.198",
+    "answer below 0.40: speed_views = 0.292",
+    "area layout: fail",
+    "area color-depth: review",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.198,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "status_attention",
+      "value": 0.392,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "control_diff",
+      "value": 0,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "speed_views",
+      "value": 0.292,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "quality_repeated_identifier",
+      "value": 0.394,
+      "uncertain": true,
+      "source": "usability"
+    }
+  ]
+}

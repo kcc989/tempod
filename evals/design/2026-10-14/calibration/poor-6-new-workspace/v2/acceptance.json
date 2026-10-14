@@ -1,0 +1,68 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "score 0.66 < 0.8",
+    "blocker: Text covered by another element.",
+    "weak dimension: focus",
+    "weak dimension: ai",
+    "weak dimension: control",
+    "weak dimension: speed",
+    "weak dimension: contrast",
+    "weak dimension: overflow",
+    "verdict is review",
+    "answer below 0.40: focus_space_fit = 0.207",
+    "answer below 0.40: quality_text_covered = 0.195",
+    "answer below 0.40: speed_views = 0.035",
+    "answer below 0.40: quality_repeated_identifier = 0.292",
+    "area layout: fail",
+    "area spacing: review",
+    "area color-depth: fail",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.207,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "overflow_scroll_cue",
+      "value": 0,
+      "uncertain": true,
+      "source": "layout"
+    },
+    {
+      "question": "quality_text_covered",
+      "value": 0.195,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "ai_steps",
+      "value": 0.265,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "control_diff",
+      "value": 0,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "speed_views",
+      "value": 0.035,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "quality_repeated_identifier",
+      "value": 0.292,
+      "uncertain": false,
+      "source": "usability"
+    }
+  ]
+}

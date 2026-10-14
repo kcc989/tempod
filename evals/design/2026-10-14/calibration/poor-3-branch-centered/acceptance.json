@@ -1,0 +1,85 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "score 0.72 < 0.8",
+    "blocker: Text covered by another element.",
+    "weak dimension: ai",
+    "weak dimension: control",
+    "verdict is review",
+    "answer below 0.40: focus_space_fit = 0.348",
+    "answer below 0.40: quality_text_covered = 0.245",
+    "answer below 0.40: ai_steps = 0.207",
+    "answer below 0.40: ai_limits = 0.025",
+    "answer below 0.40: ai_feedback = 0.018",
+    "answer below 0.40: control_draft = 0.236",
+    "answer below 0.40: speed_views = 0.033",
+    "answer below 0.40: quality_repeated_identifier = 0.259",
+    "area layout: fail",
+    "area color-depth: review",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.348,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "quality_text_covered",
+      "value": 0.245,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "ai_steps",
+      "value": 0.207,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "ai_evidence",
+      "value": 0.368,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "ai_limits",
+      "value": 0.025,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "ai_feedback",
+      "value": 0.018,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "control_draft",
+      "value": 0.236,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "control_diff",
+      "value": 0,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "speed_views",
+      "value": 0.033,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "quality_repeated_identifier",
+      "value": 0.259,
+      "uncertain": false,
+      "source": "usability"
+    }
+  ]
+}

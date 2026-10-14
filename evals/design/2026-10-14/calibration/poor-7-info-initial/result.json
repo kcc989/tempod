@@ -1,0 +1,64 @@
+{
+  "verdict": "review",
+  "score": 0.67,
+  "dimensions": {
+    "focus": 0.7,
+    "status": 0.89,
+    "ai": 0.21,
+    "control": 0.15,
+    "scan": 0.57,
+    "nav": 0.86,
+    "speed": 0.61,
+    "copy": 0.72,
+    "color": 0.86,
+    "spacing": 0.91,
+    "type": 0.91,
+    "icons": 0.77,
+    "contrast": 0.56,
+    "restraint": 0.87,
+    "overflow": 0,
+    "slop": 1,
+    "quality": 0.81
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "ai",
+    "control",
+    "scan",
+    "contrast",
+    "overflow"
+  ],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.77
+    }
+  ],
+  "fixes": [
+    "Let the user save a draft or undo before work is final.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Give each row one bold main field, aligned grey secondary fields, and truncation.",
+    "Let the user rate or correct AI output, and confirm the rating.",
+    "State the limits of the AI near its output.",
+    "Make secondary text, placeholders, and metadata darker until they are easy to read."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_affordance",
+    "status_items",
+    "status_lifecycle",
+    "ai_steps",
+    "ai_evidence",
+    "scan_rows",
+    "nav_groups",
+    "copy_labels",
+    "color_role",
+    "type_scale",
+    "type_mono",
+    "icons_meaning",
+    "contrast_secondary",
+    "contrast_boundaries",
+    "overflow_scroll_cue"
+  ]
+}

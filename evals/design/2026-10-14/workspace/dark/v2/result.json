@@ -1,0 +1,61 @@
+{
+  "verdict": "needs_work",
+  "score": 0.77,
+  "dimensions": {
+    "focus": 0.73,
+    "status": 0.75,
+    "ai": 0.75,
+    "scan": 0.87,
+    "nav": 0.91,
+    "speed": 0.5,
+    "states": 0.58,
+    "copy": 0.73,
+    "color": 0.9,
+    "spacing": 0.79,
+    "type": 0.78,
+    "icons": 0.79,
+    "contrast": 0.77,
+    "restraint": 0.86,
+    "overflow": 0.5,
+    "consistency": 0.85,
+    "slop": 1,
+    "quality": 0.8
+  },
+  "blockers": [
+    "An action gives no visible feedback near the control."
+  ],
+  "weakDimensions": [
+    "speed",
+    "states",
+    "overflow"
+  ],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.78
+    }
+  ],
+  "fixes": [
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Show a pressed or selected state at once, and confirm the result near the control.",
+    "Let the user sort, filter, and change the view of the collection.",
+    "Make each panel only as wide as its content needs.",
+    "When work sleeps or pauses, say what that means and how to resume.",
+    "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "states_disabled_clear",
+    "states_feedback",
+    "feedback_selected",
+    "copy_labels",
+    "copy_controls_labeled",
+    "type_scale",
+    "type_mono",
+    "icons_meaning",
+    "contrast_secondary",
+    "contrast_boundaries"
+  ]
+}

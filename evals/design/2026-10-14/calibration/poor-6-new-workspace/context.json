@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Tempo",
+    "category": "Agent coding workspace",
+    "platform": "desktop",
+    "primary_user": "Developer",
+    "primary_job": "Direct coding agents in project workspaces and review their work"
+  },
+  "screen": {
+    "name": "New workspace",
+    "purpose": "Describe the task and start a new workspace"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the header and chat tabs",
+    "Image 3: crop of the new workspace dialog"
+  ]
+}

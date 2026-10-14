@@ -1,0 +1,140 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.73,
+    "dimensions": {
+      "focus": 0.59,
+      "type": 0.9,
+      "overflow": 0,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "focus",
+      "overflow"
+    ],
+    "majors": [
+      "dimension focus below 0.6",
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.262 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.262,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs.",
+      "Give the screen one main path: one filled button, or no control that competes with the content.",
+      "Give the user's content most of the screen. Move controls to the edges."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.97,
+    "dimensions": {
+      "spacing": 0.89,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.9,
+    "dimensions": {
+      "color": 0.91,
+      "icons": 0.81,
+      "contrast": 0.73,
+      "restraint": 0.87,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:contrast_secondary",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.84,
+    "dimensions": {
+      "focus": 0.78,
+      "status": 0.85,
+      "control": 0.93,
+      "nav": 0.86,
+      "speed": 0.31,
+      "states": 0.77,
+      "copy": 0.81,
+      "trust": 1,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "speed"
+    ],
+    "majors": [
+      "dimension speed below 0.6",
+      "speed_shortcuts = 0.025 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "speed_shortcuts",
+        "value": 0.025,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:control_diff",
+      "usability:speed_search",
+      "usability:states_empty",
+      "usability:copy_controls_labeled"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [],
+    "fixes": [
+      "Show keyboard shortcuts next to frequent actions.",
+      "Add search or a command menu that opens from the keyboard.",
+      "Give each dropdown and selector a label that says what it sets."
+    ]
+  }
+}

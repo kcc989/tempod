@@ -1,0 +1,62 @@
+{
+  "verdict": "review",
+  "score": 0.76,
+  "dimensions": {
+    "focus": 0.73,
+    "status": 0.77,
+    "ai": 0.52,
+    "control": 0.38,
+    "scan": 0.75,
+    "nav": 0.95,
+    "speed": 0.42,
+    "copy": 0.66,
+    "color": 0.85,
+    "spacing": 0.9,
+    "type": 0.86,
+    "icons": 0.81,
+    "contrast": 0.64,
+    "restraint": 0.89,
+    "overflow": 1,
+    "slop": 1,
+    "quality": 0.83
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "ai",
+    "control",
+    "speed"
+  ],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.69
+    }
+  ],
+  "fixes": [
+    "Let the user rate or correct AI output, and confirm the rating.",
+    "Show changes as before and after.",
+    "Let the user save a draft or undo before work is final.",
+    "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+    "Show the sources, files, or commands that the AI used.",
+    "Show keyboard shortcuts next to frequent actions."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_content_share",
+    "focus_affordance",
+    "status_items",
+    "status_attention",
+    "control_diff",
+    "scan_rows",
+    "nav_tabs_current",
+    "copy_labels",
+    "copy_controls_labeled",
+    "color_role",
+    "type_scale",
+    "icons_meaning",
+    "contrast_secondary",
+    "overflow_long_text",
+    "overflow_scroll_cue"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "verdict": "review",
+  "score": 0.68,
+  "dimensions": {
+    "focus": 0.63,
+    "status": 0.5,
+    "scan": 0.41,
+    "nav": 0.76,
+    "speed": 0.02,
+    "copy": 0.65,
+    "color": 0.88,
+    "spacing": 0.88,
+    "type": 0.9,
+    "icons": 0.8,
+    "contrast": 0.66,
+    "restraint": 0.91,
+    "overflow": 0,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "status",
+    "scan",
+    "speed",
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Show the state of each item inline with an icon, a label, or a count.",
+    "Give each row one bold main field, aligned grey secondary fields, and truncation.",
+    "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+    "Make each panel only as wide as its content needs.",
+    "Make actions look clickable with a button shape, an icon, or a link color. Keep static text plain."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "scan_rows",
+    "nav_groups",
+    "nav_return",
+    "nav_tabs_current",
+    "color_role",
+    "icons_meaning",
+    "contrast_secondary",
+    "quality_heading_spacing"
+  ]
+}

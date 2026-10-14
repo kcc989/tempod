@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Attio",
+    "category": "CRM",
+    "platform": "web",
+    "primary_user": "Sales team member",
+    "primary_job": "Track companies and people"
+  },
+  "screen": {
+    "name": "Companies",
+    "purpose": "Review company records and their attributes"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar",
+    "Image 3: crop of the header and the first table rows"
+  ]
+}

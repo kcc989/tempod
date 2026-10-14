@@ -1,0 +1,206 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.86,
+    "dimensions": {
+      "focus": 0.82,
+      "type": 0.87,
+      "overflow": 0.5,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.366,
+        "uncertain": true,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_space_fit",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale",
+      "layout:type_numbers"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.98,
+    "dimensions": {
+      "spacing": 0.92,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.86,
+    "dimensions": {
+      "color": 0.73,
+      "icons": 0.83,
+      "contrast": 0.71,
+      "restraint": 0.77,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:color_accents",
+      "color-depth:color_semantic",
+      "color-depth:contrast_secondary",
+      "color-depth:restraint_noise",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Use one accent color, plus a small set of status colors.",
+      "Give each color one meaning, such as red only for errors and destructive actions.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.65,
+    "dimensions": {
+      "focus": 0.81,
+      "status": 0.67,
+      "ai": 0.04,
+      "control": 0,
+      "scan": 0.6,
+      "nav": 0.8,
+      "speed": 0.68,
+      "states": 0.64,
+      "copy": 0.81,
+      "trust": 0.97,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "ai",
+      "control"
+    ],
+    "majors": [
+      "dimension ai below 0.6",
+      "dimension control below 0.6",
+      "ai_steps = 0.042 (below 0.4)",
+      "ai_evidence = 0.076 (below 0.4)",
+      "ai_limits = 0.027 (below 0.4)",
+      "ai_feedback = 0.023 (below 0.4)",
+      "speed_shortcuts = 0.221 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "ai_steps",
+        "value": 0.042,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "ai_evidence",
+        "value": 0.076,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "ai_limits",
+        "value": 0.027,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "ai_feedback",
+        "value": 0.023,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "control_diff",
+        "value": 0,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "scan_overflow",
+        "value": 0,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "nav_return",
+        "value": 0.366,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "speed_shortcuts",
+        "value": 0.221,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "states_empty",
+        "value": 0.276,
+        "uncertain": true,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:control_diff",
+      "usability:scan_rows",
+      "usability:scan_overflow",
+      "usability:nav_return",
+      "usability:states_empty",
+      "usability:states_disabled_clear",
+      "usability:copy_labels"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [],
+    "fixes": [
+      "Show changes as before and after.",
+      "In empty states, say what will appear and why, and offer one action.",
+      "Show the state of each item inline with an icon, a label, or a count.",
+      "Let the user rate or correct AI output, and confirm the rating.",
+      "State the limits of the AI near its output.",
+      "Show each AI step as one short line that the user can expand."
+    ]
+  }
+}

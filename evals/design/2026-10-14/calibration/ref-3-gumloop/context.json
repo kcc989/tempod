@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Gumloop",
+    "category": "AI agent builder",
+    "platform": "web",
+    "primary_user": "Operations team member",
+    "primary_job": "Build and manage AI agents"
+  },
+  "screen": {
+    "name": "Agents",
+    "purpose": "Find an agent or create a new one"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar",
+    "Image 3: crop of the header and the agent table"
+  ]
+}
