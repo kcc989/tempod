@@ -931,6 +931,8 @@ fn render_native_row(
                     .map(|start| chat_model::format_duration(now_ms() - start))
                     .unwrap_or_default();
                 h_flex()
+                    .w_full()
+                    .min_w_0()
                     .gap_2()
                     .child(Spinner::new())
                     .child(div().flex_1().min_w_0().truncate().child(
@@ -948,6 +950,9 @@ fn render_native_row(
                     .zip(turn.ended_at)
                     .map(|(start, end)| end - start);
                 div()
+                    .w_full()
+                    .min_w_0()
+                    .truncate()
                     .text_color(color(Token::MutedForeground, cx))
                     .child(chat_model::work_summary(&items, duration))
                     .into_any_element()
@@ -971,6 +976,8 @@ fn render_native_row(
                 .upgrade()
                 .is_some_and(|v| v.read(cx).is_open(&key, running));
             div()
+                .w_full()
+                .px_4()
                 .opacity(if dim { 0.5 } else { 1. })
                 .child(
                     Collapsible::new()
@@ -979,6 +986,7 @@ fn render_native_row(
                             Button::new(SharedString::from(format!("{id}:toggle")))
                                 .ghost()
                                 .w_full()
+                                .px_0()
                                 .accessibility_label("Work")
                                 .child(header)
                                 .on_click(move |_, _, cx| {
@@ -1643,7 +1651,10 @@ fn disclosure(
         .is_some_and(|v| v.read(cx).is_open(&key, default));
     let mut button = Button::new(SharedString::from(format!("{id}:disclosure")))
         .ghost()
-        .label(header.title)
+        .w_full()
+        .px_0()
+        .accessibility_label(header.title.clone())
+        .child(div().w_full().min_w_0().truncate().child(header.title))
         .on_click(move |_, _, cx| {
             let _ = view.update(cx, |this, cx| {
                 let open = this.is_open(&key, default);
@@ -1661,9 +1672,11 @@ fn disclosure(
         button = button.font_family("monospace");
     }
     Collapsible::new()
+        .w_full()
+        .px_4()
         .open(expanded)
-        .child(div().min_w_0().truncate().child(button))
-        .content(content)
+        .child(button)
+        .content(div().min_w_0().pl_4().child(content))
         .into_any_element()
 }
 
