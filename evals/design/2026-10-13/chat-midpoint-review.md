@@ -20,11 +20,11 @@ This separates the interface width from the text measure. [W3C's visual presenta
 
 Cloudflare Workers AI `@cf/cloudflare/clef`, four stateless version 2.1 draft packs. All four calls returned HTTP 200 with all 51 answers. Full views and dense crops, requests, raw answers and metadata are under `dark/chat-midpoint/`. The packs remain uncalibrated. No prior results or desired scores were supplied.
 
-| Area | Finding |
-| --- | --- |
-| Layout | Panel space-fit 0.3067 remains weak. Long-line detection 0.2274 and overflow detection 0.0412. Scroll-edge detection 0.2833. |
-| Spacing | Grouping 1.8445/2, alignment 0.9060, consistency 0.8383. Cramped-padding detection 0.0465. |
+| Area        | Finding                                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Layout      | Panel space-fit 0.3067 remains weak. Long-line detection 0.2274 and overflow detection 0.0412. Scroll-edge detection 0.2833.   |
+| Spacing     | Grouping 1.8445/2, alignment 0.9060, consistency 0.8383. Cramped-padding detection 0.0465.                                     |
 | Color/depth | Tonal layers confidence 0.6390. Secondary contrast confidence 0.0247 requires review. Boundary visibility 0.5967 is uncertain. |
-| Usability | Status agreement 0.8966. Affordance confidence 0.1969 and disabled-state confidence 0.0534 require review. |
+| Usability   | Status agreement 0.8966. Affordance confidence 0.1969 and disabled-state confidence 0.0534 require review.                     |
 
 These are observations of the current workspace, not a controlled score comparison with earlier captures. No overall score or app-wide acceptance is claimed. The isolated commit includes only this width change and matching client specs; earlier unfinished edits remain unstaged. Nothing was pushed or deployed.

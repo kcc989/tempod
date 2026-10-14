@@ -33,57 +33,30 @@
     {
       "file": "full.png",
       "bytes": 1014928,
-      "size": [
-        3024,
-        1898
-      ],
+      "size": [3024, 1898],
       "sha256": "91922ced8070eb962317716641d921e5934704b946d5fa37a00bab22cfcbc2ea",
       "crop": null
     },
     {
       "file": "detail-1.png",
       "bytes": 76649,
-      "size": [
-        444,
-        1898
-      ],
+      "size": [444, 1898],
       "sha256": "8b038c8e53b5a241f44574bace769dcc2678fc1e78bd26e286b1e6dbeb3601a2",
-      "crop": [
-        0,
-        0,
-        444,
-        1898
-      ]
+      "crop": [0, 0, 444, 1898]
     },
     {
       "file": "detail-2.png",
       "bytes": 90119,
-      "size": [
-        2580,
-        160
-      ],
+      "size": [2580, 160],
       "sha256": "6ac0d58c43cf5cedb5baa6cb164fd5f353a5d89d689eecb5d9e03c405862ca46",
-      "crop": [
-        444,
-        0,
-        3024,
-        160
-      ]
+      "crop": [444, 0, 3024, 160]
     },
     {
       "file": "detail-3.png",
       "bytes": 108009,
-      "size": [
-        720,
-        1400
-      ],
+      "size": [720, 1400],
       "sha256": "8f8b8f596c58c7a572fa7ac31501b6bb65906e8563df56d785d340eed0330fe6",
-      "crop": [
-        2304,
-        0,
-        3024,
-        1400
-      ]
+      "crop": [2304, 0, 3024, 1400]
     }
   ],
   "checks": {},

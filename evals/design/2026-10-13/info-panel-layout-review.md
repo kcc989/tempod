@@ -6,12 +6,12 @@ The installed native capture `dark/info-below-bars/full.png` shows the full-widt
 
 Four separate stateless Clef requests succeeded with HTTP 200. No overall score or acceptance verdict was produced. The question pack remains reviews-v2.1 and is not calibrated for acceptance.
 
-| Area | Evidence from Clef | Status |
-| --- | --- | --- |
-| Layout | Panel space fit 0.2788; reading order 0.8507. Scroll cue and covered text remain uncertain. | Needs work / review |
-| Spacing | Grouping 1.7968 of 2; alignment 0.8850; consistency 0.8513. | Evidence retained; no acceptance gate |
-| Color/depth | Tonal layers confidence 0.7073. Secondary contrast 1.1894 of 2, confidence 0.0306. | Review |
-| Usability | Status agreement 0.9387; active tabs clear, confidence 0.5983. Main path and affordance have low confidence. | Review |
+| Area        | Evidence from Clef                                                                                           | Status                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| Layout      | Panel space fit 0.2788; reading order 0.8507. Scroll cue and covered text remain uncertain.                  | Needs work / review                   |
+| Spacing     | Grouping 1.7968 of 2; alignment 0.8850; consistency 0.8513.                                                  | Evidence retained; no acceptance gate |
+| Color/depth | Tonal layers confidence 0.7073. Secondary contrast 1.1894 of 2, confidence 0.0306.                           | Review                                |
+| Usability   | Status agreement 0.9387; active tabs clear, confidence 0.5983. Main path and affordance have low confidence. | Review                                |
 
 These results precede the scrollbar correction. Raw answers and capture metadata are in `dark/info-below-bars/`. They do not prove every core screen passes. Calibration and the separate Roles issue remain incomplete.
 

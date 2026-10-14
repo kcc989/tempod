@@ -15,10 +15,7 @@
         "purpose": "Inspect workspace state and open related work"
       },
       "action": "Pressed Tab",
-      "image_legend": [
-        "Image 1: screen before the action",
-        "Image 2: screen after the action"
-      ]
+      "image_legend": ["Image 1: screen before the action", "Image 2: screen after the action"]
     },
     "questions": {
       "states_feedback": {
@@ -27,15 +24,11 @@
         "criteria": [
           {
             "what": "Nothing visible changes in image 2, or the user cannot tell if the action worked",
-            "examples": [
-              "The user clicks an option and it shows no selected state"
-            ]
+            "examples": ["The user clicks an option and it shows no selected state"]
           },
           {
             "what": "A result appears, but far from the control, or only as a change that is easy to miss",
-            "examples": [
-              "A save works, but the only sign is a small toast in the far corner"
-            ]
+            "examples": ["A save works, but the only sign is a small toast in the far corner"]
           },
           {
             "what": "The control shows a pressed or selected state, and the result or a short confirmation appears near the action",

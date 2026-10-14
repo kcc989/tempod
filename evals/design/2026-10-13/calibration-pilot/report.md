@@ -16,15 +16,15 @@ The first header detail crop excluded branding over the sidebar. The full image 
 
 All scores below are raw question values on a 0–2 scale, not area averages or overall design scores. Confidence below 0.40 requires review.
 
-| Question and frame | Conductor reference | Tempo problem screen | Implication |
-| --- | ---: | ---: | --- |
-| Spacing grouping, workspace | 1.7899 | 1.8226 | Known problem scores slightly higher. |
-| Spacing grouping, sidebar | 1.8386 | 1.8404 | Almost no separation. |
-| Action affordance, sidebar | 1.2195 | 1.5351 | Known problem scores higher; both uncertain. |
-| Header overhead, corrected header | 1.6220 | 1.7266 | Wrong ordering remains; reference uncertain. |
-| Secondary disclosure, corrected header | 1.7916 | 1.7692 | Small separation despite reported excess controls. |
-| Transcript/composer alignment, corrected header | 1.3159 | 1.2291 | Both answers highly uncertain. |
-| Navigation density, sidebar supplement | 1.7094 | 1.0520 | Useful direction, but problem answer confidence is 0.0253. |
+| Question and frame                              | Conductor reference | Tempo problem screen | Implication                                                |
+| ----------------------------------------------- | ------------------: | -------------------: | ---------------------------------------------------------- |
+| Spacing grouping, workspace                     |              1.7899 |               1.8226 | Known problem scores slightly higher.                      |
+| Spacing grouping, sidebar                       |              1.8386 |               1.8404 | Almost no separation.                                      |
+| Action affordance, sidebar                      |              1.2195 |               1.5351 | Known problem scores higher; both uncertain.               |
+| Header overhead, corrected header               |              1.6220 |               1.7266 | Wrong ordering remains; reference uncertain.               |
+| Secondary disclosure, corrected header          |              1.7916 |               1.7692 | Small separation despite reported excess controls.         |
+| Transcript/composer alignment, corrected header |              1.3159 |               1.2291 | Both answers highly uncertain.                             |
+| Navigation density, sidebar supplement          |              1.7094 |               1.0520 | Useful direction, but problem answer confidence is 0.0253. |
 
 Color/depth contrast and several usability answers also remain uncertain. The pilot does not establish a reliable gate for any of the four areas. Raw answers, probabilities, confidence, metadata and exact images are retained beside this report.
 

@@ -1,122 +1,26 @@
 [
-  [
-    "workspace-reference/v3-supplement",
-    1,
-    "layout"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    2,
-    "layout"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    3,
-    "layout"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    1,
-    "spacing"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    2,
-    "spacing"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    3,
-    "spacing"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    1,
-    "usability"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    2,
-    "usability"
-  ],
-  [
-    "workspace-reference/v3-supplement",
-    3,
-    "usability"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    1,
-    "layout"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    2,
-    "layout"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    3,
-    "layout"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    1,
-    "spacing"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    2,
-    "spacing"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    3,
-    "spacing"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    1,
-    "usability"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    2,
-    "usability"
-  ],
-  [
-    "workspace-known-problems/v3-supplement",
-    3,
-    "usability"
-  ],
-  [
-    "sidebar-reference/v3-supplement",
-    1,
-    "spacing"
-  ],
-  [
-    "sidebar-reference/v3-supplement",
-    2,
-    "spacing"
-  ],
-  [
-    "sidebar-reference/v3-supplement",
-    3,
-    "spacing"
-  ],
-  [
-    "sidebar-known-problems/v3-supplement",
-    1,
-    "spacing"
-  ],
-  [
-    "sidebar-known-problems/v3-supplement",
-    2,
-    "spacing"
-  ],
-  [
-    "sidebar-known-problems/v3-supplement",
-    3,
-    "spacing"
-  ]
+  ["workspace-reference/v3-supplement", 1, "layout"],
+  ["workspace-reference/v3-supplement", 2, "layout"],
+  ["workspace-reference/v3-supplement", 3, "layout"],
+  ["workspace-reference/v3-supplement", 1, "spacing"],
+  ["workspace-reference/v3-supplement", 2, "spacing"],
+  ["workspace-reference/v3-supplement", 3, "spacing"],
+  ["workspace-reference/v3-supplement", 1, "usability"],
+  ["workspace-reference/v3-supplement", 2, "usability"],
+  ["workspace-reference/v3-supplement", 3, "usability"],
+  ["workspace-known-problems/v3-supplement", 1, "layout"],
+  ["workspace-known-problems/v3-supplement", 2, "layout"],
+  ["workspace-known-problems/v3-supplement", 3, "layout"],
+  ["workspace-known-problems/v3-supplement", 1, "spacing"],
+  ["workspace-known-problems/v3-supplement", 2, "spacing"],
+  ["workspace-known-problems/v3-supplement", 3, "spacing"],
+  ["workspace-known-problems/v3-supplement", 1, "usability"],
+  ["workspace-known-problems/v3-supplement", 2, "usability"],
+  ["workspace-known-problems/v3-supplement", 3, "usability"],
+  ["sidebar-reference/v3-supplement", 1, "spacing"],
+  ["sidebar-reference/v3-supplement", 2, "spacing"],
+  ["sidebar-reference/v3-supplement", 3, "spacing"],
+  ["sidebar-known-problems/v3-supplement", 1, "spacing"],
+  ["sidebar-known-problems/v3-supplement", 2, "spacing"],
+  ["sidebar-known-problems/v3-supplement", 3, "spacing"]
 ]

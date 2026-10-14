@@ -16,12 +16,12 @@ Replaces the constant percentage label with a neutral 48 × 6 horizontal capacit
 
 Cloudflare Workers AI `@cf/cloudflare/clef`; stateless requests, no prior results supplied. Version 2.1 draft packs remain uncalibrated. Four area calls and the supplied interaction questions each returned HTTP 200 with all 55 requested answers. Requests, raw responses, metadata and review crops are in `dark/context-meter/`.
 
-| Area | Evidence and limit |
-| --- | --- |
-| Layout | Overflow detection 0.0561; full-workspace panel space-fit 0.286 remains weak. This capture does not establish a layout pass. |
-| Spacing | Grouping 1.7999/2; alignment 0.8136; cramped-padding probability 0.0476. |
-| Color/depth | Tonal dark layers confidence 0.7671. Secondary contrast confidence 0.0498 requires review. No measured contrast claim. |
-| Usability | Status agreement 0.9228. Action affordance confidence 0.2784 and disabled-state confidence 0.0608 require review. |
+| Area        | Evidence and limit                                                                                                                                                                                                                                                                |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layout      | Overflow detection 0.0561; full-workspace panel space-fit 0.286 remains weak. This capture does not establish a layout pass.                                                                                                                                                      |
+| Spacing     | Grouping 1.7999/2; alignment 0.8136; cramped-padding probability 0.0476.                                                                                                                                                                                                          |
+| Color/depth | Tonal dark layers confidence 0.7671. Secondary contrast confidence 0.0498 requires review. No measured contrast claim.                                                                                                                                                            |
+| Usability   | Status agreement 0.9228. Action affordance confidence 0.2784 and disabled-state confidence 0.0608 require review.                                                                                                                                                                 |
 | Interaction | Selected-state probability 0.1806: the trigger has no persistent selected mark while details are open. Focus-after-Enter judgment has confidence 0.0645 and requires review; a focus ring is visible before Enter, but not in the popup capture. Layout-shift probability 0.1626. |
 
 No aggregate score or app-wide acceptance. Open-trigger selection and focus within the informational popup remain follow-up findings. No screen-reader session was performed. The popup's plain text is not present as child text in the native accessibility snapshot; the trigger's accessible name contains the percentage and complete token totals.

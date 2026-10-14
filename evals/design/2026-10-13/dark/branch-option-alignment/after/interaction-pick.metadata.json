@@ -3,9 +3,7 @@
   "version": "original-interaction",
   "calibrated": false,
   "requestSha256": "09d1e6b216eb1ce1dafd4c28bf074d9e11cc85b11f7ab4e5ece26c5358e0fa74",
-  "attemptStatuses": [
-    200
-  ],
+  "attemptStatuses": [200],
   "timestamp": "2026-10-13T22:55:04Z",
   "stateless": true,
   "priorResultsIncluded": false

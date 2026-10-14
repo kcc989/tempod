@@ -2,12 +2,7 @@
   "overallStatus": "incomplete",
   "accepted": false,
   "testSuitesRunThisContinuation": false,
-  "areas": [
-    "layout",
-    "spacing",
-    "color-depth",
-    "usability"
-  ],
+  "areas": ["layout", "spacing", "color-depth", "usability"],
   "gates": {
     "majorFindingBlocksScreen": true,
     "eachCoreScreenRequired": true,

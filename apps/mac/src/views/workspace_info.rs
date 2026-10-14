@@ -356,7 +356,7 @@ impl Render for WorkspaceInfo {
                 s.workspace.clone(),
                 s.sessions
                     .values()
-                    .filter(|s| s.status != p::SessionStatus::Closed && s.role_run_id.is_none())
+                    .filter(|s| s.status != p::SessionStatus::Closed && s.run_id.is_none())
                     .cloned()
                     .collect::<Vec<_>>(),
                 s.script_runs

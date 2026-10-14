@@ -1,3 +1,4 @@
+import type { Schema } from "effect";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { WorkspaceSummary } from "@tempo/protocol";
 import { ArchiveIcon } from "lucide-react";
@@ -12,8 +13,12 @@ import { useProjects } from "~/ui/hooks/useProjects";
 import { formatRelative } from "~/ui/lib/format";
 import { CONFIRM_TEXT, confirm } from "~/ui/state/workspace-ui";
 
+interface HistorySearch {
+  readonly view?: "saved";
+}
+
 export const Route = createFileRoute("/_app/history")({
-  validateSearch: (search: Record<string, unknown>): { view?: "saved" } => ({
+  validateSearch: (search: Schema.JsonObject): HistorySearch => ({
     view: search.view === "saved" ? "saved" : undefined,
   }),
   component: HistoryPage,

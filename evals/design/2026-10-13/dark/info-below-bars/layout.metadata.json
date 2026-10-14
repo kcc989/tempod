@@ -4,9 +4,7 @@
   "calibrated": false,
   "acceptanceEnabled": false,
   "requestSha256": "3c5f7b5e004adfaa6b6d43253398891df49c8beb5b21258d23d798bcb5e397cc",
-  "attemptStatuses": [
-    200
-  ],
+  "attemptStatuses": [200],
   "stateless": true,
   "priorResultsIncluded": false,
   "timestamp": "2026-10-14T01:43:43Z"

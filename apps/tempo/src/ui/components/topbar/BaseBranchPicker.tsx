@@ -38,6 +38,7 @@ export function BaseBranchMenu({
   onDone: () => void;
 }) {
   const [open, setOpen] = useState(false);
+
   return (
     <DropdownMenuSub open={open} onOpenChange={setOpen}>
       <DropdownMenuSubTrigger disabled={locked}>

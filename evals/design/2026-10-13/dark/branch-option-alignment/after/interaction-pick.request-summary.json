@@ -13,10 +13,7 @@
       "purpose": "Choose a repository branch and workspace source before creating a workspace"
     },
     "action": "Clicked \"auth-enrollment-flow\"",
-    "image_legend": [
-      "Image 1: before the action",
-      "Image 2: after the action"
-    ]
+    "image_legend": ["Image 1: before the action", "Image 2: after the action"]
   },
   "images": [
     {
@@ -39,21 +36,15 @@
       "criteria": [
         {
           "what": "Nothing visible changes in image 2, or the user cannot tell if the action worked",
-          "examples": [
-            "The user clicks an option and it shows no selected state"
-          ]
+          "examples": ["The user clicks an option and it shows no selected state"]
         },
         {
           "what": "A result appears, but far from the control, or only as a change that is easy to miss",
-          "examples": [
-            "A save works, but the only sign is a small toast in the far corner"
-          ]
+          "examples": ["A save works, but the only sign is a small toast in the far corner"]
         },
         {
           "what": "The control shows a pressed or selected state, and the result or a short confirmation appears near the action",
-          "examples": [
-            "After a thumbs-up, the button fills and a toast says 'Thank you for your feedback!'"
-          ]
+          "examples": ["After a thumbs-up, the button fills and a toast says 'Thank you for your feedback!'"]
         }
       ]
     },

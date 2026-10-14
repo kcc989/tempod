@@ -4,9 +4,7 @@
   "version": "3.0-supplement-draft",
   "calibrated": false,
   "requestSha256": "41ad0d8539c9e116bcb08012e0a69d02c741bbfa15b8309ba80f1310ff9fd02e",
-  "attemptStatuses": [
-    200
-  ],
+  "attemptStatuses": [200],
   "timestamp": "2026-10-13T22:13:00Z",
   "stateless": true,
   "priorResultsIncluded": false,

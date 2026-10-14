@@ -58,7 +58,7 @@ export function WorkspaceInfo({ workspaceId, phone = false }: { workspaceId: str
   const power = powerAction(w.state);
 
   const chats = Object.values(state.sessions)
-    .filter((s) => s.status !== "closed" && !s.roleRunId)
+    .filter((s) => s.status !== "closed" && !s.runId)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
   const runs = Object.values(state.scriptRuns).filter((r) => r.status === "running");
@@ -70,7 +70,12 @@ export function WorkspaceInfo({ workspaceId, phone = false }: { workspaceId: str
         <h2 className="min-w-0 flex-1 truncate font-medium">
           {project ? `${project.owner}/${project.name}` : w.title}
         </h2>
-        <Button variant="ghost" size="icon-sm" aria-label="Close Info" onClick={() => closeWorkspaceInfo(workspaceId)}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close Info"
+          onClick={() => closeWorkspaceInfo(workspaceId)}
+        >
           <XIcon />
         </Button>
       </div>
@@ -112,11 +117,15 @@ export function WorkspaceInfo({ workspaceId, phone = false }: { workspaceId: str
             )}
           </span>
         </Button>
-        <Button variant="ghost" className="w-full justify-start" onClick={() => {
-          openGuide(workspaceId);
+        <Button
+          variant="ghost"
+          className="w-full justify-start"
+          onClick={() => {
+            openGuide(workspaceId);
 
-          if (phone) setPhonePane("tools");
-        }}>
+            if (phone) setPhonePane("tools");
+          }}
+        >
           <BookOpenIcon />
           Guides
         </Button>

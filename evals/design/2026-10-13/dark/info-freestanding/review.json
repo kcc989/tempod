@@ -7,12 +7,7 @@
   "areaReviews": {
     "layout": {
       "answeredQuestions": 13,
-      "uncertainQuestions": [
-        "focus_content_share",
-        "overflow_scroll_cue",
-        "type_scale",
-        "type_mono"
-      ]
+      "uncertainQuestions": ["focus_content_share", "overflow_scroll_cue", "type_scale", "type_mono"]
     },
     "spacing": {
       "answeredQuestions": 7,
@@ -20,10 +15,7 @@
     },
     "color-depth": {
       "answeredQuestions": 12,
-      "uncertainQuestions": [
-        "color_role",
-        "contrast_secondary"
-      ]
+      "uncertainQuestions": ["color_role", "contrast_secondary"]
     },
     "usability": {
       "answeredQuestions": 19,
@@ -595,9 +587,7 @@
             },
             "1": {
               "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
-              "examples": [
-                "A filled 'Create' button next to a filled 'Upgrade' button of the same size"
-              ]
+              "examples": ["A filled 'Create' button next to a filled 'Upgrade' button of the same size"]
             },
             "2": {
               "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
@@ -627,9 +617,7 @@
             },
             "1": {
               "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
-              "examples": [
-                "A filled 'Create' button next to a filled 'Upgrade' button of the same size"
-              ]
+              "examples": ["A filled 'Create' button next to a filled 'Upgrade' button of the same size"]
             },
             "2": {
               "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
@@ -660,9 +648,7 @@
             },
             "1": {
               "what": "Most actions look clickable, but some look like labels or labels look like buttons",
-              "examples": [
-                "Buttons have borders, but one text action in the header has no style"
-              ]
+              "examples": ["Buttons have borders, but one text action in the header has no style"]
             },
             "2": {
               "what": "Every action looks clickable through a button shape, an icon, a link color, or a chevron, and static text never does",
@@ -690,9 +676,7 @@
             },
             "1": {
               "what": "Most actions look clickable, but some look like labels or labels look like buttons",
-              "examples": [
-                "Buttons have borders, but one text action in the header has no style"
-              ]
+              "examples": ["Buttons have borders, but one text action in the header has no style"]
             },
             "2": {
               "what": "Every action looks clickable through a button shape, an icon, a link color, or a chevron, and static text never does",
@@ -716,15 +700,11 @@
           "legend": {
             "0": {
               "what": "Items show no state; the user must open each item to learn it",
-              "examples": [
-                "A list of project names with no status, owner, or date"
-              ]
+              "examples": ["A list of project names with no status, owner, or date"]
             },
             "1": {
               "what": "Some items show state, or state uses color only, with no icon, label, or count",
-              "examples": [
-                "Rows have a colored left border but no label"
-              ]
+              "examples": ["Rows have a colored left border but no label"]
             },
             "2": {
               "what": "Each item that can change shows its state inline with an icon, a label, or a count",
@@ -748,15 +728,11 @@
           "legend": {
             "0": {
               "what": "Items show no state; the user must open each item to learn it",
-              "examples": [
-                "A list of project names with no status, owner, or date"
-              ]
+              "examples": ["A list of project names with no status, owner, or date"]
             },
             "1": {
               "what": "Some items show state, or state uses color only, with no icon, label, or count",
-              "examples": [
-                "Rows have a colored left border but no label"
-              ]
+              "examples": ["Rows have a colored left border but no label"]
             },
             "2": {
               "what": "Each item that can change shows its state inline with an icon, a label, or a count",

@@ -1,62 +1,14 @@
 [
-  [
-    "workspace-reference/v3-header-complete",
-    1,
-    "layout"
-  ],
-  [
-    "workspace-reference/v3-header-complete",
-    2,
-    "layout"
-  ],
-  [
-    "workspace-reference/v3-header-complete",
-    3,
-    "layout"
-  ],
-  [
-    "workspace-reference/v3-header-complete",
-    1,
-    "usability"
-  ],
-  [
-    "workspace-reference/v3-header-complete",
-    2,
-    "usability"
-  ],
-  [
-    "workspace-reference/v3-header-complete",
-    3,
-    "usability"
-  ],
-  [
-    "workspace-known-problems/v3-header-complete",
-    1,
-    "layout"
-  ],
-  [
-    "workspace-known-problems/v3-header-complete",
-    2,
-    "layout"
-  ],
-  [
-    "workspace-known-problems/v3-header-complete",
-    3,
-    "layout"
-  ],
-  [
-    "workspace-known-problems/v3-header-complete",
-    1,
-    "usability"
-  ],
-  [
-    "workspace-known-problems/v3-header-complete",
-    2,
-    "usability"
-  ],
-  [
-    "workspace-known-problems/v3-header-complete",
-    3,
-    "usability"
-  ]
+  ["workspace-reference/v3-header-complete", 1, "layout"],
+  ["workspace-reference/v3-header-complete", 2, "layout"],
+  ["workspace-reference/v3-header-complete", 3, "layout"],
+  ["workspace-reference/v3-header-complete", 1, "usability"],
+  ["workspace-reference/v3-header-complete", 2, "usability"],
+  ["workspace-reference/v3-header-complete", 3, "usability"],
+  ["workspace-known-problems/v3-header-complete", 1, "layout"],
+  ["workspace-known-problems/v3-header-complete", 2, "layout"],
+  ["workspace-known-problems/v3-header-complete", 3, "layout"],
+  ["workspace-known-problems/v3-header-complete", 1, "usability"],
+  ["workspace-known-problems/v3-header-complete", 2, "usability"],
+  ["workspace-known-problems/v3-header-complete", 3, "usability"]
 ]

@@ -347,6 +347,7 @@ export function ModelPicker({
 }) {
   const level = thoughtLevel ? currentValueLabel(thoughtLevel) : "";
   const suffix = level && !/^(agent )?default$/i.test(level) ? ` · ${level}` : "";
+
   return (
     <ComposerModelMenu
       label={`${option ? currentValueLabel(option) : "Agent settings"}${suffix}`}
@@ -387,6 +388,7 @@ export function ModelSettings({
   onMode: (id: string) => void;
 }) {
   const configs = [...(thoughtLevel ? [thoughtLevel] : []), ...options];
+
   return (
     <>
       {configs.map((o) =>

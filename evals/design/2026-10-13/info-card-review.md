@@ -14,12 +14,12 @@ No tests or native test targets ran. Web type checking and changed-file lint pas
 
 Four before and four after requests returned HTTP 200 and all 51 unchanged draft-v2.1 area answers. Full frames and detail crops remain in each capture folder. There is no overall or area acceptance score. Comparisons include changes in the chat pane width and cannot isolate every answer to the Info card.
 
-| Area | Result retained |
-| --- | --- |
-| Layout | Needs work: panel space-fit probability changed from 0.1753 to 0.2268 and remains low. Clef supplies no location-specific reason. |
-| Spacing | Grouping, alignment and consistency answers increased slightly; the uncalibrated rubric does not establish a pass. |
-| Color/depth | Tonal layers confidence is 0.7288. Secondary contrast remains review, confidence 0.0386. |
-| Usability | Several answers remain uncertain. Affordance increased, but primary-path and navigation answers declined. The shape correction does not establish a screen pass. |
+| Area        | Result retained                                                                                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layout      | Needs work: panel space-fit probability changed from 0.1753 to 0.2268 and remains low. Clef supplies no location-specific reason.                                |
+| Spacing     | Grouping, alignment and consistency answers increased slightly; the uncalibrated rubric does not establish a pass.                                               |
+| Color/depth | Tonal layers confidence is 0.7288. Secondary contrast remains review, confidence 0.0386.                                                                         |
+| Usability   | Several answers remain uncertain. Affordance increased, but primary-path and navigation answers declined. The shape correction does not establish a screen pass. |
 
 Original-question interactions show controls selected probability 0.7053, with uncertain overall feedback confidence 0.1093. Keyboard focus is `visible`, confidence 0.8446. The same Tab pair has a low, uncertain generic action-feedback score, which is retained rather than suppressed. The full answers, uncertainty list and comparisons are in `dark/info-freestanding/review.json`.
 

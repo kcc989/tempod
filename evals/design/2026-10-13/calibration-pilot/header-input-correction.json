@@ -3,24 +3,14 @@
     "case": "workspace-reference",
     "questionsChanged": false,
     "sourceChanged": false,
-    "headerCrop": [
-      0,
-      0,
-      3024,
-      256
-    ],
+    "headerCrop": [0, 0, 3024, 256],
     "reason": "Previous dense header crop omitted the portion above the sidebar; this crop includes the entire application header."
   },
   {
     "case": "workspace-known-problems",
     "questionsChanged": false,
     "sourceChanged": false,
-    "headerCrop": [
-      0,
-      0,
-      3024,
-      256
-    ],
+    "headerCrop": [0, 0, 3024, 256],
     "reason": "Previous dense header crop omitted the portion above the sidebar; this crop includes the entire application header."
   }
 ]
