@@ -32,7 +32,7 @@ agent/deployment tasks are never cached. Task archives can be restored across
 lockfile changes within the same OS/Bun namespace; Turbo checks the resolved
 dependencies and inputs before reusing any result. Successful task results are
 saved even if another check fails, but not after cancellation or failed dependency
-installation. Each run/attempt has a distinct archive key. Chromium is keyed by
+installation. Each run/attempt has a distinct archive key. Turbo writes a run summary for every invocation (`TURBO_RUN_SUMMARY`). After the checks, `scripts/ci-cache.ts` saves the archive only when the run wrote new entries. When every check passed, it first removes entries whose task hash no run used, so the archive does not keep growing (it reached 434 to 565 MB). A failed run keeps every entry. Chromium is keyed by
 the installed Playwright version rather than unrelated package script changes.
 
 The daemon build and production app CI build are cached. `build:ci` fixes the app's
@@ -105,6 +105,15 @@ including both browser fixture builds; all 27 browser cases still executed.
 Three Worker files took 5m22s with cold tasks, despite reaching 4m09s when
 unchanged tasks were cached. Use the full cold workload to evaluate concurrency,
 not only a cached rerun. The force flag is not part of normal CI.
+
+## Timing review (runs 196 to 210, 2026-10-14)
+
+Worker tests were the critical path in all 14 runs: median 219 s, max 293 s. Five runs failed on the 300-second deadline or the six-minute job limit. Findings and changes:
+
+- Worker results never came from the cache on CI. Locally an unchanged Worker task is a full Turbo hit. On CI, most PRs change Worker inputs, and a push to `main` cannot restore caches saved by pull request runs (GitHub scopes caches to the branch), so `main` always reruns the PR's work. A shared remote Turbo cache would fix the `main` case; it needs a new service and an owner decision.
+- The Worker suite is CPU-bound on the four-core runner. Alone it takes 77 s locally (192 s of CPU), and 128 s while the other stages run. Each file spends about 10 s importing the Worker app into workerd before its first case. Eight concurrent cases per file instead of four took 75 to 76 s, the same as four, so the concurrency limits are unchanged. Vitest's `experimental.fsModuleCache` cannot be used: workerd cannot read the cache path.
+- Run 210 passed every check, then spent 60 s in "Cleaning up orphan processes" and hit the job limit. `bun run ci` now starts each check in its own process group and kills the group when the check ends or the deadline passes.
+- Bun's install cache is 2.8 GB; restoring it would cost about as much as the 18 to 34 s install, so dependencies are still installed fresh.
 
 ## Test audit
 

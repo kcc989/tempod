@@ -63,9 +63,11 @@ const baseImage = pinned.base_image_digest
 // 2. The deploy config. No `migrations` array: it conflicts with `exports` (01).
 let workspaceImage: { image: string } | undefined;
 
-if (process.env.TEMPO_BUILD_CA && !process.argv.includes("--prepare")) {
-  // Wrangler beta's Docker builder cannot pass BuildKit secrets. Build with CA trust here.
+if (!process.argv.includes("--prepare")) {
+  // Build and push here, then pin the digest: a Wrangler-built named image can keep serving the
+  // previous image. Wrangler beta's Docker builder also cannot pass the BuildKit CA secret.
   const tag = "tempo-workspace:production";
+  const ca = process.env.TEMPO_BUILD_CA;
   run(
     "docker",
     [
@@ -74,8 +76,7 @@ if (process.env.TEMPO_BUILD_CA && !process.argv.includes("--prepare")) {
       "linux/amd64",
       "-f",
       "container/Dockerfile",
-      "--secret",
-      `id=proxy_ca,src=${process.env.TEMPO_BUILD_CA}`,
+      ...(ca ? ["--secret", `id=proxy_ca,src=${ca}`] : []),
       "-t",
       tag,
       ...Object.entries({ ...pinned.build_args, BASE_IMAGE: baseImage }).flatMap(([key, value]) => [
@@ -95,6 +96,14 @@ if (process.env.TEMPO_BUILD_CA && !process.argv.includes("--prepare")) {
 
   if (inspected.status !== 0 || !/^sha256:[a-f0-9]{64}$/.test(digest ?? ""))
     throw new Error("Cannot identify the built production image.");
+
+  const baked = spawnSync(
+    "docker",
+    ["run", "--rm", "--entrypoint", "grep", tag, "-c", "-F", buildId, "/usr/local/bin/tempod"],
+    { encoding: "utf8" },
+  );
+
+  if (baked.status !== 0) throw new Error(`The built image does not contain tempod ${buildId}.`);
   const immutableTag = `tempo-workspace:${digest.slice(7)}`;
   run("docker", ["tag", tag, immutableTag], root);
   run("bunx", ["wrangler", "containers", "push", immutableTag], app);

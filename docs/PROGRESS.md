@@ -250,6 +250,7 @@ The owner elected to test locally. These source milestones do not claim an M1–
 - [ ] Spikes S1–S20 (gate A).
 - [ ] Acceptance tests AT-1–AT-52, e2e and conformance runs.
 - [ ] First real deploy.
+- [ ] Forge demo (`bun run test:demo`): create an Artifacts repo, build, CI on push, Tempo PR, gated merge. Written; not yet run against the deployment.
 
 ## Decisions waiting on the owner
 

@@ -499,3 +499,7 @@ The owner asked for a fork of the organizations and social work (PR #56) for a s
 | Mac visibility | A segmented `Private` / `Public` choice with an inline confirmation | GPUI Kit has no compact select in the repository header |
 
 Verification: four Worker cases in `public-profile.cases.ts` (visitor reads and refusals, pins and profile order, slugs on insert, usernames and bios). The forward-migration case also checks slugs, duplicate names and the case-insensitive unique index. Removing the public check from `requireReadableProject` made the visitor case fail. Web component cases for the visibility control, the profile and the public project page; Mac `profile_model` unit cases and a repository view case for confirm, pin and unpin on `private`. Hosted sign-in to set a real username, and visitor browsing of a deployed Tempo, have not been run.
+
+## Deploy pins the workspace image (2026-10-14)
+
+A deploy updated the Worker but new workspaces kept the previous image: tempod reported `0.1.0`, so native repos could not bootstrap (`CLONE_FAILED`). `scripts/deploy-worker.ts` now always builds and pushes the image and pins its digest; `TEMPO_BUILD_CA` only adds the CA secret. The deploy fails if the image's tempod does not contain the deploy's build id. tempod read `process.env["TEMPO_BUILD_ID"]`, which `bun build --env` does not inline, so every image reported the `package.json` version; it now reads `process.env.TEMPO_BUILD_ID`. `--prepare` still writes the Dockerfile-based config without building.
