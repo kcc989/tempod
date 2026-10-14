@@ -6,7 +6,7 @@ FROM ${BASE_IMAGE} AS workspace
 
 ARG TINI_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates git ripgrep fd-find tmux inotify-tools curl jq unzip zstd \
+    bash zsh ca-certificates git ripgrep fd-find tmux inotify-tools curl jq unzip zstd \
     tini=${TINI_VERSION} procps iproute2 python3 python3-venv build-essential libnss3-tools \
  && rm -rf /var/lib/apt/lists/*
 
@@ -22,14 +22,22 @@ RUN --mount=type=secret,id=proxy_ca \
     curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v${BUN_VERSION}"
 RUN corepack enable
 
+# Oh My Zsh, read-only for everyone; ZSH_CUSTOM lives in the home folder (Shell and dotfiles)
+ARG OH_MY_ZSH_REF
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export GIT_SSL_CAINFO=/run/secrets/proxy_ca; fi; \
+    git clone --filter=blob:none https://github.com/ohmyzsh/ohmyzsh.git /opt/oh-my-zsh \
+ && git -C /opt/oh-my-zsh checkout --detach "${OH_MY_ZSH_REF}" && rm -rf /opt/oh-my-zsh/.git
+
 COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
+COPY container/home/ /etc/tempo/home-defaults/
 COPY --chmod=0644 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
 
 RUN groupmod -n tempo node \
- && usermod -l tempo -d /home/tempo -s /bin/bash node \
- && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent \
+ && usermod -l tempo -d /home/tempo -s /bin/zsh node \
+ && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent /home/tempo/.oh-my-zsh-custom \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
 

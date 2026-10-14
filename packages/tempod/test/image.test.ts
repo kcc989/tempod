@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
+import { DEFAULT_TMUX_CONF, DEFAULT_ZSHRC } from "@tempo/protocol";
 import { sleep } from "./helpers.ts";
 
 describe.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")("workspace image", () => {
@@ -27,6 +28,20 @@ describe.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")("workspace image", () =
       expect(Bun.which(binary)).not.toBeNull();
 
     expect(() => accessSync("/opt/tempo/pi/tempo-profile.ts", constants.R_OK)).not.toThrow();
+  });
+
+  test("logs tempo in to zsh with Oh My Zsh and keeps the home defaults", () => {
+    expect(Bun.which("zsh")).not.toBeNull();
+    expect(() => accessSync("/opt/oh-my-zsh/oh-my-zsh.sh", constants.R_OK)).not.toThrow();
+    expect(() => accessSync("/opt/oh-my-zsh", constants.W_OK)).toThrow();
+
+    const passwd = readFileSync("/etc/passwd", "utf8")
+      .split("\n")
+      .find((l) => l.startsWith("tempo:"));
+
+    expect(passwd?.split(":")[6]).toBe("/bin/zsh");
+    expect(readFileSync("/etc/tempo/home-defaults/.zshrc", "utf8")).toBe(DEFAULT_ZSHRC);
+    expect(readFileSync("/etc/tempo/home-defaults/.tmux.conf", "utf8")).toBe(DEFAULT_TMUX_CONF);
   });
 
   test("reaps an orphaned script child after it exits", async () => {

@@ -1,6 +1,7 @@
 import { readContainerVersions } from "./versions.ts";
 // CI check (01, Container image): the Dockerfile and versions.json must agree.
 import { readFileSync } from "node:fs";
+import { DEFAULT_TMUX_CONF, DEFAULT_ZSHRC } from "../packages/protocol/src/dotfiles.ts";
 
 const dir = new URL(".", import.meta.url);
 
@@ -38,6 +39,30 @@ for (const arg of Object.keys(versions.build_args)) {
 
 if (!dockerfile.includes("tini=${TINI_VERSION}"))
   errors.push("tini must use TINI_VERSION from versions.json");
+
+const ohMyZsh = versions.build_args["OH_MY_ZSH_REF"];
+
+if (!ohMyZsh || !/^[0-9a-f]{40}$/.test(ohMyZsh))
+  errors.push("OH_MY_ZSH_REF must be a full commit SHA in versions.json");
+
+if (!dockerfile.includes('checkout --detach "${OH_MY_ZSH_REF}"'))
+  errors.push("Oh My Zsh must be checked out at OH_MY_ZSH_REF from versions.json");
+
+for (const [file, expected] of [
+  [".zshrc", DEFAULT_ZSHRC],
+  [".tmux.conf", DEFAULT_TMUX_CONF],
+] as const) {
+  let actual: string | null = null;
+
+  try {
+    actual = readFileSync(new URL(`home/${file}`, dir), "utf8");
+  } catch {
+    // reported below
+  }
+
+  if (actual !== expected)
+    errors.push(`container/home/${file} differs from packages/protocol/src/dotfiles.ts`);
+}
 
 if (!dockerfile.includes('ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]'))
   errors.push("tini must launch tempod as the workspace entrypoint");

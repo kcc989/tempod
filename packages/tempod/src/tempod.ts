@@ -17,6 +17,7 @@ import { capList, CHANGED_FILES_MAX, MESSAGE_BUDGET } from "./bounds.ts";
 import type { Config } from "./config.ts";
 import { CodexCredentials } from "./credentials.ts";
 import { TempodDb } from "./db.ts";
+import { Dotfiles } from "./dotfiles.ts";
 import { findBinary, run } from "./exec.ts";
 import { listFiles, readWorkspaceFile, searchFiles } from "./fs.ts";
 import { Git, summarize } from "./git.ts";
@@ -73,6 +74,7 @@ export class Tempod {
   readonly codex: CodexCredentials;
   readonly settings: SettingsState;
   readonly artifacts: Artifacts;
+  readonly dotfiles: Dotfiles;
   readonly handlers: Handlers;
   private readonly caEnv: Record<string, string>;
   private scriptEnv: Record<string, string> = {};
@@ -165,6 +167,13 @@ export class Tempod {
       stageDir: config.artifactsStage,
       emit,
       runningTurnId: (sessionId) => this.agents.runningTurnId(sessionId),
+    });
+    this.dotfiles = new Dotfiles({
+      home: config.home,
+      stateDir: config.stateDir,
+      defaultsDir: config.homeDefaults,
+      env: () => this.baseEnv(),
+      log: this.log,
     });
     this.codex = new CodexCredentials({
       codexHome: config.codexHome,
@@ -400,6 +409,7 @@ export class Tempod {
       "fs.search": async (p) => ({
         matches: await searchFiles(ws, this.baseEnv(), p.query, p.regex, p.maxResults),
       }),
+      "dotfiles.apply": (p) => this.dotfiles.apply(p.source),
       "terminal.list": async () => ({ terminalIds: await this.terminals() }),
       shutdown: async () => {
         await this.shutdown();
