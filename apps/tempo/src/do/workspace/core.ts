@@ -34,7 +34,15 @@ import {
 } from "@tempo/protocol";
 import { resolveSettings } from "@tempo/settings";
 import { Match, Schema, Option } from "effect";
-import { environments, mcpServers, projects, workspaces, type McpServerRow } from "../../db/d1.ts";
+import {
+  dotfiles,
+  environments,
+  mcpServers,
+  projects,
+  workspaces,
+  type DotfilesRow,
+  type McpServerRow,
+} from "../../db/d1.ts";
 import { EMPTY_PROMPT, json, readItemContent, itemContentDecoder, type ItemContent } from "../../db/json.ts";
 import { parseEnvironment, type EnvironmentConfig } from "../../lib/environments.ts";
 import {
@@ -312,6 +320,16 @@ export class WorkspaceCore {
       .where(and(eq(mcpServers.userId, this.ws().userId), eq(mcpServers.enabled, 1)))
       .orderBy(asc(mcpServers.name))
       .all();
+  }
+  /** The owner's shell files row (01, Shell and dotfiles), read from D1 by the workspace's owner. */
+  async dotfiles(): Promise<DotfilesRow | null> {
+    return (
+      (await drizzleD1(this.env.DB)
+        .select()
+        .from(dotfiles)
+        .where(eq(dotfiles.userId, this.ws().userId))
+        .get()) ?? null
+    );
   }
   credentials() {
     const userId = this.wsOrNull()?.userId ?? this.kv<string>("catalogUserId") ?? this.ciUserId();

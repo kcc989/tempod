@@ -101,11 +101,19 @@ const revokeInitialToken = async (env: HandlerCtx["env"], name: string, token: s
   }
 };
 
+/** 09: `dotfiles-` names hold owners' shell files (01, Shell and dotfiles) and never become projects. */
+const validateProjectRepoName = (name: string): void => {
+  validateArtifactName(name);
+
+  if (name.toLowerCase().startsWith("dotfiles-"))
+    throw new TempoError("VALIDATION_FAILED", undefined, "Names that start with dotfiles- are reserved.");
+};
+
 export const createRepository = async (
   ctx: HandlerCtx,
   { name, description, defaultBranch }: FnInput<"createRepository">,
 ): Promise<FnOutput<"createRepository">> => {
-  validateArtifactName(name);
+  validateProjectRepoName(name);
   validateArtifactBranch(defaultBranch ?? "main");
   requireArtifacts(ctx.env);
   const linked = await existingRepository(ctx, name);
@@ -138,7 +146,7 @@ export const importRepository = async (
   ctx: HandlerCtx,
   { name, url, description }: FnInput<"importRepository">,
 ): Promise<FnOutput<"importRepository">> => {
-  validateArtifactName(name);
+  validateProjectRepoName(name);
   let remote: URL;
 
   try {
@@ -186,7 +194,7 @@ export const linkArtifactRepository = async (
   ctx: HandlerCtx,
   { name }: FnInput<"linkArtifactRepository">,
 ): Promise<FnOutput<"linkArtifactRepository">> => {
-  validateArtifactName(name);
+  validateProjectRepoName(name);
 
   return linkRepository(ctx, await repoInfo(ctx.env, name));
 };

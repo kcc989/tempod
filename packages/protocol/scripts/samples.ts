@@ -1003,6 +1003,8 @@ export const INPUT_SAMPLES = {
     { ...ws, proposalId: uid(903), status: "applied" },
     { ...ws, proposalId: uid(903), status: "dismissed" },
   ],
+  getDotfiles: [{}],
+  updateDotfiles: [{ files: [{ path: ".zshrc", content: "export EDITOR=vim\n" }] }, { files: [] }],
   listMcpServers: [{}],
   saveMcpServer: [
     {
@@ -1042,6 +1044,20 @@ export const OUTPUT_SAMPLES = {
     },
   ],
   SendRunToChatOut: [{ turnId: uid(926) }],
+  GetDotfilesOut: [
+    {
+      files: [{ path: ".tmux.conf", content: "set -g status off\n" }],
+      defaults: [{ path: ".tmux.conf", content: "set -g status off\n" }],
+      saved: false,
+      updatedAt: null,
+    },
+    {
+      files: [{ path: ".config/starship.toml", content: "add_newline = false\n" }],
+      defaults: [],
+      saved: true,
+      updatedAt: at(12),
+    },
+  ],
   RequestAgentOut: [{ changeId: uid(921), runId: uid(920) }],
 
   Empty: [{}],

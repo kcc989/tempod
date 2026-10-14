@@ -616,6 +616,7 @@ describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
       "tempod.connect",
       "repo.clone",
       "settings.read",
+      "dotfiles.apply",
       "setup.run",
     ]);
     expect(d.op!.steps[0]!.status).toBe("running");
@@ -2520,6 +2521,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       secrets: [],
       injectors: [],
       mcp: [],
+      dotfiles: null,
     });
     await useSettings(w, DEFAULT_EFFECTIVE);
     expect(await w.stub.getEgressConfig()).toEqual({
@@ -2533,6 +2535,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       secrets: [],
       injectors: [],
       mcp: [],
+      dotfiles: null,
     });
   });
   it("getEgressConfig fails for a workspace that was never created", async ({ expect }) => {
@@ -2615,6 +2618,7 @@ describe.concurrent("getDiagnostics", { timeout: 30_000 }, () => {
     expect(create).toMatchObject({ kind: "create", status: "done", errorCode: null, errorDetail: null });
     expect(Object.keys(create.timings).sort()).toEqual([
       "container.start",
+      "dotfiles.apply",
       "repo.clone",
       "settings.read",
       "setup.run",

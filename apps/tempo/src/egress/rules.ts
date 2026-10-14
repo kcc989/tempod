@@ -46,6 +46,8 @@ export interface EgressConfig {
   readonly injectors?: ReadonlyArray<Injector>;
   /** A CI job's container (10, Egress): read-only repository access and no credentials. */
   readonly ci?: boolean;
+  /** The owner's dotfiles remote (01, Shell and dotfiles); read side only. */
+  readonly dotfiles?: { readonly cloneUrl: string } | null;
 }
 
 export const isRepoPath = (path: string, owner: string, repo: string): boolean => {
@@ -145,6 +147,7 @@ export type Decision =
           | "github-basic"
           | "github-bearer"
           | "artifact-bearer"
+          | "dotfiles-bearer"
           | "openrouter"
           | "anthropic"
           | "openai";
@@ -169,6 +172,9 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
   if (url.protocol === "http:") return policy(8, host, config);
 
   if (config.ci) return decideForCi(url, headers, host, config);
+
+  if (config.dotfiles && isDotfilesRead(url, config.dotfiles.cloneUrl))
+    return { rule: 2, action: "forward", set: { name: "authorization", value: "dotfiles-bearer" } };
 
   if (config.provider === "artifacts" && config.cloneUrl) {
     const remote = new URL(config.cloneUrl);
@@ -223,6 +229,21 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
   if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
 
   return policy(8, host, config);
+};
+
+/** 09, Git transport: only fetches from the owner's dotfiles remote get its (read) token. */
+const isDotfilesRead = (url: URL, cloneUrl: string): boolean => {
+  const remote = new URL(cloneUrl);
+  const endpoint = url.pathname.slice(remote.pathname.length);
+
+  return (
+    remote.protocol === "https:" &&
+    url.protocol === "https:" &&
+    url.origin === remote.origin &&
+    url.pathname.startsWith(remote.pathname) &&
+    ((endpoint === "/info/refs" && url.searchParams.get("service") === "git-upload-pack") ||
+      endpoint === "/git-upload-pack")
+  );
 };
 
 /** 10, Egress: only fetches from the project's remote get a (read) token; nothing else gets a credential. */

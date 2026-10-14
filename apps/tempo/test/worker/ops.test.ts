@@ -364,7 +364,14 @@ describe("op tables", () => {
   it("lists the steps of every op exactly as in 03 Ops and their steps", ({ expect }) => {
     // 03 Ops and their steps (done is implied after the last step)
     expect(OP_STEPS).toEqual({
-      create: ["container.start", "tempod.connect", "repo.clone", "settings.read", "setup.run"],
+      create: [
+        "container.start",
+        "tempod.connect",
+        "repo.clone",
+        "settings.read",
+        "dotfiles.apply",
+        "setup.run",
+      ],
       wake: [
         "container.start",
         "tempod.connect",
@@ -373,6 +380,7 @@ describe("op tables", () => {
         "home.restore",
         "settings.read",
         "setup.run",
+        "dotfiles.apply",
         "sessions.markReload",
         "artifacts.resume",
       ],
@@ -416,6 +424,7 @@ describe("op tables", () => {
       ["repo.applyCheckpoint", 2, "skip"],
       ["home.restore", 2, "skip"],
       ["settings.read", 3, "skip"],
+      ["dotfiles.apply", 2, "skip"],
       ["setup.run", 1, "skip"],
       ["script.archive", 1, "skip"],
       ["git.checkpoint", 3, "skip"],
@@ -445,6 +454,7 @@ describe("op tables", () => {
       ["repo.applyCheckpoint", 5 * MIN],
       ["home.restore", 5 * MIN],
       ["settings.read", 10_000],
+      ["dotfiles.apply", 2 * MIN],
       ["setup.run", 30 * MIN],
       ["script.archive", 120_000],
       ["git.checkpoint", 2 * MIN],
@@ -481,7 +491,7 @@ describe("op tables", () => {
 });
 
 describe("create op", { timeout: 60_000 }, () => {
-  it("runs container.start → tempod.connect → repo.clone → settings.read → setup.run and records each step's time", async ({
+  it("runs container.start → tempod.connect → repo.clone → settings.read → dotfiles.apply → setup.run and records each step's time", async ({
     expect,
   }) => {
     const w = await seedWs();
@@ -497,6 +507,7 @@ describe("create op", { timeout: 60_000 }, () => {
       "tempod.connect",
       "repo.clone",
       "settings.read",
+      "dotfiles.apply",
       "setup.run",
     ]);
 
@@ -509,9 +520,11 @@ describe("create op", { timeout: 60_000 }, () => {
 
     const order = w.tempod.requests
       .map((r) => r.op)
-      .filter((o) => o === "repo.clone" || o === "settings.read");
+      .filter((o) => o === "repo.clone" || o === "settings.read" || o === "dotfiles.apply");
 
-    expect(order).toEqual(["repo.clone", "settings.read"]);
+    expect(order).toEqual(["repo.clone", "settings.read", "dotfiles.apply"]);
+    // 01 Shell and dotfiles: an owner who never saved gets the image defaults.
+    expect(w.tempod.requestsOf("dotfiles.apply")).toEqual([{ source: null }]);
     expect(w.tempod.requestsOf("repo.clone")[0]).toMatchObject({
       url: "https://github.com/acme/app.git",
       branch: w.branch,
@@ -806,6 +819,44 @@ describe("create op", { timeout: 60_000 }, () => {
     expect(d.settings.environment.instance).toBe("standard-3");
     expect(d.state).toBe("ready");
     expect(d.errorCode).toBeNull();
+  });
+});
+
+describe.concurrent("dotfiles.apply", { timeout: 60_000 }, () => {
+  it("failing twice is skipped with a warn notice in the Setup tab, and the op continues", async ({
+    expect,
+  }) => {
+    const w = await seedWs({ prepare: (t) => t.fail("dotfiles.apply", "INTERNAL", "fetch failed") });
+    await driveToState(w.stub, "ready");
+    await driveOp(w.stub, "create", "done");
+    // 03 Step limits: dotfiles.apply | 2 min | 2 | Skip; log warn and show the notice in the Setup tab
+    expect(w.tempod.requestsOf("dotfiles.apply")).toHaveLength(2);
+    const op = (await opOf(w.stub, "create"))!;
+    expect(opState(op).skipped).toEqual(["dotfiles.apply"]);
+    expect(Object.keys(opState(op).timings)).toContain("setup.run");
+    const d = await detail(w.stub);
+    expect(d.settingsWarnings).toContain("Could not apply your shell files. Terminals use the defaults.");
+    expect(d.state).toBe("ready");
+    expect(d.errorCode).toBeNull();
+  });
+
+  it("applies the owner's saved commit on every wake, before sessions.markReload", async ({ expect }) => {
+    const w = await asleep();
+    const url = `https://${"a".repeat(32)}.artifacts.cloudflare.net/git/tempo-repos/dotfiles-0123456789abcdef.git`;
+    await env.DB.prepare(
+      "INSERT INTO dotfiles (user_id, artifact_repo_id, repo_name, clone_url, head_sha, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+      .bind(w.seeded.userId, "repo-dotfiles", `dotfiles-${w.seeded.userId}`, url, "9".repeat(40), Date.now())
+      .run();
+    const before = w.tempod.requestsOf("dotfiles.apply").length;
+    expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
+    await driveToState(w.stub, "ready");
+    await driveOp(w.stub, "wake", "done");
+    // 03 wake: ... then dotfiles.apply → sessions.markReload, also on a snapshot wake
+    expect(w.tempod.requestsOf("dotfiles.apply").slice(before)).toEqual([
+      { source: { url, sha: "9".repeat(40) } },
+    ]);
+    expect(opState(await opOf(w.stub, "wake")).skipped).not.toContain("dotfiles.apply");
   });
 });
 

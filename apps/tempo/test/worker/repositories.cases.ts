@@ -321,6 +321,14 @@ describe("Artifacts repository lifecycle", () => {
     await expect(createRepository(ctx, { name: "../escape" })).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
     });
+
+    for (const name of ["dotfiles-0123456789abcdef", "Dotfiles-x"]) {
+      await expect(createRepository(ctx, { name })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      await expect(linkArtifactRepository(ctx, { name })).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+      });
+    }
+
     await expect(
       createRepository(ctx, { name: "valid", defaultBranch: "bad..branch" }),
     ).rejects.toMatchObject({ code: "BRANCH_INVALID" });

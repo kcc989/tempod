@@ -111,6 +111,7 @@ export class FakeTempod {
       errors: [],
       sources: {},
     }));
+    this.on("dotfiles.apply", () => ({ applied: [], restored: [] }));
     this.on("env.set", ok);
     this.on("environment.set", ok);
     this.on("script.start", () => ({ pid: 1234 }));

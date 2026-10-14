@@ -13,9 +13,12 @@ import { ops, type OpRow } from "../../db/workspace-do.ts";
 import { errorText, log } from "../../log.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
 
+/** 03, Step limits: the Setup tab notice when dotfiles.apply is skipped. */
+export const DOTFILES_NOT_APPLIED = "Could not apply your shell files. Terminals use the defaults.";
+
 /** 03, Ops and their steps. `done` is implied after the last step. */
 export const OP_STEPS: Record<OpKind, ReadonlyArray<string>> = {
-  create: ["container.start", "tempod.connect", "repo.clone", "settings.read", "setup.run"],
+  create: ["container.start", "tempod.connect", "repo.clone", "settings.read", "dotfiles.apply", "setup.run"],
   wake: [
     "container.start",
     "tempod.connect",
@@ -24,6 +27,7 @@ export const OP_STEPS: Record<OpKind, ReadonlyArray<string>> = {
     "home.restore",
     "settings.read",
     "setup.run",
+    "dotfiles.apply",
     "sessions.markReload",
     "artifacts.resume",
   ],
@@ -88,6 +92,7 @@ export const STEP_LIMITS = {
   "repo.applyCheckpoint": { timeoutMs: 5 * 60_000, maxAttempts: 2, onPermanent: { kind: "skip" } },
   "home.restore": { timeoutMs: 5 * 60_000, maxAttempts: 2, onPermanent: { kind: "skip" } },
   "settings.read": { timeoutMs: 10_000, maxAttempts: 3, onPermanent: { kind: "skip" } },
+  "dotfiles.apply": { timeoutMs: 2 * 60_000, maxAttempts: 2, onPermanent: { kind: "skip" } },
   "setup.run": { timeoutMs: 30 * 60_000, maxAttempts: 1, onPermanent: { kind: "skip" } },
   "script.archive": { timeoutMs: 120_000, maxAttempts: 1, onPermanent: { kind: "skip" } },
   "git.checkpoint": { timeoutMs: 2 * 60_000, maxAttempts: 3, onPermanent: { kind: "skip" } },
@@ -587,6 +592,16 @@ export class OpRunner {
 
     if (op.step === "script.archive")
       this.core.notice("warning", `The archive script failed: ${detail.slice(0, 300)}`);
+
+    if (op.step === "dotfiles.apply") {
+      const issues = this.core.settingsIssues();
+
+      if (!issues.warnings.includes(DOTFILES_NOT_APPLIED))
+        this.core.setKv("settingsIssues", {
+          ...issues,
+          warnings: [...issues.warnings, DOTFILES_NOT_APPLIED],
+        });
+    }
 
     if (op.step === "settings.read") {
       const issues = this.core.settingsIssues();

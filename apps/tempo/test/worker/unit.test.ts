@@ -1070,8 +1070,15 @@ describe("backoffMs", () => {
 describe("OP_STEPS", () => {
   // 03 "Ops and their steps", in order; `done` is the terminal marker.
   const SPEC = {
-    create: ["container.start", "tempod.connect", "repo.clone", "settings.read", "setup.run"],
-    // "if fresh disk: repo.clone → repo.applyCheckpoint → home.restore → settings.read → setup.run; then sessions.markReload"
+    create: [
+      "container.start",
+      "tempod.connect",
+      "repo.clone",
+      "settings.read",
+      "dotfiles.apply",
+      "setup.run",
+    ],
+    // "if fresh disk: repo.clone → repo.applyCheckpoint → home.restore → settings.read → setup.run; then dotfiles.apply → sessions.markReload"
     wake: [
       "container.start",
       "tempod.connect",
@@ -1080,6 +1087,7 @@ describe("OP_STEPS", () => {
       "home.restore",
       "settings.read",
       "setup.run",
+      "dotfiles.apply",
       "sessions.markReload",
       "artifacts.resume",
     ],
@@ -1142,6 +1150,7 @@ describe("limitOf (03 Step limits)", () => {
     ["repo.applyCheckpoint", 2],
     ["home.restore", 2],
     ["settings.read", 3],
+    ["dotfiles.apply", 2],
     ["setup.run", 1],
     ["script.archive", 1],
     ["git.checkpoint", 3],
@@ -1160,6 +1169,7 @@ describe("limitOf (03 Step limits)", () => {
     ["repo.clone", 10 * 60_000],
     ["repo.applyCheckpoint", 5 * 60_000],
     ["settings.read", 10_000],
+    ["dotfiles.apply", 2 * 60_000],
     ["setup.run", 30 * 60_000],
     ["script.archive", 120_000],
     ["git.checkpoint", 2 * 60_000],

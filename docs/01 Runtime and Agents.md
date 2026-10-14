@@ -30,6 +30,7 @@ One image, named `workspace`, holds all four agents, Chromium and the dev tools.
 | `playwright` (browsers) | 1.61.1 | npm |
 | `@playwright/mcp` | Pin in `versions.json` at build | npm |
 | `gh`, `bun` | Pin in `versions.json` at build | GitHub releases |
+| Oh My Zsh | Commit pinned as `OH_MY_ZSH_REF` in `versions.json` | GitHub (`ohmyzsh/ohmyzsh`) |
 
 **Dockerfile** (`container/Dockerfile`)
 
@@ -38,7 +39,7 @@ FROM node:24-trixie-slim@sha256:<pinned>
 
 ARG TINI_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates git ripgrep fd-find tmux inotify-tools curl jq unzip zstd \
+    bash zsh ca-certificates git ripgrep fd-find tmux inotify-tools curl jq unzip zstd \
     tini=${TINI_VERSION} procps iproute2 python3 python3-venv build-essential libnss3-tools \
  && rm -rf /var/lib/apt/lists/*
 
@@ -49,6 +50,11 @@ RUN curl -fsSL https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${
     | tar -xz -C /tmp && mv /tmp/gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh
 RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash -s "bun-v${BUN_VERSION}"
 RUN corepack enable
+
+# Oh My Zsh, read-only for everyone; ZSH_CUSTOM lives in the home folder (Shell and dotfiles)
+ARG OH_MY_ZSH_REF
+RUN git clone --filter=blob:none https://github.com/ohmyzsh/ohmyzsh.git /opt/oh-my-zsh \
+ && git -C /opt/oh-my-zsh checkout --detach "${OH_MY_ZSH_REF}" && rm -rf /opt/oh-my-zsh/.git
 
 ARG PLAYWRIGHT_MCP_VERSION
 RUN npm install -g \
@@ -66,10 +72,11 @@ RUN playwright install --with-deps chromium && chmod -R a+rwX /opt/ms-playwright
 COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
+COPY container/home/ /etc/tempo/home-defaults/
 
 RUN groupmod -n tempo node \
- && usermod -l tempo -d /home/tempo -s /bin/bash node \
- && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent \
+ && usermod -l tempo -d /home/tempo -s /bin/zsh node \
+ && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent /home/tempo/.oh-my-zsh-custom \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
 
@@ -100,6 +107,10 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]
 | `.codex/config.toml` (Codex reads only TOML) | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `check_for_update_on_startup = false`, `cli_auth_credentials_store = "file"`, `[analytics] enabled = false`, `[feedback] enabled = false` |
 | `.claude/settings.json` | `{"cleanupPeriodDays": 365}` so session files outlive the 30-day default |
 | `.gitconfig` | `init.defaultBranch = main`, `pull.rebase = false`, `safe.directory = /workspace` |
+| `.zshrc` | `DEFAULT_ZSHRC` from `packages/protocol/src/dotfiles.ts` (Shell and dotfiles) |
+| `.tmux.conf` | `DEFAULT_TMUX_CONF` from the same file: zsh as the tmux shell, `tmux-256color` with true color, no status line |
+
+`container/check-versions.ts` fails when `.zshrc` or `.tmux.conf` differ from those constants. `/etc/tempo/home-defaults/` keeps a read-only copy for `dotfiles.apply`.
 
 `IS_SANDBOX=1` is set even though agents run as uid 1000. Claude Code hides `bypassPermissions` for root unless `IS_SANDBOX` is `1`. The flag is undocumented, so spike S3 MUST confirm the mode list.
 
@@ -378,7 +389,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, { workspaceId: string; 
 
 Rules, checked in the order of the table. The first match wins. Rules 12, 13 and 14 come after 6 and before 7, in that order; their numbers are labels in `egress_log`, not the order.
 
-Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` and caches it for 60 s. `mcp` lists the owner's enabled `http` and `sse` servers as `{serverId, host, secretHeaders}`; `secretHeaders` are the lowercase names of their secret headers. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 and 12 get keys from the user's CredentialDO with `getSecret`.
+Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp, dotfiles}` and caches it for 60 s. `mcp` lists the owner's enabled `http` and `sse` servers as `{serverId, host, secretHeaders}`; `secretHeaders` are the lowercase names of their secret headers. Rules 2 and 3 get the token from `getGithubToken()` on the same DO. Rules 4 to 6 and 12 get keys from the user's CredentialDO with `getSecret`.
 
 **Rule 0** runs before all of these: a request whose host is `APP_HOST` returns 403 (05, Egress control).
 
@@ -603,7 +614,20 @@ const proc = await this.ctx.container.exec(
 - When the WebSocket closes, kill the `exec` process. The tmux session keeps running, so a reconnect gets the same shell and scrollback.
 - An open terminal counts as activity, so the workspace does not sleep.
 - The terminal tab list comes from `tmux list-sessions -F '#S'`, run through `tempod` (`terminal.list`).
+- tmux reads `/home/tempo/.tmux.conf` (Shell and dotfiles), so the terminal shell is zsh and tmux shows no status line.
 - Client: `@xterm/xterm` 6.0.0 and `@xterm/addon-fit` 0.11.0.
+
+## Shell and dotfiles
+
+Terminals run zsh with Oh My Zsh. The owner can change their shell files in Settings → Shell (04). Tempo keeps them in a private Cloudflare Artifacts repository (09) and copies them into each workspace's home folder.
+
+- **Defaults.** Until the first save, the files are `DEFAULT_DOTFILES`: `.zshrc` and `.tmux.conf`, the files baked into the image. Scripts still run with `bash -lc`; only terminals and the login shell use zsh.
+- **Files.** Each file is a path relative to `/home/tempo` and UTF-8 text. Limits are in `DOTFILES_LIMITS`: 20 files, 64 KB each, 256 KB in total. `isDotfilePath` allows only plain segments (`A-Z a-z 0-9 . _ + -`, no `.` or `..` segments) and rejects `DOTFILES_RESERVED` (`.tempod`, `.claude`, `.codex`, `.pi`, `.local/share/opencode`, `.ssh`, `attachments`) and anything under them. Shell files MUST NOT hold secrets; use Environments for those.
+- **Storage.** The first `updateDotfiles` creates the Artifacts repository `dotfiles-<first 16 hex digits of sha256(userId)>` and a `dotfiles` row (02). Every save commits a complete snapshot of the file list to `main`: the Worker writes the blobs, trees and commit itself and pushes them with a short-lived write token over Git smart HTTP. The push names the stored `head_sha` as the old value; when Artifacts rejects it as stale, the call fails with `DOTFILES_CHANGED` and nothing changes. The repository is not a project and does not appear in project lists.
+- **Apply.** The `dotfiles.apply` step (03) runs on `create` after `settings.read`, and on every `wake` before `sessions.markReload`. It calls tempod `dotfiles.apply` with the stored `clone_url` and `head_sha`, or `null` when the owner never saved. tempod fetches that commit into `/home/tempo/.tempod/dotfiles` and copies every file to its path, creating folders. It records the paths in `/home/tempo/.tempod/dotfiles.json`. A path from the previous record that is no longer listed is restored from `/etc/tempo/home-defaults/` when a default exists there, and deleted otherwise. With `null` it restores every recorded path the same way. The step is idempotent: the same commit gives the same files.
+- **Egress.** `getEgressConfig()` adds `dotfiles: {cloneUrl} | null` for the workspace owner. Only the read side of that remote gets a credential (09, Git transport), from the WorkspaceDO's `getDotfilesToken()`; the container cannot push to it.
+- **Failure.** A failed apply never blocks the workspace. The step logs `warn`, shows `Could not apply your shell files. Terminals use the defaults.` in the Setup tab, and continues.
+- Changes reach a running workspace on its next wake. Terminals that are already open keep their shell until they are closed.
 
 ## Browser testing
 

@@ -7,3 +7,4 @@ import "./artifacts-preflight.cases.ts";
 import "./artifacts-migration.cases.ts";
 import "./artifacts-egress.cases.ts";
 import "./project-ci.cases.ts";
+import "./dotfiles.cases.ts";
