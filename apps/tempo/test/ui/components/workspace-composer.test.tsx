@@ -9,7 +9,7 @@ import { NewWorkspaceDialog } from "~/ui/components/dialogs/NewWorkspaceDialog";
 
 const environment = createUiEnvironment();
 
-const state = { call: environment.request, modelsLoading: false, modelsError: false, refetchModels: vi.fn() };
+const state = { call: environment.request, modelsLoading: false, modelsError: false };
 
 let createFails = false;
 
@@ -42,7 +42,6 @@ beforeEach(() => {
   createPending = false;
   sendFails = false;
   state.modelsError = false;
-  state.refetchModels.mockReset();
   state.call.mockReset();
   state.call.mockImplementation(async (name) => {
     if (name === "listProjects")
@@ -69,6 +68,8 @@ beforeEach(() => {
       };
 
     if (name === "listModels") {
+      if (state.modelsError) throw new Error("Could not load models");
+
       if (state.modelsLoading) return new Promise(() => {});
 
       return [
@@ -110,12 +111,16 @@ beforeEach(() => {
 afterEach(resetUiState);
 
 describe("workspace creation composer", () => {
-  it("retries model discovery without submitting the workspace form", () => {
+  it("retries model discovery without submitting the workspace form", async () => {
     state.modelsError = true;
     show();
-    fireEvent.click(screen.getByRole("button", { name: "Retry loading models" }));
-    expect(state.refetchModels).toHaveBeenCalledOnce();
-    expect(state.call).not.toHaveBeenCalled();
+    const retry = await screen.findByRole("button", { name: "Retry loading models" });
+
+    state.modelsError = false;
+    fireEvent.click(retry);
+    await readyModels();
+    expect(requestsOf("listModels")).toHaveLength(2);
+    expect(requestsOf("createWorkspace")).toHaveLength(0);
   });
   it("opens an empty workspace while model discovery is still loading", async () => {
     state.modelsLoading = true;
@@ -150,7 +155,7 @@ describe("workspace creation composer", () => {
   it("sends a trimmed first prompt and a model picked inside the composer", async () => {
     show();
     await readyModels();
-    fireEvent.click(screen.getByRole("button", { name: "Model" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Model" }), { key: "ArrowDown" });
     fireEvent.click(screen.getByRole("menuitemradio", { name: /Test Codex/ }));
     const prompt = await promptField();
     fireEvent.change(prompt, { target: { value: "  Fix the login  " } });
