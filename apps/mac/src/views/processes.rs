@@ -1,5 +1,6 @@
 use crate::stores::workspace::WorkspaceStore;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString,
@@ -62,7 +63,10 @@ impl ProcessPanel {
         self.run = None;
         self.refresh(cx);
         if tab == 2 && self.terminal.is_none() {
-            self.add_terminal(cx);
+            match self.terminal_ids.first().cloned() {
+                Some(id) => self.open_terminal(id, cx),
+                None => self.add_terminal(cx),
+            }
         }
         cx.emit(ProcessSelected(tab));
         cx.notify();
@@ -245,12 +249,12 @@ impl ProcessPanel {
         })
         .detach();
     }
-    fn close_terminal(&mut self, cx: &mut Context<Self>) {
-        if let Some(id) = self.terminal.take() {
-            self.terminals.remove(&id);
-            self.terminal_ids.retain(|s| s != &id);
+    fn close_terminal(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.terminals.remove(id);
+        self.terminal_ids.retain(|s| s != id);
+        if self.terminal.as_deref() == Some(id) {
+            self.terminal = self.terminal_ids.first().cloned();
         }
-        self.terminal = self.terminal_ids.first().cloned();
         if let Some(id) = self.terminal.clone() {
             self.open_terminal(id, cx);
         }
@@ -272,6 +276,7 @@ impl ProcessPanel {
         let input = channel.input();
         let (io, remote) = tempo_terminal::TerminalIo::pair();
         let view = cx.new(|cx| tempo_terminal::TerminalView::new(io, cx));
+        let ready_id = id.clone();
         let output = cx.spawn(async move |this, cx| {
             while let Ok(event) = events.recv().await {
                 match event {
@@ -279,6 +284,15 @@ impl ProcessPanel {
                         if remote.output.send(bytes).await.is_err() {
                             break;
                         }
+                    }
+                    // The server ignores a resize sent before the process starts, so send the size again.
+                    ChannelEvent::Message(TerminalFrame::Ready) => {
+                        let _ = this.update(cx, |p, cx| {
+                            if let Some(t) = p.terminals.get(&ready_id) {
+                                let (cols, rows) = t.view.read(cx).state.size();
+                                t._channel.resize(cols, rows);
+                            }
+                        });
                     }
                     ChannelEvent::Status(status)
                         if this
@@ -441,33 +455,59 @@ impl Render for ProcessPanel {
                 )
                 .into_any_element()
         } else if self.tab == 2 {
+            let ids = self.terminal_ids.clone();
+            let selected = self
+                .terminal
+                .as_ref()
+                .and_then(|id| ids.iter().position(|t| t == id))
+                .unwrap_or(0);
+            let full = self.terminal_ids.len() >= tempo_client::TERMINAL_IDS.len();
             v_flex()
                 .size_full()
                 .child(
-                    h_flex()
-                        .gap_1()
-                        .children(self.terminal_ids.iter().map(|id| {
-                            let id = id.clone();
-                            Button::new(SharedString::from(format!("term-{id}")))
-                                .label(id.clone())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.open_terminal(id.clone(), cx)
-                                }))
-                        }))
-                        .child(
-                            Button::new("add-terminal")
-                                .label("+")
-                                .disabled(self.terminal_ids.len() >= 9)
-                                .on_click(cx.listener(|this, _, _, cx| this.add_terminal(cx))),
-                        ),
+                    div().px_3().child(
+                        TabBar::new("terminal-tabs")
+                            .underline()
+                            .selected_index(selected)
+                            .on_click(cx.listener(move |this, ix: &usize, _, cx| {
+                                if let Some(id) = ids.get(*ix) {
+                                    this.open_terminal(id.clone(), cx);
+                                }
+                            }))
+                            .children(self.terminal_ids.iter().map(|id| {
+                                let close = id.clone();
+                                Tab::new().label(id.clone()).suffix(
+                                    Button::new(SharedString::from(format!("close-{id}")))
+                                        .ghost()
+                                        .small()
+                                        .size(gpui_kit::px(super::tokens::ICON_BUTTON))
+                                        .icon(gpui_kit::assets::IconName::X)
+                                        .accessibility_label(format!("Close {id}"))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.close_terminal(&close, cx);
+                                        })),
+                                )
+                            }))
+                            .suffix(
+                                Button::new("add-terminal")
+                                    .ghost()
+                                    .small()
+                                    .size(gpui_kit::px(super::tokens::ICON_BUTTON))
+                                    .icon(gpui_kit::assets::IconName::Plus)
+                                    .accessibility_label("New terminal")
+                                    .tooltip(if full {
+                                        "Nine terminals are open"
+                                    } else {
+                                        "New terminal"
+                                    })
+                                    .disabled(full)
+                                    .on_click(cx.listener(|this, _, _, cx| this.add_terminal(cx))),
+                            ),
+                    ),
                 )
                 .child(
-                    Button::new("close-terminal")
-                        .label("Close terminal")
-                        .on_click(cx.listener(|this, _, _, cx| this.close_terminal(cx))),
-                )
-                .child(
-                    div().flex_1().min_h_0().children(
+                    div().flex_1().min_h_0().px_3().py_2().children(
                         self.terminal
                             .as_ref()
                             .and_then(|id| self.terminals.get(id))

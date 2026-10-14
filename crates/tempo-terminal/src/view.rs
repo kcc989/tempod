@@ -108,7 +108,10 @@ impl TerminalView {
 }
 impl Render for TerminalView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let font = cx.text_system().resolve_font(&gpui_kit::font("monospace"));
+        let family = cx.theme().mono_font_family.clone();
+        let font = cx
+            .text_system()
+            .resolve_font(&gpui_kit::font(family.clone()));
         let cell_width = cx
             .text_system()
             .em_advance(font, px(13.))
@@ -199,7 +202,7 @@ impl Render for TerminalView {
             .relative()
             .key_context("Terminal")
             .track_focus(&self.focus)
-            .font_family("monospace")
+            .font_family(family)
             .text_size(px(13.))
             .overflow_hidden()
             .on_mouse_up_out(
