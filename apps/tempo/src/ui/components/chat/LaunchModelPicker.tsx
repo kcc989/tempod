@@ -2,13 +2,12 @@ import type { Project } from "@tempo/protocol";
 import { useState } from "react";
 import { Button } from "~/ui/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "~/ui/components/ui/select";
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+} from "~/ui/components/ui/dropdown-menu";
+import { ComposerModelMenu } from "./ComposerControls";
 import { useCallQuery } from "~/ui/hooks/useCall";
 import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
 import { useAgentChoices } from "~/ui/hooks/useAgentChoices";
@@ -60,45 +59,46 @@ export function LaunchModelPicker({
   onClosed: () => void;
 }) {
   const { credentials, models, choices, custom, selected, pickedAgent, setPicked } = selection;
+  const [open, setOpen] = useState(false);
+
+  const label =
+    pickedAgent?.name ??
+    selected?.name ??
+    (credentials.isPending || models.isPending ? "Loading models…" : "Choose a model");
 
   return (
     <div className="min-w-0">
-      <Select
-        value={pickedAgent ? libraryAgentValue(pickedAgent.id) : (selected?.key ?? "")}
-        onValueChange={(value) => {
-          if (value === "manage-agents") openDialog({ kind: "settings", tab: "agents" });
-          else setPicked(value);
-        }}
+      <ComposerModelMenu
+        label={label}
+        ariaLabel="Model"
+        open={open}
+        onOpenChange={setOpen}
         disabled={disabled}
+        onClosed={onClosed}
       >
-        <SelectTrigger aria-label="Model" className="w-auto max-w-full border-0 bg-transparent shadow-none">
-          <SelectValue
-            placeholder={credentials.isPending || models.isPending ? "Loading models…" : "Choose a model"}
-          />
-        </SelectTrigger>
-        <SelectContent
-          onCloseAutoFocus={(e) => {
-            e.preventDefault();
-            onClosed();
-          }}
+        <DropdownMenuRadioGroup
+          value={pickedAgent ? libraryAgentValue(pickedAgent.id) : (selected?.key ?? "")}
+          onValueChange={setPicked}
         >
           {choices.map((choice) => (
-            <SelectItem key={choice.key} value={choice.key}>
+            <DropdownMenuRadioItem key={choice.key} value={choice.key}>
               {choice.name} <span className="text-muted-foreground">· {agentLabel(choice.agent)}</span>
-            </SelectItem>
+            </DropdownMenuRadioItem>
           ))}
-          {custom.length > 0 && choices.length > 0 && <SelectSeparator />}
+          {custom.length > 0 && choices.length > 0 && <DropdownMenuSeparator />}
           {custom.map((agent) => (
-            <SelectItem key={agent.id} value={libraryAgentValue(agent.id)}>
+            <DropdownMenuRadioItem key={agent.id} value={libraryAgentValue(agent.id)}>
               {agent.name} <span className="text-muted-foreground">· {agentLabel(agent.baseAgent)}</span>
-            </SelectItem>
+            </DropdownMenuRadioItem>
           ))}
-          {(custom.length > 0 || choices.length > 0) && <SelectSeparator />}
-          <SelectItem value="manage-agents">Manage agents…</SelectItem>
-        </SelectContent>
-      </Select>
+        </DropdownMenuRadioGroup>
+        {(custom.length > 0 || choices.length > 0) && <DropdownMenuSeparator />}
+        <DropdownMenuItem onSelect={() => openDialog({ kind: "settings", tab: "agents" })}>
+          Manage agents…
+        </DropdownMenuItem>
+      </ComposerModelMenu>
       {models.isError && (
-        <Button variant="link" size="sm" onClick={() => void models.refetch()}>
+        <Button type="button" variant="link" size="sm" onClick={() => void models.refetch()}>
           Retry loading models
         </Button>
       )}

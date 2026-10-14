@@ -22,9 +22,15 @@ export function EditableBranch({ view, onSave }: { view: WorkspaceView; onSave: 
     <button
       type="button"
       disabled={locked}
-      onClick={() => setEditing(true)}
+      onDoubleClick={() => setEditing(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setEditing(true);
+        }
+      }}
       aria-label="Rename branch"
-      title={locked ? view.w.branch : "Rename branch"}
+      title={locked ? view.w.branch : "Double-click to rename branch"}
       className="min-w-0 truncate rounded px-1 hover:bg-accent disabled:hover:bg-transparent"
     >
       {view.w.branch}

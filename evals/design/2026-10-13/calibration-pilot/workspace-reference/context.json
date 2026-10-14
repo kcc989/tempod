@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Conductor",
+    "category": "Agent coding workspace",
+    "platform": "desktop",
+    "primary_user": "Developer",
+    "primary_job": "Read agent work, edit a project, and manage chats"
+  },
+  "screen": {
+    "name": "Workspace",
+    "purpose": "Read a conversation and inspect project changes beside it"
+  },
+  "image_legend": [
+    "Image 1: supplied full frame",
+    "Image 2: sidebar",
+    "Image 3: header controls",
+    "Image 4: composer"
+  ]
+}

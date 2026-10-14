@@ -1,0 +1,32 @@
+{
+  "status": 200,
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "usability_secondary_disclosure": {
+          "type": "score",
+          "score": 1.7241,
+          "legend": {
+            "0": "Less frequent actions occupy a separate persistent toolbar or several prominent controls alongside the everyday conversation actions.",
+            "1": "Most less frequent actions are in menus, but some unrelated controls still compete with the main conversation controls.",
+            "2": "Everyday conversation controls remain visible, while less frequent actions are available through labeled menus, tooltips or contextual controls."
+          },
+          "probabilities": {
+            "0": 0.0461,
+            "1": 0.1838,
+            "2": 0.7701
+          },
+          "confidence": 0.4435
+        }
+      },
+      "usage": {
+        "input_tokens": 2997,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

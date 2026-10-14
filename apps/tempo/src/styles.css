@@ -245,3 +245,27 @@
   height: 100%;
   padding: 4px;
 }
+
+.workspace-info-rail {
+  flex: none;
+  width: min(360px, 40%);
+  height: 100%;
+}
+
+.chat-scrollbar {
+  scrollbar-gutter: stable;
+  scrollbar-color: transparent transparent;
+}
+.chat-scrollbar[data-scrolling] {
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+.chat-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: transparent;
+}
+.chat-scrollbar[data-scrolling]::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+}

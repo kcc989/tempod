@@ -1,0 +1,11 @@
+{
+  "area": "spacing",
+  "questionVersion": "2.1-draft",
+  "calibrated": false,
+  "acceptanceEnabled": false,
+  "requestSha256": "1a97af29d5240815264d058c2d2db32858d602ae098b0aa2ccf197bb92641f1b",
+  "attemptStatuses": [200],
+  "stateless": true,
+  "priorResultsIncluded": false,
+  "timestamp": "2026-10-14T00:52:02Z"
+}

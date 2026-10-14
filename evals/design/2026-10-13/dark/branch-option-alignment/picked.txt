@@ -1,0 +1,128 @@
+Window: "Tempo", App: Tempo.
+0 standard window Tempo, Secondary Actions: Raise
+	1 container
+		2 button New workspace
+		3 button Search workspaces
+		4 button Sort workspaces: Last activity
+		5 button Add project
+		6 button kcc989/farstep, expanded
+		7 button New workspace in kcc989/farstep
+		8 list kcc989/farstep
+			9 container (selectable) lisbon · Sleeping
+Sleeping
+		10 button Archived workspaces
+		11 button Saved chats
+		12 button Settings
+		13 button Rename branch
+		14 button Copy branch name
+		15 button Sleeping
+		16 button More actions
+		17 button Toggle right side
+		18 tab group
+			19 tab (settable, boolean) Farstep project README overview, Value: on
+				20 button Close chat
+			21 tab (settable, boolean) Mac E2E Probe · Codex, Value: off
+				22 button Close chat
+			23 button
+		24 button New chat
+		25 container (selectable)
+		26 text entry area (settable) Message, Placeholder: Message Claude Code to wake this workspace
+		27 button Model and thinking: Opus 5.5
+		28 button Context usage: 30785 of 1000000 tokens (3%)
+		29 button Attach file
+		30 button Send
+		31 dialog New workspace
+			32 button kcc989/farstep
+			33 button Workspace options
+			34 button Close
+			35 text entry area (settable) Prompt, Placeholder: What do you want to work on?
+			36 pop up button (settable) Model, Value: Default (recommended)
+			37 button Create
+		38 dialog
+			39 button New branch
+			40 button Existing branch
+			41 button Pull request
+			42 text field (settable) Branch or PR number, Value: auth-enrollment-flow
+			43 button auth-enrollment-flow
+			44 button auth-evals-recording
+			45 button auth-recovery-liveview
+			46 button codex/account-setup-workspace
+			47 button codex/adaptive-account-authentication
+			48 button codex/agent-authenticator-setup
+			49 button codex/authenticator-enrollment
+			50 button codex/automatic-manual-email
+			51 button codex/autonomous-runs
+			52 button codex/clef-flash-decisions
+			53 button codex/demo-account-page
+			54 button codex/demo-account-setup
+			55 button codex/explore-agent
+			56 button codex/explore-replay-baseline
+			57 button codex/fast-ci-cache
+			58 button codex/faster-pr-checks
+			59 button codex/fix-adaptive-account-form-tests
+			60 button codex/fix-authenticator-lifecycle
+			61 button codex/fix-browser-test-startup
+			62 button codex/fix-manual-setup-loading
+			63 button codex/fix-preview-cleanup
+			64 button codex/guide-variants
+			65 button codex/independent-authenticator
+			66 button codex/lean-ci-local
+			67 button codex/m1-components
+			68 button codex/m14-narration-captions
+			69 button codex/member-app-visual-direction
+			70 button codex/native-account-browser
+			71 button codex/recover-stalled-sign-in
+			72 button codex/remember-verified-portal
+			73 button codex/setup-browser-action-parity
+			74 button codex/setup-browser-expand
+			75 button codex/setup-continuation-inputs
+			76 button codex/setup-copy-icon
+			77 button codex/setup-invite-fullscreen
+			78 button codex/setup-paste-commit
+			79 button codex/setup-sign-in-continuation
+			80 button codex/setup-sign-in-email
+			81 button codex/sign-in-email-state
+			82 button codex/sign-in-guard-before-approval
+			83 button feat/inbox-code-reveal
+			84 button feat/reset-saved-authenticator
+			85 button feat/use-saved-authenticator-code
+			86 button fix/authenticator-save-terminal
+			87 button fix/authenticator-status
+			88 button fix/browser-handshake-timeout
+			89 button fix/bundler-source-imports
+			90 button fix/chrome-cold-startup
+			91 button fix/chrome-startup
+			92 button fix/evaluation-regression
+			93 button fix/farstep-parallel-ci
+			94 button fix/hubspot-recording-acceptance
+			95 button fix/manual-authenticator-key
+			96 button fix/manual-email-login-links
+			97 button fix/preserve-2fa-browser
+			98 button fix/provider-copy-authenticator-save
+			99 button fix/2fa-completion-dialog
+			100 button fix-public-access-guard
+			101 button kcc989/agent-inbox-invite-form
+			102 button kcc989/app-ui-guides-runs-staff
+			103 button kcc989/directive-agent-runner
+			104 button kcc989/goal-first-nav-layout
+			105 button kcc989/implement-milestone-5
+			106 button kcc989/implement-next-milestone
+			107 button kcc989/m4-jev-loop
+			108 button kcc989/m9-knowledge-base
+			109 button kcc989/m11-video-share-links
+			110 button kcc989/staging-access-cors-error
+			111 button kcc989/storybook-design-system
+			112 button kcc989/video-captions-tts
+			113 button main
+			114 button setup/cloudflare-runner
+			115 button Keep open
+116 menu bar
+	117 Tempo
+	118 File
+	119 Edit
+	120 View
+	121 Workspace
+	122 Window
+	123 Help
+
+The focused UI element is 0 standard window Tempo, Secondary Actions: Raise

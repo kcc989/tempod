@@ -14,11 +14,11 @@ import { createElement, type ReactNode } from "react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserTab } from "../../../src/ui/components/review/BrowserTab";
-import { OverflowMenu } from "../../../src/ui/components/topbar/OverflowMenu";
+import { WorkspaceInfoButton } from "../../../src/ui/components/topbar/WorkspaceInfoButton";
 import { PortLinks } from "../../../src/ui/components/topbar/PortLinks";
 import { TooltipProvider } from "../../../src/ui/components/ui/tooltip";
 
-import { getWorkspaceUi, resetUiState } from "../../../src/ui/state/workspace-ui";
+import { getLayout, getWorkspaceUi, resetUiState } from "../../../src/ui/state/workspace-ui";
 import { detail } from "../fixtures";
 
 const WS = "01jaxk3v2m9q8r7t6y5w4e3d2c";
@@ -115,54 +115,15 @@ describe("port links (04, Top bar middle)", () => {
   });
 });
 
-describe("overflow menu on a phone (04, Overflow menu, Phone width)", () => {
-  const actions = {
-    runPrimaryElsewhere: vi.fn(),
-    open: vi.fn(),
-    commit: vi.fn(),
-    createPr: vi.fn(),
-    merge: vi.fn(),
-    viewChecks: vi.fn(),
-    setPinned: vi.fn(),
-    rename: vi.fn(),
-    renameBranch: vi.fn(),
-    copyPath: vi.fn(),
-    copyBranch: vi.fn(),
-    wake: vi.fn(),
-    sleep: vi.fn(),
-    archive: vi.fn(),
-    copyLink: vi.fn(),
-    resetPreviewAccess: vi.fn(),
-    pending: { power: false, archive: false, commit: false, createPr: false, merge: false },
-  };
-
-  const show = () => {
-    vi.mocked(call).mockImplementation(async (name) => {
-      if (name === "listProjects") return [];
-
-      if (name === "openPreview") return { url: link("c".repeat(32)) };
-      throw new Error(`unexpected ${name}`);
-    });
-    const d = detail({ id: WS, ports: [{ port: 3000, url: BARE }] });
-    wrap(createElement(OverflowMenu, { view: { w: d, d }, actions: actions, phone: true }));
-    fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "Enter" });
-  };
-
-  it("lists Reset preview access and calls the confirmed action", async () => {
-    show();
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Reset preview access" }));
-    expect(actions.resetPreviewAccess).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText("Rotate preview link")).toBeNull();
-  });
-
-  it("opens a preview link the same way as the top bar", async () => {
-    const tab = fakeTab();
-    const open = vi.spyOn(browserTabs, "open").mockReturnValue(tab);
-    show();
-    fireEvent.click(await screen.findByRole("menuitem", { name: "3000 ↗" }));
-    expect(open).toHaveBeenCalledWith("", "_blank");
-    await waitFor(() => expect(tab.location.href).toBe(link("c".repeat(32))));
-    expect(call).toHaveBeenCalledWith("openPreview", { workspaceId: WS, port: 3000 });
+describe("workspace controls on a phone", () => {
+  it("opens Info in the tool host without starting container work", () => {
+    const d = detail({ id: WS });
+    wrap(createElement(WorkspaceInfoButton, { view: { w: d, d }, phone: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Workspace info" }));
+    expect(getWorkspaceUi(WS).infoOpen).toBe(true);
+    expect(getWorkspaceUi(WS).toolTabs).not.toContain("info");
+    expect(getLayout().phonePane).toBe("info");
+    expect(call).not.toHaveBeenCalled();
   });
 });
 

@@ -1,0 +1,65 @@
+{
+  "context": {
+    "app": {
+      "name": "Tempo",
+      "category": "Agent coding workspace",
+      "platform": "desktop",
+      "primary_user": "Developer",
+      "primary_job": "Read agent work and manage project workspaces"
+    },
+    "screen": {
+      "name": "Workspace Info",
+      "purpose": "Inspect workspace state and open related work"
+    },
+    "image_legend": [
+      "Image 1: app window",
+      "Image 2: workspace sidebar",
+      "Image 3: workspace header",
+      "Image 4: workspace information"
+    ],
+    "page_text": "Window: \"Tempo\", App: Tempo.\n0 standard window Tempo, Secondary Actions: Raise\n\t1 container\n\t\t2 button New workspace\n\t\t3 button Search workspaces\n\t\t4 button Sort workspaces: Last activity\n\t\t5 button Add project\n\t\t6 button kcc989/farstep, expanded\n\t\t7 button New workspace in kcc989/farstep\n\t\t8 list kcc989/farstep\n\t\t\t9 container (selectable) lisbon \u00b7 Sleeping\nSleeping\n\t\t10 button Archived workspaces\n\t\t11 button Saved chats\n\t\t12 button Settings\n\t\t13 button Rename branch\n\t\t14 button Copy branch name\n\t\t15 button Sleeping\n\t\t16 button Workspace info\n\t\t17 button Toggle right side\n\t\t18 tab group\n\t\t\t19 tab (settable, boolean) Farstep project README overview, Value: on\n\t\t\t\t20 button Close chat\n\t\t\t21 tab (settable, boolean) Mac E2E Probe \u00b7 Codex, Value: off\n\t\t\t\t22 button Close chat\n\t\t\t23 button\n\t\t24 button New chat\n\t\t25 container (selectable)\n\t\t26 text entry area (settable) Message, Placeholder: Message Claude Code to wake this workspace\n\t\t27 button Model and thinking: Opus 5.5\n\t\t28 button Context usage: 30785 of 1000000 tokens (3%)\n\t\t29 button Attach file\n\t\t30 button Send\n\t\t31 tab group\n\t\t\t32 tab (settable, boolean) Info, Value: on\n\t\t\t\t33 button Close Info\n\t\t\t34 tab (settable, boolean) New tool tab, Value: off\n\t\t35 button Copy workspace link\n\t\t36 button Wake\n\t\t37 button\n\t\t38 button Changes   +0 \u22120\n\t\t39 button Guides\n\t\t40 button Farstep project README overview \u00b7 idle\n\t\t41 button Turn summaries and check reporting \u00b7 idle\n\t\t42 button Open artifacts \u00b7 0\n\t\t43 button Environment\u2026\n\t\t44 button Diagnostics\n\t\t45 button Reset preview access\n\t\t46 button Archive workspace\n47 menu bar\n\t48 Tempo\n\t49 File\n\t50 Edit\n\t51 View\n\t52 Workspace\n\t53 Window\n\t54 Help\n\nThe focused UI element is 0 standard window Tempo, Secondary Actions: Raise"
+  },
+  "known": {
+    "ai": true,
+    "async": false,
+    "collection": true,
+    "editing": false,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Observed sleeping workspace, idle chats and assistant transcript; no running turn or spinner",
+  "images": [
+    {
+      "file": "full.png",
+      "bytes": 1059327,
+      "size": [3024, 1898],
+      "sha256": "acfa445767afe8f4bbbb2aeb227d5504199003c5bd951c671b31aa17c26a7938",
+      "crop": null
+    },
+    {
+      "file": "detail-1.png",
+      "bytes": 75916,
+      "size": [444, 1898],
+      "sha256": "0bfdddf432040302fbebf00ac140a116ae181064657e891f4ed012147e5d3eb1",
+      "crop": [0, 0, 444, 1898]
+    },
+    {
+      "file": "detail-2.png",
+      "bytes": 83425,
+      "size": [2580, 160],
+      "sha256": "9cd5677cf806f0981223c72b569b30b5146565f6216baa2a8827bda5c8d55c8a",
+      "crop": [444, 0, 3024, 160]
+    },
+    {
+      "file": "detail-3.png",
+      "bytes": 147699,
+      "size": [1040, 1400],
+      "sha256": "e580a77569828efb0fbd0b3fc5bfb766a413dc37e08d1b1de83f9c94e8fdbc60",
+      "crop": [1984, 0, 3024, 1400]
+    }
+  ],
+  "checks": {},
+  "acceptanceEnabled": false,
+  "questionVersion": "2.1-draft"
+}

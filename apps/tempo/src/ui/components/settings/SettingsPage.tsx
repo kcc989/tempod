@@ -149,6 +149,16 @@ export function SettingsPage() {
           <ArrowLeftIcon aria-hidden /> Back
         </Button>
         <p className="mb-4 px-2 text-base font-semibold">Settings</p>
+        <Button
+          variant="ghost"
+          className="mb-3 w-full justify-start gap-2"
+          aria-label="Search workspaces and actions"
+          onClick={() => openDialog({ kind: "palette" })}
+        >
+          <SearchIcon aria-hidden className="size-4" />
+          Search workspaces
+          <span className="ml-auto text-xs text-muted-foreground">⌘K</span>
+        </Button>
         <div className="relative mb-5">
           <SearchIcon
             aria-hidden

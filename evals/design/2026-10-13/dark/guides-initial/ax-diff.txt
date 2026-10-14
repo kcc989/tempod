@@ -1,0 +1,11 @@
+The following is a diff from the previous accessibility tree for Window: "Tempo" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 35-46
+~			32 tab (settable, boolean) Info, Value: off
+~			34 tab (settable, boolean) Guides, Value: on
++				55 button Close Guides
++			56 tab (settable, boolean) New tool tab, Value: off
++		57 button Refresh
++		58 button Create guide
++		59 button
++		60 button Wake workspace
+The focused UI element is 0 standard window Tempo, Secondary Actions: Raise

@@ -1,0 +1,12 @@
+{
+  "area": "spacing",
+  "run": 2,
+  "version": "2.1-draft",
+  "calibrated": false,
+  "requestSha256": "5bce29bb72a18639027eedde253252f5d9cfc2e1a4ec5cf5a9a5496441e571bc",
+  "attemptStatuses": [200],
+  "timestamp": "2026-10-13T22:08:14Z",
+  "stateless": true,
+  "priorResultsIncluded": false,
+  "groupLabelIncluded": false
+}

@@ -204,8 +204,8 @@ test(
     const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
     await expect(prompt).toBeFocused();
     await prompt.fill("Update keeled documentation");
-    await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
-    await page.getByRole("option", { name: "Fixture Sonnet · Claude", exact: true }).click();
+    await dialog.getByRole("button", { name: "Model", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Fixture Sonnet · Claude", exact: true }).click();
     await dialog.getByRole("button", { name: /^Create/ }).click();
     await expect.poll(() => fixture.inputs("createWorkspace").length).toBe(1);
     expect(fixture.inputs("createWorkspace")[0]).toMatchObject({
@@ -294,6 +294,7 @@ test("sleep and archive expose the correct read-only and restore states", async 
 
 test("desktop review, comments and file navigation", async ({ page, fixture }) => {
   test.skip(test.info().project.name.startsWith("phone"), "phone review has its own flow");
+  await page.getByRole("button", { name: /^Changes\b/ }).click();
   await page.getByRole("option", { name: /README.md/ }).click();
   await expect(page.getByText("new README", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: /Comment on file/ }).click();
@@ -328,7 +329,7 @@ test("desktop shortcuts, settings, live scripts and terminal", async ({ page, fi
   await expect(page.getByText("Ready on port 3000", { exact: false })).toBeVisible();
   await page.keyboard.press("Alt+r");
   await expect.poll(() => fixture.inputs("stopScript").length).toBe(1);
-  await page.getByRole("tab", { name: "New tool tab" }).click();
+  await page.getByRole("button", { name: "New tool tab" }).click();
   await page.getByRole("button", { name: "Terminal", exact: true }).click();
   await expect(page.getByRole("button", { name: /New terminal/ })).toBeVisible();
   await expect(page.locator(".xterm-screen")).toBeVisible();
@@ -391,8 +392,10 @@ test("theme follows the selected appearance and persists across reloads", async 
 test("tool tabs keep the chat and draft visible beside files and Browser Run", async ({ page, fixture }) => {
   const message = page.getByRole("textbox", { name: "Message", exact: true });
   await message.fill("Keep this draft");
-  await page.getByRole("tab", { name: "New tool tab" }).click();
-  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await page.getByRole("button", { name: "Toggle right side", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tools", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await page.getByRole("tab", { name: "Files", exact: true }).click();
   await page.getByRole("treeitem", { name: "README.md", exact: true }).click();
   await expect(page.getByText("export const keeled = true;", { exact: false })).toBeVisible();
   await expect(message).toHaveValue("Keep this draft");
@@ -404,7 +407,7 @@ test("tool tabs keep the chat and draft visible beside files and Browser Run", a
     route.fulfill({ contentType: "text/html", body: "<p>Browser Run fixture</p>" }),
   );
   fixture.updateWorkspace({ browserActive: true });
-  await page.getByRole("tab", { name: "New tool tab" }).click();
+  await page.getByRole("button", { name: "New tool tab" }).click();
   await page.getByRole("button", { name: "Browser", exact: true }).click();
   await expect(page.frameLocator('iframe[title="Live View"]').getByText("Browser Run fixture")).toBeVisible();
   await expect(message).toHaveValue("Keep this draft");
@@ -415,6 +418,6 @@ test("tool tabs keep the chat and draft visible beside files and Browser Run", a
     "true",
   );
   await page.getByRole("button", { name: "Close tool tab" }).last().click();
-  await expect(page.getByRole("heading", { name: "Open a tool" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tools", exact: true })).toBeVisible();
   await expect(message).toBeVisible();
 });

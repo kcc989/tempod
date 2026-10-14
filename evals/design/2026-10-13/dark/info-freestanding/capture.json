@@ -1,0 +1,65 @@
+{
+  "context": {
+    "app": {
+      "name": "Tempo",
+      "category": "Agent coding workspace",
+      "platform": "desktop",
+      "primary_user": "Developer",
+      "primary_job": "Read agent work and manage project workspaces"
+    },
+    "screen": {
+      "name": "Workspace Info",
+      "purpose": "Inspect workspace state and open related work"
+    },
+    "image_legend": [
+      "Image 1: app window",
+      "Image 2: workspace sidebar",
+      "Image 3: workspace header",
+      "Image 4: workspace information"
+    ],
+    "page_text": "Window: \"Tempo\", App: Tempo.\n0 standard window Tempo, Secondary Actions: Raise\n\t1 container\n\t\t2 button New workspace\n\t\t3 button Search workspaces\n\t\t4 button Sort workspaces: Last activity\n\t\t5 button Add project\n\t\t6 button kcc989/farstep, expanded\n\t\t7 button New workspace in kcc989/farstep\n\t\t8 list kcc989/farstep\n\t\t\t9 container (selectable) lisbon \u00b7 Sleeping\nSleeping\n\t\t10 button Archived workspaces\n\t\t11 button Saved chats\n\t\t12 button Settings\n\t\t13 button Rename branch\n\t\t14 button Copy branch name\n\t\t15 button Sleeping\n\t\t16 button Workspace info\n\t\t17 button Toggle right side\n\t\t18 tab group\n\t\t\t19 tab (settable, boolean) Farstep project README overview, Value: on\n\t\t\t\t20 button Close chat\n\t\t\t21 tab (settable, boolean) Mac E2E Probe \u00b7 Codex, Value: off\n\t\t\t\t22 button Close chat\n\t\t\t23 button\n\t\t24 button New chat\n\t\t25 container (selectable)\n\t\t26 text entry area (settable) Message, Placeholder: Message Claude Code to wake this workspace\n\t\t27 button Model and thinking: Opus 5.5\n\t\t28 button Context usage: 30785 of 1000000 tokens (3%)\n\t\t29 button Attach file\n\t\t30 button Send\n\t\t31 button Close Info\n\t\t32 button Wake\n\t\t33 button Changes\n\t\t34 button Guides\n\t\t35 button Farstep project README overview\n\t\t36 button Turn summaries and check reporting\n\t\t37 button Open artifacts \u00b7 0\n\t\t38 button Workspace controls, collapsed\n39 menu bar\n\t40 Tempo\n\t41 File\n\t42 Edit\n\t43 View\n\t44 Workspace\n\t45 Window\n\t46 Help\n\nThe focused UI element is 0 standard window Tempo, Secondary Actions: Raise"
+  },
+  "known": {
+    "ai": true,
+    "async": false,
+    "collection": true,
+    "editing": false,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Observed sleeping workspace, idle chats and assistant transcript; no running turn or spinner",
+  "images": [
+    {
+      "file": "full.png",
+      "bytes": 1014928,
+      "size": [3024, 1898],
+      "sha256": "91922ced8070eb962317716641d921e5934704b946d5fa37a00bab22cfcbc2ea",
+      "crop": null
+    },
+    {
+      "file": "detail-1.png",
+      "bytes": 76649,
+      "size": [444, 1898],
+      "sha256": "8b038c8e53b5a241f44574bace769dcc2678fc1e78bd26e286b1e6dbeb3601a2",
+      "crop": [0, 0, 444, 1898]
+    },
+    {
+      "file": "detail-2.png",
+      "bytes": 90119,
+      "size": [2580, 160],
+      "sha256": "6ac0d58c43cf5cedb5baa6cb164fd5f353a5d89d689eecb5d9e03c405862ca46",
+      "crop": [444, 0, 3024, 160]
+    },
+    {
+      "file": "detail-3.png",
+      "bytes": 108009,
+      "size": [720, 1400],
+      "sha256": "8f8b8f596c58c7a572fa7ac31501b6bb65906e8563df56d785d340eed0330fe6",
+      "crop": [2304, 0, 3024, 1400]
+    }
+  ],
+  "checks": {},
+  "acceptanceEnabled": false,
+  "questionVersion": "2.1-draft"
+}

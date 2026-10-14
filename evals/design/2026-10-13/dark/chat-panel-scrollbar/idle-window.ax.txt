@@ -1,0 +1,52 @@
+Window: "Tempo", App: Tempo.
+0 standard window Tempo, Secondary Actions: Raise
+	1 container
+		2 button New workspace
+		3 button Search workspaces
+		4 button Sort workspaces: Last activity
+		5 button Add project
+		6 button kcc989/farstep, expanded
+		7 button New workspace in kcc989/farstep
+		8 list kcc989/farstep
+			9 container (selectable) lisbon · Sleeping
+Sleeping
+		10 button Archived workspaces
+		11 button Saved chats
+		12 button Settings
+		13 button Rename branch
+		14 button Copy branch name
+		15 button Sleeping
+		16 button Workspace info
+		17 button Toggle right side
+		18 tab group
+			19 tab (settable, boolean) Farstep project README overview, Value: on
+				20 button Close chat
+			21 tab (settable, boolean) Turn summaries and check reporting, Value: off
+				22 button Close chat
+			23 button
+		24 button New chat
+		25 container (selectable)
+		26 text entry area (settable) Message, Placeholder: Message Claude Code to wake this workspace
+		27 button Model and thinking: Opus 5.5
+		28 button Context usage: 30785 of 1000000 tokens (3%)
+		29 button Attach file
+		30 button Send
+		31 button Close Info
+		32 button Wake
+		33 button Changes
+		34 button Guides
+		35 button Farstep project README overview
+		36 button Turn summaries and check reporting
+		37 button Open artifacts · 0
+		38 button Workspace controls, collapsed
+	39 menu button Window sharing
+40 menu bar
+	41 Tempo
+	42 File
+	43 Edit
+	44 View
+	45 Workspace
+	46 Window
+	47 Help
+
+The focused UI element is 0 standard window Tempo, Secondary Actions: Raise
