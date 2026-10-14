@@ -1,4 +1,6 @@
-use gpui_kit::component::v_flex;
+use crate::terminal_launch::TerminalApplication;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, Styled as _, Task,
     Window, div,
@@ -9,6 +11,9 @@ use tempo_client::{ChannelEvent, Client, TerminalFrame, TerminalHandle};
 pub struct RemoteTerminal {
     view: Entity<tempo_terminal::TerminalView>,
     channel: TerminalHandle,
+    workspace_id: String,
+    terminal_id: String,
+    launch_pending: bool,
     error: Option<String>,
     _output: Task<()>,
     _input: Task<()>,
@@ -88,6 +93,9 @@ impl RemoteTerminal {
             Self {
                 view,
                 channel,
+                workspace_id: workspace_id.into(),
+                terminal_id: terminal_id.into(),
+                launch_pending: false,
                 error: None,
                 _output: output,
                 _input: input_task,
@@ -95,10 +103,65 @@ impl RemoteTerminal {
         }))
     }
 }
+impl RemoteTerminal {
+    /// 07: the same cloud session in Terminal or iTerm through the bundled `tempo` bridge.
+    fn open_external(&mut self, application: TerminalApplication, cx: &mut Context<Self>) {
+        if self.launch_pending {
+            return;
+        }
+        self.launch_pending = true;
+        self.error = None;
+        let (workspace, terminal) = (self.workspace_id.clone(), self.terminal_id.clone());
+        let (send, result) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let _ = send.send_blocking(crate::terminal_launch::open(
+                application,
+                &workspace,
+                &terminal,
+            ));
+        });
+        cx.spawn(async move |this, cx| {
+            if let Ok(result) = result.recv().await {
+                let _ = this.update(cx, |t, cx| {
+                    t.launch_pending = false;
+                    t.error = result.err().map(String::from);
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+}
 impl Render for RemoteTerminal {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let launch = |id: &'static str, label: &'static str, app: TerminalApplication| {
+            Button::new(id)
+                .ghost()
+                .small()
+                .label(label)
+                .disabled(self.launch_pending)
+                .on_click(cx.listener(move |this, _, _, cx| this.open_external(app, cx)))
+        };
         v_flex()
             .size_full()
+            .child(
+                h_flex()
+                    .px_3()
+                    .pt_1()
+                    .gap_1()
+                    .justify_end()
+                    .child(launch(
+                        "open-terminal-app",
+                        "Open in Terminal",
+                        TerminalApplication::Terminal,
+                    ))
+                    .child(launch(
+                        "open-iterm-app",
+                        "Open in iTerm",
+                        TerminalApplication::ITerm,
+                    )),
+            )
             .children(self.error.clone().map(|e| div().px_3().pt_2().child(e)))
             .child(
                 div()

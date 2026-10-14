@@ -16,10 +16,12 @@ if [[ "$mode" != --adhoc ]]; then
   bunx --no-install wrangler r2 object get "$TEMPO_MAC_BUCKET/clients/mac/latest.json" --remote --file "$out/previous.json"
   python3 scripts/mac/manifest.py newer "$version" "$out/previous.json"
 fi
-cargo build --locked --release -p tempo-mac --target aarch64-apple-darwin
+cargo build --locked --release -p tempo-mac -p tempo-keychain --bins --target aarch64-apple-darwin
 app="$out/Tempo.app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Helpers"
 cp target/aarch64-apple-darwin/release/Tempo "$app/Contents/MacOS/Tempo"
+cp target/aarch64-apple-darwin/release/tempo "$app/Contents/MacOS/tempo"
+cp target/aarch64-apple-darwin/release/TempoKeychain "$app/Contents/Helpers/TempoKeychain"
 cp apps/mac/resources/Info.plist "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $version" "$app/Contents/Info.plist"
@@ -27,8 +29,12 @@ python3 scripts/mac/icon.py "$out/Tempo.iconset"
 iconutil --convert icns --output "$app/Contents/Resources/AppIcon.icns" "$out/Tempo.iconset"
 plutil -lint "$app/Contents/Info.plist" apps/mac/resources/Tempo.entitlements
 if [[ "$mode" == --adhoc ]]; then
-  codesign --force --sign - "$app"
+  codesign --force --sign - --identifier dev.tempo.mac.terminal "$app/Contents/MacOS/tempo"
+  codesign --force --sign - --identifier dev.tempo.mac.keychain "$app/Contents/Helpers/TempoKeychain"
+  codesign --force --sign - --entitlements apps/mac/resources/Tempo.entitlements "$app"
 else
+  codesign --force --options runtime --timestamp --sign "$TEMPO_MAC_SIGN_IDENTITY" --identifier dev.tempo.mac.terminal "$app/Contents/MacOS/tempo"
+  codesign --force --options runtime --timestamp --sign "$TEMPO_MAC_SIGN_IDENTITY" --identifier dev.tempo.mac.keychain "$app/Contents/Helpers/TempoKeychain"
   codesign --force --options runtime --timestamp --entitlements apps/mac/resources/Tempo.entitlements --sign "$TEMPO_MAC_SIGN_IDENTITY" "$app"
 fi
 codesign --verify --deep --strict --verbose=2 "$app"

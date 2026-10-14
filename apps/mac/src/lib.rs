@@ -19,6 +19,8 @@ pub mod menus;
 pub mod platform;
 pub mod storage;
 pub mod stores;
+pub mod terminal_cli;
+pub mod terminal_launch;
 pub mod update;
 pub mod url_scheme;
 pub mod views;
@@ -72,8 +74,10 @@ mod tests {
     }
 
     #[test]
-    fn entitlements_have_no_exceptions() {
+    fn entitlements_allow_terminal_launch_without_runtime_exceptions() {
         let entitlements = include_str!("../resources/Tempo.entitlements");
-        assert!(!entitlements.contains("<key>"));
+        assert!(entitlements.contains("<key>com.apple.security.automation.apple-events</key>"));
+        assert_eq!(entitlements.matches("<key>").count(), 1);
+        assert!(!entitlements.contains("com.apple.security.cs."));
     }
 }

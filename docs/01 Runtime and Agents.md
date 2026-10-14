@@ -274,7 +274,7 @@ Each agent is an ACP v1 adapter process that `tempod` starts and drives over std
 | Login (API key) | `ANTHROPIC_API_KEY=tempo-placeholder` | `OPENAI_API_KEY=tempo-placeholder` | Same as default | Same as default |
 | Extra env | `CLAUDE_CONFIG_DIR=/home/tempo/.claude` | `CODEX_HOME=/home/tempo/.codex`, `INITIAL_AGENT_MODE=agent-full-access` | — | `PI_CODING_AGENT_SESSION_DIR=/home/tempo/.pi/agent/sessions` |
 | Session files | `~/.claude/projects/-workspace/<sessionId>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `~/.local/share/opencode/project/<slug>/storage/` | `~/.pi/agent/sessions/`, `~/.pi/pi-acp/session-map.json` |
-| Default mode | `bypassPermissions` | `agent-full-access` | Agent default (`build`) | Agent default |
+| Default mode | `auto` | `agent-full-access` | Agent default (`build`) | Agent default |
 | Plan mode | `plan` | `read-only` | `plan` | None |
 | Model choice | ACP config option, category `model` | Same | Same; `agent.models.opencode` is required | Same; `agent.models.pi` is required |
 | `session/load` | Yes | Yes | Verify in S9 | Yes, through `session-map.json` |
@@ -465,7 +465,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 - The turn-summary rule is this fixed text. The web and Mac clients show the last agent message of a turn as its answer (04, Work row), so it must stand alone:
 
   ```text
-  Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that says what you changed, which checks you ran and their results, and what is left to do. Name the command for each check. Link each file you name as file:///workspace/<path>.
+  Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that answers the user or says what you did. If you changed files, say what you changed and link each file you name as file:///workspace/<path>. If you ran checks, name the command for each check and give its result. If work is left, say what it is. Do not report files you did not change, checks you did not run, or that nothing is left to do.
   ```
 
 - `tempod` calls `session/prompt` and turns every `session/update` into items (02). When `session/prompt` returns, it sends `turn.ended {turnId, stopReason}`.
@@ -611,6 +611,7 @@ const proc = await this.ctx.container.exec(
   - Server to client, binary: `proc.stdout`.
   - Server to client, text: `{"type":"ready"}` once, after the process starts.
 - The DO MUST `accept()` this WebSocket. It MUST NOT use hibernation for it; hibernation drops the process handle.
+- Set the accepted socket's `binaryType` to `"arraybuffer"` before accepting it, so keyboard frames reach `proc.stdin` as bytes regardless of the runtime's default binary type. Send `ready` only after both stdin and stdout are available. A failed stdin write closes the socket with 1011 so the client can reconnect.
 - When the WebSocket closes, kill the `exec` process. The tmux session keeps running, so a reconnect gets the same shell and scrollback.
 - An open terminal counts as activity, so the workspace does not sleep.
 - The terminal tab list comes from `tmux list-sessions -F '#S'`, run through `tempod` (`terminal.list`).

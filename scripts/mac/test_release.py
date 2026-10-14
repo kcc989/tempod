@@ -71,12 +71,18 @@ class DevLaunchTests(unittest.TestCase):
             scripts.mkdir(parents=True)
             shutil.copyfile(pathlib.Path(__file__).with_name("dev.sh"), scripts / "dev.sh")
             (scripts / "icon.py").write_text("")
+            (scripts / "verify-dev-signing.py").write_text(
+                "import os\nfrom pathlib import Path\n"
+                "with Path(os.environ['TEMPO_TEST_COMMANDS']).open('a') as log: log.write('verify-dev-signing\\n')\n"
+            )
             resources = root / "apps/mac/resources"
             resources.mkdir(parents=True)
             (resources / "Info.plist").write_text("fixture")
+            (resources / "Tempo.entitlements").write_text("fixture")
             binary = root / "target/debug"
             binary.mkdir(parents=True)
             (binary / "Tempo").write_text("fixture")
+            (binary / "tempo").write_text("terminal bridge fixture")
             (binary / "TempoKeychain").write_text("fixture")
             helper = root / "crates/tempo-keychain/src"
             helper.mkdir(parents=True)
@@ -90,7 +96,7 @@ class DevLaunchTests(unittest.TestCase):
                 "pgrep": "exit 1",
                 "uname": 'if [ "$1" = -s ]; then echo Darwin; else echo arm64; fi',
                 "security": 'echo \'1) ABCDEF "Tempo Development"\'' if identity else 'echo "0 valid identities found"',
-                "cargo": 'echo cargo >> "$TEMPO_TEST_COMMANDS"',
+                "cargo": "if [ \"$1\" = metadata ]; then printf '{\"target_directory\":\"%s/target\"}\\n' \"$PWD\"; else echo cargo >> \"$TEMPO_TEST_COMMANDS\"; fi",
                 "iconutil": 'echo iconutil >> "$TEMPO_TEST_COMMANDS"',
                 "codesign": 'echo "codesign $*" >> "$TEMPO_TEST_COMMANDS"',
                 "open": 'echo open >> "$TEMPO_TEST_COMMANDS"',

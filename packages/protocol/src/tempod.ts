@@ -500,7 +500,7 @@ export const HANDOFF_MAX_CHARS = 24_000;
 
 /** Turn-summary rule (01, Send a prompt, block 1). */
 export const TURN_SUMMARY_RULE =
-  "Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that says what you changed, which checks you ran and their results, and what is left to do. Name the command for each check. Link each file you name as file:///workspace/<path>.";
+  "Tempo shows your last message in each turn as the summary of that turn. End every turn with a short final message that answers the user or says what you did. If you changed files, say what you changed and link each file you name as file:///workspace/<path>. If you ran checks, name the command for each check and give its result. If work is left, say what it is. Do not report files you did not change, checks you did not run, or that nothing is left to do.";
 
 export const revertNote = (seq: number): string =>
   `Note: the user reverted the files to the state after turn ${seq}. Changes made after that point are gone.`;

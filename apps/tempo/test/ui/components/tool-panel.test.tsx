@@ -4,6 +4,7 @@ const environment = createUiEnvironment();
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it } from "vitest";
+import { TerminalRuntimeContext, type OpenTerminal } from "../../../src/ui/components/processes/TerminalView";
 import { ToolPanel } from "../../../src/ui/components/shell/ToolPanel";
 import { newTerminal, resetUiState, selectTool } from "../../../src/ui/state/workspace-ui";
 import { elementOf } from "../elements.ts";
@@ -63,4 +64,36 @@ it("disables the grid's Terminal row while nine terminal tabs are open", async (
   expect(row).toHaveProperty("disabled", true);
   act(() => row.parentElement!.focus());
   expect((await screen.findAllByText("Nine terminals are open")).length).toBeGreaterThan(0);
+});
+
+const openStub: OpenTerminal = async () => ({
+  terminal: {
+    cols: 80,
+    rows: 24,
+    options: {},
+    focus() {},
+    dispose() {},
+    reset() {},
+    write() {},
+    onData() {},
+    onBinary() {},
+    onResize() {},
+  },
+  fit: () => true,
+});
+
+it("keeps each opened shell mounted while another terminal tab is selected", () => {
+  environment.setState({ workspace: detail({ state: "ready" }) });
+  render(
+    <TerminalRuntimeContext.Provider value={openStub}>
+      <ToolPanel workspaceId={WS} />
+    </TerminalRuntimeContext.Provider>,
+    { wrapper: environment.Provider },
+  );
+  openFromGrid();
+  openFromGrid();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Terminal 1" }), { button: 0, ctrlKey: false });
+  expect(screen.getByRole("tab", { name: "Terminal 1" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByLabelText("Terminal t1")).toBeDefined();
+  expect(screen.getByLabelText("Terminal t2")).toBeDefined();
 });

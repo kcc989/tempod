@@ -464,6 +464,10 @@ The owner asked for stage 5 of `CLOUDFLARE-CODE-HOSTING-PLAN.md` on the Artifact
 
 Verification: Worker tests cover pipeline validation and revisions, ingestion dedupe, supersede and cancel, `needs`, the two-job limit, stale results, merge gating with workspace check events, runner launch/log/report, checkout failure, timeout, a lost container, a lost report and CI egress. tempod tests cover `ci.checkout`. Web model/component and Mac tests cover the Checks tab and PR checks. Live Artifacts, hosted container CI and native visual acceptance are not run.
 
+## Local Mac terminal bridge
+
+The user approved a bundled `tempo terminal <workspace-id-or-slug> [t1..t9]` helper and Terminal.app/iTerm launch buttons. This adds an external terminal option to the current native process panel and preserves its embedded terminal. Credentials reuse the saved host's stable Keychain helper, and the cloud terminal protocol is unchanged. Both development and release packaging include/sign the CLI and Keychain helper. Actual macOS launch and signing remain platform acceptance checks.
+
 ## Connected base agents in Settings (2026-10-14)
 
 The connected-base editor changes were rebased onto the current agent library. Web and Mac keep Project default and saved disconnected bases, hide unconnected concrete choices, and require confirmed credentials for a new definition. A new definition selects the first connected concrete base. Loading/error states provide recovery; native editor scrolling keeps Save reachable. The former custom-agent and Roles APIs remain removed.
@@ -471,3 +475,9 @@ The connected-base editor changes were rebased onto the current agent library. W
 Model discovery starts configured adapters concurrently and preserves result order. The existing detached-event callback accepts Codex auth refreshes and updates only matching credential-version metadata in the cache signature. Secrets remain outside workspace event storage; CI detached events retain their replay owner.
 
 Pre-rebase historical validation and native observations are not acceptance evidence for this revision. Current validation is recorded in the PR; no local test suite is run during this design pass. Native visual acceptance and the four-area calibration remain incomplete.
+
+## Claude auto mode and turn summary (2026-10-14)
+
+The owner changed the Claude default mode from `bypassPermissions` to `auto` (01, Agents table). `claude-agent-acp` 0.89.1 advertises `auto` (evidence `docs/evidence/core/claude.json`). If an adapter does not offer it, `tempod` logs the failed mode change and the session keeps the agent's current mode. Leaving plan mode in web and Mac returns to `auto`. Codex, OpenCode and Pi are unchanged.
+
+The turn-summary rule (01, Send a prompt) now asks the agent to report changes and checks only when it made them. The old text made agents end question-only turns with "I changed no files and ran no checks".

@@ -1244,11 +1244,11 @@ describe.concurrent("createSession, renameSession and closeSession", { timeout: 
     expect(s.id).toMatch(ULID);
     await waitFor(() => w.tempod.requestsOf("session.start").length === 1, 5000, "session.start");
     // 01 Start a session 2: session.start {sessionId, agent, env, modeId, model, acpSessionId: null};
-    // 01 Agents: Claude default mode bypassPermissions
+    // 01 Agents: Claude default mode auto
     expect(w.tempod.requestsOf("session.start")[0]).toMatchObject({
       sessionId: s.id,
       agent: "claude",
-      modeId: "bypassPermissions",
+      modeId: "auto",
       model: "claude-opus-4",
       acpSessionId: null,
     });

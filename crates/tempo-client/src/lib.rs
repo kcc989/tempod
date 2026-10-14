@@ -9,6 +9,7 @@ mod prng;
 mod runtime;
 mod server;
 pub mod state;
+pub mod terminal_bridge;
 mod tls;
 mod token;
 mod version;

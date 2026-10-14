@@ -163,7 +163,7 @@ pub fn first_permission_option<'a>(
 }
 pub fn plan_target(session: &Session, previous: Option<&str>) -> Option<String> {
     let (plan, default) = match session.agent {
-        AgentId::Claude => ("plan", "bypassPermissions"),
+        AgentId::Claude => ("plan", "auto"),
         AgentId::Codex => ("read-only", "agent-full-access"),
         AgentId::Opencode => ("plan", "build"),
         AgentId::Pi => return None,
