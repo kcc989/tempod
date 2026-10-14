@@ -910,6 +910,89 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getProfile": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetProfileIn.json"
+        },
+        "output": {
+          "$ref": "Profile.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listProfileProjects": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProfileProjectsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "ProjectSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getPublicProject": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetPublicProjectIn.json"
+        },
+        "output": {
+          "$ref": "ProjectSummary.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setProjectVisibility": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetProjectVisibilityIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setProjectPinned": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetProjectPinnedIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listEnvironments": {
       "type": "object",
       "properties": {
@@ -2263,6 +2346,11 @@
     "listBranches",
     "listOpenPullRequests",
     "setProjectEnvironment",
+    "getProfile",
+    "listProfileProjects",
+    "getPublicProject",
+    "setProjectVisibility",
+    "setProjectPinned",
     "listEnvironments",
     "createEnvironment",
     "updateEnvironment",

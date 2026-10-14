@@ -10,6 +10,7 @@ import * as repositories from "./handlers/repositories.ts";
 import * as issues from "./handlers/issues.ts";
 import * as pullRequests from "./handlers/pull-requests.ts";
 import * as ci from "./handlers/ci.ts";
+import * as profile from "./handlers/profile.ts";
 import {
   createSession,
   createWorkspace,
@@ -17,17 +18,26 @@ import {
   listWorkspaces,
   viaWorkspace,
 } from "./handlers/workspaces.ts";
-import type { Handler } from "./run.ts";
+import type { VisitorFnName } from "./policy.ts";
+import type { Handler, VisitorHandler } from "./run.ts";
 
-type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
+type NonWorkspace = Exclude<FnName, WorkspaceFnName | VisitorFnName>;
+
+/** Functions that also run without a session (11, Function access). */
+const visitor = {
+  getProfile: profile.getProfile,
+  listProfileProjects: profile.listProfileProjects,
+  getPublicProject: profile.getPublicProject,
+  getRepository: repositories.getRepository,
+  getRepositoryFile: repositories.getRepositoryFile,
+  listRepositoryCommits: repositories.listRepositoryCommits,
+  listBranches: projects.listBranches,
+} satisfies { [K in VisitorFnName]: VisitorHandler<K> };
 
 const own = {
   createRepository: repositories.createRepository,
   importRepository: repositories.importRepository,
   linkArtifactRepository: repositories.linkArtifactRepository,
-  getRepository: repositories.getRepository,
-  getRepositoryFile: repositories.getRepositoryFile,
-  listRepositoryCommits: repositories.listRepositoryCommits,
   listRepositoryPullRequests: pullRequests.listRepositoryPullRequests,
   getRepositoryPullRequest: pullRequests.getRepositoryPullRequest,
   createRepositoryPullRequest: pullRequests.createRepositoryPullRequest,
@@ -68,9 +78,10 @@ const own = {
   getProjectConversation: conversations.getProjectConversation,
   updateProjectSettings: projects.updateProjectSettings,
   unlinkProject: projects.unlinkProject,
-  listBranches: projects.listBranches,
   listOpenPullRequests: projects.listOpenPullRequests,
   setProjectEnvironment: environments.setProjectEnvironment,
+  setProjectVisibility: profile.setProjectVisibility,
+  setProjectPinned: profile.setProjectPinned,
   listEnvironments: environments.listEnvironments,
   createEnvironment: environments.createEnvironment,
   updateEnvironment: environments.updateEnvironment,
@@ -105,6 +116,7 @@ const workspaceHandlers = Object.fromEntries(WORKSPACE_FNS.map((name) => [name, 
 const workspace = workspaceHandlers as { [K in WorkspaceFnName]: Handler<K> };
 
 export const HANDLERS = {
+  ...visitor,
   ...own,
   ...workspace,
   createSession,

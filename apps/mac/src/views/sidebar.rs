@@ -376,7 +376,17 @@ fn navigation(cx: &App) -> impl IntoElement {
         )
 }
 
+/// 04, Sidebar: `Profile` opens `<Tempo URL>/<username>` in the default browser (07, Scope).
+fn profile_url(cx: &App) -> Option<String> {
+    let app = crate::app::AppState::try_global(cx)?;
+    let app = app.read(cx);
+    let username = super::profile_model::owner_username(&app.hub.read(cx).projects)?;
+    let origin = app.server_url.clone()?;
+    Some(super::profile_model::profile_url(&origin, &username))
+}
+
 fn footer(cx: &App) -> impl IntoElement {
+    let profile = profile_url(cx);
     v_flex()
         .flex_wrap()
         .flex_none()
@@ -402,6 +412,21 @@ fn footer(cx: &App) -> impl IntoElement {
                     window.dispatch_action(Box::new(crate::actions::ShowRepositories), cx)
                 }),
         )
+        .children(profile.map(|url| {
+            Button::new("profile")
+                .ghost()
+                .small()
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .w_full()
+                .icon(IconName::ExternalLink)
+                .accessibility_label("Profile")
+                .child(div().w_full().text_left().child("Profile"))
+                .tooltip("Open your public profile in the browser")
+                .on_click(move |_, _, cx| cx.open_url(&url))
+        }))
         .child(
             Button::new("history")
                 .ghost()

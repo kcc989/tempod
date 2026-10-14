@@ -27,6 +27,7 @@ pub mod main_window;
 pub mod mcp_model;
 pub mod palette;
 pub mod processes;
+pub mod profile_model;
 pub mod repositories;
 pub mod repository_checks;
 pub mod review;

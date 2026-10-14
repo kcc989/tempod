@@ -9,6 +9,7 @@ import {
   MergeMethod,
   ReviewSide,
   IssueState,
+  ProjectVisibility,
 } from "./enums.ts";
 import { EgressPolicy } from "./enums.ts";
 import {
@@ -33,7 +34,9 @@ import {
   CredentialStatus,
   Diagnostics,
   Mention,
+  Profile,
   Project,
+  ProjectSummary,
   CiPipeline,
   CiRun,
   CiRunDetail,
@@ -283,6 +286,17 @@ export const API = {
     Schema.Struct({ projectId: S, environmentId: Schema.NullOr(S) }),
     Project,
   ),
+
+  // Public projects, the profile and pins (11)
+  getProfile: fn("GET", Schema.Struct({ username: NonEmpty }), Profile),
+  listProfileProjects: fn(
+    "GET",
+    Schema.Struct({ username: NonEmpty, offset: opt(N) }),
+    Schema.Array(ProjectSummary),
+  ),
+  getPublicProject: fn("GET", Schema.Struct({ username: NonEmpty, slug: NonEmpty }), ProjectSummary),
+  setProjectVisibility: fn("POST", Schema.Struct({ projectId: S, visibility: ProjectVisibility }), Project),
+  setProjectPinned: fn("POST", Schema.Struct({ projectId: S, pinned: B }), Project),
 
   // Environments (01, Environments)
   listEnvironments: fn("GET", Empty, Schema.Array(Environment)),

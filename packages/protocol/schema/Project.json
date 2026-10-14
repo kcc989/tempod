@@ -126,6 +126,53 @@
           "type": "null"
         }
       ]
+    },
+    "username": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "slug": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "visibility": {
+      "anyOf": [
+        {
+          "$ref": "ProjectVisibility.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pinned": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["id", "installationId", "repoId", "owner", "name", "defaultBranch", "settings", "sortOrder"],

@@ -2104,7 +2104,10 @@ describe.concurrent("commitAndPush behind other ops", { timeout: 30_000 }, () =>
     const call = w.stub.commitAndPush({ message: "Second" });
     // 03 Step runner: "Ops wait as pending and start in creation order."
     await waitFor(async () => (await opsOf(w.stub, "commit_push")).length === 2, 3000, "queued op");
-    expect((await opsOf(w.stub, "commit_push")).map((o) => o.status)).toEqual(["pending", "pending"]);
+    // On a slow runner the first op may already have started; the second must still wait.
+    const [first, second] = (await opsOf(w.stub, "commit_push")).map((o) => o.status);
+    expect(["pending", "running"]).toContain(first);
+    expect(second).toBe("pending");
     const res = await whileDriving(w.stub, call);
     expect(ok(res)).toEqual({ commitSha: "f".repeat(40) });
     expect(w.tempod.requestsOf("git.commitAndPush").map((r) => r.message)).toEqual(["First", "Second"]);

@@ -1,12 +1,34 @@
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { TempoError } from "@tempo/protocol";
 import * as schema from "../db/d1.ts";
 import type { Env } from "../env.ts";
 import { getGithubAppConfig } from "../github/app.ts";
-import { authOptions } from "./options.ts";
+import { authOptions, type UsernameTaken } from "./options.ts";
+
+/** Another user row, not the one of this GitHub id, has the name (11, Identity). */
+export const d1UsernameTaken =
+  (env: Env): UsernameTaken =>
+  async (name, githubId) => {
+    const other = await drizzle(env.DB, { schema })
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .leftJoin(
+        schema.account,
+        and(eq(schema.account.userId, schema.user.id), eq(schema.account.providerId, "github")),
+      )
+      .where(
+        and(
+          eq(schema.user.username, name),
+          or(ne(schema.account.accountId, githubId), isNull(schema.account.accountId)),
+        ),
+      )
+      .get();
+
+    return other !== undefined;
+  };
 
 const createAuth = (env: Env, github: { clientId: string; clientSecret: string } | null) => {
   const db = drizzle(env.DB, { schema });
@@ -17,6 +39,7 @@ const createAuth = (env: Env, github: { clientId: string; clientSecret: string }
       secret: env.BETTER_AUTH_SECRET,
       ownerGithubId: env.TEMPO_OWNER_GITHUB_ID,
       github,
+      usernameTaken: d1UsernameTaken(env),
     }),
     database: drizzleAdapter(db, { provider: "sqlite", schema }),
   });

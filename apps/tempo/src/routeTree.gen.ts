@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as DeviceRouteImport } from './routes/device'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as UsernameIndexRouteImport } from './routes/$username/index'
+import { Route as UsernameSlugRouteImport } from './routes/$username/$slug'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppRepositoriesRouteImport } from './routes/_app/repositories'
@@ -30,6 +32,16 @@ const DeviceRoute = DeviceRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsernameIndexRoute = UsernameIndexRouteImport.update({
+  id: '/$username/',
+  path: '/$username/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsernameSlugRoute = UsernameSlugRouteImport.update({
+  id: '/$username/$slug',
+  path: '/$username/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -62,17 +74,21 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/device': typeof DeviceRoute
   '/login': typeof LoginRoute
+  '/$username/$slug': typeof UsernameSlugRoute
   '/history': typeof AppHistoryRoute
   '/repositories': typeof AppRepositoriesRoute
   '/workspaces': typeof AppWorkspacesRoute
+  '/$username/': typeof UsernameIndexRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
 export interface FileRoutesByTo {
   '/device': typeof DeviceRoute
   '/login': typeof LoginRoute
+  '/$username/$slug': typeof UsernameSlugRoute
   '/history': typeof AppHistoryRoute
   '/repositories': typeof AppRepositoriesRoute
   '/workspaces': typeof AppWorkspacesRoute
+  '/$username': typeof UsernameIndexRoute
   '/': typeof AppIndexRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
@@ -81,9 +97,11 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/device': typeof DeviceRoute
   '/login': typeof LoginRoute
+  '/$username/$slug': typeof UsernameSlugRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/repositories': typeof AppRepositoriesRoute
   '/_app/workspaces': typeof AppWorkspacesRoute
+  '/$username/': typeof UsernameIndexRoute
   '/_app/': typeof AppIndexRoute
   '/_app/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
@@ -93,17 +111,21 @@ export interface FileRouteTypes {
     | '/'
     | '/device'
     | '/login'
+    | '/$username/$slug'
     | '/history'
     | '/repositories'
     | '/workspaces'
+    | '/$username/'
     | '/w/$workspaceId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/device'
     | '/login'
+    | '/$username/$slug'
     | '/history'
     | '/repositories'
     | '/workspaces'
+    | '/$username'
     | '/'
     | '/w/$workspaceId'
   id:
@@ -111,9 +133,11 @@ export interface FileRouteTypes {
     | '/_app'
     | '/device'
     | '/login'
+    | '/$username/$slug'
     | '/_app/history'
     | '/_app/repositories'
     | '/_app/workspaces'
+    | '/$username/'
     | '/_app/'
     | '/_app/w/$workspaceId'
   fileRoutesById: FileRoutesById
@@ -122,6 +146,8 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   DeviceRoute: typeof DeviceRoute
   LoginRoute: typeof LoginRoute
+  UsernameSlugRoute: typeof UsernameSlugRoute
+  UsernameIndexRoute: typeof UsernameIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -145,6 +171,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$username/': {
+      id: '/$username/'
+      path: '/$username'
+      fullPath: '/$username/'
+      preLoaderRoute: typeof UsernameIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$username/$slug': {
+      id: '/$username/$slug'
+      path: '/$username/$slug'
+      fullPath: '/$username/$slug'
+      preLoaderRoute: typeof UsernameSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -207,6 +247,8 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   DeviceRoute: DeviceRoute,
   LoginRoute: LoginRoute,
+  UsernameSlugRoute: UsernameSlugRoute,
+  UsernameIndexRoute: UsernameIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

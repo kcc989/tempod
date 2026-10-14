@@ -14,8 +14,8 @@ import {
 } from "../../artifacts/repositories.ts";
 import { projects, type ProjectRow } from "../../db/d1.ts";
 import { bytesToBase64 } from "../../lib/crypto.ts";
-import type { HandlerCtx } from "../run.ts";
-import { d1, projectToWire, requireProject } from "./common.ts";
+import type { HandlerCtx, VisitorCtx } from "../run.ts";
+import { d1, insertProject, projectToWire, requireReadableProject } from "./common.ts";
 
 const MAX_FILE_BYTES = 1024 * 1024;
 
@@ -56,7 +56,7 @@ const linkRepository = async (
 
   const now = Date.now();
 
-  const row: ProjectRow = {
+  await insertProject(env, {
     id: newId(),
     userId: user.id,
     provider: "artifacts",
@@ -72,9 +72,7 @@ const linkRepository = async (
     environmentId: null,
     createdAt: now,
     updatedAt: now,
-  };
-
-  await db.insert(projects).values(row).onConflictDoNothing().run();
+  });
 
   const saved = await db
     .select()
@@ -199,8 +197,8 @@ export const linkArtifactRepository = async (
   return linkRepository(ctx, await repoInfo(ctx.env, name));
 };
 
-const requireNativeProject = async (ctx: HandlerCtx, projectId: string): Promise<ProjectRow> => {
-  const project = await requireProject(ctx.env, ctx.user.id, projectId);
+const requireNativeProject = async (ctx: VisitorCtx, projectId: string): Promise<ProjectRow> => {
+  const project = await requireReadableProject(ctx.env, ctx.user, projectId);
 
   if (project.provider !== "artifacts" || !project.artifactRepoId)
     throw new TempoError(
@@ -240,7 +238,7 @@ const requireRepositoryIdentity = async (
 };
 
 export const getRepository = async (
-  ctx: HandlerCtx,
+  ctx: VisitorCtx,
   { projectId, ref, path = "" }: FnInput<"getRepository">,
 ): Promise<FnOutput<"getRepository">> => {
   const project = await requireNativeProject(ctx, projectId);
@@ -278,7 +276,8 @@ export const getRepository = async (
       name: info.name,
       description: info.description,
       defaultBranch: info.defaultBranch,
-      remote: info.remote,
+      // 11: the Artifacts URL names the Cloudflare account, and visitors cannot get a clone token.
+      remote: ctx.user?.id === project.userId ? info.remote : "",
       readOnly: info.readOnly,
       ref: resolvedRef,
       empty: commit === null,
@@ -294,7 +293,7 @@ export const getRepository = async (
 };
 
 export const getRepositoryFile = async (
-  ctx: HandlerCtx,
+  ctx: VisitorCtx,
   { projectId, ref, path }: FnInput<"getRepositoryFile">,
 ): Promise<FnOutput<"getRepositoryFile">> => {
   const project = await requireNativeProject(ctx, projectId);
@@ -323,7 +322,7 @@ export const getRepositoryFile = async (
 };
 
 export const listRepositoryCommits = async (
-  ctx: HandlerCtx,
+  ctx: VisitorCtx,
   { projectId, ref, offset }: FnInput<"listRepositoryCommits">,
 ): Promise<FnOutput<"listRepositoryCommits">> => {
   const project = await requireNativeProject(ctx, projectId);

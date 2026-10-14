@@ -14,6 +14,7 @@ import { RepositoryCode, RepositoryCommits } from "./RepositoryCode";
 import { RepositoryPullRequests } from "./RepositoryPullRequests";
 import { RepositoryChecks } from "./RepositoryChecks";
 import { RepositoryIssues } from "./RepositoryIssues";
+import { ProjectVisibility } from "./ProjectVisibility";
 import { isRepositoryTab, repositoryInput, type RepositorySearch } from "./model";
 
 export interface RepositoryHubProps {
@@ -149,6 +150,7 @@ function RepositoryDetail({ project, search, onNavigate }: RepositoryHubProps & 
           {project.owner}/{project.name}
         </h1>
         <Badge variant="muted">{project.provider === "artifacts" ? "Artifacts" : "GitHub"}</Badge>
+        <ProjectVisibility project={project} />
         <Button
           size="sm"
           variant="outline"

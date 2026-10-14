@@ -6,7 +6,7 @@ Oct 10, 2026 · @Casey Collins
 
 Tempo hosts Git repositories on Cloudflare Artifacts and runs Claude Code, Codex, OpenCode and Pi in parallel workspaces on your own Cloudflare account, with your own subscriptions. Repository browsing, Tempo pull requests and issue tracking are defined in [09 Git Forge](09%20Git%20Forge.md). GitHub-linked projects remain supported. A workspace is one branch of a repo, one agent chat, and one Linux container that runs while the agent works and sleeps when it stops.
 
-This version is for **one trusted user on their own Cloudflare account**. The schema allows many users. The code allows one.
+This version is for **one trusted user on their own Cloudflare account**. The schema allows many users. The code allows one. The owner can make projects public: anyone can then read their code and the owner's profile without signing in ([11 Public Profile](11%20Public%20Profile.md)).
 
 | # | Decision | Choice | Reason |
 | --- | --- | --- | --- |
@@ -45,6 +45,8 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 07 Mac Client | Tempo for Mac on GPUI Kit: native API, device sign-in, layout, macOS integration, release, phase 4 and gate E |
 | 08 Events and Agents | Lifecycle events, agent libraries, attachments, decisions, runs, phase 7 and gate I |
 | 09 Git Forge | Artifacts-hosted repositories, browsing, pull requests, issues, comments and labels |
+| 10 Project CI | Project CI pipelines and runs |
+| 11 Public Profile | Public projects, the owner's profile and pinned projects |
 
 ## Goals and non-goals
 
@@ -69,7 +71,7 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 
 **Non-goals for version 1**
 
-- More than one user, teams, or sharing.
+- More than one user, teams, or sharing. Visitors can only read public code and the profile (11).
 - A hosted service for other people. Anthropic does not allow third parties to offer Claude sign-in.
 - Billing, quotas, or a platform model proxy (SAM's `sam` mode).
 - Tempo's own agent harness. Agents (08) drive the existing agents through ACP; they are not a harness.

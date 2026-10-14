@@ -35,6 +35,12 @@ export const PrState = Schema.Literals(PR_STATES);
 
 export type PrState = typeof PrState.Type;
 
+export const PROJECT_VISIBILITIES = ["public", "private"] as const;
+
+export const ProjectVisibility = Schema.Literals(PROJECT_VISIBILITIES);
+
+export type ProjectVisibility = typeof ProjectVisibility.Type;
+
 export const IssueState = Schema.Literals(["open", "closed"]);
 
 export type IssueState = typeof IssueState.Type;

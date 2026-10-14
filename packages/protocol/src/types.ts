@@ -28,6 +28,7 @@ import {
   OpKind,
   OpStatus,
   PrState,
+  ProjectVisibility,
   ReviewSide,
   ReviewStatus,
   ScriptKind,
@@ -60,9 +61,37 @@ export const Project = Schema.Struct({
   settings: SettingsLayer,
   sortOrder: Schema.Number,
   environmentId: Schema.optional(N(Schema.String)),
+  username: Schema.optional(N(Schema.String)),
+  slug: Schema.optional(Schema.String),
+  visibility: Schema.optional(ProjectVisibility),
+  pinned: Schema.optional(Schema.Boolean),
 });
 
 export type Project = typeof Project.Type;
+
+/** A public project as the profile and public pages show it (11, Server functions). */
+export const ProjectSummary = Schema.Struct({
+  id: Schema.String,
+  username: Schema.String,
+  slug: Schema.String,
+  provider: Schema.Literals(["github", "artifacts"]),
+  owner: Schema.String,
+  name: Schema.String,
+  defaultBranch: Schema.String,
+  pinned: Schema.Boolean,
+  updatedAt: Ms,
+});
+
+export type ProjectSummary = typeof ProjectSummary.Type;
+
+export const Profile = Schema.Struct({
+  username: Schema.String,
+  name: Schema.String,
+  image: N(Schema.String),
+  bio: N(Schema.String),
+});
+
+export type Profile = typeof Profile.Type;
 
 export const RepositoryCommit = Schema.Struct({
   hash: Schema.String,

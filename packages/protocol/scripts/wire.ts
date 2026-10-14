@@ -113,6 +113,9 @@ export const SHARED = {
   ProfileIssue: P.ProfileIssue,
 
   Project: P.Project,
+  ProjectSummary: P.ProjectSummary,
+  Profile: P.Profile,
+  ProjectVisibility: P.ProjectVisibility,
   RepositoryCommit: P.RepositoryCommit,
   RepositoryEntry: P.RepositoryEntry,
   RepositoryDetail: P.RepositoryDetail,
