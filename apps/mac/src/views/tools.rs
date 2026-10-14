@@ -105,7 +105,7 @@ pub struct ToolPanel {
     browser_generation: u64,
     /// Keeps the selected tool tab in view when the tabs overflow the pane.
     tab_scroll: gpui_kit::ScrollHandle,
-    scrolled_to: Option<usize>,
+    scrolled_to: Option<(usize, usize)>,
     #[cfg(target_os = "macos")]
     native_browser: Option<crate::macos::live_view::LiveView>,
     _subscriptions: Vec<Subscription>,
@@ -372,9 +372,11 @@ impl ToolPanel {
                 .and_then(|tool| self.tabs.iter().position(|t| *t == tool.group()))
                 .unwrap_or(self.tabs.len() + documents.len())
         };
-        if self.scrolled_to != Some(selected) {
+        // The launcher selects one past the last tab, the index a new tab then takes.
+        let target = (selected, self.tabs.len() + documents.len());
+        if self.scrolled_to != Some(target) {
             self.tab_scroll.scroll_to_item(selected);
-            self.scrolled_to = Some(selected);
+            self.scrolled_to = Some(target);
         }
         let tab_tools = self.tabs.clone();
         let doc_keys: Vec<_> = documents.iter().map(|(key, _)| key.clone()).collect();
