@@ -1,4 +1,5 @@
 import { Match } from "effect";
+import { ComposerModelMenu, COMPOSER_PICKER_TRIGGER as pickerTrigger } from "./ComposerControls";
 import type { ConfigOption, Session, Turn } from "@tempo/protocol";
 import {
   ChevronDownIcon,
@@ -29,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/components/ui/dropdown-menu";
 import { ShortcutKbd } from "~/ui/components/ui/kbd";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Spinner } from "~/ui/components/ui/spinner";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { formatBytes, formatTokens } from "~/ui/lib/format";
@@ -260,42 +262,46 @@ export function QueuedChip({
 }
 
 /** Used and total context from the agent's usage_update. */
-export function ContextRing({ usage }: { usage: ContextUsage }) {
-  const r = 6;
-  const c = 2 * Math.PI * r;
+export function ContextMeter({ usage }: { usage: ContextUsage }) {
   const pct = Math.round(usage.ratio * 100);
   const label = `${formatTokens(usage.used)} of ${formatTokens(usage.size)} tokens of context used (${pct}%)`;
 
   return (
-    <SimpleTooltip label={label}>
-      <span
-        tabIndex={0}
-        role="img"
-        aria-label={label}
-        className="inline-flex size-6 items-center justify-center rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        <svg viewBox="0 0 16 16" className="size-4 -rotate-90">
-          <circle cx="8" cy="8" r={r} fill="none" strokeWidth="2" className="stroke-muted" />
-          <circle
-            cx="8"
-            cy="8"
-            r={r}
-            fill="none"
-            strokeWidth="2"
-            strokeDasharray={c}
-            strokeDashoffset={c * (1 - usage.ratio)}
-            strokeLinecap="round"
-            className={cn(
-              usage.ratio >= 0.95
-                ? "stroke-destructive"
-                : usage.ratio >= 0.8
-                  ? "stroke-warning"
-                  : "stroke-primary",
-            )}
-          />
-        </svg>
-      </span>
-    </SimpleTooltip>
+    <Popover>
+      <SimpleTooltip label={label}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-2 px-2 text-xs text-muted-foreground"
+            aria-label={`Context usage: ${label}`}
+          >
+            Context
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-12 overflow-hidden rounded-full bg-muted-foreground/25"
+            >
+              <span
+                className="block h-full rounded-full bg-muted-foreground"
+                style={{ width: `${usage.ratio * 100}%` }}
+              />
+            </span>
+          </Button>
+        </PopoverTrigger>
+      </SimpleTooltip>
+      <PopoverContent side="top" align="end" className="w-64 space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-4 font-medium">
+          <span>Context used</span>
+          <span className="tabular-nums">{pct}%</span>
+        </div>
+        <p className="text-muted-foreground tabular-nums">
+          {usage.used.toLocaleString()} of {usage.size.toLocaleString()} tokens
+        </p>
+        <p className="text-xs text-muted-foreground">
+          The fill shows how much of the agent’s context window is used.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -319,51 +325,124 @@ function SelectOptionItems({ option, onPick }: { option: ConfigOption; onPick: (
   );
 }
 
-const pickerTrigger =
-  "inline-flex h-7 max-w-36 items-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
-
 /** Model picker (⌘/) from the agent's `model` config option; set with setSessionConfig. */
 export function ModelPicker({
   option,
+  thoughtLevel,
+  children,
   open,
   onOpenChange,
   disabled,
   onPick,
   onClosed,
 }: {
-  option: ConfigOption;
+  option?: ConfigOption;
+  thoughtLevel?: ConfigOption;
+  children?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
   onPick: (value: string) => void;
   onClosed: () => void;
 }) {
+  const level = thoughtLevel ? currentValueLabel(thoughtLevel) : "";
+  const suffix = level && !/^(agent )?default$/i.test(level) ? ` · ${level}` : "";
+
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger
-        className={cn(pickerTrigger, "text-foreground")}
-        disabled={disabled}
-        aria-label={`Model: ${currentValueLabel(option)}`}
-      >
-        <span className="truncate">{currentValueLabel(option)}</span>
-        <ChevronDownIcon className="size-3 shrink-0" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        side="top"
-        className="max-h-80 min-w-48"
-        onCloseAutoFocus={(e) => {
-          e.preventDefault();
-          onClosed();
-        }}
-      >
-        <DropdownMenuLabel className="flex items-center justify-between gap-4">
-          {option.name || "Model"}
-          <ShortcutKbd action="modelPicker" />
-        </DropdownMenuLabel>
-        <SelectOptionItems option={option} onPick={onPick} />
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <ComposerModelMenu
+      label={`${option ? currentValueLabel(option) : "Agent settings"}${suffix}`}
+      ariaLabel={`Model and thinking: ${option ? currentValueLabel(option) : "Agent settings"}${level ? `, ${level}` : ""}`}
+      open={open}
+      onOpenChange={onOpenChange}
+      disabled={disabled}
+      onClosed={onClosed}
+    >
+      <DropdownMenuLabel className="flex items-center justify-between gap-4">
+        {option?.name || "Model"}
+        <ShortcutKbd action="modelPicker" />
+      </DropdownMenuLabel>
+      {option && <SelectOptionItems option={option} onPick={onPick} />}
+      {children && (
+        <>
+          <DropdownMenuSeparator />
+          {children}
+        </>
+      )}
+    </ComposerModelMenu>
+  );
+}
+
+export function ModelSettings({
+  session,
+  thoughtLevel,
+  modeOption,
+  options,
+  onConfig,
+  onMode,
+}: {
+  session: Session;
+  thoughtLevel?: ConfigOption;
+  modeOption?: ConfigOption;
+  options: ReadonlyArray<ConfigOption>;
+  onConfig: (option: ConfigOption, value: string | boolean) => void;
+  onMode: (id: string) => void;
+}) {
+  const configs = [...(thoughtLevel ? [thoughtLevel] : []), ...options];
+
+  return (
+    <>
+      {configs.map((o) =>
+        o.type === "boolean" ? (
+          <DropdownMenuCheckboxItem
+            key={o.id}
+            checked={o.currentValue === true}
+            onCheckedChange={(value) => onConfig(o, value === true)}
+          >
+            {o.name}
+          </DropdownMenuCheckboxItem>
+        ) : (
+          <DropdownMenuSub key={o.id}>
+            <DropdownMenuSubTrigger>
+              <span className="flex-1">{o === thoughtLevel ? "Thinking" : o.name}</span>
+              <span className="ml-4 text-xs text-muted-foreground">{currentValueLabel(o)}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-h-80">
+              <SelectOptionItems option={o} onPick={(value) => onConfig(o, value)} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ),
+      )}
+      {(session.modes.length > 0 || modeOption) && (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="flex-1">Mode</span>
+            <span className="ml-4 text-xs text-muted-foreground">
+              {session.modes.length > 0
+                ? (session.modes.find((m) => m.id === session.modeId)?.name ?? session.modeId)
+                : currentValueLabel(modeOption!)}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="max-h-80">
+            {session.modes.length > 0 ? (
+              <DropdownMenuRadioGroup value={session.modeId ?? ""} onValueChange={onMode}>
+                {session.modes.map((m) => (
+                  <DropdownMenuRadioItem key={m.id} value={m.id}>
+                    <span className="flex flex-col">
+                      {m.name}
+                      {m.description && (
+                        <span className="text-xs text-muted-foreground">{m.description}</span>
+                      )}
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            ) : (
+              <SelectOptionItems option={modeOption!} onPick={(value) => onConfig(modeOption!, value)} />
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      )}
+    </>
   );
 }
 
@@ -386,6 +465,7 @@ export function LevelPicker({
         disabled={disabled}
         aria-label={`Reasoning level: ${currentValueLabel(option)}`}
       >
+        <span className="shrink-0 text-xs text-muted-foreground">Reasoning:</span>
         <span className="truncate">{currentValueLabel(option)}</span>
         <ChevronDownIcon className="size-3 shrink-0" />
       </DropdownMenuTrigger>
@@ -431,6 +511,7 @@ export function ModePicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className={pickerTrigger} disabled={disabled} aria-label={`Mode: ${current}`}>
+        <span className="shrink-0 text-xs text-muted-foreground">Mode:</span>
         <span className="truncate">{current}</span>
         <ChevronDownIcon className="size-3 shrink-0" />
       </DropdownMenuTrigger>

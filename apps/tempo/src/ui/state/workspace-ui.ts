@@ -134,6 +134,9 @@ export type BottomTab = "setup" | "run" | "terminal";
 
 export type UtilityTab = RightTab | BottomTab;
 
+export const toolGroup = <T extends string | null>(key: T) =>
+  key === "files" || key === "checks" ? "changes" : key === "setup" ? "run" : key;
+
 export type ComposerInsertion =
   | { readonly kind: "mention"; readonly path: string }
   | { readonly kind: "reviewComments"; readonly commentIds: ReadonlyArray<string> }
@@ -155,10 +158,13 @@ export interface WorkspaceUiState {
   /** Increments when something asks the composer to take focus. */
   readonly composerFocusSeq: number;
   readonly diffScope: DiffScope;
+  readonly infoOpen: boolean;
   readonly toolTabs: ReadonlyArray<UtilityTab>;
   readonly activeToolKey: string | null;
   readonly rightTab: RightTab;
   readonly bottomTab: BottomTab;
+  readonly changesSection: Exclude<RightTab, "artifacts">;
+  readonly runSection: Exclude<BottomTab, "terminal">;
   /** Sleeping, or no changes and no PR: the right side starts closed (04, Right and bottom panels). */
   readonly rightQuiet: boolean;
   /** The user opened the right side while quiet. Not kept. */
@@ -172,10 +178,13 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   insertions: [],
   composerFocusSeq: 0,
   diffScope: "branch",
-  toolTabs: ["changes"],
-  activeToolKey: "changes",
+  infoOpen: true,
+  toolTabs: [],
+  activeToolKey: null,
   rightTab: "changes",
   bottomTab: "setup",
+  changesSection: "changes",
+  runSection: "run",
   rightQuiet: false,
   rightPinned: false,
 };
@@ -202,13 +211,15 @@ const update = (workspaceId: string, f: (s: WorkspaceUiState) => WorkspaceUiStat
 const withActive = (s: WorkspaceUiState, key: string | null): WorkspaceUiState => {
   const open = key === null ? undefined : s.tabs.find((t) => t.key === key);
   const lastChatSessionId = open?.tab.kind === "chat" ? open.tab.sessionId : s.lastChatSessionId;
+  const infoOpen = open && open.tab.kind !== "chat" ? false : s.infoOpen;
 
-  if (s.activeKey === key && s.lastChatSessionId === lastChatSessionId) return s;
+  if (s.activeKey === key && s.lastChatSessionId === lastChatSessionId && s.infoOpen === infoOpen) return s;
 
   return {
     ...s,
     activeKey: key,
     lastChatSessionId,
+    infoOpen,
     activeToolKey: open && open.tab.kind !== "chat" ? key : s.activeToolKey,
   };
 };
@@ -233,6 +244,7 @@ export const openTab = (
   });
 
   if (tab.kind !== "chat" && activate) {
+    closeWorkspaceInfo(workspaceId);
     pinRight(workspaceId);
     setLayout({ rightOpen: true });
   }
@@ -435,11 +447,33 @@ export const setBottomTab = (workspaceId: string, bottomTab: BottomTab): void =>
   selectTool(workspaceId, bottomTab);
 };
 
+export const showWorkspaceInfo = (workspaceId: string): void => {
+  update(workspaceId, (s) => ({ ...s, infoOpen: true }));
+  setLayout({ rightOpen: false });
+};
+
+export const toggleWorkspaceInfo = (workspaceId: string): void => {
+  if (getWorkspaceUi(workspaceId).infoOpen) closeWorkspaceInfo(workspaceId);
+  else showWorkspaceInfo(workspaceId);
+};
+
+export const closeWorkspaceInfo = (workspaceId: string): void => {
+  update(workspaceId, (s) => ({ ...s, infoOpen: false }));
+
+  if (getLayout().phonePane === "info") setPhonePane("chat");
+};
+
 export const selectTool = (workspaceId: string, key: UtilityTab | null): void => {
+  closeWorkspaceInfo(workspaceId);
   update(workspaceId, (s) => ({
     ...s,
-    toolTabs: key && !s.toolTabs.includes(key) ? [...s.toolTabs, key] : s.toolTabs,
+    toolTabs: key && !s.toolTabs.includes(toolGroup(key)) ? [...s.toolTabs, toolGroup(key)] : s.toolTabs,
     activeToolKey: key,
+    rightTab:
+      key === "changes" || key === "files" || key === "checks" || key === "artifacts" ? key : s.rightTab,
+    bottomTab: key === "setup" || key === "run" || key === "terminal" ? key : s.bottomTab,
+    changesSection: key === "changes" || key === "files" || key === "checks" ? key : s.changesSection,
+    runSection: key === "setup" || key === "run" ? key : s.runSection,
   }));
   pinRight(workspaceId);
   setLayout({ rightOpen: true });
@@ -448,8 +482,8 @@ export const selectTool = (workspaceId: string, key: UtilityTab | null): void =>
 export const closeTool = (workspaceId: string, key: UtilityTab): void =>
   update(workspaceId, (s) => ({
     ...s,
-    toolTabs: s.toolTabs.filter((t) => t !== key),
-    activeToolKey: s.activeToolKey === key ? null : s.activeToolKey,
+    toolTabs: s.toolTabs.filter((t) => toolGroup(t) !== toolGroup(key)),
+    activeToolKey: toolGroup(s.activeToolKey) === toolGroup(key) ? null : s.activeToolKey,
   }));
 
 export const setRightQuiet = (workspaceId: string, rightQuiet: boolean): void =>
@@ -462,8 +496,8 @@ const pinRight = (workspaceId: string | null): void => {
 /** Whether the right side shows for this workspace: the layout choice, unless it starts closed. */
 export const isRightOpen = (
   layout: Pick<LayoutState, "rightOpen">,
-  ui: Pick<WorkspaceUiState, "rightQuiet" | "rightPinned">,
-): boolean => layout.rightOpen && (ui.rightPinned || !ui.rightQuiet);
+  ui: Pick<WorkspaceUiState, "rightQuiet" | "rightPinned"> & { readonly infoOpen?: boolean },
+): boolean => !ui.infoOpen && layout.rightOpen && (ui.rightPinned || !ui.rightQuiet);
 
 /** Selects a right-panel tab and makes sure the right side is open. */
 export const showRightTab = (workspaceId: string, tab: RightTab): void => {
@@ -489,7 +523,7 @@ export const showBottomTab = (workspaceId: string, tab: BottomTab): void => {
 // ---------------------------------------------------------------------------------------------
 // Layout (global, kept in localStorage)
 /** `setup` has no bottom-navigation entry; the Setup banners open it. */
-export type PhonePane = "chat" | "changes" | "setup";
+export type PhonePane = "chat" | "changes" | "setup" | "tools" | "info";
 
 export interface LayoutState {
   readonly sidebarOpen: boolean;
@@ -574,6 +608,12 @@ export const toggleRight = (): void => {
 
   if (shownRight(l)) setLayout({ rightOpen: false });
   else {
+    if (l.lastWorkspaceId) {
+      selectTool(l.lastWorkspaceId, null);
+
+      return;
+    }
+
     pinRight(l.lastWorkspaceId);
     setLayout({ rightOpen: true });
   }

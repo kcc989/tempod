@@ -3,6 +3,7 @@ import {
   activateTab,
   selectTool,
   closeTool,
+  closeWorkspaceInfo,
   closeDialog,
   closeTab,
   confirm,
@@ -331,6 +332,8 @@ describe("right side starts closed (04, Right and bottom panels)", () => {
     expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(false);
     toggleRight();
     expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(false);
+    closeWorkspaceInfo("w2");
     expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(true);
     setRightQuiet("w2", true);
     expect(isRightOpen(getLayout(), getWorkspaceUi("w2"))).toBe(false);
@@ -338,9 +341,12 @@ describe("right side starts closed (04, Right and bottom panels)", () => {
     expect(getLayout().rightOpen).toBe(false);
   });
 
-  it("opens by itself when the workspace stops being quiet", () => {
+  it("keeps Info visible when the workspace stops being quiet, then reveals tools when Info closes", () => {
     setRightQuiet(W, true);
     setRightQuiet(W, false);
+    expect(getWorkspaceUi(W).infoOpen).toBe(true);
+    expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(false);
+    closeWorkspaceInfo(W);
     expect(isRightOpen(getLayout(), getWorkspaceUi(W))).toBe(true);
   });
 

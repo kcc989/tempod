@@ -1,0 +1,10 @@
+{
+  "area": "usability",
+  "version": "2.1-draft",
+  "calibrated": false,
+  "requestSha256": "8fcd911ba67c269e49c43fc04fed91dd718d5d3409a73b161971588e7d454e1e",
+  "attemptStatuses": [200],
+  "timestamp": "2026-10-13T22:55:05Z",
+  "stateless": true,
+  "priorResultsIncluded": false
+}

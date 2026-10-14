@@ -1,0 +1,9 @@
+The following is a diff from the previous accessibility tree for Window: "Tempo" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++		47 dialog New workspace
++			48 button kcc989/farstep
++			49 button Workspace options
++			50 button Close
++			51 text entry area (settable) Prompt, Placeholder: What do you want to work on?
++			52 pop up button (settable) Model, Value: Loading models…
++			53 button Create
+The focused UI element is 0 standard window Tempo, Secondary Actions: Raise

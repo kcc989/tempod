@@ -1382,6 +1382,28 @@ impl Render for ReviewPanel {
         } else {
             changed_rows.extend((0..self.files.len()).map(|ix| (Some(ix), String::new())));
         }
+        let github = self.store.read(cx).state.workspace.as_ref().and_then(|w| {
+            crate::app::AppState::try_global(cx).and_then(|a| {
+                a.read(cx)
+                    .hub
+                    .read(cx)
+                    .projects
+                    .iter()
+                    .find(|p| p.id == w.project_id)
+                    .map(|p| {
+                        if w.pushed || w.pr_number.is_some() {
+                            super::indicators::github_url_for(
+                                &p.owner,
+                                &p.name,
+                                w.pr_number,
+                                &w.branch,
+                            )
+                        } else {
+                            format!("https://github.com/{}/{}", p.owner, p.name)
+                        }
+                    })
+            })
+        });
         let content = match self.tab {
             0 => v_flex()
                 .size_full()
@@ -1417,7 +1439,15 @@ impl Render for ReviewPanel {
                                 .small()
                                 .label("Refresh")
                                 .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
-                        ),
+                        )
+                        .children(github.map(|url| {
+                            Button::new("changes-github")
+                                .ghost()
+                                .small()
+                                .icon(IconName::ExternalLink)
+                                .accessibility_label("Open on GitHub")
+                                .on_click(move |_, _, cx| cx.open_url(&url))
+                        })),
                 )
                 .child(if self.loading {
                     super::skeleton_rows(4).into_any_element()

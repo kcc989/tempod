@@ -5,7 +5,7 @@ import { ArchiveRestoreIcon, ArrowUpIcon, PlusIcon, SquareIcon } from "lucide-re
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/ui/components/ui/button";
-import { Textarea } from "~/ui/components/ui/textarea";
+import { ComposerSurface, ComposerInput, ComposerToolbar } from "./ComposerControls";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useAction } from "~/ui/hooks/useActions";
 import { useBanner } from "~/ui/hooks/useBanner";
@@ -51,14 +51,12 @@ import {
 } from "./composer-model";
 import {
   AttachmentChip,
-  ContextRing,
+  ContextMeter,
   LoginBanner,
   ProfileIssuesNotice,
   MentionChip,
-  LevelPicker,
   ModelPicker,
-  ModePicker,
-  OptionsMenu,
+  ModelSettings,
   PickerList,
   PlanModeBadge,
   PlanPill,
@@ -618,7 +616,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
         />
       )}
       <div
-        className="relative px-3 pt-2 pb-3"
+        className="relative mx-auto w-full max-w-[51.25rem] px-[var(--chat-gutter,12px)] pt-2 pb-3"
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
@@ -635,7 +633,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
           addFiles([...e.dataTransfer.files]);
         }}
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+        <div className="flex w-full min-w-0 flex-col gap-2">
           {(plan !== null || inPlan || queued.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5" aria-label="Queued messages">
               {plan !== null && <PlanPill progress={plan} />}
@@ -660,12 +658,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
               ))}
             </div>
           )}
-          <div
-            className={cn(
-              "rounded-2xl border border-input bg-muted p-3 shadow-md",
-              dragging && "border-ring bg-accent/40 ring-2 ring-ring/20",
-            )}
-          >
+          <ComposerSurface className={cn(dragging && "border-ring bg-accent/40 ring-2 ring-ring/20")}>
             {hasChips && (
               <div className="mb-3 flex flex-wrap gap-1.5">
                 {reviewCommentIds.length > 0 && (
@@ -685,7 +678,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
             )}
             <div className="relative">
               <span
-                className="pointer-events-none absolute top-0 right-0 hidden text-xs text-muted-foreground/70 sm:block"
+                className="pointer-events-none absolute top-0 right-0 hidden text-xs text-muted-foreground sm:block"
                 aria-hidden="true"
               >
                 {formatBinding("focusComposer")} to focus
@@ -718,7 +711,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   @{/^\s*\/agent\s+([a-z][a-z0-9-]{1,31})/.exec(draft)?.[1]}
                 </Button>
               )}
-              <Textarea
+              <ComposerInput
                 ref={textRef}
                 value={draft}
                 rows={1}
@@ -765,42 +758,34 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   if (!e.clipboardData.getData("text/plain")) e.preventDefault();
                   addFiles(pasted);
                 }}
-                className="max-h-72 min-h-16 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent sm:pr-28"
+                className="sm:pr-28"
               />
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2">
-              {pickers.model && (
+            <ComposerToolbar>
+              {(pickers.model ||
+                pickers.thoughtLevel ||
+                pickers.modeOption ||
+                pickers.others.length > 0 ||
+                session.modes.length > 0) && (
                 <ModelPicker
                   option={pickers.model}
+                  thoughtLevel={pickers.thoughtLevel}
                   open={modelOpen}
                   onOpenChange={setModelOpen}
                   disabled={pickersDisabled}
                   onPick={(v) => onConfig(pickers.model!, v)}
                   onClosed={refocus}
-                />
+                >
+                  <ModelSettings
+                    session={session}
+                    thoughtLevel={pickers.thoughtLevel}
+                    modeOption={pickers.modeOption}
+                    options={pickers.others}
+                    onConfig={onConfig}
+                    onMode={(modeId) => setMode.mutate({ workspaceId, sessionId, modeId })}
+                  />
+                </ModelPicker>
               )}
-              {pickers.thoughtLevel && (
-                <LevelPicker
-                  option={pickers.thoughtLevel}
-                  disabled={pickersDisabled}
-                  onPick={(v) => onConfig(pickers.thoughtLevel!, v)}
-                  onClosed={refocus}
-                />
-              )}
-              <ModePicker
-                session={session}
-                modeOption={pickers.modeOption}
-                disabled={pickersDisabled}
-                onMode={(modeId) => setMode.mutate({ workspaceId, sessionId, modeId })}
-                onConfig={onConfig}
-                onClosed={refocus}
-              />
-              <OptionsMenu
-                options={pickers.others}
-                disabled={pickersDisabled}
-                onConfig={onConfig}
-                onClosed={refocus}
-              />
               <div className="ml-auto flex items-center gap-2">
                 <SimpleTooltip label={`Attach a file (${formatBinding("attach")})`}>
                   <Button
@@ -825,7 +810,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                     e.target.value = "";
                   }}
                 />
-                {usage && <ContextRing usage={usage} />}
+                {usage && <ContextMeter usage={usage} />}
                 {running && (
                   <SimpleTooltip label="Stop (Esc)">
                     <Button
@@ -860,8 +845,8 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   </Button>
                 )}
               </div>
-            </div>
-          </div>
+            </ComposerToolbar>
+          </ComposerSurface>
         </div>
       </div>
     </div>

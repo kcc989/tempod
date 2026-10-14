@@ -2,6 +2,7 @@
 //! `Composer` key context. Enter sends, ⇧Enter adds a line (the text field's own binding), Esc
 //! stops the turn, ⇧Tab toggles plan mode. Pickers use agent-reported modes and models.
 use super::composer_model::{self, SlashEntry};
+use super::composer_parts::{self, Choice, Picker};
 use super::file_picker::{FilePicker, MentionTrigger};
 use super::tokens::{Token, color};
 use crate::actions::{
@@ -12,11 +13,11 @@ use crate::keymap::COMPOSER;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
-use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
+use gpui_kit::component::input::{InputEvent, TextareaState};
 use gpui_kit::component::list::{List, ListEvent, ListState};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::progress::ProgressCircle;
-use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
+use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::component::v_flex;
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex};
 use gpui_kit::component::{Icon, IndexPath};
@@ -26,25 +27,6 @@ use gpui_kit::{
     px,
 };
 use tempo_protocol as p;
-
-#[derive(Clone, Debug, PartialEq)]
-struct Choice {
-    value: String,
-    label: SharedString,
-}
-impl SelectItem for Choice {
-    type Value = String;
-    fn title(&self) -> SharedString {
-        self.label.clone()
-    }
-    fn render(&self, _: &mut Window, _: &mut gpui_kit::App) -> impl IntoElement {
-        div().py_1().child(self.label.clone())
-    }
-    fn value(&self) -> &String {
-        &self.value
-    }
-}
-type Picker = SelectState<Vec<Choice>>;
 
 /// A select option's values, with group names kept in the labels.
 fn select_choices(config: Option<&p::ConfigOption>) -> Vec<Choice> {
@@ -56,6 +38,7 @@ fn select_choices(config: Option<&p::ConfigOption>) -> Vec<Choice> {
             p::ConfigOptionOptionsItem::Option(option) => vec![Choice {
                 value: option.value.clone(),
                 label: option.name.clone().into(),
+                trigger_label: None,
             }],
             p::ConfigOptionOptionsItem::Group(group) => group
                 .options
@@ -63,6 +46,7 @@ fn select_choices(config: Option<&p::ConfigOption>) -> Vec<Choice> {
                 .map(|option| Choice {
                     value: option.value.clone(),
                     label: format!("{} · {}", group.name, option.name).into(),
+                    trigger_label: None,
                 })
                 .collect(),
         })
@@ -106,12 +90,15 @@ pub struct Composer {
     pub steering: bool,
     commands: Vec<p::AvailableCommand>,
     usage: Option<(f64, f64)>,
+    context_details_open: bool,
     plan_available: bool,
     command_menu: Entity<CommandState>,
     command_dismissed: bool,
     command_query: Option<String>,
     command_selected: usize,
     model: Entity<Picker>,
+    model_menu: Entity<CommandState>,
+    model_menu_open: bool,
     mode: Entity<Picker>,
     model_config: Option<String>,
     model_choices: Vec<Choice>,
@@ -216,12 +203,15 @@ impl Composer {
             steering: false,
             commands: vec![],
             usage: None,
+            context_details_open: false,
             plan_available: false,
             command_menu: cx.new(|cx| CommandState::new(window, cx)),
             command_dismissed: false,
             command_query: None,
             command_selected: 0,
             model,
+            model_menu: cx.new(|cx| CommandState::new(window, cx)),
+            model_menu_open: false,
             mode,
             model_config: None,
             model_choices: vec![],
@@ -313,6 +303,7 @@ impl Composer {
             .map(|mode| Choice {
                 value: mode.id.clone(),
                 label: mode.name.clone().into(),
+                trigger_label: None,
             })
             .collect();
         if self.mode_choices != choices {
@@ -332,16 +323,308 @@ impl Composer {
         cx.notify();
     }
 
-    pub fn focus_model(&self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn focus_model(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.model_choices.is_empty()
             && !self.read_only
             && !self.working
             && !self.starting
             && !self.configuring
         {
-            self.model.update(cx, |state, cx| state.focus(window, cx));
-            window.dispatch_action(Box::new(gpui_kit::base::actions::SelectDown), cx);
+            self.model_menu_open = true;
+            self.model_menu.read(cx).focus_handle(cx).focus(window, cx);
+            cx.notify();
         }
+    }
+
+    fn render_context_usage(
+        &self,
+        used: f64,
+        size: f64,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let ratio = (used / size).min(1.);
+        let percent = ratio * 100.;
+        let label = format!("Context usage: {used:.0} of {size:.0} tokens ({percent:.0}%)");
+        let owner = cx.weak_entity();
+        Popover::new("context-details")
+            .anchor(gpui_kit::Anchor::BottomRight)
+            .open(self.context_details_open)
+            .trigger(
+                Button::new("context-usage")
+                    .ghost()
+                    .small()
+                    .h(px(28.))
+                    .accessibility_label(label.clone())
+                    .tooltip(label)
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .text_xs()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child("Context")
+                            .child(
+                                div()
+                                    .w(px(48.))
+                                    .h(px(6.))
+                                    .rounded(px(3.))
+                                    .overflow_hidden()
+                                    .bg(color(Token::MutedForeground, cx).opacity(0.25))
+                                    .child(
+                                        div()
+                                            .h_full()
+                                            .w(gpui_kit::relative(ratio as f32))
+                                            .rounded(px(3.))
+                                            .bg(color(Token::MutedForeground, cx)),
+                                    ),
+                            ),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.context_details_open = true;
+                        cx.notify();
+                    })),
+            )
+            .on_open_change(move |open, _, cx| {
+                let _ = owner.update(cx, |this, cx| {
+                    this.context_details_open = *open;
+                    cx.notify();
+                });
+            })
+            .content(move |_, _, cx| {
+                v_flex()
+                    .w(px(240.))
+                    .gap_2()
+                    .text_sm()
+                    .child(
+                        h_flex()
+                            .justify_between()
+                            .child("Context used")
+                            .child(format!("{percent:.0}%")),
+                    )
+                    .child(
+                        div()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(format!("{used:.0} of {size:.0} tokens")),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(
+                                "The fill shows how much of the agent’s context window is used.",
+                            ),
+                    )
+            })
+    }
+
+    fn render_model_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let disabled = self.read_only || self.working || self.starting || self.configuring;
+        let selected = self.model.read(cx).selected_value().cloned();
+        let level = self.level.read(cx).selected_value().cloned();
+        let mode = self.mode.read(cx).selected_value().cloned();
+        let label = self
+            .model_choices
+            .iter()
+            .find(|c| Some(&c.value) == selected.as_ref())
+            .map(|c| c.label.to_string())
+            .unwrap_or_else(|| "Model".into());
+        let level_label = self
+            .level_choices
+            .iter()
+            .find(|c| Some(&c.value) == level.as_ref())
+            .map(|c| c.label.to_string())
+            .unwrap_or_else(|| "Default".into());
+        let label = if level_label.eq_ignore_ascii_case("default") {
+            label
+        } else {
+            format!("{label} · {level_label}")
+        };
+        let mode_label = self
+            .mode_choices
+            .iter()
+            .find(|c| Some(&c.value) == mode.as_ref())
+            .map(|c| c.label.to_string())
+            .unwrap_or_else(|| "Mode".into());
+        let models = self.model_choices.clone();
+        let levels = self.level_choices.clone();
+        let modes = self.mode_choices.clone();
+        let model_id = self.model_config.clone();
+        let level_id = self.level_config.clone();
+        let menu_state = self.model_menu.clone();
+        let focus = menu_state.read(cx).focus_handle(cx);
+        let weak = cx.weak_entity();
+        let close = weak.clone();
+        let confirm = weak.clone();
+        let cancel = weak.clone();
+        let level_owner = weak.clone();
+        let mode_owner = weak.clone();
+        Popover::new("composer-model-menu")
+            .anchor(gpui_kit::Anchor::BottomLeft)
+            .open(self.model_menu_open)
+            .track_focus(&focus)
+            .trigger(
+                Button::new("composer-model-trigger")
+                    .ghost()
+                    .small()
+                    .h(px(28.))
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(label.clone())
+                            .child(Icon::new(IconName::ChevronDown).small()),
+                    )
+                    .accessibility_label(format!("Model and thinking: {label}"))
+                    .tooltip("Model and thinking (⌘/)")
+                    .disabled(disabled)
+                    .on_click(cx.listener(|this, _, window, cx| this.focus_model(window, cx))),
+            )
+            .on_open_change(move |open, window, cx| {
+                let _ = close.update(cx, |this, cx| {
+                    this.model_menu_open = *open;
+                    if *open {
+                        this.model_menu.read(cx).focus_handle(cx).focus(window, cx);
+                    } else {
+                        this.input.read(cx).focus_handle(cx).focus(window, cx);
+                    }
+                    cx.notify();
+                });
+            })
+            .content(move |_, _, _| {
+                let confirm = confirm.clone();
+                let cancel = cancel.clone();
+                let model_id = model_id.clone();
+                let level_owner = level_owner.clone();
+                let mode_owner = mode_owner.clone();
+                let levels = levels.clone();
+                let level = level.clone();
+                let level_id = level_id.clone();
+                let modes = modes.clone();
+                let mode = mode.clone();
+                v_flex()
+                    .w(px(320.))
+                    .gap_1()
+                    .child(
+                        Command::new(&menu_state)
+                            .searchable(true)
+                            .placeholder("Search models")
+                            .max_h(px(240.))
+                            .items(models.iter().map(|choice| {
+                                CommandItem::new()
+                                    .label(choice.label.clone())
+                                    .checked(Some(&choice.value) == selected.as_ref())
+                            }))
+                            .on_cancel(move |window, cx| {
+                                let _ = cancel.update(cx, |this, cx| {
+                                    this.model_menu_open = false;
+                                    this.input.read(cx).focus_handle(cx).focus(window, cx);
+                                    cx.notify();
+                                });
+                            })
+                            .on_confirm(move |index, window, cx| {
+                                let _ = confirm.update(cx, |this, cx| {
+                                    if this.read_only
+                                        || this.working
+                                        || this.starting
+                                        || this.configuring
+                                    {
+                                        return;
+                                    }
+                                    if let (Some(id), Some(choice)) =
+                                        (&model_id, this.model_choices.get(index.row))
+                                    {
+                                        cx.emit(ComposerEvent::SetModel {
+                                            config_id: id.clone(),
+                                            value: choice.value.clone(),
+                                        });
+                                        this.model_menu_open = false;
+                                        this.input.read(cx).focus_handle(cx).focus(window, cx);
+                                        cx.notify();
+                                    }
+                                });
+                            }),
+                    )
+                    .children((!levels.is_empty()).then(|| {
+                        Button::new("model-thinking-settings")
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .h(px(32.))
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .justify_between()
+                                    .child(format!("Thinking: {level_label}"))
+                                    .child(Icon::new(IconName::ChevronRight).small()),
+                            )
+                            .accessibility_label("Thinking level")
+                            .dropdown_menu(move |mut menu, _, _| {
+                                for choice in &levels {
+                                    let owner = level_owner.clone();
+                                    let id = level_id.clone();
+                                    let value = choice.value.clone();
+                                    menu = menu.item(
+                                        PopupMenuItem::new(choice.label.clone())
+                                            .checked(Some(&value) == level.as_ref())
+                                            .on_click(move |_, _, cx| {
+                                                let _ = owner.update(cx, |this, cx| {
+                                                    if this.read_only
+                                                        || this.working
+                                                        || this.starting
+                                                        || this.configuring
+                                                    {
+                                                        return;
+                                                    }
+                                                    if let Some(id) = &id {
+                                                        cx.emit(ComposerEvent::SetModel {
+                                                            config_id: id.clone(),
+                                                            value: value.clone(),
+                                                        });
+                                                    }
+                                                });
+                                            }),
+                                    );
+                                }
+                                menu
+                            })
+                    }))
+                    .children((!modes.is_empty()).then(|| {
+                        Button::new("model-mode-settings")
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .h(px(32.))
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .justify_between()
+                                    .child(format!("Mode: {mode_label}"))
+                                    .child(Icon::new(IconName::ChevronRight).small()),
+                            )
+                            .accessibility_label("Mode")
+                            .dropdown_menu(move |mut menu, _, _| {
+                                for choice in &modes {
+                                    let owner = mode_owner.clone();
+                                    let value = choice.value.clone();
+                                    menu = menu.item(
+                                        PopupMenuItem::new(choice.label.clone())
+                                            .checked(Some(&value) == mode.as_ref())
+                                            .on_click(move |_, _, cx| {
+                                                let _ = owner.update(cx, |this, cx| {
+                                                    if this.read_only
+                                                        || this.working
+                                                        || this.starting
+                                                        || this.configuring
+                                                    {
+                                                        return;
+                                                    }
+                                                    cx.emit(ComposerEvent::SetMode(value.clone()));
+                                                });
+                                            }),
+                                    );
+                                }
+                                menu
+                            })
+                    }))
+            })
     }
 
     pub fn text(&self, cx: &gpui_kit::App) -> String {
@@ -635,7 +918,8 @@ impl Render for Composer {
             field = field.key_context("ComposerPicker");
         }
         let field = field.child(
-            Textarea::new(&self.input)
+            composer_parts::input(&self.input, "Message")
+                .pr(px(80.))
                 .on_paste({
                     let weak = cx.weak_entity();
                     move |item, _, cx| {
@@ -664,9 +948,6 @@ impl Render for Composer {
                         }
                     }
                 })
-                .aria_label("Message")
-                .appearance(false)
-                .bordered(false)
                 .disabled(self.read_only || self.sending),
         );
         let list = self.file_menu.clone();
@@ -734,7 +1015,7 @@ impl Render for Composer {
                     let _ = weak.update(cx, |this, cx| this.pick_command(index.row, window, cx));
                 })
         });
-        v_flex()
+        composer_parts::surface(cx)
             .key_context(COMPOSER)
             .on_action(cx.listener(|_, _: &crate::actions::AttachFile, _, cx| {
                 cx.emit(ComposerEvent::Attach(vec![]))
@@ -766,17 +1047,8 @@ impl Render for Composer {
                 cx.listener(|_, _: &TogglePlanMode, _, cx| cx.emit(ComposerEvent::TogglePlanMode)),
             )
             .w_full()
-            .max_w(px(792.))
-            .mx_auto()
             .mb_4()
             .flex_shrink_0()
-            .p_3()
-            .gap_2()
-            .rounded(px(16.))
-            .shadow_md()
-            .border_1()
-            .border_color(color(Token::Border, cx))
-            .bg(color(Token::Muted, cx))
             .children(
                 self.profile_notice
                     .clone()
@@ -860,123 +1132,25 @@ impl Render for Composer {
                             }))
                     }),
             )
-            .child(field)
             .child(
-                h_flex()
-                    .gap_2()
-                    .children((!self.model_choices.is_empty()).then(|| {
-                        div()
-                            .w(px(self
-                                .model_choices
-                                .iter()
-                                .find(|choice| {
-                                    self.model.read(cx).selected_value() == Some(&choice.value)
-                                })
-                                .map(|choice| {
-                                    (choice.label.chars().count() as f32 * 7. + 34.)
-                                        .clamp(64., 220.)
-                                })
-                                .unwrap_or(90.)))
-                            .flex_shrink_0()
-                            .child(
-                                Select::new(&self.model)
-                                    .menu_width(px(320.))
-                                    .search_placeholder("Search models")
-                                    .icon(
-                                        Icon::new(IconName::ChevronDown)
-                                            .size(px(12.))
-                                            .text_color(color(Token::MutedForeground, cx)),
-                                    )
-                                    .w_full()
-                                    .large()
-                                    .h(px(28.))
-                                    .py_0()
-                                    .text_sm()
-                                    .appearance(false)
-                                    .accessibility_label("Model")
-                                    .placeholder("Model")
-                                    .disabled(
-                                        self.read_only
-                                            || self.working
-                                            || self.starting
-                                            || self.configuring,
-                                    ),
-                            )
-                    }))
-                    .children((!self.level_choices.is_empty()).then(|| {
-                        div().w(px(120.)).flex_shrink_0().child(
-                            Select::new(&self.level)
-                                .menu_width(px(320.))
-                                .icon(
-                                    Icon::new(IconName::ChevronDown)
-                                        .size(px(12.))
-                                        .text_color(color(Token::MutedForeground, cx)),
-                                )
-                                .w_full()
-                                .small()
-                                .appearance(false)
-                                .accessibility_label("Reasoning level")
-                                .placeholder("Reasoning level")
-                                .disabled(
-                                    self.read_only
-                                        || self.working
-                                        || self.starting
-                                        || self.configuring,
-                                ),
-                        )
-                    }))
-                    .children((!self.mode_choices.is_empty()).then(|| {
-                        div()
-                            .w(px(self
-                                .mode_choices
-                                .iter()
-                                .find(|choice| {
-                                    self.mode.read(cx).selected_value() == Some(&choice.value)
-                                })
-                                .map(|choice| {
-                                    (choice.label.chars().count() as f32 * 7. + 34.)
-                                        .clamp(64., 220.)
-                                })
-                                .unwrap_or(90.)))
-                            .flex_shrink_0()
-                            .child(
-                                Select::new(&self.mode)
-                                    .menu_width(px(320.))
-                                    .icon(
-                                        Icon::new(IconName::ChevronDown)
-                                            .size(px(12.))
-                                            .text_color(color(Token::MutedForeground, cx)),
-                                    )
-                                    .w_full()
-                                    .small()
-                                    .appearance(false)
-                                    .accessibility_label("Mode")
-                                    .placeholder("Mode")
-                                    .disabled(
-                                        self.read_only
-                                            || self.working
-                                            || self.starting
-                                            || self.configuring,
-                                    ),
-                            )
-                    }))
+                div().relative().child(field).child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .right_0()
+                        .text_xs()
+                        .text_color(color(Token::MutedForeground, cx))
+                        .child("⌘L to focus"),
+                ),
+            )
+            .child(
+                composer_parts::toolbar()
+                    .children((!self.model_choices.is_empty()).then(|| self.render_model_menu(cx)))
                     .child(div().flex_1())
-                    .children(self.usage.map(|(used, size)| {
-                        let percent = (used / size).min(1.) * 100.;
-                        let label = format!("{used:.0} / {size:.0} tokens · {percent:.0}% context");
-                        Button::new("context-usage")
-                            .ghost()
-                            .small()
-                            .accessibility_label(label.clone())
-                            .tooltip(label.clone())
-                            .child(
-                                ProgressCircle::new("context-ring")
-                                    .value(percent as f32)
-                                    .size(px(14.))
-                                    .color(color(Token::MutedForeground, cx))
-                                    .accessibility_label(label),
-                            )
-                    }))
+                    .children(
+                        self.usage
+                            .map(|(used, size)| self.render_context_usage(used, size, cx)),
+                    )
                     .child(
                         Button::new("attach-file")
                             .ghost()

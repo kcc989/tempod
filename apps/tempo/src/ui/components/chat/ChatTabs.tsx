@@ -1,6 +1,6 @@
 import { useApiCall } from "~/ui/hooks/useCall";
 import { ChevronDownIcon, HistoryIcon, PlusIcon, ShieldQuestionIcon, XIcon } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { CENTER_TAB_KINDS, CenterTabPart } from "~/ui/components/chat/tab-kinds";
 import { EmptyState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -54,13 +54,14 @@ export interface ChatTabsProps {
   readonly workspaceId: string;
   /** `phone`: one chat at a time with a menu at the top to switch (04, Phone width). */
   readonly variant?: "desktop" | "phone";
+  readonly aside?: ReactNode;
 }
 
 /** How long to wait for a cancelled turn to end before closing its chat. */
 const CANCEL_WAIT_MS = 30_000;
 
 /** The center tab host: chat, file, diff and browser tabs (04, Center: chat tabs and composer). */
-export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
+export function ChatTabs({ workspaceId, variant = "desktop", aside }: ChatTabsProps) {
   const call = useApiCall();
 
   const store = useWorkspaceStore(workspaceId);
@@ -215,15 +216,15 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
   const closedMenu =
     closed.length > 0 ? (
       <DropdownMenu>
-        <SimpleTooltip label="Closed chats">
+        <SimpleTooltip label="Closed chats in this workspace">
           <DropdownMenuTrigger asChild>
-            <Button size="icon-sm" variant="ghost" aria-label="Closed chats">
+            <Button size="icon-sm" variant="ghost" aria-label="Closed chats in this workspace">
               <HistoryIcon />
             </Button>
           </DropdownMenuTrigger>
         </SimpleTooltip>
         <DropdownMenuContent align="end" className="max-h-80 min-w-52">
-          <DropdownMenuLabel>Closed chats</DropdownMenuLabel>
+          <DropdownMenuLabel>Closed chats in this workspace ({closed.length})</DropdownMenuLabel>
           {closed.map((s) => (
             <DropdownMenuItem key={s.id} onSelect={() => openClosed(s.id)}>
               <span className="min-w-0 flex-1 truncate">{sessionTitle(s)}</span>
@@ -337,7 +338,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         <div
           role="tablist"
           aria-label="Center tabs"
-          className="flex h-full min-w-0 items-center gap-0.5 overflow-x-auto px-1"
+          className="flex h-full min-w-0 items-center gap-0.5 overflow-x-auto pr-1 pl-3"
         >
           {ui.tabs.map((t, i) => {
             const selected = t.key === ui.activeKey;
@@ -352,7 +353,7 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
                     className={cn(
                       "group/tab flex h-7 shrink-0 items-center rounded-md",
                       selected
-                        ? "bg-accent text-accent-foreground"
+                        ? "border-b-2 border-primary bg-accent font-medium text-accent-foreground"
                         : "text-muted-foreground hover:bg-accent/50",
                     )}
                   >
@@ -422,13 +423,16 @@ export function ChatTabs({ workspaceId, variant = "desktop" }: ChatTabsProps) {
         {newChatMenu}
         <div className="ml-auto flex items-center">{closedMenu}</div>
       </div>
-      <div
-        role="tabpanel"
-        id={`${baseId}-panel`}
-        aria-labelledby={active ? `${baseId}-tab-${ui.tabs.indexOf(active)}` : undefined}
-        className="min-h-0 flex-1"
-      >
-        {body}
+      <div className="flex min-h-0 flex-1">
+        <div
+          role="tabpanel"
+          id={`${baseId}-panel`}
+          aria-labelledby={active ? `${baseId}-tab-${ui.tabs.indexOf(active)}` : undefined}
+          className="min-h-0 min-w-0 flex-1"
+        >
+          {body}
+        </div>
+        {aside}
       </div>
     </div>
   );

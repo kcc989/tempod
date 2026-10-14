@@ -131,13 +131,13 @@ function BranchList({
                   key={b.name}
                   value={b.name}
                   onSelect={() => onPick(b.name)}
-                  className="font-mono text-xs"
+                  className="w-full min-w-0 font-mono text-xs"
                 >
                   <CheckIcon
                     aria-hidden
                     className={cn("size-3", b.name === value ? "opacity-100" : "opacity-0")}
                   />
-                  <span className="truncate">{b.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-left">{b.name}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

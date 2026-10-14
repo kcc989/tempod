@@ -1,0 +1,10 @@
+{
+  "area": "interaction-controls",
+  "version": "original-interaction",
+  "calibrated": false,
+  "requestSha256": "fceb02db30640009a6945c668cc88fc5e2490b23cc23b30628f256e7170fb44a",
+  "attemptStatuses": [422, 422],
+  "timestamp": "2026-10-14T00:55:05Z",
+  "stateless": true,
+  "priorResultsIncluded": false
+}

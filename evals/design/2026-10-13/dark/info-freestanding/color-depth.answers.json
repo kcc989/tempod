@@ -1,0 +1,115 @@
+{
+  "status": 200,
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "color_role": {
+          "type": "score",
+          "score": 1.6426,
+          "legend": {
+            "0": "Color is decoration: gradients, many accent colors, or colored surfaces with no meaning",
+            "1": "The base is neutral, but some color is decoration only",
+            "2": "The base is neutral, and color appears only where it means something: status, category tags, the selected item, or the one main action"
+          },
+          "probabilities": {
+            "0": 0.0492,
+            "1": 0.259,
+            "2": 0.6918
+          },
+          "confidence": 0.3221
+        },
+        "color_accents": {
+          "type": "score",
+          "score": 1.9108,
+          "legend": {
+            "0": "Many accent colors with no clear system",
+            "1": "Two or three accent colors compete for attention",
+            "2": "One accent color, plus a small set of status colors such as green, amber, and red"
+          },
+          "probabilities": {
+            "0": 0.019,
+            "1": 0.0512,
+            "2": 0.9298
+          },
+          "confidence": 0.8012
+        },
+        "color_semantic": {
+          "type": "noul",
+          "noul": 0.8258
+        },
+        "color_not_alone": {
+          "type": "noul",
+          "noul": 0.9135
+        },
+        "color_dark_layers": {
+          "type": "choice",
+          "choice": "tonal",
+          "probabilities": {
+            "tonal": 0.9002,
+            "flat": 0.0943,
+            "not_shown": 0.0055
+          },
+          "confidence": 0.7288
+        },
+        "contrast_secondary": {
+          "type": "score",
+          "score": 1.1926,
+          "legend": {
+            "0": "Some needed text is very faint and hard to read",
+            "1": "Faint text is readable, but only with effort",
+            "2": "All needed text is easy to read; only decorative or disabled items are faint"
+          },
+          "probabilities": {
+            "0": 0.2024,
+            "1": 0.4026,
+            "2": 0.395
+          },
+          "confidence": 0.0386
+        },
+        "contrast_boundaries": {
+          "type": "noul",
+          "noul": 0.6529
+        },
+        "quality_gray_on_color": {
+          "type": "noul",
+          "noul": 0.0521
+        },
+        "slop_dark_glow": {
+          "type": "noul",
+          "noul": 0.0241
+        },
+        "slop_glass": {
+          "type": "noul",
+          "noul": 0.0217
+        },
+        "slop_border_and_shadow": {
+          "type": "noul",
+          "noul": 0.1317
+        },
+        "restraint_noise": {
+          "type": "score",
+          "score": 1.7768,
+          "legend": {
+            "0": "Many borders, shadows, badges, illustrations, or glows compete with the content",
+            "1": "Some extra decoration, but the main content is still easy to find",
+            "2": "Flat surfaces, thin dividers, and few shadows; illustrations appear only in empty states or onboarding"
+          },
+          "probabilities": {
+            "0": 0.0346,
+            "1": 0.1541,
+            "2": 0.8113
+          },
+          "confidence": 0.5248
+        }
+      },
+      "usage": {
+        "input_tokens": 5208,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

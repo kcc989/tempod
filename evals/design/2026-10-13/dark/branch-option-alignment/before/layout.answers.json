@@ -1,0 +1,116 @@
+{
+  "status": 200,
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "focus_content_share": {
+          "type": "score",
+          "score": 0.9566,
+          "legend": {
+            "0": "Controls, banners, promotions, or decoration take most of the screen",
+            "1": "Content and controls take similar space",
+            "2": "The user's content takes most of the screen, and controls sit in a sidebar, a header, or a footer"
+          },
+          "probabilities": {
+            "0": 0.3193,
+            "1": 0.4049,
+            "2": 0.2758
+          },
+          "confidence": 0.0129
+        },
+        "focus_reading_order": {
+          "type": "noul",
+          "noul": 0.6204
+        },
+        "focus_space_fit": {
+          "type": "noul",
+          "noul": 0.2706
+        },
+        "overflow_long_text": {
+          "type": "choice",
+          "choice": "ellipsis",
+          "probabilities": {
+            "ellipsis": 0.5483,
+            "cut": 0.1574,
+            "breaks_layout": 0.0603,
+            "not_shown": 0.234
+          },
+          "confidence": 0.1785
+        },
+        "overflow_scroll_cue": {
+          "type": "choice",
+          "choice": "cue",
+          "probabilities": {
+            "cue": 0.6978,
+            "no_cue": 0.2717,
+            "not_shown": 0.0305
+          },
+          "confidence": 0.3426
+        },
+        "quality_long_lines": {
+          "type": "noul",
+          "noul": 0.152
+        },
+        "quality_text_covered": {
+          "type": "noul",
+          "noul": 0.8119
+        },
+        "quality_overflow": {
+          "type": "noul",
+          "noul": 0.383
+        },
+        "quality_scroll_edge": {
+          "type": "noul",
+          "noul": 0.2632
+        },
+        "type_hierarchy": {
+          "type": "noul",
+          "noul": 0.9174
+        },
+        "type_scale": {
+          "type": "score",
+          "score": 1.4721,
+          "legend": {
+            "0": "Many sizes with small differences, or no clear pattern",
+            "1": "A few sizes, but some styles look almost the same",
+            "2": "A small set of clearly different sizes and weights, used the same way for the same role everywhere"
+          },
+          "probabilities": {
+            "0": 0.1218,
+            "1": 0.2842,
+            "2": 0.594
+          },
+          "confidence": 0.1726
+        },
+        "type_numbers": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "aligned": 0.0169,
+            "ragged": 0.0124,
+            "not_shown": 0.9707
+          },
+          "confidence": 0.9139
+        },
+        "type_mono": {
+          "type": "choice",
+          "choice": "mono",
+          "probabilities": {
+            "mono": 0.5557,
+            "mixed": 0.3978,
+            "not_shown": 0.0465
+          },
+          "confidence": 0.2038
+        }
+      },
+      "usage": {
+        "input_tokens": 5591,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

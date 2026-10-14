@@ -9,7 +9,7 @@ import { NewWorkspaceDialog } from "~/ui/components/dialogs/NewWorkspaceDialog";
 
 const environment = createUiEnvironment();
 
-const state = { call: environment.request, modelsLoading: false };
+const state = { call: environment.request, modelsLoading: false, modelsError: false };
 
 let createFails = false;
 
@@ -23,7 +23,7 @@ const promptField = async () =>
   elementOf(await screen.findByRole("textbox", { name: "Prompt" }), HTMLTextAreaElement);
 
 const readyModels = async () =>
-  waitFor(() => expect(screen.getByRole("combobox", { name: "Model" }).textContent).toContain("Test Opus"), {
+  waitFor(() => expect(screen.getByRole("button", { name: "Model" }).textContent).toContain("Test Opus"), {
     timeout: 3000,
   });
 
@@ -41,6 +41,7 @@ beforeEach(() => {
   createFails = false;
   createPending = false;
   sendFails = false;
+  state.modelsError = false;
   state.call.mockReset();
   state.call.mockImplementation(async (name) => {
     if (name === "listProjects")
@@ -67,6 +68,8 @@ beforeEach(() => {
       };
 
     if (name === "listModels") {
+      if (state.modelsError) throw new Error("Could not load models");
+
       if (state.modelsLoading) return new Promise(() => {});
 
       return [
@@ -108,6 +111,17 @@ beforeEach(() => {
 afterEach(resetUiState);
 
 describe("workspace creation composer", () => {
+  it("retries model discovery without submitting the workspace form", async () => {
+    state.modelsError = true;
+    show();
+    const retry = await screen.findByRole("button", { name: "Retry loading models" });
+
+    state.modelsError = false;
+    fireEvent.click(retry);
+    await readyModels();
+    expect(requestsOf("listModels")).toHaveLength(2);
+    expect(requestsOf("createWorkspace")).toHaveLength(0);
+  });
   it("opens an empty workspace while model discovery is still loading", async () => {
     state.modelsLoading = true;
     show();
@@ -141,8 +155,8 @@ describe("workspace creation composer", () => {
   it("sends a trimmed first prompt and a model picked inside the composer", async () => {
     show();
     await readyModels();
-    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
-    fireEvent.click(screen.getByRole("option", { name: /Test Codex/ }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Model" }), { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /Test Codex/ }));
     const prompt = await promptField();
     fireEvent.change(prompt, { target: { value: "  Fix the login  " } });
     fireEvent.keyDown(prompt, { key: "Enter", code: "Enter" });

@@ -136,7 +136,7 @@ test("closed chats stay readable after confirming stop and close", async ({ page
   await page.keyboard.press("Alt+w");
   await expect(page.getByRole("alertdialog", { name: "Stop the agent and close this chat?" })).toBeVisible();
   await page.getByRole("button", { name: "Stop and close", exact: true }).click();
-  await page.getByRole("button", { name: "Closed chats", exact: true }).click();
+  await page.getByRole("button", { name: "Closed chats in this workspace", exact: true }).click();
   await page.getByRole("menuitem", { name: /Chat/ }).click();
   await expect(page.getByText("This chat is closed.", { exact: true })).toBeVisible();
   await expect(page.getByText("Starting the implementation.", { exact: true })).toBeVisible();
@@ -168,8 +168,8 @@ test("new chat discovers models only when opened and sends from its composer", a
   const dialog = page.getByRole("dialog", { name: "New chat", exact: true });
   const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
   await expect(prompt).toBeFocused();
-  await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
-  await page.getByRole("option", { name: "Fixture Codex · Codex", exact: true }).click();
+  await dialog.getByRole("button", { name: "Model", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Fixture Codex · Codex", exact: true }).click();
   await prompt.fill("Fix the new chat flow");
   await prompt.press("Enter");
   await expect(dialog).toBeHidden();
@@ -193,7 +193,7 @@ test("blank Enter in the new chat composer opens a chat without a message", asyn
   await page.getByRole("button", { name: "New chat", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "New chat", exact: true });
   const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
-  await expect(dialog.getByRole("combobox", { name: "Model", exact: true })).toContainText("Fixture Sonnet");
+  await expect(dialog.getByRole("button", { name: "Model", exact: true })).toContainText("Fixture Sonnet");
   await prompt.press("Shift+Enter");
   expect(app.requests.filter((r) => r.name === "createSession")).toHaveLength(0);
   await prompt.press("Enter");

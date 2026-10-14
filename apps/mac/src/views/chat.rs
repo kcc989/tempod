@@ -187,6 +187,7 @@ pub struct TranscriptView {
     attachment_source: Option<(Client, String)>,
     thumbnails: Thumbnails,
     pub read_only: bool,
+    pub chat_inset: f32,
     /// The chat's agent, for error messages that name it.
     pub agent: Option<AgentId>,
     /// No turn runs and none is queued, so a revert can start (04, Transcript).
@@ -216,6 +217,7 @@ impl TranscriptView {
             attachment_source: None,
             thumbnails: Thumbnails::default(),
             read_only: false,
+            chat_inset: 16.,
             agent: None,
             can_revert: false,
         }
@@ -495,16 +497,21 @@ impl Render for TranscriptView {
         let view = cx.weak_entity();
         let images = self.images.clone();
         let background = color(Token::Background, cx);
+        let inset = (self.chat_inset - 4.).max(0.);
+        let row_style = div().px_0().style().clone();
         MessageScroller::new("transcript", self.scroller.clone(), move |ix, _, cx| {
             let row = view
                 .upgrade()
                 .and_then(|v| v.read(cx).rows.get(ix).cloned());
             // GPUI lays out list rows during prepaint, where an outer `image_cache` element is not
             // on the stack; wrapping each row puts the cache in scope for its images.
-            div().w_full().flex().justify_center().child(
+            div().w_full().flex().justify_start().child(
                 image_cache(images.clone())
                     .w_full()
-                    .max_w(gpui_kit::px(768.))
+                    .max_w(px(820.))
+                    .mx_auto()
+                    .px(px(inset))
+                    .min_w_0()
                     .children(row.map(|row| {
                         if row.native.is_some() {
                             render_native_row(row, ix, view.clone(), cx)
@@ -514,6 +521,7 @@ impl Render for TranscriptView {
                     })),
             )
         })
+        .with_row_style(row_style)
         .with_jump_button_transition(std::time::Duration::ZERO)
         .with_jump_button_renderer(move |button| {
             button.label("Jump to latest").bg(background).shadow_md()
@@ -551,10 +559,13 @@ fn render_row(id: SharedString, text: SharedString) -> impl IntoElement {
         .id(id.clone())
         .role(Role::Article)
         .w_full()
+        .max_w(px(632.))
         .px_4()
         .py_2()
         .child(
             TextView::markdown(id, text)
+                .w_full()
+                .min_w_0()
                 .style(TextViewStyle {
                     heading_font_size: Some(std::sync::Arc::new(|level, _| {
                         px(match level {
@@ -1456,16 +1467,34 @@ fn user_message(
         .group(group.clone())
         .role(Role::Article)
         .aria_label("Your message")
-        .children((!c.text.is_empty()).then(|| markdown(id.clone(), &c.text)))
-        .children(
-            (!c.mentions.is_empty() || !c.attachments.is_empty()).then(|| {
-                h_flex()
-                    .px_4()
-                    .gap_1()
-                    .flex_wrap()
-                    .children(mentions)
-                    .children(attachments)
-            }),
+        .w_full()
+        .items_end()
+        .gap_1()
+        .child(
+            v_flex()
+                .min_w_0()
+                .max_w(gpui_kit::relative(0.85))
+                .rounded_lg()
+                .bg(color(Token::Muted, cx))
+                .px_3()
+                .py_2()
+                .gap_2()
+                .children((!c.text.is_empty()).then(|| {
+                    div()
+                        .min_w_0()
+                        .text_sm()
+                        .whitespace_normal()
+                        .child(c.text.clone())
+                }))
+                .children(
+                    (!c.mentions.is_empty() || !c.attachments.is_empty()).then(|| {
+                        h_flex()
+                            .gap_1()
+                            .flex_wrap()
+                            .children(mentions)
+                            .children(attachments)
+                    }),
+                ),
         )
         .child(
             h_flex()

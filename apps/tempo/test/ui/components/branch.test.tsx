@@ -6,20 +6,27 @@ import { EditableBranch } from "../../../src/ui/components/topbar/EditableBranch
 import { detail } from "../fixtures.ts";
 
 describe("branch editor", () => {
-  it("saves a manual branch name on Enter and cancels on Escape", () => {
+  it("saves double-click edits on Enter or blur and cancels on Escape", () => {
     const onSave = vi.fn();
     const w = detail({ branch: "tempo/otter" });
     render(createElement(EditableBranch, { view: { w, d: w }, onSave }));
     fireEvent.click(screen.getByRole("button", { name: "Rename branch" }));
+    expect(screen.queryByRole("textbox", { name: "Branch name" })).toBeNull();
+    fireEvent.doubleClick(screen.getByRole("button", { name: "Rename branch" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Branch name" }), {
       target: { value: "feature/my-name" },
     });
     fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
     expect(onSave).toHaveBeenCalledWith("feature/my-name");
-    fireEvent.click(screen.getByRole("button", { name: "Rename branch" }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: "Rename branch" }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "feature/cancelled" } });
     fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
     expect(onSave).toHaveBeenCalledTimes(1);
+    fireEvent.doubleClick(screen.getByRole("button", { name: "Rename branch" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "feature/on-blur" } });
+    fireEvent.blur(screen.getByRole("textbox"));
+    expect(onSave).toHaveBeenLastCalledWith("feature/on-blur");
+    expect(onSave).toHaveBeenCalledTimes(2);
   });
 
   it.each([

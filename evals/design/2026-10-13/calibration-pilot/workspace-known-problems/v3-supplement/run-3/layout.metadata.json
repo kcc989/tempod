@@ -1,0 +1,12 @@
+{
+  "area": "layout",
+  "run": 3,
+  "version": "3.0-supplement-draft",
+  "calibrated": false,
+  "requestSha256": "b88d7af67b297ffc1dc604e8995aba817986465713720987278a128a3ea865e3",
+  "attemptStatuses": [200],
+  "timestamp": "2026-10-13T22:12:55Z",
+  "stateless": true,
+  "priorResultsIncluded": false,
+  "groupLabelIncluded": false
+}

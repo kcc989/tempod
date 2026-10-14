@@ -1,4 +1,10 @@
-import { ChevronDownIcon, ChevronRightIcon, FolderIcon, FolderTreeIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FolderIcon,
+  FolderTreeIcon,
+  ExternalLinkIcon,
+} from "lucide-react";
 import { useCallback, useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
@@ -12,6 +18,8 @@ import { Toggle } from "~/ui/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "~/ui/components/ui/toggle-group";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { useCallMutation } from "~/ui/hooks/useCall";
+import { useProject } from "~/ui/hooks/useProjects";
+import { githubUrlFor } from "~/ui/components/topbar/topbar-logic";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useLocalStorage } from "~/ui/hooks/useLocalStorage";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
@@ -50,6 +58,9 @@ export function ChangesView({
 }) {
   const phone = variant === "phone";
   const changes = useChanges(workspaceId);
+  const workspace = useHubWorkspace(workspaceId);
+  const pushed = useWorkspaceSelector(workspaceId, (s) => s.workspace?.pushed);
+  const project = useProject(workspace?.projectId ?? "");
   const [grouped, setGrouped] = useLocalStorage(GROUP_BY_FOLDER_KEY, false, isBoolean);
   const [collapsed, setCollapsed] = useRememberedSet(`changes:${workspaceId}`);
 
@@ -109,6 +120,18 @@ export function ChangesView({
       )}
       <div className="flex shrink-0 flex-wrap items-center gap-2 px-2 py-1.5">
         <ScopeToggle workspaceId={workspaceId} changes={changes} />
+        {workspace && project && (
+          <Button size="icon-sm" variant="ghost" asChild>
+            <a
+              href={githubUrlFor(project, workspace, pushed)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={project.provider === "artifacts" ? "Open repository" : "Open on GitHub"}
+            >
+              <ExternalLinkIcon />
+            </a>
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"

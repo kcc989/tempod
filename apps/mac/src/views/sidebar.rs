@@ -24,10 +24,10 @@ use std::rc::Rc;
 use tempo_client::state::hub;
 use tempo_protocol::{self as p, api};
 
-/// Width in px (04): 280 by default, 220 to 400.
-pub const DEFAULT_WIDTH: f32 = 280.;
+/// Width in px (04): 240 by default, 220 to 320.
+pub const DEFAULT_WIDTH: f32 = 240.;
 pub const MIN_WIDTH: f32 = 220.;
-pub const MAX_WIDTH: f32 = 400.;
+pub const MAX_WIDTH: f32 = 320.;
 
 /// 04: the hover card opens after 400 ms.
 const HOVER_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
@@ -213,7 +213,20 @@ impl WorkspaceSidebar {
                     .map(|w| SidebarRow {
                         id: w.id.clone().into(),
                         title: w.title.clone().into(),
-                        detail: format!("{} · {}", w.branch, w.slug).into(),
+                        detail: if w.branch.rsplit('/').next() == Some(w.title.as_str()) {
+                            if w.slug == w.title {
+                                String::new()
+                            } else {
+                                w.slug.clone()
+                            }
+                        } else if w.slug == w.title
+                            || w.branch.rsplit('/').next() == Some(w.slug.as_str())
+                        {
+                            w.branch.clone()
+                        } else {
+                            format!("{} · {}", w.branch, w.slug)
+                        }
+                        .into(),
                         summary: Some(w),
                     })
                     .collect(),
@@ -245,16 +258,13 @@ fn header(cx: &App) -> impl IntoElement {
     };
     h_flex()
         .h(px(36.))
-        .pl_3()
-        .pr_2()
+        .px_3()
         .gap_1()
-        .border_b_1()
-        .border_color(color(Token::Border, cx))
         .child(
             div()
                 .flex_1()
                 .font_weight(gpui_kit::FontWeight::MEDIUM)
-                .text_size(px(11.))
+                .text_size(px(12.))
                 .text_color(color(Token::MutedForeground, cx))
                 .child("Projects"),
         )
@@ -287,7 +297,7 @@ fn header(cx: &App) -> impl IntoElement {
             Button::new("add-project-header")
                 .ghost()
                 .small()
-                .icon(IconName::Folder)
+                .icon(gpui_kit::assets::IconName::FolderPlus)
                 .accessibility_label("Add project")
                 .tooltip("Add project")
                 .on_click(|_, window, cx| {
@@ -299,7 +309,8 @@ fn header(cx: &App) -> impl IntoElement {
 fn navigation(cx: &App) -> impl IntoElement {
     v_flex()
         .flex_none()
-        .p_2()
+        .px_3()
+        .py_3()
         .gap_1()
         .border_b_1()
         .border_color(color(Token::Border, cx))
@@ -307,12 +318,16 @@ fn navigation(cx: &App) -> impl IntoElement {
             Button::new("sidebar-new-workspace")
                 .ghost()
                 .small()
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
                 .w_full()
                 .accessibility_label("New workspace")
                 .child(
                     h_flex()
                         .w_full()
-                        .gap_2()
+                        .gap_3()
                         .child(Icon::new(IconName::Plus).small())
                         .child("New workspace")
                         .child(
@@ -332,12 +347,16 @@ fn navigation(cx: &App) -> impl IntoElement {
             Button::new("sidebar-search")
                 .ghost()
                 .small()
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
                 .w_full()
                 .accessibility_label("Search workspaces")
                 .child(
                     h_flex()
                         .w_full()
-                        .gap_2()
+                        .gap_3()
                         .child(Icon::new(IconName::Search).small())
                         .child("Search workspaces")
                         .child(
@@ -356,13 +375,13 @@ fn navigation(cx: &App) -> impl IntoElement {
 }
 
 fn footer(cx: &App) -> impl IntoElement {
-    h_flex()
+    v_flex()
         .flex_wrap()
         .flex_none()
         .w_full()
-        .px_2()
-        .py_2()
-        .justify_between()
+        .px_3()
+        .py_3()
+        .gap_1()
         .border_t_1()
         .border_color(color(Token::Border, cx))
         .child(
@@ -378,7 +397,15 @@ fn footer(cx: &App) -> impl IntoElement {
             Button::new("history")
                 .ghost()
                 .small()
-                .label("History")
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .w_full()
+                .icon(gpui_kit::assets::IconName::Archive)
+                .accessibility_label("Archived workspaces")
+                .child(div().w_full().text_left().child("Archived workspaces"))
+                .tooltip("Restore or delete archived workspaces")
                 .on_click(|_, window, cx| {
                     window.dispatch_action(Box::new(crate::actions::ShowHistory), cx)
                 }),
@@ -387,12 +414,23 @@ fn footer(cx: &App) -> impl IntoElement {
             Button::new("saved-conversations")
                 .ghost()
                 .small()
-                .label("Saved conversations")
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .w_full()
+                .icon(IconName::ExternalLink)
+                .accessibility_label("Saved chats")
+                .child(div().w_full().text_left().child("Saved chats"))
+                .tooltip("Read retained chats from all projects in the browser")
                 .on_click(|_, _, cx| {
                     if let Some(state) = crate::app::AppState::try_global(cx)
                         && let Some(origin) = state.read(cx).server_url.clone()
                     {
-                        cx.open_url(&format!("{}/history", origin.trim_end_matches('/')));
+                        cx.open_url(&format!(
+                            "{}/history?view=saved",
+                            origin.trim_end_matches('/')
+                        ));
                     }
                 }),
         )
@@ -400,8 +438,19 @@ fn footer(cx: &App) -> impl IntoElement {
             Button::new("sidebar-settings")
                 .ghost()
                 .small()
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
                 .icon(IconName::Settings)
-                .label("Settings")
+                .w_full()
+                .child(
+                    h_flex().w_full().justify_between().child("Settings").child(
+                        div()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child("⌘,"),
+                    ),
+                )
                 .accessibility_label("Settings")
                 .tooltip("Settings (⌘,)")
                 .on_click(|_, window, cx| {
@@ -476,7 +525,7 @@ fn render_section(
     let key = section.key.clone();
     let label = section.label.clone();
     let header = h_flex()
-        .h(px(32.))
+        .h(px(36.))
         .flex_none()
         .gap_1()
         .child(
@@ -489,11 +538,12 @@ fn render_section(
                 ))
                 .flex_1()
                 .min_w_0()
-                .gap_1()
-                .px_1()
-                .text_size(px(12.))
+                .gap_2()
+                .h(px(36.))
+                .px_2()
+                .text_size(px(13.))
                 .font_weight(gpui_kit::FontWeight::MEDIUM)
-                .text_color(muted)
+                .text_color(color(Token::Foreground, cx))
                 .rounded_md()
                 .hover(move |style| style.bg(muted.opacity(0.08)))
                 .child(
@@ -505,11 +555,18 @@ fn render_section(
                     .xsmall(),
                 )
                 .when(section.project_id.is_some(), |this| {
-                    this.child(Icon::new(IconName::Folder).small())
+                    this.child(Icon::new(gpui_kit::assets::IconName::FolderGit2).small())
                 })
                 .child(div().flex_1().min_w_0().truncate().child(label.clone()))
                 .when(!section.rows.is_empty(), |this| {
-                    this.child(section.rows.len().to_string())
+                    this.child(
+                        div()
+                            .pl_1()
+                            .text_size(px(12.))
+                            .font_weight(gpui_kit::FontWeight::NORMAL)
+                            .text_color(muted)
+                            .child(section.rows.len().to_string()),
+                    )
                 })
                 .on_click(move |_, _, cx| {
                     if let Some(app) = crate::app::AppState::try_global(cx) {
@@ -526,7 +583,7 @@ fn render_section(
         .children(section.project_id.clone().map(|project_id| {
             Button::new(SharedString::from(format!("new-in-{project_id}")))
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(IconName::Plus)
                 .accessibility_label(format!("New workspace in {label}"))
                 .on_click(move |_, window, cx| {
@@ -556,6 +613,7 @@ fn render_section(
     } else {
         v_flex()
             .id(ElementId::Name(format!("rows-{}", section.key).into()))
+            .gap_1()
             .role(gpui_kit::Role::List)
             .aria_label(section.label.clone())
             .children(
@@ -569,7 +627,7 @@ fn render_section(
     v_flex()
         .w_full()
         .gap_1()
-        .pb_2()
+        .pb_4()
         .child(header)
         .child(body)
         .into_any_element()
@@ -712,7 +770,7 @@ fn render_row(
     let status = indicator
         .as_ref()
         .map(|i| i.tooltip.clone())
-        .unwrap_or_default();
+        .unwrap_or_else(|| ind::pill_text(summary.state, None, None).text);
     let title = div()
         .flex_1()
         .min_w_0()
@@ -752,14 +810,18 @@ fn render_row(
         .id(ElementId::Name(format!("workspace-{id}").into()))
         .role(gpui_kit::Role::ListItem)
         .aria_label(
-            [row.title.to_string(), row.detail.to_string(), status]
-                .into_iter()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" · "),
+            [
+                row.title.to_string(),
+                row.detail.to_string(),
+                status.clone(),
+            ]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · "),
         )
-        .px_2()
-        .py_1p5()
+        .px_3()
+        .py_2()
         .w_full()
         .min_h(px(48.))
         .rounded_md()
@@ -768,10 +830,18 @@ fn render_row(
         .child(
             div()
                 .pl(px(20.))
-                .text_size(px(11.))
-                .truncate()
+                .text_size(px(12.))
                 .text_color(muted)
-                .child(row.detail.clone()),
+                .child(
+                    h_flex()
+                        .min_w_0()
+                        .gap_2()
+                        .children(
+                            (!row.detail.is_empty())
+                                .then(|| div().min_w_0().truncate().child(row.detail.clone())),
+                        )
+                        .child(div().flex_shrink_0().child(status)),
+                ),
         )
         .on_click(move |_, window, cx| {
             if let Some(f) = &select {
@@ -814,46 +884,46 @@ fn row_menu(
     let pin = summary.clone();
     let archive = summary.id.clone();
     let branch = summary.branch.clone();
-    let github = project_of(summary, cx)
+    let github = summary
+        .pr_number
+        .and_then(|_| project_of(summary, cx))
         .map(|p| ind::github_url_for(&p.owner, &p.name, summary.pr_number, &summary.branch));
-    menu.item(PopupMenuItem::new("Rename").on_click(move |_, window, cx| {
-        crate::app::AppState::global(cx).update(cx, |a, cx| {
-            a.show_workspace(&rename, cx);
-        });
-        window.dispatch_action(Box::new(crate::actions::RenameWorkspace), cx);
-    }))
-    .item(
-        PopupMenuItem::new(if summary.pinned { "Unpin" } else { "Pin" }).on_click(
-            move |_, window, cx| {
-                mutate::<api::SetPinned>(
-                    p::SetPinnedIn {
-                        workspace_id: pin.id.clone(),
-                        pinned: !pin.pinned,
-                    },
-                    None,
-                    window,
-                    cx,
-                )
-            },
-        ),
-    )
-    .item(
-        PopupMenuItem::new("Copy branch name").on_click(move |_, window, cx| {
-            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()));
-            super::toast::success("Branch name copied.", window, cx);
-        }),
-    )
-    .item(
-        PopupMenuItem::new("Open on GitHub")
-            .disabled(github.is_none())
-            .on_click(move |_, _, cx| {
-                if let Some(url) = &github {
-                    cx.open_url(url);
-                }
+    let menu = menu
+        .item(PopupMenuItem::new("Rename").on_click(move |_, window, cx| {
+            crate::app::AppState::global(cx).update(cx, |a, cx| {
+                a.show_workspace(&rename, cx);
+            });
+            window.dispatch_action(Box::new(crate::actions::RenameWorkspace), cx);
+        }))
+        .item(
+            PopupMenuItem::new(if summary.pinned { "Unpin" } else { "Pin" }).on_click(
+                move |_, window, cx| {
+                    mutate::<api::SetPinned>(
+                        p::SetPinnedIn {
+                            workspace_id: pin.id.clone(),
+                            pinned: !pin.pinned,
+                        },
+                        None,
+                        window,
+                        cx,
+                    )
+                },
+            ),
+        )
+        .item(
+            PopupMenuItem::new("Copy branch name").on_click(move |_, window, cx| {
+                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()));
+                super::toast::success("Branch name copied.", window, cx);
             }),
-    )
-    .separator()
-    .item(
+        );
+    let menu = if let Some(url) = github {
+        menu.item(
+            PopupMenuItem::new("Open PR on GitHub").on_click(move |_, _, cx| cx.open_url(&url)),
+        )
+    } else {
+        menu
+    };
+    menu.separator().item(
         PopupMenuItem::new("Archive")
             .disabled(!ind::can_archive(summary.state))
             .on_click(move |_, window, cx| {

@@ -23,38 +23,22 @@ import {
 } from "~/ui/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Label } from "~/ui/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "~/ui/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
-import { Textarea } from "~/ui/components/ui/textarea";
+import { ComposerSurface, ComposerInput, ComposerToolbar } from "~/ui/components/chat/ComposerControls";
+import { LaunchModelPicker, useLaunchModels } from "~/ui/components/chat/LaunchModelPicker";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
-import { useCredentialStatus } from "~/ui/hooks/useCredentialStatus";
-import { useAgentChoices } from "~/ui/hooks/useAgentChoices";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { useIsPhone } from "~/ui/hooks/useMediaQuery";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
-import { agentLabel } from "~/ui/lib/agents";
 import { cn } from "~/ui/lib/utils";
 import { getHubStore } from "~/ui/stores/hub-store";
 import { closeDialog, openDialog, setPhonePane, type DialogOf } from "~/ui/state/workspace-ui";
 import { BranchPicker } from "./BranchPicker";
 import {
-  libraryAgentOf,
-  agentsWithLogin,
-  libraryAgentValue,
-  libraryAgentsWithLogin,
   createInput,
   emptySource,
   filterPullRequests,
-  initialAgent,
-  initialModel,
-  modelChoices,
   isSourceTab,
   SOURCE_TABS,
   type SourceDraft,
@@ -111,31 +95,22 @@ function NewWorkspaceForm({
 }) {
   const navigate = useNavigate();
   const isPhone = useIsPhone();
-  const credentials = useCredentialStatus();
 
   const [projectId, setProjectId] = useState(
     args.projectId && projects.some((p) => p.id === args.projectId) ? args.projectId : projects[0]!.id,
   );
 
   const [source, setSource] = useState<SourceDraft>(emptySource);
-  const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
-  const [pickedModel, setPickedModel] = useState<string | null>(null);
   const [prompt, setPrompt] = useState(args.prompt ?? "");
   const [keepOpen, setKeepOpen] = useState(false);
   const [tried, setTried] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const creating = useRef(false);
+  const sourceFocus = useRef<HTMLButtonElement>(null);
 
   const project = projects.find((p) => p.id === projectId) ?? projects[0]!;
-  const libraryAgents = useAgentChoices(project.settings.agent?.default ?? "claude");
-  const available = agentsWithLogin(credentials.data);
-  const choices = modelChoices(available, models.data ?? []);
-
-  const selected =
-    choices.find((choice) => choice.key === pickedModel) ?? initialModel(choices, models.data ?? [], project);
-
-  const custom = libraryAgentsWithLogin(libraryAgents.data, available);
-  const pickedAgent = libraryAgentOf(pickedModel, custom);
+  const selection = useLaunchModels(project.settings);
+  const { credentials, models, available, selected, pickedAgent } = selection;
 
   const repository = useCallQuery(
     "getRepository",
@@ -150,7 +125,7 @@ function NewWorkspaceForm({
     : models.isSuccess && selected
       ? createInput(project, source, selected.agent, prompt, selected.model)
       : !prompt.trim()
-        ? createInput(project, source, initialAgent(available, project), prompt)
+        ? createInput(project, source, selection.fallbackAgent, prompt)
         : null;
 
   const input = writable ? requestedInput : null;
@@ -198,7 +173,7 @@ function NewWorkspaceForm({
   return (
     <DialogContent
       onSubmitShortcut={submit}
-      className="gap-0 overflow-visible rounded-2xl bg-muted p-0"
+      className="gap-0 overflow-visible rounded-2xl border-0 bg-transparent p-0 shadow-none"
       style={{ width: "min(48rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
       overlayClassName="backdrop-blur-sm"
       onOpenAutoFocus={(event) => {
@@ -212,195 +187,176 @@ function NewWorkspaceForm({
           Choose a project and model, then describe what you want to work on.
         </DialogDescription>
       </DialogHeader>
-      <form
-        className="flex min-h-72 flex-col"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        {repository.data?.readOnly && (
-          <p role="alert" className="px-4 py-3 text-sm text-muted-foreground">
-            This repository is read-only.
-          </p>
-        )}
-        {project.provider === "artifacts" && repository.isError && (
-          <ErrorState error={repository.error} onRetry={() => void repository.refetch()} />
-        )}
-        <div className="flex items-center gap-2 border-b px-4 py-2 pr-12">
-          <Select
-            value={project.id}
-            onValueChange={(value) => {
-              setProjectId(value);
-              setSource(emptySource());
-            }}
-          >
-            <SelectTrigger
-              id="nw-project"
-              aria-label="Project"
-              className="w-auto max-w-[70%] border-0 bg-transparent shadow-none"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.owner}/{p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Popover open={optionsOpen} onOpenChange={setOptionsOpen}>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="Workspace options">
-                <MoreHorizontalIcon className="size-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-[min(24rem,calc(100vw-3rem))] space-y-3">
-              <Tabs
-                value={source.tab}
-                onValueChange={(v) => isSourceTab(v) && setSource((s) => ({ ...s, tab: v }))}
-                className="gap-2"
-              >
-                <TabsList aria-label="Source" className="w-full">
-                  {SOURCE_TABS.map((t) => (
-                    <TabsTrigger key={t.id} value={t.id}>
-                      {t.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                <TabsContent value="new">
-                  <Field label="Base branch" htmlFor="nw-base" hint="The new branch starts from this one.">
-                    <BranchPicker
-                      key={project.id}
-                      id="nw-base"
-                      projectId={project.id}
-                      label="Base branch"
-                      value={source.baseBranch || project.defaultBranch}
-                      placeholder={project.defaultBranch}
-                      onChange={(b) => setSource((s) => ({ ...s, baseBranch: b }))}
-                    />
-                  </Field>
-                </TabsContent>
-                <TabsContent value="branch">
-                  <Field
-                    label="Branch"
-                    htmlFor="nw-branch"
-                    error={tried && !source.branch ? "Pick a branch." : null}
-                  >
-                    <BranchPicker
-                      key={project.id}
-                      id="nw-branch"
-                      projectId={project.id}
-                      label="Branch"
-                      value={source.branch}
-                      placeholder="Pick a branch"
-                      invalid={tried && !source.branch}
-                      onChange={(b) => setSource((s) => ({ ...s, branch: b }))}
-                    />
-                  </Field>
-                </TabsContent>
-                <TabsContent value="pr">
-                  <PullRequestPicker
-                    key={project.id}
-                    projectId={project.id}
-                    value={source.prNumber}
-                    invalid={tried && source.prNumber === null}
-                    onChange={(n) => setSource((s) => ({ ...s, prNumber: n }))}
-                  />
-                </TabsContent>
-              </Tabs>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="nw-keep"
-                  checked={keepOpen}
-                  onCheckedChange={(value) => setKeepOpen(value === true)}
-                />
-                <Label htmlFor="nw-keep" className="font-normal">
-                  Keep open
-                </Label>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <Textarea
-          id="nw-prompt"
-          aria-label="Prompt"
-          disabled={create.isPending}
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          placeholder="What do you want to work on?"
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing)
-              return;
-            event.preventDefault();
+      <ComposerSurface>
+        <form
+          className="flex min-h-72 flex-col"
+          onSubmit={(e) => {
+            e.preventDefault();
             submit();
           }}
-          className="min-h-48 flex-1 max-h-[50dvh] resize-none rounded-none border-0 bg-transparent px-5 py-4 text-base shadow-none focus-visible:ring-1 focus-visible:ring-inset"
-        />
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4">
-          <div className="min-w-0 flex-1">
+        >
+          {repository.data?.readOnly && (
+            <p role="alert" className="pb-3 text-sm text-muted-foreground">
+              This repository is read-only.
+            </p>
+          )}
+          {project.provider === "artifacts" && repository.isError && (
+            <ErrorState error={repository.error} onRetry={() => void repository.refetch()} />
+          )}
+          <div className="mb-3 flex items-center gap-2 border-b pb-2 pr-8">
             <Select
-              value={pickedAgent ? libraryAgentValue(pickedAgent.id) : (selected?.key ?? "")}
-              onValueChange={setPickedModel}
-              disabled={!choices.length && !custom.length}
+              value={project.id}
+              onValueChange={(value) => {
+                setProjectId(value);
+                setSource(emptySource());
+              }}
             >
               <SelectTrigger
-                id="nw-model"
-                aria-label="Model"
-                className="w-auto max-w-full border-0 bg-transparent shadow-none"
+                id="nw-project"
+                aria-label="Project"
+                className="w-auto max-w-[70%] border-0 bg-transparent shadow-none"
               >
-                <SelectValue
-                  placeholder={
-                    credentials.isPending || models.isPending ? "Loading models…" : "Choose a model"
-                  }
-                />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {choices.map((choice) => (
-                  <SelectItem key={choice.key} value={choice.key}>
-                    {choice.name} <span className="text-muted-foreground">· {agentLabel(choice.agent)}</span>
-                  </SelectItem>
-                ))}
-                {custom.length > 0 && <SelectSeparator />}
-                {custom.map((a) => (
-                  <SelectItem key={a.id} value={libraryAgentValue(a.id)}>
-                    {a.name} <span className="text-muted-foreground">· {agentLabel(a.baseAgent)}</span>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.owner}/{p.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {credentials.isSuccess && !available.length && (
-              <Button
-                type="button"
-                variant="link"
-                className="h-auto px-3 text-xs"
-                onClick={() => openDialog({ kind: "settings", tab: "logins" })}
+            <Popover open={optionsOpen} onOpenChange={setOptionsOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" aria-label="Workspace options">
+                  <MoreHorizontalIcon className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="w-[min(24rem,calc(100vw-3rem))] space-y-3"
+                onOpenAutoFocus={(event) => {
+                  if (sourceFocus.current) {
+                    event.preventDefault();
+                    sourceFocus.current.focus();
+                  }
+                }}
               >
-                Add a login to choose a model
-              </Button>
-            )}
-            {models.isError && (
-              <Button
-                type="button"
-                variant="link"
-                className="h-auto px-3 text-xs"
-                onClick={() => void models.refetch()}
-              >
-                Retry loading models
-              </Button>
-            )}
+                <Tabs
+                  value={source.tab}
+                  onValueChange={(v) => isSourceTab(v) && setSource((s) => ({ ...s, tab: v }))}
+                  className="gap-2"
+                >
+                  <TabsList aria-label="Source" className="w-full">
+                    {SOURCE_TABS.map((t) => (
+                      <TabsTrigger
+                        key={t.id}
+                        value={t.id}
+                        ref={source.tab === t.id ? sourceFocus : undefined}
+                      >
+                        {t.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  <TabsContent value="new">
+                    <Field label="Base branch" htmlFor="nw-base" hint="The new branch starts from this one.">
+                      <BranchPicker
+                        key={project.id}
+                        id="nw-base"
+                        projectId={project.id}
+                        label="Base branch"
+                        value={source.baseBranch || project.defaultBranch}
+                        placeholder={project.defaultBranch}
+                        onChange={(b) => setSource((s) => ({ ...s, baseBranch: b }))}
+                      />
+                    </Field>
+                  </TabsContent>
+                  <TabsContent value="branch">
+                    <Field
+                      label="Branch"
+                      htmlFor="nw-branch"
+                      error={tried && !source.branch ? "Pick a branch." : null}
+                    >
+                      <BranchPicker
+                        key={project.id}
+                        id="nw-branch"
+                        projectId={project.id}
+                        label="Branch"
+                        value={source.branch}
+                        placeholder="Pick a branch"
+                        invalid={tried && !source.branch}
+                        onChange={(b) => setSource((s) => ({ ...s, branch: b }))}
+                      />
+                    </Field>
+                  </TabsContent>
+                  <TabsContent value="pr">
+                    <PullRequestPicker
+                      key={project.id}
+                      projectId={project.id}
+                      value={source.prNumber}
+                      invalid={tried && source.prNumber === null}
+                      onChange={(n) => setSource((s) => ({ ...s, prNumber: n }))}
+                    />
+                  </TabsContent>
+                </Tabs>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="nw-keep"
+                    checked={keepOpen}
+                    onCheckedChange={(value) => setKeepOpen(value === true)}
+                  />
+                  <Label htmlFor="nw-keep" className="font-normal">
+                    Keep open
+                  </Label>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
-          <Button
-            type="submit"
-            className="bg-foreground text-background hover:bg-foreground/90"
-            disabled={create.isPending || !input}
-          >
-            {create.isPending ? "Creating…" : "Create"}
-            <CornerDownLeftIcon className="size-3.5" />
-          </Button>
-        </div>
-      </form>
+
+          <ComposerInput
+            id="nw-prompt"
+            aria-label="Prompt"
+            disabled={create.isPending}
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            placeholder="What do you want to work on?"
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing)
+                return;
+              event.preventDefault();
+              submit();
+            }}
+            className="min-h-48 flex-1 max-h-[50dvh]"
+          />
+          <ComposerToolbar className="justify-between">
+            <div className="min-w-0 flex-1">
+              <LaunchModelPicker
+                selection={selection}
+                disabled={create.isPending}
+                onClosed={() => document.getElementById("nw-prompt")?.focus()}
+              />
+              {credentials.isSuccess && !available.length && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto px-3 text-xs"
+                  onClick={() => openDialog({ kind: "settings", tab: "logins" })}
+                >
+                  Add a login to choose a model
+                </Button>
+              )}
+            </div>
+            <Button
+              type="submit"
+              className="bg-foreground text-background hover:bg-foreground/90"
+              disabled={create.isPending || !input}
+            >
+              {create.isPending ? "Creating…" : "Create"}
+              <CornerDownLeftIcon className="size-3.5" />
+            </Button>
+          </ComposerToolbar>
+        </form>
+      </ComposerSurface>
     </DialogContent>
   );
 }

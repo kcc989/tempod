@@ -1,3 +1,4 @@
+import { useAppHeader } from "~/ui/components/shell/AppHeader";
 import { Match } from "effect";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeftIcon } from "lucide-react";
@@ -5,6 +6,7 @@ import { useEffect } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
+import { WorkspaceInfo } from "~/ui/components/shell/WorkspaceInfo";
 import { ToolPanel } from "~/ui/components/shell/ToolPanel";
 import { SetupTab } from "~/ui/components/processes/SetupTab";
 import { useToggleRunAction } from "~/ui/components/processes/useScripts";
@@ -83,6 +85,7 @@ function useWorkspaceActions(workspaceId: string, projectId: string | undefined)
 }
 
 function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
+  const setToolWidth = useAppHeader()?.setToolWidth;
   const layout = useLayout();
 
   const quiet = useWorkspaceSelector(workspaceId, (s) => {
@@ -97,36 +100,60 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
   const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
-  const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned });
+  const infoOpen = useWorkspaceUiSelector(workspaceId, (ui) => ui.infoOpen);
+  const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned, infoOpen });
+  const toolsOpen = rightOpen;
+  useEffect(() => {
+    if (!toolsOpen) setToolWidth?.(0);
+
+    return () => setToolWidth?.(0);
+  }, [toolsOpen, setToolWidth]);
+  const chatStyle = { minWidth: 0, "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 2vw, 24px)" };
 
   const horizontal = useDefaultLayout({
     id: "workspace",
-    panelIds: rightOpen ? ["center", "right"] : ["center"],
+    panelIds: toolsOpen ? ["center", "right"] : ["center"],
     storage: safeLayoutStorage,
   });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TopBar workspaceId={workspaceId} variant="desktop" />
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
         <ResizablePanelGroup
           id="workspace"
+          className="min-w-0 flex-1"
           orientation="horizontal"
           defaultLayout={horizontal.defaultLayout}
           onLayoutChanged={horizontal.onLayoutChanged}
         >
           <ResizablePanel id="center" minSize={320}>
-            <section aria-label="Chat" className="flex h-full min-h-0 flex-col">
+            <section aria-label="Chat" className="flex h-full min-h-0 flex-col" style={chatStyle}>
               <WorkspaceBanners workspaceId={workspaceId} />
               <div className="min-h-0 flex-1">
-                <ChatTabs workspaceId={workspaceId} variant="desktop" />
+                <ChatTabs
+                  workspaceId={workspaceId}
+                  variant="desktop"
+                  aside={
+                    infoOpen ? (
+                      <aside aria-label="Workspace info" className="workspace-info-rail min-h-0 p-3">
+                        <WorkspaceInfo workspaceId={workspaceId} />
+                      </aside>
+                    ) : undefined
+                  }
+                />
               </div>
             </section>
           </ResizablePanel>
-          {rightOpen && (
+          {toolsOpen && (
             <>
               <ResizableHandle aria-label="Resize right side" />
-              <ResizablePanel id="right" defaultSize="50%" minSize={280}>
+              <ResizablePanel
+                id="right"
+                defaultSize="50%"
+                minSize={280}
+                onResize={(size) => setToolWidth?.(size.inPixels)}
+              >
                 <RightSide workspaceId={workspaceId} />
               </ResizablePanel>
             </>
@@ -137,8 +164,8 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-function RightSide({ workspaceId }: { workspaceId: string }) {
-  return <ToolPanel workspaceId={workspaceId} />;
+function RightSide({ workspaceId, phone = false }: { workspaceId: string; phone?: boolean }) {
+  return <ToolPanel workspaceId={workspaceId} phone={phone} />;
 }
 
 function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
@@ -148,6 +175,32 @@ function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
     <div className="flex h-full min-h-0 flex-col">
       <TopBar workspaceId={workspaceId} variant="phone" />
       {Match.value(phonePane).pipe(
+        Match.when("info", () => (
+          <section aria-label="Workspace info" className="flex min-h-0 flex-1 flex-col">
+            <div className="border-b px-2 py-1">
+              <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
+                <ChevronLeftIcon aria-hidden />
+                Back to chat
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 p-3">
+              <WorkspaceInfo workspaceId={workspaceId} phone />
+            </div>
+          </section>
+        )),
+        Match.when("tools", () => (
+          <section aria-label="Workspace tools" className="flex min-h-0 flex-1 flex-col">
+            <div className="border-b px-2 py-1">
+              <Button size="sm" variant="ghost" onClick={() => setPhonePane("chat")}>
+                <ChevronLeftIcon aria-hidden />
+                Back to chat
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <RightSide workspaceId={workspaceId} phone />
+            </div>
+          </section>
+        )),
         Match.when("changes", () => (
           <section aria-label="Changes" className="flex min-h-0 flex-1 flex-col">
             <RightPanel workspaceId={workspaceId} variant="phone" />
