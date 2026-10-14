@@ -66,8 +66,9 @@ describe("settings page", () => {
       .getAllByRole("button")
       .map((b) => b.textContent);
 
-    expect(labels.slice(0, 8)).toEqual([
+    expect(labels.slice(0, 9)).toEqual([
       "General",
+      "Shell",
       "Logins",
       "Agents",
       "Environments",
@@ -107,6 +108,7 @@ describe("settings page", () => {
         .map((b) => b.textContent),
     ).toEqual([
       "General",
+      "Shell",
       "Logins",
       "Agents",
       "Environments",

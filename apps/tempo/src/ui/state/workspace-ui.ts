@@ -640,6 +640,7 @@ export const setPhonePane = (phonePane: PhonePane): void => setLayout({ phonePan
 // App dialogs
 export type SettingsTab =
   | "general"
+  | "shell"
   | "logins"
   | "agents"
   | "environments"

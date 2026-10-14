@@ -10,6 +10,7 @@ import {
   PaletteIcon,
   SearchIcon,
   ServerIcon,
+  SquareTerminalIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SECTIONS, sectionPage } from "~/ui/components/dialogs/settings-model";
@@ -22,6 +23,7 @@ import { McpServersTab } from "~/ui/components/dialogs/settings/McpServersTab";
 import { NotificationsTab } from "~/ui/components/dialogs/settings/NotificationsTab";
 import { ProjectTab } from "~/ui/components/dialogs/settings/ProjectTab";
 import { useOpenWorkspaceDetail } from "~/ui/components/dialogs/settings/useOpenWorkspace";
+import { ShellTab } from "~/ui/components/dialogs/settings/ShellTab";
 import { ShortcutsTab } from "~/ui/components/dialogs/settings/ShortcutsTab";
 import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
@@ -36,6 +38,12 @@ const PERSONAL = [
     label: "General",
     description: "Notifications and sound for this browser.",
     icon: BellIcon,
+  },
+  {
+    id: "shell",
+    label: "Shell",
+    description: "Shell files for your workspace terminals.",
+    icon: SquareTerminalIcon,
   },
   { id: "logins", label: "Logins", description: "Manage agent logins and API keys.", icon: KeyRoundIcon },
   {
@@ -253,6 +261,7 @@ export function SettingsPage() {
             {tab === "project" ? "Configure this project and its workspaces." : personal?.description}
           </p>
           {tab === "general" && <NotificationsTab />}
+          {tab === "shell" && <ShellTab />}
           {tab === "logins" && <LoginsTab />}
           {tab === "agents" && <AgentsTab />}
           {tab === "environments" && <EnvironmentsTab />}
