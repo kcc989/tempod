@@ -600,6 +600,7 @@ const proc = await this.ctx.container.exec(
   - Server to client, binary: `proc.stdout`.
   - Server to client, text: `{"type":"ready"}` once, after the process starts.
 - The DO MUST `accept()` this WebSocket. It MUST NOT use hibernation for it; hibernation drops the process handle.
+- Set the accepted socket's `binaryType` to `"arraybuffer"` before accepting it, so keyboard frames reach `proc.stdin` as bytes regardless of the runtime's default binary type. Send `ready` only after both stdin and stdout are available. A failed stdin write closes the socket with 1011 so the client can reconnect.
 - When the WebSocket closes, kill the `exec` process. The tmux session keeps running, so a reconnect gets the same shell and scrollback.
 - An open terminal counts as activity, so the workspace does not sleep.
 - The terminal tab list comes from `tmux list-sessions -F '#S'`, run through `tempod` (`terminal.list`).

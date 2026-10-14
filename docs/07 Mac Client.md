@@ -245,6 +245,16 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 - Tabs `t1` to `t9` and the `+` button as in 04. A reconnect attaches to the same tmux session, so tmux restores the screen.
 - In the `Terminal` key context, only ⌘ shortcuts leave the terminal. Every other key goes to the shell.
 
+**Local terminal option**
+
+- The native process panel also offers **Open in Terminal** and **Open in iTerm** for the selected `t1` to `t9` cloud session. The embedded terminal remains available; the web UI continues to use xterm.
+- The bundle includes `Contents/MacOS/tempo`. `tempo terminal <workspace-id-or-slug> [t1..t9]` uses `t1` by default. IDs take precedence over slugs; ambiguous slugs require an ID.
+- The CLI reads the saved server URL and reuses that host's Keychain sign-in through the existing stable `TempoKeychain` helper. No token enters shell commands, process arguments, environment variables, temporary files or logs.
+- The bridge requires terminal stdin/stdout, saves TTY settings and uses raw mode without local echo. It forwards input only after `ready` and handles SIGWINCH resizes within the PTY's 10–500 column and 5–200 row limits. Ctrl+C reaches the cloud shell; Ctrl+] disconnects without ending tmux. Reconnection restores the screen and uses the latest size. Normal shell exit ends the CLI.
+- Completion, errors and handled SIGINT/SIGTERM/SIGHUP restore local TTY settings, cursor and screen state. Revoked credentials are removed and prompt the user to sign in again.
+- Launching uses a shell- and AppleScript-quoted command on `osascript` stdin, off the GPUI main thread. The app declares the Apple events usage description and automation entitlement. Development and release bundles sign the CLI and stable Keychain helper before the app.
+- `bun run mac:bundle` delegates to the signed development bundle's build-only mode. `bun run mac:install-cli` installs a symlink in `~/.local/bin` without replacing another command; users can invoke the bundled helper directly from any terminal.
+
 **Setup and Run.** Same as 04: output from `script.output`, Start and Stop, and ⌘R to start or stop the default run script.
 
 **Previews.** Each detected port shows as `<port> ↗` in the top bar. A click calls `openPreview` and opens the returned link in the default browser. The Browser tool is dedicated to Cloudflare Browser Run Live View (C7). Reset preview access works as in 04. When `browserActive` is true, `Live` opens Browser in the tool area. Opening it and Reload call `getBrowserLiveView`; its secret URL stays in memory only, never in logs, disk, layout or container state. A transient WKWebView shows the returned hosted live view with a nonpersistent website data store. The tool panel owns it beyond GPUI's per-frame element arena. It hides and detaches for another tool or document, an inactive workspace, a collapsed tool area, Settings or sign-in. GPUI dialogs, sheets, deferred popovers and dropdown menus hide it while open. Closing Browser, Reload and session end discard the view and URL. A closed session shows `Browser session ended.`; Reload retries request errors. Previews and HTML/PDF artifacts still use the default browser. No address bar, general browsing, browser history or saved cookies are added. A PR link `#<number> ↗` shows as in 04. Agents still test in Chromium inside the container (01), so browser testing does not change.
@@ -329,7 +339,7 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 
 1. Read the version from `apps/mac/Cargo.toml`. It MUST be newer than `clients/mac/latest.json`.
 2. `cargo build --release -p tempo-mac --target aarch64-apple-darwin`.
-3. Build `Tempo.app`: `Contents/MacOS/Tempo`, `Contents/Info.plist` (`CFBundleIdentifier` `dev.tempo.mac`, the version, `LSMinimumSystemVersion` `15.0`, `CFBundleURLTypes` for `tempo`), and `Contents/Resources/AppIcon.icns`.
+3. Build `Tempo.app`: `Contents/MacOS/Tempo`, `Contents/MacOS/tempo`, `Contents/Helpers/TempoKeychain`, `Contents/Info.plist` (`CFBundleIdentifier` `dev.tempo.mac`, the version, `LSMinimumSystemVersion` `15.0`, `CFBundleURLTypes` for `tempo`), and `Contents/Resources/AppIcon.icns`.
 4. `codesign --force --options runtime --timestamp --entitlements apps/mac/resources/Tempo.entitlements --sign "$TEMPO_MAC_SIGN_IDENTITY" Tempo.app`
 5. `hdiutil create -volname Tempo -srcfolder Tempo.app -ov -format UDZO Tempo-<version>.dmg`, then sign the DMG with the same identity.
 6. `xcrun notarytool submit Tempo-<version>.dmg --keychain-profile "$TEMPO_MAC_NOTARY_PROFILE" --wait`, then `xcrun stapler staple Tempo-<version>.dmg`.
@@ -338,7 +348,7 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 - `TEMPO_MAC_SIGN_IDENTITY` is a "Developer ID Application" identity. `TEMPO_MAC_NOTARY_PROFILE` is made once with `xcrun notarytool store-credentials`. Both need a paid Apple Developer Program membership.
 - `mac:dev` uses a stable certificate and bundle identifier, so Keychain authorization can survive rebuilds. Its setup script keeps temporary private-key files private, imports the identity for `/usr/bin/codesign` only, grants trust for code signing only, and removes temporary files. No developer account is needed. It refuses to launch without a valid signing identity or to overwrite a running Tempo bundle. The first signed launch may need approval for the existing session item.
 - Local `mac:release -- --adhoc` builds remain ad-hoc (`codesign --sign -`) and are for the owner's own Mac only. Keychain may ask again after each rebuild.
-- `Tempo.entitlements` turns on the hardened runtime with no exceptions. No App Sandbox in this version.
+- `Tempo.entitlements` permits terminal-launch Apple events automation without code-signing runtime exceptions. No App Sandbox in this version.
 
 `latestMacClientSha256` is the lowercase 64-character SHA-256 from the same `clients/mac/latest.json` record as `latestMacClient`. It is omitted when no valid hash is published. Clients MUST refuse an unverified download when the field is absent. This is additive under protocol version 1.
 

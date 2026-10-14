@@ -335,6 +335,16 @@ test("desktop shortcuts, settings, live scripts and terminal", async ({ page, fi
   await page.getByRole("button", { name: "Terminal", exact: true }).click();
   await expect(page.getByRole("button", { name: /New terminal/ })).toBeVisible();
   await expect(page.locator(".xterm-screen")).toBeVisible();
+  await expect(page.locator(".xterm-helper-textarea:visible")).toBeFocused();
+  await page.keyboard.type("ls");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => fixture.terminalInput).toBe("ls\r");
+  await page.getByRole("button", { name: "New terminal", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "t2", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".xterm-helper-textarea:visible")).toBeFocused();
+  await page.getByRole("tab", { name: "t1", exact: true }).click();
+  await expect(page.locator(".xterm-helper-textarea:visible")).toBeFocused();
+  await expect(page.locator(".xterm-screen")).toHaveCount(2);
 });
 
 test(
