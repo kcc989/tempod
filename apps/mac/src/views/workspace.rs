@@ -3001,6 +3001,7 @@ impl Render for WorkspaceView {
                                         Button::new(button_id)
                                             .ghost()
                                             .small()
+                                            .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                                             .icon(gpui_kit::assets::IconName::X)
                                             .accessibility_label("Close chat")
                                             .tooltip("Close chat")

@@ -103,6 +103,9 @@ pub struct ToolPanel {
     browser_error: Option<String>,
     pub browser_pending: bool,
     browser_generation: u64,
+    /// Keeps the selected tool tab in view when the tabs overflow the pane.
+    tab_scroll: gpui_kit::ScrollHandle,
+    scrolled_to: Option<usize>,
     #[cfg(target_os = "macos")]
     native_browser: Option<crate::macos::live_view::LiveView>,
     _subscriptions: Vec<Subscription>,
@@ -188,6 +191,8 @@ impl ToolPanel {
             browser_error: None,
             browser_pending: false,
             browser_generation: 0,
+            tab_scroll: gpui_kit::ScrollHandle::new(),
+            scrolled_to: None,
             #[cfg(target_os = "macos")]
             native_browser: None,
             _subscriptions: vec![
@@ -367,6 +372,10 @@ impl ToolPanel {
                 .and_then(|tool| self.tabs.iter().position(|t| *t == tool.group()))
                 .unwrap_or(self.tabs.len() + documents.len())
         };
+        if self.scrolled_to != Some(selected) {
+            self.tab_scroll.scroll_to_item(selected);
+            self.scrolled_to = Some(selected);
+        }
         let tab_tools = self.tabs.clone();
         let doc_keys: Vec<_> = documents.iter().map(|(key, _)| key.clone()).collect();
         div()
@@ -376,6 +385,8 @@ impl ToolPanel {
             .child(
                 TabBar::new("tool-tabs")
                     .underline()
+                    .menu(true)
+                    .track_scroll(&self.tab_scroll)
                     .h_full()
                     .bg(color(Token::Muted, cx))
                     .selected_index(selected)
@@ -394,6 +405,7 @@ impl ToolPanel {
                             Button::new(SharedString::from(format!("close-tool-{}", tool.title())))
                                 .ghost()
                                 .small()
+                                .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                                 .icon(gpui_kit::assets::IconName::X)
                                 .accessibility_label(format!("Close {}", tool.title()))
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -407,6 +419,7 @@ impl ToolPanel {
                             Button::new(SharedString::from(format!("close-tool-document-{key}")))
                                 .ghost()
                                 .small()
+                                .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                                 .icon(gpui_kit::assets::IconName::X)
                                 .accessibility_label("Close tool tab")
                                 .on_click(cx.listener(move |this, _, _, cx| {
