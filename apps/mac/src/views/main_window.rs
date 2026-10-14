@@ -89,6 +89,8 @@ pub struct MainWindow {
     /// An action for the shown workspace that arrived before its view existed.
     pending_action: Option<Box<dyn gpui_kit::Action>>,
     live_subscriptions: Vec<(gpui_kit::EntityId, Subscription)>,
+    measured_sidebar_width: Option<f32>,
+    measured_right_width: Option<f32>,
 }
 
 impl MainWindow {
@@ -205,6 +207,8 @@ impl MainWindow {
             live_workspaces: Vec::new(),
             pending_action: None,
             live_subscriptions: Vec::new(),
+            measured_sidebar_width: None,
+            measured_right_width: None,
             top_bar,
             tabs,
             transcript: cx.new(|cx| TranscriptView::new(rows, cx)),
@@ -391,6 +395,38 @@ impl MainWindow {
             .iter()
             .find(|v| v.read(cx).store.read(cx).workspace_id == id)
             .cloned()
+    }
+
+    fn measure_pane(&self, right: bool, cx: &Context<Self>) -> AnyElement {
+        let owner = cx.entity().downgrade();
+        gpui_kit::canvas(
+            |_, _, _| (),
+            move |bounds, _, _, cx| {
+                let width = f32::from(bounds.size.width);
+                let Some(owner) = owner.upgrade() else { return };
+                let previous = if right {
+                    owner.read(cx).measured_right_width
+                } else {
+                    owner.read(cx).measured_sidebar_width
+                };
+                if previous.is_some_and(|previous| (previous - width).abs() < 0.5) {
+                    return;
+                }
+                cx.defer(move |cx| {
+                    owner.update(cx, |this, cx| {
+                        if right {
+                            this.measured_right_width = Some(width);
+                        } else {
+                            this.measured_sidebar_width = Some(width);
+                        }
+                        cx.notify();
+                    });
+                });
+            },
+        )
+        .absolute()
+        .size_full()
+        .into_any_element()
     }
 
     fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -713,12 +749,14 @@ impl Render for MainWindow {
             .is_some_and(|v| v.read(cx).tools.read(cx).info_open);
         let show_right = show_right && !info_open;
         let active_view = self.live_active(cx);
-        let sidebar_width = pane_sizes
-            .sidebar
+        let sidebar_width = self
+            .measured_sidebar_width
+            .or(pane_sizes.sidebar)
             .unwrap_or(sidebar::DEFAULT_WIDTH)
             .clamp(sidebar::MIN_WIDTH, sidebar_max);
-        let right_width = pane_sizes
-            .right
+        let right_width = self
+            .measured_right_width
+            .or(pane_sizes.right)
             .unwrap_or((width - 280.) / 2.)
             .clamp(300., 600.);
         let shared_header = active_view.as_ref().map(|view| {
@@ -985,7 +1023,9 @@ impl Render for MainWindow {
                                         .visible(self.panes.sidebar)
                                         .child(
                                             v_flex()
+                                                .relative()
                                                 .size_full()
+                                                .child(self.measure_pane(false, cx))
                                                 .children(
                                                     (!shared_header_visible
                                                         && !window.is_fullscreen())
@@ -1010,7 +1050,9 @@ impl Render for MainWindow {
                                         .visible(show_right)
                                         .child(
                                             div()
+                                                .relative()
                                                 .size_full()
+                                                .child(self.measure_pane(true, cx))
                                                 .bg(color(Token::Panel, cx))
                                                 .child(right),
                                         ),
