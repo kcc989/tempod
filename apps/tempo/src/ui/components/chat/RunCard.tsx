@@ -146,7 +146,8 @@ export function RunCard({
 }
 
 /** 04, Workspace activity: the empty state. */
-export const NO_RUN_ACTIVITY = "No agent runs yet. Runs that project hooks start, outside a chat, appear here.";
+export const NO_RUN_ACTIVITY =
+  "No agent runs yet. Runs that project hooks start, outside a chat, appear here.";
 
 export function RunActivity({ workspaceId }: { workspaceId: string }) {
   const query = useCallQuery("listRuns", { workspaceId });
@@ -155,7 +156,9 @@ export function RunActivity({ workspaceId }: { workspaceId: string }) {
 
   for (const run of Object.values(live)) rows.set(run.id, run);
 
-  const runs = [...rows.values()].filter((r) => !r.originSessionId).toSorted((a, b) => b.createdAt - a.createdAt);
+  const runs = [...rows.values()]
+    .filter((r) => !r.originSessionId)
+    .toSorted((a, b) => b.createdAt - a.createdAt);
 
   if (runs.length === 0) return <p className="p-3 text-sm text-muted-foreground">{NO_RUN_ACTIVITY}</p>;
 

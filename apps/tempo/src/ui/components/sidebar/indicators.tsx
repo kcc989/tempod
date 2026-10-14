@@ -128,5 +128,9 @@ export function ContainerPill({
     </span>
   );
 
-  return rest.length ? <SimpleTooltip label={`Running on ${rest.join(" · ")}`}>{status}</SimpleTooltip> : status;
+  return rest.length ? (
+    <SimpleTooltip label={`Running on ${rest.join(" · ")}`}>{status}</SimpleTooltip>
+  ) : (
+    status
+  );
 }
