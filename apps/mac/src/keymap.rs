@@ -56,6 +56,8 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("cmd-shift-a", Archive, ws),
         KeyBinding::new("cmd-r", ToggleRun, ws),
         KeyBinding::new("enter", Send, Some(COMPOSER_INPUT)),
+        // The mention popover's Space binding must not consume text input.
+        KeyBinding::new("space", NoAction, Some(COMPOSER_INPUT)),
         KeyBinding::new("escape", StopTurn, Some(COMPOSER_INPUT)),
         KeyBinding::new("shift-tab", TogglePlanMode, Some(COMPOSER_INPUT)),
         KeyBinding::new(

@@ -1467,16 +1467,34 @@ fn user_message(
         .group(group.clone())
         .role(Role::Article)
         .aria_label("Your message")
-        .children((!c.text.is_empty()).then(|| markdown(id.clone(), &c.text)))
-        .children(
-            (!c.mentions.is_empty() || !c.attachments.is_empty()).then(|| {
-                h_flex()
-                    .px_4()
-                    .gap_1()
-                    .flex_wrap()
-                    .children(mentions)
-                    .children(attachments)
-            }),
+        .w_full()
+        .items_end()
+        .gap_1()
+        .child(
+            v_flex()
+                .min_w_0()
+                .max_w(gpui_kit::relative(0.85))
+                .rounded_lg()
+                .bg(color(Token::Muted, cx))
+                .px_3()
+                .py_2()
+                .gap_2()
+                .children((!c.text.is_empty()).then(|| {
+                    div()
+                        .min_w_0()
+                        .text_sm()
+                        .whitespace_normal()
+                        .child(c.text.clone())
+                }))
+                .children(
+                    (!c.mentions.is_empty() || !c.attachments.is_empty()).then(|| {
+                        h_flex()
+                            .gap_1()
+                            .flex_wrap()
+                            .children(mentions)
+                            .children(attachments)
+                    }),
+                ),
         )
         .child(
             h_flex()
