@@ -50,15 +50,25 @@ const checks = {
 
 let exitCode = 0;
 
+/** Each check runs in its own process group, so no grandchild outlives it and stalls job cleanup. */
+const killGroup = (pid: number, signal: NodeJS.Signals): void => {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // the group has already exited
+  }
+};
+
 const runCheck = async ([name, cmd]: Check): Promise<boolean> => {
   if (exitCode !== 0 || Date.now() - checksStarted >= budgetMs) return false;
   console.log(`Starting ${name}`);
   const stepStarted = Date.now();
-  const child = Bun.spawn(cmd, { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+  const child = Bun.spawn(cmd, { stdin: "inherit", stdout: "inherit", stderr: "inherit", detached: true });
   const remaining = budgetMs - (Date.now() - checksStarted);
-  const timer = setTimeout(() => child.kill("SIGTERM"), Math.max(0, remaining));
+  const timer = setTimeout(() => killGroup(child.pid, "SIGTERM"), Math.max(0, remaining));
   const result = await child.exited;
   clearTimeout(timer);
+  killGroup(child.pid, "SIGKILL");
   const seconds = (Date.now() - stepStarted) / 1000;
   timings.push({ name, seconds });
   console.log(`::notice title=${name} runtime::${seconds.toFixed(1)} seconds`);

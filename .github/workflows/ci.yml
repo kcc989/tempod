@@ -42,6 +42,9 @@ jobs:
           restore-keys: |
             ci-v1-${{ runner.os }}-bun-1.4.2-${{ hashFiles('bun.lock') }}-
             ci-v1-${{ runner.os }}-bun-1.4.2-
+      - name: Mark restored task cache
+        if: steps.changes.outputs.docs_only != 'true'
+        run: mkdir -p .turbo/cache && touch .turbo/cache-restored
       - name: Install dependencies
         id: install
         run: |
@@ -62,14 +65,24 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true' && steps.chromium.outputs.cache-hit != 'true'
         run: ./tests/e2e/node_modules/.bin/playwright install chromium
       - name: Checks within the total runtime budget
+        id: checks
+        env:
+          TURBO_RUN_SUMMARY: "true"
+          TURBO_TELEMETRY_DISABLED: "1"
         run: |
           if [ "${{ steps.changes.outputs.docs_only }}" = "true" ]; then
             bun run ci --docs-only
           else
             bun run ci
           fi
+      - name: Prune task cache
+        id: prune
+        if: ${{ !cancelled() && steps.changes.outputs.docs_only != 'true' && steps.install.outcome == 'success' }}
+        env:
+          CI_CHECKS_OK: ${{ steps.checks.outcome == 'success' }}
+        run: bun scripts/ci-cache.ts
       - name: Save successful task results
-        if: ${{ !cancelled() && steps.changes.outputs.docs_only != 'true' && steps.install.outcome == 'success' && steps.tasks.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && steps.prune.outputs.changed == 'true' }}
         uses: actions/cache/save@v4
         with:
           path: .turbo/cache
