@@ -3,11 +3,11 @@ import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.t
 import type { Result } from "@tempo/protocol";
 import {
   createExecutionContext,
-  env,
   runDurableObjectAlarm,
   runInDurableObject,
   waitOnExecutionContext,
 } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, it, vi, type TestContext } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
 import { github } from "../../src/github/provider.ts";

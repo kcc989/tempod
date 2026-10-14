@@ -44,7 +44,7 @@ tempo/
   CLAUDE.md                     symlink to AGENTS.md
 ```
 
-**Tooling:** Bun, Vite, TypeScript 7.0.2 (native compiler) in strict mode, Vitest with `@cloudflare/vitest-pool-workers` for DO tests, oxlint with the vendored anti-slop generic and Effect rules, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
+**Tooling:** Bun, Vite, TypeScript 7.0.2 (native compiler) in strict mode, Vitest with `@cloudflare/vitest-plugin` for DO tests, `cloudflare.config.ts` with the `cf` CLI for Worker config and deploys (01, Worker config), oxlint with the vendored anti-slop generic and Effect rules, Oxfmt. Effect v4 in Worker server code and in `tempod`; the UI uses Effect Schema only.
 
 **Scripts** (root `package.json`): `dev`, `build`, `typecheck`, `lint`, `format`, `test`, `test:conformance`, `test:e2e`, `deploy`.
 
@@ -174,7 +174,7 @@ The Tempo Spec (tabs 00 to 06) is the source of truth. Read the tab for the area
 
 ## Code
 13. Keep comments minimal. Comment only where the reason is not clear from the code.
-14. Every server function, op step and tempod request has a test. DO tests use @cloudflare/vitest-pool-workers. tempod tests run inside the container image.
+14. Every server function, op step and tempod request has a test. DO tests use @cloudflare/vitest-plugin. tempod tests run inside the container image.
 15. Before you finish: bun run typecheck, bun run lint and bun run test all pass.
 16. If behavior must change, change the spec in the same pull request, and say so in its description.
 ```
@@ -236,7 +236,7 @@ Each milestone is one pull request and merges when its own tests pass.
 Follow `docs/CI.md` and the CI and test budget rules in `AGENTS.md`. Every test proves one behavior and asserts an outcome.
 
 - Unit: definition and hook validation, handle derivation, hook matching, decision batching at 64, threshold, the state builder's caps and redaction, each output kind schema, the Send to chat texts and the migration mapping.
-- Worker integration with `@cloudflare/vitest-pool-workers` and a fake `AI` binding: ownership and CRUD for every new function; event → decision → run → `report_result` → `run.completed` → auto-send; the follow-up; `RUN_RESULT_MISSING`; timeout; cancel; the files-changed warning; protected files; `max_runs`; decision failure and Run anyway; proposal apply and reject; migration idempotency.
+- Worker integration with `@cloudflare/vitest-plugin` and a fake `AI` binding: ownership and CRUD for every new function; event → decision → run → `report_result` → `run.completed` → auto-send; the follow-up; `RUN_RESULT_MISSING`; timeout; cancel; the files-changed warning; protected files; `max_runs`; decision failure and Run anyway; proposal apply and reject; migration idempotency.
 - `tempod`, in the container image: `report_result` is listed only with `TEMPO_RUN_ID` and uses the right schema; `list_agents` and `propose_agent_change` are hidden in run sessions.
 
 ## Gate I

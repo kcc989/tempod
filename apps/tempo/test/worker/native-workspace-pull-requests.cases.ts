@@ -1,4 +1,5 @@
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, expect, it } from "vitest";
 import { Session, newId, unwrap, type TempodParams } from "@tempo/protocol";
 import { Schema } from "effect";

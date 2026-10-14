@@ -1,7 +1,8 @@
 import type { JsonData } from "@tempo/protocol";
 import { Schema } from "effect";
 import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.ts";
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { newId, type AgentId, type Source, type TempodEvent, type TempodOp } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import type { WorkspaceCore } from "../../src/do/workspace/core.ts";

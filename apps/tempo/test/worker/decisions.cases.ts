@@ -1,7 +1,8 @@
 import { Files } from "@cloudflare/sandbox";
 import { seedReadyWorkspace } from "./ready-fixture.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Schema } from "effect";
 import {

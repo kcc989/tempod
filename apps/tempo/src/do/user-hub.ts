@@ -9,16 +9,16 @@ import { summaries, userHubSchema } from "../db/user-hub-do.ts";
 import { USER_HUB_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
 import { workspaces } from "../db/d1.ts";
 import { summaryFromD1Row } from "../lib/summary.ts";
-import type { Env } from "../env.ts";
+import type { Bindings } from "../env.ts";
 
 const MAX_BUFFERED = 4 * 1024 * 1024;
 
 /** Fans out sidebar updates (02, UserHubDO). One per user, named by the user id. */
-export class UserHubDO extends DurableObject<Env> {
+export class UserHubDO extends DurableObject<Bindings> {
   private readonly db: DrizzleSqliteDODatabase<typeof userHubSchema>;
   private loading: Promise<void> | null = null;
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: Bindings) {
     super(ctx, env);
     this.db = drizzle(ctx.storage, { schema: userHubSchema });
     void ctx.blockConcurrencyWhile(() => runMigrations(this.db, USER_HUB_MIGRATIONS));

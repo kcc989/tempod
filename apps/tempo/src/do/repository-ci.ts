@@ -23,7 +23,7 @@ import { ciLogKey, ciRunnerName, type CiJobResult, type CiJobStart } from "../ci
 import { projects, workspaces } from "../db/d1.ts";
 import { REPOSITORY_CI_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
 import { ciBranches, ciJobs, ciKv, ciRuns, pipelines, repositoryCiSchema } from "../db/repository-ci-do.ts";
-import type { Env } from "../env.ts";
+import { type Bindings, type Env, withWorkspace } from "../env.ts";
 import { errorText, log } from "../log.ts";
 
 /** 10, Runs and jobs and Ingestion. */
@@ -78,7 +78,7 @@ const SHA = /^[0-9a-f]{40}$/;
  * The CI coordinator of one native project (10, Components). Named by the project id. Owns
  * pipeline revisions, runs, jobs and branch baselines in its own SQLite; reads D1 only.
  */
-export class RepositoryCiDO extends DurableObject<Env> {
+export class RepositoryCiDO extends DurableObject<Bindings> {
   private readonly db: DrizzleSqliteDODatabase<typeof repositoryCiSchema>;
   /** The Worker bindings. */
   bindings: Env;
@@ -91,10 +91,10 @@ export class RepositoryCiDO extends DurableObject<Env> {
   private pumping: Promise<void> | null = null;
   private repump = false;
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: Bindings) {
     super(ctx, env);
-    this.bindings = env;
-    this.runners = env.WORKSPACE;
+    this.bindings = withWorkspace(env, ctx.exports);
+    this.runners = this.bindings.WORKSPACE;
     this.db = drizzle(ctx.storage, { schema: repositoryCiSchema });
     void ctx.blockConcurrencyWhile(() => runMigrations(this.db, REPOSITORY_CI_MIGRATIONS));
   }

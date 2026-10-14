@@ -1,6 +1,7 @@
 import { proposalNotifications } from "../../src/agents/proposals.ts";
 import { Schema } from "effect";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentLibraryToolResult, newId, unwrap, type ToolReq, type ToolRes } from "@tempo/protocol";
 import { seedReadyWorkspace } from "./ready-fixture.ts";

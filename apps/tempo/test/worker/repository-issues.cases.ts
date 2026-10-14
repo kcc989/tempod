@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { RepositoryIssue, RepositoryIssueComment, RepositoryLabel, capture, newId } from "@tempo/protocol";
 import { Schema } from "effect";
 import { describe, it } from "vitest";

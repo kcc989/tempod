@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 /** Worker and Durable Object tests, run inside workerd (06, Tooling). */
@@ -7,8 +7,13 @@ export default defineConfig({
   plugins: [
     cloudflareTest(async () => ({
       main: "./test/worker/entry.ts",
-      wrangler: { configPath: "./test/wrangler.test.jsonc" },
+      experimental: { newConfig: { configPath: "./test/cloudflare.config.ts" } },
       miniflare: {
+        durableObjects: {
+          USER_HUB: "UserHubDO",
+          REPOSITORY_CI: "RepositoryCiDO",
+          CREDENTIALS: "CredentialDO",
+        },
         bindings: {
           TEMPO_ENCRYPTION_KEY: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
           BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-test",

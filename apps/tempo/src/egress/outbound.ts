@@ -1,7 +1,7 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Injector } from "@tempo/protocol";
 import { SECRET_KEYS } from "../do/credential.ts";
-import type { Env } from "../env.ts";
+import type { Bindings } from "../env.ts";
 import { BROWSER_CDP_HEADER, stripInternalHeaders } from "../http/preview.ts";
 import { environmentSecretKey } from "../lib/environments.ts";
 import { log } from "../log.ts";
@@ -30,12 +30,12 @@ const block = (status: number, body: string) => new Response(body, { status });
  * credentials, swaps environment secrets, runs injectors, enforces the egress policy, and logs
  * every request. Never buffers bodies.
  */
-export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
+export class TempoOutbound extends WorkerEntrypoint<Bindings, OutboundProps> {
   override async fetch(request: Request): Promise<Response> {
     const started = Date.now();
     const url = new URL(request.url);
     const { workspaceId, userId, injector: injectorName } = this.ctx.props;
-    const workspace = this.env.WORKSPACE.getByName(workspaceId);
+    const workspace = this.ctx.exports.WorkspaceDO.getByName(workspaceId);
     let rule = injectorName ? 13 : 10;
     let status = 0;
 
@@ -204,7 +204,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     const hit = configCache.get(workspaceId);
 
     if (hit && Date.now() - hit.at < CONFIG_TTL_MS) return hit.config;
-    const config = await this.env.WORKSPACE.getByName(workspaceId).getEgressConfig();
+    const config = await this.ctx.exports.WorkspaceDO.getByName(workspaceId).getEgressConfig();
     configCache.set(workspaceId, { config, at: Date.now() });
 
     return config;
@@ -221,19 +221,23 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     userId: string,
   ): Promise<string | null> {
     if (kind === "dotfiles-bearer") {
-      const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getDotfilesToken();
+      const token = await this.ctx.exports.WorkspaceDO.getByName(
+        this.ctx.props.workspaceId,
+      ).getDotfilesToken();
 
       return token === null ? null : `Bearer ${token}`;
     }
 
     if (kind === "artifact-bearer") {
-      const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getRepositoryToken();
+      const token = await this.ctx.exports.WorkspaceDO.getByName(
+        this.ctx.props.workspaceId,
+      ).getRepositoryToken();
 
       return token === null ? null : `Bearer ${token}`;
     }
 
     if (kind === "github-basic" || kind === "github-bearer") {
-      const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getGithubToken();
+      const token = await this.ctx.exports.WorkspaceDO.getByName(this.ctx.props.workspaceId).getGithubToken();
 
       if (!token) return null;
 
@@ -257,7 +261,7 @@ export interface InjectorSecretsProps {
 const HASHES = new Set(["SHA-1", "SHA-256", "SHA-512"]);
 
 /** `env.SECRETS` inside an injector (01, rule 13): MACs, never raw values. */
-export class InjectorSecrets extends WorkerEntrypoint<Env, InjectorSecretsProps> {
+export class InjectorSecrets extends WorkerEntrypoint<Bindings, InjectorSecretsProps> {
   async hmac(
     name: string,
     data: string | ArrayBuffer,

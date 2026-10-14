@@ -24,7 +24,7 @@ import {
 } from "../../db/workspace-do.ts";
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import { json } from "../../db/json.ts";
-import type { Env } from "../../env.ts";
+import { type Bindings, withWorkspace } from "../../env.ts";
 import type { EgressConfig } from "../../egress/rules.ts";
 import { BROWSER_APP_HEADER, BROWSER_CDP_HEADER, PREVIEW_HEADER } from "../../http/preview.ts";
 import { mcpToEgress } from "../../lib/mcp.ts";
@@ -117,9 +117,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   private lastPrPoll = 0;
   private modelDiscovery: Promise<FnOutput<"listModels">> | null = null;
   private lastBrowserCheck = 0;
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: Bindings) {
     super(ctx, env);
-    const core = new WorkspaceCore(ctx, env);
+    const core = new WorkspaceCore(ctx, withWorkspace(env, ctx.exports));
     this.core = core;
     this.handlers = {
       onEvent: (event) => applyTempodEvent({ core, runner: this.runner }, event),

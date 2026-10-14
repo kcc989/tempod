@@ -1,8 +1,8 @@
 import { Schema } from "effect";
 import { readContainerVersions } from "../container/versions.ts";
-// Builds and deploys the Worker with wrangler (called by alchemy.run.ts). Writes the deploy
-// config from the same shape as apps/tempo/wrangler.jsonc (01, Worker config), then runs
-// `vite build` and `wrangler deploy` with the secrets in a temporary 0600 file.
+// Builds and deploys the Worker with cf (called by alchemy.run.ts). apps/tempo/cloudflare.config.ts
+// holds the config (01, Worker config); this script passes the deploy values in the environment
+// and runs `cf deploy` with the secrets in a temporary 0600 file.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -60,8 +60,8 @@ const baseImage = pinned.base_image_digest
   ? `${pinned.base_image}@${pinned.base_image_digest}`
   : pinned.base_image;
 
-// 2. The deploy config. No `migrations` array: it conflicts with `exports` (01).
-let workspaceImage: { image: string } | undefined;
+// 2. The workspace image. Without TEMPO_BUILD_CA, cf builds it from container/Dockerfile.
+let workspaceImage: string | undefined;
 
 if (process.env.TEMPO_BUILD_CA && !process.argv.includes("--prepare")) {
   // Wrangler beta's Docker builder cannot pass BuildKit secrets. Build with CA trust here.
@@ -111,74 +111,20 @@ if (process.env.TEMPO_BUILD_CA && !process.argv.includes("--prepare")) {
   );
 
   if (!reference) throw new Error("Cannot identify the pushed managed-registry image digest.");
-  workspaceImage = { image: reference };
+  workspaceImage = reference;
 }
 
-const DO = { type: "durable-object", storage: "sqlite" } as const;
-
-const config = {
-  name: "tempo",
-  main: "./src/worker.ts",
-  compatibility_date: "2026-10-10",
-  compatibility_flags: ["nodejs_compat"],
-  // Disable invocation logs because request URLs can contain setup and preview tokens.
-  observability: {
-    enabled: true,
-    redact_query_string: true,
-    logs: { enabled: true, invocation_logs: false },
-  },
-  vars: {
-    APP_HOST: env("APP_HOST"),
-    PREVIEW_DOMAIN: env("PREVIEW_DOMAIN"),
-    TEMPO_OWNER_GITHUB_ID: env("TEMPO_OWNER_GITHUB_ID"),
-    TEMPO_VERSION: buildId,
-  },
-  containers: [
-    {
-      class_name: "WorkspaceDO",
-      scheduling_policy: "durable_object",
-      images: {
-        workspace: workspaceImage ?? {
-          dockerfile: "../../container/Dockerfile",
-          build_context: "../..",
-          build_vars: { ...pinned.build_args, BASE_IMAGE: baseImage },
-        },
-      },
-    },
-  ],
-  durable_objects: {
-    bindings: [
-      { name: "WORKSPACE", class_name: "WorkspaceDO" },
-      { name: "USER_HUB", class_name: "UserHubDO" },
-      { name: "REPOSITORY_CI", class_name: "RepositoryCiDO" },
-      { name: "CREDENTIALS", class_name: "CredentialDO" },
-    ],
-  },
-  exports: { WorkspaceDO: DO, UserHubDO: DO, CredentialDO: DO, RepositoryCiDO: DO },
-  d1_databases: [
-    { binding: "DB", database_name: env("TEMPO_D1_DATABASE_NAME"), database_id: env("TEMPO_D1_DATABASE_ID") },
-  ],
-  r2_buckets: [{ binding: "DATA", bucket_name: env("TEMPO_R2_BUCKET_NAME") }],
-  browser: { binding: "BROWSER" },
-  worker_loaders: [{ binding: "LOADER" }],
-  ai: { binding: "AI" },
-  artifacts: [{ binding: "ARTIFACTS", namespace: process.env.TEMPO_ARTIFACTS_NAMESPACE ?? "tempo-repos" }],
-  routes: [
-    { pattern: env("APP_HOST"), custom_domain: true },
-    { pattern: `*.${env("PREVIEW_DOMAIN")}/*`, zone_name: env("PREVIEW_DOMAIN") },
-  ],
-};
-
-const configPath = path.join(app, "wrangler.deploy.jsonc");
-
-fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+// Values that apps/tempo/cloudflare.config.ts reads when TEMPO_DEPLOY=1.
+// An empty TEMPO_WORKSPACE_IMAGE makes cf build the image itself.
+const deployEnv = { TEMPO_DEPLOY: "1", TEMPO_VERSION: buildId, TEMPO_WORKSPACE_IMAGE: workspaceImage ?? "" };
 
 if (process.argv.includes("--prepare")) {
-  console.log("Prepared apps/tempo/wrangler.deploy.jsonc; no cloud resources were changed.");
+  run("bunx", ["vite", "build"], app, deployEnv);
+  console.log("Built apps/tempo with the deploy config; no cloud resources were changed.");
   process.exit(0);
 }
 
-// 3. Build and deploy. The Vite plugin writes .wrangler/deploy/config.json under apps/tempo.
+// 3. Build and deploy. cf runs the Vite build, then deploys .cloudflare/output under apps/tempo.
 const secretsDir = fs.mkdtempSync(path.join(os.tmpdir(), "tempo-"));
 
 const secretsFile = path.join(secretsDir, "secrets.json");
@@ -194,10 +140,7 @@ fs.writeFileSync(
 );
 
 try {
-  run("bunx", ["vite", "build", "--minify", "oxc"], app, {
-    TEMPO_WRANGLER_CONFIG: "./wrangler.deploy.jsonc",
-  });
-  run("bunx", ["wrangler", "deploy", "--secrets-file", secretsFile], app);
+  run("bunx", ["cf", "deploy", "--secrets-file", secretsFile], app, deployEnv);
 } finally {
   fs.rmSync(secretsDir, { recursive: true, force: true });
 }

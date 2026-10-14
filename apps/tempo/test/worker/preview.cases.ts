@@ -1,6 +1,7 @@
 import { Predicate } from "effect";
 import { type WorkspaceStub } from "../../src/do/workspace/stub.ts";
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, expect, it } from "vitest";
 import { WORKSPACE_MIGRATIONS } from "../../src/db/do-migrations.ts";
 import { previewCookie } from "../../src/do/workspace/preview.ts";

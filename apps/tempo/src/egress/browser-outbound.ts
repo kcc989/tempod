@@ -1,5 +1,5 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-import type { Env } from "../env.ts";
+import type { Bindings } from "../env.ts";
 import { BROWSER_APP_HEADER, stripInternalHeaders } from "../http/preview.ts";
 
 export interface BrowserOutboundProps {
@@ -10,7 +10,7 @@ export interface BrowserOutboundProps {
  * Browser Run's route to the app under test (01, Browser Run): `outboundByHost` sends requests
  * for `localhost` here, and the WorkspaceDO forwards them to the port through tempod.
  */
-export class BrowserOutbound extends WorkerEntrypoint<Env, BrowserOutboundProps> {
+export class BrowserOutbound extends WorkerEntrypoint<Bindings, BrowserOutboundProps> {
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
@@ -18,6 +18,8 @@ export class BrowserOutbound extends WorkerEntrypoint<Env, BrowserOutboundProps>
     const headers = stripInternalHeaders(new Headers(request.headers));
     headers.set(BROWSER_APP_HEADER, url.port);
 
-    return this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).fetch(new Request(request, { headers }));
+    return this.ctx.exports.WorkspaceDO.getByName(this.ctx.props.workspaceId).fetch(
+      new Request(request, { headers }),
+    );
   }
 }

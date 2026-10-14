@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, expect, it } from "vitest";
 import { newId, type FnInput, type FnName, type JsonData } from "@tempo/protocol";
 import { d1UsernameTaken } from "../../src/auth/auth.ts";

@@ -126,43 +126,51 @@ For builds behind a TLS proxy, supply a combined public CA bundle as BuildKit se
 
 The WorkspaceDO class owns the container through `this.ctx.container`, under the `durable_object` scheduling policy. There is no `Sandbox` class and no `getSandbox()`; those were removed in SDK 1.0.
 
-**Worker config** (Alchemy v2 MUST produce the same result; if it cannot, use this wrangler file)
+**Worker config** (`apps/tempo/cloudflare.config.ts`, the `cf/config` format. Alchemy v2 MUST produce the same result; if it cannot, deploy this file with `cf deploy`)
 
-```jsonc
-{
-  "name": "tempo",
-  "main": "apps/tempo/src/worker.ts",
-  "compatibility_date": "2026-10-10",
-  "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
-  "vars": { "APP_HOST": "<APP_HOST>", "PREVIEW_DOMAIN": "<PREVIEW_DOMAIN>", "TEMPO_OWNER_GITHUB_ID": "<id>" },
-  "containers": [{
-    "class_name": "WorkspaceDO",
-    "scheduling_policy": "durable_object",
-    "images": { "workspace": { "dockerfile": "./container/Dockerfile" } }
-  }],
-  "durable_objects": { "bindings": [
-    { "name": "WORKSPACE",   "class_name": "WorkspaceDO" },
-    { "name": "USER_HUB",    "class_name": "UserHubDO" },
-    { "name": "CREDENTIALS", "class_name": "CredentialDO" }
-  ]},
-  "exports": {
-    "WorkspaceDO":  { "type": "durable-object", "storage": "sqlite" },
-    "UserHubDO":    { "type": "durable-object", "storage": "sqlite" },
-    "CredentialDO": { "type": "durable-object", "storage": "sqlite" }
+```ts
+import { bindings, defineConfig, defineContainer, exports, triggers } from "cf/config";
+
+const workspace = defineContainer({
+  name: "tempo-workspacedo",
+  schedulingPolicy: "durable-object",
+  images: { workspace: { dockerfile: "./container/Dockerfile" } },
+});
+
+export default defineConfig({
+  containers: [workspace],
+  worker: {
+    name: "tempo",
+    entrypoint: "apps/tempo/src/worker.ts",
+    compatibilityDate: "2026-10-10",
+    compatibilityFlags: ["nodejs_compat"],
+    observability: { enabled: true },
+    env: {
+      APP_HOST: bindings.text("<APP_HOST>"),
+      PREVIEW_DOMAIN: bindings.text("<PREVIEW_DOMAIN>"),
+      TEMPO_OWNER_GITHUB_ID: bindings.text("<id>"),
+      USER_HUB: bindings.durableObject({ worker: "tempo", exportName: "UserHubDO" }),
+      CREDENTIALS: bindings.durableObject({ worker: "tempo", exportName: "CredentialDO" }),
+      DB: bindings.d1({ name: "tempo", id: "<id>" }),
+      DATA: bindings.r2({ name: "tempo-data" }),
+      LOADER: bindings.workerLoader(),
+      AGENTS: bindings.artifacts({ namespace: "tempo-agents" }),
+    },
+    exports: {
+      WorkspaceDO: exports.durableObject({ storage: "sqlite", container: workspace }),
+      UserHubDO: exports.durableObject({ storage: "sqlite" }),
+      CredentialDO: exports.durableObject({ storage: "sqlite" }),
+    },
+    domains: ["<APP_HOST>"],
+    triggers: [triggers.fetch({ pattern: "*.<PREVIEW_DOMAIN>/*", zone: "<PREVIEW_DOMAIN>" })],
   },
-  "d1_databases": [{ "binding": "DB", "database_name": "tempo", "database_id": "<id>" }],
-  "r2_buckets":   [{ "binding": "DATA", "bucket_name": "tempo-data" }],
-  "worker_loaders": [{ "binding": "LOADER" }],
-  "artifacts":    [{ "binding": "AGENTS", "namespace": "tempo-agents" }],
-  "routes": [
-    { "pattern": "<APP_HOST>", "custom_domain": true },
-    { "pattern": "*.<PREVIEW_DOMAIN>/*", "zone_name": "<PREVIEW_DOMAIN>" }
-  ]
-}
+});
 ```
 
-- MUST NOT add a `migrations` array. It conflicts with `exports`.
+- `exports` replaces the migration history. There is no `migrations` array.
+- WorkspaceDO MUST NOT have an env binding. Every binding in this format has a `script_name`, and a container cannot be attached to a Durable Object bound with `script_name`. Code reaches WorkspaceDO through `ctx.exports.WorkspaceDO`. Request handlers receive it as `env.WORKSPACE` (`withWorkspace` in `apps/tempo/src/env.ts`).
+- The container name `tempo-workspacedo` is the name wrangler gave the application, so deploys update the same application.
+- Loading `cloudflare.config.ts` needs Node.js 22.18 or later. It does not load on Bun.
 - `instance_type` and `max_instances` do not apply under this policy. Pass `instance` to `start()`.
 
 **Main module exports** (`apps/tempo/src/worker.ts`)

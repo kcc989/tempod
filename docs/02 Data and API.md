@@ -11,7 +11,7 @@ One set of rules for every store and every wire format.
 | Topic | Rule |
 | --- | --- |
 | IDs | ULIDs, stored and sent in lowercase (26 chars from `[0-9a-hjkmnp-tv-z]`). Generate with a monotonic ULID factory, then lowercase. No prefixes. |
-| Workspace DO name | The workspace id. `env.WORKSPACE.getByName(workspaceId)`. |
+| Workspace DO name | The workspace id. `ctx.exports.WorkspaceDO.getByName(workspaceId)`, which handlers receive as `env.WORKSPACE` (01, Worker config). |
 | User DO names | The Better Auth user id, for `UserHubDO` and `CredentialDO`. |
 | Time | Integer milliseconds since the Unix epoch, UTC. Columns end in `_at`. |
 | Booleans | `INTEGER` 0 or 1 in SQLite; `true` or `false` in JSON. |

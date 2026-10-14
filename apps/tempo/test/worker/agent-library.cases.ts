@@ -1,5 +1,6 @@
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { Schema } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentDefinition, newId, type JsonData, type FnName, type Result } from "@tempo/protocol";

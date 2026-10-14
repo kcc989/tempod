@@ -29,7 +29,7 @@ The Tempo Spec (tabs 00 to 09 in `docs/`) is the source of truth. Read the tab f
 ## Code
 
 13. Keep comments minimal. Comment only where the reason is not clear from the code.
-14. Every server function, op step and tempod request has a test. DO tests use @cloudflare/vitest-pool-workers. tempod tests run inside the container image.
+14. Every server function, op step and tempod request has a test. DO tests use @cloudflare/vitest-plugin. tempod tests run inside the container image.
 15. Before you finish: bun run typecheck, bun run lint and bun run test all pass.
 16. If behavior must change, change the spec in the same pull request, and say so in its description.
 17. When the web UI (04) changes, the Mac client (07) changes in the same phase.

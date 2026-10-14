@@ -144,11 +144,12 @@ One deploy command builds the image, deploys the Worker and runs migrations. A o
 | `TEMPO_SETUP_TOKEN` | secret | 32 random characters |
 | `DB` | D1 binding | Database `tempo` |
 | `DATA` | R2 binding | Bucket `tempo-data` |
-| `WORKSPACE`, `USER_HUB`, `CREDENTIALS` | DO bindings | As in 01 |
+| `USER_HUB`, `CREDENTIALS` | DO bindings | As in 01 |
+| `WorkspaceDO` | `ctx.exports` entry, no binding | As in 01 |
 
 **Deploy.** `bun run deploy` first verifies Cloudflare API access and the dedicated Tempo state-store health endpoint, then runs Alchemy v2. An unreachable existing store must stop deployment before bootstrap; a network error must never be interpreted as absent state. When the store exists, the wrapper sets `TEMPO_STATE_BOOTSTRAP_ALLOWED=0` and runs without prompts. The SDK patch then refuses automatic state-store bootstrap/upgrade even when `--yes` approves the app resource plan. Existing state-store auth/encryption secrets and the Tempo secrets must be preserved. It MUST: build `dist/tempod`, build and push the container image, create D1 and R2 if missing, apply D1 migrations, set vars and secrets (generating the three secrets on first deploy), deploy the Worker, and save `https://<APP_HOST>/setup/github?token=<TEMPO_SETUP_TOKEN>` privately in mode-0600 `.alchemy/tempo-setup-link.txt`. The pinned SDK patch isolates Worker/DO namespace, auth/encryption secret names, bootstrap stack and credential cache identity (deployment guide). Stage `production` and profile `tempo` are fixed by the wrapper. Bootstrap and generated Tempo secrets persist in encrypted remote state; local files are caches. The unrelated account-wide `alchemy-state-store` and its secrets MUST NOT be touched or reused.
 
-On TLS-proxied deployment runners, `TEMPO_BUILD_CA` supplies the temporary BuildKit CA secret for an explicit full-image build and Wrangler registry push. The Worker uses the image tagged by its digest; CA material stays out of image layers. Deployment runs Wrangler every time so the private setup link is recreated on fresh VMs. A missing dedicated Worker with surviving dedicated state-store secrets or local bootstrap files must fail closed to prevent key rotation.
+On TLS-proxied deployment runners, `TEMPO_BUILD_CA` supplies the temporary BuildKit CA secret for an explicit full-image build and Wrangler registry push before `cf deploy`. The Worker uses the image tagged by its digest; CA material stays out of image layers. Deployment runs `cf deploy` every time so the private setup link is recreated on fresh VMs. A missing dedicated Worker with surviving dedicated state-store secrets or local bootstrap files must fail closed to prevent key rotation.
 
 **GitHub App setup** (manifest flow)
 

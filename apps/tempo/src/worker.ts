@@ -1,5 +1,5 @@
 import startHandler from "@tanstack/react-start/server-entry";
-import type { Env } from "./env.ts";
+import { type Bindings, type Env, withWorkspace } from "./env.ts";
 import { getAuth } from "./auth/auth.ts";
 import { handleAttachment, handleAttachmentRead } from "./http/attachments.ts";
 import {
@@ -79,5 +79,5 @@ export const handleRequest = async (request: Request, env: Env, ctx: ExecutionCo
 };
 
 export default {
-  fetch: handleRequest,
-} satisfies ExportedHandler<Env>;
+  fetch: (request, env, ctx) => handleRequest(request, withWorkspace(env, ctx.exports), ctx),
+} satisfies ExportedHandler<Bindings>;

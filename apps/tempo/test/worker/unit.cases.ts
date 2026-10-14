@@ -4,7 +4,7 @@ import { waitFor } from "./fakes.ts";
 import { Schema } from "effect";
 import { OpKind } from "@tempo/protocol";
 import type { RedactableFields } from "@tempo/protocol";
-import { env } from "cloudflare:workers";
+import { env } from "./test-env.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   OP_KINDS,

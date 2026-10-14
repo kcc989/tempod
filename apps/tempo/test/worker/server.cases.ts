@@ -11,7 +11,8 @@ import {
 import { ErrorBody as ErrorBodySchema } from "@tempo/protocol";
 import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import type { ErrorBody, Result } from "@tempo/protocol";
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Schema } from "effect";

@@ -1,5 +1,6 @@
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { ConversationArtifact, newId, type ConversationArtifact as Artifact } from "@tempo/protocol";
 import { Schema } from "effect";
 import { describe, expect, it, vi } from "vitest";

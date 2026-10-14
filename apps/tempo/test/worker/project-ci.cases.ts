@@ -1,4 +1,5 @@
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, it } from "vitest";
 import { capture, newId, unwrap, type CiRun } from "@tempo/protocol";
 import type { CiJobStart } from "../../src/ci/types.ts";

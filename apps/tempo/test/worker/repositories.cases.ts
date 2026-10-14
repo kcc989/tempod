@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TempoError } from "@tempo/protocol";
 import {

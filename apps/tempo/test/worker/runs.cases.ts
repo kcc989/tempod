@@ -2,7 +2,8 @@ import { runFn } from "../../src/server/run.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { Schema } from "effect";
 import { Files } from "@cloudflare/sandbox";
-import { env, runInDurableObject, runDurableObjectAlarm } from "cloudflare:test";
+import { runInDurableObject, runDurableObjectAlarm } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AgentDefinition,

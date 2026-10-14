@@ -1,5 +1,6 @@
 import { Schema } from "effect";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { newId } from "@tempo/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { startCodexLogin, pollCodexLogin, cancelCodexLogin } from "../../src/server/handlers/credentials.ts";

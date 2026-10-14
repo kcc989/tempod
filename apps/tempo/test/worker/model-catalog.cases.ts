@@ -1,4 +1,5 @@
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { unwrap } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import { FakeTempod, installFakes, seedProject, seedCredentials, internals, waitFor } from "./fakes.ts";

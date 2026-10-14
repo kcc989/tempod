@@ -1,5 +1,6 @@
 import { workspaceStub } from "../../src/do/workspace/stub.ts";
-import { env, runInDurableObject } from "cloudflare:test";
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { newId, randomToken, type AgentId, type Settings } from "@tempo/protocol";
 import { workspace } from "../../src/db/workspace-do.ts";
 import { json } from "../../src/db/json.ts";

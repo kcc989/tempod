@@ -4,11 +4,15 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+// scripts/deploy-worker.ts sets TEMPO_DEPLOY=1; deploys also minify the Worker bundle.
+const deploying = process.env["TEMPO_DEPLOY"] === "1";
+
 export default defineConfig({
+  build: deploying ? { minify: "oxc" } : {},
   plugins: [
     cloudflare({
       viteEnvironment: { name: "ssr" },
-      configPath: process.env["TEMPO_WRANGLER_CONFIG"] ?? "./wrangler.jsonc",
+      experimental: { newConfig: true },
     }),
     tailwindcss(),
     tanstackStart({ server: { entry: "./worker.ts" } }),

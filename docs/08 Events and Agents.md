@@ -483,7 +483,7 @@ Each milestone is one pull request and merges when its own tests pass.
 Follow `docs/CI.md` and the CI and test budget rules in `AGENTS.md`. Every test proves one behavior and asserts an outcome.
 
 - Unit: definition and hook validation, handle derivation, hook matching, decision batching at 64, threshold, the state builder's caps and redaction, each output kind schema, the Send to chat texts and the migration mapping.
-- Worker integration with `@cloudflare/vitest-pool-workers` and a fake `AI` binding: ownership and CRUD for every new function; event → decision → run → `report_result` → `run.completed` → auto-send; the follow-up; `RUN_RESULT_MISSING`; timeout; cancel; the files-changed warning; protected files; `max_runs`; decision failure and Run anyway; proposal apply and reject; migration idempotency.
+- Worker integration with `@cloudflare/vitest-plugin` and a fake `AI` binding: ownership and CRUD for every new function; event → decision → run → `report_result` → `run.completed` → auto-send; the follow-up; `RUN_RESULT_MISSING`; timeout; cancel; the files-changed warning; protected files; `max_runs`; decision failure and Run anyway; proposal apply and reject; migration idempotency.
 - `tempod`, in the container image: `report_result` is listed only with `TEMPO_RUN_ID` and uses the right schema; `list_agents` and `propose_agent_change` are hidden in run sessions.
 
 ## Gate I

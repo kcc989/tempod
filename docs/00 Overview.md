@@ -286,7 +286,7 @@ The biggest risk is that the container platform is new: Sandbox SDK 1.0 shipped 
 | ID | Risk | Impact | Mitigation | Spike |
 | --- | --- | --- | --- | --- |
 | R1 | Sandbox SDK 1.0, the `durable_object` scheduling policy and container snapshots are new or in beta | APIs change; snapshots fail | Pin exact versions. The fallback wake path (clone, checkpoint, setup script) MUST always work. | S1, S5, S6 |
-| R2 | Alchemy v2 may not support `scheduling_policy: "durable_object"` or `exports` | Deploy blocked | If S1 finds a gap, deploy with wrangler and keep Alchemy for the rest | S1 |
+| R2 | Alchemy v2 may not support `scheduling_policy: "durable_object"` or `exports` | Deploy blocked | If S1 finds a gap, deploy with `cf deploy` and keep Alchemy for the rest | S1 |
 | R3 | Model streams and WebSockets through `TempoOutbound` | Agent calls break or time out | Test each agent through the proxy before phase 1 | S2, S3, S4 |
 | R4 | Claude and Codex credentials live inside the container | A hostile repo or prompt could leak them | One trusted user; egress log; later, test a placeholder token that `TempoOutbound` swaps for the real one | S3 |
 | R5 | Codex token refreshes from parallel containers can race | One refresh can break another container's login | CredentialDO keeps the newest `auth.json` and pushes it to every running container; auth errors ask the user to reconnect in Settings | S4 |

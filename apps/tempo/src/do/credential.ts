@@ -5,7 +5,7 @@ import { eq, like } from "drizzle-orm";
 import { credentialSchema, codexLeases, secrets } from "../db/credential-do.ts";
 import { json, type SecretMeta } from "../db/json.ts";
 import { CREDENTIAL_MIGRATIONS, runMigrations } from "../db/do-migrations.ts";
-import type { Env } from "../env.ts";
+import type { Bindings } from "../env.ts";
 import { deriveKey, open, seal } from "../lib/crypto.ts";
 import { environmentSecretKey, environmentSecretPrefix } from "../lib/environments.ts";
 import { log } from "../log.ts";
@@ -56,7 +56,7 @@ export interface SecretStatus {
  * The only place secrets are stored (02, CredentialDO). One per user, named by the user id,
  * plus one named `system` for the GitHub App config.
  */
-export class CredentialDO extends DurableObject<Env> {
+export class CredentialDO extends DurableObject<Bindings> {
   private readonly db: DrizzleSqliteDODatabase<typeof credentialSchema>;
   private keyPromise: Promise<CryptoKey> | null = null;
   private codexLogin: {
@@ -165,7 +165,7 @@ export class CredentialDO extends DurableObject<Env> {
   async cancelCodexLogin(loginId: string): Promise<void> {
     if (this.codexLogin?.public.loginId === loginId) this.codexLogin = null;
   }
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: Bindings) {
     super(ctx, env);
     this.db = drizzle(ctx.storage, { schema: credentialSchema });
     void ctx.blockConcurrencyWhile(() => runMigrations(this.db, CREDENTIAL_MIGRATIONS));
@@ -334,7 +334,7 @@ export class CredentialDO extends DurableObject<Env> {
     for (const lease of leases) {
       if (lease.workspaceId === fromWorkspaceId) continue;
       this.ctx.waitUntil(
-        this.env.WORKSPACE.getByName(lease.workspaceId)
+        this.ctx.exports.WorkspaceDO.getByName(lease.workspaceId)
           .pushCodexAuth(content, version)
           .catch(() => log("warn", "codex auth push failed", { workspaceId: lease.workspaceId })),
       );
@@ -353,7 +353,7 @@ export class CredentialDO extends DurableObject<Env> {
   private pushCodexAuth(content: string, version: number): void {
     for (const lease of this.db.select().from(codexLeases).all()) {
       this.ctx.waitUntil(
-        this.env.WORKSPACE.getByName(lease.workspaceId)
+        this.ctx.exports.WorkspaceDO.getByName(lease.workspaceId)
           .pushCodexAuth(content, version)
           .catch(() => log("warn", "codex auth push failed", { workspaceId: lease.workspaceId })),
       );

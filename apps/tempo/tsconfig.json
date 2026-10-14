@@ -3,7 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["./worker-runtime.d.ts", "vite/client", "@cloudflare/vitest-pool-workers/types"],
+    "types": ["./worker-runtime.d.ts", "vite/client", "@cloudflare/vitest-plugin/types"],
     "paths": {
       "~/*": ["./src/*"]
     }
@@ -12,6 +12,7 @@
     "src",
     "test",
     "scripts",
+    "cloudflare.config.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "worker-runtime.d.ts",

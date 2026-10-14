@@ -2,7 +2,8 @@ import type { Settings } from "@tempo/protocol";
 
 import { Schema } from "effect";
 import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.ts";
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, it, vi } from "vitest";
 import { TempoError, newId, type Source } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";

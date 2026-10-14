@@ -8,12 +8,13 @@ These are places where the spec and the real packages disagree. The code follows
 
 | # | Spec | Finding | What the code does |
 | --- | --- | --- | --- |
-| S-1 | 00 R2, 05 Deploy | Alchemy 2.0.0-beta.81 cannot emit `exports` or a `durable_object` container with named `images`. | `alchemy.run.ts` owns D1 (and its migrations), R2 and the three generated secrets. `scripts/deploy-worker.ts` writes the wrangler config and deploys the Worker with wrangler. This is the fallback that R2 allows. |
+| S-1 | 00 R2, 05 Deploy | Alchemy 2.0.0-beta.81 cannot emit `exports` or a `durable_object` container with named `images`. | `alchemy.run.ts` owns D1 (and its migrations), R2 and the three generated secrets. `scripts/deploy-worker.ts` deploys the Worker from `apps/tempo/cloudflare.config.ts` with `cf deploy` (S-7). This is the fallback that R2 allows. |
 | S-2 | 01 Agents, Playwright MCP | `@playwright/mcp@0.0.83` installs the bin `playwright-mcp`, not `mcp-server-playwright`. | The image adds a `mcp-server-playwright` symlink, so the spec's command works. Spike S7 should confirm the name and the flags. |
 | S-3 | 01 Start procedure | `ContainerStartupOptions.containerSnapshot` takes `{ id }`, not a string. | `start({ containerSnapshot: { id } })`. |
 | S-4 | 01 Start procedure | `DirectoryBackup` needs `backup.intercept()` before `interceptAllOutboundHttp()`. Otherwise the catch-all takes the backup gateway's host. | `container.start` registers the backup intercept first, then the two egress intercepts. |
-| S-5 | 06 Tooling | `@cloudflare/vitest-pool-workers` is deprecated and renamed `@cloudflare/vitest-plugin`. Its bundled workerd supports compatibility dates up to 2026-08-22. | The spec's package is kept (0.23.0). `apps/tempo/test/wrangler.test.jsonc` uses 2026-08-22; deploys use 2026-10-10. |
+| S-5 | 06 Tooling | `@cloudflare/vitest-pool-workers` is deprecated and renamed `@cloudflare/vitest-plugin`. | The owner approved the rename (S-7). `@cloudflare/vitest-plugin` 1.4.2 is used. `apps/tempo/test/cloudflare.config.ts` keeps 2026-08-22; deploys use 2026-10-10. |
 | S-6 | 01 Worker config | Alchemy notes that Cloudflare may reject a redundant `nodejs_compat` flag after its default-on date (2026-08-04). | The flag is kept as the spec says. If a deploy rejects it, remove it. |
+| S-7 | 01 Worker config, 06 Tooling | The owner asked to replace every `wrangler.jsonc` with `cloudflare.config.ts` (`cf` 1.0.0-beta.17, open beta). | See "cloudflare.config.ts (2026-10-14)" below. |
 
 ## Open questions for the owner
 
@@ -128,7 +129,7 @@ Specs 00, 01, 02, 04, 05, 06 and 07 are updated. Findings from the pinned adapte
 | Mac | Same features; Settings → Agents page; `Manage agents…` opens it | Native rendering and interaction need the local Mac check. |
 
 - **Mac tab tooltip.** GPUI Kit 0.7.1 `Tab` has no tooltip method of its own, but it implements GPUI's `StatefulInteractiveElement`. The Mac app sets its `tooltip` with GPUI Kit's `Tooltip` view to `<custom agent> · <base agent>`, and the same text as the accessibility label. The rendered tooltip still needs the local Mac check.
-- **Alchemy and the `artifacts` binding.** The deploy path writes the binding through the wrangler config (`scripts/deploy-worker.ts`, S-1). `alchemy.run.ts` is unchanged.
+- **Alchemy and the `artifacts` binding.** The deploy path declares the binding in `apps/tempo/cloudflare.config.ts` (S-1, S-7). `alchemy.run.ts` is unchanged.
 - **Merged with main (2026-10-12).** Main added user MCP servers (with a bridge for transports an agent lacks), `~/.pi/agent/mcp.json` for pi, per-agent models and a prompt-first New workspace dialog. Custom agents now build on them: a custom agent's MCP servers join the user's servers and use the same bridge; pi gets Playwright, `tempo` and user servers from `mcp.json`, so the plain-pi profile wrapper was dropped (the owner's decision that every pi session gets Playwright is met by main's `mcp.json`); New workspace lists custom agents in its model picker; a custom agent's `model` counts for `agent.models.<agent>`. Spike and test numbers moved to S19, S20 and AT-48 to AT-52 because main took S17 and AT-38 to AT-40.
 - **Reasoning-level picker.** The composer now shows the agent's `thought_level` option as its own picker for every chat; it no longer appears under the other options menu.
 
@@ -499,3 +500,24 @@ The owner asked for a fork of the organizations and social work (PR #56) for a s
 | Mac visibility | A segmented `Private` / `Public` choice with an inline confirmation | GPUI Kit has no compact select in the repository header |
 
 Verification: four Worker cases in `public-profile.cases.ts` (visitor reads and refusals, pins and profile order, slugs on insert, usernames and bios). The forward-migration case also checks slugs, duplicate names and the case-insensitive unique index. Removing the public check from `requireReadableProject` made the visitor case fail. Web component cases for the visibility control, the profile and the public project page; Mac `profile_model` unit cases and a repository view case for confirm, pin and unpin on `private`. Hosted sign-in to set a real username, and visitor browsing of a deployed Tempo, have not been run.
+
+## cloudflare.config.ts (2026-10-14)
+
+The owner asked to move from `wrangler.jsonc` to `cloudflare.config.ts` (https://developers.cloudflare.com/cf/projects/cloudflare-config/), to use `cf@1.0.0-beta.17` and to replace `@cloudflare/vitest-pool-workers` with `@cloudflare/vitest-plugin`. The format is open beta.
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Config files | `apps/tempo/cloudflare.config.ts` (dev and deploy) and `apps/tempo/test/cloudflare.config.ts` (Worker tests) replace `wrangler.jsonc` and `test/wrangler.test.jsonc` | Owner request |
+| Versions | `cf` 1.0.0-beta.17, `@cloudflare/vitest-plugin` 1.4.2, `@cloudflare/vite-plugin` 1.64.0, `wrangler` 4.151.0 | The first versions that load `cloudflare.config.ts` |
+| Plugin options | Vite: `experimental.newConfig`. Vitest: `experimental.newConfig.configPath` | Both loaders are experimental |
+| Node only | The loaders refuse Bun. `vite`, `vitest` and `cf` run on Node (22.18 or later) through their `#!/usr/bin/env node` bins | `cloudflare.config.ts loading is not supported on Bun` |
+| WorkspaceDO | No env binding. Code uses `ctx.exports.WorkspaceDO`; `withWorkspace` (`src/env.ts`) gives handlers `env.WORKSPACE`. DO classes and entrypoints take `Bindings`, which has no `WORKSPACE` | The format writes `script_name` on every DO binding, and the deploy check rejects a container on a DO bound with `script_name`. The owner chose this for WorkspaceDO only |
+| Other DOs | `USER_HUB`, `CREDENTIALS` and `REPOSITORY_CI` are bindings with `worker: "tempo"` | `cf deploy --dry-run` accepts them. A real deploy has not run yet |
+| Container name | `tempo-workspacedo` | The name wrangler derived from `tempo` and `WorkspaceDO`, so a deploy updates the same application |
+| Deploy values | `scripts/deploy-worker.ts` sets `TEMPO_DEPLOY=1`, `TEMPO_VERSION` and `TEMPO_WORKSPACE_IMAGE` for `cf deploy`. With `TEMPO_DEPLOY=1` the config reads the Alchemy values from the environment and fails on a missing one; without it, it uses the local values | One file for dev and deploy. `wrangler.deploy.jsonc` is gone |
+| Deploy command | `cf deploy --secrets-file` replaces `vite build` and `wrangler deploy`. `--prepare` runs `vite build` with the deploy values. Vite minifies with `oxc` when `TEMPO_DEPLOY=1`, as `--minify oxc` did | `cf deploy` runs the Vite build itself |
+| D1 `migrations_dir` | Dropped | The format has no such field. Alchemy applies D1 migrations; tests use `readD1Migrations` |
+| Test DO bindings | `USER_HUB`, `CREDENTIALS` and `REPOSITORY_CI` are set in `vitest.worker.config.ts` (`miniflare.durableObjects`) | `@cloudflare/vitest-plugin` 1.4.2 keeps `script_name: "tempo-test"` on self bindings from `cloudflare.config.ts`, and workerd finds no such service |
+| Tests | `test/worker/test-env.ts` exports `withWorkspace(env, exports)` for the cases | Same `Env` as production handlers |
+| Runtime types | `cf-typegen` runs `cf workers types` and keeps its runtime part in `worker-runtime.d.ts` (`scripts/runtime-types.ts`) | `wrangler types` needs a wrangler config; `Env` stays hand-written in `src/env.ts` |
+| Historical records | `docs/deployment/core-test.wrangler.jsonc` and the deployment and results logs are unchanged | They record what was generated and deployed at the time |

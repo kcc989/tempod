@@ -8,13 +8,14 @@ const lines = [
   'import { createServerFn } from "@tanstack/react-start";',
   'import { getRequest } from "@tanstack/react-start/server";',
   'import type { FnInput, FnName } from "@tempo/protocol";',
-  'import { env } from "cloudflare:workers";',
+  'import { env, exports } from "cloudflare:workers";',
+  'import { withWorkspace } from "../env.ts";',
   'import { runFn } from "./run.ts";',
   "",
   "// The Result envelope travels as JSON text: wire types hold `unknown` fields (ACP pass-through)",
   "// that TanStack's serializability check rejects.",
   "const run = async <K extends FnName>(name: K, data: FnInput<K>): Promise<string> =>",
-  "  JSON.stringify(await runFn(name, env, getRequest().headers, data, { allowCookie: true, allowBearer: false }));",
+  "  JSON.stringify(await runFn(name, withWorkspace(env, exports), getRequest().headers, data, { allowCookie: true, allowBearer: false }));",
   "",
 ];
 

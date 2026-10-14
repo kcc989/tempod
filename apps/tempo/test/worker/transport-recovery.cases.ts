@@ -1,5 +1,6 @@
 import { Schema } from "effect";
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, expect, it, vi } from "vitest";
 import { newId, type TempodEvent } from "@tempo/protocol";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";

@@ -2,7 +2,7 @@
 //
 // Alchemy v2 owns the D1 database and its migrations, the R2 bucket and the three generated
 // secrets. It cannot emit a Worker with `exports` or a `durable_object` container with named
-// `images`, so scripts/deploy-worker.ts deploys the Worker with wrangler (risk R2 in 00).
+// `images`, so scripts/deploy-worker.ts deploys the Worker with cf (risk R2 in 00).
 //
 // Needs: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, APP_HOST, PREVIEW_DOMAIN, TEMPO_OWNER_GITHUB_ID.
 import fs from "node:fs";

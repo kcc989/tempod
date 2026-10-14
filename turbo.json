@@ -58,9 +58,9 @@
         "!src/routes/**",
         "!src/routeTree.gen.ts",
         "test/worker/**",
-        "test/wrangler.test.jsonc",
+        "test/cloudflare.config.ts",
         "vitest.worker.config.ts",
-        "wrangler.jsonc",
+        "cloudflare.config.ts",
         "package.json",
         "tsconfig.json",
         "worker-runtime.d.ts",
@@ -126,7 +126,7 @@
     "@tempo/app#build": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/agents-starter/**"],
       "cache": false,
-      "env": ["TEMPO_WRANGLER_CONFIG", "CLOUDFLARE_ENV", "NODE_ENV", "VITE_*"]
+      "env": ["TEMPO_DEPLOY", "CLOUDFLARE_ENV", "NODE_ENV", "VITE_*"]
     },
     "@tempo/app#build:ci": {
       "dependsOn": ["^transit"],
@@ -141,7 +141,7 @@
         "$TURBO_ROOT$/packages/agents-starter/**",
         "$TURBO_ROOT$/container/**"
       ],
-      "env": ["CLOUDFLARE_ENV", "NODE_ENV", "VITE_*", "PWD"]
+      "env": ["TEMPO_DEPLOY", "CLOUDFLARE_ENV", "NODE_ENV", "VITE_*", "PWD"]
     }
   },
   "globalDependencies": ["tsconfig*.json", "bunfig.toml", "patches/**"],

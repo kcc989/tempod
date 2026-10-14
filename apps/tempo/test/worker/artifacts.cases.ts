@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { env } from "./test-env.ts";
 import { describe, expect, it } from "vitest";
 import { newId, type TempodEventOf } from "@tempo/protocol";
 import { artifactCsp, resumeArtifacts } from "../../src/do/workspace/artifacts.ts";

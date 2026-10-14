@@ -35,13 +35,13 @@ saved even if another check fails, but not after cancellation or failed dependen
 installation. Each run/attempt has a distinct archive key. Chromium is keyed by
 the installed Playwright version rather than unrelated package script changes.
 
-The daemon build and production app CI build are cached. `build:ci` fixes the app's
-Wrangler configuration to the checked-in default and restores both `dist` and the
-Wrangler deployment pointer. Its inputs include transitive workspace sources,
+The daemon build and production app CI build are cached. `build:ci` builds with the
+checked-in `cloudflare.config.ts` (local values, `TEMPO_DEPLOY` unset) and restores both
+`dist` and the Wrangler deployment pointer. Its inputs include transitive workspace sources,
 starter definitions, container configuration, local environment files and build-time
 environment values. Generated Wrangler metadata contains absolute paths, so the
 checkout directory is part of this task's hash. The general app `build` remains
-uncached because it permits arbitrary external Wrangler configuration paths.
+uncached because `TEMPO_DEPLOY` selects deploy values from the environment.
 Browser fixture builds have separate cached outputs (`test/web/dist` and
 `test/browser/dist`). The App build step builds them alongside `build:ci`, so the
 browser stage's web servers only replay the cached outputs; both browser suites still
