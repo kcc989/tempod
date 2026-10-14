@@ -1409,6 +1409,15 @@ mod view_tests {
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            window.scroll(
+                "settings-project-b",
+                gpui_kit::ScrollDelta::Pixels(gpui_kit::point(
+                    gpui_kit::px(0.),
+                    gpui_kit::px(-400.),
+                )),
+                cx,
+            );
+            window.render_frame(cx);
             window.click("settings-project-c", cx);
         })
         .unwrap();

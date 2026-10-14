@@ -30,10 +30,13 @@ use tempo_protocol::{self as p, api};
 
 pub const TAB_LOGINS: usize = 0;
 pub const TAB_PROJECT: usize = 1;
+pub const TAB_APPEARANCE: usize = 2;
 pub const TAB_GENERAL: usize = 3;
-pub const TAB_ENVIRONMENTS: usize = 5;
-pub const TAB_MCP: usize = 6;
-pub const TAB_AGENTS: usize = 7;
+pub const TAB_SHELL: usize = 4;
+pub const TAB_SHORTCUTS: usize = 5;
+pub const TAB_ENVIRONMENTS: usize = 6;
+pub const TAB_MCP: usize = 7;
+pub const TAB_AGENTS: usize = 8;
 
 /// The pages of a project (04), each with the field sections of [`model::SECTIONS`] it shows.
 pub const PROJECT_PAGES: [(&str, &[&str]); 8] = [
@@ -2711,7 +2714,7 @@ impl Render for SettingsForm {
             TAB_LOGINS => self.render_logins(cx),
             TAB_MCP => self.render_mcp(cx),
             TAB_PROJECT => self.render_project(cx),
-            2 => {
+            TAB_APPEARANCE => {
                 let current = cx.global::<Local>().config().theme;
                 let detail = cx.global::<Local>().config().transcript_detail;
                 v_flex()

@@ -50,6 +50,7 @@ pub fn error_text(code: &str) -> &'static str {
         "PATH_OUTSIDE_WORKSPACE" => "That path is outside the workspace.",
         "CHECKPOINT_NOT_FOUND" => "That checkpoint no longer exists.",
         "ARTIFACT_NOT_READY" => "This artifact is still being saved. Try again in a moment.",
+        "DOTFILES_CHANGED" => "Your shell files changed while saving. Reload them and try again.",
         "ENVIRONMENT_EXISTS" => "An environment with this name already exists.",
         "MODEL_REQUIRED" => "Set a default model for this agent in Settings → Project.",
         "SETTINGS_INVALID" => "Settings are not valid.",

@@ -3,9 +3,10 @@
 use super::agents_settings::AgentsSettings;
 use super::environments::EnvironmentsPage;
 use super::settings_form::{
-    PROJECT_PAGES, SettingsForm, TAB_AGENTS, TAB_ENVIRONMENTS, TAB_GENERAL, TAB_LOGINS, TAB_MCP,
-    TAB_PROJECT,
+    PROJECT_PAGES, SettingsForm, TAB_AGENTS, TAB_APPEARANCE, TAB_ENVIRONMENTS, TAB_GENERAL,
+    TAB_LOGINS, TAB_MCP, TAB_PROJECT, TAB_SHELL, TAB_SHORTCUTS,
 };
+use super::shell::ShellPage;
 use super::tokens::{Token, color};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::Root;
@@ -18,11 +19,12 @@ use gpui_kit::{
     div, px,
 };
 
-pub const TABS: [&str; 8] = [
+pub const TABS: [&str; 9] = [
     "Logins",
     "Project",
     "Appearance",
     "General",
+    "Shell",
     "Shortcuts",
     "Environments",
     "MCP servers",
@@ -69,6 +71,7 @@ pub struct SettingsView {
     pub(crate) form: Entity<SettingsForm>,
     pub(crate) focus: FocusHandle,
     environments: Entity<EnvironmentsPage>,
+    shell: Entity<ShellPage>,
     agents: Entity<AgentsSettings>,
     search: Entity<InputState>,
 }
@@ -91,6 +94,7 @@ impl SettingsView {
             form,
             focus: cx.focus_handle(),
             environments: cx.new(|cx| EnvironmentsPage::new(window, cx)),
+            shell: cx.new(|cx| ShellPage::new(window, cx)),
             agents: cx.new(|cx| AgentsSettings::new(window, cx)),
             search,
         }
@@ -110,7 +114,7 @@ impl Render for SettingsView {
             let form = self.form.read(cx);
             (form.tab, form.section)
         };
-        let body = if TABS[tab] == "Shortcuts" {
+        let body = if tab == TAB_SHORTCUTS {
             v_flex()
                 .gap_1()
                 .children(SHORTCUTS.iter().map(|(action, keys)| {
@@ -120,6 +124,8 @@ impl Render for SettingsView {
                         .child(div().text_color(muted).child(*keys))
                 }))
                 .into_any_element()
+        } else if tab == TAB_SHELL {
+            self.shell.clone().into_any_element()
         } else if tab == TAB_ENVIRONMENTS {
             self.environments.clone().into_any_element()
         } else if tab == TAB_AGENTS {
@@ -168,12 +174,13 @@ impl Render for SettingsView {
             .children(
                 [
                     TAB_GENERAL,
+                    TAB_SHELL,
                     TAB_LOGINS,
                     TAB_AGENTS,
                     TAB_ENVIRONMENTS,
                     TAB_MCP,
-                    2,
-                    4,
+                    TAB_APPEARANCE,
+                    TAB_SHORTCUTS,
                 ]
                 .into_iter()
                 .filter(|ix| matches(TABS[*ix]))
@@ -182,11 +189,12 @@ impl Render for SettingsView {
                         .ghost()
                         .icon(match ix {
                             TAB_GENERAL => IconName::Bell,
+                            TAB_SHELL => IconName::SquareTerminal,
                             TAB_LOGINS => IconName::KeyRound,
-                            TAB_AGENTS | 8 => IconName::Bot,
+                            TAB_AGENTS => IconName::Bot,
                             TAB_ENVIRONMENTS => IconName::Network,
                             TAB_MCP => IconName::Server,
-                            2 => IconName::Palette,
+                            TAB_APPEARANCE => IconName::Palette,
                             _ => IconName::Keyboard,
                         })
                         .accessibility_label(TABS[ix])
@@ -326,6 +334,7 @@ impl Render for SettingsView {
                                                 TAB_GENERAL => {
                                                     "Notifications and sound for this Mac."
                                                 }
+                                                TAB_SHELL => super::shell_model::DESCRIPTION,
                                                 TAB_PROJECT => {
                                                     "Configure this project and its workspaces."
                                                 }
@@ -334,7 +343,9 @@ impl Render for SettingsView {
                                                 }
                                                 TAB_MCP => "Manage MCP servers for your agents.",
                                                 TAB_AGENTS => "Manage agents and their defaults.",
-                                                2 => "Set your theme and transcript detail.",
+                                                TAB_APPEARANCE => {
+                                                    "Set your theme and transcript detail."
+                                                }
                                                 _ => "Keyboard shortcuts for Tempo.",
                                             },
                                         )),
