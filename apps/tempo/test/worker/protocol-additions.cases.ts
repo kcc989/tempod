@@ -5,6 +5,7 @@ import { newId, type Source, type TempodEvent } from "@tempo/protocol";
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import {
+  fastRetries,
   driveToState,
   emitEvent,
   internals,
@@ -71,7 +72,10 @@ const eventSeqs = async (stub: Stub, incarnation: string): Promise<number[]> =>
 
 const emit = (ctx: Ctx, event: TempodEvent): Promise<number> => emitEvent(ctx.stub, ctx.tempod, event);
 
-const closeTempod = (ctx: Ctx): Promise<void> => runInDurableObject(ctx.stub, () => ctx.tempod.close(1011));
+const closeTempod = async (ctx: Ctx): Promise<void> => {
+  await fastRetries(ctx.stub);
+  await runInDurableObject(ctx.stub, () => ctx.tempod.close(1011));
+};
 
 const log = (msg: string): TempodEvent => ({ kind: "log", level: "info", msg });
 
@@ -240,33 +244,35 @@ describe("agent.exited reason", () => {
     T,
   );
 
-  for (const reason of ["crashed", undefined] as const) {
-    it(
-      `${reason ?? "no reason"}: a running turn fails with AGENT_CRASHED and a notice carries the stderr tail`,
-      async () => {
-        // 03 Failure handling: "Adapter exits during a turn | agent.exited | Turn failed / AGENT_CRASHED; notice with stderrTail".
-        const ctx = await runningTurn();
-        await waitApplied(ctx.stub, await emit(ctx, exited(ctx.sessionId, reason, "Error: adapter blew up")));
-        await waitFor(
-          async () => (await turnRow(ctx.stub, ctx.turnId))?.status === "failed",
-          5000,
-          "turn failed",
-        );
-        expect((await turnRow(ctx.stub, ctx.turnId))!.error_code).toBe("AGENT_CRASHED");
-        const errors = await errorItems(ctx.stub, ctx.turnId);
-        expect(errors).toHaveLength(1);
-        expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(errors[0]!.content_json)).code).toBe(
-          "AGENT_CRASHED",
-        );
-        const crash = (await notices(ctx.stub)).filter((n) => n.text.includes("stopped unexpectedly"));
-        expect(crash).toHaveLength(1);
-        expect(crash[0]).toMatchObject({ level: "error" });
-        expect(crash[0]!.text).toContain("Error: adapter blew up");
-        expect(await isLive(ctx.stub, ctx.sessionId)).toBe(false);
-      },
-      T,
-    );
-  }
+  // Without a reason, agent.exited is covered in workspace-events (agent.exited during a turn).
+  it(
+    "crashed: a running turn fails with AGENT_CRASHED and a notice carries the stderr tail",
+    async () => {
+      // 03 Failure handling: "Adapter exits during a turn | agent.exited | Turn failed / AGENT_CRASHED; notice with stderrTail".
+      const ctx = await runningTurn();
+      await waitApplied(
+        ctx.stub,
+        await emit(ctx, exited(ctx.sessionId, "crashed", "Error: adapter blew up")),
+      );
+      await waitFor(
+        async () => (await turnRow(ctx.stub, ctx.turnId))?.status === "failed",
+        5000,
+        "turn failed",
+      );
+      expect((await turnRow(ctx.stub, ctx.turnId))!.error_code).toBe("AGENT_CRASHED");
+      const errors = await errorItems(ctx.stub, ctx.turnId);
+      expect(errors).toHaveLength(1);
+      expect(JSON.parse(Schema.decodeUnknownSync(Schema.String)(errors[0]!.content_json)).code).toBe(
+        "AGENT_CRASHED",
+      );
+      const crash = (await notices(ctx.stub)).filter((n) => n.text.includes("stopped unexpectedly"));
+      expect(crash).toHaveLength(1);
+      expect(crash[0]).toMatchObject({ level: "error" });
+      expect(crash[0]!.text).toContain("Error: adapter blew up");
+      expect(await isLive(ctx.stub, ctx.sessionId)).toBe(false);
+    },
+    T,
+  );
 });
 
 // =============================================================================================
@@ -274,19 +280,19 @@ describe("agent.exited reason", () => {
 // =============================================================================================
 
 describe("repo.clone mode", () => {
-  for (const source of [{ kind: "new" }, { kind: "branch" }] as const satisfies ReadonlyArray<Source>) {
-    it(
-      `a create op sends mode "create" (source ${source.kind})`,
-      async () => {
-        // IMPLEMENTATION_NOTES: "repo.clone params | mode: create or wake | On create, 03's checkout per source applies".
-        const ctx = await readyWorkspace({ source });
-        const clones = ctx.tempod.requestsOf("repo.clone");
-        expect(clones).toHaveLength(1);
-        expect(clones[0]).toMatchObject({ mode: "create", source, baseBranch: "main" });
-      },
-      T,
-    );
-  }
+  // A branch source's create clone is covered by the ops create-retry case.
+  it(
+    'a create op sends mode "create"',
+    async () => {
+      // IMPLEMENTATION_NOTES: "repo.clone params | mode: create or wake | On create, 03's checkout per source applies".
+      const source = { kind: "new" } as const satisfies Source;
+      const ctx = await readyWorkspace({ source });
+      const clones = ctx.tempod.requestsOf("repo.clone");
+      expect(clones).toHaveLength(1);
+      expect(clones[0]).toMatchObject({ mode: "create", source, baseBranch: "main" });
+    },
+    T,
+  );
 
   it(
     'a wake on a fresh disk sends mode "wake" with the workspace branch',

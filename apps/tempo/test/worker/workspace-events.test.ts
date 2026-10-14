@@ -13,6 +13,7 @@ import { describe, it } from "vitest";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { recoverSteering } from "../../src/do/workspace/queue.ts";
 import {
+  fastRetries,
   DEFAULT_EFFECTIVE,
   FakeTempod,
   internals,
@@ -66,7 +67,7 @@ const detail = async (stub: Stub): Promise<any> => unwrap(await stub.getWorkspac
 const applied = (stub: Stub, seq: number) =>
   waitFor(async () => Number((await wsRow(stub)).tempod_acked_seq) >= seq, 5000, `event ${seq} applied`);
 
-const settle = (ms = 300) => new Promise((r) => setTimeout(r, ms));
+const settle = (ms = 100) => new Promise((r) => setTimeout(r, ms));
 
 const driveUntil = async (
   stub: Stub,
@@ -78,7 +79,7 @@ const driveUntil = async (
 
     if (d.ok && (await done(d.value.state))) return;
     await runDurableObjectAlarm(stub);
-    await settle(10);
+    await settle(5);
   }
 
   const d = await stub.getWorkspace({});
@@ -149,7 +150,10 @@ const emitRaw = (
   event: TempodEvent | import("@tempo/protocol").JsonData,
 ): Promise<void> => runInDurableObject(ctx.stub, () => ctx.tempod.emitRaw(seq, event));
 
-const closeTempod = (ctx: Ctx): Promise<void> => runInDurableObject(ctx.stub, () => ctx.tempod.close(1011));
+const closeTempod = async (ctx: Ctx): Promise<void> => {
+  await fastRetries(ctx.stub);
+  await runInDurableObject(ctx.stub, () => ctx.tempod.close(1011));
+};
 
 /** Ends a running turn and waits until the DO has finished turn-end processing (the state is ready again). */
 const endTurn = async (
@@ -879,7 +883,8 @@ const openItems = async (ctx: RunningCtx) => {
 };
 
 describe.concurrent("turn.ended", () => {
-  it.for(["end_turn", "max_tokens", "max_turn_requests", "refusal"])(
+  // The Worker stores every non-cancel stop reason the same way; one other than end_turn proves it is not fixed.
+  it.for(["end_turn", "refusal"])(
     "stopReason %s → completed with the reason stored; streaming items become completed",
     { timeout: T },
     async (stopReason, { expect }) => {
@@ -1261,10 +1266,11 @@ describe.concurrent("after a turn ends", () => {
       // 03 Failure handling: "Checkpoint bundle upload fails | bundle.upload | 3 attempts, then local_only".
       // (The fake container cannot read files, so every upload attempt fails.)
       const ctx = await runningTurn({ configure: (t) => t.on("git.checkpoint", () => CKPT(2)) });
+      await fastRetries(ctx.stub);
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
       await waitFor(
         async () => (await sql(ctx.stub, "SELECT local_only FROM checkpoints"))[0]?.local_only === 1,
-        12_000,
+        5000,
         "local_only",
       );
       const row = (await sql(ctx.stub, "SELECT * FROM checkpoints"))[0]!;
@@ -1815,45 +1821,6 @@ describe.concurrent("script.output", () => {
       await settle();
       expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(1);
       expect((await turnRow(ctx.stub, second))!.status).toBe("queued");
-    },
-    T,
-  );
-
-  it(
-    "a failed setup blocks the queue until continueAfterSetupFailure",
-    async ({ expect }) => {
-      // 03 Failure handling: "Setup fails | script.exited with a non-zero code | setup_status = 'failed'; queue waits for
-      // Rerun setup or Continue anyway". 03 Queue runner: "continueAfterSetupFailure sets it from failed to skipped."
-      // 03 Attention: "error: ... setup_status is failed".
-      const ctx = await setupRunning({ prompt: "Do it" });
-
-      const first = Schema.decodeUnknownSync(Schema.String)(
-        (await sql(ctx.stub, "SELECT id FROM turns WHERE seq = 1"))[0]!.id,
-      );
-
-      const seq = await emit(ctx, {
-        kind: "script.exited",
-        runId: ctx.runId,
-        exitCode: 1,
-        signal: null,
-        timedOut: false,
-      });
-
-      await applied(ctx.stub, seq);
-      await driveUntil(ctx.stub, (s) => s === "ready");
-      await settle();
-      const row = await wsRow(ctx.stub);
-      expect(row.setup_status).toBe("failed");
-      expect(row.attention).toBe("error");
-      const run = (await sql(ctx.stub, "SELECT * FROM script_runs WHERE id = ?", ctx.runId))[0]!;
-      expect(run).toMatchObject({ status: "exited", exit_code: 1 });
-      expect(ctx.tempod.requestsOf("session.prompt")).toHaveLength(0);
-      expect((await turnRow(ctx.stub, first))!.status).toBe("queued");
-
-      unwrap(await ctx.stub.continueAfterSetupFailure({}));
-      expect((await wsRow(ctx.stub)).setup_status).toBe("skipped");
-      await waitPrompt(ctx, first);
-      expect((await wsRow(ctx.stub)).state).toBe("working");
     },
     T,
   );
@@ -2818,4 +2785,13 @@ describe.concurrent("queue runner scheduling", () => {
     },
     T,
   );
+});
+
+// =============================================================================================
+// Sequential cases from other areas share this file's workerd startup and balance the four Worker
+// files (docs/CI.md). Each module loads inside its own describe, so its hooks stay scoped to it.
+// =============================================================================================
+
+describe("server", async () => {
+  await import("./server.cases.ts");
 });

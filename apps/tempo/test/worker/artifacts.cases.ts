@@ -7,6 +7,7 @@ import { artifactCsp, resumeArtifacts } from "../../src/do/workspace/artifacts.t
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { handleArtifactHost, handleArtifactRead, parseArtifactHost } from "../../src/http/artifacts.ts";
 import {
+  fastRetries,
   emitEvent,
   internals,
   seedCredentials,
@@ -58,13 +59,14 @@ const readyWs = async () => {
   const seeded = await seedProject();
   await seedCredentials(seeded.userId);
   const w = await seedWorkspace(seeded);
+  await fastRetries(w.stub);
   w.tempod.on("artifact.release", () => ({}));
   const deadline = Date.now() + 20_000;
 
   while (!["ready", "working"].includes(ok(await w.stub.getWorkspace({})).state)) {
     if (Date.now() > deadline) throw new Error("timed out driving to ready");
     await runDurableObjectAlarm(w.stub);
-    await new Promise((r) => setTimeout(r, 25));
+    await new Promise((r) => setTimeout(r, 5));
   }
 
   const sessionId = String((await sqlRows(w.stub, "SELECT id FROM sessions"))[0]!["id"]);
@@ -221,7 +223,7 @@ describe("upload retries and the artifacts.upload step (01, 03)", { timeout: 60_
         s.storage.sql.exec("UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running')");
       });
       await runDurableObjectAlarm(w.stub);
-      await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, 5));
     }
 
     expect((await artifactRows(w))[0]!["status"]).toBe("ready");

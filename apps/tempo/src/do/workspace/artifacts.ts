@@ -191,7 +191,7 @@ const runJob = async (core: WorkspaceCore, key: string): Promise<void> => {
       log("warn", "artifact upload failed", { workspaceId: core.workspaceId, attempt, error: errorText(e) });
 
       if (!containerRunning(core) || attempt === UPLOAD_ATTEMPTS) return;
-      await new Promise((r) => setTimeout(r, backoffMs(attempt)));
+      await new Promise((r) => setTimeout(r, backoffMs(attempt) * core.retryDelayScale));
     }
   }
 };

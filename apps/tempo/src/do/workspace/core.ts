@@ -141,6 +141,8 @@ export class WorkspaceCore {
   tempodStopping = false;
   turnEndInProgress = false;
   reconnectAttempt = 0;
+  /** Scales in-process waits (health polls, tempod reconnect, uploads); tests shorten them per workspace. */
+  retryDelayScale = 1;
   reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   /** Open terminal sockets and their PTY exec processes (01, Terminal). */
   readonly terminals = new Map<WebSocket, { readonly terminalId: string; proc: ExecProcess | null }>();

@@ -6,6 +6,7 @@ import { Schema } from "effect";
 
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import {
+  fastRetries,
   emitEvent,
   internals,
   seedCredentials,
@@ -140,11 +141,12 @@ describe("regressions", () => {
     const seeded = await seedProject();
     const { stub, tempod } = await seedWorkspace(seeded);
     tempod.healthy = false;
+    await fastRetries(stub);
     await runInDurableObject(stub, async (instance: WorkspaceDO) => {
       const core = internals(instance).core;
       const { waitHealthy } = await import("../../src/do/workspace/container.ts");
       core.container!.start({ image: "workspace", enableInternet: false });
-      await expect(waitHealthy(core, AbortSignal.timeout(400))).rejects.toMatchObject({
+      await expect(waitHealthy(core, AbortSignal.timeout(100))).rejects.toMatchObject({
         code: "CONTAINER_START_FAILED",
         detail: expect.stringContaining("health returned 503"),
       });
