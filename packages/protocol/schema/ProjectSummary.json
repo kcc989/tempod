@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectSummary",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "string"
+    },
+    "organizationId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "visibility": {
+      "$ref": "ProjectVisibility.json"
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["github", "artifacts"]
+    },
+    "defaultBranch": {
+      "type": "string"
+    },
+    "stars": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "starred": {
+      "type": "boolean"
+    },
+    "role": {
+      "anyOf": [
+        {
+          "$ref": "ProjectRole.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "namespace",
+    "slug",
+    "organizationId",
+    "visibility",
+    "provider",
+    "defaultBranch",
+    "stars",
+    "starred",
+    "role",
+    "updatedAt"
+  ],
+  "additionalProperties": true
+}

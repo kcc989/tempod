@@ -204,9 +204,9 @@ const insertProjectRow = async (
   const id = newId();
   const now = Date.now();
   await env.DB.prepare(
-    "INSERT INTO projects (id, user_id, installation_id, repo_id, repo_owner, repo_name, default_branch, settings_json, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 'acme', ?, 'main', '{}', ?, ?, ?)",
+    "INSERT INTO projects (id, user_id, installation_id, repo_id, repo_owner, repo_name, slug, default_branch, settings_json, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 'acme', ?, ?, 'main', '{}', ?, ?, ?)",
   )
-    .bind(id, userId, installationId, repoId, name, sortOrder, now, now)
+    .bind(id, userId, installationId, repoId, name, name, sortOrder, now, now)
     .run();
 
   return id;
@@ -478,17 +478,27 @@ describe("auth middleware (02, Rules for every server function; 05, Authenticati
     const token = await signIn(seeded.userId, -60_000);
     expect(codeOf(await call("listProjects", { token }))).toBe("UNAUTHENTICATED");
   });
-  it("returns FORBIDDEN for a signed-in user whose GitHub id is not TEMPO_OWNER_GITHUB_ID", async () => {
+  it("lets any GitHub user sign in, but keeps instance-admin functions and private projects from them (11)", async () => {
+    const o = await owner();
     const stranger = await seedStranger();
-    const res = await call("listProjects", stranger);
-    // 02 Error codes: FORBIDDEN, "This Tempo belongs to someone else."
-    expect(errOf(res)).toMatchObject({ code: "FORBIDDEN", message: "This Tempo belongs to someone else." });
+    const own = await call("listProjects", stranger);
+    expect(own.ok && own.value).toEqual([]);
+    // 02 Error codes: FORBIDDEN, "You don't have access to this."
+    expect(errOf(await call("setClaudeToken", stranger, { token: "sk-ant-oat01-x" }))).toMatchObject({
+      code: "FORBIDDEN",
+      message: "You don't have access to this.",
+    });
+    expect(
+      codeOf(await call("updateProjectSettings", stranger, { projectId: o.projectId, settings: {} })),
+    ).toBe("NOT_FOUND");
+    // The GitHub App's installations belong to the deployment.
+    expect(codeOf(await call("listInstallations", stranger))).toBe("FORBIDDEN");
   });
   it("runs the auth check before the schema decode", async () => {
     // 02: "An auth middleware runs first."
     expect(codeOf(await call("linkProject", null, { installationId: "nope" }))).toBe("UNAUTHENTICATED");
     const stranger = await seedStranger();
-    expect(codeOf(await call("linkProject", stranger, { installationId: "nope" }))).toBe("FORBIDDEN");
+    expect(codeOf(await call("linkArtifactRepository", stranger, { name: 5 }))).toBe("FORBIDDEN");
   });
   it("returns VALIDATION_FAILED when the input fails its schema", async () => {
     const o = await owner();
@@ -536,6 +546,12 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
       settings: {},
       sortOrder: 1,
       environmentId: null,
+      organizationId: null,
+      // 11: a user from before usernames has their id as namespace until their next sign-in.
+      namespace: o.userId,
+      slug: "app",
+      visibility: "private",
+      role: "admin",
     });
     expect(list.map((p) => p["id"])).not.toContain(other.projectId);
   });
@@ -1565,19 +1581,27 @@ describe("/api/v1 (07, Server changes for native clients)", () => {
     expect(res.status).toBe(401);
     expect(Schema.decodeUnknownSync(ErrorBodySchema)(await res.json()).code).toBe("UNAUTHENTICATED");
   });
-  it("returns 401 without any credentials and 403 FORBIDDEN for a non-owner", async () => {
+  it("returns 401 without credentials, and 404 for another user's private project (11)", async () => {
     const none = await v1("/api/v1/rpc/listProjects", { method: "POST", body: "{}" });
     expect(none.status).toBe(401);
+    const o = await owner();
     const stranger = await seedStranger();
 
-    const res = await v1("/api/v1/rpc/listProjects", {
+    const anonymous = await v1("/api/v1/rpc/listBranches", {
       method: "POST",
-      headers: { Authorization: `Bearer ${stranger.token}` },
-      body: "{}",
+      body: JSON.stringify({ projectId: o.projectId }),
     });
 
-    expect(res.status).toBe(403);
-    expect(Schema.decodeUnknownSync(ErrorBodySchema)(await res.json()).code).toBe("FORBIDDEN");
+    expect(anonymous.status).toBe(404);
+
+    const res = await v1("/api/v1/rpc/updateProjectSettings", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${stranger.token}` },
+      body: JSON.stringify({ projectId: o.projectId, settings: {} }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(Schema.decodeUnknownSync(ErrorBodySchema)(await res.json()).code).toBe("NOT_FOUND");
   });
   it("returns 404 NOT_FOUND for an unknown function", async () => {
     const o = await owner();
@@ -1716,9 +1740,22 @@ describe("channel upgrades (02, Upgrade rules for all three channels; 07, WebSoc
   it("returns 401 for a browser upgrade without a session", async () => {
     expect((await upgrade("/api/ws/hub", { Origin: APP_ORIGIN }))?.status).toBe(401);
   });
-  it("returns 403 for a non-owner", async () => {
-    const stranger = await seedStranger();
-    expect((await upgrade("/api/ws/hub", { Authorization: `Bearer ${stranger.token}` }))?.status).toBe(403);
+  it("returns 403 on a workspace channel once its user loses write on the project (11)", async () => {
+    const o = await owner();
+    const member = await seedStranger();
+    const now = Date.now();
+    await d1Row(
+      "INSERT INTO project_members (project_id, user_id, role, created_at, updated_at) VALUES (?, ?, 'write', ?, ?)",
+      o.projectId,
+      member.userId,
+      now,
+      now,
+    );
+    const { workspaceId } = await seedWorkspace({ ...o, userId: member.userId });
+    await d1Row("UPDATE project_members SET role = 'read' WHERE user_id = ?", member.userId);
+    const path = `/api/ws/workspace/${workspaceId}?sinceRev=0`;
+    expect((await upgrade(path, { Authorization: `Bearer ${member.token}` }))?.status).toBe(403);
+    expect((await upgrade("/api/ws/hub", { Authorization: `Bearer ${member.token}` }))?.status).toBe(101);
   });
   it("accepts a bearer upgrade with no Origin on the hub channel (AT-25)", async () => {
     const o = await owner();
@@ -2016,7 +2053,7 @@ describe("preview access (05, Preview access)", () => {
     const second = ok(await call("openPreview", o, { workspaceId, port: 3000 })).url;
     expect(second).not.toBe(url);
   });
-  it("openPreview returns NOT_FOUND for a port that is not detected, and only the owner may call it", async () => {
+  it("openPreview returns NOT_FOUND for a port that is not detected, and for another user's workspace", async () => {
     const o = await owner();
     const { workspaceId, stub } = await seedWorkspace(o);
     await addPort(stub, 3000);
@@ -2024,7 +2061,7 @@ describe("preview access (05, Preview access)", () => {
     expect(codeOf(await call("openPreview", o, { workspaceId, port: 7070 }))).toBe("NOT_FOUND");
     expect(codeOf(await call("openPreview", null, { workspaceId, port: 3000 }))).toBe("UNAUTHENTICATED");
     expect(codeOf(await call("openPreview", await seedStranger(), { workspaceId, port: 3000 }))).toBe(
-      "FORBIDDEN",
+      "NOT_FOUND",
     );
     expect(await doRows(stub, "SELECT * FROM preview_codes")).toHaveLength(0);
   });

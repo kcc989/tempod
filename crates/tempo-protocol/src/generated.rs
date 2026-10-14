@@ -2375,6 +2375,13 @@ pub struct CreateRepositoryIn {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub description: ::std::option::Option<::std::string::String>,
     pub name: CreateRepositoryInName,
+    #[serde(
+        rename = "organizationId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub organization_id: ::std::option::Option<CreateRepositoryInOrganizationId>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub visibility: ::std::option::Option<ProjectVisibility>,
 }
 ///`CreateRepositoryInDefaultBranch`
 #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -2465,6 +2472,56 @@ impl ::std::convert::TryFrom<::std::string::String> for CreateRepositoryInName {
     }
 }
 impl<'de> ::serde::Deserialize<'de> for CreateRepositoryInName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`CreateRepositoryInOrganizationId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CreateRepositoryInOrganizationId(::std::string::String);
+impl ::std::ops::Deref for CreateRepositoryInOrganizationId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CreateRepositoryInOrganizationId> for ::std::string::String {
+    fn from(value: CreateRepositoryInOrganizationId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CreateRepositoryInOrganizationId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CreateRepositoryInOrganizationId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CreateRepositoryInOrganizationId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CreateRepositoryInOrganizationId {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -3105,6 +3162,64 @@ pub struct DeleteProjectAgentIn {
     pub agent_id: ::std::string::String,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
+}
+///`DeleteProjectMemberIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeleteProjectMemberIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    #[serde(rename = "userId")]
+    pub user_id: DeleteProjectMemberInUserId,
+}
+///`DeleteProjectMemberInUserId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct DeleteProjectMemberInUserId(::std::string::String);
+impl ::std::ops::Deref for DeleteProjectMemberInUserId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<DeleteProjectMemberInUserId> for ::std::string::String {
+    fn from(value: DeleteProjectMemberInUserId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for DeleteProjectMemberInUserId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeleteProjectMemberInUserId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeleteProjectMemberInUserId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for DeleteProjectMemberInUserId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`DeleteProjectSecretIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3839,6 +3954,12 @@ pub struct ErrorContent {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub detail: ::std::option::Option<::std::string::String>,
 }
+///`ExploreProjectsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct ExploreProjectsIn {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub offset: ::std::option::Option<i64>,
+}
 ///`GetAgentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetAgentIn {
@@ -4088,6 +4209,112 @@ pub struct GetProjectConversationIn {
     pub conversation_id: ::std::string::String,
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
+}
+///`GetProjectIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetProjectIn {
+    pub namespace: GetProjectInNamespace,
+    pub slug: GetProjectInSlug,
+}
+///`GetProjectInNamespace`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct GetProjectInNamespace(::std::string::String);
+impl ::std::ops::Deref for GetProjectInNamespace {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<GetProjectInNamespace> for ::std::string::String {
+    fn from(value: GetProjectInNamespace) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for GetProjectInNamespace {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for GetProjectInNamespace {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for GetProjectInNamespace {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for GetProjectInNamespace {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`GetProjectInSlug`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct GetProjectInSlug(::std::string::String);
+impl ::std::ops::Deref for GetProjectInSlug {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<GetProjectInSlug> for ::std::string::String {
+    fn from(value: GetProjectInSlug) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for GetProjectInSlug {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for GetProjectInSlug {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for GetProjectInSlug {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for GetProjectInSlug {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`GetRepositoryFileIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4603,7 +4830,14 @@ pub struct ImportRepositoryIn {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub description: ::std::option::Option<::std::string::String>,
     pub name: ImportRepositoryInName,
+    #[serde(
+        rename = "organizationId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub organization_id: ::std::option::Option<ImportRepositoryInOrganizationId>,
     pub url: ImportRepositoryInUrl,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub visibility: ::std::option::Option<ProjectVisibility>,
 }
 ///`ImportRepositoryInName`
 #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -4644,6 +4878,56 @@ impl ::std::convert::TryFrom<::std::string::String> for ImportRepositoryInName {
     }
 }
 impl<'de> ::serde::Deserialize<'de> for ImportRepositoryInName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`ImportRepositoryInOrganizationId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ImportRepositoryInOrganizationId(::std::string::String);
+impl ::std::ops::Deref for ImportRepositoryInOrganizationId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ImportRepositoryInOrganizationId> for ::std::string::String {
+    fn from(value: ImportRepositoryInOrganizationId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ImportRepositoryInOrganizationId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ImportRepositoryInOrganizationId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ImportRepositoryInOrganizationId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ImportRepositoryInOrganizationId {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -6016,8 +6300,65 @@ impl<'de> ::serde::Deserialize<'de> for LinkArtifactRepositoryInName {
 pub struct LinkProjectIn {
     #[serde(rename = "installationId")]
     pub installation_id: f64,
+    #[serde(
+        rename = "organizationId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub organization_id: ::std::option::Option<LinkProjectInOrganizationId>,
     #[serde(rename = "repoId")]
     pub repo_id: f64,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub visibility: ::std::option::Option<ProjectVisibility>,
+}
+///`LinkProjectInOrganizationId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LinkProjectInOrganizationId(::std::string::String);
+impl ::std::ops::Deref for LinkProjectInOrganizationId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LinkProjectInOrganizationId> for ::std::string::String {
+    fn from(value: LinkProjectInOrganizationId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LinkProjectInOrganizationId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LinkProjectInOrganizationId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LinkProjectInOrganizationId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LinkProjectInOrganizationId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`ListArtifactsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6215,6 +6556,63 @@ pub struct ListLifecycleEventsIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`ListNamespaceProjectsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListNamespaceProjectsIn {
+    pub namespace: ListNamespaceProjectsInNamespace,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub offset: ::std::option::Option<i64>,
+}
+///`ListNamespaceProjectsInNamespace`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ListNamespaceProjectsInNamespace(::std::string::String);
+impl ::std::ops::Deref for ListNamespaceProjectsInNamespace {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ListNamespaceProjectsInNamespace> for ::std::string::String {
+    fn from(value: ListNamespaceProjectsInNamespace) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ListNamespaceProjectsInNamespace {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ListNamespaceProjectsInNamespace {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ListNamespaceProjectsInNamespace {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ListNamespaceProjectsInNamespace {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`ListOpenPullRequestsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ListOpenPullRequestsIn {
@@ -6249,6 +6647,12 @@ pub struct ListProjectConversationsOut {
     pub conversations: ::std::vec::Vec<ConversationSummary>,
     #[serde(deserialize_with = "::std::option::Option::deserialize")]
     pub cursor: ::std::option::Option<::std::string::String>,
+}
+///`ListProjectMembersIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListProjectMembersIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
 }
 ///`ListProjectSecretNamesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6443,6 +6847,12 @@ pub struct ListRunsIn {
 pub struct ListScriptRunsIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`ListStarredProjectsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct ListStarredProjectsIn {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub offset: ::std::option::Option<i64>,
 }
 ///`ListTerminalsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -8048,6 +8458,13 @@ pub struct Project {
     )]
     pub installation_id: ::std::option::Option<f64>,
     pub name: ::std::string::String,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub namespace: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "organizationId",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub organization_id: ::std::option::Option<::std::string::String>,
     pub owner: ::std::string::String,
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub provider: ::std::option::Option<ProjectProvider>,
@@ -8056,9 +8473,27 @@ pub struct Project {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub repo_id: ::std::option::Option<f64>,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub role: ::std::option::Option<ProjectRole>,
     pub settings: SettingsLayer,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub slug: ::std::option::Option<::std::string::String>,
     #[serde(rename = "sortOrder")]
     pub sort_order: f64,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub visibility: ::std::option::Option<ProjectVisibility>,
+}
+///`ProjectMember`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ProjectMember {
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub image: ::std::option::Option<::std::string::String>,
+    pub name: ::std::string::String,
+    pub role: ProjectRole,
+    #[serde(rename = "userId")]
+    pub user_id: ::std::string::String,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub username: ::std::option::Option<::std::string::String>,
 }
 ///`ProjectProvider`
 #[derive(
@@ -8104,6 +8539,185 @@ impl ::std::convert::TryFrom<&str> for ProjectProvider {
     }
 }
 impl ::std::convert::TryFrom<::std::string::String> for ProjectProvider {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`ProjectRole`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ProjectRole {
+    #[serde(rename = "read")]
+    Read,
+    #[serde(rename = "write")]
+    Write,
+    #[serde(rename = "admin")]
+    Admin,
+}
+impl ::std::fmt::Display for ProjectRole {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Read => f.write_str("read"),
+            Self::Write => f.write_str("write"),
+            Self::Admin => f.write_str("admin"),
+        }
+    }
+}
+impl ::std::str::FromStr for ProjectRole {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "read" => Ok(Self::Read),
+            "write" => Ok(Self::Write),
+            "admin" => Ok(Self::Admin),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ProjectRole {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ProjectRole {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`ProjectSummary`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ProjectSummary {
+    #[serde(rename = "defaultBranch")]
+    pub default_branch: ::std::string::String,
+    pub id: ::std::string::String,
+    pub namespace: ::std::string::String,
+    #[serde(
+        rename = "organizationId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub organization_id: ::std::option::Option<::std::string::String>,
+    pub provider: ProjectSummaryProvider,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub role: ::std::option::Option<ProjectRole>,
+    pub slug: ::std::string::String,
+    pub starred: bool,
+    pub stars: f64,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: f64,
+    pub visibility: ProjectVisibility,
+}
+///`ProjectSummaryProvider`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ProjectSummaryProvider {
+    #[serde(rename = "github")]
+    Github,
+    #[serde(rename = "artifacts")]
+    Artifacts,
+}
+impl ::std::fmt::Display for ProjectSummaryProvider {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Github => f.write_str("github"),
+            Self::Artifacts => f.write_str("artifacts"),
+        }
+    }
+}
+impl ::std::str::FromStr for ProjectSummaryProvider {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "github" => Ok(Self::Github),
+            "artifacts" => Ok(Self::Artifacts),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ProjectSummaryProvider {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ProjectSummaryProvider {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`ProjectVisibility`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ProjectVisibility {
+    #[serde(rename = "public")]
+    Public,
+    #[serde(rename = "private")]
+    Private,
+}
+impl ::std::fmt::Display for ProjectVisibility {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Public => f.write_str("public"),
+            Self::Private => f.write_str("private"),
+        }
+    }
+}
+impl ::std::str::FromStr for ProjectVisibility {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "public" => Ok(Self::Public),
+            "private" => Ok(Self::Private),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ProjectVisibility {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ProjectVisibility {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -8186,6 +8800,64 @@ impl ::std::convert::TryFrom<::std::string::String> for PutProjectAgentInHooksIt
     }
 }
 impl<'de> ::serde::Deserialize<'de> for PutProjectAgentInHooksItemWhen {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`PutProjectMemberIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct PutProjectMemberIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub role: ProjectRole,
+    pub username: PutProjectMemberInUsername,
+}
+///`PutProjectMemberInUsername`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PutProjectMemberInUsername(::std::string::String);
+impl ::std::ops::Deref for PutProjectMemberInUsername {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PutProjectMemberInUsername> for ::std::string::String {
+    fn from(value: PutProjectMemberInUsername) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PutProjectMemberInUsername {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PutProjectMemberInUsername {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PutProjectMemberInUsername {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PutProjectMemberInUsername {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -10328,6 +11000,13 @@ pub struct SetProjectSecretIn {
     pub project_id: ::std::string::String,
     pub value: ::std::string::String,
 }
+///`SetProjectVisibilityIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SetProjectVisibilityIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub visibility: ProjectVisibility,
+}
 ///`SetSessionConfigIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct SetSessionConfigIn {
@@ -10689,6 +11368,18 @@ impl ::std::convert::TryFrom<::std::string::String> for SetupStatus {
 pub struct SleepWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`StarProjectIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StarProjectIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`StarState`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StarState {
+    pub starred: bool,
+    pub stars: f64,
 }
 ///`StartCiRunIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -11063,6 +11754,12 @@ pub struct TurnUsage {
 ///`UnlinkProjectIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct UnlinkProjectIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`UnstarProjectIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct UnstarProjectIn {
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
 }
@@ -13087,6 +13784,15 @@ pub mod api {
         type Input = crate::DeleteProjectAgentIn;
         type Output = crate::Empty;
     }
+    /// `deleteProjectMember`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DeleteProjectMember;
+    impl crate::Function for DeleteProjectMember {
+        const NAME: &'static str = "deleteProjectMember";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::DeleteProjectMemberIn;
+        type Output = crate::Empty;
+    }
     /// `deleteProjectSecret`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteProjectSecret;
@@ -13158,6 +13864,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::EditQueuedTurnIn;
         type Output = crate::Turn;
+    }
+    /// `exploreProjects`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ExploreProjects;
+    impl crate::Function for ExploreProjects {
+        const NAME: &'static str = "exploreProjects";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ExploreProjectsIn;
+        type Output = ::std::vec::Vec<crate::ProjectSummary>;
     }
     /// `getAgent`
     #[derive(Clone, Copy, Debug)]
@@ -13239,6 +13954,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::GetFileDiffIn;
         type Output = crate::GetFileDiffOut;
+    }
+    /// `getProject`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetProject;
+    impl crate::Function for GetProject {
+        const NAME: &'static str = "getProject";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetProjectIn;
+        type Output = crate::ProjectSummary;
     }
     /// `getProjectConversation`
     #[derive(Clone, Copy, Debug)]
@@ -13447,6 +14171,15 @@ pub mod api {
         type Input = crate::Empty;
         type Output = ::std::vec::Vec<crate::AgentModelOptions>;
     }
+    /// `listNamespaceProjects`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListNamespaceProjects;
+    impl crate::Function for ListNamespaceProjects {
+        const NAME: &'static str = "listNamespaceProjects";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListNamespaceProjectsIn;
+        type Output = ::std::vec::Vec<crate::ProjectSummary>;
+    }
     /// `listOpenPullRequests`
     #[derive(Clone, Copy, Debug)]
     pub struct ListOpenPullRequests;
@@ -13473,6 +14206,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListProjectConversationsIn;
         type Output = crate::ListProjectConversationsOut;
+    }
+    /// `listProjectMembers`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListProjectMembers;
+    impl crate::Function for ListProjectMembers {
+        const NAME: &'static str = "listProjectMembers";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListProjectMembersIn;
+        type Output = ::std::vec::Vec<crate::ProjectMember>;
     }
     /// `listProjectSecretNames`
     #[derive(Clone, Copy, Debug)]
@@ -13564,6 +14306,15 @@ pub mod api {
         type Input = crate::ListScriptRunsIn;
         type Output = ::std::vec::Vec<crate::ScriptRunWithLog>;
     }
+    /// `listStarredProjects`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListStarredProjects;
+    impl crate::Function for ListStarredProjects {
+        const NAME: &'static str = "listStarredProjects";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListStarredProjectsIn;
+        type Output = ::std::vec::Vec<crate::ProjectSummary>;
+    }
     /// `listTerminals`
     #[derive(Clone, Copy, Debug)]
     pub struct ListTerminals;
@@ -13635,6 +14386,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::PutProjectAgentIn;
         type Output = crate::AgentAttachment;
+    }
+    /// `putProjectMember`
+    #[derive(Clone, Copy, Debug)]
+    pub struct PutProjectMember;
+    impl crate::Function for PutProjectMember {
+        const NAME: &'static str = "putProjectMember";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::PutProjectMemberIn;
+        type Output = crate::ProjectMember;
     }
     /// `readFile`
     #[derive(Clone, Copy, Debug)]
@@ -13906,6 +14666,15 @@ pub mod api {
         type Input = crate::SetProjectSecretIn;
         type Output = crate::Empty;
     }
+    /// `setProjectVisibility`
+    #[derive(Clone, Copy, Debug)]
+    pub struct SetProjectVisibility;
+    impl crate::Function for SetProjectVisibility {
+        const NAME: &'static str = "setProjectVisibility";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::SetProjectVisibilityIn;
+        type Output = crate::Project;
+    }
     /// `setSessionConfig`
     #[derive(Clone, Copy, Debug)]
     pub struct SetSessionConfig;
@@ -13942,6 +14711,15 @@ pub mod api {
         type Input = crate::SleepWorkspaceIn;
         type Output = crate::Empty;
     }
+    /// `starProject`
+    #[derive(Clone, Copy, Debug)]
+    pub struct StarProject;
+    impl crate::Function for StarProject {
+        const NAME: &'static str = "starProject";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::StarProjectIn;
+        type Output = crate::StarState;
+    }
     /// `startCiRun`
     #[derive(Clone, Copy, Debug)]
     pub struct StartCiRun;
@@ -13977,6 +14755,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::UnlinkProjectIn;
         type Output = crate::Empty;
+    }
+    /// `unstarProject`
+    #[derive(Clone, Copy, Debug)]
+    pub struct UnstarProject;
+    impl crate::Function for UnstarProject {
+        const NAME: &'static str = "unstarProject";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::UnstarProjectIn;
+        type Output = crate::StarState;
     }
     /// `updateCiPipeline`
     #[derive(Clone, Copy, Debug)]
@@ -14076,6 +14863,7 @@ pub mod api {
         ("deleteEnvironmentSecret", crate::Method::Post),
         ("deleteMcpServer", crate::Method::Post),
         ("deleteProjectAgent", crate::Method::Post),
+        ("deleteProjectMember", crate::Method::Post),
         ("deleteProjectSecret", crate::Method::Post),
         ("deleteQueuedTurn", crate::Method::Post),
         ("deleteRepositoryIssue", crate::Method::Post),
@@ -14084,6 +14872,7 @@ pub mod api {
         ("deleteReviewComment", crate::Method::Post),
         ("deleteWorkspace", crate::Method::Post),
         ("editQueuedTurn", crate::Method::Post),
+        ("exploreProjects", crate::Method::Get),
         ("getAgent", crate::Method::Get),
         ("getBrowserLiveView", crate::Method::Post),
         ("getChanges", crate::Method::Get),
@@ -14093,6 +14882,7 @@ pub mod api {
         ("getCredentialStatus", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
+        ("getProject", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
         ("getRepository", crate::Method::Get),
         ("getRepositoryFile", crate::Method::Get),
@@ -14116,9 +14906,11 @@ pub mod api {
         ("listLifecycleEvents", crate::Method::Get),
         ("listMcpServers", crate::Method::Get),
         ("listModels", crate::Method::Get),
+        ("listNamespaceProjects", crate::Method::Get),
         ("listOpenPullRequests", crate::Method::Get),
         ("listProjectAgents", crate::Method::Get),
         ("listProjectConversations", crate::Method::Get),
+        ("listProjectMembers", crate::Method::Get),
         ("listProjectSecretNames", crate::Method::Get),
         ("listProjects", crate::Method::Get),
         ("listRepositoryCommits", crate::Method::Get),
@@ -14129,6 +14921,7 @@ pub mod api {
         ("listReviewComments", crate::Method::Get),
         ("listRuns", crate::Method::Get),
         ("listScriptRuns", crate::Method::Get),
+        ("listStarredProjects", crate::Method::Get),
         ("listTerminals", crate::Method::Get),
         ("listWorkspaces", crate::Method::Get),
         ("markViewed", crate::Method::Post),
@@ -14137,6 +14930,7 @@ pub mod api {
         ("openPreview", crate::Method::Post),
         ("pollCodexLogin", crate::Method::Post),
         ("putProjectAgent", crate::Method::Post),
+        ("putProjectMember", crate::Method::Post),
         ("readFile", crate::Method::Get),
         ("readFileAt", crate::Method::Get),
         ("refreshPullRequest", crate::Method::Post),
@@ -14167,14 +14961,17 @@ pub mod api {
         ("setPinned", crate::Method::Post),
         ("setProjectEnvironment", crate::Method::Post),
         ("setProjectSecret", crate::Method::Post),
+        ("setProjectVisibility", crate::Method::Post),
         ("setSessionConfig", crate::Method::Post),
         ("setSessionMode", crate::Method::Post),
         ("setWorkspaceEnvironment", crate::Method::Post),
         ("sleepWorkspace", crate::Method::Post),
+        ("starProject", crate::Method::Post),
         ("startCiRun", crate::Method::Post),
         ("startCodexLogin", crate::Method::Post),
         ("stopScript", crate::Method::Post),
         ("unlinkProject", crate::Method::Post),
+        ("unstarProject", crate::Method::Post),
         ("updateCiPipeline", crate::Method::Post),
         ("updateEnvironment", crate::Method::Post),
         ("updateProjectSettings", crate::Method::Post),
@@ -14265,6 +15062,7 @@ pub mod wire {
         "DeleteEnvironmentSecretIn",
         "DeleteMcpServerIn",
         "DeleteProjectAgentIn",
+        "DeleteProjectMemberIn",
         "DeleteProjectSecretIn",
         "DeleteQueuedTurnIn",
         "DeleteRepositoryIssueCommentIn",
@@ -14284,6 +15082,7 @@ pub mod wire {
         "ErrorBody",
         "ErrorCode",
         "ErrorContent",
+        "ExploreProjectsIn",
         "GetAgentIn",
         "GetBrowserLiveViewIn",
         "GetBrowserLiveViewOut",
@@ -14297,6 +15096,7 @@ pub mod wire {
         "GetFileDiffIn",
         "GetFileDiffOut",
         "GetProjectConversationIn",
+        "GetProjectIn",
         "GetRepositoryFileIn",
         "GetRepositoryFileOut",
         "GetRepositoryIn",
@@ -14349,11 +15149,13 @@ pub mod wire {
         "ListInstallationReposItem",
         "ListInstallationsItem",
         "ListLifecycleEventsIn",
+        "ListNamespaceProjectsIn",
         "ListOpenPullRequestsIn",
         "ListOpenPullRequestsItem",
         "ListProjectAgentsIn",
         "ListProjectConversationsIn",
         "ListProjectConversationsOut",
+        "ListProjectMembersIn",
         "ListProjectSecretNamesIn",
         "ListProjectSecretNamesOut",
         "ListRepositoryCommitsIn",
@@ -14364,6 +15166,7 @@ pub mod wire {
         "ListReviewCommentsIn",
         "ListRunsIn",
         "ListScriptRunsIn",
+        "ListStarredProjectsIn",
         "ListTerminalsIn",
         "ListTerminalsItem",
         "ListWorkspacesIn",
@@ -14407,7 +15210,12 @@ pub mod wire {
         "PrState",
         "ProfileIssue",
         "Project",
+        "ProjectMember",
+        "ProjectRole",
+        "ProjectSummary",
+        "ProjectVisibility",
         "PutProjectAgentIn",
+        "PutProjectMemberIn",
         "ReadFileAtIn",
         "ReadFileAtOut",
         "ReadFileIn",
@@ -14470,6 +15278,7 @@ pub mod wire {
         "SetPinnedIn",
         "SetProjectEnvironmentIn",
         "SetProjectSecretIn",
+        "SetProjectVisibilityIn",
         "SetSessionConfigIn",
         "SetSessionModeIn",
         "SetWorkspaceEnvironmentIn",
@@ -14479,6 +15288,8 @@ pub mod wire {
         "SettingsSource",
         "SetupStatus",
         "SleepWorkspaceIn",
+        "StarProjectIn",
+        "StarState",
         "StartCiRunIn",
         "StartCodexLoginOut",
         "StopScriptIn",
@@ -14491,6 +15302,7 @@ pub mod wire {
         "TurnStatus",
         "TurnUsage",
         "UnlinkProjectIn",
+        "UnstarProjectIn",
         "UpdateCiPipelineIn",
         "UpdateEnvironmentIn",
         "UpdateProjectSettingsIn",
@@ -14612,6 +15424,7 @@ pub mod wire {
             }
             "DeleteMcpServerIn" => crate::roundtrip::<crate::DeleteMcpServerIn>(text),
             "DeleteProjectAgentIn" => crate::roundtrip::<crate::DeleteProjectAgentIn>(text),
+            "DeleteProjectMemberIn" => crate::roundtrip::<crate::DeleteProjectMemberIn>(text),
             "DeleteProjectSecretIn" => crate::roundtrip::<crate::DeleteProjectSecretIn>(text),
             "DeleteQueuedTurnIn" => crate::roundtrip::<crate::DeleteQueuedTurnIn>(text),
             "DeleteRepositoryIssueCommentIn" => {
@@ -14633,6 +15446,7 @@ pub mod wire {
             "ErrorBody" => crate::roundtrip::<crate::ErrorBody>(text),
             "ErrorCode" => crate::roundtrip::<crate::ErrorCode>(text),
             "ErrorContent" => crate::roundtrip::<crate::ErrorContent>(text),
+            "ExploreProjectsIn" => crate::roundtrip::<crate::ExploreProjectsIn>(text),
             "GetAgentIn" => crate::roundtrip::<crate::GetAgentIn>(text),
             "GetBrowserLiveViewIn" => crate::roundtrip::<crate::GetBrowserLiveViewIn>(text),
             "GetBrowserLiveViewOut" => crate::roundtrip::<crate::GetBrowserLiveViewOut>(text),
@@ -14646,6 +15460,7 @@ pub mod wire {
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
             "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
+            "GetProjectIn" => crate::roundtrip::<crate::GetProjectIn>(text),
             "GetRepositoryFileIn" => crate::roundtrip::<crate::GetRepositoryFileIn>(text),
             "GetRepositoryFileOut" => crate::roundtrip::<crate::GetRepositoryFileOut>(text),
             "GetRepositoryIn" => crate::roundtrip::<crate::GetRepositoryIn>(text),
@@ -14718,6 +15533,7 @@ pub mod wire {
             }
             "ListInstallationsItem" => crate::roundtrip::<crate::ListInstallationsItem>(text),
             "ListLifecycleEventsIn" => crate::roundtrip::<crate::ListLifecycleEventsIn>(text),
+            "ListNamespaceProjectsIn" => crate::roundtrip::<crate::ListNamespaceProjectsIn>(text),
             "ListOpenPullRequestsIn" => crate::roundtrip::<crate::ListOpenPullRequestsIn>(text),
             "ListOpenPullRequestsItem" => crate::roundtrip::<crate::ListOpenPullRequestsItem>(text),
             "ListProjectAgentsIn" => crate::roundtrip::<crate::ListProjectAgentsIn>(text),
@@ -14727,6 +15543,7 @@ pub mod wire {
             "ListProjectConversationsOut" => {
                 crate::roundtrip::<crate::ListProjectConversationsOut>(text)
             }
+            "ListProjectMembersIn" => crate::roundtrip::<crate::ListProjectMembersIn>(text),
             "ListProjectSecretNamesIn" => crate::roundtrip::<crate::ListProjectSecretNamesIn>(text),
             "ListProjectSecretNamesOut" => {
                 crate::roundtrip::<crate::ListProjectSecretNamesOut>(text)
@@ -14743,6 +15560,7 @@ pub mod wire {
             "ListReviewCommentsIn" => crate::roundtrip::<crate::ListReviewCommentsIn>(text),
             "ListRunsIn" => crate::roundtrip::<crate::ListRunsIn>(text),
             "ListScriptRunsIn" => crate::roundtrip::<crate::ListScriptRunsIn>(text),
+            "ListStarredProjectsIn" => crate::roundtrip::<crate::ListStarredProjectsIn>(text),
             "ListTerminalsIn" => crate::roundtrip::<crate::ListTerminalsIn>(text),
             "ListTerminalsItem" => crate::roundtrip::<crate::ListTerminalsItem>(text),
             "ListWorkspacesIn" => crate::roundtrip::<crate::ListWorkspacesIn>(text),
@@ -14788,7 +15606,12 @@ pub mod wire {
             "PrState" => crate::roundtrip::<crate::PrState>(text),
             "ProfileIssue" => crate::roundtrip::<crate::ProfileIssue>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
+            "ProjectMember" => crate::roundtrip::<crate::ProjectMember>(text),
+            "ProjectRole" => crate::roundtrip::<crate::ProjectRole>(text),
+            "ProjectSummary" => crate::roundtrip::<crate::ProjectSummary>(text),
+            "ProjectVisibility" => crate::roundtrip::<crate::ProjectVisibility>(text),
             "PutProjectAgentIn" => crate::roundtrip::<crate::PutProjectAgentIn>(text),
+            "PutProjectMemberIn" => crate::roundtrip::<crate::PutProjectMemberIn>(text),
             "ReadFileAtIn" => crate::roundtrip::<crate::ReadFileAtIn>(text),
             "ReadFileAtOut" => crate::roundtrip::<crate::ReadFileAtOut>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
@@ -14853,6 +15676,7 @@ pub mod wire {
             "SetPinnedIn" => crate::roundtrip::<crate::SetPinnedIn>(text),
             "SetProjectEnvironmentIn" => crate::roundtrip::<crate::SetProjectEnvironmentIn>(text),
             "SetProjectSecretIn" => crate::roundtrip::<crate::SetProjectSecretIn>(text),
+            "SetProjectVisibilityIn" => crate::roundtrip::<crate::SetProjectVisibilityIn>(text),
             "SetSessionConfigIn" => crate::roundtrip::<crate::SetSessionConfigIn>(text),
             "SetSessionModeIn" => crate::roundtrip::<crate::SetSessionModeIn>(text),
             "SetWorkspaceEnvironmentIn" => {
@@ -14864,6 +15688,8 @@ pub mod wire {
             "SettingsSource" => crate::roundtrip::<crate::SettingsSource>(text),
             "SetupStatus" => crate::roundtrip::<crate::SetupStatus>(text),
             "SleepWorkspaceIn" => crate::roundtrip::<crate::SleepWorkspaceIn>(text),
+            "StarProjectIn" => crate::roundtrip::<crate::StarProjectIn>(text),
+            "StarState" => crate::roundtrip::<crate::StarState>(text),
             "StartCiRunIn" => crate::roundtrip::<crate::StartCiRunIn>(text),
             "StartCodexLoginOut" => crate::roundtrip::<crate::StartCodexLoginOut>(text),
             "StopScriptIn" => crate::roundtrip::<crate::StopScriptIn>(text),
@@ -14876,6 +15702,7 @@ pub mod wire {
             "TurnStatus" => crate::roundtrip::<crate::TurnStatus>(text),
             "TurnUsage" => crate::roundtrip::<crate::TurnUsage>(text),
             "UnlinkProjectIn" => crate::roundtrip::<crate::UnlinkProjectIn>(text),
+            "UnstarProjectIn" => crate::roundtrip::<crate::UnstarProjectIn>(text),
             "UpdateCiPipelineIn" => crate::roundtrip::<crate::UpdateCiPipelineIn>(text),
             "UpdateEnvironmentIn" => crate::roundtrip::<crate::UpdateEnvironmentIn>(text),
             "UpdateProjectSettingsIn" => crate::roundtrip::<crate::UpdateProjectSettingsIn>(text),

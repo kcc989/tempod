@@ -1,19 +1,21 @@
 import { waitUntil } from "cloudflare:workers";
-import { and, eq, isNull, sql } from "drizzle-orm";
-import { TempoError, newId, unwrap, type FnInput, type FnOutput } from "@tempo/protocol";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { TempoError, newId, unwrap, type FnInput, type FnOutput, type Project } from "@tempo/protocol";
 import { validateOverrides } from "@tempo/settings";
-import { githubInstallations, projects, workspaces } from "../../db/d1.ts";
+import { githubInstallations, member, projectMembers, projects, workspaces } from "../../db/d1.ts";
+import { atLeast, membershipRole, requireOrganizationAdmin } from "../../auth/access.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
 import { getRepoById, listAppInstallations, listInstallationRepos } from "../../github/api.ts";
 import { GithubHttpError } from "../../github/client.ts";
 import { github } from "../../github/provider.ts";
 import { listArtifactBranches } from "../../artifacts/repositories.ts";
 import { listArtifactPullRequests } from "../../artifacts/pull-requests.ts";
-import type { HandlerCtx } from "../run.ts";
+import type { HandlerCtx, PublicCtx } from "../run.ts";
 import {
   d1,
   installationToken,
-  projectToWire,
+  namespaceKey,
+  projectView,
   projectToken,
   repoOf,
   requireInstallation,
@@ -86,15 +88,18 @@ export const listInstallationReposFn = async (
 
 export const linkProject = async (
   { env, user }: HandlerCtx,
-  { installationId, repoId }: FnInput<"linkProject">,
+  { installationId, repoId, organizationId, visibility }: FnInput<"linkProject">,
 ): Promise<FnOutput<"linkProject">> => {
   await requireInstallation(env, user.id, installationId);
+
+  if (organizationId !== undefined) await requireOrganizationAdmin(env, user.id, organizationId);
+  const owner = organizationId ?? null;
   const db = d1(env);
 
   const exists = await db
     .select({ id: projects.id })
     .from(projects)
-    .where(and(eq(projects.userId, user.id), eq(projects.repoId, repoId)))
+    .where(and(eq(namespaceKey, owner ?? user.id), eq(projects.repoId, repoId)))
     .get();
 
   if (exists) throw new TempoError("PROJECT_EXISTS");
@@ -132,24 +137,62 @@ export const linkProject = async (
     settingsJson: "{}",
     sortOrder: (max?.m ?? 0) + 1,
     environmentId: null,
+    organizationId: owner,
+    slug: await freeSlug(env, owner ?? user.id, repo.name, `${repo.owner.login}-${repo.name}`),
+    visibility: visibility ?? "private",
     createdAt: now,
     updatedAt: now,
   };
 
   await db.insert(projects).values(row).run();
 
-  return projectToWire(row);
+  return projectView(env, user, row, "admin");
 };
 
+/** The first slug from `candidates` that its namespace does not use yet; else PROJECT_EXISTS. */
+const freeSlug = async (env: HandlerCtx["env"], key: string, ...candidates: string[]): Promise<string> => {
+  for (const slug of candidates) {
+    const used = await d1(env)
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(namespaceKey, key), sql`lower(${projects.slug}) = lower(${slug})`))
+      .get();
+
+    if (!used) return slug;
+  }
+
+  throw new TempoError("PROJECT_EXISTS");
+};
+
+/** Projects where the caller can create workspaces: `write` or higher (11). */
 export const listProjects = async ({ env, user }: HandlerCtx): Promise<FnOutput<"listProjects">> => {
   const rows = await d1(env)
-    .select()
+    .select({ project: projects, orgRole: member.role, projectRole: projectMembers.role })
     .from(projects)
-    .where(eq(projects.userId, user.id))
-    .orderBy(projects.sortOrder)
+    .leftJoin(member, and(eq(member.organizationId, projects.organizationId), eq(member.userId, user.id)))
+    .leftJoin(
+      projectMembers,
+      and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, user.id)),
+    )
+    .where(
+      or(
+        and(isNull(projects.organizationId), eq(projects.userId, user.id)),
+        isNotNull(member.id),
+        inArray(projectMembers.role, ["write", "admin"]),
+      ),
+    )
+    .orderBy(projects.sortOrder, projects.id)
     .all();
 
-  return rows.map(projectToWire);
+  const out: Project[] = [];
+
+  for (const { project, orgRole, projectRole } of rows) {
+    const role = membershipRole(user.id, project, orgRole, projectRole);
+
+    if (atLeast(role, "write")) out.push(await projectView(env, user, project, role));
+  }
+
+  return out;
 };
 
 const activeWorkspaceIds = async (env: HandlerCtx["env"], projectId: string): Promise<string[]> =>
@@ -165,7 +208,7 @@ export const updateProjectSettings = async (
   { env, user }: HandlerCtx,
   { projectId, settings }: FnInput<"updateProjectSettings">,
 ): Promise<FnOutput<"updateProjectSettings">> => {
-  const row = await requireProject(env, user.id, projectId);
+  const row = await requireProject(env, user, projectId, "admin");
   const valid = validateOverrides(settings);
 
   if (!valid.ok) throw new TempoError("SETTINGS_INVALID", undefined, valid.error);
@@ -186,14 +229,19 @@ export const updateProjectSettings = async (
 
   waitUntil(refresh);
 
-  return projectToWire({ ...row, settingsJson: JSON.stringify(valid.value), updatedAt: now });
+  return projectView(
+    env,
+    user,
+    { ...row, settingsJson: JSON.stringify(valid.value), updatedAt: now },
+    "admin",
+  );
 };
 
 export const unlinkProject = async (
   { env, user }: HandlerCtx,
   { projectId }: FnInput<"unlinkProject">,
 ): Promise<FnOutput<"unlinkProject">> => {
-  const project = await requireProject(env, user.id, projectId);
+  const project = await requireProject(env, user, projectId, "admin");
 
   if ((await activeWorkspaceIds(env, projectId)).length > 0) throw new TempoError("PROJECT_HAS_WORKSPACES");
 
@@ -208,7 +256,8 @@ export const unlinkProject = async (
     unwrap(res);
   }
 
-  await env.CREDENTIALS.getByName(user.id).deleteProjectEnv(projectId);
+  // 11, Shared project configuration: project secrets live with the project holder.
+  await env.CREDENTIALS.getByName(project.userId).deleteProjectEnv(projectId);
 
   if (project.provider === "artifacts") await env.REPOSITORY_CI.getByName(projectId).destroy();
   await d1(env).delete(projects).where(eq(projects.id, projectId)).run();
@@ -217,10 +266,10 @@ export const unlinkProject = async (
 };
 
 export const listBranches = async (
-  { env, user }: HandlerCtx,
+  { env, user }: PublicCtx,
   { projectId, query }: FnInput<"listBranches">,
 ): Promise<FnOutput<"listBranches">> => {
-  const p = await requireProject(env, user.id, projectId);
+  const p = await requireProject(env, user, projectId, "public");
 
   if (p.provider === "artifacts") {
     if (!p.artifactRepoId) throw new TempoError("REPO_NOT_ACCESSIBLE");
@@ -232,10 +281,10 @@ export const listBranches = async (
 };
 
 export const listOpenPullRequests = async (
-  { env, user }: HandlerCtx,
+  { env, user }: PublicCtx,
   { projectId }: FnInput<"listOpenPullRequests">,
 ): Promise<FnOutput<"listOpenPullRequests">> => {
-  const p = await requireProject(env, user.id, projectId);
+  const p = await requireProject(env, user, projectId, "public");
 
   if (p.provider === "artifacts") {
     const pulls = await listArtifactPullRequests(env, { ...p, name: p.repoName });

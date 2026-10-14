@@ -1,1 +1,2 @@
 {"name":"native","url":"https://github.com/acme/demo.git"}
+{"name":"demo","url":"https://github.com/acme/demo.git","visibility":"private"}

@@ -9,17 +9,25 @@ import {
   type Result,
 } from "@tempo/protocol";
 import { Exit, Schema } from "effect";
-import { requireOwner, type AuthedUser } from "../auth/auth.ts";
+import { getSessionUser, requireInstanceAdmin, type AuthedUser } from "../auth/auth.ts";
 import type { Env } from "../env.ts";
 import { log } from "../log.ts";
-import { HANDLERS } from "./registry.ts";
+import { INSTANCE_ADMIN_FNS, isPublicFn } from "./policy.ts";
+import { HANDLERS, PUBLIC_HANDLERS } from "./registry.ts";
 
-export interface HandlerCtx {
+/** Context of a function that also runs without a session (11, policy `public`). */
+export interface PublicCtx {
   readonly env: Env;
+  readonly user: AuthedUser | null;
+}
+
+export interface HandlerCtx extends PublicCtx {
   readonly user: AuthedUser;
 }
 
 export type Handler<K extends FnName> = (c: HandlerCtx, input: FnInput<K>) => Promise<FnOutput<K>>;
+
+export type PublicHandler<K extends FnName> = (c: PublicCtx, input: FnInput<K>) => Promise<FnOutput<K>>;
 
 export const decodeInput = <K extends FnName>(
   name: K,
@@ -47,7 +55,7 @@ export const decodeInput = <K extends FnName>(
 };
 
 /**
- * Runs one server function: auth middleware (owner check), schema decode, the handler.
+ * Runs one server function: auth middleware (the access policy of 11), schema decode, the handler.
  * Shared by the createServerFn wrappers and /api/v1/rpc (07, One handler per function).
  */
 export const runFn = async <K extends FnName>(
@@ -58,10 +66,22 @@ export const runFn = async <K extends FnName>(
   auth: { allowCookie: boolean; allowBearer: boolean },
 ): Promise<Result<FnOutput<K>>> =>
   capture(async () => {
-    const user = await requireOwner(env, headers, auth);
+    const user = await getSessionUser(env, headers, auth);
+
+    if (!user && !isPublicFn(name)) throw new TempoError("UNAUTHENTICATED");
+
+    if (user && INSTANCE_ADMIN_FNS.has(name)) await requireInstanceAdmin(env, user.id);
     const input = decodeInput(name, raw);
 
     try {
+      if (isPublicFn(name)) {
+        // SAFETY: PUBLIC_HANDLERS maps each public K to PublicHandler<K>; dispatch uses that same key.
+        const handler = PUBLIC_HANDLERS[name] as PublicHandler<K>;
+
+        return await handler({ env, user }, input);
+      }
+
+      if (!user) throw new TempoError("UNAUTHENTICATED");
       // SAFETY: the registry maps each K to Handler<K>; runtime dispatch uses that same key.
       const handler = HANDLERS[name] as Handler<K>;
 

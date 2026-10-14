@@ -24,7 +24,7 @@ One set of rules for every store and every wire format.
 
 ## D1 schema
 
-D1 holds lists and summaries. Better Auth owns its own tables (`user`, `session`, `account`, `verification`); generate them with the Better Auth CLI and do not edit them by hand.
+D1 holds lists and summaries. Better Auth owns its own tables (`user`, `session`, `account`, `verification`, and the organization plugin's `organization`, `member`, `invitation`); generate them with the Better Auth CLI and do not edit them by hand.
 
 ```sql
 CREATE TABLE github_installations (
@@ -51,10 +51,11 @@ CREATE TABLE projects (
   settings_json    TEXT NOT NULL DEFAULT '{}',
   sort_order       INTEGER NOT NULL DEFAULT 0,
   environment_id   TEXT REFERENCES environments(id) ON DELETE SET NULL,
+  organization_id  TEXT REFERENCES organization(id) ON DELETE RESTRICT, -- 11
+  slug             TEXT NOT NULL,                                       -- 11
+  visibility       TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('public','private')), -- 11
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL,
-  UNIQUE (user_id, repo_id),
-  UNIQUE (user_id, artifact_repo_id),
   CHECK ((provider = 'github' AND installation_id IS NOT NULL AND repo_id IS NOT NULL)
       OR (provider = 'artifacts' AND artifact_repo_id IS NOT NULL AND clone_url IS NOT NULL))
 );
@@ -623,8 +624,8 @@ All mutations go through TanStack Start server functions. Live updates come only
 **Rules for every server function**
 
 - Created with `createServerFn`. Input and output are Effect Schemas from `packages/protocol`.
-- An auth middleware runs first. No session, or a user who is not the owner, returns `UNAUTHENTICATED` or `FORBIDDEN`.
-- A function that takes `workspaceId` checks that the workspace belongs to the user, then calls the WorkspaceDO by RPC. It MUST NOT write WorkspaceDO data itself.
+- An auth middleware runs first. It applies the function's access policy from 11. A function that needs a session returns `UNAUTHENTICATED` without one; a caller without the required project role gets `NOT_FOUND` or `FORBIDDEN` (11).
+- A function that takes `workspaceId` checks that the workspace belongs to the user and, for most functions, that the user has `write` on its project (11), then calls the WorkspaceDO by RPC. It MUST NOT write WorkspaceDO data itself.
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
@@ -1014,7 +1015,7 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | Code | Meaning | UI message |
 | --- | --- | --- |
 | `UNAUTHENTICATED` | No valid session | Sign in to continue. |
-| `FORBIDDEN` | Not the owner | This Tempo belongs to someone else. |
+| `FORBIDDEN` | The caller's role is too low (11) | You don't have access to this. |
 | `NOT_FOUND` | No such object | Not found. |
 | `VALIDATION_FAILED` | Input failed its schema | Check the highlighted fields. |
 | `PROJECT_EXISTS` | Repo already linked | This repo is already a project. |

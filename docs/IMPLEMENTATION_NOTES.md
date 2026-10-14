@@ -471,3 +471,18 @@ The connected-base editor changes were rebased onto the current agent library. W
 Model discovery starts configured adapters concurrently and preserves result order. The existing detached-event callback accepts Codex auth refreshes and updates only matching credential-version metadata in the cache signature. Secrets remain outside workspace event storage; CI detached events retain their replay owner.
 
 Pre-rebase historical validation and native observations are not acceptance evidence for this revision. Current validation is recorded in the PR; no local test suite is run during this design pass. Native visual acceptance and the four-area calibration remain incomplete.
+
+## Organizations and social, phase 1 (2026-10-14)
+
+The owner asked for GitHub-style users, organizations, public browsing and stars with the Better Auth `organization` plugin. They chose open GitHub sign-up with anonymous browsing, each member's own agent credentials, user- or organization-owned projects with per-project members, and stars only. Tab 11 defines the contracts. Choices in phase 1:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Organization plugin | `organization()` from the pinned `better-auth` 1.7.7, teams off, hooks for slug rules and deletion. No new dependency. | O3 |
+| Access policy | `runFn` reads an optional session. `PUBLIC_FNS`, `INSTANCE_ADMIN_FNS` and `CLEANUP_WORKSPACE_FNS` in `src/server/policy.ts`; project roles in `src/auth/access.ts`. | One place per rule |
+| D1 migration | `0010_organizations` is additive (`ALTER TABLE ADD`, index swap). Drizzle's generated table rebuild was replaced, and its expression indexes were written by hand. `slug` has a database default `''` that the schema omits, so `ADD COLUMN NOT NULL` works on existing rows. | No rebuild of `projects` and its dependants |
+| Artifacts collision | Before this change, a second user who created an Artifacts repository with an existing name was linked to the first user's repository. New names are `t<hash>-<slug>`, and `artifact_repo_id` is unique across projects. | Security fix found while scoping 11 |
+| Shared configuration | Project secrets, the project environment and project agent attachments use the project holder (`projects.user_id`). `getEgressConfig` carries `environmentUserId`. | Members' workspaces need the project's configuration |
+| Clients | Only protocol compatibility changed: the Mac app passes `None` for the new optional inputs, and the `FORBIDDEN` text changed in both clients. The web UI and Mac screens for organizations are phase 2 (rule 17). | O8 |
+
+Verification: four new Worker cases in `organizations.cases.ts` (roles and public reads, organization roles and the workspace write gate, per-owner Artifacts names and holder secrets, stars and namespaces). The forward-migration case now also checks slugs, visibility and duplicate names. A mutation of the workspace write gate made the new case fail. Hosted sign-in with a second GitHub account (AT-1) is manual and has not been run.

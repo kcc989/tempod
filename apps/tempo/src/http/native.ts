@@ -1,6 +1,6 @@
 import { Option, Schema } from "effect";
 import { API, FN_NAMES, type ApiMeta } from "@tempo/protocol";
-import { requireOwner } from "../auth/auth.ts";
+import { requireUser } from "../auth/auth.ts";
 import type { Env } from "../env.ts";
 import { runFn } from "../server/run.ts";
 import { errorOf, errorResponse } from "./common.ts";
@@ -69,10 +69,10 @@ export const handleApiV1 = async (request: Request, env: Env, url: URL): Promise
   return errorOf("NOT_FOUND");
 };
 
-/** GET /downloads/mac/<version>: the signed DMG from R2, owner only (07). */
+/** GET /downloads/mac/<version>: the signed DMG from R2, signed-in users only (07, 11). */
 export const handleDownload = async (request: Request, env: Env, version: string): Promise<Response> => {
   try {
-    await requireOwner(env, request.headers);
+    await requireUser(env, request.headers);
   } catch {
     return errorOf("UNAUTHENTICATED");
   }

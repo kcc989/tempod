@@ -28,6 +28,8 @@ import {
   OpKind,
   OpStatus,
   PrState,
+  ProjectRole,
+  ProjectVisibility,
   ReviewSide,
   ReviewStatus,
   ScriptKind,
@@ -60,9 +62,45 @@ export const Project = Schema.Struct({
   settings: SettingsLayer,
   sortOrder: Schema.Number,
   environmentId: Schema.optional(N(Schema.String)),
+  organizationId: Schema.optional(N(Schema.String)),
+  namespace: Schema.optional(Schema.String),
+  slug: Schema.optional(Schema.String),
+  visibility: Schema.optional(ProjectVisibility),
+  role: Schema.optional(N(ProjectRole)),
 });
 
 export type Project = typeof Project.Type;
+
+/** A project as browsing and social lists show it (11, Server functions). */
+export const ProjectSummary = Schema.Struct({
+  id: Schema.String,
+  namespace: Schema.String,
+  slug: Schema.String,
+  organizationId: N(Schema.String),
+  visibility: ProjectVisibility,
+  provider: Schema.Literals(["github", "artifacts"]),
+  defaultBranch: Schema.String,
+  stars: Schema.Number,
+  starred: Schema.Boolean,
+  role: N(ProjectRole),
+  updatedAt: Ms,
+});
+
+export type ProjectSummary = typeof ProjectSummary.Type;
+
+export const ProjectMember = Schema.Struct({
+  userId: Schema.String,
+  username: N(Schema.String),
+  name: Schema.String,
+  image: N(Schema.String),
+  role: ProjectRole,
+});
+
+export type ProjectMember = typeof ProjectMember.Type;
+
+export const StarState = Schema.Struct({ stars: Schema.Number, starred: Schema.Boolean });
+
+export type StarState = typeof StarState.Type;
 
 export const RepositoryCommit = Schema.Struct({
   hash: Schema.String,

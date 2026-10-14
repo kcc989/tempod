@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { errorMessage, type ErrorBody, type ErrorCode } from "@tempo/protocol";
-import { workspaces, type WorkspaceRow } from "../db/d1.ts";
+import { atLeast, memberRoleOf } from "../auth/access.ts";
+import { projects, workspaces, type WorkspaceRow } from "../db/d1.ts";
 import type { Env } from "../env.ts";
 
 export const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
@@ -33,6 +34,28 @@ export const getOwnedWorkspace = async (
     .from(workspaces)
     .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)))
     .get()) ?? null;
+
+/**
+ * The caller's own workspace, while they still have `write` on its project (11, Function access).
+ * `"forbidden"` means the workspace exists but its user lost `write`.
+ */
+export const getWritableWorkspace = async (
+  env: Env,
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceRow | "forbidden" | null> => {
+  const ws = await getOwnedWorkspace(env, userId, workspaceId);
+
+  if (!ws) return null;
+
+  return (await canWriteProject(env, userId, ws.projectId)) ? ws : "forbidden";
+};
+
+export const canWriteProject = async (env: Env, userId: string, projectId: string): Promise<boolean> => {
+  const project = await drizzle(env.DB).select().from(projects).where(eq(projects.id, projectId)).get();
+
+  return project !== undefined && atLeast(await memberRoleOf(env, userId, project), "write");
+};
 
 export const appOrigin = (env: Env): string =>
   env.APP_HOST.startsWith("localhost") ? `http://${env.APP_HOST}` : `https://${env.APP_HOST}`;

@@ -41,18 +41,24 @@ export class Lifecycle {
     if (this.loading) await this.loading;
     this.loading = (async () => {
       const ws = this.core.ws();
+      const { holderId } = await this.core.project();
       const db = d1(this.core.env);
 
+      // 11, Shared project configuration: attachments reference the project holder's agents.
       const [definitions, rows] = await db.batch([
         db
           .select()
           .from(agents)
-          .where(and(eq(agents.userId, ws.userId), isNull(agents.deletedAt))),
+          .where(and(inArray(agents.userId, [ws.userId, holderId]), isNull(agents.deletedAt))),
         db.select().from(projectAgents).where(eq(projectAgents.projectId, ws.projectId)),
       ]);
 
-      this.agents = definitions.map(agentToWire);
-      const byId = new Map(definitions.map((agent) => [agent.id, agent]));
+      this.agents = definitions.filter((agent) => agent.userId === ws.userId).map(agentToWire);
+
+      const byId = new Map(
+        definitions.filter((agent) => agent.userId === holderId).map((agent) => [agent.id, agent] as const),
+      );
+
       this.attachments = await Promise.all(
         rows.map((row) => attachmentToWire(this.core.env, row, byId.get(row.agentId) ?? null)),
       );

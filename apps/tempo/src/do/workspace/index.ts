@@ -408,6 +408,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
           ? assertArtifactRemote(project.cloneUrl ?? "", project.name).href
           : null,
       environmentId: environment?.id ?? null,
+      environmentUserId: environment?.userId ?? null,
       policy: environment?.egressPolicy ?? settings.egress_policy,
       allowlist: environment?.egressAllowlist ?? settings.egress_allowlist,
       secrets: environment?.secrets ?? [],

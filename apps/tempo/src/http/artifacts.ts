@@ -1,8 +1,8 @@
 import { ARTIFACT_HOST_LABEL, toErrorBody } from "@tempo/protocol";
-import { requireOwner } from "../auth/auth.ts";
+import { requireUser } from "../auth/auth.ts";
 import type { Env } from "../env.ts";
 import { log } from "../log.ts";
-import { appOrigin, errorOf, errorResponse, getOwnedWorkspace } from "./common.ts";
+import { appOrigin, errorOf, errorResponse, getWritableWorkspace } from "./common.ts";
 import { previewNotFound } from "./preview.ts";
 
 export const ARTIFACT_COOKIE = "__Host-tempo_artifact";
@@ -38,9 +38,12 @@ export const handleArtifactRead = async (
 
     if (origin !== null && origin !== appOrigin(env)) return errorOf("FORBIDDEN");
     const bearer = request.headers.get("Authorization")?.toLowerCase().startsWith("bearer ") ?? false;
-    const user = await requireOwner(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
+    const user = await requireUser(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
+    const ws = await getWritableWorkspace(env, user.id, workspaceId);
 
-    if (!(await getOwnedWorkspace(env, user.id, workspaceId))) return errorOf("NOT_FOUND");
+    if (!ws) return errorOf("NOT_FOUND");
+
+    if (ws === "forbidden") return errorOf("FORBIDDEN");
     const a = await env.WORKSPACE.getByName(workspaceId).getArtifact(artifactId, version);
 
     if (!a || a.status === "lost") return errorOf("NOT_FOUND");

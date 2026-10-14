@@ -20,6 +20,27 @@
           "type": "null"
         }
       ]
+    },
+    "organizationId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "visibility": {
+      "anyOf": [
+        {
+          "$ref": "ProjectVisibility.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": ["name", "url"],

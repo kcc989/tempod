@@ -910,6 +910,178 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getProject": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetProjectIn.json"
+        },
+        "output": {
+          "$ref": "ProjectSummary.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listNamespaceProjects": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListNamespaceProjectsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "ProjectSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "exploreProjects": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ExploreProjectsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "ProjectSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listStarredProjects": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListStarredProjectsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "ProjectSummary.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setProjectVisibility": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetProjectVisibilityIn.json"
+        },
+        "output": {
+          "$ref": "Project.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listProjectMembers": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProjectMembersIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "ProjectMember.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "putProjectMember": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "PutProjectMemberIn.json"
+        },
+        "output": {
+          "$ref": "ProjectMember.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteProjectMember": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DeleteProjectMemberIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "starProject": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "StarProjectIn.json"
+        },
+        "output": {
+          "$ref": "StarState.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "unstarProject": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UnstarProjectIn.json"
+        },
+        "output": {
+          "$ref": "StarState.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listEnvironments": {
       "type": "object",
       "properties": {
@@ -2231,6 +2403,16 @@
     "listBranches",
     "listOpenPullRequests",
     "setProjectEnvironment",
+    "getProject",
+    "listNamespaceProjects",
+    "exploreProjects",
+    "listStarredProjects",
+    "setProjectVisibility",
+    "listProjectMembers",
+    "putProjectMember",
+    "deleteProjectMember",
+    "starProject",
+    "unstarProject",
     "listEnvironments",
     "createEnvironment",
     "updateEnvironment",

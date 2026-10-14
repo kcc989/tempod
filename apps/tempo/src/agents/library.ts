@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   AGENT_LIMIT,
   AgentDefinition,
@@ -22,7 +22,7 @@ import {
   type AgentRow,
   type ProjectAgentRow,
 } from "../db/d1.ts";
-import { d1 } from "../server/handlers/common.ts";
+import { d1, heldProjectIds } from "../server/handlers/common.ts";
 import { log } from "../log.ts";
 import type { Env } from "../env.ts";
 
@@ -353,12 +353,17 @@ export const attachmentToWire = async (
   };
 };
 
+/** Refreshes the user's live workspaces and those of the projects they hold (11). */
 export const agentsChanged = async (env: Env, userId: string): Promise<void> => {
   const live = await d1(env)
     .select({ id: workspaces.id })
     .from(workspaces)
     .where(
-      and(eq(workspaces.userId, userId), isNull(workspaces.archivedAt), ne(workspaces.state, "archived")),
+      and(
+        or(eq(workspaces.userId, userId), inArray(workspaces.projectId, heldProjectIds(env, userId))),
+        isNull(workspaces.archivedAt),
+        ne(workspaces.state, "archived"),
+      ),
     )
     .all();
 

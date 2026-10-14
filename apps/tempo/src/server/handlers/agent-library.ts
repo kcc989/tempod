@@ -61,8 +61,9 @@ export const listProjectAgents = async (
   { env, user }: HandlerCtx,
   { projectId }: FnInput<"listProjectAgents">,
 ): Promise<FnOutput<"listProjectAgents">> => {
-  await requireProject(env, user.id, projectId);
-  await migrateAgents(env, user.id);
+  const project = await requireProject(env, user, projectId, "read");
+  // 11, Shared project configuration: attachments use the project holder's library.
+  await migrateAgents(env, project.userId);
 
   return Promise.all(
     (
@@ -80,8 +81,8 @@ export const putProjectAgent = async (
   { env, user }: HandlerCtx,
   input: FnInput<"putProjectAgent">,
 ): Promise<FnOutput<"putProjectAgent">> => {
-  await requireProject(env, user.id, input.projectId);
-  await activeAgent(env, user.id, input.agentId);
+  const project = await requireProject(env, user, input.projectId, "admin");
+  await activeAgent(env, project.userId, input.agentId);
   const now = Date.now();
 
   const fields = {
@@ -100,7 +101,7 @@ export const putProjectAgent = async (
     .returning()
     .get();
 
-  await agentsChanged(env, user.id);
+  await agentsChanged(env, project.userId);
 
   return attachmentToWire(env, row);
 };
@@ -109,7 +110,7 @@ export const deleteProjectAgent = async (
   { env, user }: HandlerCtx,
   { projectId, agentId }: FnInput<"deleteProjectAgent">,
 ): Promise<FnOutput<"deleteProjectAgent">> => {
-  await requireProject(env, user.id, projectId);
+  const project = await requireProject(env, user, projectId, "admin");
 
   const removed = await d1(env)
     .delete(projectAgents)
@@ -118,7 +119,7 @@ export const deleteProjectAgent = async (
     .get();
 
   if (!removed) throw new TempoError("NOT_FOUND");
-  await agentsChanged(env, user.id);
+  await agentsChanged(env, project.userId);
 
   return {};
 };

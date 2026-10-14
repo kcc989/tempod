@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StarState",
+  "type": "object",
+  "properties": {
+    "stars": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "starred": {
+      "type": "boolean"
+    }
+  },
+  "required": ["stars", "starred"],
+  "additionalProperties": true
+}

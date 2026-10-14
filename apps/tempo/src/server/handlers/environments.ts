@@ -1,5 +1,5 @@
 import { waitUntil } from "cloudflare:workers";
-import { and, asc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import {
   ENVIRONMENT_LIMITS,
   TempoError,
@@ -18,15 +18,22 @@ import {
   sha256Hex,
 } from "../../lib/environments.ts";
 import type { HandlerCtx } from "../run.ts";
-import { d1, projectToWire, requireProject } from "./common.ts";
+import { d1, heldProjectIds, projectView, requireProject } from "./common.ts";
 
 const creds = (c: HandlerCtx) => c.env.CREDENTIALS.getByName(c.user.id);
 
-export const requireEnvironment = async (c: HandlerCtx, environmentId: string): Promise<EnvironmentRow> => {
+export const requireEnvironment = (c: HandlerCtx, environmentId: string): Promise<EnvironmentRow> =>
+  requireEnvironmentOf(c, c.user.id, environmentId);
+
+const requireEnvironmentOf = async (
+  c: HandlerCtx,
+  userId: string,
+  environmentId: string,
+): Promise<EnvironmentRow> => {
   const row = await d1(c.env)
     .select()
     .from(environments)
-    .where(and(eq(environments.id, environmentId), eq(environments.userId, c.user.id)))
+    .where(and(eq(environments.id, environmentId), eq(environments.userId, userId)))
     .get();
 
   if (!row) throw new TempoError("NOT_FOUND", undefined, "environment not found");
@@ -53,12 +60,20 @@ const assertNameFree = async (c: HandlerCtx, name: string, exceptId?: string) =>
   if (clash) throw new TempoError("ENVIRONMENT_EXISTS");
 };
 
-/** Sends env.set and environment.set to every live workspace of the owner (01, After a change). */
-export const refreshAllWorkspaces = async (c: HandlerCtx): Promise<void> => {
+/**
+ * Sends env.set and environment.set to every live workspace of the user and of the projects they
+ * hold (01, After a change; 11, Shared project configuration).
+ */
+export const refreshAllWorkspaces = async (c: HandlerCtx, holderId = c.user.id): Promise<void> => {
   const ids = await d1(c.env)
     .select({ id: workspaces.id })
     .from(workspaces)
-    .where(and(eq(workspaces.userId, c.user.id), isNull(workspaces.archivedAt)))
+    .where(
+      and(
+        or(eq(workspaces.userId, c.user.id), inArray(workspaces.projectId, heldProjectIds(c.env, holderId))),
+        isNull(workspaces.archivedAt),
+      ),
+    )
     .all();
 
   waitUntil(
@@ -246,16 +261,17 @@ export const setProjectEnvironment = async (
   c: HandlerCtx,
   { projectId, environmentId }: FnInput<"setProjectEnvironment">,
 ): Promise<FnOutput<"setProjectEnvironment">> => {
-  const row = await requireProject(c.env, c.user.id, projectId);
+  const row = await requireProject(c.env, c.user, projectId, "admin");
 
-  if (environmentId !== null) await requireEnvironment(c, environmentId);
+  // 11, Shared project configuration: the project environment belongs to the project holder.
+  if (environmentId !== null) await requireEnvironmentOf(c, row.userId, environmentId);
   const now = Date.now();
   await d1(c.env)
     .update(projects)
     .set({ environmentId, updatedAt: now })
     .where(eq(projects.id, projectId))
     .run();
-  await refreshAllWorkspaces(c);
+  await refreshAllWorkspaces(c, row.userId);
 
-  return projectToWire({ ...row, environmentId, updatedAt: now });
+  return projectView(c.env, c.user, { ...row, environmentId, updatedAt: now });
 };

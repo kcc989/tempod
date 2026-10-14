@@ -56,15 +56,15 @@ test.describe("AT-1 owner sign-in", () => {
     requireUi();
     await page.goto("/");
     await expect(page.getByText("History", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("This Tempo belongs to someone else.")).toHaveCount(0);
+    await expect(page.getByText("You don't have access to this.")).toHaveCount(0);
   });
 
-  // Manual: GitHub sign-in needs real GitHub credentials (password, 2FA, device checks) for the
-  // owner and for a second account, which cannot be scripted against github.com. Steps:
-  // 1. In a fresh browser profile open TEMPO_E2E_URL and sign in with GitHub as the owner: the app opens.
-  // 2. In another fresh profile sign in as a different GitHub account: the page shows
-  //    "This Tempo belongs to someone else." and GET /api/auth/get-session in that profile returns null.
-  test.fixme("AT-1 GitHub sign-in: the owner gets in, a different GitHub account is refused with the owner message", async () => {});
+  // Manual: GitHub sign-in needs real GitHub credentials (password, 2FA, device checks) for two
+  // accounts, which cannot be scripted against github.com. Steps (11, Identity):
+  // 1. In a fresh browser profile open TEMPO_E2E_URL and sign in with GitHub as the instance admin: the app opens.
+  // 2. In another fresh profile sign in as a different GitHub account: the app opens, and
+  //    listProjects does not include the instance admin's private projects.
+  test.fixme("AT-1 GitHub sign-in: any GitHub account gets in and sees only its own private projects", async () => {});
 });
 
 test("AT-2 link a repo, create a workspace with a prompt: first agent output under 120 s, branch tempo/<slug> in the container", async () => {

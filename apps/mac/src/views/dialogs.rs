@@ -642,6 +642,8 @@ impl Dialogs {
         let request = client.call::<api::LinkProject>(p::LinkProjectIn {
             installation_id,
             repo_id,
+            organization_id: None,
+            visibility: None,
         });
         self.pending = true;
         cx.spawn(async move |this, cx| {

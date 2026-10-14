@@ -73,6 +73,8 @@ export interface ProjectInfo {
   readonly defaultBranch: string;
   readonly overrides: SettingsLayer;
   readonly environmentId: string | null;
+  /** The project holder (11, Shared project configuration). */
+  readonly holderId: string;
 }
 
 export interface Author {
@@ -295,6 +297,7 @@ export class WorkspaceCore {
       defaultBranch: row.defaultBranch,
       overrides: json.projectSettings.read(row.settingsJson, {}),
       environmentId: row.environmentId,
+      holderId: row.userId,
     };
 
     this.projectCache = { info, at: Date.now() };
@@ -320,18 +323,24 @@ export class WorkspaceCore {
 
     return this.env.CREDENTIALS.getByName(userId);
   }
-  /** The workspace override, else the project's environment, else none (01, Environments). */
+  /**
+   * The workspace override (an environment of the workspace user), else the project's environment
+   * (an environment of the project holder), else none (01, Environments; 11).
+   */
   async environment(fresh = false): Promise<EnvironmentConfig | null> {
     const project = await this.project(fresh);
     const row = this.ws();
 
-    for (const id of [row.environmentId, project.environmentId]) {
+    for (const [id, owner] of [
+      [row.environmentId, row.userId],
+      [project.environmentId, project.holderId],
+    ] as const) {
       if (!id) continue;
 
       const env = await drizzleD1(this.env.DB)
         .select()
         .from(environments)
-        .where(and(eq(environments.id, id), eq(environments.userId, row.userId)))
+        .where(and(eq(environments.id, id), eq(environments.userId, owner)))
         .get();
 
       if (env) return parseEnvironment(env);
@@ -342,7 +351,7 @@ export class WorkspaceCore {
   /** Environment secrets for the container: placeholders when bound to hosts, else values (01). */
   private async environmentEnv(env: EnvironmentConfig | null): Promise<Record<string, string>> {
     if (!env || env.secrets.length === 0) return {};
-    const values = await this.credentials().listEnvironmentSecrets(env.id);
+    const values = await this.env.CREDENTIALS.getByName(env.userId).listEnvironmentSecrets(env.id);
     const out: Record<string, string> = {};
 
     for (const s of env.secrets) {
@@ -358,7 +367,7 @@ export class WorkspaceCore {
     const settings = this.settings().environment;
 
     const set = env
-      ? new Set(await this.credentials().listEnvironmentSecretNames(env.id))
+      ? new Set(await this.env.CREDENTIALS.getByName(env.userId).listEnvironmentSecretNames(env.id))
       : new Set<string>();
 
     return {
@@ -400,7 +409,9 @@ export class WorkspaceCore {
     const row = this.ws();
     const settings = this.settings();
     const envSecrets = await this.environmentEnv(await this.environment());
-    const secrets = await this.credentials().listProjectEnv(row.projectId);
+    const project = await this.project();
+    // 11, Shared project configuration: project secrets live with the project holder.
+    const secrets = await this.env.CREDENTIALS.getByName(project.holderId).listProjectEnv(row.projectId);
 
     const base = {
       TEMPO_WORKSPACE_ID: row.workspaceId,

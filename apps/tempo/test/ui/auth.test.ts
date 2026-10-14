@@ -19,7 +19,7 @@ describe("auth helpers", () => {
   });
 
   it("shows the owner-check message for ?error=forbidden", () => {
-    expect(loginErrorText("forbidden")).toBe("This Tempo belongs to someone else.");
+    expect(loginErrorText("forbidden")).toBe("You don't have access to this.");
     expect(loginErrorText("state_mismatch")).toBe("Something went wrong.");
     expect(loginErrorText(undefined)).toBeNull();
   });

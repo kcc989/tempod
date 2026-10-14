@@ -3,7 +3,7 @@ import { CodexAuthFile } from "@tempo/protocol";
 import { waitUntil } from "cloudflare:workers";
 import { TempoError, unwrap, type FnInput, type FnOutput } from "@tempo/protocol";
 import { and, eq, isNull } from "drizzle-orm";
-import { workspaces } from "../../db/d1.ts";
+import { workspaces, type ProjectRow } from "../../db/d1.ts";
 import { SECRET_KEYS, projectEnvKey } from "../../do/credential.ts";
 import type { HandlerCtx } from "../run.ts";
 import { d1, requireProject } from "./common.ts";
@@ -119,6 +119,9 @@ export const deleteCredential = async (
   return {};
 };
 
+/** 11, Shared project configuration: project secrets live with the project holder. */
+const holderCreds = (c: HandlerCtx, project: ProjectRow) => c.env.CREDENTIALS.getByName(project.userId);
+
 const refreshProjectEnv = async (c: HandlerCtx, projectId: string) => {
   const ids = await d1(c.env)
     .select({ id: workspaces.id })
@@ -141,8 +144,8 @@ export const setProjectSecret = async (
   c: HandlerCtx,
   { projectId, name, value }: FnInput<"setProjectSecret">,
 ): Promise<FnOutput<"setProjectSecret">> => {
-  await requireProject(c.env, c.user.id, projectId);
-  await creds(c).putSecret(projectEnvKey(projectId, name), value);
+  const project = await requireProject(c.env, c.user, projectId, "admin");
+  await holderCreds(c, project).putSecret(projectEnvKey(projectId, name), value);
   await refreshProjectEnv(c, projectId);
 
   return {};
@@ -152,8 +155,8 @@ export const deleteProjectSecret = async (
   c: HandlerCtx,
   { projectId, name }: FnInput<"deleteProjectSecret">,
 ): Promise<FnOutput<"deleteProjectSecret">> => {
-  await requireProject(c.env, c.user.id, projectId);
-  await creds(c).deleteSecret(projectEnvKey(projectId, name));
+  const project = await requireProject(c.env, c.user, projectId, "admin");
+  await holderCreds(c, project).deleteSecret(projectEnvKey(projectId, name));
   await refreshProjectEnv(c, projectId);
 
   return {};
@@ -163,7 +166,7 @@ export const listProjectSecretNames = async (
   c: HandlerCtx,
   { projectId }: FnInput<"listProjectSecretNames">,
 ): Promise<FnOutput<"listProjectSecretNames">> => {
-  await requireProject(c.env, c.user.id, projectId);
+  const project = await requireProject(c.env, c.user, projectId, "admin");
 
-  return { names: await creds(c).listProjectEnvNames(projectId) };
+  return { names: await holderCreds(c, project).listProjectEnvNames(projectId) };
 };

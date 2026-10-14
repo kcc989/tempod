@@ -17,7 +17,7 @@ export const openWorkspace = async (
   opts: { phone?: boolean } = {},
 ): Promise<void> => {
   await page.goto("/");
-  await expect(page.getByText("This Tempo belongs to someone else.")).toHaveCount(0);
+  await expect(page.getByText("You don't have access to this.")).toHaveCount(0);
 
   if (opts.phone) await page.getByText("Workspaces", { exact: true }).first().click();
   await page.getByText(title, { exact: true }).first().click();

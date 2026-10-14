@@ -519,6 +519,8 @@ impl RepositoryView {
                             name,
                             description,
                             default_branch,
+                            organization_id: None,
+                            visibility: None,
                         }),
                 )
             }
@@ -543,6 +545,8 @@ impl RepositoryView {
                             name,
                             url,
                             description,
+                            organization_id: None,
+                            visibility: None,
                         }),
                 )
             }

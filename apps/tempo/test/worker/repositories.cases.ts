@@ -11,6 +11,7 @@ import {
 } from "../../src/artifacts/repositories.ts";
 import type { Env } from "../../src/env.ts";
 import {
+  artifactStorageName,
   createRepository,
   getRepository,
   getRepositoryFile,
@@ -22,6 +23,9 @@ import type { HandlerCtx } from "../../src/server/run.ts";
 import { seedProject } from "./fakes.ts";
 
 const REMOTE = "https://0123456789abcdef0123456789abcdef.artifacts.cloudflare.net/git/tempo-repos";
+
+/** The flat Artifacts name of a new project of the fixture's user (11, Artifacts storage names). */
+const storageName = (ctx: HandlerCtx, slug: string) => artifactStorageName(ctx.user.id, slug);
 
 const SHA = "a".repeat(40);
 
@@ -168,7 +172,14 @@ const fixture = async () => {
 
 const populated = async () => {
   const f = await fixture();
-  const repo = fakeRepo("demo", { lastPushAt: new Date().toISOString(), description: "Demo repo" });
+
+  // Artifacts repository ids are unique across projects (11), so each fixture gets its own.
+  const repo = fakeRepo("demo", {
+    id: `repo-demo-${f.seeded.userId}`,
+    lastPushAt: new Date().toISOString(),
+    description: "Demo repo",
+  });
+
   repo.commits.set("main", [COMMIT]);
   repo.commits.set("refs/heads/main", [COMMIT]);
   repo.trees.set(ROOT, [
@@ -198,6 +209,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("Artifacts repository lifecycle", () => {
   it("creates a native project, revokes the transient token, and returns the same project on retry", async () => {
     const { ctx, artifacts } = await fixture();
+    const name = await storageName(ctx, "demo");
 
     const project = await createRepository(ctx, {
       name: "demo",
@@ -209,16 +221,20 @@ describe("Artifacts repository lifecycle", () => {
       provider: "artifacts",
       installationId: null,
       repoId: null,
-      artifactRepoId: "repo-demo",
+      artifactRepoId: `repo-${name}`,
       owner: "tempo",
       name: "demo",
+      slug: "demo",
+      visibility: "private",
+      organizationId: null,
+      role: "admin",
       defaultBranch: "trunk",
-      cloneUrl: `${REMOTE}/demo.git`,
+      cloneUrl: `${REMOTE}/${name}.git`,
     });
     expect(await createRepository(ctx, { name: "demo" })).toEqual(project);
     expect(artifacts.binding.create).toHaveBeenCalledTimes(1);
-    expect(artifacts.repos.get("demo")!.repo.revokeToken).toHaveBeenCalledWith(INITIAL_TOKEN);
-    expect(artifacts.repos.get("demo")!.repo[Symbol.dispose]).toHaveBeenCalled();
+    expect(artifacts.repos.get(name)!.repo.revokeToken).toHaveBeenCalledWith(INITIAL_TOKEN);
+    expect(artifacts.repos.get(name)!.repo[Symbol.dispose]).toHaveBeenCalled();
     const stored = await env.DB.prepare("SELECT * FROM projects WHERE id = ?").bind(project.id).first();
     expect(JSON.stringify([project, stored])).not.toContain(INITIAL_TOKEN);
     expect(artifacts.binding.delete).not.toHaveBeenCalled();
@@ -226,8 +242,9 @@ describe("Artifacts repository lifecycle", () => {
 
   it("recovers a create whose service acknowledgement was lost without overwriting its contents", async () => {
     const { ctx, artifacts } = await fixture();
+    const name = await storageName(ctx, "recover");
     artifacts.binding.create.mockImplementationOnce(async () => {
-      artifacts.repos.set("recover", fakeRepo("recover", { description: "Existing contents" }));
+      artifacts.repos.set(name, fakeRepo(name, { description: "Existing contents" }));
       throw new Error(`lost response ${INITIAL_TOKEN}`);
     });
 
@@ -243,8 +260,8 @@ describe("Artifacts repository lifecycle", () => {
     }
 
     const project = await createRepository(ctx, { name: "recover", description: "Replacement" });
-    expect(project.artifactRepoId).toBe("repo-recover");
-    expect(artifacts.repos.get("recover")!.metadata.description).toBe("Existing contents");
+    expect(project.artifactRepoId).toBe(`repo-${name}`);
+    expect(artifacts.repos.get(name)!.metadata.description).toBe("Existing contents");
     expect(artifacts.binding.delete).not.toHaveBeenCalled();
   });
 
@@ -257,14 +274,16 @@ describe("Artifacts repository lifecycle", () => {
       description: "Baseline",
     });
 
+    const name = await storageName(ctx, "imported");
     expect(artifacts.binding.import).toHaveBeenCalledWith({
       source: { url: "https://github.com/example/project.git" },
-      target: { name: "imported", opts: { description: "Baseline" } },
+      target: { name, opts: { description: "Baseline" } },
     });
-    expect(artifacts.repos.get("imported")!.repo.revokeToken).toHaveBeenCalledWith(INITIAL_TOKEN);
+    expect(artifacts.repos.get(name)!.repo.revokeToken).toHaveBeenCalledWith(INITIAL_TOKEN);
     expect(JSON.stringify(repo)).not.toContain(INITIAL_TOKEN);
-    const imported = fakeRepo("already-imported");
-    artifacts.repos.set("already-imported", imported);
+    const existing = await storageName(ctx, "already-imported");
+    const imported = fakeRepo(existing);
+    artifacts.repos.set(existing, imported);
     expect(
       (
         await importRepository(ctx, {
@@ -286,14 +305,15 @@ describe("Artifacts repository lifecycle", () => {
 
   it("converges concurrent creates on one project and tolerates initial token revocation failures", async () => {
     const { ctx, artifacts } = await fixture();
-    const repo = fakeRepo("concurrent");
+    const name = await storageName(ctx, "concurrent");
+    const repo = fakeRepo(name);
     repo.repo.revokeToken.mockRejectedValue(nativeError("INTERNAL_ERROR", INITIAL_TOKEN));
     artifacts.binding.create.mockImplementationOnce(async () => {
-      artifacts.repos.set("concurrent", repo);
+      artifacts.repos.set(name, repo);
 
       return {
         id: repo.metadata.id,
-        name: "concurrent",
+        name,
         description: null,
         defaultBranch: "main",
         remote: repo.metadata.remote,
@@ -310,7 +330,7 @@ describe("Artifacts repository lifecycle", () => {
     expect(JSON.stringify(results)).not.toContain(INITIAL_TOKEN);
 
     const rows = await env.DB.prepare("SELECT id FROM projects WHERE user_id = ? AND artifact_repo_id = ?")
-      .bind(ctx.user.id, "repo-concurrent")
+      .bind(ctx.user.id, repo.metadata.id)
       .all();
 
     expect(rows.results).toHaveLength(1);
@@ -348,7 +368,8 @@ describe("Artifacts repository lifecycle", () => {
   it("does not treat stale linked metadata as a successful create or import retry", async () => {
     const { ctx, artifacts } = await fixture();
     await createRepository(ctx, { name: "stale" });
-    artifacts.repos.set("stale", fakeRepo("stale", { id: "recreated-stale" }));
+    const name = await storageName(ctx, "stale");
+    artifacts.repos.set(name, fakeRepo(name, { id: `recreated-stale-${ctx.user.id}` }));
     await expect(createRepository(ctx, { name: "stale" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       importRepository(ctx, { name: "stale", url: "https://github.com/example/repo.git" }),
@@ -519,26 +540,28 @@ describe("Artifacts repository browsing", () => {
 describe("Artifacts Git refs and scoped tokens", () => {
   it("checks stable repository identity before reusing cached credentials or fetching refs", async () => {
     const { ctx, artifacts, repo } = await populated();
-    expect((await assertArtifactRepositoryIdentity(ctx.env, "demo", "repo-demo")).id).toBe("repo-demo");
+    expect((await assertArtifactRepositoryIdentity(ctx.env, "demo", repo.metadata.id)).id).toBe(
+      repo.metadata.id,
+    );
     await expect(assertArtifactRepositoryIdentity(ctx.env, "demo", null)).rejects.toMatchObject({
       code: "REPO_NOT_ACCESSIBLE",
     });
-    await artifactToken(ctx.env, "demo", "write", "repo-demo");
+    await artifactToken(ctx.env, "demo", "write", repo.metadata.id);
     expect(repo.repo.createToken).toHaveBeenCalledTimes(1);
     const replacement = fakeRepo("demo", { id: "replacement-demo" });
     artifacts.repos.set("demo", replacement);
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
-    await expect(assertArtifactRepositoryIdentity(ctx.env, "demo", "repo-demo")).rejects.toMatchObject({
+    await expect(assertArtifactRepositoryIdentity(ctx.env, "demo", repo.metadata.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(artifactToken(ctx.env, "demo", "write", "repo-demo")).rejects.toMatchObject({
+    await expect(artifactToken(ctx.env, "demo", "write", repo.metadata.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(artifactBranchExists(ctx.env, "demo", "main", "repo-demo")).rejects.toMatchObject({
+    await expect(artifactBranchExists(ctx.env, "demo", "main", repo.metadata.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(listArtifactBranches(ctx.env, "demo", undefined, "repo-demo")).rejects.toMatchObject({
+    await expect(listArtifactBranches(ctx.env, "demo", undefined, repo.metadata.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(replacement.repo.createToken).not.toHaveBeenCalled();
@@ -553,7 +576,7 @@ describe("Artifacts Git refs and scoped tokens", () => {
     artifacts.binding.get.mockResolvedValueOnce(repo.repo).mockResolvedValueOnce(replacement.repo);
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
-    await expect(listArtifactBranches(ctx.env, "demo", undefined, "repo-demo")).rejects.toMatchObject({
+    await expect(listArtifactBranches(ctx.env, "demo", undefined, repo.metadata.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(replacement.repo.createToken).not.toHaveBeenCalled();
@@ -563,11 +586,11 @@ describe("Artifacts Git refs and scoped tokens", () => {
   it("allows scoped read access to read-only repositories and rejects writes before minting", async () => {
     const { ctx, repo } = await populated();
     repo.metadata.readOnly = true;
-    await expect(artifactToken(ctx.env, "demo", "write", "repo-demo")).rejects.toMatchObject({
+    await expect(artifactToken(ctx.env, "demo", "write", repo.metadata.id)).rejects.toMatchObject({
       code: "REPO_NOT_ACCESSIBLE",
     });
     expect(repo.repo.createToken).not.toHaveBeenCalled();
-    await expect(artifactToken(ctx.env, "demo", "read", "repo-demo")).resolves.toBe(TOKEN);
+    await expect(artifactToken(ctx.env, "demo", "read", repo.metadata.id)).resolves.toBe(TOKEN);
     expect(repo.repo.createToken).toHaveBeenCalledWith("read", 600);
   });
 

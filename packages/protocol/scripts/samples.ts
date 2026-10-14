@@ -192,6 +192,22 @@ const ciJob: P.CiJob = {
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 const ENV_ID = uid(901);
 
+const ORG_ID = uid(930);
+
+const PROJECT_SUMMARY: P.ProjectSummary = {
+  id: uid(4),
+  namespace: "acme",
+  slug: "site",
+  organizationId: ORG_ID,
+  visibility: "public",
+  provider: "artifacts",
+  defaultBranch: "main",
+  stars: 3,
+  starred: true,
+  role: "write",
+  updatedAt: at(12),
+};
+
 const INJECTOR_CODE = "export default { async fetch(request, env) { return fetch(request); } };\n";
 
 const ENVIRONMENT = {
@@ -447,7 +463,43 @@ export const SHARED_SAMPLES = {
       artifactRepoId: "repo-native",
       cloneUrl: null,
     },
+    {
+      ...w.project,
+      id: uid(4),
+      owner: "tempo",
+      name: "t0123456789ab-site",
+      installationId: null,
+      repoId: null,
+      provider: "artifacts",
+      artifactRepoId: "repo-site",
+      cloneUrl: null,
+      organizationId: ORG_ID,
+      namespace: "acme",
+      slug: "site",
+      visibility: "public",
+      role: "write",
+    },
   ],
+  ProjectSummary: [
+    PROJECT_SUMMARY,
+    { ...PROJECT_SUMMARY, organizationId: null, namespace: "octo", starred: false, role: null },
+  ],
+  ProjectMember: [
+    { userId: uid(931), username: "octo", name: "Octo Cat", image: null, role: "write" },
+    {
+      userId: uid(932),
+      username: null,
+      name: "Legacy",
+      image: "https://avatars.example/1.png",
+      role: "admin",
+    },
+  ],
+  StarState: [
+    { stars: 3, starred: true },
+    { stars: 0, starred: false },
+  ],
+  ProjectVisibility: ["public", "private"],
+  ProjectRole: ["read", "write", "admin"],
   RepositoryCommit: [repositoryCommit],
   RepositoryEntry: [repositoryEntry],
   RepositoryDetail: [
@@ -771,8 +823,14 @@ const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
 export const INPUT_SAMPLES = {
-  createRepository: [{ name: "native", defaultBranch: "main" }],
-  importRepository: [{ name: "native", url: "https://github.com/acme/demo.git" }],
+  createRepository: [
+    { name: "native", defaultBranch: "main" },
+    { name: "site", organizationId: ORG_ID, visibility: "public" },
+  ],
+  importRepository: [
+    { name: "native", url: "https://github.com/acme/demo.git" },
+    { name: "demo", url: "https://github.com/acme/demo.git", visibility: "private" },
+  ],
   linkArtifactRepository: [{ name: "native" }],
   getRepository: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, ref: "main", path: "src" }],
   getRepositoryFile: [{ projectId: PROJECT_ID, ref: "main", path: "README.md" }],
@@ -859,7 +917,20 @@ export const INPUT_SAMPLES = {
   getTrace: [{ workspaceId: W1, eventId: uid(922) }],
   listInstallationRepos: [{ installationId: 51234567 }],
   listInstallations: [{}],
-  linkProject: [{ installationId: 51234567, repoId: 812345678 }],
+  linkProject: [
+    { installationId: 51234567, repoId: 812345678 },
+    { installationId: 51234567, repoId: 812345678, organizationId: ORG_ID, visibility: "public" },
+  ],
+  getProject: [{ namespace: "acme", slug: "site" }],
+  listNamespaceProjects: [{ namespace: "acme" }, { namespace: "octo", offset: 50 }],
+  exploreProjects: [{}, { offset: 50 }],
+  listStarredProjects: [{}],
+  setProjectVisibility: [{ projectId: PROJECT_ID, visibility: "public" }],
+  listProjectMembers: [{ projectId: PROJECT_ID }],
+  putProjectMember: [{ projectId: PROJECT_ID, username: "octo", role: "write" }],
+  deleteProjectMember: [{ projectId: PROJECT_ID, userId: uid(931) }],
+  starProject: [{ projectId: PROJECT_ID }],
+  unstarProject: [{ projectId: PROJECT_ID }],
   listProjects: [{}],
   updateProjectSettings: [
     { projectId: PROJECT_ID, settings: { agent: { default: "codex" }, git: { archive_on_merge: true } } },
