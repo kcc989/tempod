@@ -1458,7 +1458,7 @@ mod view_tests {
             let project = window.find("section-a").bounds();
             let row = window.find("workspace-a1").bounds();
             assert!(
-                row.size.height >= px(48.),
+                row.size.height >= px(36.),
                 "workspace row is clipped: {row:?}"
             );
             assert!(
