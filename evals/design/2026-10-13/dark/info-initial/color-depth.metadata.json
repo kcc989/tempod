@@ -1,0 +1,13 @@
+{
+  "area": "color-depth",
+  "questionVersion": "2.1-draft",
+  "calibrated": false,
+  "acceptanceEnabled": false,
+  "requestSha256": "005202c4c0aeb7da5737693e958b5bac6e72092062764bde97fe9b0b838a7428",
+  "attemptStatuses": [
+    200
+  ],
+  "stateless": true,
+  "priorResultsIncluded": false,
+  "timestamp": "2026-10-14T00:44:07Z"
+}

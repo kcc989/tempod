@@ -16,7 +16,6 @@ use tempo_protocol::{self as p, api};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
-    Info,
     Guides,
     Changes,
     Files,
@@ -31,7 +30,6 @@ pub enum Tool {
 impl Tool {
     fn title(self) -> &'static str {
         match self {
-            Self::Info => "Info",
             Self::Guides => "Guides",
             Self::Changes => "Changes",
             Self::Files => "Files",
@@ -45,8 +43,7 @@ impl Tool {
         }
     }
 }
-const TOOLS: [Tool; 11] = [
-    Tool::Info,
+const TOOLS: [Tool; 10] = [
     Tool::Guides,
     Tool::Browser,
     Tool::Files,
@@ -78,6 +75,7 @@ pub struct ToolPanel {
     processes: Entity<ProcessPanel>,
     pub(super) info: Entity<super::workspace_info::WorkspaceInfo>,
     guides: Entity<super::guides::GuidePanel>,
+    pub info_open: bool,
     tabs: Vec<Tool>,
     active: Option<Tool>,
     browser: Option<String>,
@@ -125,6 +123,7 @@ impl ToolPanel {
                     }
                 }
                 ReviewEvent::Document => {
+                    this.info_open = false;
                     this.active = None;
                     cx.emit(RevealTools);
                 }
@@ -159,8 +158,9 @@ impl ToolPanel {
             processes,
             info,
             guides,
-            tabs: vec![Tool::Info],
-            active: Some(Tool::Info),
+            info_open: true,
+            tabs: vec![Tool::Changes],
+            active: Some(Tool::Changes),
             browser: None,
             browser_error: None,
             browser_pending: false,
@@ -178,6 +178,7 @@ impl ToolPanel {
         }
     }
     fn activate(&mut self, tool: Tool, cx: &mut Context<Self>) {
+        self.info_open = false;
         if !self.tabs.contains(&tool) {
             self.tabs.push(tool);
         }
@@ -197,9 +198,6 @@ impl ToolPanel {
         } else if tool == Tool::Browser && self.browser.is_none() && !self.browser_pending {
             self.open_browser(cx);
         }
-        if tool == Tool::Info {
-            self.info.update(cx, |i, cx| i.refresh(cx));
-        }
         if tool == Tool::Guides {
             self.guides.update(cx, |g, cx| g.refresh(cx));
         }
@@ -210,7 +208,11 @@ impl ToolPanel {
             g.active_chat = chat;
             cx.notify();
         });
-        self.select(Tool::Info, cx);
+        self.info_open = true;
+        self.hide_browser();
+        self.info.update(cx, |i, cx| i.refresh(cx));
+        cx.emit(RevealTools);
+        cx.notify();
     }
     pub fn set_chat(&mut self, chat: Option<String>, cx: &mut Context<Self>) {
         self.guides.update(cx, |g, cx| {
@@ -337,6 +339,15 @@ impl ToolPanel {
 }
 impl Render for ToolPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.info_open {
+            self.hide_browser();
+            return div()
+                .size_full()
+                .p_3()
+                .bg(color(Token::Background, cx))
+                .child(self.info.clone())
+                .into_any_element();
+        }
         let documents = self.review.read(cx).document_tabs();
         let document_open = self.review.read(cx).document_open;
         if document_open || self.active != Some(Tool::Browser) {
@@ -368,8 +379,6 @@ impl Render for ToolPanel {
                     .size_full()
                     .child(self.processes.clone())
                     .into_any_element()
-            } else if tool == Tool::Info {
-                self.info.clone().into_any_element()
             } else if tool == Tool::Guides {
                 self.guides.clone().into_any_element()
             } else {
@@ -380,6 +389,14 @@ impl Render for ToolPanel {
                 .p_6()
                 .gap_2()
                 .child(div().mb_2().child("Open a tool"))
+                .child(
+                    Button::new("open-workspace-info")
+                        .outline()
+                        .label("Workspace info")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.show_info(this.guides.read(cx).active_chat.clone(), cx)
+                        })),
+                )
                 .children(TOOLS.map(|tool| {
                     Button::new(SharedString::from(format!("open-tool-{}", tool.title())))
                         .outline()
@@ -444,5 +461,6 @@ impl Render for ToolPanel {
                     .child(Tab::new().label("+").aria_label("New tool tab")),
             )
             .child(div().flex_1().min_h_0().child(content))
+            .into_any_element()
     }
 }

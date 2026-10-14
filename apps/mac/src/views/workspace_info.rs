@@ -22,6 +22,7 @@ pub enum InfoAction {
     ResetPreview,
     Archive,
     CopyLink,
+    Close,
     OpenChat(String),
     OpenTool(Tool),
     GenerateGuide,
@@ -30,6 +31,7 @@ pub enum InfoAction {
 impl EventEmitter<InfoAction> for WorkspaceInfo {}
 
 pub struct WorkspaceInfo {
+    controls_open: bool,
     store: Entity<WorkspaceStore>,
     client: Client,
     query: Entity<InputState>,
@@ -80,6 +82,7 @@ impl WorkspaceInfo {
             }
         });
         let mut this = Self {
+            controls_open: false,
             store,
             client,
             query,
@@ -218,17 +221,42 @@ impl WorkspaceInfo {
         .detach();
     }
     fn row(&self, id: String, label: String, action: InfoAction, cx: &mut Context<Self>) -> Button {
+        let icon = match &action {
+            InfoAction::OpenChat(_) => gpui_kit::assets::IconName::MessageCircle,
+            InfoAction::OpenTool(Tool::Guides) => gpui_kit::assets::IconName::BookOpen,
+            InfoAction::OpenTool(Tool::Changes) => gpui_kit::assets::IconName::FileDiff,
+            InfoAction::OpenTool(Tool::Artifacts) => gpui_kit::assets::IconName::Boxes,
+            InfoAction::OpenTool(_) => gpui_kit::assets::IconName::Terminal,
+            InfoAction::Environment => gpui_kit::assets::IconName::Settings,
+            InfoAction::Diagnostics => gpui_kit::assets::IconName::Info,
+            InfoAction::Archive => gpui_kit::assets::IconName::Archive,
+            InfoAction::CopyLink => gpui_kit::assets::IconName::Link,
+            _ => gpui_kit::assets::IconName::RotateCcw,
+        };
         Button::new(SharedString::from(id))
             .ghost()
             .w_full()
+            .small()
+            .h(gpui_kit::px(32.))
             .accessibility_label(label.clone())
-            .child(div().w_full().min_w_0().text_left().truncate().child(label))
+            .child(
+                h_flex()
+                    .w_full()
+                    .min_w_0()
+                    .gap_2()
+                    .child(gpui_kit::component::Icon::new(icon).small())
+                    .child(div().flex_1().min_w_0().text_left().truncate().child(label)),
+            )
             .on_click(cx.listener(move |_, _, _, cx| cx.emit(action.clone())))
     }
     fn heading(label: &str, cx: &gpui_kit::App) -> gpui_kit::Div {
         div()
             .mt_4()
-            .mb_2()
+            .mb_1()
+            .pt_3()
+            .border_t_1()
+            .border_color(color(Token::Border, cx))
+            .text_sm()
             .text_color(color(Token::MutedForeground, cx))
             .child(label.to_string())
     }
@@ -240,6 +268,7 @@ impl WorkspaceInfo {
         let workspace = w.clone();
         let pending = self.branch_pending;
         let trigger = Button::new("info-base-branch")
+            .accessibility_label(format!("Base branch: {}", w.base_branch))
             .ghost()
             .w_full()
             .child(
@@ -320,7 +349,7 @@ impl WorkspaceInfo {
     }
 }
 impl Render for WorkspaceInfo {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (workspace, mut chats, runs, changes) = {
             let s = &self.store.read(cx).state;
             (
@@ -361,22 +390,28 @@ impl Render for WorkspaceInfo {
             p::WorkspaceState::Error => "Needs attention".into(),
             _ => w.state.to_string(),
         };
-        v_flex()
+        let body = v_flex()
             .id("workspace-info")
-            .size_full()
+            .w_full()
+            .max_h(gpui_kit::px(
+                (f32::from(window.viewport_size().height) - 48.).max(200.),
+            ))
             .p_4()
+            .rounded(gpui_kit::px(16.))
+            .bg(color(Token::Muted, cx))
             .overflow_y_scroll()
             .gap_2()
             .child(
                 h_flex()
                     .child(div().flex_1().min_w_0().truncate().child(title))
                     .child(
-                        Button::new("copy-workspace-link")
+                        Button::new("close-workspace-info")
                             .ghost()
                             .small()
-                            .icon(gpui_kit::assets::IconName::Copy)
-                            .accessibility_label("Copy workspace link")
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(InfoAction::CopyLink))),
+                            .icon(gpui_kit::assets::IconName::X)
+                            .accessibility_label("Close Info")
+                            .tooltip("Close Info")
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(InfoAction::Close))),
                     ),
             )
             .child(
@@ -400,18 +435,42 @@ impl Render for WorkspaceInfo {
                         })),
                 ),
             )
-            .child(div().min_w_0().truncate().child(w.branch.clone()))
-            .child(self.branch_picker(&w, cx))
-            .child(Self::heading("Work", cx))
             .child(
-                self.row(
-                    "info-changes".into(),
-                    changes
-                        .map(|c| format!("Changes   +{} −{}", c.additions, c.deletions))
-                        .unwrap_or("Changes".into()),
-                    InfoAction::OpenTool(Tool::Changes),
-                    cx,
-                ),
+                Button::new("info-changes")
+                    .ghost()
+                    .small()
+                    .w_full()
+                    .h(gpui_kit::px(32.))
+                    .accessibility_label("Changes")
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .gap_2()
+                            .child(
+                                gpui_kit::component::Icon::new(
+                                    gpui_kit::assets::IconName::FileDiff,
+                                )
+                                .small(),
+                            )
+                            .child(div().flex_1().text_left().child("Changes"))
+                            .children(changes.map(|c| {
+                                h_flex()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .text_color(color(Token::Success, cx))
+                                            .child(format!("+{}", c.additions)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_color(color(Token::Destructive, cx))
+                                            .child(format!("−{}", c.deletions)),
+                                    )
+                            })),
+                    )
+                    .on_click(
+                        cx.listener(|_, _, _, cx| cx.emit(InfoAction::OpenTool(Tool::Changes))),
+                    ),
             )
             .child(self.row(
                 "info-guides".into(),
@@ -423,7 +482,11 @@ impl Render for WorkspaceInfo {
             .children(chats.into_iter().map(|s| {
                 self.row(
                     format!("info-chat-{}", s.id),
-                    format!("{} · {}", s.title, s.status),
+                    if s.status == p::SessionStatus::Idle {
+                        s.title.clone()
+                    } else {
+                        format!("{} · {}", s.title, s.status)
+                    },
                     InfoAction::OpenChat(s.id),
                     cx,
                 )
@@ -469,46 +532,99 @@ impl Render for WorkspaceInfo {
                     .clone()
                     .map(|e| div().text_color(color(Token::MutedForeground, cx)).child(e)),
             )
-            .child(Self::heading("Workspace controls", cx))
-            .child(self.row(
-                "info-environment".into(),
-                "Environment…".into(),
-                InfoAction::Environment,
-                cx,
-            ))
-            .child(self.row(
-                "info-diagnostics".into(),
-                "Diagnostics".into(),
-                InfoAction::Diagnostics,
-                cx,
-            ))
             .child(
-                self.row(
-                    "info-preview-access".into(),
-                    "Reset preview access".into(),
-                    InfoAction::ResetPreview,
-                    cx,
-                )
-                .disabled(matches!(
-                    w.state,
-                    p::WorkspaceState::Archived | p::WorkspaceState::Archiving
-                )),
+                Button::new("info-controls-disclosure")
+                    .ghost()
+                    .w_full()
+                    .small()
+                    .h(gpui_kit::px(32.))
+                    .accessibility_label(if self.controls_open {
+                        "Workspace controls, expanded"
+                    } else {
+                        "Workspace controls, collapsed"
+                    })
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .gap_2()
+                            .child(
+                                gpui_kit::component::Icon::new(
+                                    gpui_kit::assets::IconName::Settings,
+                                )
+                                .small(),
+                            )
+                            .child(div().flex_1().text_left().child("Workspace controls"))
+                            .child(
+                                gpui_kit::component::Icon::new(if self.controls_open {
+                                    gpui_kit::assets::IconName::ChevronDown
+                                } else {
+                                    gpui_kit::assets::IconName::ChevronRight
+                                })
+                                .small(),
+                            ),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.controls_open = !this.controls_open;
+                        cx.notify();
+                    })),
             )
-            .child(
-                self.row(
-                    "info-archive".into(),
-                    "Archive workspace".into(),
-                    InfoAction::Archive,
-                    cx,
-                )
-                .disabled(!matches!(
-                    w.state,
-                    p::WorkspaceState::Sleeping
-                        | p::WorkspaceState::Ready
-                        | p::WorkspaceState::Working
-                        | p::WorkspaceState::Error
-                )),
-            )
-            .into_any_element()
+            .children(self.controls_open.then(|| {
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .font_family("monospace")
+                            .child(w.branch.clone()),
+                    )
+                    .child(self.branch_picker(&w, cx))
+                    .child(self.row(
+                        "info-copy-link".into(),
+                        "Copy workspace link".into(),
+                        InfoAction::CopyLink,
+                        cx,
+                    ))
+                    .child(self.row(
+                        "info-environment".into(),
+                        "Environment…".into(),
+                        InfoAction::Environment,
+                        cx,
+                    ))
+                    .child(self.row(
+                        "info-diagnostics".into(),
+                        "Diagnostics".into(),
+                        InfoAction::Diagnostics,
+                        cx,
+                    ))
+                    .child(
+                        self.row(
+                            "info-preview-access".into(),
+                            "Reset preview access".into(),
+                            InfoAction::ResetPreview,
+                            cx,
+                        )
+                        .disabled(matches!(
+                            w.state,
+                            p::WorkspaceState::Archived | p::WorkspaceState::Archiving
+                        )),
+                    )
+                    .child(
+                        self.row(
+                            "info-archive".into(),
+                            "Archive workspace".into(),
+                            InfoAction::Archive,
+                            cx,
+                        )
+                        .disabled(!matches!(
+                            w.state,
+                            p::WorkspaceState::Sleeping
+                                | p::WorkspaceState::Ready
+                                | p::WorkspaceState::Working
+                                | p::WorkspaceState::Error
+                        )),
+                    )
+            }));
+        body.into_any_element()
     }
 }

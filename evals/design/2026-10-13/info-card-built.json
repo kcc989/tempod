@@ -1,0 +1,12 @@
+{
+  "sourceHead": "7985ee86be982ffb16e841dc227750afb9c6ded5",
+  "workingTreePending": true,
+  "binary": "/Users/caseycollins/projects/tempod/target/debug/Tempo",
+  "sha256": "ef6666f0a78f60b7ffce9a08add7b5b7b351ef659bf29c789aff66e1bc50c660",
+  "buildPassed": true,
+  "testsRun": false,
+  "installed": false,
+  "nativeVerified": false,
+  "blocker": "Mac locked; manual-unlock request pending",
+  "timestamp": "2026-10-14T00:47:37.975107+00:00"
+}

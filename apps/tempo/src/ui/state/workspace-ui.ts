@@ -128,7 +128,7 @@ export interface OpenTab {
   readonly seq: number;
 }
 
-export type RightTab = "info" | "changes" | "files" | "checks" | "artifacts" | "activity";
+export type RightTab = "changes" | "files" | "checks" | "artifacts" | "activity";
 
 export type BottomTab = "setup" | "run" | "terminal";
 
@@ -155,6 +155,7 @@ export interface WorkspaceUiState {
   /** Increments when something asks the composer to take focus. */
   readonly composerFocusSeq: number;
   readonly diffScope: DiffScope;
+  readonly infoOpen: boolean;
   readonly toolTabs: ReadonlyArray<UtilityTab>;
   readonly activeToolKey: string | null;
   readonly rightTab: RightTab;
@@ -172,8 +173,9 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   insertions: [],
   composerFocusSeq: 0,
   diffScope: "branch",
-  toolTabs: ["info"],
-  activeToolKey: "info",
+  infoOpen: true,
+  toolTabs: ["changes"],
+  activeToolKey: "changes",
   rightTab: "changes",
   bottomTab: "setup",
   rightQuiet: false,
@@ -210,6 +212,7 @@ const withActive = (s: WorkspaceUiState, key: string | null): WorkspaceUiState =
     activeKey: key,
     lastChatSessionId,
     activeToolKey: open && open.tab.kind !== "chat" ? key : s.activeToolKey,
+    infoOpen: open && open.tab.kind !== "chat" ? false : s.infoOpen,
   };
 };
 
@@ -435,9 +438,20 @@ export const setBottomTab = (workspaceId: string, bottomTab: BottomTab): void =>
   selectTool(workspaceId, bottomTab);
 };
 
+export const showWorkspaceInfo = (workspaceId: string): void => {
+  update(workspaceId, (s) => ({ ...s, infoOpen: true }));
+  pinRight(workspaceId);
+  setLayout({ rightOpen: true });
+};
+
+export const closeWorkspaceInfo = (): void => {
+  setLayout({ rightOpen: false, phonePane: "chat" });
+};
+
 export const selectTool = (workspaceId: string, key: UtilityTab | null): void => {
   update(workspaceId, (s) => ({
     ...s,
+    infoOpen: false,
     toolTabs: key && !s.toolTabs.includes(key) ? [...s.toolTabs, key] : s.toolTabs,
     activeToolKey: key,
   }));

@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tab
 import { useWorkspaceUi } from "~/ui/hooks/useWorkspaceUi";
 import {
   activateTab,
+  showWorkspaceInfo,
   closeTab,
   closeTool,
   openLiveView,
@@ -36,10 +37,7 @@ import {
   type UtilityTab,
 } from "~/ui/state/workspace-ui";
 
-import { WorkspaceInfo } from "./WorkspaceInfo";
-
 const tools: ReadonlyArray<{ key: UtilityTab; label: string; icon: LucideIcon }> = [
-  { key: "info", label: "Info", icon: InfoIcon },
   { key: "files", label: "Files", icon: FolderIcon },
   { key: "terminal", label: "Terminal", icon: SquareTerminalIcon },
   { key: "changes", label: "Changes", icon: FileDiffIcon },
@@ -138,6 +136,14 @@ export function ToolPanel({ workspaceId, phone = false }: { workspaceId: string;
               <BookOpenIcon aria-hidden />
               Guides
             </Button>
+            <Button
+              variant="outline"
+              className="h-11 justify-start"
+              onClick={() => showWorkspaceInfo(workspaceId)}
+            >
+              <InfoIcon aria-hidden />
+              Workspace info
+            </Button>
             {available.map(({ key, label, icon: Icon }) => (
               <Button
                 key={key}
@@ -153,9 +159,6 @@ export function ToolPanel({ workspaceId, phone = false }: { workspaceId: string;
           <p className="mt-5 text-sm text-muted-foreground">
             Browser shows the workspace’s Cloudflare Browser Run live view.
           </p>
-        </TabsContent>
-        <TabsContent value="info" className="min-h-0">
-          <WorkspaceInfo workspaceId={workspaceId} phone={phone} />
         </TabsContent>
         <TabsContent value="changes" className="flex min-h-0 flex-col">
           <ChangesView workspaceId={workspaceId} />

@@ -173,6 +173,7 @@ impl Render for GuidePanel {
             )
             .child(
                 Button::new("open-guided-review")
+                    .accessibility_label("Open guided review")
                     .ghost()
                     .w_full()
                     .child(div().w_full().text_left().child("Open guided review ↗"))

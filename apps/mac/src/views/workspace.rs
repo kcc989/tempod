@@ -156,6 +156,7 @@ impl WorkspaceView {
                 use super::workspace_info::InfoAction;
                 let id = this.store.read(cx).workspace_id.clone();
                 match event {
+                    InfoAction::Close => window.dispatch_action(Box::new(ToggleRightSide), cx),
                     InfoAction::Wake => this
                         .mutate::<api::WakeWorkspace>(p::WakeWorkspaceIn { workspace_id: id }, cx),
                     InfoAction::Sleep => this.mutate::<api::SleepWorkspace>(

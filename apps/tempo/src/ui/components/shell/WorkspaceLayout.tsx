@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ChatTabs } from "~/ui/components/chat/ChatTabs";
 import { WorkspaceBanners } from "~/ui/components/chat/WorkspaceBanners";
+import { WorkspaceInfo } from "~/ui/components/shell/WorkspaceInfo";
 import { ToolPanel } from "~/ui/components/shell/ToolPanel";
 import { SetupTab } from "~/ui/components/processes/SetupTab";
 import { useToggleRunAction } from "~/ui/components/processes/useScripts";
@@ -98,20 +99,23 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
   useEffect(() => setRightQuiet(workspaceId, quiet), [workspaceId, quiet]);
   const pinned = useWorkspaceUiSelector(workspaceId, (ui) => ui.rightPinned);
   const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned });
+  const infoOpen = useWorkspaceUiSelector(workspaceId, (ui) => ui.infoOpen);
+  const toolsOpen = rightOpen && !infoOpen;
   const chatStyle = { minWidth: 0, "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 2vw, 24px)" };
 
   const horizontal = useDefaultLayout({
-    id: "workspace",
-    panelIds: rightOpen ? ["center", "right"] : ["center"],
+    id: infoOpen ? "workspace-info" : "workspace",
+    panelIds: toolsOpen ? ["center", "right"] : ["center"],
     storage: safeLayoutStorage,
   });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TopBar workspaceId={workspaceId} variant="desktop" />
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
         <ResizablePanelGroup
-          id="workspace"
+          id={infoOpen ? "workspace-info" : "workspace"}
+          className="min-w-0 flex-1"
           orientation="horizontal"
           defaultLayout={horizontal.defaultLayout}
           onLayoutChanged={horizontal.onLayoutChanged}
@@ -124,7 +128,7 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
               </div>
             </section>
           </ResizablePanel>
-          {rightOpen && (
+          {toolsOpen && (
             <>
               <ResizableHandle aria-label="Resize right side" />
               <ResizablePanel id="right" defaultSize="50%" minSize={280}>
@@ -133,13 +137,26 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
             </>
           )}
         </ResizablePanelGroup>
+        {rightOpen && infoOpen && (
+          <aside aria-label="Workspace info" className="h-full min-h-0 w-[360px] shrink-0 p-3">
+            <WorkspaceInfo workspaceId={workspaceId} />
+          </aside>
+        )}
       </div>
     </div>
   );
 }
 
-function RightSide({ workspaceId }: { workspaceId: string }) {
-  return <ToolPanel workspaceId={workspaceId} />;
+function RightSide({ workspaceId, phone = false }: { workspaceId: string; phone?: boolean }) {
+  const infoOpen = useWorkspaceUiSelector(workspaceId, (ui) => ui.infoOpen);
+
+  return infoOpen ? (
+    <div className="h-full min-h-0 p-3">
+      <WorkspaceInfo workspaceId={workspaceId} phone={phone} />
+    </div>
+  ) : (
+    <ToolPanel workspaceId={workspaceId} phone={phone} />
+  );
 }
 
 function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
@@ -158,7 +175,7 @@ function PhoneWorkspace({ workspaceId }: { workspaceId: string }) {
               </Button>
             </div>
             <div className="min-h-0 flex-1">
-              <ToolPanel workspaceId={workspaceId} phone />
+              <RightSide workspaceId={workspaceId} phone />
             </div>
           </section>
         )),

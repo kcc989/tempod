@@ -120,7 +120,8 @@ describe("workspace controls on a phone", () => {
     const d = detail({ id: WS });
     wrap(createElement(WorkspaceInfoButton, { view: { w: d, d }, phone: true }));
     fireEvent.click(screen.getByRole("button", { name: "Workspace info" }));
-    expect(getWorkspaceUi(WS).activeToolKey).toBe("info");
+    expect(getWorkspaceUi(WS).infoOpen).toBe(true);
+    expect(getWorkspaceUi(WS).toolTabs).not.toContain("info");
     expect(getLayout().phonePane).toBe("tools");
     expect(call).not.toHaveBeenCalled();
   });
