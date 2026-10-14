@@ -537,7 +537,7 @@ export const seedProject = async (opts: { settingsJson?: string } = {}): Promise
       "INSERT INTO github_installations (id, user_id, installation_id, account_login, account_type, created_at) VALUES (?, ?, ?, 'acme', 'Organization', ?)",
     ).bind(newId(), userId, installationId, now),
     env.DB.prepare(
-      "INSERT INTO projects (id, user_id, installation_id, repo_id, repo_owner, repo_name, default_branch, settings_json, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 'acme', 'app', 'main', ?, 1, ?, ?)",
+      "INSERT INTO projects (id, user_id, installation_id, repo_id, repo_owner, repo_name, slug, default_branch, settings_json, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 'acme', 'app', 'app', 'main', ?, 1, ?, ?)",
     ).bind(projectId, userId, installationId, repoId, opts.settingsJson ?? "{}", now, now),
   ]);
 

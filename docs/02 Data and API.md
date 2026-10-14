@@ -51,6 +51,9 @@ CREATE TABLE projects (
   settings_json    TEXT NOT NULL DEFAULT '{}',
   sort_order       INTEGER NOT NULL DEFAULT 0,
   environment_id   TEXT REFERENCES environments(id) ON DELETE SET NULL,
+  slug             TEXT NOT NULL,                                                  -- 11
+  visibility       TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('public','private')), -- 11
+  pinned_at        INTEGER,                                                        -- 11
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL,
   UNIQUE (user_id, repo_id),
@@ -633,7 +636,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 **Rules for every server function**
 
 - Created with `createServerFn`. Input and output are Effect Schemas from `packages/protocol`.
-- An auth middleware runs first. No session, or a user who is not the owner, returns `UNAUTHENTICATED` or `FORBIDDEN`.
+- An auth middleware runs first. No session, or a user who is not the owner, returns `UNAUTHENTICATED` or `FORBIDDEN`. The functions of the `visitor` policy in 11 also run without a session, for public projects only.
 - A function that takes `workspaceId` checks that the workspace belongs to the user, then calls the WorkspaceDO by RPC. It MUST NOT write WorkspaceDO data itself.
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
@@ -655,6 +658,8 @@ All mutations go through TanStack Start server functions. Live updates come only
 | `listBranches` | `{projectId, query?}` | `[{name}]`, at most 100 | `GITHUB_API_ERROR` |
 | `listOpenPullRequests` | `{projectId}` | `[{number, title, headBranch}]` | `GITHUB_API_ERROR` |
 | `setProjectEnvironment` | `{projectId, environmentId}`; `environmentId` null = none | `Project` | `NOT_FOUND` |
+
+Public projects, the profile and pins: `getProfile`, `listProfileProjects`, `getPublicProject`, `setProjectVisibility` and `setProjectPinned` are in 11.
 
 **Environments** (01, Environments)
 

@@ -1,4 +1,11 @@
-import { AGENT_IDS, ATTENTIONS, CHECKS_STATES, PR_STATES, WORKSPACE_STATES } from "@tempo/protocol";
+import {
+  AGENT_IDS,
+  ATTENTIONS,
+  CHECKS_STATES,
+  PROJECT_VISIBILITIES,
+  PR_STATES,
+  WORKSPACE_STATES,
+} from "@tempo/protocol";
 import { sql } from "drizzle-orm";
 import { primaryKey, check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema.ts";
@@ -78,13 +85,18 @@ export const projects = sqliteTable(
     settingsJson: text("settings_json").notNull().default("{}"),
     sortOrder: integer("sort_order").notNull().default(0),
     environmentId: text("environment_id").references(() => environments.id, { onDelete: "set null" }),
+    slug: text("slug").notNull(),
+    visibility: text("visibility", { enum: PROJECT_VISIBILITIES }).notNull().default("private"),
+    pinnedAt: integer("pinned_at"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
   (t) => [
     uniqueIndex("projects_user_repo").on(t.userId, t.repoId),
     uniqueIndex("projects_user_artifact_repo").on(t.userId, t.artifactRepoId),
+    uniqueIndex("projects_user_slug").on(t.userId, sql`lower(${t.slug})`),
     check("projects_provider", sql`${t.provider} IN ('github','artifacts')`),
+    check("projects_visibility", sql`${t.visibility} IN ('public','private')`),
     check(
       "projects_repository",
       sql`(${t.provider} = 'github' AND ${t.installationId} IS NOT NULL AND ${t.repoId} IS NOT NULL) OR (${t.provider} = 'artifacts' AND ${t.artifactRepoId} IS NOT NULL AND ${t.cloneUrl} IS NOT NULL)`,

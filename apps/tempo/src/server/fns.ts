@@ -228,6 +228,26 @@ export const setProjectEnvironment = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setProjectEnvironment">) => data)
   .handler(({ data }) => run("setProjectEnvironment", data));
 
+export const getProfile = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getProfile">) => data)
+  .handler(({ data }) => run("getProfile", data));
+
+export const listProfileProjects = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listProfileProjects">) => data)
+  .handler(({ data }) => run("listProfileProjects", data));
+
+export const getPublicProject = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getPublicProject">) => data)
+  .handler(({ data }) => run("getPublicProject", data));
+
+export const setProjectVisibility = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setProjectVisibility">) => data)
+  .handler(({ data }) => run("setProjectVisibility", data));
+
+export const setProjectPinned = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setProjectPinned">) => data)
+  .handler(({ data }) => run("setProjectPinned", data));
+
 export const listEnvironments = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listEnvironments">) => data)
   .handler(({ data }) => run("listEnvironments", data));

@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { Project } from "@tempo/protocol";
 import {
@@ -10,8 +11,10 @@ import {
   PinIcon,
   SearchIcon,
   SettingsIcon,
+  UserIcon,
 } from "lucide-react";
 import { useMemo } from "react";
+import { sessionQueryOptions } from "~/ui/auth";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/ui/components/ui/collapsible";
@@ -55,6 +58,7 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
   const phone = variant === "phone";
   const hub = useHub();
   const projects = useProjects();
+  const username = useQuery(sessionQueryOptions).data?.user.username ?? null;
   const [sort, setSort] = useLocalStorage(SORT_KEY, DEFAULT_SORT, isSortMode);
   const [collapsed, setCollapsed] = useLocalStorage(COLLAPSED_KEY, NO_COLLAPSED, isStringList);
 
@@ -158,6 +162,19 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
             Repositories
           </Link>
         </Button>
+        {username && (
+          <Button
+            asChild
+            size="sm"
+            variant="ghost"
+            className="h-9 w-full justify-start gap-3 text-sm font-normal"
+          >
+            <Link to="/$username" params={{ username }}>
+              <UserIcon />
+              Profile
+            </Link>
+          </Button>
+        )}
         <Button
           asChild
           size="sm"

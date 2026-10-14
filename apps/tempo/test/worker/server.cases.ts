@@ -204,9 +204,9 @@ const insertProjectRow = async (
   const id = newId();
   const now = Date.now();
   await env.DB.prepare(
-    "INSERT INTO projects (id, user_id, installation_id, repo_id, repo_owner, repo_name, default_branch, settings_json, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 'acme', ?, 'main', '{}', ?, ?, ?)",
+    "INSERT INTO projects (id, user_id, installation_id, repo_id, repo_owner, repo_name, slug, default_branch, settings_json, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 'acme', ?, ?, 'main', '{}', ?, ?, ?)",
   )
-    .bind(id, userId, installationId, repoId, name, sortOrder, now, now)
+    .bind(id, userId, installationId, repoId, name, name, sortOrder, now, now)
     .run();
 
   return id;
@@ -536,6 +536,11 @@ describe("projects and GitHub (02, Projects and GitHub)", () => {
       settings: {},
       sortOrder: 1,
       environmentId: null,
+      // 11: a user from before usernames has none until their next sign-in.
+      username: null,
+      slug: "app",
+      visibility: "private",
+      pinned: false,
     });
     expect(list.map((p) => p["id"])).not.toContain(other.projectId);
   });

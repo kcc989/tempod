@@ -780,6 +780,12 @@ export const CONFIRM_TEXT = {
     confirmLabel: "Stop and close",
     destructive: true,
   }),
+  makePublic: (): ConfirmOptions => ({
+    title: "Make this repository public?",
+    description:
+      "Anyone can read this repository's code, commits and branches without signing in, including commit author emails. Issues, pull requests and checks stay private.",
+    confirmLabel: "Make public",
+  }),
   resetPreviewAccess: (): ConfirmOptions => ({
     title: "Reset preview access?",
     description: "Open previews will stop working. Open them again from Tempo.",

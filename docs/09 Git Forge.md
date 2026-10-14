@@ -1,6 +1,6 @@
 # 09 Git Forge
 
-The owner requested Artifacts-hosted Git repositories, repository browsing, pull requests and issue tracking in Tempo. This tab extends tabs 00–08 for that scope and takes precedence over their GitHub-only repository assumptions. Tempo remains an owner-operated deployment; GitHub sign-in and optional GitHub-linked projects remain supported. It is not yet a public, multi-user forge.
+The owner requested Artifacts-hosted Git repositories, repository browsing, pull requests and issue tracking in Tempo. This tab extends tabs 00–08 for that scope and takes precedence over their GitHub-only repository assumptions. Tempo remains an owner-operated deployment; GitHub sign-in and optional GitHub-linked projects remain supported. It is not yet a public, multi-user forge. The owner can make a project's code public (11).
 
 ## Storage and identity
 

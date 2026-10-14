@@ -1,14 +1,15 @@
+use super::profile_model;
 use super::tokens::{Token, color};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Disableable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Selectable as _, h_flex, v_flex};
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, EventEmitter, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _,
     Subscription, Window, div,
 };
-use tempo_client::Client;
+use tempo_client::{ApiError, Client};
 use tempo_protocol::{self as p, api};
 
 pub enum RepositoryEvent {
@@ -70,6 +71,8 @@ pub struct RepositoryView {
     loading: bool,
     projects_loading: bool,
     pending: bool,
+    /// 04, Dialogs: `Make public` waits for this confirmation.
+    confirm_public: bool,
     error: Option<String>,
     generation: u64,
     projects_generation: u64,
@@ -147,6 +150,7 @@ impl RepositoryView {
             loading: false,
             projects_loading: false,
             pending: false,
+            confirm_public: false,
             error: None,
             generation: 0,
             projects_generation: 0,
@@ -202,6 +206,146 @@ impl RepositoryView {
         .detach();
     }
 
+    /// 11: visibility and pins change the project row; the hub list refreshes with it.
+    fn save_project(
+        &mut self,
+        request: impl std::future::Future<Output = Result<p::Project, ApiError>> + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.pending = true;
+        self.error = None;
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.pending = false;
+                match result {
+                    Ok(project) => {
+                        if this.project.as_ref().is_some_and(|p| p.id == project.id) {
+                            this.project = Some(project.clone());
+                        }
+                        if let Some(row) = this.projects.iter_mut().find(|p| p.id == project.id) {
+                            *row = project;
+                        }
+                        this.refresh_projects(cx);
+                    }
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// 04, Dialogs: `Public` first asks to confirm.
+    fn ask_public(&mut self, cx: &mut Context<Self>) {
+        self.confirm_public = true;
+        cx.notify();
+    }
+
+    fn set_visibility(&mut self, visibility: p::ProjectVisibility, cx: &mut Context<Self>) {
+        let Some(project) = &self.project else {
+            return;
+        };
+        if self.pending {
+            return;
+        }
+        self.confirm_public = false;
+        let request = self
+            .client
+            .call::<api::SetProjectVisibility>(p::SetProjectVisibilityIn {
+                project_id: project.id.clone(),
+                visibility,
+            });
+        self.save_project(request, cx);
+    }
+
+    fn set_pinned(&mut self, pinned: bool, cx: &mut Context<Self>) {
+        let Some(project) = &self.project else {
+            return;
+        };
+        if self.pending {
+            return;
+        }
+        let request = self
+            .client
+            .call::<api::SetProjectPinned>(p::SetProjectPinnedIn {
+                project_id: project.id.clone(),
+                pinned,
+            });
+        self.save_project(request, cx);
+    }
+
+    /// 04, Public profile: the visibility choice, Pin and Public page in the repository header.
+    fn render_visibility(&self, project: &p::Project, cx: &mut Context<Self>) -> AnyElement {
+        let visibility = profile_model::visibility(project);
+        let public = visibility == p::ProjectVisibility::Public;
+        let pinned = profile_model::is_pinned(project);
+        let page = profile_model::public_page_url(&self.client.server().origin(), project);
+        if self.confirm_public {
+            return v_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                        .child("Make this repository public?"),
+                )
+                .child(profile_model::MAKE_PUBLIC_CONFIRM)
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(
+                            Button::new("confirm-public")
+                                .primary()
+                                .label("Make public")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_visibility(p::ProjectVisibility::Public, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("cancel-public")
+                                .label("Cancel")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.confirm_public = false;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .into_any_element();
+        }
+        h_flex()
+            .gap_2()
+            .child(
+                Button::new("visibility-private")
+                    .label("Private")
+                    .selected(!public)
+                    .disabled(self.pending)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.set_visibility(p::ProjectVisibility::Private, cx)
+                    })),
+            )
+            .child(
+                Button::new("visibility-public")
+                    .label("Public")
+                    .selected(public)
+                    .disabled(self.pending || public)
+                    .on_click(cx.listener(|this, _, _, cx| this.ask_public(cx))),
+            )
+            .children(public.then(|| {
+                Button::new("pin-project")
+                    .label(if pinned { "Unpin" } else { "Pin" })
+                    .disabled(self.pending)
+                    .on_click(cx.listener(move |this, _, _, cx| this.set_pinned(!pinned, cx)))
+            }))
+            .children(page.map(|url| {
+                Button::new("public-page")
+                    .label("Public page")
+                    .on_click(move |_, _, cx| cx.open_url(&url))
+            }))
+            .into_any_element()
+    }
+
     fn refresh_current(&mut self, cx: &mut Context<Self>) {
         self.refresh_projects(cx);
         if let Some(pr) = &self.pull_request {
@@ -230,6 +374,7 @@ impl RepositoryView {
         self.add_mode = None;
         self.pr_form = false;
         self.editing_pr = false;
+        self.confirm_public = false;
         self.error = None;
         self.loading = false;
         self.inputs.reference.update(cx, |input, cx| {
@@ -1636,6 +1781,12 @@ impl RepositoryView {
             return v_flex()
                 .gap_3()
                 .child(format!("{}/{}", project.owner, project.name))
+                .child(self.render_visibility(&project, cx))
+                .children(
+                    self.error
+                        .clone()
+                        .map(|error| div().text_color(color(Token::Destructive, cx)).child(error)),
+                )
                 .child("This repository is hosted on GitHub.")
                 .child(
                     Button::new("open-github-repository")
@@ -1675,9 +1826,11 @@ impl RepositoryView {
             }
         };
         let base_branch = project.default_branch.clone();
+        let visibility = self.render_visibility(&project, cx);
         v_flex()
             .gap_3()
             .child(div().text_xl().child(project.name))
+            .child(visibility)
             .children(
                 self.detail
                     .as_ref()
@@ -1918,6 +2071,9 @@ mod tests {
             let worker_linked = linked.clone();
             let worker = std::thread::spawn(move || {
                 let mut pr = pull_request();
+                let mut listed = json!(project());
+                listed["username"] = json!("octo");
+                listed["slug"] = json!("repo");
                 let mut workspace_state = if sleeping {
                     p::WorkspaceState::Sleeping
                 } else {
@@ -1971,7 +2127,18 @@ mod tests {
                         "author":{"name":"Owner","email":"owner@example.com"},"committer":{"name":"Owner","email":"owner@example.com"},
                         "parents":[],"authoredAt":1,"committedAt":1});
                     let (status, body) = match path.rsplit('/').next().unwrap() {
-                        "listProjects" => (200, json!([project()])),
+                        "listProjects" => (200, json!([listed])),
+                        "setProjectVisibility" => {
+                            listed["visibility"] = input["visibility"].clone();
+                            if input["visibility"] == "private" {
+                                listed["pinned"] = json!(false);
+                            }
+                            (200, listed.clone())
+                        }
+                        "setProjectPinned" => {
+                            listed["pinned"] = input["pinned"].clone();
+                            (200, listed.clone())
+                        }
                         "getRepository" if empty && input.get("ref").is_some() => {
                             (404, json!({"code":"NOT_FOUND","message":"Ref not found."}))
                         }
@@ -2156,6 +2323,83 @@ mod tests {
             assert!(Instant::now() < deadline, "repository RPC did not finish");
             std::thread::yield_now();
         }
+    }
+
+    #[gpui_kit::test]
+    fn making_a_repository_public_confirms_then_offers_pin_and_public_page(
+        cx: &mut TestAppContext,
+    ) {
+        let server = LocalServer::new(false, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let origin = client.server().origin();
+        let (window, view) = mount(cx, client);
+        settle(cx, &view);
+        let listed = view.read_with(cx, |view, _| view.projects[0].clone());
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.select_project(listed, window, cx))
+        })
+        .unwrap();
+        settle(cx, &view);
+        view.update(cx, |view, cx| view.ask_public(cx));
+        let calls = |server: &LocalServer| {
+            server
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(path, _)| path.contains("setProject"))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            calls(&server).is_empty(),
+            "Public waits for the confirmation"
+        );
+        view.update(cx, |view, cx| {
+            assert!(view.confirm_public);
+            view.set_visibility(p::ProjectVisibility::Public, cx);
+        });
+        settle(cx, &view);
+        view.update(cx, |view, cx| {
+            let project = view.project.as_ref().unwrap();
+            assert!(!view.confirm_public);
+            assert_eq!(project.visibility, Some(p::ProjectVisibility::Public));
+            assert_eq!(
+                profile_model::public_page_url(&origin, project),
+                Some(format!("{origin}/octo/repo"))
+            );
+            view.set_pinned(true, cx);
+        });
+        settle(cx, &view);
+        view.update(cx, |view, cx| {
+            assert_eq!(view.project.as_ref().unwrap().pinned, Some(true));
+            view.set_visibility(p::ProjectVisibility::Private, cx);
+        });
+        settle(cx, &view);
+        assert_eq!(
+            view.read_with(cx, |view, _| view.project.as_ref().unwrap().pinned),
+            Some(false)
+        );
+        assert_eq!(
+            calls(&server),
+            vec![
+                (
+                    "/api/v1/rpc/setProjectVisibility".to_string(),
+                    json!({"projectId":"project-artifacts","visibility":"public"})
+                ),
+                (
+                    "/api/v1/rpc/setProjectPinned".to_string(),
+                    json!({"projectId":"project-artifacts","pinned":true})
+                ),
+                (
+                    "/api/v1/rpc/setProjectVisibility".to_string(),
+                    json!({"projectId":"project-artifacts","visibility":"private"})
+                ),
+            ]
+        );
     }
 
     #[gpui_kit::test]

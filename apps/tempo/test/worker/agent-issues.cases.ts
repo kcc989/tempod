@@ -76,7 +76,8 @@ const makeRun = async (w: Fixture, access: "read-only" | "write") =>
     return id;
   });
 
-describe("project-scoped agent issue tools", () => {
+// Each case drives a full workspace; the CI runner needs more than the 5 s default (docs/CI.md).
+describe("project-scoped agent issue tools", { timeout: 30_000 }, () => {
   it.concurrent("creates, reads, edits, comments and deletes through tool frames, preserving labels and numbering", async ({
     expect,
   }) => {
