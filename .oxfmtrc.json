@@ -5,6 +5,8 @@
   "trailingComma": "all",
   "ignorePatterns": [
     "docs/**",
+    "evals/design/**/design-eval.ts",
+    "evals/design/calibration/**",
     "**/routeTree.gen.ts",
     "**/migrations/**",
     "**/worker-runtime.d.ts",

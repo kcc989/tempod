@@ -40,9 +40,15 @@ const Gate = Schema.Literals(["ai", "async", "collection", "editing", "empty", "
 const CaseFile = Schema.Struct({
   context: Schema.String,
   images: Schema.Array(Schema.String),
-  interactions: Schema.optional(Schema.Array(Schema.Struct({ action: Schema.String, before: Schema.String, after: Schema.String }))),
+  interactions: Schema.optional(
+    Schema.Array(Schema.Struct({ action: Schema.String, before: Schema.String, after: Schema.String })),
+  ),
   related: Schema.optional(
-    Schema.Struct({ images: Schema.Array(Schema.String), image_legend: Schema.Array(Schema.String), page_text: Schema.optional(Schema.String) }),
+    Schema.Struct({
+      images: Schema.Array(Schema.String),
+      image_legend: Schema.Array(Schema.String),
+      page_text: Schema.optional(Schema.String),
+    }),
   ),
   known: Schema.Record(Gate, Schema.Boolean),
   knownSource: Schema.String,
@@ -61,17 +67,31 @@ const Context = Schema.Struct({
   page_text: Schema.optional(Schema.String),
 });
 
-const Measured = Schema.Struct({ checks: Schema.Record(Schema.String, Schema.Struct({ pass: Schema.NullOr(Schema.Boolean) })) });
+const Measured = Schema.Struct({
+  checks: Schema.Record(Schema.String, Schema.Struct({ pass: Schema.NullOr(Schema.Boolean) })),
+});
 
 const Probabilities = Schema.optional(Schema.Record(Schema.String, Schema.Number));
 
 const ClefAnswer = Schema.Union([
   Schema.Struct({ type: Schema.Literal("noul"), noul: Schema.Number }),
-  Schema.Struct({ type: Schema.Literal("score"), score: Schema.Number, confidence: Schema.optional(Schema.Number), probabilities: Probabilities }),
-  Schema.Struct({ type: Schema.Literal("choice"), choice: Schema.String, confidence: Schema.optional(Schema.Number), probabilities: Probabilities }),
+  Schema.Struct({
+    type: Schema.Literal("score"),
+    score: Schema.Number,
+    confidence: Schema.optional(Schema.Number),
+    probabilities: Probabilities,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("choice"),
+    choice: Schema.String,
+    confidence: Schema.optional(Schema.Number),
+    probabilities: Probabilities,
+  }),
 ]);
 
-const ClefResponse = Schema.Struct({ result: Schema.Struct({ answers: Schema.Record(Schema.String, ClefAnswer) }) });
+const ClefResponse = Schema.Struct({
+  result: Schema.Struct({ answers: Schema.Record(Schema.String, ClefAnswer) }),
+});
 
 const SavedAnswers = Schema.Struct({ response: ClefResponse });
 
@@ -106,7 +126,12 @@ const measuredPath = join(dir, "measured.json");
 
 if (!existsSync(measuredPath)) throw new Error("Run evals/design/measure.py on this case first.");
 
-const measured = new Map(Object.entries(Schema.decodeUnknownSync(Measured)(readJson(measuredPath)).checks).map(([k, v]) => [k, v.pass]));
+const measured = new Map(
+  Object.entries(Schema.decodeUnknownSync(Measured)(readJson(measuredPath)).checks).map(([k, v]) => [
+    k,
+    v.pass,
+  ]),
+);
 
 const measuredPass = (id: string) => measured.get(id) === true;
 
@@ -128,7 +153,18 @@ const variant = (name: string, quality: number | null) => {
   if (!existsSync(join(dir, target))) {
     mkdirSync(join(dir, "v3", "replicates", `q${quality}`), { recursive: true });
 
-    const run = Bun.spawnSync(["sips", "-s", "format", "jpeg", "-s", "formatOptions", String(quality), join(dir, name), "--out", join(dir, target)]);
+    const run = Bun.spawnSync([
+      "sips",
+      "-s",
+      "format",
+      "jpeg",
+      "-s",
+      "formatOptions",
+      String(quality),
+      join(dir, name),
+      "--out",
+      join(dir, target),
+    ]);
 
     if (run.exitCode !== 0) throw new Error(`sips failed for ${name}`);
   }
@@ -160,7 +196,11 @@ const captureFor = (quality: number | null): Capture => {
   return {
     context: { ...context, image_legend: [...context.image_legend] },
     images: file.images.map(img),
-    interactions: file.interactions?.map((i) => ({ action: i.action, before: img(i.before), after: img(i.after) })),
+    interactions: file.interactions?.map((i) => ({
+      action: i.action,
+      before: img(i.before),
+      after: img(i.after),
+    })),
     related: file.related && {
       images: file.related.images.map(img),
       image_legend: [...file.related.image_legend],
@@ -175,11 +215,15 @@ const judged = findJudgmentWords({ ...context, image_legend: [...context.image_l
 
 if (judged.length) throw new Error(`context.json contains judgment words: ${judged.join(", ")}`);
 
-const everyQuestion = new Map<string, Question>(Object.entries({ ...spec.screen, ...spec.visual, ...spec.slop }));
+const everyQuestion = new Map<string, Question>(
+  Object.entries({ ...spec.screen, ...spec.visual, ...spec.slop }),
+);
 
 const notScored = new Set([...policy.notSent.coverage, ...policy.notSent.replacedByMeasured]);
 
-const allQuestions = new Map([...everyQuestion].filter(([id]) => !notScored.has(id) && !id.startsWith("applies_")));
+const allQuestions = new Map(
+  [...everyQuestion].filter(([id]) => !notScored.has(id) && !id.startsWith("applies_")),
+);
 
 const interactionQuestions = new Map<string, Question>(Object.entries(spec.interaction));
 
@@ -193,7 +237,8 @@ if (unassigned.length || new Set(assigned).size !== assigned.length) {
   throw new Error(`Area map must cover each scored question once: ${unassigned.join(", ")}`);
 }
 
-const pick = (ids: string[], from: Map<string, Question>) => Object.fromEntries(ids.flatMap((id) => (from.has(id) ? [[id, from.get(id)]] : [])));
+const pick = (ids: string[], from: Map<string, Question>) =>
+  Object.fromEntries(ids.flatMap((id) => (from.has(id) ? [[id, from.get(id)]] : [])));
 
 const keyboard = (action: string) => action.startsWith(policy.keyboardActions.prefix);
 
@@ -208,8 +253,14 @@ const jobsFor = (capture: Capture): Job[] => {
   const requests = buildRequests(capture);
 
   return [
-    ...AREAS.map((a) => ({ name: a, body: { ...requests.screen, questions: pick(areaQuestions(a), allQuestions) } })),
-    { name: "coverage", body: { ...requests.screen, questions: pick(policy.notSent.coverage, everyQuestion) } },
+    ...AREAS.map((a) => ({
+      name: a,
+      body: { ...requests.screen, questions: pick(areaQuestions(a), allQuestions) },
+    })),
+    {
+      name: "coverage",
+      body: { ...requests.screen, questions: pick(policy.notSent.coverage, everyQuestion) },
+    },
     ...requests.interactions.map((body, i) => ({
       name: `interaction-${i + 1}`,
       body: keyboard(file.interactions?.[i]?.action ?? "")
@@ -225,11 +276,14 @@ async function send(body: Job["body"]) {
 
   if (!account || !token) throw new Error("Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.");
 
-  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/clef`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/clef`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 
   return { status: res.status, text: await res.text() };
 }
@@ -243,7 +297,8 @@ const parseAnswers = (text: string) => {
 };
 
 async function ask(path: string, body: Job["body"]): Promise<AnswerSet | null> {
-  if (reuse && existsSync(path)) return copyAnswers(Schema.decodeUnknownSync(SavedAnswers)(readJson(path)).response.result.answers);
+  if (reuse && existsSync(path))
+    return copyAnswers(Schema.decodeUnknownSync(SavedAnswers)(readJson(path)).response.result.answers);
 
   const statuses: number[] = [];
 
@@ -258,7 +313,12 @@ async function ask(path: string, body: Job["body"]): Promise<AnswerSet | null> {
     const answers = status === 200 ? parseAnswers(text) : null;
 
     if (answers) {
-      const saved = { status, attemptStatuses: statuses, timestamp: new Date().toISOString(), response: JSON.parse(text) };
+      const saved = {
+        status,
+        attemptStatuses: statuses,
+        timestamp: new Date().toISOString(),
+        response: JSON.parse(text),
+      };
 
       writeFileSync(path, JSON.stringify(saved, null, 2));
 
@@ -266,7 +326,10 @@ async function ask(path: string, body: Job["body"]): Promise<AnswerSet | null> {
     }
 
     if (attempt === 1) {
-      writeFileSync(path.replace(".answers.json", ".error.json"), JSON.stringify({ attemptStatuses: statuses, response: text }, null, 2));
+      writeFileSync(
+        path.replace(".answers.json", ".error.json"),
+        JSON.stringify({ attemptStatuses: statuses, response: text }, null, 2),
+      );
       console.error(`${basename(path)}: failed after retry (${statuses.join(", ")})`);
     }
   }
@@ -278,13 +341,19 @@ const replicates = await Promise.all(
   qualities.map(async (quality, r) => {
     const capture = captureFor(quality);
 
-    const results = await Promise.all(jobsFor(capture).map(async (j) => [j.name, await ask(join(out, `${j.name}.r${r}.answers.json`), j.body)] as const));
+    const results = await Promise.all(
+      jobsFor(capture).map(
+        async (j) => [j.name, await ask(join(out, `${j.name}.r${r}.answers.json`), j.body)] as const,
+      ),
+    );
 
     return { capture, got: new Map<string, AnswerSet | null>(results) };
   }),
 );
 
-const failed = replicates.flatMap((rep, r) => [...rep.got].flatMap(([name, a]) => (a ? [] : [`${name} (replicate ${r})`])));
+const failed = replicates.flatMap((rep, r) =>
+  [...rep.got].flatMap(([name, a]) => (a ? [] : [`${name} (replicate ${r})`])),
+);
 
 const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
 
@@ -309,17 +378,26 @@ const average = (answers: Answer[]): Answer | undefined => {
 
   const confidence = mean(answers.flatMap((a) => (a.type === "noul" ? [] : [a.confidence ?? 1])));
 
-  const probabilities = averageProbabilities(answers.map((a) => (a.type === "noul" ? undefined : a.probabilities)));
+  const probabilities = averageProbabilities(
+    answers.map((a) => (a.type === "noul" ? undefined : a.probabilities)),
+  );
 
   if (first.type === "score") {
-    return { type: "score", score: mean(answers.flatMap((a) => (a.type === "score" ? [a.score] : []))), confidence, probabilities };
+    return {
+      type: "score",
+      score: mean(answers.flatMap((a) => (a.type === "score" ? [a.score] : []))),
+      confidence,
+      probabilities,
+    };
   }
 
   const votes = answers.flatMap((a) => (a.type === "choice" ? [a.choice] : []));
 
   const ranked = probabilities
     ? Object.entries(probabilities).sort((a, b) => b[1] - a[1])
-    : [...new Set(votes)].map((c) => [c, votes.filter((v) => v === c).length] as const).sort((a, b) => b[1] - a[1]);
+    : [...new Set(votes)]
+        .map((c) => [c, votes.filter((v) => v === c).length] as const)
+        .sort((a, b) => b[1] - a[1]);
 
   return { type: "choice", choice: ranked[0]?.[0] ?? first.choice, confidence, probabilities };
 };
@@ -347,7 +425,11 @@ for (const name of replicates[0]?.got.keys() ?? []) {
   );
 }
 
-const answersFrom = (got: Map<string, AnswerSet | null | undefined>, ids: string[], withUsability: boolean): Answers => {
+const answersFrom = (
+  got: Map<string, AnswerSet | null | undefined>,
+  ids: string[],
+  withUsability: boolean,
+): Answers => {
   const answers: Answers = { screen: {}, visual: {}, slop: {}, interactions: [] };
 
   for (const area of AREAS) {
@@ -362,7 +444,9 @@ const answersFrom = (got: Map<string, AnswerSet | null | undefined>, ids: string
 
   if (!withUsability) return answers;
 
-  answers.interactions = [...got].flatMap(([name, set]) => (name.startsWith("interaction-") && set ? [set] : []));
+  answers.interactions = [...got].flatMap(([name, set]) =>
+    name.startsWith("interaction-") && set ? [set] : [],
+  );
   answers.consistency = got.get("consistency") ?? undefined;
 
   return answers;
@@ -434,7 +518,8 @@ function normalized(id: string, a: Answer) {
     return a.score / ((Array.isArray(criteria) ? criteria.length : 2) - 1);
   }
 
-  const choices = id === "feedback_focus_visible" ? FOCUS_CHOICES : new Map(Object.entries(ruleOf(id)?.choices ?? {}));
+  const choices =
+    id === "feedback_focus_visible" ? FOCUS_CHOICES : new Map(Object.entries(ruleOf(id)?.choices ?? {}));
 
   return choices.get(a.choice) ?? null;
 }
@@ -472,7 +557,9 @@ function answerFloor(sets: readonly (readonly [string, AnswerSet | null | undefi
   return { low, uncertain: unsure };
 }
 
-const usabilitySets = [...merged].flatMap(([name, set]) => (name.startsWith("interaction-") || name === "consistency" ? [[name, set] as const] : []));
+const usabilitySets = [...merged].flatMap(([name, set]) =>
+  name.startsWith("interaction-") || name === "consistency" ? [[name, set] as const] : [],
+);
 
 const areaReports = new Map(
   AREAS.map((area) => {
@@ -486,12 +573,16 @@ const areaReports = new Map(
 
     const checks = Object.fromEntries(def.measured.map((m) => [m, measured.get(m) ?? null]));
 
-    const measuredFails = def.measured.flatMap((m) => (measured.get(m) === true ? [] : [`measured ${m}: ${measured.get(m) === false ? "fail" : "missing"}`]));
+    const measuredFails = def.measured.flatMap((m) =>
+      measured.get(m) === true ? [] : [`measured ${m}: ${measured.get(m) === false ? "fail" : "missing"}`],
+    );
 
     const clefMajors = [
       ...clef.blockers,
       ...clef.weakDimensions.map((d) => `dimension ${d} below ${THRESHOLDS.dimensionFloor}`),
-      ...floor.low.flatMap((l) => (l.uncertain ? [] : [`${l.question} = ${l.value} (below ${policy.screenPass.minAnswer.toFixed(2)})`])),
+      ...floor.low.flatMap((l) =>
+        l.uncertain ? [] : [`${l.question} = ${l.value} (below ${policy.screenPass.minAnswer.toFixed(2)})`],
+      ),
     ];
 
     const gatedByClef = def.gate !== "measured";
@@ -503,7 +594,11 @@ const areaReports = new Map(
     const reviewItems = gatedByClef ? floor.uncertain : [];
 
     const status =
-      majors.length || (gatedByClef && clef.score < policy.screenPass.minScore) ? "fail" : missing.length || reviewItems.length ? "review" : "pass";
+      majors.length || (gatedByClef && clef.score < policy.screenPass.minScore)
+        ? "fail"
+        : missing.length || reviewItems.length
+          ? "review"
+          : "pass";
 
     const report = {
       status,
@@ -533,11 +628,15 @@ const screenFloor = answerFloor([
 const statusOf = (a: AreaId) => areaReports.get(a)?.status ?? "fail";
 
 const reasons = [
-  ...(result.score < policy.screenPass.minScore ? [`score ${result.score} < ${policy.screenPass.minScore}`] : []),
+  ...(result.score < policy.screenPass.minScore
+    ? [`score ${result.score} < ${policy.screenPass.minScore}`]
+    : []),
   ...result.blockers.map((b) => `blocker: ${b}`),
   ...result.weakDimensions.map((d) => `weak dimension: ${d}`),
   ...(result.verdict === "review" ? ["verdict is review"] : []),
-  ...screenFloor.low.flatMap((l) => (l.uncertain ? [] : [`answer below ${policy.screenPass.minAnswer.toFixed(2)}: ${l.question} = ${l.value}`])),
+  ...screenFloor.low.flatMap((l) =>
+    l.uncertain ? [] : [`answer below ${policy.screenPass.minAnswer.toFixed(2)}: ${l.question} = ${l.value}`],
+  ),
   ...AREAS.flatMap((a) => (statusOf(a) === "pass" ? [] : [`area ${a}: ${statusOf(a)}`])),
   ...failed.map((n) => `request failed: ${n}`),
 ];
@@ -573,4 +672,14 @@ writeFileSync(join(out, "images.json"), JSON.stringify(Object.fromEntries(imageM
 
 const summary = Object.fromEntries(AREAS.map((a) => [a, statusOf(a)]));
 
-console.log(JSON.stringify({ case: out, score: result.score, scoreSd: Math.round(noise.score.sd * 1000) / 1000, verdict: result.verdict, pass: acceptance.pass, areas: summary, failed }));
+console.log(
+  JSON.stringify({
+    case: out,
+    score: result.score,
+    scoreSd: Math.round(noise.score.sd * 1000) / 1000,
+    verdict: result.verdict,
+    pass: acceptance.pass,
+    areas: summary,
+    failed,
+  }),
+);

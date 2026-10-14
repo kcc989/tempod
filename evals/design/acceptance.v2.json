@@ -13,29 +13,19 @@
   },
   "denoise": {
     "replicates": 4,
-    "jpegQualities": [
-      null,
-      95,
-      90,
-      85
-    ],
+    "jpegQualities": [null, 95, 90, 85],
     "noiseFloor": 0.03,
     "dropRule": "A dimension drops only when after - before < -max(noiseFloor, 2 * sqrt(sdBefore^2 + sdAfter^2)), with sd taken across replicates."
   },
   "keyboardActions": {
     "prefix": "Pressed ",
-    "questions": [
-      "feedback_focus_visible",
-      "feedback_layout_shift"
-    ],
+    "questions": ["feedback_focus_visible", "feedback_layout_shift"],
     "reason": "states_feedback and feedback_selected judge a pressed control; for a key press the feedback is the focus mark."
   },
   "areas": {
     "layout": {
       "gate": "clef+measured",
-      "measured": [
-        "headerOneRow"
-      ],
+      "measured": ["headerOneRow"],
       "questions": [
         "focus_primary_path",
         "focus_content_share",
@@ -69,25 +59,12 @@
     },
     "spacing": {
       "gate": "measured",
-      "measured": [
-        "specRowHeights",
-        "footerLeftAligned",
-        "spacingOnScale",
-        "chatBarInset",
-        "targetSize24px"
-      ],
-      "questions": [
-        "slop_monotonous_spacing",
-        "quality_cramped",
-        "quality_heading_spacing"
-      ]
+      "measured": ["specRowHeights", "footerLeftAligned", "spacingOnScale", "chatBarInset", "targetSize24px"],
+      "questions": ["slop_monotonous_spacing", "quality_cramped", "quality_heading_spacing"]
     },
     "color-depth": {
       "gate": "measured",
-      "measured": [
-        "textContrastAA",
-        "nonTextContrast3"
-      ],
+      "measured": ["textContrastAA", "nonTextContrast3"],
       "questions": [
         "restraint_noise",
         "icons_one_set",
@@ -147,10 +124,7 @@
         "quality_repeated_text",
         "quality_repeated_identifier"
       ],
-      "alsoOwns": [
-        "interaction",
-        "consistency"
-      ]
+      "alsoOwns": ["interaction", "consistency"]
     }
   },
   "measuredToScorerChecks": {
@@ -158,11 +132,7 @@
     "nonTextContrast3": "nonTextContrast3",
     "targetSize24px": "targetSize24px",
     "spacingOnScale": "spacingOnScale",
-    "matchesDesignSystem": [
-      "specRowHeights",
-      "footerLeftAligned",
-      "chatBarInset"
-    ],
+    "matchesDesignSystem": ["specRowHeights", "footerLeftAligned", "chatBarInset"],
     "noHorizontalOverflow": "headerOneRow"
   },
   "coverage": "Coverage questions are asked in their own request and reported; they are never passed to scoreDesign.",
