@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tempo_protocol as p;
 
 pub const LOST_TEXT: &str = "This artifact was lost before it was saved.";
-pub const NO_ARTIFACTS: &str = "No artifacts yet. Agents publish them with publish_artifact.";
+pub const NO_ARTIFACTS: &str = "No artifacts yet. Pages and files that agents publish appear here.";
 pub const SAVING: &str = "Saving";
 
 #[derive(Clone, Debug, PartialEq)]

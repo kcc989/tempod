@@ -125,7 +125,7 @@ describe("Artifacts tab", () => {
   it("shows the empty state", async () => {
     vi.mocked(call).mockResolvedValue([]);
     show(createElement(ArtifactsView, { workspaceId: "w1" }));
-    await screen.findByText("No artifacts yet. Agents publish them with publish_artifact.");
+    await screen.findByText("No artifacts yet. Pages and files that agents publish appear here.");
     expect(call).toHaveBeenCalledWith("listArtifacts", { workspaceId: "w1" });
   });
 

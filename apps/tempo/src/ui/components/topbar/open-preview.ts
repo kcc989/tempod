@@ -17,7 +17,7 @@ export const browserTabs: BrowserTabs = {
   open: (...args) => globalThis.open?.(...args) ?? null,
 };
 
-export const BROWSER_SESSION_ENDED = "Browser session ended.";
+export const BROWSER_SESSION_ENDED = "Browser session ended. Reload checks for a new one.";
 
 /**
  * The tab opens on the click, before `link` returns, so pop-up blockers allow it. It then goes to

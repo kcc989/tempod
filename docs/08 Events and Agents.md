@@ -440,7 +440,7 @@ Web (tab 04) and Mac (tab 07) change in the same milestone.
 | Chat transcript | The run card: handle, name, hook event, decision probability, base agent, access, status and time. While running: Cancel. When done: the result by output kind, then Approve or Send to chat, Open transcript, Dismiss. A `files_changed` warning shows with Revert. |
 | Chat transcript | One quiet line per event that had skipped decisions: each handle with its probability. |
 | Tab bar | Run sessions do not show. Open transcript shows one in a side panel. |
-| Workspace activity | Runs with no origin session |
+| Workspace activity | Runs with no origin session; when there are none: `No agent runs yet. Runs that project hooks start, outside a chat, appear here.` |
 | Composer | `@handle` in a group named `Agents`, and `/agent`.  |
 | Chat transcript | The agent proposal card, with Apply and Reject |
 | Diagnostics → Events | `run.decided` rows show the question from the attachment, the probability and the threshold |

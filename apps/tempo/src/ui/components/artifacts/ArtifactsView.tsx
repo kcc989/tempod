@@ -19,7 +19,7 @@ import { ArtifactIcon } from "./ArtifactIcon";
 import { artifactGroups } from "./artifact-model";
 import { useArtifacts } from "./useArtifacts";
 
-export const NO_ARTIFACTS = "No artifacts yet. Agents publish them with publish_artifact.";
+export const NO_ARTIFACTS = "No artifacts yet. Pages and files that agents publish appear here.";
 
 /** 04 Artifacts tab: one row per artifact, newest version first; older versions in its menu. */
 export function ArtifactsView({ workspaceId }: { workspaceId: string }) {

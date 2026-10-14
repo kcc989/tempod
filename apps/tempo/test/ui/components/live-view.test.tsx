@@ -151,20 +151,20 @@ describe("Live View tab (04, Browser tabs)", () => {
     expect(liveCalls()).toHaveLength(2);
   });
 
-  it("shows Browser session ended. when no session is open", async () => {
+  it("shows the session-ended message when no session is open", async () => {
     vi.mocked(call).mockResolvedValue({ url: null });
     render(element(), { wrapper: environment.Provider });
-    expect(await screen.findByText("Browser session ended.")).toBeTruthy();
+    expect(await screen.findByText("Browser session ended. Reload checks for a new one.")).toBeTruthy();
     expect(frame()).toBeNull();
   });
 
-  it("drops the page and shows Browser session ended. when browserActive turns false", async () => {
+  it("drops the page and shows the session-ended message when browserActive turns false", async () => {
     vi.mocked(call).mockResolvedValue({ url: live("a") });
     const { rerender } = render(element(), { wrapper: environment.Provider });
     await waitFor(() => expect(frame()).not.toBeNull());
     setActive(false);
     rerender(element());
-    expect(screen.getByText("Browser session ended.")).toBeTruthy();
+    expect(screen.getByText("Browser session ended. Reload checks for a new one.")).toBeTruthy();
     expect(frame()).toBeNull();
     expect(document.body.innerHTML).not.toContain(live("a"));
   });
@@ -176,19 +176,19 @@ describe("Live View tab (04, Browser tabs)", () => {
     setActive(false);
     rerender(element());
     await act(async () => pending.resolve({ url: live("late") }));
-    expect(screen.getByText("Browser session ended.")).toBeTruthy();
+    expect(screen.getByText("Browser session ended. Reload checks for a new one.")).toBeTruthy();
     expect(frame()).toBeNull();
   });
 
-  it("stays on Browser session ended. while browserActive is false, on open and on Reload", async () => {
+  it("keeps the session-ended message while browserActive is false, on open and on Reload", async () => {
     vi.mocked(call).mockResolvedValue({ url: live("stale") });
     setActive(false);
     render(element(), { wrapper: environment.Provider });
-    expect(screen.getByText("Browser session ended.")).toBeTruthy();
+    expect(screen.getByText("Browser session ended. Reload checks for a new one.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reload" }));
     await waitFor(() => expect(liveCalls()).toHaveLength(2));
     await act(async () => {});
-    expect(screen.getByText("Browser session ended.")).toBeTruthy();
+    expect(screen.getByText("Browser session ended. Reload checks for a new one.")).toBeTruthy();
     expect(frame()).toBeNull();
   });
 
