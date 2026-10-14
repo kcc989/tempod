@@ -3021,7 +3021,7 @@ impl Render for WorkspaceView {
             .child(
                 h_flex()
                     .bg(color(Token::Panel, cx))
-                    .pl_3()
+                    .pl(gpui_kit::px(12.))
                     .pr_2()
                     .border_b_1()
                     .border_color(color(Token::Border, cx))
