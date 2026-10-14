@@ -28,6 +28,24 @@ pub enum Tool {
     Browser,
 }
 impl Tool {
+    fn group(self) -> Self {
+        match self {
+            Self::Files | Self::Checks => Self::Changes,
+            Self::Setup => Self::Run,
+            _ => self,
+        }
+    }
+    fn icon(self) -> gpui_kit::assets::IconName {
+        use gpui_kit::assets::IconName;
+        match self.group() {
+            Self::Changes => IconName::FileDiff,
+            Self::Run => IconName::Play,
+            Self::Terminal => IconName::Terminal,
+            Self::Browser => IconName::Globe,
+            Self::Guides => IconName::BookOpen,
+            _ => IconName::Boxes,
+        }
+    }
     fn title(self) -> &'static str {
         match self {
             Self::Guides => "Guides",
@@ -43,17 +61,14 @@ impl Tool {
         }
     }
 }
-const TOOLS: [Tool; 10] = [
-    Tool::Guides,
-    Tool::Browser,
-    Tool::Files,
-    Tool::Terminal,
+const TOOLS: [Tool; 7] = [
     Tool::Changes,
-    Tool::Checks,
-    Tool::Artifacts,
+    Tool::Terminal,
     Tool::Activity,
-    Tool::Setup,
     Tool::Run,
+    Tool::Browser,
+    Tool::Guides,
+    Tool::Artifacts,
 ];
 const REVIEW: [Tool; 5] = [
     Tool::Changes,
@@ -79,8 +94,11 @@ pub struct ToolPanel {
     pub(super) info: Entity<super::workspace_info::WorkspaceInfo>,
     guides: Entity<super::guides::GuidePanel>,
     pub info_open: bool,
+    pub shared_header: bool,
     tabs: Vec<Tool>,
     active: Option<Tool>,
+    last_review: Tool,
+    last_process: Tool,
     browser: Option<String>,
     browser_error: Option<String>,
     pub browser_pending: bool,
@@ -161,8 +179,11 @@ impl ToolPanel {
             info,
             guides,
             info_open: true,
-            tabs: vec![Tool::Changes],
-            active: Some(Tool::Changes),
+            shared_header: false,
+            tabs: vec![],
+            active: None,
+            last_review: Tool::Changes,
+            last_process: Tool::Run,
             browser: None,
             browser_error: None,
             browser_pending: false,
@@ -180,12 +201,27 @@ impl ToolPanel {
         }
     }
     fn activate(&mut self, tool: Tool, cx: &mut Context<Self>) {
-        if !self.tabs.contains(&tool) {
-            self.tabs.push(tool);
+        let group = tool.group();
+        if !self.tabs.contains(&group) {
+            self.tabs.push(group);
         }
         self.active = Some(tool);
+        if group == Tool::Changes {
+            self.last_review = tool;
+        }
+        if group == Tool::Run {
+            self.last_process = tool;
+        }
         cx.emit(RevealTools);
         cx.notify();
+    }
+    fn select_group(&mut self, group: Tool, cx: &mut Context<Self>) {
+        let tool = match group {
+            Tool::Changes => self.last_review,
+            Tool::Run => self.last_process,
+            _ => group,
+        };
+        self.select(tool, cx);
     }
     fn select(&mut self, tool: Tool, cx: &mut Context<Self>) {
         self.review.update(cx, |r, cx| {
@@ -289,6 +325,14 @@ impl ToolPanel {
             self.select(Tool::Terminal, cx);
         }
     }
+    pub fn show_launcher(&mut self, cx: &mut Context<Self>) {
+        self.active = None;
+        self.review.update(cx, |review, cx| {
+            review.document_open = false;
+            cx.notify();
+        });
+        cx.notify();
+    }
     pub fn hide_browser(&self) {
         #[cfg(target_os = "macos")]
         if let Some(browser) = &self.native_browser {
@@ -299,8 +343,8 @@ impl ToolPanel {
         self.browser.is_some()
     }
     fn close(&mut self, tool: Tool, cx: &mut Context<Self>) {
-        self.tabs.retain(|t| *t != tool);
-        if self.active == Some(tool) {
+        self.tabs.retain(|t| *t != tool.group());
+        if self.active.map(Tool::group) == Some(tool.group()) {
             self.active = None;
         }
         if tool == Tool::Browser {
@@ -308,6 +352,72 @@ impl ToolPanel {
             self.browser_pending = false;
         }
         cx.notify();
+    }
+    pub fn tab_bar(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let documents = self.review.read(cx).document_tabs();
+        let document_open = self.review.read(cx).document_open;
+        let selected = if document_open {
+            self.tabs.len()
+                + documents
+                    .iter()
+                    .position(|(key, _)| Some(key) == self.review.read(cx).active_document.as_ref())
+                    .unwrap_or(0)
+        } else {
+            self.active
+                .and_then(|tool| self.tabs.iter().position(|t| *t == tool.group()))
+                .unwrap_or(self.tabs.len() + documents.len())
+        };
+        let tab_tools = self.tabs.clone();
+        let doc_keys: Vec<_> = documents.iter().map(|(key, _)| key.clone()).collect();
+        div()
+            .h(gpui_kit::px(40.))
+            .w_full()
+            .bg(color(Token::Muted, cx))
+            .child(
+                TabBar::new("tool-tabs")
+                    .h_full()
+                    .bg(color(Token::Muted, cx))
+                    .selected_index(selected)
+                    .on_click(cx.listener(move |this, ix: &usize, window, cx| {
+                        if let Some(tool) = tab_tools.get(*ix) {
+                            this.select_group(*tool, cx);
+                        } else if let Some(key) = doc_keys.get(ix.saturating_sub(tab_tools.len())) {
+                            this.review
+                                .update(cx, |r, cx| r.select_document(key, window, cx));
+                        } else {
+                            this.show_launcher(cx);
+                        }
+                    }))
+                    .children(self.tabs.clone().into_iter().map(|tool| {
+                        Tab::new().label(tool.title()).suffix(
+                            Button::new(SharedString::from(format!("close-tool-{}", tool.title())))
+                                .ghost()
+                                .small()
+                                .icon(gpui_kit::assets::IconName::X)
+                                .accessibility_label(format!("Close {}", tool.title()))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.close(tool, cx);
+                                })),
+                        )
+                    }))
+                    .children(documents.into_iter().map(|(key, title)| {
+                        Tab::new().label(SharedString::from(title)).suffix(
+                            Button::new(SharedString::from(format!("close-tool-document-{key}")))
+                                .ghost()
+                                .small()
+                                .icon(gpui_kit::assets::IconName::X)
+                                .accessibility_label("Close tool tab")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.review
+                                        .update(cx, |r, cx| r.close_document_key(&key, cx));
+                                })),
+                        )
+                    }))
+                    .child(Tab::new().label("+").aria_label("New tool tab")),
+            )
+            .into_any_element()
     }
     fn browser_content(&self, cx: &mut Context<Self>) -> AnyElement {
         let body = if self.browser_pending {
@@ -352,24 +462,10 @@ impl ToolPanel {
 }
 impl Render for ToolPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let documents = self.review.read(cx).document_tabs();
         let document_open = self.review.read(cx).document_open;
         if document_open || self.active != Some(Tool::Browser) {
             self.hide_browser();
         }
-        let selected = if document_open {
-            self.tabs.len()
-                + documents
-                    .iter()
-                    .position(|(key, _)| Some(key) == self.review.read(cx).active_document.as_ref())
-                    .unwrap_or(0)
-        } else {
-            self.active
-                .and_then(|tool| self.tabs.iter().position(|t| *t == tool))
-                .unwrap_or(self.tabs.len() + documents.len())
-        };
-        let tab_tools = self.tabs.clone();
-        let doc_keys: Vec<_> = documents.iter().map(|(key, _)| key.clone()).collect();
         let content = if document_open {
             self.review.read(cx).document(cx)
         } else if let Some(tool) = self.active {
@@ -390,80 +486,74 @@ impl Render for ToolPanel {
             }
         } else {
             v_flex()
-                .p_6()
-                .gap_2()
-                .child(div().mb_2().child("Open a tool"))
-                .child(
-                    Button::new("open-workspace-info")
-                        .outline()
-                        .label("Workspace info")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.show_info(this.guides.read(cx).active_chat.clone(), cx)
-                        })),
-                )
-                .children(TOOLS.map(|tool| {
-                    Button::new(SharedString::from(format!("open-tool-{}", tool.title())))
-                        .outline()
-                        .label(tool.title())
-                        .on_click(cx.listener(move |this, _, _, cx| this.select(tool, cx)))
-                }))
+                .p_4()
+                .gap_4()
+                .child(div().text_base().child("Tools"))
                 .child(
                     div()
-                        .mt_3()
-                        .text_color(color(Token::MutedForeground, cx))
-                        .child("Browser shows the workspace’s Cloudflare Browser Run live view."),
+                        .grid()
+                        .grid_cols(2)
+                        .gap_2()
+                        .children(TOOLS.map(|tool| {
+                            Button::new(SharedString::from(format!("open-tool-{}", tool.title())))
+                                .ghost()
+                                .small()
+                                .w_full()
+                                .h(gpui_kit::px(36.))
+                                .bg(color(Token::Muted, cx))
+                                .accessibility_label(tool.title())
+                                .child(
+                                    h_flex()
+                                        .w_full()
+                                        .text_sm()
+                                        .font_weight(gpui_kit::FontWeight::NORMAL)
+                                        .gap_2()
+                                        .child(gpui_kit::component::Icon::new(tool.icon()).small())
+                                        .child(div().flex_1().text_left().child(tool.title()))
+                                        .children((tool == Tool::Terminal).then(|| {
+                                            div()
+                                                .px_2()
+                                                .rounded_md()
+                                                .bg(color(Token::SidebarAccent, cx))
+                                                .text_color(color(Token::MutedForeground, cx))
+                                                .child("⌘J")
+                                        })),
+                                )
+                                .on_click(cx.listener(move |this, _, _, cx| this.select(tool, cx)))
+                        })),
                 )
                 .into_any_element()
         };
         v_flex()
             .size_full()
-            .child(
-                TabBar::new("tool-tabs")
-                    .selected_index(selected)
-                    .on_click(cx.listener(move |this, ix: &usize, window, cx| {
-                        if let Some(tool) = tab_tools.get(*ix) {
-                            this.select(*tool, cx);
-                        } else if let Some(key) = doc_keys.get(ix.saturating_sub(tab_tools.len())) {
-                            this.review
-                                .update(cx, |r, cx| r.select_document(key, window, cx));
-                        } else {
-                            this.active = None;
-                            this.review.update(cx, |r, cx| {
-                                r.document_open = false;
-                                cx.notify();
-                            });
-                            cx.notify();
-                        }
-                    }))
-                    .children(self.tabs.clone().into_iter().map(|tool| {
-                        Tab::new().label(tool.title()).suffix(
-                            Button::new(SharedString::from(format!("close-tool-{}", tool.title())))
-                                .ghost()
-                                .small()
-                                .icon(gpui_kit::assets::IconName::X)
-                                .accessibility_label(format!("Close {}", tool.title()))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.close(tool, cx);
-                                })),
+            .children((!self.shared_header).then(|| self.tab_bar(cx)))
+            .children((!document_open).then(|| {
+                let sections: Vec<Tool> = match self.active.map(Tool::group) {
+                    Some(Tool::Changes) => vec![Tool::Changes, Tool::Files, Tool::Checks],
+                    Some(Tool::Run) => vec![Tool::Setup, Tool::Run],
+                    _ => vec![],
+                };
+                let selected = sections
+                    .iter()
+                    .position(|tool| Some(*tool) == self.active)
+                    .unwrap_or(0);
+                let choices = sections.clone();
+                div().px_3().children((!sections.is_empty()).then(|| {
+                    TabBar::new("tool-sections")
+                        .underline()
+                        .selected_index(selected)
+                        .on_click(cx.listener(move |this, ix: &usize, _, cx| {
+                            if let Some(tool) = choices.get(*ix) {
+                                this.select(*tool, cx);
+                            }
+                        }))
+                        .children(
+                            sections
+                                .into_iter()
+                                .map(|tool| Tab::new().label(tool.title())),
                         )
-                    }))
-                    .children(documents.into_iter().map(|(key, title)| {
-                        Tab::new().label(SharedString::from(title)).suffix(
-                            Button::new(SharedString::from(format!("close-tool-document-{key}")))
-                                .ghost()
-                                .small()
-                                .icon(gpui_kit::assets::IconName::X)
-                                .accessibility_label("Close tool tab")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.review
-                                        .update(cx, |r, cx| r.close_document_key(&key, cx));
-                                })),
-                        )
-                    }))
-                    .child(Tab::new().label("+").aria_label("New tool tab")),
-            )
+                }))
+            }))
             .child(div().flex_1().min_h_0().child(content))
             .into_any_element()
     }

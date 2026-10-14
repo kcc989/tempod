@@ -1,3 +1,4 @@
+import { SharedHeaderRegion, useAppHeader } from "~/ui/components/shell/AppHeader";
 import type { WorkspaceSummary } from "@tempo/protocol";
 import { CopyIcon, GitBranchIcon, PanelRightIcon } from "lucide-react";
 import { useState } from "react";
@@ -40,18 +41,22 @@ export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
   useGitShortcuts(workspaceId, view, actions, variant === "desktop");
 
   if (!view) {
-    return (
+    const loading = (
       <header aria-busy="true" className="flex h-10 shrink-0 items-center gap-2 border-b bg-card px-3">
         <Skeleton className="h-4 w-40" />
         <Skeleton className="ml-auto h-5 w-24 rounded-full" />
       </header>
     );
+
+    return variant === "phone" ? loading : <SharedHeaderRegion region="center">{loading}</SharedHeaderRegion>;
   }
 
   return variant === "phone" ? (
     <PhoneTopBar view={view} actions={actions} />
   ) : (
-    <DesktopTopBar view={view} actions={actions} />
+    <SharedHeaderRegion region="center">
+      <DesktopTopBar view={view} actions={actions} />
+    </SharedHeaderRegion>
   );
 }
 
@@ -75,10 +80,16 @@ function pillFor({ w, d }: WorkspaceView) {
 
 function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: WorkspaceActions }) {
   const { w, d } = view;
+  const sharedHeader = useAppHeader();
   const [renamingTitle, setRenamingTitle] = useState(false);
 
   return (
-    <header className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-card px-2 py-1">
+    <header
+      className={cn(
+        "flex min-h-10 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1",
+        sharedHeader ? "bg-transparent" : "border-b bg-card",
+      )}
+    >
       <div className="flex min-w-0 shrink flex-wrap items-center gap-1.5">
         <EditableTitle
           title={w.title}

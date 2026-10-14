@@ -1,3 +1,4 @@
+import { useAppHeader } from "~/ui/components/shell/AppHeader";
 import { Match } from "effect";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeftIcon } from "lucide-react";
@@ -84,6 +85,7 @@ function useWorkspaceActions(workspaceId: string, projectId: string | undefined)
 }
 
 function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
+  const setToolWidth = useAppHeader()?.setToolWidth;
   const layout = useLayout();
 
   const quiet = useWorkspaceSelector(workspaceId, (s) => {
@@ -101,6 +103,11 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
   const infoOpen = useWorkspaceUiSelector(workspaceId, (ui) => ui.infoOpen);
   const rightOpen = isRightOpen(layout, { rightQuiet: quiet, rightPinned: pinned, infoOpen });
   const toolsOpen = rightOpen;
+  useEffect(() => {
+    if (!toolsOpen) setToolWidth?.(0);
+
+    return () => setToolWidth?.(0);
+  }, [toolsOpen, setToolWidth]);
   const chatStyle = { minWidth: 0, "--chat-gutter": rightOpen ? "12px" : "clamp(12px, 2vw, 24px)" };
 
   const horizontal = useDefaultLayout({
@@ -127,11 +134,13 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
                 <ChatTabs
                   workspaceId={workspaceId}
                   variant="desktop"
-                  aside={infoOpen ? (
-                    <aside aria-label="Workspace info" className="workspace-info-rail min-h-0 p-3">
-                      <WorkspaceInfo workspaceId={workspaceId} />
-                    </aside>
-                  ) : undefined}
+                  aside={
+                    infoOpen ? (
+                      <aside aria-label="Workspace info" className="workspace-info-rail min-h-0 p-3">
+                        <WorkspaceInfo workspaceId={workspaceId} />
+                      </aside>
+                    ) : undefined
+                  }
                 />
               </div>
             </section>
@@ -139,7 +148,12 @@ function DesktopWorkspace({ workspaceId }: { workspaceId: string }) {
           {toolsOpen && (
             <>
               <ResizableHandle aria-label="Resize right side" />
-              <ResizablePanel id="right" defaultSize="50%" minSize={280}>
+              <ResizablePanel
+                id="right"
+                defaultSize="50%"
+                minSize={280}
+                onResize={(size) => setToolWidth?.(size.inPixels)}
+              >
                 <RightSide workspaceId={workspaceId} />
               </ResizablePanel>
             </>

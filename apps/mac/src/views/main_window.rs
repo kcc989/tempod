@@ -1,5 +1,5 @@
 //! The main window (04, Layout; 07, Window layout): `Root` (from `gpui_kit::open_window`) with a
-//! `Resizable` panes: sidebar | chat | full-height tool area, with native window controls above the sidebar.
+//! `Resizable` panes below a shared header: sidebar | chat | full-height tools.
 use super::chat::{TranscriptRow, TranscriptView};
 use super::composer::Composer;
 use super::sidebar::{self, SidebarSection, WorkspaceSidebar};
@@ -7,10 +7,12 @@ use super::tokens::{Token, color};
 use super::top_bar::TopBar;
 use crate::actions::*;
 use crate::keymap::WORKSPACE;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::resizable::{h_resizable, resizable_panel, v_resizable};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Disableable as _, Theme, TitleBar, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{
+    Disableable as _, Sizable as _, Theme, TitleBar, WindowExt as _, h_flex, v_flex,
+};
 use gpui_kit::{
     AnyElement, AnyWindowHandle, App, AppContext as _, Context, Entity, FocusHandle, Focusable,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
@@ -364,6 +366,12 @@ impl MainWindow {
 
     fn toggle_right(&mut self, cx: &mut Context<Self>) {
         if !self.right_visible(cx) {
+            if let Some(view) = self.live_active(cx) {
+                view.read(cx)
+                    .tools
+                    .clone()
+                    .update(cx, |tools, cx| tools.show_launcher(cx));
+            }
             return self.open_right(cx);
         }
         if self.narrow {
@@ -448,9 +456,11 @@ impl MainWindow {
                 if let (Some(store), Some(client)) = (store, app.read(cx).client()) {
                     let view = cx
                         .new(|cx| super::workspace::WorkspaceView::new(store, client, window, cx));
-                    view.update(cx, |view, _| {
+                    view.update(cx, |view, cx| {
                         view.chat_inset = chat_inset;
                         view.show_window_controls = show_window_controls;
+                        view.shared_header = true;
+                        view.tools.update(cx, |tools, _| tools.shared_header = true);
                     });
                     let reveal =
                         cx.subscribe(&view, |this, _, _: &super::workspace::RevealRight, cx| {
@@ -459,7 +469,12 @@ impl MainWindow {
                             cx.notify();
                         });
                     self.live_subscriptions.push((view.entity_id(), reveal));
+                    let changed = cx.observe(&view, |_, _, cx| cx.notify());
+                    self.live_subscriptions.push((view.entity_id(), changed));
                     let tools = view.read(cx).tools.clone();
+                    let tools_changed = cx.observe(&tools, |_, _, cx| cx.notify());
+                    self.live_subscriptions
+                        .push((view.entity_id(), tools_changed));
                     let info_changed = cx.subscribe(
                         &tools,
                         |this, tools, _: &super::tools::InfoVisibilityChanged, cx| {
@@ -697,6 +712,75 @@ impl Render for MainWindow {
             .live_active(cx)
             .is_some_and(|v| v.read(cx).tools.read(cx).info_open);
         let show_right = show_right && !info_open;
+        let active_view = self.live_active(cx);
+        let sidebar_width = pane_sizes
+            .sidebar
+            .unwrap_or(sidebar::DEFAULT_WIDTH)
+            .clamp(sidebar::MIN_WIDTH, sidebar_max);
+        let right_width = pane_sizes
+            .right
+            .unwrap_or((width - 280.) / 2.)
+            .clamp(300., 600.);
+        let shared_header = active_view.as_ref().map(|view| {
+            let workspace_header = view.update(cx, |view, cx| view.top_bar(cx));
+            let tools = view.read(cx).tools.clone();
+            let tool_header = show_right.then(|| tools.update(cx, |tools, cx| tools.tab_bar(cx)));
+            let leading_width = if self.panes.sidebar {
+                sidebar_width
+            } else if window.is_fullscreen() {
+                40.
+            } else {
+                108.
+            };
+            let sidebar_toggle = Button::new("header-toggle-sidebar")
+                .ghost()
+                .small()
+                .icon(gpui_kit::assets::IconName::PanelLeft)
+                .accessibility_label("Toggle sidebar")
+                .tooltip("Toggle sidebar (⌘B)")
+                .on_click(|_, window, cx| window.dispatch_action(Box::new(ToggleSidebar), cx));
+            let leading = h_flex()
+                .size_full()
+                .justify_end()
+                .pr_2()
+                .child(sidebar_toggle);
+            let leading = if window.is_fullscreen() {
+                leading.into_any_element()
+            } else {
+                TitleBar::new()
+                    .h(px(40.))
+                    .border_b_0()
+                    .bg(color(Token::Muted, cx))
+                    .child(leading)
+                    .into_any_element()
+            };
+            h_flex()
+                .h(px(40.))
+                .w_full()
+                .flex_none()
+                .bg(color(Token::Muted, cx))
+                .border_b_1()
+                .border_color(color(Token::Border, cx))
+                .child(
+                    div()
+                        .w(px(leading_width))
+                        .h_full()
+                        .flex_none()
+                        .child(leading),
+                )
+                .child(div().flex_1().min_w_0().h_full().child(workspace_header))
+                .children(tool_header.map(|header| {
+                    div()
+                        .w(px(right_width))
+                        .h_full()
+                        .flex_none()
+                        .border_l_1()
+                        .border_color(color(Token::Border, cx))
+                        .child(header)
+                }))
+        });
+        let shared_header_visible = shared_header.is_some();
+        let main_id = cx.entity_id();
         let right = self.render_right(cx);
         let reconnecting = crate::app::AppState::try_global(cx).is_some_and(|app| {
             let app = app.read(cx);
@@ -874,6 +958,7 @@ impl Render for MainWindow {
                             )
                     }),
             )
+            .children(shared_header)
             .child(
                 div().flex_1().min_h_0().child(
                     h_flex().size_full().child(
@@ -887,6 +972,7 @@ impl Render for MainWindow {
                                         s.panes.sidebar = sidebar;
                                         s.panes.right = right;
                                     });
+                                    cx.notify(main_id);
                                 })
                                 .child(
                                     resizable_panel()
@@ -900,11 +986,15 @@ impl Render for MainWindow {
                                         .child(
                                             v_flex()
                                                 .size_full()
-                                                .children((!window.is_fullscreen()).then(|| {
-                                                    TitleBar::new()
-                                                        .border_b_0()
-                                                        .bg(color(Token::Sidebar, cx))
-                                                }))
+                                                .children(
+                                                    (!shared_header_visible
+                                                        && !window.is_fullscreen())
+                                                    .then(|| {
+                                                        TitleBar::new()
+                                                            .border_b_0()
+                                                            .bg(color(Token::Sidebar, cx))
+                                                    }),
+                                                )
                                                 .child(div().flex_1().min_h_0().child(sidebar)),
                                         ),
                                 )

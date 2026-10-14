@@ -12,7 +12,9 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{
+    Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
+};
 use gpui_kit::{
     AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
     Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
@@ -106,6 +108,7 @@ pub struct WorkspaceView {
     pub right_opened: bool,
     pub chat_inset: f32,
     pub show_window_controls: bool,
+    pub shared_header: bool,
     _detail_changed: Subscription,
     _store_changed: Subscription,
 }
@@ -150,7 +153,10 @@ impl WorkspaceView {
         let tool_events = cx.subscribe(&tools, |this, _, _: &super::tools::RevealTools, cx| {
             this.reveal_right(cx)
         });
-        let info_changed = cx.subscribe(&tools, |_, _, _: &super::tools::InfoVisibilityChanged, cx| cx.notify());
+        let info_changed = cx.subscribe(
+            &tools,
+            |_, _, _: &super::tools::InfoVisibilityChanged, cx| cx.notify(),
+        );
         let info_events = cx.subscribe_in(
             &tools,
             window,
@@ -280,6 +286,7 @@ impl WorkspaceView {
             _info_changed: info_changed,
             chat_inset: 16.,
             show_window_controls: false,
+            shared_header: false,
             _detail_changed: detail_changed,
             processes,
             review,
@@ -1070,7 +1077,7 @@ impl WorkspaceView {
                 .child(div().h(gpui_kit::px(440.)).child(view.clone()))
         });
     }
-    fn top_bar(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    pub(super) fn top_bar(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let Some(w) = self.store.read(cx).state.workspace.clone() else {
             return div().into_any_element();
         };
@@ -1129,10 +1136,11 @@ impl WorkspaceView {
         let bar = h_flex()
             .group("workspace-branch")
             .flex_wrap()
-            .bg(color(Token::Panel, cx))
+            .min_h(gpui_kit::px(40.))
+            .bg(color(if self.shared_header { Token::Muted } else { Token::Panel }, cx))
             .gap_2()
             .p_2()
-            .border_b_1()
+            .border_b(gpui_kit::px(if self.shared_header { 0. } else { 1. }))
             .border_color(color(Token::Border, cx))
             .children(
                 (w.title != w.slug && w.branch.rsplit('/').next() != Some(w.title.as_str())).then(
@@ -1274,7 +1282,7 @@ impl WorkspaceView {
                     }),
             )
             .into_any_element();
-        if self.show_window_controls {
+        if self.show_window_controls && !self.shared_header {
             gpui_kit::component::TitleBar::new()
                 .h(gpui_kit::px(40.))
                 .border_b_0()
@@ -2972,7 +2980,7 @@ impl Render for WorkspaceView {
                 this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.request_commit(window, cx))
             }))
-            .child(self.top_bar(cx))
+            .children((!self.shared_header).then(|| self.top_bar(cx)))
             .on_action(
                 cx.listener(|this, _: &CreatePr, window, cx| {
                     this.operation("Create PR", window, cx)

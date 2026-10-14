@@ -134,6 +134,9 @@ export type BottomTab = "setup" | "run" | "terminal";
 
 export type UtilityTab = RightTab | BottomTab;
 
+export const toolGroup = <T extends string | null>(key: T) =>
+  key === "files" || key === "checks" ? "changes" : key === "setup" ? "run" : key;
+
 export type ComposerInsertion =
   | { readonly kind: "mention"; readonly path: string }
   | { readonly kind: "reviewComments"; readonly commentIds: ReadonlyArray<string> }
@@ -160,6 +163,8 @@ export interface WorkspaceUiState {
   readonly activeToolKey: string | null;
   readonly rightTab: RightTab;
   readonly bottomTab: BottomTab;
+  readonly changesSection: Exclude<RightTab, "artifacts">;
+  readonly runSection: Exclude<BottomTab, "terminal">;
   /** Sleeping, or no changes and no PR: the right side starts closed (04, Right and bottom panels). */
   readonly rightQuiet: boolean;
   /** The user opened the right side while quiet. Not kept. */
@@ -174,10 +179,12 @@ const emptyWorkspaceUi: WorkspaceUiState = {
   composerFocusSeq: 0,
   diffScope: "branch",
   infoOpen: true,
-  toolTabs: ["changes"],
-  activeToolKey: "changes",
+  toolTabs: [],
+  activeToolKey: null,
   rightTab: "changes",
   bottomTab: "setup",
+  changesSection: "changes",
+  runSection: "run",
   rightQuiet: false,
   rightPinned: false,
 };
@@ -460,8 +467,13 @@ export const selectTool = (workspaceId: string, key: UtilityTab | null): void =>
   closeWorkspaceInfo(workspaceId);
   update(workspaceId, (s) => ({
     ...s,
-    toolTabs: key && !s.toolTabs.includes(key) ? [...s.toolTabs, key] : s.toolTabs,
+    toolTabs: key && !s.toolTabs.includes(toolGroup(key)) ? [...s.toolTabs, toolGroup(key)] : s.toolTabs,
     activeToolKey: key,
+    rightTab:
+      key === "changes" || key === "files" || key === "checks" || key === "artifacts" ? key : s.rightTab,
+    bottomTab: key === "setup" || key === "run" || key === "terminal" ? key : s.bottomTab,
+    changesSection: key === "changes" || key === "files" || key === "checks" ? key : s.changesSection,
+    runSection: key === "setup" || key === "run" ? key : s.runSection,
   }));
   pinRight(workspaceId);
   setLayout({ rightOpen: true });
@@ -470,8 +482,8 @@ export const selectTool = (workspaceId: string, key: UtilityTab | null): void =>
 export const closeTool = (workspaceId: string, key: UtilityTab): void =>
   update(workspaceId, (s) => ({
     ...s,
-    toolTabs: s.toolTabs.filter((t) => t !== key),
-    activeToolKey: s.activeToolKey === key ? null : s.activeToolKey,
+    toolTabs: s.toolTabs.filter((t) => toolGroup(t) !== toolGroup(key)),
+    activeToolKey: toolGroup(s.activeToolKey) === toolGroup(key) ? null : s.activeToolKey,
   }));
 
 export const setRightQuiet = (workspaceId: string, rightQuiet: boolean): void =>
@@ -596,7 +608,12 @@ export const toggleRight = (): void => {
 
   if (shownRight(l)) setLayout({ rightOpen: false });
   else {
-    if (l.lastWorkspaceId) closeWorkspaceInfo(l.lastWorkspaceId);
+    if (l.lastWorkspaceId) {
+      selectTool(l.lastWorkspaceId, null);
+
+      return;
+    }
+
     pinRight(l.lastWorkspaceId);
     setLayout({ rightOpen: true });
   }
