@@ -15,7 +15,8 @@
     "GH_VERSION": "2.102.0",
     "BUN_VERSION": "1.4.2",
     "PLAYWRIGHT_MCP_VERSION": "0.0.83",
-    "TINI_VERSION": "0.19.0-3+b8"
+    "TINI_VERSION": "0.19.0-3+b8",
+    "OH_MY_ZSH_REF": "83a0ec79ee3b1f64c6ae2e80dcb1fb27a55e5952"
   },
   "acp_sdk": "1.8.0"
 }

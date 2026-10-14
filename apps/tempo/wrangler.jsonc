@@ -25,6 +25,7 @@
             "TINI_VERSION": "0.19.0-3+b8",
             "BUN_VERSION": "1.4.2",
             "PLAYWRIGHT_MCP_VERSION": "0.0.83",
+            "OH_MY_ZSH_REF": "83a0ec79ee3b1f64c6ae2e80dcb1fb27a55e5952",
           },
         },
       },

@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Tempo",
+    "category": "Agent coding workspace",
+    "platform": "desktop",
+    "primary_user": "Developer",
+    "primary_job": "Direct coding agents in project workspaces and review their work"
+  },
+  "screen": {
+    "name": "Agent editor",
+    "purpose": "Set up a custom agent's base agent, model and prompt"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the settings sidebar",
+    "Image 3: crop of the top of the agent form"
+  ]
+}

@@ -10,6 +10,8 @@ export interface Config {
   readonly port: number;
   readonly workspace: string;
   readonly home: string;
+  /** Read-only copy of the image's home files, for `dotfiles.apply` (01, Shell and dotfiles). */
+  readonly homeDefaults: string;
   readonly caCert: string;
   readonly caWaitMs: number;
   readonly stateDir: string;
@@ -80,6 +82,7 @@ export interface ConfigOverrides {
   readonly agentCommands?: Partial<Record<AgentId, ReadonlyArray<string>>>;
   readonly limits?: Partial<Limits>;
   readonly selfCommand?: ReadonlyArray<string>;
+  readonly homeDefaults?: string;
 }
 
 export const loadConfig = (
@@ -102,6 +105,7 @@ export const loadConfig = (
     port,
     workspace,
     home,
+    homeDefaults: overrides.homeDefaults ?? "/etc/tempo/home-defaults",
     caCert: env["TEMPOD_CA_CERT"] || "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
     caWaitMs: Number.isFinite(caWaitMs) && caWaitMs >= 0 ? caWaitMs : 10_000,
     stateDir,

@@ -1,0 +1,19 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "header.png",
+    "composer.png"
+  ],
+  "known": {
+    "ai": true,
+    "async": false,
+    "collection": true,
+    "editing": true,
+    "empty": true,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Assistant transcript; workspace list; composer; 'No changes.' and 'No setup script.' empty areas. Label basis: user reported excess top bars, persistent copy/base/guide actions and a narrow centered conversation."
+}

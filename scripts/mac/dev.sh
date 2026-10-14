@@ -19,7 +19,9 @@ app="dist/mac/dev/Tempo.app"
 if [[ "$mode" == --check-workspace ]]; then
   app="dist/mac/check/Tempo.app"
 fi
-helper_cache="dist/mac/keychain-helper"
+# Keychain trust follows the helper's code hash, so every worktree reuses one helper build.
+repo_root=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's#/\.git$##' || pwd)
+helper_cache="$repo_root/dist/mac/keychain-helper"
 mkdir -p "$helper_cache" "$app/Contents/Helpers"
 helper_key=$(python3 - "$identity" <<'PYHELPER'
 import hashlib, pathlib, subprocess, sys

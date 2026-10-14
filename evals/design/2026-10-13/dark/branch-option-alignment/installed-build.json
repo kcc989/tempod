@@ -1,8 +1,0 @@
-{
-  "binarySha256": "5ed5c9dc0a5b279b58486570ee5f46c277658202a96432108192641a756f8951",
-  "buildPassed": true,
-  "typesPassed": true,
-  "signingVerified": true,
-  "keychainHelperPreserved": true,
-  "testsRun": false
-}

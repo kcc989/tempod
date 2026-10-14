@@ -44,6 +44,20 @@ export const environments = sqliteTable(
   ],
 );
 
+/** Shell files (01, Shell and dotfiles). The files live in the Artifacts repository, not here. */
+export const dotfiles = sqliteTable("dotfiles", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  artifactRepoId: text("artifact_repo_id").notNull(),
+  repoName: text("repo_name").notNull().unique(),
+  cloneUrl: text("clone_url").notNull(),
+  headSha: text("head_sha").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export type DotfilesRow = typeof dotfiles.$inferSelect;
+
 export const projects = sqliteTable(
   "projects",
   {

@@ -73,6 +73,16 @@ CREATE TABLE environments (
   UNIQUE (user_id, name)
 );
 
+-- Shell files (01, Shell and dotfiles). The files live in the Artifacts repository, not here.
+CREATE TABLE dotfiles (
+  user_id           TEXT PRIMARY KEY REFERENCES user(id) ON DELETE CASCADE,
+  artifact_repo_id  TEXT NOT NULL,
+  repo_name         TEXT NOT NULL UNIQUE,     -- dotfiles-<first 16 hex digits of sha256(user_id)>
+  clone_url         TEXT NOT NULL,            -- credential-free remote from Artifacts
+  head_sha          TEXT NOT NULL,            -- the last commit Tempo pushed to main
+  updated_at        INTEGER NOT NULL
+);
+
 CREATE TABLE mcp_servers (
   id               TEXT PRIMARY KEY,           -- ULID
   user_id          TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
@@ -628,7 +638,7 @@ All mutations go through TanStack Start server functions. Live updates come only
 - Errors use the shape `{code, message, detail?}` with a code from the error table. Any function MAY also return `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED` or `INTERNAL`. Any function that needs the container (03, wake triggers) MAY also return `CONTAINER_NOT_READY`. The tables below list only the other codes.
 - `GET` for reads, `POST` for writes.
 
-**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, code)` (the code names the version), `artifactFetch(request, artifactId, cookie)`, `getArtifact(artifactId, version)` (one `Artifact` or null, for the artifact route), `getGithubToken()`, `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp}` for `TempoOutbound`; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`, `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
+**WorkspaceDO RPC.** One method per workspace server function, with the same name and the same input minus `workspaceId`. Plus these internal methods: `init(input)`, `previewFetch(request, port, cookie)`, `previewEnter(port, code)`, `browserConnect(request)`, `browserFetch(request, port)`, `artifactEnter(artifactId, code)` (the code names the version), `artifactFetch(request, artifactId, cookie)`, `getArtifact(artifactId, version)` (one `Artifact` or null, for the artifact route), `getGithubToken()`, `getDotfilesToken()` (a read token for the owner's dotfiles repository, or null without a `dotfiles` row), `getEgressConfig()` (returns `{owner, repo, environmentId, policy, allowlist, secrets, injectors, mcp, dotfiles}` for `TempoOutbound`; `dotfiles` is `{cloneUrl}` or null; `secrets` are `{name, hosts}`, `injectors` are `{name, hosts, code, sha256}`, `mcp` is in 01, Credentials and egress), `logEgress(row)`, `pushCodexAuth(content, version)`. `previewFetch`, `browserConnect` and `browserFetch` run inside the DO's `fetch()`, picked by an internal `x-tempo-*` header, because RPC cannot carry a WebSocket upgrade; the Worker removes every `x-tempo-*` header that a client or a browser sends.
 
 **Projects and GitHub**
 
@@ -810,6 +820,13 @@ Workspace channel publishes `run {run}`. `Session` exposes optional flat `runId`
 | `deleteProjectSecret` | `{projectId, name}` | `{}` | — |
 | `listProjectSecretNames` | `{projectId}` | `{names}` | — |
 
+**Shell and dotfiles** (01, Shell and dotfiles)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `getDotfiles` | `{}` | `DotfilesState`: `{files, defaults, saved, updatedAt}`. Without a `dotfiles` row, `files` equals `defaults` and `saved` is false. Reads the files at the tip of `main`; when that differs from `head_sha` (a save whose D1 write was lost; only Tempo pushes), it first stores the tip as `head_sha`. | `ARTIFACTS_NOT_CONFIGURED`, `ARTIFACTS_API_ERROR` |
+| `updateDotfiles` | `{files}`, which replaces the whole list. Validated with `isDotfilePath` and `dotfilesProblem`. | `DotfilesState` after the push | `VALIDATION_FAILED`, `DOTFILES_CHANGED`, `ARTIFACTS_NOT_CONFIGURED`, `ARTIFACTS_API_ERROR` |
+
 **MCP servers** (01, User MCP servers)
 
 | Function | Input | Output | Errors |
@@ -972,6 +989,7 @@ The WorkspaceDO and `tempod` talk over one WebSocket, opened by the DO with `get
 | `fs.read` | `{path, maxBytes}` | `{content, encoding, size}` | 10 s |
 | `fs.search` | `{query, regex, maxResults}` | `{matches}` | 30 s |
 | `terminal.list` | `{}` | `{terminalIds}` | 10 s |
+| `dotfiles.apply` | `{source: {url, sha} \| null}` | `{applied, restored}`: the paths it wrote and the paths it restored or deleted (01, Shell and dotfiles) | 2 min |
 | `shutdown` | `{reason}` | `{}`, after it stops scripts and agents and flushes the outbox. tempod keeps running unless it is in SIGTERM mode (01) | 45 s |
 
 **Events** (`event.kind`)
@@ -1056,6 +1074,7 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `MODEL_REQUIRED` | An OpenCode or Pi session starts while `agent.models.<agent>` is empty | Set a default model for this agent in Settings → Project. |
 | `SETTINGS_INVALID` | Settings failed validation | Settings are not valid. |
 | `ENVIRONMENT_EXISTS` | Another environment has that name | An environment with this name already exists. |
+| `DOTFILES_CHANGED` | `updateDotfiles` pushed onto a stale `head_sha` | Your shell files changed while saving. Reload them and try again. |
 | `EGRESS_BLOCKED` | `TempoOutbound` refused a host | (Shown only in the egress log.) |
 | `AGENT_INVALID` | A definition or proposal is invalid | Check the agent definition. |
 | `INTERNAL` | Anything else | Something went wrong. |

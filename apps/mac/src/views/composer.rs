@@ -361,7 +361,6 @@ impl Composer {
                             .gap_2()
                             .text_xs()
                             .text_color(color(Token::MutedForeground, cx))
-                            .child("Context")
                             .child(
                                 div()
                                     .w(px(48.))
@@ -1132,17 +1131,7 @@ impl Render for Composer {
                             }))
                     }),
             )
-            .child(
-                div().relative().child(field).child(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .right_0()
-                        .text_xs()
-                        .text_color(color(Token::MutedForeground, cx))
-                        .child("⌘L to focus"),
-                ),
-            )
+            .child(field)
             .child(
                 composer_parts::toolbar()
                     .children((!self.model_choices.is_empty()).then(|| self.render_model_menu(cx)))
@@ -1155,6 +1144,7 @@ impl Render for Composer {
                         Button::new("attach-file")
                             .ghost()
                             .small()
+                            .size(px(super::tokens::ICON_BUTTON))
                             .icon(IconName::Plus)
                             .accessibility_label("Attach file")
                             .tooltip("Attach file (⌘U)")
@@ -1170,6 +1160,7 @@ impl Render for Composer {
                             .small()
                             .accessibility_label(if self.working { "Queue" } else { "Send" })
                             .w(px(28.))
+                            .h(px(super::tokens::ICON_BUTTON))
                             .rounded(px(8.))
                             .disabled(
                                 self.read_only

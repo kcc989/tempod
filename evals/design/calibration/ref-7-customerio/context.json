@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Customer.io",
+    "category": "Messaging automation",
+    "platform": "web",
+    "primary_user": "Marketer",
+    "primary_job": "Send and analyze customer messages"
+  },
+  "screen": {
+    "name": "Agent",
+    "purpose": "Ask the built-in agent a question and read its answer"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar and recent chats",
+    "Image 3: crop of the question and the agent answer",
+    "Image 4: crop of the suggestions and the message field"
+  ]
+}

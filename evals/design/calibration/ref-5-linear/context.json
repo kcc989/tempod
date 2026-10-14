@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Linear",
+    "category": "Project tracking",
+    "platform": "web",
+    "primary_user": "Product team member",
+    "primary_job": "Plan and track team work"
+  },
+  "screen": {
+    "name": "Pulse",
+    "purpose": "Write and post a project update"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar",
+    "Image 3: crop of the update dialog",
+    "Image 4: crop of the area behind the dialog"
+  ]
+}

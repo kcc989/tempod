@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -268,7 +268,25 @@ export const git = async (cwd: string, ...args: string[]): Promise<string> => {
 
 /** A bare "origin" with `main` holding a few files; returns its file:// URL and a work clone path. */
 export const makeOrigin = async (): Promise<{ url: string; bare: string; seed: string }> => {
+  originTemplate ??= buildOrigin();
+  const template = await originTemplate;
   const root = tmpDir("origin-");
+  const bare = join(root, "origin.git");
+  const seed = join(root, "seed");
+  cpSync(template.bare, bare, { recursive: true });
+  cpSync(template.seed, seed, { recursive: true });
+  const config = join(seed, ".git", "config");
+  writeFileSync(config, readFileSync(config, "utf8").replaceAll(template.bare, bare));
+
+  return { url: `file://${bare}`, bare, seed };
+};
+
+// Each origin is a copy of one seeded pair; building every origin with git costs about nine processes.
+let originTemplate: Promise<{ bare: string; seed: string }> | undefined;
+
+const buildOrigin = async (): Promise<{ bare: string; seed: string }> => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "origin-template-")));
+  process.once("exit", () => rmSync(root, { recursive: true, force: true }));
   const bare = join(root, "origin.git");
   const seed = join(root, "seed");
   await git(root, "init", "-q", "--bare", "-b", "main", bare);
@@ -286,7 +304,7 @@ export const makeOrigin = async (): Promise<{ url: string; bare: string; seed: s
   await git(seed, "remote", "add", "origin", bare);
   await git(seed, "push", "-q", "origin", "main");
 
-  return { url: `file://${bare}`, bare, seed };
+  return { bare, seed };
 };
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));

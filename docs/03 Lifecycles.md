@@ -76,8 +76,8 @@ Every multi-step flow is an op in the WorkspaceDO `ops` table, run one step per 
 
 | Op | Steps, in order |
 | --- | --- |
-| `create` | `container.start` → `tempod.connect` → `repo.clone` → `settings.read` → `setup.run` → `done` |
-| `wake` | `container.start` → `tempod.connect` → if fresh disk: `repo.clone` → `repo.applyCheckpoint` → `home.restore` → `settings.read` → `setup.run`; then `sessions.markReload` → `artifacts.resume` → `done` |
+| `create` | `container.start` → `tempod.connect` → `repo.clone` → `settings.read` → `dotfiles.apply` → `setup.run` → `done` |
+| `wake` | `container.start` → `tempod.connect` → if fresh disk: `repo.clone` → `repo.applyCheckpoint` → `home.restore` → `settings.read` → `setup.run`; then `dotfiles.apply` → `sessions.markReload` → `artifacts.resume` → `done` |
 | `sleep` | `turns.check` → `git.checkpoint` (`pre_sleep`) → `bundle.upload` → `home.backup` → `artifacts.upload` → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `done` |
 | `archive` | `turns.cancel` → `script.archive` → `git.checkpoint` (`pre_archive`) → `bundle.upload` → `home.backup` → `artifacts.upload` → `repo.deleteBranch` (native Git only) → `tempod.shutdown` → `container.snapshot` → `container.destroy` → `github.deleteBranch` (GitHub only) → `done` |
 | `restore` | `branch.check` → `done` |
@@ -97,6 +97,7 @@ When the container is not running, GitHub `archive` skips every step that needs 
 | `repo.applyCheckpoint` | 5 min | 2 | Skip; log `warn` and continue without it |
 | `home.restore` | 5 min | 2 | Skip; sessions hand off |
 | `settings.read` | 10 s | 3 | Use defaults; show the error in the Setup tab |
+| `dotfiles.apply` | 2 min | 2 | Skip; log `warn` and show `Could not apply your shell files. Terminals use the defaults.` in the Setup tab (01, Shell and dotfiles) |
 | `setup.run` | 30 min | 1 | Not an error: set `setup_status = 'failed'` |
 | `script.archive` | 120 s | 1 | Continue; `warn` notice |
 | `git.checkpoint` | 2 min | 3 | For `revert`, fail with `INTERNAL` without reverting; otherwise skip and log `warn` |

@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Claude",
+    "category": "AI assistant",
+    "platform": "desktop",
+    "primary_user": "Knowledge worker",
+    "primary_job": "Chat with an AI assistant and return to earlier conversations"
+  },
+  "screen": {
+    "name": "Conversation",
+    "purpose": "Follow the assistant's reply in progress and send the next message"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar",
+    "Image 3: crop of the header and the top of the conversation",
+    "Image 4: crop of the message area at the bottom"
+  ]
+}

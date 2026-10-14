@@ -31,7 +31,7 @@ const setup = () => {
     loginId: "login-1",
     verificationUrl: "https://auth.openai.com/codex/device",
     userCode: "ABCD-EFGH",
-    intervalMs: 1000,
+    intervalMs: 10,
     expiresAt: Date.now() + 900_000,
   };
 
@@ -43,21 +43,18 @@ afterEach(() => vi.useRealTimers());
 describe("Codex device login controls", () => {
   it("shows the link and code, polls to approval and refreshes credential status", async () => {
     const h = setup();
-    vi.mocked(call).mockResolvedValueOnce(h.login);
+    vi.mocked(call)
+      .mockResolvedValueOnce(h.login)
+      .mockResolvedValueOnce({ status: "pending" })
+      .mockResolvedValueOnce({ status: "connected" });
     fireEvent.click(screen.getByRole("button", { name: "Connect Codex" }));
     await screen.findByText("ABCD-EFGH");
     expect(screen.getByRole("link", { name: "Open sign-in page" }).getAttribute("href")).toBe(
       h.login.verificationUrl,
     );
-    vi.mocked(call)
-      .mockResolvedValueOnce({ status: "pending" })
-      .mockResolvedValueOnce({ status: "connected" });
-    await waitFor(() => expect(call).toHaveBeenCalledWith("pollCodexLogin", { loginId: "login-1" }), {
-      timeout: 2000,
-    });
-    await waitFor(
-      () => expect(h.invalidate).toHaveBeenCalledWith({ queryKey: ["call", "getCredentialStatus"] }),
-      { timeout: 3000 },
+    await waitFor(() => expect(call).toHaveBeenCalledWith("pollCodexLogin", { loginId: "login-1" }));
+    await waitFor(() =>
+      expect(h.invalidate).toHaveBeenCalledWith({ queryKey: ["call", "getCredentialStatus"] }),
     );
     expect(screen.queryByText("ABCD-EFGH")).toBeNull();
   });
@@ -81,7 +78,7 @@ describe("Codex device login controls", () => {
     vi.mocked(call).mockResolvedValueOnce({ ...h.login, expiresAt: Date.now() - 1 });
     fireEvent.click(screen.getByRole("button", { name: "Connect Codex" }));
     await screen.findByText("ABCD-EFGH");
-    await screen.findByRole("alert", {}, { timeout: 2000 });
+    await screen.findByRole("alert");
     expect(screen.getByRole("alert").textContent).toContain("expired");
     expect(call).toHaveBeenCalledTimes(1);
     vi.mocked(call).mockRejectedValueOnce(

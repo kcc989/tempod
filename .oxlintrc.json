@@ -44,6 +44,7 @@
     "**/.output/**",
     "**/routeTree.gen.ts",
     "docs/**",
+    "evals/design/**/design-eval.ts",
     "**/node_modules/**",
     ".agent/**",
     ".agents/**",

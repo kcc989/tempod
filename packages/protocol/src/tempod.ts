@@ -468,6 +468,12 @@ export const TEMPOD_REQUESTS = {
     }),
     30_000,
   ),
+  /** 01, Shell and dotfiles: copies the owner's shell files into /home/tempo; null restores the image defaults. */
+  "dotfiles.apply": req(
+    Schema.Struct({ source: Schema.NullOr(Schema.Struct({ url: Schema.String, sha: Schema.String })) }),
+    Schema.Struct({ applied: Schema.Array(Schema.String), restored: Schema.Array(Schema.String) }),
+    2 * 60_000,
+  ),
   "terminal.list": req(Empty, Schema.Struct({ terminalIds: Schema.Array(Schema.String) }), 10_000),
   shutdown: req(Schema.Struct({ reason: Schema.String }), Empty, 45_000),
 } as const;

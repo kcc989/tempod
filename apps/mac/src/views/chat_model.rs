@@ -99,6 +99,9 @@ pub fn running_turn<'a>(state: &'a WorkspaceState, session_id: &str) -> Option<&
         .values()
         .find(|t| t.session_id == session_id && t.status == TurnStatus::Running)
 }
+pub fn is_initial_prompt(turn: &Turn) -> bool {
+    turn.seq == 1. && turn.status == TurnStatus::Queued && turn.steering_pending != Some(true)
+}
 pub fn queued_turns<'a>(state: &'a WorkspaceState, session_id: &str) -> Vec<&'a Turn> {
     let mut turns: Vec<_> = state
         .turns
@@ -112,6 +115,43 @@ pub fn queued_turns<'a>(state: &'a WorkspaceState, session_id: &str) -> Vec<&'a 
             .then_with(|| a.queued_at.total_cmp(&b.queued_at))
     });
     turns
+}
+pub fn reordered_queue(state: &WorkspaceState, dragged: &str, before: &str) -> Option<Vec<String>> {
+    let mut turns: Vec<_> = state
+        .turns
+        .values()
+        .filter(|turn| turn.status == TurnStatus::Queued)
+        .collect();
+    turns.sort_by(|a, b| {
+        a.queue_pos
+            .unwrap_or(f64::INFINITY)
+            .total_cmp(&b.queue_pos.unwrap_or(f64::INFINITY))
+            .then_with(|| a.queued_at.total_cmp(&b.queued_at))
+    });
+    let mut movable: Vec<_> = turns
+        .iter()
+        .filter(|turn| !is_initial_prompt(turn))
+        .map(|turn| turn.id.clone())
+        .collect();
+    if dragged == before || !movable.iter().any(|id| id == dragged) {
+        return None;
+    }
+    movable.retain(|id| id != dragged);
+    let index = movable.iter().position(|id| id == before)?;
+    movable.insert(index, dragged.into());
+    let mut moved = movable.into_iter();
+    Some(
+        turns
+            .into_iter()
+            .map(|turn| {
+                if is_initial_prompt(turn) {
+                    turn.id.clone()
+                } else {
+                    moved.next().unwrap()
+                }
+            })
+            .collect(),
+    )
 }
 pub fn first_permission_option<'a>(
     options: &'a [PermissionOption],
@@ -491,6 +531,10 @@ pub enum RowContent {
     Working {
         turn_id: String,
     },
+    Startup {
+        title: String,
+        setup: bool,
+    },
 }
 impl RowContent {
     pub fn id(&self) -> String {
@@ -499,6 +543,7 @@ impl RowContent {
             Self::Work { turn, .. } => format!("work:{}", turn.id),
             Self::Footer { turn, .. } => format!("footer:{}", turn.id),
             Self::Working { turn_id } => format!("working:{turn_id}"),
+            Self::Startup { .. } => "workspace-startup".into(),
         }
     }
 }
@@ -523,7 +568,7 @@ pub fn transcript_rows(
         let user = matches!(item.content, ItemContent::UserMessage(_));
         if user
             && ((item.turn_id.is_some() && turn.is_none())
-                || turn.is_some_and(|t| t.status == TurnStatus::Queued))
+                || turn.is_some_and(|t| t.status == TurnStatus::Queued && !is_initial_prompt(t)))
         {
             continue;
         }
@@ -649,6 +694,15 @@ pub fn transcript_rows(
     if let Some(turn_id) = working {
         rows.push(RowContent::Working { turn_id });
     }
+    if let Some(WorkspaceBanner::Progress { title, setup }) =
+        state.workspace.as_ref().and_then(|workspace| {
+            workspace_banners(workspace)
+                .into_iter()
+                .find(|banner| matches!(banner, WorkspaceBanner::Progress { .. }))
+        })
+    {
+        rows.push(RowContent::Startup { title, setup });
+    }
     rows
 }
 
@@ -713,6 +767,7 @@ pub fn step_label(step: &str) -> String {
         "repo.applyCheckpoint" => "Restoring checkpoint",
         "home.restore" => "Restoring home",
         "settings.read" => "Reading settings",
+        "dotfiles.apply" => "Applying shell files",
         "setup.run" => "Running setup",
         "sessions.markReload" => "Reloading sessions",
         "turns.check" => "Checking turns",
@@ -866,6 +921,16 @@ pub fn format_tokens(n: f64) -> String {
         format!("{:.1}M", n / 1_000_000.)
     }
 }
+/// The token split shown on hover over the turn footer (04, Transcript).
+pub fn turn_usage_detail(turn: &Turn) -> Option<String> {
+    turn.usage.as_ref().map(|u| {
+        format!(
+            "{} in, {} out",
+            format_tokens(u.input_tokens),
+            format_tokens(u.output_tokens)
+        )
+    })
+}
 /// The turn footer (04, Transcript): duration unless the work row shows it, tokens when the agent
 /// sent usage, and how it ended when that is not plain success.
 pub fn turn_footer(turn: &Turn, work_row: bool) -> String {
@@ -874,14 +939,10 @@ pub fn turn_footer(turn: &Turn, work_row: bool) -> String {
         .zip(turn.ended_at)
         .filter(|_| !work_row)
         .map(|(start, end)| format_duration((end - start).max(0.)));
-    let tokens = turn.usage.as_ref().map(|u| {
-        format!(
-            "{} tokens ({} in, {} out)",
-            format_tokens(u.total_tokens),
-            format_tokens(u.input_tokens),
-            format_tokens(u.output_tokens)
-        )
-    });
+    let tokens = turn
+        .usage
+        .as_ref()
+        .map(|u| format!("{} tokens", format_tokens(u.total_tokens)));
     let outcome = match turn.status {
         TurnStatus::Cancelled => Some("Stopped"),
         TurnStatus::Failed => Some("Failed"),
@@ -978,10 +1039,8 @@ mod tests {
             cached_read_tokens: None,
             cached_write_tokens: None,
         });
-        assert_eq!(
-            turn_footer(&turn, false),
-            "12 s · 15k tokens (12k in, 3.3k out)"
-        );
+        assert_eq!(turn_footer(&turn, false), "12 s · 15k tokens");
+        assert_eq!(turn_usage_detail(&turn).as_deref(), Some("12k in, 3.3k out"));
         turn.status = TurnStatus::Cancelled;
         turn.usage = None;
         assert_eq!(turn_footer(&turn, false), "12 s · Stopped");
@@ -1229,6 +1288,88 @@ mod tests {
     }
     fn ids(rows: &[RowContent]) -> Vec<String> {
         rows.iter().map(RowContent::id).collect()
+    }
+    #[test]
+    fn initial_prompt_stays_in_the_transcript_through_startup_and_deletion() {
+        let mut state = turn_state("queued", vec![]);
+        let first = state.turns.get_mut("t1").unwrap();
+        first.started_at = None;
+        first.ended_at = None;
+        first.queue_pos = Some(0.);
+        let mut follow_up = first.clone();
+        follow_up.id = "t2".into();
+        follow_up.seq = 2.;
+        follow_up.queue_pos = Some(1.);
+        state.turns.insert("t2".into(), follow_up);
+        let mut message = state.items["u"].clone();
+        message.id = "u2".into();
+        message.turn_id = Some("t2".into());
+        state.order.get_mut("s").unwrap().push("u2".into());
+        state.items.insert("u2".into(), message);
+
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Default)),
+            ["u"]
+        );
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Detailed)),
+            ["u"]
+        );
+        let first = state.turns.get_mut("t1").unwrap();
+        first.status = TurnStatus::Running;
+        first.started_at = Some(100.);
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Default)),
+            ["u", "work:t1"]
+        );
+        state.turns.remove("t1");
+        assert!(transcript_rows(&state, "s", TranscriptDetail::Default).is_empty());
+    }
+    #[test]
+    fn queue_reordering_keeps_the_initial_prompt_fixed() {
+        let mut state = turn_state("queued", vec![]);
+        state.turns.get_mut("t1").unwrap().queue_pos = Some(0.);
+        for (id, seq, position) in [("t2", 2., 1.), ("t3", 3., 2.), ("t4", 4., 3.)] {
+            let mut turn = state.turns["t1"].clone();
+            turn.id = id.into();
+            turn.seq = seq;
+            turn.queue_pos = Some(position);
+            state.turns.insert(id.into(), turn);
+        }
+        assert_eq!(
+            reordered_queue(&state, "t4", "t2").unwrap(),
+            ["t1", "t4", "t2", "t3"]
+        );
+        assert_eq!(
+            reordered_queue(&state, "t2", "t4").unwrap(),
+            ["t1", "t3", "t2", "t4"]
+        );
+        assert!(reordered_queue(&state, "t1", "t2").is_none());
+        assert!(reordered_queue(&state, "t2", "t1").is_none());
+    }
+    #[test]
+    fn startup_progress_follows_the_prompt_and_disappears_when_ready() {
+        let mut state = turn_state("queued", vec![]);
+        let mut workspace = self::state().workspace.unwrap();
+        workspace.state = p::WorkspaceState::Starting;
+        workspace.setup_status = p::SetupStatus::None;
+        workspace.op = None;
+        state.workspace = Some(workspace);
+        let rows = transcript_rows(&state, "s", TranscriptDetail::Default);
+        assert_eq!(ids(&rows), ["u", "workspace-startup"]);
+        assert!(
+            matches!(&rows[1], RowContent::Startup { title, setup: false } if title == "Starting the workspace")
+        );
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::SettingUp;
+        let rows = transcript_rows(&state, "s", TranscriptDetail::Default);
+        assert!(
+            matches!(&rows[1], RowContent::Startup { title, setup: true } if title == "Running setup")
+        );
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::Ready;
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Default)),
+            ["u"]
+        );
     }
     #[test]
     fn work_types_follow_tool_kind_and_command() {

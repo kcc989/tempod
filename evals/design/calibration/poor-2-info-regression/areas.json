@@ -1,0 +1,177 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.79,
+    "dimensions": {
+      "focus": 0.61,
+      "type": 0.84,
+      "overflow": 0.5,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.313 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.313,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:overflow_long_text",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs.",
+      "Give the user's content most of the screen. Move controls to the edges."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.97,
+    "dimensions": {
+      "spacing": 0.88,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "fail",
+    "score": 0.86,
+    "dimensions": {
+      "color": 0.88,
+      "icons": 0.76,
+      "contrast": 0.55,
+      "restraint": 0.84,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "contrast"
+    ],
+    "majors": [
+      "dimension contrast below 0.6"
+    ],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:contrast_boundaries",
+      "color-depth:restraint_noise",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Give inputs, buttons, and selected items edges with at least 3:1 contrast.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.76,
+    "dimensions": {
+      "focus": 0.73,
+      "status": 0.84,
+      "control": 0.1,
+      "scan": 0.8,
+      "nav": 0.51,
+      "speed": 0.64,
+      "states": 1,
+      "copy": 0.74,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "control",
+      "nav"
+    ],
+    "majors": [
+      "dimension control below 0.6",
+      "dimension nav below 0.6",
+      "control_draft = 0.097 (below 0.4)",
+      "nav_current = 0.221 (below 0.4)",
+      "nav_return = 0.339 (below 0.4)",
+      "speed_views = 0.028 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "control_draft",
+        "value": 0.097,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "nav_current",
+        "value": 0.221,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "nav_return",
+        "value": 0.339,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.028,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:status_lifecycle",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:quality_repeated_identifier"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [],
+    "fixes": [
+      "Let the user save a draft or undo before work is final.",
+      "Let the user sort, filter, and change the view of the collection.",
+      "Show the current location with a visible selected state.",
+      "Let the user go back to recent or pinned work in one click.",
+      "Put navigation in short groups with clear names. Add counts where they help.",
+      "Give each dropdown and selector a label that says what it sets."
+    ]
+  }
+}

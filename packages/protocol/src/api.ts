@@ -19,6 +19,7 @@ import {
   SecretBindings,
 } from "./environments.ts";
 import { McpServer, McpServerInput } from "./mcp.ts";
+import { DotfileList, DotfilesState } from "./dotfiles.ts";
 import { Artifact } from "./artifacts.ts";
 import { Agent, AgentDefinition, AgentSummary, AgentAttachment, AttachmentOptions } from "./agent-library.ts";
 import { EnvName } from "./settings.ts";
@@ -496,6 +497,10 @@ export const API = {
     Schema.Struct({ projectId: S }),
     Schema.Struct({ names: Schema.Array(S) }),
   ),
+
+  // Shell and dotfiles (01, Shell and dotfiles)
+  getDotfiles: fn("GET", Empty, DotfilesState),
+  updateDotfiles: fn("POST", Schema.Struct({ files: DotfileList }), DotfilesState),
 
   // MCP servers
   listMcpServers: fn("GET", Empty, Schema.Array(McpServer)),

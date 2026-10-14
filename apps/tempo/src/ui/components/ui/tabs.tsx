@@ -34,7 +34,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
       className={cn(
         "inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-sm border border-transparent px-2 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         "hover:text-foreground data-[state=active]:text-foreground",
-        "group-data-[variant=default]/tabs:data-[state=active]:bg-background group-data-[variant=default]/tabs:data-[state=active]:shadow-xs dark:group-data-[variant=default]/tabs:data-[state=active]:bg-input/30",
+        "group-data-[variant=default]/tabs:data-[state=active]:bg-background group-data-[variant=default]/tabs:data-[state=active]:shadow-xs dark:group-data-[variant=default]/tabs:data-[state=active]:bg-input-fill/30",
         "group-data-[variant=line]/tabs:flex-none group-data-[variant=line]/tabs:rounded-none group-data-[variant=line]/tabs:border-b-2 group-data-[variant=line]/tabs:-mb-px group-data-[variant=line]/tabs:data-[state=active]:border-b-foreground",
         className,
       )}

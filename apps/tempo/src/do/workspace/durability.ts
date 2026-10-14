@@ -128,7 +128,8 @@ export const uploadBundleWithRetry = async (core: WorkspaceCore, bundle: Pending
     } catch (e) {
       log("warn", "bundle upload failed", { workspaceId: core.workspaceId, attempt, error: errorText(e) });
 
-      if (attempt < 3) await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+      if (attempt < 3)
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1) * core.retryDelayScale));
     }
   }
 

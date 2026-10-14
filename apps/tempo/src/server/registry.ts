@@ -2,6 +2,7 @@ import { WORKSPACE_FNS, type FnName, type WorkspaceFnName } from "@tempo/protoco
 import * as conversations from "./handlers/conversations.ts";
 import * as library from "./handlers/agent-library.ts";
 import * as credentials from "./handlers/credentials.ts";
+import * as dotfiles from "./handlers/dotfiles.ts";
 import * as environments from "./handlers/environments.ts";
 import * as mcp from "./handlers/mcp.ts";
 import * as projects from "./handlers/projects.ts";
@@ -76,6 +77,8 @@ const own = {
   deleteEnvironment: environments.deleteEnvironment,
   setEnvironmentSecret: environments.setEnvironmentSecret,
   deleteEnvironmentSecret: environments.deleteEnvironmentSecret,
+  getDotfiles: dotfiles.getDotfiles,
+  updateDotfiles: dotfiles.updateDotfiles,
   createWorkspace,
   listWorkspaces,
   listModels,

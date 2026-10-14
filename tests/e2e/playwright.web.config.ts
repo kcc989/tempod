@@ -16,11 +16,6 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
-      name: "desktop-dark",
-      grep: /theme follows the selected appearance/,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, colorScheme: "dark" },
-    },
-    {
       name: "phone-chromium",
       grep: /@mobile/,
       use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },

@@ -43,8 +43,10 @@ environment values. Generated Wrangler metadata contains absolute paths, so the
 checkout directory is part of this task's hash. The general app `build` remains
 uncached because it permits arbitrary external Wrangler configuration paths.
 Browser fixture builds have separate cached outputs (`test/web/dist` and
-`test/browser/dist`); both browser suites still execute against restored or freshly
-built artifacts before previewing to avoid development-server transform costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
+`test/browser/dist`). The App build step builds them alongside `build:ci`, so the
+browser stage's web servers only replay the cached outputs; both browser suites still
+execute against those artifacts before previewing to avoid development-server
+transform costs. Worker tests prebundle Effect and Drizzle (including their used subpaths)
 to avoid loading the same dependency module graph into every workerd isolate.
 Worker, UI model and component suites have separate Turbo tasks and cache entries.
 `bun run test` starts the Worker task immediately and runs all other test tasks
@@ -119,7 +121,7 @@ not a quality target.
 | UI model tests | Stores, parsing, drafts, shortcuts and view-state decisions | Every code PR in Node |
 | Component tests | DOM interaction, rendered states and accessibility contracts | Every code PR in happy-dom |
 | Web client browser tests | Shell integration, RPC contracts, keyboard, persistence, mobile navigation and rendering | Every code PR; desktop contracts plus focused phone interactions |
-| Dark appearance browser test | Actual theme application, persistence and system media changes | Every code PR; replaces duplicating every functional scenario in dark mode |
+| Theme browser test | Actual theme application, persistence and system media changes | Every code PR on desktop; one run covers light, dark, reload and System media changes |
 | Workspace browser regressions | Streaming reloads, hidden-panel shortcuts, draft mentions, phone overflow, transcript scroll, closed chats and blocked storage | Every code PR, independent browser contexts |
 | Deployment script tests | Preflight outcomes and isolation of the pinned Alchemy patch | Every code PR |
 | Image tests | Image tools, uid, tini and orphan reaping | Relevant main pushes and manual image workflow |
@@ -128,13 +130,13 @@ not a quality target.
 The port-scanner integration test now requires a scan and the listener's port;
 it previously passed when the scanner returned nothing. The idle-sleep test now asserts daemon shutdown and container destruction with an
 open UI socket. All app Vitest projects require assertions. Browser fixtures fail on unexpected calls and runtime errors.
-Eight repeated phone scenarios now execute only on desktop. Four phone web cases
-cover the tab picker/draft persistence, upload chips, project creation and touch
-navigation/settings. A separate iPhone touch regression covers the composer,
-permission approval, review and narrow-screen overflow. All general RPC, failure,
-announcement, git-lifecycle, sleep and theme cases remain covered on desktop.
-The complete dark functional matrix added no theme-specific assertion; a focused
-theme test now provides that coverage. Hosted and conformance tests no longer
+One phone web case covers touch navigation, the tab picker's focus return, the
+unified diff, settings and narrow-screen overflow; a separate iPhone touch regression
+covers the composer, permission approval, review and overflow. Other browser cases
+run on desktop only. The theme test runs once on desktop: it already switches
+light, dark and System and emulates both media schemes, so a second dark-default
+project added no assertion.
+Hosted and conformance tests no longer
 start in local CI merely to skip for missing deployments or binaries. Their
 explicit commands and acceptance gates remain available.
 
@@ -238,3 +240,45 @@ PR #53's first hosted check (`38587679509`) passed all 28 browser cases but hit 
 The Worker optimizer now bundles the existing Better Auth minimal initializer, Drizzle adapter, bearer and device-authorization plugins. Node crypto and async-hooks remain workerd built-ins. The six terminal transport regressions share the existing Worker unit suite rather than starting an additional Worker environment. All 1,030 Worker cases remain; the focused unit suite passes 382 cases. Four-file/four-case Worker limits, the two-worker browser pool, single job and deadlines are unchanged.
 
 The complete local `CI=true TURBO_FORCE=true bun run ci` workload passed with task caches bypassed in 115.8 seconds for check commands and the setup-inclusive summary. Worker tests took 106.7 seconds, other tests 67.6, browsers 45.0, typecheck 17.0, app build 17.5, daemon build 0.9, lint 2.7 and formatting 0.3. Stage durations overlap. Installed toolchains and Chromium were reused; this does not measure hosted runner provisioning. The preceding authentication-only benchmark passed in 119.8 seconds with Worker tests at 113.4 seconds. All 28 browsers execute, including real terminal keyboard input and focus across tab switches. Separate native validation passes 415 Rust cases, the attached-PTY restoration case, strict all-targets Clippy and six packaging script cases; Linux validation does not establish macOS launch, Keychain or signed-bundle acceptance.
+
+## Browser and non-Worker test reduction (2026-10-14)
+
+Hosted runs spent 127–182 s on other tests and 90–111 s on browsers, so that chain
+was nearly as long as the Worker suite. Runs where only `test:ui` and
+`test:components` missed the cache still took 70–103 s for other tests; the component
+suite alone took 39.5 s (35 s of module import) in a failed hosted log.
+
+The browser stage drops from 28 to 15 cases. Removed cases duplicated lower layers or
+another browser case: queue/edit/stop (workspace streaming case and composer
+components), duplicate-Enter and failed-send recovery (composer components), live
+announcements (transcript component and `messagesToAnnounce` unit tests), permission
+Enter (permission component and the streaming case), new workspace and both new-chat
+cases (new-workspace and workspace-composer components), desktop review/file
+navigation (phone review and file-dialog cases), and the draft/title case (draft
+mention reload and sleep/archive live updates). The new-chat case's lazy model
+discovery assertion moved into the draft-mention case. Three phone repeats and the
+dark-default theme project were removed; the phone navigation case now asserts the
+tab picker returns focus. The desktop terminal case now opens its second terminal as
+an outer `Terminal 2` tab; it still used the removed inner terminal tab list and
+timed out. Fixture builds moved to the App build step (20–33 s of browser-stage
+startup on uncached hosted runs).
+
+The Codex device-login component test used the response's one-second poll interval
+and waited three seconds; the fixture now returns a 10 ms interval. Daemon Git tests
+copy one seeded origin per process instead of running nine Git commands per origin.
+
+Local macOS measurements, on a machine shared with another test workload (load
+average about 6), with Chrome rather than the bundled Chromium: browser cases took
+11.0–12.1 s wall and 13.5 s of case time (previously 23.2 s for 27 passing cases plus
+the timed-out terminal case). Components took 6.8–7.6 s (previously 9.8 s; the Codex
+file 3.0 s to 0.09 s). Daemon tests took 16.6–20.2 s (previously 19.7–21.4 s). These
+are not hosted results; pool sizes, the single job and deadlines are unchanged.
+
+## Worker suite reduction (2026-10-14)
+
+The Worker suite exceeded the 300-second check deadline on the hosted runner (225–293 s). Local wall time fell from 35–38 s to 16–18 s, and sequential test time from 90 s to 48 s.
+
+- **Four files.** `ops`, `workspace-rpc`, `workspace-events` and `platform` are the only `*.test.ts` files, so all four Worker slots start at once and the per-file workerd startup is paid four times. Other modules are `*.cases.ts`, each imported inside its own `describe` so its hooks (fetch spies, `restoreAllMocks`) stay scoped to it.
+- **Retry timing.** `WorkspaceCore.retryDelayScale` (default 1) scales reconnect delays, bundle and artifact upload backoff and the health poll. Tests set it per workspace with `fastRetries(stub)`; production values are unchanged. Deadline cases move the clock instead of waiting.
+- **Setup.** RPC cases that need only a ready workspace use `seedReadyWorkspace`; create, wake, archive/restore and errored-workspace groups run concurrently. Cases that spy on `Date.now` or the GitHub provider stay in small sequential groups.
+- **Deleted cases (covered elsewhere):** archive and restore RPC duplicates of the ops cases; four errored-workspace read calls that share one readiness guard; sendPrompt and wakeWorkspace from error; two of four identical turn.ended stop reasons; a failed-setup queue case covered by the setup.run and continueAfterSetupFailure cases; an agent.exited duplicate; the branch-source clone variant; a wake snapshot variant; and the two harness smoke checks.

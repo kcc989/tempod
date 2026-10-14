@@ -7,12 +7,13 @@ use super::tokens::{Token, color};
 use crate::image_policy::LocalImageCache;
 use crate::links::{self, LinkTarget};
 use crate::markdown::{escape_raw_html, tool_text};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::{TextView, TextViewStyle};
-use gpui_kit::component::{Disableable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
     ImageFormat, ImageSource, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
@@ -78,6 +79,7 @@ impl TranscriptRow {
 
 #[derive(Clone, Debug)]
 pub enum TranscriptEvent {
+    OpenSetup,
     ResolveAgentProposal {
         proposal_id: String,
         apply: bool,
@@ -917,6 +919,26 @@ fn render_native_row(
         return markdown(id, &row.source);
     };
     match content {
+        RowContent::Startup { title, setup } => h_flex()
+            .id("workspace-startup")
+            .role(Role::Status)
+            .aria_label(title.clone())
+            .px_4()
+            .py_2()
+            .gap_2()
+            .text_color(color(Token::MutedForeground, cx))
+            .child(Spinner::new().small())
+            .child(div().flex_1().min_w_0().child(title))
+            .children(setup.then(|| {
+                Button::new("transcript-open-setup")
+                    .ghost()
+                    .small()
+                    .label("Open Setup tab")
+                    .on_click(move |_, _, cx| {
+                        let _ = view.update(cx, |_, cx| cx.emit(TranscriptEvent::OpenSetup));
+                    })
+            }))
+            .into_any_element(),
         RowContent::Working { .. } => div()
             .px_4()
             .py_2()
@@ -931,6 +953,8 @@ fn render_native_row(
                     .map(|start| chat_model::format_duration(now_ms() - start))
                     .unwrap_or_default();
                 h_flex()
+                    .w_full()
+                    .min_w_0()
                     .gap_2()
                     .child(Spinner::new())
                     .child(div().flex_1().min_w_0().truncate().child(
@@ -948,6 +972,9 @@ fn render_native_row(
                     .zip(turn.ended_at)
                     .map(|(start, end)| end - start);
                 div()
+                    .w_full()
+                    .min_w_0()
+                    .truncate()
                     .text_color(color(Token::MutedForeground, cx))
                     .child(chat_model::work_summary(&items, duration))
                     .into_any_element()
@@ -971,6 +998,8 @@ fn render_native_row(
                 .upgrade()
                 .is_some_and(|v| v.read(cx).is_open(&key, running));
             div()
+                .w_full()
+                .px_4()
                 .opacity(if dim { 0.5 } else { 1. })
                 .child(
                     Collapsible::new()
@@ -979,6 +1008,7 @@ fn render_native_row(
                             Button::new(SharedString::from(format!("{id}:toggle")))
                                 .ghost()
                                 .w_full()
+                                .px_0()
                                 .accessibility_label("Work")
                                 .child(header)
                                 .on_click(move |_, _, cx| {
@@ -995,13 +1025,22 @@ fn render_native_row(
                 )
                 .into_any_element()
         }
-        RowContent::Footer { turn, work_row } => div()
-            .px_4()
-            .py_2()
-            .opacity(if turn.reverted { 0.5 } else { 1. })
-            .text_color(color(Token::MutedForeground, cx))
-            .child(chat_model::turn_footer(&turn, work_row))
-            .into_any_element(),
+        RowContent::Footer { turn, work_row } => {
+            let detail = chat_model::turn_usage_detail(&turn).map(SharedString::from);
+            div()
+                .id(SharedString::from(format!("turn-footer-{id}")))
+                .px_4()
+                .py_2()
+                .opacity(if turn.reverted { 0.5 } else { 1. })
+                .text_color(color(Token::MutedForeground, cx))
+                .when_some(detail, |this, detail| {
+                    this.tooltip(move |window, cx| {
+                        gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx)
+                    })
+                })
+                .child(chat_model::turn_footer(&turn, work_row))
+                .into_any_element()
+        }
         RowContent::Item {
             item,
             dim,
@@ -1643,7 +1682,10 @@ fn disclosure(
         .is_some_and(|v| v.read(cx).is_open(&key, default));
     let mut button = Button::new(SharedString::from(format!("{id}:disclosure")))
         .ghost()
-        .label(header.title)
+        .w_full()
+        .px_0()
+        .accessibility_label(header.title.clone())
+        .child(div().w_full().min_w_0().truncate().child(header.title))
         .on_click(move |_, _, cx| {
             let _ = view.update(cx, |this, cx| {
                 let open = this.is_open(&key, default);
@@ -1661,9 +1703,11 @@ fn disclosure(
         button = button.font_family("monospace");
     }
     Collapsible::new()
+        .w_full()
+        .px_4()
         .open(expanded)
-        .child(div().min_w_0().truncate().child(button))
-        .content(content)
+        .child(button)
+        .content(div().min_w_0().pl_4().child(content))
         .into_any_element()
 }
 

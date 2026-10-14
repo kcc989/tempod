@@ -1,0 +1,78 @@
+{
+  "policy": "acceptance-v1",
+  "pass": false,
+  "status": "review_or_fail",
+  "reasons": [
+    "score 0.76 < 0.8",
+    "weak dimension: ai",
+    "weak dimension: control",
+    "weak dimension: speed",
+    "verdict is review",
+    "answer below 0.40: focus_space_fit = 0.302",
+    "answer below 0.40: ai_evidence = 0.264",
+    "answer below 0.40: ai_feedback = 0.03",
+    "answer below 0.40: control_draft = 0.155",
+    "answer below 0.40: speed_shortcuts = 0.022",
+    "answer below 0.40: speed_views = 0.285",
+    "answer below 0.40: quality_repeated_identifier = 0.307",
+    "area layout: fail",
+    "area color-depth: review",
+    "area usability: fail"
+  ],
+  "lowAnswers": [
+    {
+      "question": "focus_space_fit",
+      "value": 0.302,
+      "uncertain": false,
+      "source": "layout"
+    },
+    {
+      "question": "status_attention",
+      "value": 0.379,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "ai_evidence",
+      "value": 0.264,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "ai_feedback",
+      "value": 0.03,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "control_draft",
+      "value": 0.155,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "control_diff",
+      "value": 0,
+      "uncertain": true,
+      "source": "usability"
+    },
+    {
+      "question": "speed_shortcuts",
+      "value": 0.022,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "speed_views",
+      "value": 0.285,
+      "uncertain": false,
+      "source": "usability"
+    },
+    {
+      "question": "quality_repeated_identifier",
+      "value": 0.307,
+      "uncertain": false,
+      "source": "usability"
+    }
+  ]
+}

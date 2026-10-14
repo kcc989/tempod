@@ -27,7 +27,8 @@ import {
   WrenchIcon,
   XCircleIcon,
 } from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState } from "react";
+import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { Button } from "~/ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/ui/components/ui/collapsible";
 import { Kbd } from "~/ui/components/ui/kbd";
@@ -56,6 +57,7 @@ import {
   toolIcon,
   turnDuration,
   turnOutcome,
+  turnTokenSplit,
   turnTokens,
   workspacePath,
   type ToolIcon,
@@ -260,7 +262,7 @@ function AgentMessage({ ctx, item }: { ctx: ItemContext; item: ItemOf<"agent_mes
 function Collapsed({ label, text, mono = false }: { label: string; text: string; mono?: boolean }) {
   return (
     <Collapsible className="group/c">
-      <CollapsibleTrigger className="flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground">
+      <CollapsibleTrigger className="flex items-center gap-1 rounded-sm text-left text-xs text-muted-foreground hover:text-foreground">
         <ChevronRightIcon className="size-3 transition-transform group-data-[state=open]/c:rotate-90" />
         {label}
       </CollapsibleTrigger>
@@ -695,13 +697,29 @@ function AttachmentThumb({
 export function TurnFooter({ turn, worked = false }: { turn: Turn; worked?: boolean }) {
   const ms = worked ? null : turnDuration(turn);
   const tokens = turnTokens(turn);
+  const split = turnTokenSplit(turn);
   const outcome = turnOutcome(turn);
 
   if (ms === null && tokens === null && outcome === null) return null;
 
+  const parts = [
+    ms !== null ? formatDuration(ms) : null,
+    tokens && split ? (
+      <SimpleTooltip key="tokens" label={split}>
+        <span>{tokens}</span>
+      </SimpleTooltip>
+    ) : null,
+    outcome,
+  ].filter((part) => part !== null);
+
   return (
     <p className="text-xs text-muted-foreground">
-      {[ms !== null ? formatDuration(ms) : null, tokens, outcome].filter(Boolean).join(" · ")}
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && " · "}
+          {part}
+        </Fragment>
+      ))}
     </p>
   );
 }

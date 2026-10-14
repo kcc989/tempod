@@ -129,7 +129,7 @@ export const waitHealthy = async (
       last = errorText(e);
     }
 
-    await new Promise((r) => setTimeout(r, HEALTH_POLL_MS));
+    await new Promise((r) => setTimeout(r, HEALTH_POLL_MS * core.retryDelayScale));
   }
 
   throw new TempoError("CONTAINER_START_FAILED", undefined, `tempod never became healthy: ${last}`);
@@ -265,7 +265,7 @@ export const scheduleReconnect = (
       });
       scheduleReconnect(core, handlers, giveUp);
     }
-  }, RECONNECT_DELAYS[attempt]);
+  }, RECONNECT_DELAYS[attempt]! * core.retryDelayScale);
 };
 
 export const requireTempod = (core: WorkspaceCore): TempodClient => {

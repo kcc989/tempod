@@ -3,7 +3,7 @@ use crate::{TerminalEvent, TerminalInput, TerminalIo, TerminalState, input, mous
 use alacritty_terminal::event::Event;
 use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
 use alacritty_terminal::term::cell::Flags;
-use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, v_flex};
 use gpui_kit::{
     ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Task,
@@ -108,7 +108,10 @@ impl TerminalView {
 }
 impl Render for TerminalView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let font = cx.text_system().resolve_font(&gpui_kit::font("monospace"));
+        let family = cx.theme().mono_font_family.clone();
+        let font = cx
+            .text_system()
+            .resolve_font(&gpui_kit::font(family.clone()));
         let cell_width = cx
             .text_system()
             .em_advance(font, px(13.))
@@ -125,69 +128,77 @@ impl Render for TerminalView {
             .as_ref()
             .and_then(|s| s.to_range(self.state.term()));
         let cursor = self.state.cursor();
+        let base = gpui_kit::font(family.clone());
+        let default_bg = palette.background();
+        let show_cursor = self
+            .state
+            .mode()
+            .contains(alacritty_terminal::term::TermMode::SHOW_CURSOR)
+            && self.state.display_offset() == 0;
+        // One shaped text per row; per-cell elements made every echo re-layout the whole grid.
         let lines: Vec<_> = (0..usize::from(rows))
             .map(|row| {
                 let line = Line(row as i32 - self.state.display_offset() as i32);
-                h_flex()
-                    .h(px(18.))
-                    .children((0..usize::from(cols)).filter_map(|col| {
-                        let cell = &self.state.term().grid()[line][Column(col)];
-                        if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
-                            return None;
+                let mut text = String::new();
+                let mut runs: Vec<gpui_kit::TextRun> = Vec::new();
+                for col in 0..usize::from(cols) {
+                    let cell = &self.state.term().grid()[line][Column(col)];
+                    if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+                        continue;
+                    }
+                    let mut fg = palette.resolve(cell.fg, self.state.term().colors());
+                    let mut bg = palette.resolve(cell.bg, self.state.term().colors());
+                    if cell.flags.contains(Flags::INVERSE) {
+                        std::mem::swap(&mut fg, &mut bg);
+                    }
+                    if cell.flags.contains(Flags::DIM) {
+                        fg = crate::colors::dim(fg);
+                    }
+                    if selection
+                        .as_ref()
+                        .is_some_and(|s| s.contains(GridPoint::new(line, Column(col))))
+                    {
+                        bg = palette.selection();
+                    }
+                    if show_cursor && cursor == (line.0, col) {
+                        bg = palette.cursor();
+                        fg = palette.background();
+                    }
+                    let start = text.len();
+                    if cell.flags.contains(Flags::HIDDEN) || cell.c == '\0' {
+                        text.push(' ');
+                    } else {
+                        text.push(cell.c);
+                        if let Some(chars) = cell.zerowidth() {
+                            text.extend(chars);
                         }
-                        let mut fg = palette.resolve(cell.fg, self.state.term().colors());
-                        let mut bg = palette.resolve(cell.bg, self.state.term().colors());
-                        if cell.flags.contains(Flags::INVERSE) {
-                            std::mem::swap(&mut fg, &mut bg);
-                        }
-                        if cell.flags.contains(Flags::DIM) {
-                            fg = crate::colors::dim(fg);
-                        }
-                        if selection
-                            .as_ref()
-                            .is_some_and(|s| s.contains(GridPoint::new(line, Column(col))))
+                    }
+                    let len = text.len() - start;
+                    let mut font = base.clone();
+                    if cell.flags.contains(Flags::BOLD) {
+                        font.weight = gpui_kit::FontWeight::BOLD;
+                    }
+                    let background_color = (bg != default_bg).then_some(bg);
+                    match runs.last_mut() {
+                        Some(last)
+                            if last.color == fg
+                                && last.background_color == background_color
+                                && last.font == font =>
                         {
-                            bg = palette.selection();
+                            last.len += len
                         }
-                        if self
-                            .state
-                            .mode()
-                            .contains(alacritty_terminal::term::TermMode::SHOW_CURSOR)
-                            && cursor == (line.0, col)
-                            && self.state.display_offset() == 0
-                        {
-                            bg = palette.cursor();
-                            fg = palette.background();
-                        }
-                        let text = if cell
-                            .flags
-                            .intersects(Flags::WIDE_CHAR_SPACER | Flags::HIDDEN)
-                        {
-                            " ".into()
-                        } else {
-                            let mut text = cell.c.to_string();
-                            if let Some(chars) = cell.zerowidth() {
-                                text.extend(chars);
-                            }
-                            text
-                        };
-                        let mut div = div()
-                            .w(cell_width
-                                * if cell.flags.contains(Flags::WIDE_CHAR) {
-                                    2.
-                                } else {
-                                    1.
-                                })
-                            .flex_shrink_0()
-                            .h(px(18.))
-                            .text_color(fg)
-                            .bg(bg)
-                            .child(text);
-                        if cell.flags.contains(Flags::BOLD) {
-                            div = div.font_weight(gpui_kit::FontWeight::BOLD);
-                        }
-                        Some(div)
-                    }))
+                        _ => runs.push(gpui_kit::TextRun {
+                            len,
+                            font,
+                            color: fg,
+                            background_color,
+                            underline: None,
+                            strikethrough: None,
+                        }),
+                    }
+                }
+                gpui_kit::StyledText::new(text)
+                    .with_runs(runs)
                     .into_any_element()
             })
             .collect();
@@ -199,8 +210,9 @@ impl Render for TerminalView {
             .relative()
             .key_context("Terminal")
             .track_focus(&self.focus)
-            .font_family("monospace")
+            .font_family(family)
             .text_size(px(13.))
+            .line_height(px(18.))
             .overflow_hidden()
             .on_mouse_up_out(
                 gpui_kit::MouseButton::Left,

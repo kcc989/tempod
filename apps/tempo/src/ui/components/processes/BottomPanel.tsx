@@ -65,7 +65,12 @@ export function BottomPanel({ workspaceId }: BottomPanelProps) {
       ) : (
         terminalOpened && (
           <TabsContent value="terminal" forceMount className="min-h-0 data-[state=inactive]:hidden">
-            <TerminalTab key={workspaceId} workspaceId={workspaceId} visible={tab === "terminal"} />
+            <TerminalTab
+              key={workspaceId}
+              workspaceId={workspaceId}
+              terminalId="t1"
+              visible={tab === "terminal"}
+            />
           </TabsContent>
         )
       )}

@@ -1,0 +1,71 @@
+{
+  "verdict": "review",
+  "score": 0.72,
+  "dimensions": {
+    "focus": 0.61,
+    "status": 0.88,
+    "ai": 0.15,
+    "control": 0.12,
+    "scan": 0.65,
+    "nav": 0.87,
+    "speed": 0.63,
+    "states": 1,
+    "copy": 0.75,
+    "color": 0.9,
+    "spacing": 0.89,
+    "type": 0.9,
+    "icons": 0.81,
+    "contrast": 0.62,
+    "restraint": 0.85,
+    "overflow": 1,
+    "slop": 1,
+    "quality": 0.63
+  },
+  "blockers": [
+    "Text covered by another element."
+  ],
+  "weakDimensions": [
+    "ai",
+    "control"
+  ],
+  "issues": [
+    {
+      "rule": "Text covered by another element",
+      "kind": "quality",
+      "p": 0.76
+    },
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.74
+    }
+  ],
+  "fixes": [
+    "Show changes as before and after.",
+    "Let the user save a draft or undo before work is final.",
+    "Give each row one bold main field, aligned grey secondary fields, and truncation.",
+    "Let the user rate or correct AI output, and confirm the rating.",
+    "State the limits of the AI near its output.",
+    "Show each AI step as one short line that the user can expand."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_content_share",
+    "focus_reading_order",
+    "focus_affordance",
+    "status_items",
+    "status_lifecycle",
+    "ai_evidence",
+    "control_diff",
+    "scan_rows",
+    "nav_groups",
+    "states_disabled_clear",
+    "copy_labels",
+    "type_scale",
+    "type_mono",
+    "icons_meaning",
+    "contrast_secondary",
+    "overflow_long_text",
+    "overflow_scroll_cue"
+  ]
+}

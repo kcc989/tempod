@@ -138,6 +138,7 @@ describe("contract", () => {
     expect(TEMPOD_REQUESTS["git.readFile"].timeoutMs).toBe(10_000);
     expect(TEMPOD_REQUESTS["artifact.release"].timeoutMs).toBe(10_000);
     expect(TEMPOD_REQUESTS["ci.checkout"].timeoutMs).toBe(600_000);
+    expect(TEMPOD_REQUESTS["dotfiles.apply"].timeoutMs).toBe(120_000);
     expect(Object.keys(TEMPOD_REQUESTS).sort()).toEqual(
       [
         "repo.clone",
@@ -171,6 +172,7 @@ describe("contract", () => {
         "fs.read",
         "fs.search",
         "terminal.list",
+        "dotfiles.apply",
         "shutdown",
       ].sort(),
     );

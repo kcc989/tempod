@@ -1,0 +1,18 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "list.png"
+  ],
+  "known": {
+    "ai": false,
+    "async": false,
+    "collection": true,
+    "editing": false,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Thread list with queue counts; no AI output, running work, editor, empty area, error or limit."
+}

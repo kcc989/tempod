@@ -1,0 +1,193 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.89,
+    "dimensions": {
+      "focus": 0.71,
+      "type": 0.86,
+      "overflow": 1,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [
+      "focus_space_fit = 0.302 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.302,
+        "uncertain": false,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:overflow_long_text",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make each panel only as wide as its content needs."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.97,
+    "dimensions": {
+      "spacing": 0.9,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.88,
+    "dimensions": {
+      "color": 0.85,
+      "icons": 0.81,
+      "contrast": 0.64,
+      "restraint": 0.89,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.72,
+    "dimensions": {
+      "focus": 0.78,
+      "status": 0.77,
+      "ai": 0.52,
+      "control": 0.38,
+      "scan": 0.75,
+      "nav": 0.95,
+      "speed": 0.42,
+      "copy": 0.66,
+      "slop": 1,
+      "quality": 0.83
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "ai",
+      "control",
+      "speed"
+    ],
+    "majors": [
+      "dimension ai below 0.6",
+      "dimension control below 0.6",
+      "dimension speed below 0.6",
+      "ai_evidence = 0.264 (below 0.4)",
+      "ai_feedback = 0.03 (below 0.4)",
+      "control_draft = 0.155 (below 0.4)",
+      "speed_shortcuts = 0.022 (below 0.4)",
+      "speed_views = 0.285 (below 0.4)",
+      "quality_repeated_identifier = 0.307 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "status_attention",
+        "value": 0.379,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "ai_evidence",
+        "value": 0.264,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "ai_feedback",
+        "value": 0.03,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "control_draft",
+        "value": 0.155,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "control_diff",
+        "value": 0,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "speed_shortcuts",
+        "value": 0.022,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.285,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.307,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:status_attention",
+      "usability:control_diff",
+      "usability:scan_rows",
+      "usability:nav_tabs_current",
+      "usability:copy_labels",
+      "usability:copy_controls_labeled"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.69
+      }
+    ],
+    "fixes": [
+      "Let the user rate or correct AI output, and confirm the rating.",
+      "Show changes as before and after.",
+      "Let the user save a draft or undo before work is final.",
+      "Show the sources, files, or commands that the AI used.",
+      "Show keyboard shortcuts next to frequent actions.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing."
+    ]
+  }
+}

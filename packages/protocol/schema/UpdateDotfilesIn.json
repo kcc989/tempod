@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UpdateDotfilesIn",
+  "type": "object",
+  "properties": {
+    "files": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["files"],
+  "additionalProperties": true
+}

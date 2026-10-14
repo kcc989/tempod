@@ -1,0 +1,995 @@
+{
+  "overall": {
+    "auc": 0.9183673469387755,
+    "ref": [
+      0.76,
+      0.78,
+      0.77,
+      0.69,
+      0.79,
+      0.8,
+      0.75
+    ],
+    "poor": [
+      0.75,
+      0.75,
+      0.72,
+      0.68,
+      0.64,
+      0.66,
+      0.67
+    ]
+  },
+  "areas": {
+    "layout": {
+      "auc": 0.7857142857142857,
+      "ref": [
+        0.89,
+        0.89,
+        0.85,
+        0.86,
+        0.73,
+        0.85,
+        0.76
+      ],
+      "poor": [
+        0.84,
+        0.79,
+        0.83,
+        0.74,
+        0.76,
+        0.67,
+        0.77
+      ],
+      "refPass": 0,
+      "poorPass": 0
+    },
+    "spacing": {
+      "auc": 0.6938775510204082,
+      "ref": [
+        0.97,
+        0.97,
+        0.97,
+        0.98,
+        0.97,
+        0.98,
+        0.97
+      ],
+      "poor": [
+        0.97,
+        0.97,
+        0.97,
+        0.96,
+        0.97,
+        0.97,
+        0.97
+      ],
+      "refPass": 7,
+      "poorPass": 6
+    },
+    "color-depth": {
+      "auc": 0.6632653061224489,
+      "ref": [
+        0.88,
+        0.87,
+        0.88,
+        0.86,
+        0.9,
+        0.9,
+        0.89
+      ],
+      "poor": [
+        0.88,
+        0.86,
+        0.88,
+        0.89,
+        0.89,
+        0.86,
+        0.86
+      ],
+      "refPass": 0,
+      "poorPass": 0
+    },
+    "usability": {
+      "auc": 0.8367346938775511,
+      "ref": [
+        0.72,
+        0.75,
+        0.77,
+        0.65,
+        0.84,
+        0.8,
+        0.78
+      ],
+      "poor": [
+        0.74,
+        0.76,
+        0.69,
+        0.65,
+        0.6,
+        0.66,
+        0.65
+      ],
+      "refPass": 0,
+      "poorPass": 0
+    }
+  },
+  "questions": {
+    "focus_primary_path": {
+      "auc": 0.592,
+      "refMean": 0.812,
+      "poorMean": 0.785,
+      "refMin": 0.649
+    },
+    "focus_content_share": {
+      "auc": 0.694,
+      "refMean": 0.791,
+      "poorMean": 0.65,
+      "refMin": 0.565
+    },
+    "focus_reading_order": {
+      "auc": 0.735,
+      "refMean": 0.899,
+      "poorMean": 0.79,
+      "refMin": 0.824
+    },
+    "focus_affordance": {
+      "auc": 0.98,
+      "refMean": 0.807,
+      "poorMean": 0.656,
+      "refMin": 0.738
+    },
+    "focus_space_fit": {
+      "auc": 0.633,
+      "refMean": 0.301,
+      "poorMean": 0.265,
+      "refMin": 0.236
+    },
+    "status_items": {
+      "auc": 0.551,
+      "refMean": 0.686,
+      "poorMean": 0.6,
+      "refMin": 0.443
+    },
+    "status_async": {
+      "auc": 0.449,
+      "refMean": 0.45,
+      "poorMean": 0.399,
+      "refMin": 0.091
+    },
+    "status_attention": {
+      "auc": 0.714,
+      "refMean": 0.319,
+      "poorMean": 0.118,
+      "refMin": 0.032
+    },
+    "status_consistent": {
+      "auc": 0.408,
+      "refMean": 0.9,
+      "poorMean": 0.904,
+      "refMin": 0.857
+    },
+    "status_lifecycle": {
+      "choices": {
+        "poor-1-workspace": "explains",
+        "poor-2-info-regression": "explains",
+        "poor-3-branch-centered": "explains",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "explains",
+        "poor-7-info-initial": "explains",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "not_shown",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "not_shown",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "bare",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "ai_steps": {
+      "auc": 0.49,
+      "refMean": 0.431,
+      "poorMean": 0.219,
+      "refMin": 0.042
+    },
+    "ai_evidence": {
+      "auc": 0.49,
+      "refMean": 0.352,
+      "poorMean": 0.338,
+      "refMin": 0.041
+    },
+    "ai_marked": {
+      "choices": {
+        "poor-1-workspace": "not_shown",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "not_shown",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "not_shown",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "not_shown",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "not_shown",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "marked",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "ai_limits": {
+      "auc": 0.653,
+      "refMean": 0.287,
+      "poorMean": 0.035,
+      "refMin": 0.015
+    },
+    "ai_feedback": {
+      "auc": 0.918,
+      "refMean": 0.158,
+      "poorMean": 0.021,
+      "refMin": 0.022
+    },
+    "control_ask": {
+      "choices": {
+        "poor-1-workspace": "not_shown",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "not_shown",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "not_shown",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "structured",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "not_shown",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "not_shown",
+        "ref-7-customerio": "none"
+      }
+    },
+    "control_draft": {
+      "auc": 0.388,
+      "refMean": 0.22,
+      "poorMean": 0.186,
+      "refMin": 0.091
+    },
+    "control_diff": {
+      "choices": {
+        "poor-1-workspace": "not_shown",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "hidden",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "hidden",
+        "poor-6-new-workspace": "hidden",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "hidden",
+        "ref-2-codex": "not_shown",
+        "ref-3-gumloop": "hidden",
+        "ref-4-attio": "hidden",
+        "ref-5-linear": "shown",
+        "ref-6-plain": "hidden",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "control_consent": {
+      "choices": {
+        "poor-1-workspace": "not_shown",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "not_shown",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "not_shown",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "in_context",
+        "ref-2-codex": "not_shown",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "not_shown",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "not_shown",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "scan_rows": {
+      "auc": 0.796,
+      "refMean": 0.784,
+      "poorMean": 0.648,
+      "refMin": 0.691
+    },
+    "scan_missing": {
+      "choices": {
+        "poor-1-workspace": "not_shown",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "not_shown",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "muted",
+        "poor-6-new-workspace": "not_shown",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "not_shown",
+        "ref-3-gumloop": "muted",
+        "ref-4-attio": "muted",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "muted",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "scan_overflow": {
+      "choices": {
+        "poor-1-workspace": "not_shown",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "not_shown",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "not_shown",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "not_shown",
+        "ref-3-gumloop": "count",
+        "ref-4-attio": "clipped",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "not_shown",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "nav_current": {
+      "auc": 0.857,
+      "refMean": 0.941,
+      "poorMean": 0.786,
+      "refMin": 0.867
+    },
+    "nav_groups": {
+      "auc": 0.796,
+      "refMean": 0.822,
+      "poorMean": 0.726,
+      "refMin": 0.717
+    },
+    "nav_return": {
+      "auc": 0.551,
+      "refMean": 0.687,
+      "poorMean": 0.626,
+      "refMin": 0.366
+    },
+    "nav_tabs_current": {
+      "choices": {
+        "poor-1-workspace": "clear",
+        "poor-2-info-regression": "clear",
+        "poor-3-branch-centered": "clear",
+        "poor-4-agents-list": "clear",
+        "poor-5-agent-editor": "clear",
+        "poor-6-new-workspace": "clear",
+        "poor-7-info-initial": "clear",
+        "ref-1-claude": "clear",
+        "ref-2-codex": "clear",
+        "ref-3-gumloop": "clear",
+        "ref-4-attio": "clear",
+        "ref-5-linear": "clear",
+        "ref-6-plain": "clear",
+        "ref-7-customerio": "clear"
+      }
+    },
+    "speed_search": {
+      "auc": 0.286,
+      "refMean": 0.782,
+      "poorMean": 0.686,
+      "refMin": 0.589
+    },
+    "speed_shortcuts": {
+      "auc": 0.327,
+      "refMean": 0.188,
+      "poorMean": 0.647,
+      "refMin": 0.015
+    },
+    "speed_views": {
+      "auc": 0.837,
+      "refMean": 0.534,
+      "poorMean": 0.11,
+      "refMin": 0.022
+    },
+    "states_empty": {
+      "auc": 0.306,
+      "refMean": 0.418,
+      "poorMean": 0.49,
+      "refMin": 0.198
+    },
+    "states_errors": {
+      "auc": 0.939,
+      "refMean": 0.203,
+      "poorMean": 0.037,
+      "refMin": 0.04
+    },
+    "states_disabled_clear": {
+      "choices": {
+        "poor-1-workspace": "clear",
+        "poor-2-info-regression": "clear",
+        "poor-3-branch-centered": "clear",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "confusing",
+        "poor-6-new-workspace": "clear",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "clear",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "clear",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "not_shown",
+        "ref-7-customerio": "clear"
+      }
+    },
+    "copy_labels": {
+      "auc": 0.714,
+      "refMean": 0.86,
+      "poorMean": 0.836,
+      "refMin": 0.81
+    },
+    "copy_status": {
+      "auc": 0.653,
+      "refMean": 0.721,
+      "poorMean": 0.602,
+      "refMin": 0.405
+    },
+    "copy_controls_labeled": {
+      "auc": 0.327,
+      "refMean": 0.649,
+      "poorMean": 0.724,
+      "refMin": 0.425
+    },
+    "trust_usage": {
+      "auc": 0.786,
+      "refMean": 0.305,
+      "poorMean": 0.046,
+      "refMin": 0.04
+    },
+    "trust_onboarding": {
+      "choices": {
+        "poor-1-workspace": "light",
+        "poor-2-info-regression": "none",
+        "poor-3-branch-centered": "none",
+        "poor-4-agents-list": "none",
+        "poor-5-agent-editor": "none",
+        "poor-6-new-workspace": "none",
+        "poor-7-info-initial": "none",
+        "ref-1-claude": "none",
+        "ref-2-codex": "none",
+        "ref-3-gumloop": "none",
+        "ref-4-attio": "light",
+        "ref-5-linear": "light",
+        "ref-6-plain": "none",
+        "ref-7-customerio": "light"
+      }
+    },
+    "color_role": {
+      "auc": 0.306,
+      "refMean": 0.826,
+      "poorMean": 0.847,
+      "refMin": 0.8
+    },
+    "color_accents": {
+      "auc": 0.429,
+      "refMean": 0.879,
+      "poorMean": 0.948,
+      "refMin": 0.535
+    },
+    "color_semantic": {
+      "auc": 0.286,
+      "refMean": 0.792,
+      "poorMean": 0.854,
+      "refMin": 0.574
+    },
+    "color_not_alone": {
+      "auc": 0.694,
+      "refMean": 0.856,
+      "poorMean": 0.818,
+      "refMin": 0.693
+    },
+    "color_dark_layers": {
+      "choices": {
+        "poor-1-workspace": "tonal",
+        "poor-2-info-regression": "tonal",
+        "poor-3-branch-centered": "tonal",
+        "poor-4-agents-list": "tonal",
+        "poor-5-agent-editor": "tonal",
+        "poor-6-new-workspace": "tonal",
+        "poor-7-info-initial": "tonal",
+        "ref-1-claude": "tonal",
+        "ref-2-codex": "tonal",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "not_shown",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "not_shown",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "spacing_grouping": {
+      "auc": 0.714,
+      "refMean": 0.913,
+      "poorMean": 0.897,
+      "refMin": 0.908
+    },
+    "spacing_alignment": {
+      "auc": 0.612,
+      "refMean": 0.917,
+      "poorMean": 0.908,
+      "refMin": 0.878
+    },
+    "spacing_consistent": {
+      "auc": 0.673,
+      "refMean": 0.879,
+      "poorMean": 0.861,
+      "refMin": 0.813
+    },
+    "type_hierarchy": {
+      "auc": 0.469,
+      "refMean": 0.916,
+      "poorMean": 0.923,
+      "refMin": 0.873
+    },
+    "type_scale": {
+      "auc": 0.388,
+      "refMean": 0.807,
+      "poorMean": 0.815,
+      "refMin": 0.747
+    },
+    "type_line_height": {
+      "auc": 0.694,
+      "refMean": 0.863,
+      "poorMean": 0.857,
+      "refMin": 0.733
+    },
+    "type_numbers": {
+      "choices": {
+        "poor-1-workspace": "not_shown",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "not_shown",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "not_shown",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "not_shown",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "aligned",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "not_shown",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "type_mono": {
+      "choices": {
+        "poor-1-workspace": "mono",
+        "poor-2-info-regression": "not_shown",
+        "poor-3-branch-centered": "mono",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "mixed",
+        "poor-7-info-initial": "mono",
+        "ref-1-claude": "not_shown",
+        "ref-2-codex": "mono",
+        "ref-3-gumloop": "not_shown",
+        "ref-4-attio": "not_shown",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "not_shown",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "icons_one_set": {
+      "auc": 0.735,
+      "refMean": 0.895,
+      "poorMean": 0.884,
+      "refMin": 0.815
+    },
+    "icons_size": {
+      "auc": 0.878,
+      "refMean": 0.888,
+      "poorMean": 0.852,
+      "refMin": 0.862
+    },
+    "icons_meaning": {
+      "auc": 0.469,
+      "refMean": 0.636,
+      "poorMean": 0.635,
+      "refMin": 0.603
+    },
+    "contrast_secondary": {
+      "auc": 0.878,
+      "refMean": 0.66,
+      "poorMean": 0.583,
+      "refMin": 0.561
+    },
+    "contrast_boundaries": {
+      "auc": 0.735,
+      "refMean": 0.763,
+      "poorMean": 0.663,
+      "refMin": 0.68
+    },
+    "restraint_noise": {
+      "auc": 0.388,
+      "refMean": 0.849,
+      "poorMean": 0.864,
+      "refMin": 0.774
+    },
+    "overflow_long_text": {
+      "choices": {
+        "poor-1-workspace": "ellipsis",
+        "poor-2-info-regression": "ellipsis",
+        "poor-3-branch-centered": "ellipsis",
+        "poor-4-agents-list": "not_shown",
+        "poor-5-agent-editor": "not_shown",
+        "poor-6-new-workspace": "not_shown",
+        "poor-7-info-initial": "not_shown",
+        "ref-1-claude": "ellipsis",
+        "ref-2-codex": "ellipsis",
+        "ref-3-gumloop": "ellipsis",
+        "ref-4-attio": "ellipsis",
+        "ref-5-linear": "not_shown",
+        "ref-6-plain": "ellipsis",
+        "ref-7-customerio": "not_shown"
+      }
+    },
+    "overflow_scroll_cue": {
+      "choices": {
+        "poor-1-workspace": "no_cue",
+        "poor-2-info-regression": "no_cue",
+        "poor-3-branch-centered": "cue",
+        "poor-4-agents-list": "no_cue",
+        "poor-5-agent-editor": "no_cue",
+        "poor-6-new-workspace": "no_cue",
+        "poor-7-info-initial": "no_cue",
+        "ref-1-claude": "cue",
+        "ref-2-codex": "cue",
+        "ref-3-gumloop": "no_cue",
+        "ref-4-attio": "no_cue",
+        "ref-5-linear": "no_cue",
+        "ref-6-plain": "no_cue",
+        "ref-7-customerio": "no_cue"
+      }
+    },
+    "slop_grid_background": {
+      "auc": 0.582,
+      "refMean": 0.989,
+      "poorMean": 0.989,
+      "refMin": 0.988
+    },
+    "slop_rounded_border_accent": {
+      "auc": 0.602,
+      "refMean": 0.984,
+      "poorMean": 0.913,
+      "refMin": 0.982
+    },
+    "slop_side_stripe": {
+      "auc": 0.082,
+      "refMean": 0.977,
+      "poorMean": 0.981,
+      "refMin": 0.97
+    },
+    "slop_border_and_shadow": {
+      "auc": 0.469,
+      "refMean": 0.917,
+      "poorMean": 0.922,
+      "refMin": 0.761
+    },
+    "slop_glass": {
+      "auc": 0.561,
+      "refMean": 0.983,
+      "poorMean": 0.981,
+      "refMin": 0.97
+    },
+    "slop_stripes": {
+      "auc": 0.316,
+      "refMean": 0.987,
+      "poorMean": 0.988,
+      "refMin": 0.984
+    },
+    "slop_extreme_radius": {
+      "auc": 0.327,
+      "refMean": 0.944,
+      "poorMean": 0.948,
+      "refMin": 0.922
+    },
+    "slop_rough_illustration": {
+      "auc": 0.235,
+      "refMean": 0.977,
+      "poorMean": 0.989,
+      "refMin": 0.912
+    },
+    "slop_placeholder_illustration": {
+      "auc": 0.122,
+      "refMean": 0.955,
+      "poorMean": 0.983,
+      "refMin": 0.812
+    },
+    "slop_eyebrow_label": {
+      "auc": 0.633,
+      "refMean": 0.98,
+      "poorMean": 0.975,
+      "refMin": 0.968
+    },
+    "slop_icon_tile_heading": {
+      "auc": 0.0,
+      "refMean": 0.96,
+      "poorMean": 0.979,
+      "refMin": 0.938
+    },
+    "slop_badge_headline": {
+      "auc": 0.367,
+      "refMean": 0.98,
+      "poorMean": 0.983,
+      "refMin": 0.961
+    },
+    "slop_italic_serif_headline": {
+      "auc": 0.48,
+      "refMean": 0.993,
+      "poorMean": 0.993,
+      "refMin": 0.991
+    },
+    "slop_hero_headline": {
+      "auc": 0.439,
+      "refMean": 0.985,
+      "poorMean": 0.986,
+      "refMin": 0.982
+    },
+    "slop_flat_hierarchy": {
+      "auc": 0.51,
+      "refMean": 0.943,
+      "poorMean": 0.949,
+      "refMin": 0.902
+    },
+    "slop_tight_tracking": {
+      "auc": 0.408,
+      "refMean": 0.983,
+      "poorMean": 0.984,
+      "refMin": 0.978
+    },
+    "slop_glow": {
+      "auc": 0.408,
+      "refMean": 0.953,
+      "poorMean": 0.899,
+      "refMin": 0.898
+    },
+    "slop_ai_palette": {
+      "auc": 0.612,
+      "refMean": 0.945,
+      "poorMean": 0.956,
+      "refMin": 0.878
+    },
+    "slop_dark_glow": {
+      "auc": 0.939,
+      "refMean": 0.98,
+      "poorMean": 0.968,
+      "refMin": 0.974
+    },
+    "slop_gradient_text": {
+      "auc": 0.061,
+      "refMean": 0.986,
+      "poorMean": 0.989,
+      "refMin": 0.982
+    },
+    "slop_numbered_labels": {
+      "auc": 0.378,
+      "refMean": 0.986,
+      "poorMean": 0.989,
+      "refMin": 0.977
+    },
+    "slop_hero_metric": {
+      "auc": 0.306,
+      "refMean": 0.986,
+      "poorMean": 0.987,
+      "refMin": 0.984
+    },
+    "slop_card_grid": {
+      "auc": 0.388,
+      "refMean": 0.983,
+      "poorMean": 0.985,
+      "refMin": 0.978
+    },
+    "slop_nested_cards": {
+      "auc": 0.735,
+      "refMean": 0.97,
+      "poorMean": 0.952,
+      "refMin": 0.928
+    },
+    "slop_monotonous_spacing": {
+      "auc": 0.714,
+      "refMean": 0.942,
+      "poorMean": 0.933,
+      "refMin": 0.934
+    },
+    "slop_hidden_image": {
+      "auc": 0.347,
+      "refMean": 0.983,
+      "poorMean": 0.985,
+      "refMin": 0.972
+    },
+    "slop_em_dash": {
+      "auc": 0.714,
+      "refMean": 0.974,
+      "poorMean": 0.939,
+      "refMin": 0.949
+    },
+    "slop_marketing_claims": {
+      "auc": 0.265,
+      "refMean": 0.986,
+      "poorMean": 0.989,
+      "refMin": 0.978
+    },
+    "slop_forced_contrast": {
+      "auc": 0.235,
+      "refMean": 0.984,
+      "poorMean": 0.987,
+      "refMin": 0.973
+    },
+    "slop_theater": {
+      "auc": 0.388,
+      "refMean": 0.983,
+      "poorMean": 0.985,
+      "refMin": 0.973
+    },
+    "quality_tiny_text": {
+      "auc": 0.469,
+      "refMean": 0.819,
+      "poorMean": 0.824,
+      "refMin": 0.769
+    },
+    "quality_all_caps": {
+      "auc": 0.48,
+      "refMean": 0.99,
+      "poorMean": 0.99,
+      "refMin": 0.988
+    },
+    "quality_gray_on_color": {
+      "auc": 0.265,
+      "refMean": 0.903,
+      "poorMean": 0.933,
+      "refMin": 0.853
+    },
+    "quality_heading_spacing": {
+      "auc": 0.673,
+      "refMean": 0.756,
+      "poorMean": 0.711,
+      "refMin": 0.681
+    },
+    "quality_cramped": {
+      "auc": 0.714,
+      "refMean": 0.954,
+      "poorMean": 0.95,
+      "refMin": 0.94
+    },
+    "quality_long_lines": {
+      "auc": 0.592,
+      "refMean": 0.847,
+      "poorMean": 0.822,
+      "refMin": 0.765
+    },
+    "quality_repeated_text": {
+      "auc": 0.49,
+      "refMean": 0.914,
+      "poorMean": 0.927,
+      "refMin": 0.773
+    },
+    "quality_text_covered": {
+      "auc": 0.469,
+      "refMean": 0.887,
+      "poorMean": 0.76,
+      "refMin": 0.568
+    },
+    "quality_overflow": {
+      "auc": 0.612,
+      "refMean": 0.941,
+      "poorMean": 0.924,
+      "refMin": 0.863
+    },
+    "quality_broken_image": {
+      "auc": 0.306,
+      "refMean": 0.969,
+      "poorMean": 0.988,
+      "refMin": 0.885
+    },
+    "quality_scroll_edge": {
+      "auc": 0.714,
+      "refMean": 0.883,
+      "poorMean": 0.804,
+      "refMin": 0.79
+    },
+    "quality_repeated_identifier": {
+      "auc": 0.714,
+      "refMean": 0.635,
+      "poorMean": 0.478,
+      "refMin": 0.306
+    }
+  },
+  "refFailReasons": {
+    "ref-1-claude": [
+      "score 0.76 < 0.8",
+      "weak dimension: ai",
+      "weak dimension: control",
+      "weak dimension: speed",
+      "verdict is review",
+      "answer below 0.40: focus_space_fit = 0.302",
+      "answer below 0.40: ai_evidence = 0.264",
+      "answer below 0.40: ai_feedback = 0.03",
+      "answer below 0.40: control_draft = 0.155",
+      "answer below 0.40: speed_shortcuts = 0.022",
+      "answer below 0.40: speed_views = 0.285",
+      "answer below 0.40: quality_repeated_identifier = 0.307",
+      "area layout: fail",
+      "area color-depth: review",
+      "area usability: fail"
+    ],
+    "ref-2-codex": [
+      "score 0.78 < 0.8",
+      "weak dimension: ai",
+      "weak dimension: control",
+      "weak dimension: speed",
+      "verdict is review",
+      "answer below 0.40: ai_limits = 0.015",
+      "answer below 0.40: ai_feedback = 0.039",
+      "answer below 0.40: control_draft = 0.118",
+      "answer below 0.40: speed_shortcuts = 0.017",
+      "answer below 0.40: speed_views = 0.022",
+      "answer below 0.40: quality_repeated_identifier = 0.345",
+      "area layout: review",
+      "area color-depth: review",
+      "area usability: fail"
+    ],
+    "ref-3-gumloop": [
+      "score 0.77 < 0.8",
+      "weak dimension: control",
+      "weak dimension: overflow",
+      "verdict is review",
+      "answer below 0.40: focus_space_fit = 0.268",
+      "answer below 0.40: speed_shortcuts = 0.015",
+      "area layout: fail",
+      "area color-depth: review",
+      "area usability: fail"
+    ],
+    "ref-4-attio": [
+      "score 0.69 < 0.8",
+      "weak dimension: ai",
+      "weak dimension: control",
+      "weak dimension: overflow",
+      "verdict is review",
+      "answer below 0.40: ai_steps = 0.042",
+      "answer below 0.40: ai_evidence = 0.076",
+      "answer below 0.40: ai_limits = 0.027",
+      "answer below 0.40: ai_feedback = 0.023",
+      "answer below 0.40: speed_shortcuts = 0.221",
+      "area layout: fail",
+      "area color-depth: review",
+      "area usability: fail"
+    ],
+    "ref-5-linear": [
+      "score 0.79 < 0.8",
+      "weak dimension: speed",
+      "weak dimension: overflow",
+      "verdict is review",
+      "answer below 0.40: focus_space_fit = 0.262",
+      "answer below 0.40: speed_shortcuts = 0.025",
+      "area layout: fail",
+      "area color-depth: review",
+      "area usability: fail"
+    ],
+    "ref-6-plain": [
+      "weak dimension: control",
+      "weak dimension: overflow",
+      "answer below 0.40: focus_space_fit = 0.281",
+      "answer below 0.40: overflow_scroll_cue = 0",
+      "answer below 0.40: status_lifecycle = 0.3",
+      "area layout: fail",
+      "area color-depth: review",
+      "area usability: fail"
+    ],
+    "ref-7-customerio": [
+      "score 0.75 < 0.8",
+      "weak dimension: control",
+      "weak dimension: speed",
+      "weak dimension: overflow",
+      "verdict is review",
+      "answer below 0.40: focus_space_fit = 0.236",
+      "answer below 0.40: control_draft = 0.103",
+      "answer below 0.40: speed_shortcuts = 0.084",
+      "answer below 0.40: speed_views = 0.042",
+      "area layout: fail",
+      "area color-depth: review",
+      "area usability: fail"
+    ]
+  }
+}

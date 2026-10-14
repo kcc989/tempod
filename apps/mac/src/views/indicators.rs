@@ -73,6 +73,7 @@ pub fn step_label(step: &str) -> String {
         "repo.applyCheckpoint" => "Restoring checkpoint",
         "home.restore" => "Restoring home",
         "settings.read" => "Reading settings",
+        "dotfiles.apply" => "Applying shell files",
         "setup.run" => "Running setup",
         "sessions.markReload" => "Reloading sessions",
         "turns.check" => "Checking turns",

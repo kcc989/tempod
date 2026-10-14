@@ -49,6 +49,7 @@ export const ERROR_MESSAGES = {
   ARTIFACT_NOT_READY: "This artifact is still being saved. Try again in a moment.",
   MODEL_REQUIRED: "Set a default model for this agent in Settings → Project.",
   SETTINGS_INVALID: "Settings are not valid.",
+  DOTFILES_CHANGED: "Your shell files changed while saving. Reload them and try again.",
   ENVIRONMENT_EXISTS: "An environment with this name already exists.",
   EGRESS_BLOCKED: "(Shown only in the egress log.)",
   EVENT_INVALID: "(Logged only.)",

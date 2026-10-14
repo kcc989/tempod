@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Plain",
+    "category": "Customer support",
+    "platform": "web",
+    "primary_user": "Support agent",
+    "primary_job": "Answer customer threads"
+  },
+  "screen": {
+    "name": "All threads",
+    "purpose": "Pick the next customer thread to answer"
+  },
+  "image_legend": [
+    "Image 1: the full screen",
+    "Image 2: crop of the sidebar",
+    "Image 3: crop of the header and the thread list"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "top.png",
+    "question.png"
+  ],
+  "known": {
+    "ai": true,
+    "async": true,
+    "collection": true,
+    "editing": true,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Agent steps and a running command; project and thread lists with spinners; question form and composer."
+}

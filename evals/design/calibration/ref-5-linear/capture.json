@@ -1,0 +1,19 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "dialog.png",
+    "empty.png"
+  ],
+  "known": {
+    "ai": false,
+    "async": false,
+    "collection": false,
+    "editing": true,
+    "empty": true,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Update editor dialog over the empty Pulse page; no AI output, running work, item list, error or limit."
+}

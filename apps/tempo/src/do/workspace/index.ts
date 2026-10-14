@@ -413,7 +413,29 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       secrets: environment?.secrets ?? [],
       injectors: environment?.injectors ?? [],
       mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
+      dotfiles: await this.dotfilesEgress(),
     };
+  }
+
+  private async dotfilesEgress(): Promise<{ cloneUrl: string } | null> {
+    const row = await this.core.dotfiles();
+
+    return row ? { cloneUrl: assertArtifactRemote(row.cloneUrl, row.repoName).href } : null;
+  }
+
+  /** A read token for the owner's dotfiles repository (09, Git transport), or null without a row. */
+  async getDotfilesToken(): Promise<string | null> {
+    if (!this.core.wsOrNull()) return null;
+
+    try {
+      const row = await this.core.dotfiles();
+
+      return row ? await artifactToken(this.core.env, row.repoName, "read", row.artifactRepoId) : null;
+    } catch {
+      log("warn", "dotfiles credential unavailable", { workspaceId: this.core.workspaceId });
+
+      return null;
+    }
   }
 
   /** The job of a CI runner instance; never set on a workspace. */

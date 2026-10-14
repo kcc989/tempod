@@ -2124,6 +2124,38 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getDotfiles": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "GetDotfilesOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateDotfiles": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateDotfilesIn.json"
+        },
+        "output": {
+          "$ref": "GetDotfilesOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listMcpServers": {
       "type": "object",
       "properties": {
@@ -2305,6 +2337,8 @@
     "setProjectSecret",
     "deleteProjectSecret",
     "listProjectSecretNames",
+    "getDotfiles",
+    "updateDotfiles",
     "listMcpServers",
     "saveMcpServer",
     "deleteMcpServer"

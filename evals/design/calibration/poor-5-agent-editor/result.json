@@ -1,0 +1,55 @@
+{
+  "verdict": "review",
+  "score": 0.64,
+  "dimensions": {
+    "focus": 0.71,
+    "status": 0.63,
+    "control": 0.09,
+    "scan": 0.79,
+    "nav": 0.79,
+    "speed": 0.03,
+    "states": 0,
+    "copy": 0.64,
+    "color": 0.9,
+    "spacing": 0.91,
+    "type": 0.89,
+    "icons": 0.82,
+    "contrast": 0.65,
+    "restraint": 0.88,
+    "overflow": 0,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "control",
+    "speed",
+    "states",
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "Fade only disabled controls. Give enabled controls full contrast.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Show changes as before and after.",
+    "Show the state of each item inline with an icon, a label, or a count.",
+    "Let the user save a draft or undo before work is final.",
+    "Make secondary text, placeholders, and metadata darker until they are easy to read."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_content_share",
+    "focus_affordance",
+    "status_items",
+    "control_diff",
+    "scan_rows",
+    "nav_groups",
+    "nav_return",
+    "nav_tabs_current",
+    "states_disabled_clear",
+    "copy_labels",
+    "icons_meaning",
+    "contrast_secondary",
+    "overflow_scroll_cue"
+  ]
+}

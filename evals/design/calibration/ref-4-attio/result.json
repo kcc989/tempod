@@ -1,0 +1,61 @@
+{
+  "verdict": "review",
+  "score": 0.69,
+  "dimensions": {
+    "focus": 0.82,
+    "status": 0.67,
+    "ai": 0.04,
+    "control": 0,
+    "scan": 0.6,
+    "nav": 0.8,
+    "speed": 0.68,
+    "states": 0.64,
+    "copy": 0.81,
+    "trust": 0.97,
+    "color": 0.73,
+    "spacing": 0.92,
+    "type": 0.87,
+    "icons": 0.83,
+    "contrast": 0.71,
+    "restraint": 0.77,
+    "overflow": 0.5,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "ai",
+    "control",
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "Show changes as before and after.",
+    "In empty states, say what will appear and why, and offer one action.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Show the state of each item inline with an icon, a label, or a count.",
+    "Let the user rate or correct AI output, and confirm the rating.",
+    "State the limits of the AI near its output."
+  ],
+  "uncertain": [
+    "focus_affordance",
+    "focus_space_fit",
+    "status_items",
+    "control_diff",
+    "scan_rows",
+    "scan_overflow",
+    "nav_return",
+    "states_empty",
+    "states_disabled_clear",
+    "copy_labels",
+    "color_role",
+    "color_accents",
+    "color_semantic",
+    "type_scale",
+    "type_numbers",
+    "icons_meaning",
+    "contrast_secondary",
+    "restraint_noise",
+    "overflow_scroll_cue"
+  ]
+}

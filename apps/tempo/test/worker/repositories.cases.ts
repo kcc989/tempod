@@ -321,6 +321,14 @@ describe("Artifacts repository lifecycle", () => {
     await expect(createRepository(ctx, { name: "../escape" })).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
     });
+
+    for (const name of ["dotfiles-0123456789abcdef", "Dotfiles-x"]) {
+      await expect(createRepository(ctx, { name })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      await expect(linkArtifactRepository(ctx, { name })).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+      });
+    }
+
     await expect(
       createRepository(ctx, { name: "valid", defaultBranch: "bad..branch" }),
     ).rejects.toMatchObject({ code: "BRANCH_INVALID" });
@@ -593,7 +601,7 @@ describe("Artifacts Git refs and scoped tokens", () => {
     const [url, options] = fetcher.mock.calls[0]!;
     expect(url.href).toBe(`${REMOTE}/demo.git/info/refs?service=git-upload-pack`);
     expect(new Headers(options.headers).get("Authorization")).toBe(`Bearer ${TOKEN}`);
-    expect(options.redirect).toBe("error");
+    expect(options.redirect).toBe("manual");
     expect(await artifactToken(ctx.env, "demo", "write")).toBe(TOKEN);
     expect(repo.repo.createToken).toHaveBeenLastCalledWith("write", 600);
     expect(await artifactHeadSha(ctx.env, "demo", "main")).toBe(SHA);

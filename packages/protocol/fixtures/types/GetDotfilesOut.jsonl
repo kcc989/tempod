@@ -1,0 +1,2 @@
+{"files":[{"path":".tmux.conf","content":"set -g status off\n"}],"defaults":[{"path":".tmux.conf","content":"set -g status off\n"}],"saved":false,"updatedAt":null}
+{"files":[{"path":".config/starship.toml","content":"add_newline = false\n"}],"defaults":[],"saved":true,"updatedAt":1791709212000}

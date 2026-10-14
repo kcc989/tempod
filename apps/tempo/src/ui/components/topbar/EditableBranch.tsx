@@ -31,7 +31,7 @@ export function EditableBranch({ view, onSave }: { view: WorkspaceView; onSave: 
       }}
       aria-label="Rename branch"
       title={locked ? view.w.branch : "Double-click to rename branch"}
-      className="min-w-0 truncate rounded px-1 hover:bg-accent disabled:hover:bg-transparent"
+      className="min-w-0 truncate rounded px-1 text-left hover:bg-accent disabled:hover:bg-transparent"
     >
       {view.w.branch}
     </button>

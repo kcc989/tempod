@@ -70,6 +70,7 @@ import {
 import { closeBrowser } from "./browser.ts";
 import { finishTurn } from "./queue.ts";
 import {
+  DOTFILES_NOT_APPLIED,
   OpRunner,
   type OpHooks,
   type OpState,
@@ -117,6 +118,7 @@ const CONTAINER_STEPS = [
   "repo.applyCheckpoint",
   "home.restore",
   "settings.read",
+  "dotfiles.apply",
   "setup.run",
 ] as const;
 
@@ -309,6 +311,28 @@ export const operationSteps = (handlers: ConnectHandlers) => {
       core.lifecycle.kick();
       await sendEnv(core);
       core.broadcastDetailSoon();
+
+      return "next";
+    },
+    "dotfiles.apply": async ({ core, signal }) => {
+      const row = await core.dotfiles();
+
+      await (
+        await tempodFor(core, handlers)
+      ).request(
+        "dotfiles.apply",
+        { source: row ? { url: row.cloneUrl, sha: row.headSha } : null },
+        { signal },
+      );
+      const issues = core.settingsIssues();
+
+      if (issues.warnings.includes(DOTFILES_NOT_APPLIED)) {
+        core.setKv("settingsIssues", {
+          ...issues,
+          warnings: issues.warnings.filter((w) => w !== DOTFILES_NOT_APPLIED),
+        });
+        core.broadcastDetailSoon();
+      }
 
       return "next";
     },

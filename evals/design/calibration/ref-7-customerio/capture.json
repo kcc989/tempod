@@ -1,0 +1,19 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "answer.png",
+    "composer.png"
+  ],
+  "known": {
+    "ai": true,
+    "async": false,
+    "collection": true,
+    "editing": true,
+    "empty": false,
+    "errors": true,
+    "limits": false
+  },
+  "knownSource": "Agent answer with collapsed steps; recent chats list; message field; account review banner."
+}

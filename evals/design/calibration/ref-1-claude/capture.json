@@ -1,0 +1,19 @@
+{
+  "context": "context.json",
+  "images": [
+    "full.png",
+    "sidebar.png",
+    "top.png",
+    "composer.png"
+  ],
+  "known": {
+    "ai": true,
+    "async": true,
+    "collection": true,
+    "editing": true,
+    "empty": false,
+    "errors": false,
+    "limits": false
+  },
+  "knownSource": "Assistant reply running with elapsed time; conversation list; reply composer; no empty area, error or usage limit."
+}

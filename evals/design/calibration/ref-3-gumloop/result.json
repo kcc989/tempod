@@ -1,0 +1,54 @@
+{
+  "verdict": "review",
+  "score": 0.77,
+  "dimensions": {
+    "focus": 0.78,
+    "status": 0.8,
+    "control": 0,
+    "scan": 0.96,
+    "nav": 0.82,
+    "speed": 0.6,
+    "copy": 0.63,
+    "trust": 0.94,
+    "color": 0.81,
+    "spacing": 0.91,
+    "type": 0.92,
+    "icons": 0.78,
+    "contrast": 0.73,
+    "restraint": 0.84,
+    "overflow": 0.5,
+    "slop": 1,
+    "quality": 1
+  },
+  "blockers": [],
+  "weakDimensions": [
+    "control",
+    "overflow"
+  ],
+  "issues": [],
+  "fixes": [
+    "Show changes as before and after.",
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Show keyboard shortcuts next to frequent actions.",
+    "Make each panel only as wide as its content needs.",
+    "Use status labels that a new user understands.",
+    "Give each dropdown and selector a label that says what it sets."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "status_items",
+    "control_diff",
+    "nav_groups",
+    "nav_return",
+    "copy_status",
+    "copy_controls_labeled",
+    "color_role",
+    "type_scale",
+    "icons_meaning",
+    "contrast_secondary",
+    "restraint_noise",
+    "overflow_scroll_cue",
+    "quality_repeated_identifier"
+  ]
+}

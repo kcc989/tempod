@@ -272,6 +272,7 @@ fn header(cx: &App) -> impl IntoElement {
             Button::new("sidebar-sort")
                 .ghost()
                 .small()
+                .size(px(super::tokens::ICON_BUTTON))
                 .icon(IconName::SortAscending)
                 .accessibility_label(format!("Sort workspaces: {label}"))
                 .tooltip("Sort by")
@@ -297,6 +298,7 @@ fn header(cx: &App) -> impl IntoElement {
             Button::new("add-project-header")
                 .ghost()
                 .small()
+                .size(px(super::tokens::ICON_BUTTON))
                 .icon(gpui_kit::assets::IconName::FolderPlus)
                 .accessibility_label("Add project")
                 .tooltip("Add project")
@@ -388,7 +390,14 @@ fn footer(cx: &App) -> impl IntoElement {
             Button::new("repositories")
                 .ghost()
                 .small()
-                .label("Repositories")
+                .h(px(36.))
+                .gap_3()
+                .text_size(px(13.))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .w_full()
+                .icon(gpui_kit::assets::IconName::FolderGit2)
+                .accessibility_label("Repositories")
+                .child(div().w_full().text_left().child("Repositories"))
                 .on_click(|_, window, cx| {
                     window.dispatch_action(Box::new(crate::actions::ShowRepositories), cx)
                 }),
@@ -584,6 +593,7 @@ fn render_section(
             Button::new(SharedString::from(format!("new-in-{project_id}")))
                 .ghost()
                 .small()
+                .size(px(super::tokens::ICON_BUTTON))
                 .icon(IconName::Plus)
                 .accessibility_label(format!("New workspace in {label}"))
                 .on_click(move |_, window, cx| {
@@ -823,26 +833,10 @@ fn render_row(
         .px_3()
         .py_2()
         .w_full()
-        .min_h(px(48.))
+        .min_h(px(36.))
         .rounded_md()
         .hover(move |style| style.bg(muted.opacity(0.08)))
         .child(line)
-        .child(
-            div()
-                .pl(px(20.))
-                .text_size(px(12.))
-                .text_color(muted)
-                .child(
-                    h_flex()
-                        .min_w_0()
-                        .gap_2()
-                        .children(
-                            (!row.detail.is_empty())
-                                .then(|| div().min_w_0().truncate().child(row.detail.clone())),
-                        )
-                        .child(div().flex_shrink_0().child(status)),
-                ),
-        )
         .on_click(move |_, window, cx| {
             if let Some(f) = &select {
                 f(&workspace_id, window, cx);
@@ -1069,6 +1063,10 @@ fn hover_card(summary: &p::WorkspaceSummary, window: &mut Window, cx: &mut App) 
         .child(
             v_flex()
                 .gap_1()
+                .child(row(
+                    "Branch",
+                    div().min_w_0().truncate().child(summary.branch.clone()).into_any_element(),
+                ))
                 .child(row(
                     "State",
                     div()

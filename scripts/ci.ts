@@ -32,7 +32,19 @@ const checks = {
   workerTests: ["Worker tests", ["bun", "scripts/test.ts", "--worker-only"]],
   otherTests: ["Other tests", ["bun", "scripts/test.ts", "--other-only"]],
   daemon: ["Daemon build", ["bun", "run", "build:tempod"]],
-  app: ["App build", ["bun", "run", "turbo", "run", "build:ci", "--filter=@tempo/app"]],
+  app: [
+    "App build",
+    [
+      "bun",
+      "run",
+      "turbo",
+      "run",
+      "build:ci",
+      "build:web-fixture",
+      "build:browser-fixture",
+      "--filter=@tempo/app",
+    ],
+  ],
   browsers: ["Browser suites", ["bun", "run", "--cwd", "tests/e2e", "test:ci"]],
 } satisfies Record<string, Check>;
 

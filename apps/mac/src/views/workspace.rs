@@ -2,6 +2,7 @@ use super::chat::{TranscriptEvent, TranscriptRow, TranscriptView};
 use super::chat_model;
 use super::composer::{Composer, ComposerEvent};
 use super::indicators::PreviewLink;
+use super::tokens::ToggleOn as _;
 use super::tokens::{Token, color};
 use crate::actions::*;
 use crate::stores::workspace::WorkspaceStore;
@@ -53,7 +54,7 @@ struct QueueEditor {
 }
 
 struct ErrorToast;
-pub(super) const BROWSER_SESSION_ENDED: &str = "Browser session ended.";
+pub(super) const BROWSER_SESSION_ENDED: &str = "Browser session ended. Reload checks for a new one.";
 
 pub struct WorkspaceView {
     pub store: Entity<WorkspaceStore>,
@@ -81,7 +82,6 @@ pub struct WorkspaceView {
     seen_permissions: HashSet<String>,
     window_handle: Option<gpui_kit::AnyWindowHandle>,
     toasted_store_error: Option<String>,
-    last_state: Option<p::WorkspaceState>,
     error_details_open: bool,
     banner_pending: bool,
     queue_editor: Option<QueueEditor>,
@@ -309,7 +309,6 @@ impl WorkspaceView {
             seen_permissions: HashSet::new(),
             window_handle: Some(window.window_handle()),
             toasted_store_error: None,
-            last_state: None,
             error_details_open: false,
             banner_pending: false,
             queue_editor: None,
@@ -1077,7 +1076,7 @@ impl WorkspaceView {
                 .child(div().h(gpui_kit::px(440.)).child(view.clone()))
         });
     }
-    pub(super) fn top_bar(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    pub(super) fn top_bar(&self, tools_open: bool, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let Some(w) = self.store.read(cx).state.workspace.clone() else {
             return div().into_any_element();
         };
@@ -1104,60 +1103,21 @@ impl WorkspaceView {
             let project = hub.projects.iter().find(|p| p.id == w.project_id)?;
             super::indicators::pr_link(&project.owner, &project.name, w.pr_number, w.pr_state)
         });
-        let instance = match &w.settings.environment.instance {
-            p::Instance::InstanceName(name) => name.to_string(),
-            p::Instance::CustomInstance(instance) => format!(
-                "{} vCPU, {} GiB",
-                instance.vcpu,
-                (instance.memory_mib as f64 / 1024.).round()
-            ),
-        };
-        let pill = match w.state {
-            p::WorkspaceState::Starting => match w
-                .op
-                .as_ref()
-                .map(|op| op.step.as_str())
-                .filter(|step| !step.is_empty())
-            {
-                Some(step) => format!("Starting… {}", chat_model::step_label(step)),
-                None => "Starting…".into(),
-            },
-            p::WorkspaceState::SettingUp => "Running setup".into(),
-            p::WorkspaceState::Ready | p::WorkspaceState::Working => {
-                format!("Running · {instance}")
-            }
-            p::WorkspaceState::Stopping => "Going to sleep".into(),
-            p::WorkspaceState::Sleeping => "Sleeping".into(),
-            p::WorkspaceState::Error => "Error".into(),
-            p::WorkspaceState::Creating => "Creating".into(),
-            p::WorkspaceState::Archiving => "Archiving".into(),
-            p::WorkspaceState::Archived => "Archived".into(),
-        };
         let bar = h_flex()
             .group("workspace-branch")
-            .flex_wrap()
-            .min_h(gpui_kit::px(40.))
+            .w_full()
+            .min_w_0()
+            .h(gpui_kit::px(40.))
+            .overflow_hidden()
             .bg(color(if self.shared_header { Token::Muted } else { Token::Panel }, cx))
             .gap_2()
-            .px_2()
+            .pl_2()
+            .pr(gpui_kit::px(super::tools::HEADER_INSET))
             .py_1()
             .border_b(gpui_kit::px(if self.shared_header { 0. } else { 1. }))
             .border_color(color(Token::Border, cx))
-            .children(
-                (w.title != w.slug && w.branch.rsplit('/').next() != Some(w.title.as_str())).then(
-                    || {
-                        Button::new("workspace-title")
-                            .ghost()
-                            .small()
-                            .label(w.title)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.operation("Rename", window, cx)
-                            }))
-                    },
-                ),
-            )
             .child(if let Some(input) = &self.branch_editor {
-                div().id("branch-editor").w(gpui_kit::px(220.))
+                div().id("branch-editor").flex_1().min_w_0().max_w(gpui_kit::px(220.))
                     .capture_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
                         if event.keystroke.key == "escape" && !this.branch_pending {
                             this.branch_editor = None;
@@ -1169,7 +1129,8 @@ impl WorkspaceView {
                     .into_any_element()
             } else {
                 Button::new("branch-name").ghost().small()
-                    .label(w.branch.clone())
+                    .flex_1().min_w_0()
+                    .child(div().w_full().min_w_0().truncate().child(w.branch.clone()))
                     .accessibility_label("Rename branch")
                     .tooltip("Double-click to rename branch")
                     .disabled(self.branch_pending || w.pushed || !matches!(w.state, p::WorkspaceState::Ready | p::WorkspaceState::Working | p::WorkspaceState::Sleeping))
@@ -1180,7 +1141,7 @@ impl WorkspaceView {
                     }))
                     .into_any_element()
             })
-            .child(Button::new("copy-branch").ghost().small().icon(gpui_kit::assets::IconName::Copy)
+            .child(Button::new("copy-branch").ghost().small().size(gpui_kit::px(super::tokens::ICON_BUTTON)).icon(gpui_kit::assets::IconName::Copy)
                 .opacity(0.).group_hover("workspace-branch", |style| style.opacity(1.)).focus_visible(|style| style.opacity(1.))
                 .accessibility_label("Copy branch name").tooltip("Copy branch name")
                 .on_click(move |_, _, cx| cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()))))
@@ -1215,12 +1176,11 @@ impl WorkspaceView {
                             .on_click(cx.listener(|this, _, _, cx| this.open_live_view(cx))),
                     }),
             )
-            .child(div().flex_1())
-            .child(if sleep {
+            .children(sleep.then(|| {
                 Button::new("wake-pill")
                     .ghost()
                     .small()
-                    .label(pill)
+                    .label("Sleeping")
                     .tooltip("Wake. Sending a message also wakes it.")
                     .disabled(self.operation_pending)
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -1231,20 +1191,7 @@ impl WorkspaceView {
                             cx,
                         )
                     }))
-                    .into_any_element()
-            } else {
-                div()
-                    .text_color(color(
-                        if w.state == p::WorkspaceState::Error {
-                            Token::Destructive
-                        } else {
-                            Token::MutedForeground
-                        },
-                        cx,
-                    ))
-                    .child(pill)
-                    .into_any_element()
-            })
+            }))
             .children(primary.map(|label| {
                 Button::new("primary-action")
                     .label(label)
@@ -1266,8 +1213,10 @@ impl WorkspaceView {
                 Button::new("workspace-info")
                     .ghost()
                     .small()
+                    .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                     .icon(gpui_kit::assets::IconName::Info)
                     .selected(self.tools.read(cx).info_open)
+                    .toggle_on(self.tools.read(cx).info_open, cx)
                     .accessibility_label("Workspace info")
                     .tooltip("Workspace info")
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -1279,7 +1228,10 @@ impl WorkspaceView {
                 Button::new("toggle-right-side")
                     .ghost()
                     .small()
+                    .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                     .icon(gpui_kit::assets::IconName::PanelRight)
+                    .selected(tools_open)
+                    .toggle_on(tools_open, cx)
                     .accessibility_label("Toggle right side")
                     .tooltip("Toggle right side (⌘⌥B)")
                     .on_click(|_, window, cx| {
@@ -1435,6 +1387,7 @@ impl WorkspaceView {
             &transcript,
             window,
             move |this, _, event: &TranscriptEvent, window, cx| match event {
+                TranscriptEvent::OpenSetup => this.show_setup_tab(window, cx),
                 TranscriptEvent::Permission {
                     request_id,
                     option_id,
@@ -1567,13 +1520,9 @@ impl WorkspaceView {
             .workspace
             .as_ref()
             .map(|w| w.state);
-        if state == Some(p::WorkspaceState::SettingUp) && self.last_state != state {
-            self.show_setup_tab(window, cx);
-        }
         if state != Some(p::WorkspaceState::Error) {
             self.error_details_open = false;
         }
-        self.last_state = state;
         if let Some(id) = self.closing.clone()
             && !self.close_request
             && chat_model::running_turn(&self.store.read(cx).state, &id).is_none()
@@ -2189,28 +2138,9 @@ impl WorkspaceView {
         if self.queue_pending || dragged.workspace_id != store.workspace_id {
             return;
         }
-        let mut turns: Vec<_> = store
-            .state
-            .turns
-            .values()
-            .filter(|t| t.status == p::TurnStatus::Queued)
-            .collect();
-        turns.sort_by(|a, b| {
-            a.queue_pos
-                .unwrap_or(f64::INFINITY)
-                .total_cmp(&b.queue_pos.unwrap_or(f64::INFINITY))
-                .then_with(|| a.id.cmp(&b.id))
-        });
-        let mut ids: Vec<_> = turns.into_iter().map(|t| t.id.clone()).collect();
-        if dragged.turn_id == before
-            || !ids.contains(&dragged.turn_id)
-            || !ids.iter().any(|id| id == before)
-        {
+        let Some(ids) = chat_model::reordered_queue(&store.state, &dragged.turn_id, before) else {
             return;
-        }
-        let ix = ids.iter().position(|id| id == before).unwrap();
-        ids.retain(|id| id != &dragged.turn_id);
-        ids.insert(ix, dragged.turn_id.clone());
+        };
         let request = self.client.call::<api::ReorderQueue>(p::ReorderQueueIn {
             workspace_id: store.workspace_id.clone(),
             turn_ids: ids,
@@ -2730,6 +2660,7 @@ impl Render for WorkspaceView {
         let new_chat = Button::new("new-chat")
             .ghost()
             .small()
+            .size(gpui_kit::px(super::tokens::ICON_BUTTON))
             .icon(gpui_kit::assets::IconName::Plus)
             .accessibility_label("New chat")
             .tooltip("New chat (⌘T)")
@@ -2766,6 +2697,7 @@ impl Render for WorkspaceView {
             .as_ref()
             .into_iter()
             .flat_map(|id| chat_model::queued_turns(&self.store.read(cx).state, id))
+            .filter(|turn| !chat_model::is_initial_prompt(turn))
             .map(|turn| {
                 (
                     turn.id.clone(),
@@ -2985,7 +2917,7 @@ impl Render for WorkspaceView {
                 this.reveal_right(cx);
                 this.review.update(cx, |r, cx| r.request_commit(window, cx))
             }))
-            .children((!self.shared_header).then(|| self.top_bar(cx)))
+            .children((!self.shared_header).then(|| self.top_bar(false, cx)))
             .on_action(
                 cx.listener(|this, _: &CreatePr, window, cx| {
                     this.operation("Create PR", window, cx)
@@ -3025,12 +2957,15 @@ impl Render for WorkspaceView {
             .children(
                 banners
                     .into_iter()
+                    .filter(|banner| {
+                        !matches!(banner, chat_model::WorkspaceBanner::Progress { .. })
+                    })
                     .map(|banner| self.render_banner(banner, cx)),
             )
             .child(
                 h_flex()
                     .bg(color(Token::Panel, cx))
-                    .pl_3()
+                    .pl(gpui_kit::px(12.))
                     .pr_2()
                     .border_b_1()
                     .border_color(color(Token::Border, cx))
@@ -3067,6 +3002,7 @@ impl Render for WorkspaceView {
                                         Button::new(button_id)
                                             .ghost()
                                             .small()
+                                            .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                                             .icon(gpui_kit::assets::IconName::X)
                                             .accessibility_label("Close chat")
                                             .tooltip("Close chat")
@@ -3079,7 +3015,8 @@ impl Render for WorkspaceView {
                                 },
                             )),
                     )
-                    .child(new_chat)
+                    // Clears the TabBar's 16 pt list chevron (WCAG 2.5.8 spacing).
+                    .child(div().pl_1p5().child(new_chat))
                     .children(has_closed.then_some(closed_menu)),
             )
             .child(
@@ -4542,7 +4479,7 @@ mod tests {
 
     #[gpui_kit::test]
     fn live_opens_in_the_tool_area_and_reports_request_failures(cx: &mut TestAppContext) {
-        assert_eq!(BROWSER_SESSION_ENDED, "Browser session ended.");
+        assert_eq!(BROWSER_SESSION_ENDED, "Browser session ended. Reload checks for a new one.");
         for (fail, link) in [(true, None), (false, None), (false, Some(LIVE_VIEW_LINK))] {
             let mut state = fixture();
             state.workspace.as_mut().unwrap().browser_active = true;
@@ -4638,5 +4575,148 @@ mod tests {
             .unwrap();
         assert_eq!(call.1, serde_json::json!({"workspaceId": id}));
         assert!(view.read_with(cx, |view, _| view.operation.is_none()));
+    }
+
+    fn mount_tools(
+        cx: &mut TestAppContext,
+    ) -> (
+        AnyWindowHandle,
+        Entity<WorkspaceView>,
+        Entity<super::super::tools::ToolPanel>,
+        tempo_client::Runtime,
+    ) {
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client =
+            tempo_client::Server::new(&runtime.handle(), "http://127.0.0.1:9", crate::VERSION)
+                .unwrap()
+                .client(tempo_client::Token::new("test-token"));
+        let (_, view) = mount(cx, fixture(), client);
+        let tools = view.read_with(cx, |view, _| view.tools.clone());
+        let handle = cx.update(|cx| {
+            gpui_kit::open_window(Default::default(), cx, |_, _| tools.clone())
+                .unwrap()
+                .0
+        });
+        (handle, view, tools, runtime)
+    }
+
+    #[gpui_kit::test]
+    fn tools_grid_opens_each_terminal_as_its_own_tab_up_to_nine(cx: &mut TestAppContext) {
+        use super::super::tools::ToolTab::Terminal;
+        let (handle, _, tools, _runtime) = mount_tools(cx);
+        let open_from_grid = |cx: &mut TestAppContext| {
+            tools.update(cx, |tools, cx| tools.show_launcher(cx));
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click("open-tool-Terminal", cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("open-tool-Changes").is_none());
+            for tool in [
+                "Terminal",
+                "Run",
+                "Browser",
+                "Guides",
+                "Artifacts",
+                "Activity",
+            ] {
+                assert!(
+                    window.try_find(format!("open-tool-{tool}")).is_some(),
+                    "{tool}"
+                );
+            }
+        })
+        .unwrap();
+        open_from_grid(cx);
+        open_from_grid(cx);
+        assert_eq!(
+            tools.read_with(cx, |tools, _| tools.open_tabs()),
+            (vec![Terminal(1), Terminal(2)], Some(Terminal(2)))
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("terminal-tabs").is_none());
+            assert!(window.try_find("close-tool-Terminal 2").is_some());
+        })
+        .unwrap();
+        for _ in 3..=9 {
+            open_from_grid(cx);
+        }
+        open_from_grid(cx);
+        let (tabs, active) = tools.read_with(cx, |tools, _| tools.open_tabs());
+        assert_eq!(tabs.len(), 9);
+        assert_eq!(active, None);
+        tools.update(cx, |tools, cx| tools.close_tab(Terminal(3), cx));
+        open_from_grid(cx);
+        let (tabs, active) = tools.read_with(cx, |tools, _| tools.open_tabs());
+        assert_eq!(tabs.len(), 9);
+        assert_eq!(tabs.last(), Some(&Terminal(3)));
+        assert_eq!(active, Some(Terminal(3)));
+    }
+
+    #[gpui_kit::test]
+    fn terminal_shortcut_selects_the_recent_tab_opens_one_or_returns_to_the_launcher(
+        cx: &mut TestAppContext,
+    ) {
+        use super::super::tools::ToolTab::Terminal;
+        let (_, _, tools, _runtime) = mount_tools(cx);
+        let toggle = |cx: &mut TestAppContext| {
+            tools.update(cx, |tools, cx| tools.toggle_terminal(cx));
+            tools.read_with(cx, |tools, _| tools.open_tabs())
+        };
+        assert_eq!(toggle(cx), (vec![Terminal(1)], Some(Terminal(1))));
+        assert_eq!(toggle(cx), (vec![Terminal(1)], None));
+        tools.update(cx, |tools, cx| tools.open_terminal(cx));
+        tools.update(cx, |tools, cx| tools.show_launcher(cx));
+        assert_eq!(
+            toggle(cx),
+            (vec![Terminal(1), Terminal(2)], Some(Terminal(2)))
+        );
+        tools.update(cx, |tools, cx| tools.close_tab(Terminal(2), cx));
+        assert_eq!(toggle(cx), (vec![Terminal(1)], Some(Terminal(1))));
+        tools.update(cx, |tools, cx| tools.close_tab(Terminal(1), cx));
+        assert_eq!(toggle(cx), (vec![Terminal(1)], Some(Terminal(1))));
+    }
+
+    struct SharedHeader(Entity<WorkspaceView>);
+    impl Render for SharedHeader {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let workspace = self.0.update(cx, |view, cx| view.top_bar(true, cx));
+            let tools = self.0.read(cx).tools.clone();
+            let tabs = tools.update(cx, |tools, cx| tools.tab_bar(cx));
+            super::super::main_window::header_row(
+                (div().into_any_element(), 200.),
+                workspace,
+                Some((tabs, 400.)),
+                cx,
+            )
+        }
+    }
+
+    #[gpui_kit::test]
+    fn shared_header_insets_controls_and_tabs_from_the_right_pane_edge(cx: &mut TestAppContext) {
+        let (_, view, tools, _runtime) = mount_tools(cx);
+        tools.update(cx, |tools, cx| tools.open_terminal(cx));
+        let handle = cx.update(|cx| {
+            gpui_kit::open_window(Default::default(), cx, |_, cx| {
+                cx.new(|_| SharedHeader(view.clone()))
+            })
+            .unwrap()
+            .0
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let edge = window.viewport_size().width - gpui_kit::px(400.);
+            let toggle = window.find("toggle-right-side").bounds();
+            let tab = window.within("tool-tabs").find(0usize).bounds();
+            assert_eq!(edge - toggle.right(), gpui_kit::px(12.));
+            // The pane's 1 pt left border sits between the edge and the tab bar.
+            assert_eq!(tab.left() - edge, gpui_kit::px(13.));
+        })
+        .unwrap();
     }
 }

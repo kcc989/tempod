@@ -1,0 +1,182 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T15:24:16.049Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "color_role": {
+          "type": "score",
+          "score": 1.7454,
+          "legend": {
+            "0": "Color is decoration: gradients, many accent colors, or colored surfaces with no meaning",
+            "1": "The base is neutral, but some color is decoration only",
+            "2": "The base is neutral, and color appears only where it means something: status, category tags, the selected item, or the one main action"
+          },
+          "probabilities": {
+            "0": 0.045,
+            "1": 0.1646,
+            "2": 0.7904
+          },
+          "confidence": 0.4808
+        },
+        "color_accents": {
+          "type": "score",
+          "score": 1.9334,
+          "legend": {
+            "0": "Many accent colors with no clear system",
+            "1": "Two or three accent colors compete for attention",
+            "2": "One accent color, plus a small set of status colors such as green, amber, and red"
+          },
+          "probabilities": {
+            "0": 0.0112,
+            "1": 0.0442,
+            "2": 0.9446
+          },
+          "confidence": 0.8415
+        },
+        "color_semantic": {
+          "type": "noul",
+          "noul": 0.8929
+        },
+        "color_not_alone": {
+          "type": "noul",
+          "noul": 0.6693
+        },
+        "color_dark_layers": {
+          "type": "choice",
+          "choice": "tonal",
+          "probabilities": {
+            "tonal": 0.8793,
+            "flat": 0.1149,
+            "not_shown": 0.0058
+          },
+          "confidence": 0.6796
+        },
+        "contrast_secondary": {
+          "type": "score",
+          "score": 1.1757,
+          "legend": {
+            "0": "Some needed text is very faint and hard to read",
+            "1": "Faint text is readable, but only with effort",
+            "2": "All needed text is easy to read; only decorative or disabled items are faint"
+          },
+          "probabilities": {
+            "0": 0.1973,
+            "1": 0.4297,
+            "2": 0.373
+          },
+          "confidence": 0.0441
+        },
+        "contrast_boundaries": {
+          "type": "noul",
+          "noul": 0.5662
+        },
+        "restraint_noise": {
+          "type": "score",
+          "score": 1.6494,
+          "legend": {
+            "0": "Many borders, shadows, badges, illustrations, or glows compete with the content",
+            "1": "Some extra decoration, but the main content is still easy to find",
+            "2": "Flat surfaces, thin dividers, and few shadows; illustrations appear only in empty states or onboarding"
+          },
+          "probabilities": {
+            "0": 0.0477,
+            "1": 0.2552,
+            "2": 0.6971
+          },
+          "confidence": 0.33
+        },
+        "icons_one_set": {
+          "type": "noul",
+          "noul": 0.9057
+        },
+        "icons_size": {
+          "type": "noul",
+          "noul": 0.8579
+        },
+        "icons_meaning": {
+          "type": "score",
+          "score": 1.3135,
+          "legend": {
+            "0": "Icons are unusual or abstract, and they have no labels",
+            "1": "Most icons are common symbols, but some are unclear",
+            "2": "Every icon-only button is a common symbol, such as search, close, or add, or it has a label"
+          },
+          "probabilities": {
+            "0": 0.1132,
+            "1": 0.4601,
+            "2": 0.4267
+          },
+          "confidence": 0.1098
+        },
+        "slop_grid_background": {
+          "type": "noul",
+          "noul": 0.0092
+        },
+        "slop_rounded_border_accent": {
+          "type": "noul",
+          "noul": 0.0144
+        },
+        "slop_side_stripe": {
+          "type": "noul",
+          "noul": 0.0167
+        },
+        "slop_border_and_shadow": {
+          "type": "noul",
+          "noul": 0.1477
+        },
+        "slop_glass": {
+          "type": "noul",
+          "noul": 0.0212
+        },
+        "slop_stripes": {
+          "type": "noul",
+          "noul": 0.0098
+        },
+        "slop_extreme_radius": {
+          "type": "noul",
+          "noul": 0.0585
+        },
+        "slop_rough_illustration": {
+          "type": "noul",
+          "noul": 0.0089
+        },
+        "slop_placeholder_illustration": {
+          "type": "noul",
+          "noul": 0.0143
+        },
+        "slop_glow": {
+          "type": "noul",
+          "noul": 0.0176
+        },
+        "slop_ai_palette": {
+          "type": "noul",
+          "noul": 0.0363
+        },
+        "slop_dark_glow": {
+          "type": "noul",
+          "noul": 0.0255
+        },
+        "slop_gradient_text": {
+          "type": "noul",
+          "noul": 0.0097
+        },
+        "quality_gray_on_color": {
+          "type": "noul",
+          "noul": 0.0856
+        }
+      },
+      "usage": {
+        "input_tokens": 5324,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

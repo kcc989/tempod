@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetDotfilesOut",
+  "type": "object",
+  "properties": {
+    "files": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"],
+        "additionalProperties": true
+      }
+    },
+    "defaults": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"],
+        "additionalProperties": true
+      }
+    },
+    "saved": {
+      "type": "boolean"
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["files", "defaults", "saved", "updatedAt"],
+  "additionalProperties": true
+}

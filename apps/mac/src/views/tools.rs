@@ -6,7 +6,7 @@ use super::{
 use crate::stores::workspace::WorkspaceStore;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, EventEmitter, IntoElement, ParentElement as _,
     Render, SharedString, Styled as _, Subscription, Window, div,
@@ -14,7 +14,7 @@ use gpui_kit::{
 use tempo_client::Client;
 use tempo_protocol::{self as p, api};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
     Guides,
     Changes,
@@ -61,14 +61,13 @@ impl Tool {
         }
     }
 }
-const TOOLS: [Tool; 7] = [
-    Tool::Changes,
+const TOOLS: [Tool; 6] = [
     Tool::Terminal,
-    Tool::Activity,
     Tool::Run,
     Tool::Browser,
     Tool::Guides,
     Tool::Artifacts,
+    Tool::Activity,
 ];
 const REVIEW: [Tool; 5] = [
     Tool::Changes,
@@ -77,7 +76,37 @@ const REVIEW: [Tool; 5] = [
     Tool::Artifacts,
     Tool::Activity,
 ];
-const PROCESSES: [Tool; 3] = [Tool::Setup, Tool::Run, Tool::Terminal];
+const PROCESSES: [Tool; 2] = [Tool::Setup, Tool::Run];
+/// Where tool and section tabs start inside the pane edge, and where workspace controls end before it.
+pub const HEADER_INSET: f32 = 12.;
+const TERMINALS: u8 = tempo_client::TERMINAL_IDS.len() as u8;
+
+/// An outer tool tab: a tool group, or one terminal by its number in `t1`..`t9`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ToolTab {
+    Group(Tool),
+    Terminal(u8),
+}
+impl ToolTab {
+    fn key(self) -> Self {
+        match self {
+            Self::Group(tool) => Self::Group(tool.group()),
+            terminal => terminal,
+        }
+    }
+    fn tool(self) -> Option<Tool> {
+        match self {
+            Self::Group(tool) => Some(tool),
+            Self::Terminal(_) => None,
+        }
+    }
+    fn title(self) -> SharedString {
+        match self {
+            Self::Group(tool) => tool.title().into(),
+            Self::Terminal(n) => format!("Terminal {n}").into(),
+        }
+    }
+}
 #[derive(Clone)]
 pub struct RevealTools;
 impl EventEmitter<RevealTools> for ToolPanel {}
@@ -95,14 +124,20 @@ pub struct ToolPanel {
     guides: Entity<super::guides::GuidePanel>,
     pub info_open: bool,
     pub shared_header: bool,
-    tabs: Vec<Tool>,
-    active: Option<Tool>,
+    tabs: Vec<ToolTab>,
+    active: Option<ToolTab>,
+    terminals: std::collections::BTreeMap<u8, Entity<super::terminal::RemoteTerminal>>,
+    /// Open terminal tabs, most recently used first.
+    recent_terminals: Vec<u8>,
     last_review: Tool,
     last_process: Tool,
     browser: Option<String>,
     browser_error: Option<String>,
     pub browser_pending: bool,
     browser_generation: u64,
+    /// Keeps the selected tool tab in view when the tabs overflow the pane.
+    tab_scroll: gpui_kit::ScrollHandle,
+    scrolled_to: Option<(usize, usize)>,
     #[cfg(target_os = "macos")]
     native_browser: Option<crate::macos::live_view::LiveView>,
     _subscriptions: Vec<Subscription>,
@@ -125,7 +160,9 @@ impl ToolPanel {
         let info_events = cx.subscribe(
             &info,
             |this, _, event: &super::workspace_info::InfoAction, cx| {
-                if let super::workspace_info::InfoAction::OpenTool(tool) = event {
+                if let super::workspace_info::InfoAction::OpenTool(Tool::Terminal) = event {
+                    this.show_terminal(cx);
+                } else if let super::workspace_info::InfoAction::OpenTool(tool) = event {
                     this.select(*tool, cx);
                 } else {
                     cx.emit(event.clone());
@@ -140,7 +177,7 @@ impl ToolPanel {
             match event {
                 ReviewEvent::Selected(ix) => {
                     if let Some(tool) = REVIEW.get(*ix) {
-                        this.activate(*tool, cx);
+                        this.activate(ToolTab::Group(*tool), cx);
                     }
                 }
                 ReviewEvent::Document => {
@@ -153,7 +190,7 @@ impl ToolPanel {
         });
         let process_events = cx.subscribe(&processes, |this, _, event: &ProcessSelected, cx| {
             if let Some(tool) = PROCESSES.get(event.0) {
-                this.activate(*tool, cx);
+                this.activate(ToolTab::Group(*tool), cx);
             }
         });
         let changed = cx.observe(&review, |_, _, cx| cx.notify());
@@ -182,12 +219,16 @@ impl ToolPanel {
             shared_header: false,
             tabs: vec![],
             active: None,
+            terminals: Default::default(),
+            recent_terminals: vec![],
             last_review: Tool::Changes,
             last_process: Tool::Run,
             browser: None,
             browser_error: None,
             browser_pending: false,
             browser_generation: 0,
+            tab_scroll: gpui_kit::ScrollHandle::new(),
+            scrolled_to: None,
             #[cfg(target_os = "macos")]
             native_browser: None,
             _subscriptions: vec![
@@ -200,20 +241,58 @@ impl ToolPanel {
             ],
         }
     }
-    fn activate(&mut self, tool: Tool, cx: &mut Context<Self>) {
-        let group = tool.group();
-        if !self.tabs.contains(&group) {
-            self.tabs.push(group);
+    fn activate(&mut self, tab: ToolTab, cx: &mut Context<Self>) {
+        if !self.tabs.contains(&tab.key()) {
+            self.tabs.push(tab.key());
         }
-        self.active = Some(tool);
-        if group == Tool::Changes {
-            self.last_review = tool;
-        }
-        if group == Tool::Run {
-            self.last_process = tool;
+        self.active = Some(tab);
+        match tab {
+            ToolTab::Group(tool) if tool.group() == Tool::Changes => self.last_review = tool,
+            ToolTab::Group(tool) if tool.group() == Tool::Run => self.last_process = tool,
+            ToolTab::Terminal(n) => {
+                self.recent_terminals.retain(|t| *t != n);
+                self.recent_terminals.insert(0, n);
+            }
+            _ => {}
         }
         cx.emit(RevealTools);
         cx.notify();
+    }
+    fn hide_document(&self, cx: &mut Context<Self>) {
+        self.review.update(cx, |r, cx| {
+            r.document_open = false;
+            cx.notify();
+        });
+    }
+    fn terminals_full(&self) -> bool {
+        self.tabs
+            .iter()
+            .filter(|t| matches!(t, ToolTab::Terminal(_)))
+            .count()
+            >= TERMINALS as usize
+    }
+    /// Opens a tab for the lowest terminal id without one; tmux keeps an existing session's shell.
+    pub fn open_terminal(&mut self, cx: &mut Context<Self>) {
+        let Some(n) = (1..=TERMINALS).find(|n| !self.tabs.contains(&ToolTab::Terminal(*n))) else {
+            return;
+        };
+        let workspace_id = self.store.read(cx).workspace_id.clone();
+        if let Some(terminal) =
+            super::terminal::RemoteTerminal::open(&self.client, &workspace_id, &format!("t{n}"), cx)
+        {
+            self.terminals.insert(n, terminal);
+        }
+        self.select_terminal(n, cx);
+    }
+    fn select_terminal(&mut self, n: u8, cx: &mut Context<Self>) {
+        self.hide_document(cx);
+        self.activate(ToolTab::Terminal(n), cx);
+    }
+    pub fn show_terminal(&mut self, cx: &mut Context<Self>) {
+        match self.recent_terminals.first() {
+            Some(n) => self.select_terminal(*n, cx),
+            None => self.open_terminal(cx),
+        }
     }
     fn select_group(&mut self, group: Tool, cx: &mut Context<Self>) {
         let tool = match group {
@@ -224,10 +303,11 @@ impl ToolPanel {
         self.select(tool, cx);
     }
     fn select(&mut self, tool: Tool, cx: &mut Context<Self>) {
-        self.review.update(cx, |r, cx| {
-            r.document_open = false;
-            cx.notify();
-        });
+        if tool == Tool::Terminal {
+            self.open_terminal(cx);
+            return;
+        }
+        self.hide_document(cx);
         if let Some(ix) = REVIEW.iter().position(|t| *t == tool) {
             self.review.update(cx, |r, cx| r.select_tab(ix, cx));
         } else if let Some(ix) = PROCESSES.iter().position(|t| *t == tool) {
@@ -238,7 +318,7 @@ impl ToolPanel {
         if tool == Tool::Guides {
             self.guides.update(cx, |g, cx| g.refresh(cx));
         }
-        self.activate(tool, cx);
+        self.activate(ToolTab::Group(tool), cx);
     }
     pub fn show_info(&mut self, chat: Option<String>, cx: &mut Context<Self>) {
         self.guides.update(cx, |g, cx| {
@@ -278,11 +358,8 @@ impl ToolPanel {
         }
     }
     pub fn open_browser(&mut self, cx: &mut Context<Self>) {
-        self.review.update(cx, |r, cx| {
-            r.document_open = false;
-            cx.notify();
-        });
-        self.activate(Tool::Browser, cx);
+        self.hide_document(cx);
+        self.activate(ToolTab::Group(Tool::Browser), cx);
         self.clear_browser();
         let generation = self.browser_generation;
         self.browser_error = None;
@@ -318,19 +395,16 @@ impl ToolPanel {
         .detach();
     }
     pub fn toggle_terminal(&mut self, cx: &mut Context<Self>) {
-        if self.active == Some(Tool::Terminal) {
-            self.active = None;
-            cx.notify();
+        let document_open = self.review.read(cx).document_open;
+        if !document_open && matches!(self.active, Some(ToolTab::Terminal(_))) {
+            self.show_launcher(cx);
         } else {
-            self.select(Tool::Terminal, cx);
+            self.show_terminal(cx);
         }
     }
     pub fn show_launcher(&mut self, cx: &mut Context<Self>) {
         self.active = None;
-        self.review.update(cx, |review, cx| {
-            review.document_open = false;
-            cx.notify();
-        });
+        self.hide_document(cx);
         cx.notify();
     }
     pub fn hide_browser(&self) {
@@ -339,17 +413,33 @@ impl ToolPanel {
             browser.hide();
         }
     }
+    #[cfg(test)]
+    pub fn open_tabs(&self) -> (Vec<ToolTab>, Option<ToolTab>) {
+        (self.tabs.clone(), self.active)
+    }
+    #[cfg(test)]
+    pub fn close_tab(&mut self, tab: ToolTab, cx: &mut Context<Self>) {
+        self.close(tab, cx);
+    }
     pub fn browser_ready(&self) -> bool {
         self.browser.is_some()
     }
-    fn close(&mut self, tool: Tool, cx: &mut Context<Self>) {
-        self.tabs.retain(|t| *t != tool.group());
-        if self.active.map(Tool::group) == Some(tool.group()) {
+    fn close(&mut self, tab: ToolTab, cx: &mut Context<Self>) {
+        let tab = tab.key();
+        self.tabs.retain(|t| *t != tab);
+        if self.active.map(ToolTab::key) == Some(tab) {
             self.active = None;
         }
-        if tool == Tool::Browser {
-            self.clear_browser();
-            self.browser_pending = false;
+        match tab {
+            ToolTab::Group(Tool::Browser) => {
+                self.clear_browser();
+                self.browser_pending = false;
+            }
+            ToolTab::Terminal(n) => {
+                self.terminals.remove(&n);
+                self.recent_terminals.retain(|t| *t != n);
+            }
+            _ => {}
         }
         cx.notify();
     }
@@ -364,24 +454,35 @@ impl ToolPanel {
                     .unwrap_or(0)
         } else {
             self.active
-                .and_then(|tool| self.tabs.iter().position(|t| *t == tool.group()))
+                .and_then(|tab| self.tabs.iter().position(|t| *t == tab.key()))
                 .unwrap_or(self.tabs.len() + documents.len())
         };
+        // The launcher selects one past the last tab, the index a new tab then takes.
+        let target = (selected, self.tabs.len() + documents.len());
+        if self.scrolled_to != Some(target) {
+            self.tab_scroll.scroll_to_item(selected);
+            self.scrolled_to = Some(target);
+        }
         let tab_tools = self.tabs.clone();
         let doc_keys: Vec<_> = documents.iter().map(|(key, _)| key.clone()).collect();
         div()
             .h(gpui_kit::px(40.))
             .w_full()
+            .pl(gpui_kit::px(HEADER_INSET))
             .bg(color(Token::Muted, cx))
             .child(
                 TabBar::new("tool-tabs")
                     .underline()
+                    .track_scroll(&self.tab_scroll)
                     .h_full()
                     .bg(color(Token::Muted, cx))
                     .selected_index(selected)
                     .on_click(cx.listener(move |this, ix: &usize, window, cx| {
-                        if let Some(tool) = tab_tools.get(*ix) {
-                            this.select_group(*tool, cx);
+                        if let Some(tab) = tab_tools.get(*ix) {
+                            match *tab {
+                                ToolTab::Group(tool) => this.select_group(tool, cx),
+                                ToolTab::Terminal(n) => this.select_terminal(n, cx),
+                            }
                         } else if let Some(key) = doc_keys.get(ix.saturating_sub(tab_tools.len())) {
                             this.review
                                 .update(cx, |r, cx| r.select_document(key, window, cx));
@@ -389,16 +490,17 @@ impl ToolPanel {
                             this.show_launcher(cx);
                         }
                     }))
-                    .children(self.tabs.clone().into_iter().map(|tool| {
-                        Tab::new().label(tool.title()).suffix(
-                            Button::new(SharedString::from(format!("close-tool-{}", tool.title())))
+                    .children(self.tabs.clone().into_iter().map(|tab| {
+                        Tab::new().label(tab.title()).suffix(
+                            Button::new(SharedString::from(format!("close-tool-{}", tab.title())))
                                 .ghost()
                                 .small()
+                                .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                                 .icon(gpui_kit::assets::IconName::X)
-                                .accessibility_label(format!("Close {}", tool.title()))
+                                .accessibility_label(format!("Close {}", tab.title()))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
-                                    this.close(tool, cx);
+                                    this.close(tab, cx);
                                 })),
                         )
                     }))
@@ -407,6 +509,7 @@ impl ToolPanel {
                             Button::new(SharedString::from(format!("close-tool-document-{key}")))
                                 .ghost()
                                 .small()
+                                .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                                 .icon(gpui_kit::assets::IconName::X)
                                 .accessibility_label("Close tool tab")
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -420,6 +523,7 @@ impl ToolPanel {
                         Button::new("new-tool-tab")
                             .ghost()
                             .small()
+                            .size(gpui_kit::px(super::tokens::ICON_BUTTON))
                             .icon(gpui_kit::assets::IconName::Plus)
                             .accessibility_label("New tool tab")
                             .tooltip("Open a tool")
@@ -472,12 +576,17 @@ impl ToolPanel {
 impl Render for ToolPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let document_open = self.review.read(cx).document_open;
-        if document_open || self.active != Some(Tool::Browser) {
+        if document_open || self.active != Some(ToolTab::Group(Tool::Browser)) {
             self.hide_browser();
         }
         let content = if document_open {
             self.review.read(cx).document(cx)
-        } else if let Some(tool) = self.active {
+        } else if let Some(ToolTab::Terminal(n)) = self.active {
+            div()
+                .size_full()
+                .children(self.terminals.get(&n).cloned())
+                .into_any_element()
+        } else if let Some(tool) = self.active.and_then(ToolTab::tool) {
             if REVIEW.contains(&tool) {
                 div()
                     .size_full()
@@ -504,31 +613,41 @@ impl Render for ToolPanel {
                         .grid_cols(2)
                         .gap_2()
                         .children(TOOLS.map(|tool| {
-                            Button::new(SharedString::from(format!("open-tool-{}", tool.title())))
-                                .ghost()
-                                .small()
-                                .w_full()
-                                .h(gpui_kit::px(36.))
-                                .bg(color(Token::Muted, cx))
-                                .accessibility_label(tool.title())
-                                .child(
-                                    h_flex()
-                                        .w_full()
-                                        .text_sm()
-                                        .font_weight(gpui_kit::FontWeight::NORMAL)
-                                        .gap_2()
-                                        .child(gpui_kit::component::Icon::new(tool.icon()).small())
-                                        .child(div().flex_1().text_left().child(tool.title()))
-                                        .children((tool == Tool::Terminal).then(|| {
-                                            div()
-                                                .px_2()
-                                                .rounded_md()
-                                                .bg(color(Token::SidebarAccent, cx))
-                                                .text_color(color(Token::MutedForeground, cx))
-                                                .child("⌘J")
-                                        })),
-                                )
-                                .on_click(cx.listener(move |this, _, _, cx| this.select(tool, cx)))
+                            let full = tool == Tool::Terminal && self.terminals_full();
+                            let button = Button::new(SharedString::from(format!(
+                                "open-tool-{}",
+                                tool.title()
+                            )))
+                            .disabled(full);
+                            (if full {
+                                button.tooltip("Nine terminals are open")
+                            } else {
+                                button
+                            })
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .h(gpui_kit::px(36.))
+                            .bg(color(Token::Muted, cx))
+                            .accessibility_label(tool.title())
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .text_sm()
+                                    .font_weight(gpui_kit::FontWeight::NORMAL)
+                                    .gap_2()
+                                    .child(gpui_kit::component::Icon::new(tool.icon()).small())
+                                    .child(div().flex_1().text_left().child(tool.title()))
+                                    .children((tool == Tool::Terminal).then(|| {
+                                        div()
+                                            .px_2()
+                                            .rounded_md()
+                                            .bg(color(Token::SidebarAccent, cx))
+                                            .text_color(color(Token::MutedForeground, cx))
+                                            .child("⌘J")
+                                    })),
+                            )
+                            .on_click(cx.listener(move |this, _, _, cx| this.select(tool, cx)))
                         })),
                 )
                 .into_any_element()
@@ -537,31 +656,34 @@ impl Render for ToolPanel {
             .size_full()
             .children((!self.shared_header).then(|| self.tab_bar(cx)))
             .children((!document_open).then(|| {
-                let sections: Vec<Tool> = match self.active.map(Tool::group) {
+                let active = self.active.and_then(ToolTab::tool);
+                let sections: Vec<Tool> = match active.map(Tool::group) {
                     Some(Tool::Changes) => vec![Tool::Changes, Tool::Files, Tool::Checks],
                     Some(Tool::Run) => vec![Tool::Setup, Tool::Run],
                     _ => vec![],
                 };
                 let selected = sections
                     .iter()
-                    .position(|tool| Some(*tool) == self.active)
+                    .position(|tool| Some(*tool) == active)
                     .unwrap_or(0);
                 let choices = sections.clone();
-                div().px_3().children((!sections.is_empty()).then(|| {
-                    TabBar::new("tool-sections")
-                        .underline()
-                        .selected_index(selected)
-                        .on_click(cx.listener(move |this, ix: &usize, _, cx| {
-                            if let Some(tool) = choices.get(*ix) {
-                                this.select(*tool, cx);
-                            }
-                        }))
-                        .children(
-                            sections
-                                .into_iter()
-                                .map(|tool| Tab::new().label(tool.title())),
-                        )
-                }))
+                div()
+                    .px(gpui_kit::px(HEADER_INSET))
+                    .children((!sections.is_empty()).then(|| {
+                        TabBar::new("tool-sections")
+                            .underline()
+                            .selected_index(selected)
+                            .on_click(cx.listener(move |this, ix: &usize, _, cx| {
+                                if let Some(tool) = choices.get(*ix) {
+                                    this.select(*tool, cx);
+                                }
+                            }))
+                            .children(
+                                sections
+                                    .into_iter()
+                                    .map(|tool| Tab::new().label(tool.title())),
+                            )
+                    }))
             }))
             .child(div().flex_1().min_h_0().child(content))
             .into_any_element()

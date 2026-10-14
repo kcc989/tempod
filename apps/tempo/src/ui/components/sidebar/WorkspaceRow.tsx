@@ -40,8 +40,8 @@ import { ChecksDot, PrBadge, StatusIcon } from "./indicators";
 import { CHECKS_LABELS, PR_STATE_LABELS, isBold } from "./sidebar-logic";
 
 /**
- * 04, Workspace row: status icon and title (bold when unread or waiting), `branch · slug`, PR badge
- * and checks dot. Hover card after 400 ms; right-click menu.
+ * 04, Workspace row: one line with status icon, title (bold when unread or waiting), PR badge and
+ * checks dot. Branch and state are in the hover card after 400 ms and in the accessible name.
  */
 export function WorkspaceRow({
   workspace: w,
@@ -59,12 +59,7 @@ export function WorkspaceRow({
   const slug = w.slug !== w.title && w.branch.split("/").at(-1) !== w.slug ? w.slug : "";
   const detail = [branch, slug].filter(Boolean).join(" · ");
 
-  const metadata = (
-    <span className="flex min-w-0 items-center gap-2 pl-5 text-xs text-muted-foreground">
-      {detail && <span className="min-w-0 truncate">{detail}</span>}
-      <span className="shrink-0">{status}</span>
-    </span>
-  );
+  const metadata = <span className="sr-only">{[detail, status].filter(Boolean).join(" · ")}</span>;
 
   const body = (
     <>
@@ -233,6 +228,8 @@ function RowHoverCard({
         <span className="truncate text-sm font-medium">{view.w.title}</span>
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <dt className="text-muted-foreground">Branch</dt>
+        <dd className="truncate font-mono">{view.w.branch}</dd>
         <dt className="text-muted-foreground">State</dt>
         <dd className={cn("truncate", pill.tone === "error" && "text-destructive")}>{pill.text}</dd>
         <dt className="text-muted-foreground">Last activity</dt>

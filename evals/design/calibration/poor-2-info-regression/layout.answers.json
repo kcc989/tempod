@@ -1,0 +1,216 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T15:24:10.316Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "focus_primary_path": {
+          "type": "score",
+          "score": 1.4637,
+          "legend": {
+            "0": {
+              "what": "Several controls compete for attention, or nothing shows what to do first",
+              "examples": [
+                "Four filled buttons in different colors in the header",
+                "A promo banner, a tour popup, and a filled button all ask for a click"
+              ]
+            },
+            "1": {
+              "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
+              "examples": [
+                "A filled 'Create' button next to a filled 'Upgrade' button of the same size"
+              ]
+            },
+            "2": {
+              "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
+              "examples": [
+                "An agents list where only 'Create Agent' is a filled dark button",
+                "A thread list where the rows are the focus and the header has only text buttons"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.1983,
+            "1": 0.1397,
+            "2": 0.662
+          },
+          "confidence": 0.2456
+        },
+        "focus_content_share": {
+          "type": "score",
+          "score": 1.2208,
+          "legend": {
+            "0": "Controls, banners, promotions, or decoration take most of the screen",
+            "1": "Content and controls take similar space",
+            "2": "The user's content takes most of the screen, and controls sit in a sidebar, a header, or a footer"
+          },
+          "probabilities": {
+            "0": 0.1964,
+            "1": 0.3864,
+            "2": 0.4172
+          },
+          "confidence": 0.0429
+        },
+        "focus_reading_order": {
+          "type": "noul",
+          "noul": 0.6741
+        },
+        "focus_space_fit": {
+          "type": "noul",
+          "noul": 0.3133
+        },
+        "overflow_long_text": {
+          "type": "choice",
+          "choice": "ellipsis",
+          "probabilities": {
+            "ellipsis": 0.6705,
+            "cut": 0.0387,
+            "breaks_layout": 0.0098,
+            "not_shown": 0.281
+          },
+          "confidence": 0.3735
+        },
+        "overflow_scroll_cue": {
+          "type": "choice",
+          "choice": "no_cue",
+          "probabilities": {
+            "cue": 0.0649,
+            "no_cue": 0.6814,
+            "not_shown": 0.2537
+          },
+          "confidence": 0.2993
+        },
+        "type_hierarchy": {
+          "type": "noul",
+          "noul": 0.9053
+        },
+        "type_scale": {
+          "type": "score",
+          "score": 1.6086,
+          "legend": {
+            "0": "Many sizes with small differences, or no clear pattern",
+            "1": "A few sizes, but some styles look almost the same",
+            "2": "A small set of clearly different sizes and weights, used the same way for the same role everywhere"
+          },
+          "probabilities": {
+            "0": 0.0822,
+            "1": 0.227,
+            "2": 0.6908
+          },
+          "confidence": 0.3033
+        },
+        "type_line_height": {
+          "type": "noul",
+          "noul": 0.7495
+        },
+        "type_numbers": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "aligned": 0.0524,
+            "ragged": 0.0407,
+            "not_shown": 0.9069
+          },
+          "confidence": 0.7405
+        },
+        "type_mono": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "mono": 0.0994,
+            "mixed": 0.3787,
+            "not_shown": 0.5219
+          },
+          "confidence": 0.1385
+        },
+        "slop_eyebrow_label": {
+          "type": "noul",
+          "noul": 0.036
+        },
+        "slop_icon_tile_heading": {
+          "type": "noul",
+          "noul": 0.0278
+        },
+        "slop_badge_headline": {
+          "type": "noul",
+          "noul": 0.0218
+        },
+        "slop_italic_serif_headline": {
+          "type": "noul",
+          "noul": 0.0076
+        },
+        "slop_hero_headline": {
+          "type": "noul",
+          "noul": 0.0155
+        },
+        "slop_flat_hierarchy": {
+          "type": "noul",
+          "noul": 0.073
+        },
+        "slop_tight_tracking": {
+          "type": "noul",
+          "noul": 0.0167
+        },
+        "slop_numbered_labels": {
+          "type": "noul",
+          "noul": 0.0117
+        },
+        "slop_hero_metric": {
+          "type": "noul",
+          "noul": 0.0156
+        },
+        "slop_card_grid": {
+          "type": "noul",
+          "noul": 0.0164
+        },
+        "slop_nested_cards": {
+          "type": "noul",
+          "noul": 0.0673
+        },
+        "slop_hidden_image": {
+          "type": "noul",
+          "noul": 0.0161
+        },
+        "quality_tiny_text": {
+          "type": "noul",
+          "noul": 0.1859
+        },
+        "quality_all_caps": {
+          "type": "noul",
+          "noul": 0.0119
+        },
+        "quality_long_lines": {
+          "type": "noul",
+          "noul": 0.0504
+        },
+        "quality_text_covered": {
+          "type": "noul",
+          "noul": 0.0446
+        },
+        "quality_overflow": {
+          "type": "noul",
+          "noul": 0.0613
+        },
+        "quality_broken_image": {
+          "type": "noul",
+          "noul": 0.0137
+        },
+        "quality_scroll_edge": {
+          "type": "noul",
+          "noul": 0.1237
+        }
+      },
+      "usage": {
+        "input_tokens": 6165,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

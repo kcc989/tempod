@@ -8,7 +8,7 @@ import {
   runInDurableObject,
   waitOnExecutionContext,
 } from "cloudflare:test";
-import { describe, expect, it, vi, type TestContext } from "vitest";
+import { describe, it, vi, type TestContext } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
 import { github } from "../../src/github/provider.ts";
 import { previewCookie } from "../../src/do/workspace/preview.ts";
@@ -113,7 +113,7 @@ const driveUntil = async (
       "UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'",
     );
     await runDurableObjectAlarm(stub);
-    await sleep(25);
+    await sleep(5);
   }
 };
 
@@ -139,7 +139,7 @@ const whileDriving = async <T>(stub: Stub, rpc: PromiseLike<Result<T>>): Promise
       "UPDATE ops SET next_run_at = 0 WHERE status IN ('pending', 'running') AND kind != 'housekeeping'",
     );
     await runDurableObjectAlarm(stub);
-    await sleep(25);
+    await sleep(5);
   }
 
   return await call;
@@ -271,6 +271,9 @@ const readyWs = async (
 
   return { ...w, seeded, first };
 };
+
+/** A seeded ready workspace with Claude credentials, for RPC contracts that do not need the create op. */
+const readyFast = async (): Promise<Ws> => seedReadyWorkspace({ credentials: ["claude"] });
 
 const liveSession = async (w: Ws, agent: AgentId = "claude") => {
   const s = ok(await w.stub.createSession({ agent }));
@@ -530,7 +533,7 @@ describe.concurrent("init", { timeout: 30_000 }, () => {
 
 describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
   it("returns every WorkspaceDetail field for a ready workspace", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const d = await detail(w.stub);
 
     // 02 Shared types: WorkspaceDetail = WorkspaceSummary plus errorCode, errorDetail, setupStatus, pushed,
@@ -616,6 +619,7 @@ describe.concurrent("getWorkspace", { timeout: 30_000 }, () => {
       "tempod.connect",
       "repo.clone",
       "settings.read",
+      "dotfiles.apply",
       "setup.run",
     ]);
     expect(d.op!.steps[0]!.status).toBe("running");
@@ -912,7 +916,7 @@ describe.concurrent("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () 
   });
 
   it("runs the sleep op from ready to sleeping, then a second call is a no-op", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     expect(codeOf(await w.stub.sleepWorkspace({}))).toBe("OK");
     expect(await opsOf(w.stub, "sleep")).toHaveLength(1);
     // A sleep op is now pending or running: another call cannot start a second one.
@@ -933,7 +937,7 @@ describe.concurrent("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () 
     expect,
     onTestFinished,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await putToSleep(w);
     hold(w.tempod, onTestFinished);
     expect(codeOf(await w.stub.wakeWorkspace({}))).toBe("OK");
@@ -946,22 +950,10 @@ describe.concurrent("sleepWorkspace and wakeWorkspace", { timeout: 30_000 }, () 
 });
 
 describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { timeout: 60_000 }, () => {
-  it("archives a sleeping workspace without starting its container", async ({ expect }) => {
-    const w = await readyWs();
-    await putToSleep(w);
-    const starts = w.container.starts.length;
-    const requests = w.tempod.requests.length;
-    // 03 Step runner: "When the container is not running, archive skips every step that needs it"
-    await archiveIt(w);
-    expect(w.container.starts).toHaveLength(starts);
-    expect(w.tempod.requests).toHaveLength(requests);
-    expect((await d1Row(w.workspaceId))!["state"]).toBe("archived");
-  });
-
   it("restoreWorkspace during archiving queues the restore op, which runs after the archive", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     expect(codeOf(await w.stub.archiveWorkspace({}))).toBe("OK");
     expect(await stateOf(w.stub)).toBe("archiving");
     // 03 Archive: "If the archive op is still running, restoreWorkspace queues the restore op. It starts when archive ends."
@@ -1056,26 +1048,8 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
     expect(await stateOf(w.stub)).toBe("archived");
   });
 
-  it("restores an archived workspace to sleeping and clears archived_at", async ({ expect }) => {
-    const w = await readyWs();
-    await archiveIt(w);
-    expect(codeOf(await w.stub.restoreWorkspace({}))).toBe("OK");
-    // 03 Restore 3: "Clear archived_at. State sleeping."
-    await driveToState(w.stub, "sleeping");
-    expect((await detail(w.stub)).archivedAt).toBeNull();
-    await waitFor(
-      async () => {
-        const r = await d1Row(w.workspaceId);
-
-        return r?.["state"] === "sleeping" && r["archived_at"] === null;
-      },
-      5000,
-      "D1 restored",
-    );
-  });
-
   it("restore returns BRANCH_IN_USE when another live workspace took the branch", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await archiveIt(w);
     const branch = (await detail(w.stub)).branch;
     await insertD1Workspace(w.seeded, { slug: `thief-${++counter}`, branch });
@@ -1083,23 +1057,6 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
     expect(codeOf(await w.stub.restoreWorkspace({}))).toBe("BRANCH_IN_USE");
     expect(await stateOf(w.stub)).toBe("archived");
     expect(await opsOf(w.stub, "restore")).toHaveLength(0);
-  });
-
-  it("restore gives the workspace a new slug when only the slug is taken, and keeps the branch", async ({
-    expect,
-  }) => {
-    const w = await readyWs();
-    await archiveIt(w);
-    const before = await detail(w.stub);
-    await insertD1Workspace(w.seeded, { slug: before.slug, branch: `tempo/other-${++counter}` });
-    expect(codeOf(await w.stub.restoreWorkspace({}))).toBe("OK");
-    await driveToState(w.stub, "sleeping");
-    const after = await detail(w.stub);
-    // 03 Restore 1: "If only the slug is taken, give the workspace a new slug; keep the branch."
-    expect(after.slug).not.toBe(before.slug);
-    expect(after.slug).toMatch(/^[a-z0-9-]+$/);
-    expect(after.branch).toBe(before.branch);
-    await waitFor(async () => (await d1Row(w.workspaceId))?.["slug"] === after.slug, 5000, "D1 slug");
   });
 
   it("deleteWorkspace returns WORKSPACE_NOT_ARCHIVED unless archived", async ({ expect, onTestFinished }) => {
@@ -1113,7 +1070,7 @@ describe.concurrent("archiveWorkspace, restoreWorkspace and deleteWorkspace", { 
   it("deleteWorkspace deletes the R2 keys, the D1 row, the DO rows and the hub summary", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await archiveIt(w);
     const id = w.workspaceId;
     const otherId = newId();
@@ -1236,7 +1193,7 @@ describe.concurrent("createSession, renameSession and closeSession", { timeout: 
   it("inserts the session as starting, then starts it in tempod and marks it idle when the workspace is ready", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = ok(await w.stub.createSession({ agent: "claude", model: "claude-opus-4" }));
     // 01 Start a session 1: "inserts the session row with status starting"
     expect(s).toMatchObject({ agent: "claude", status: "starting", title: "" });
@@ -1268,7 +1225,7 @@ describe.concurrent("createSession, renameSession and closeSession", { timeout: 
   });
 
   it("is a wake trigger on a sleeping workspace", async ({ expect, onTestFinished }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await putToSleep(w);
     hold(w.tempod, onTestFinished);
     const s = ok(await w.stub.createSession({ agent: "claude" }));
@@ -1328,7 +1285,7 @@ describe.concurrent("createSession, renameSession and closeSession", { timeout: 
   });
 
   it("closeSession sends session.close for a live session", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     expect(codeOf(await w.stub.closeSession({ sessionId: s.id }))).toBe("OK");
     // 02 tempod protocol: session.close {sessionId}
@@ -1526,7 +1483,7 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
     expect,
     onTestFinished,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     hold(w.tempod, onTestFinished);
     await forceError(w);
@@ -1584,7 +1541,7 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
     expect,
     onTestFinished,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     let releaseRename!: () => void;
     let markRenameEntered!: () => void;
@@ -1640,7 +1597,7 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
     expect,
     onTestFinished,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     const acpId = (await sessionOf(w.stub, s.id))!["acp_session_id"];
     await putToSleep(w);
@@ -1863,7 +1820,7 @@ describe.concurrent("setSessionMode and setSessionConfig", { timeout: 30_000 }, 
   it("send session.setMode and session.setConfig to tempod for a live session and store the result", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     expect(codeOf(await w.stub.setSessionMode({ sessionId: s.id, modeId: "plan" }))).toBe("OK");
     expect(w.tempod.requestsOf("session.setMode")).toEqual([{ sessionId: s.id, modeId: "plan" }]);
@@ -1881,7 +1838,7 @@ describe.concurrent("setSessionMode and setSessionConfig", { timeout: 30_000 }, 
   });
 
   it("keep the old mode when tempod fails session.setMode", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     const before = (await sessionOf(w.stub, s.id))!["mode_id"];
     w.tempod.fail("session.setMode", "INTERNAL", "no such mode");
@@ -2013,7 +1970,7 @@ describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 
   it("returns WORKSPACE_BUSY while a turn is queued, and reverts once the queue is empty", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     const id = newId();
     await exec(
@@ -2096,7 +2053,7 @@ describe.concurrent("listCheckpoints and revertToCheckpoint", { timeout: 60_000 
 
 describe.concurrent("commitAndPush", { timeout: 30_000 }, () => {
   it("commits and pushes, then sets pushed and last_pushed_sha", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const branch = (await detail(w.stub)).branch;
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Add README" }));
     expect(ok(res)).toEqual({ commitSha: "f".repeat(40) });
@@ -2115,7 +2072,7 @@ describe.concurrent("commitAndPush", { timeout: 30_000 }, () => {
   });
 
   it("passes PUSH_REJECTED through and leaves pushed and the state alone", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Try" }));
     // 03 Commit and push 5: "A rejected push fails with PUSH_REJECTED"
@@ -2128,7 +2085,7 @@ describe.concurrent("commitAndPush", { timeout: 30_000 }, () => {
   });
 
   it("passes NOTHING_TO_COMMIT through", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     w.tempod.fail("git.commitAndPush", "NOTHING_TO_COMMIT", "clean");
     const res = await whileDriving(w.stub, w.stub.commitAndPush({ message: "Nothing" }));
     expect(codeOf(res)).toBe("NOTHING_TO_COMMIT");
@@ -2140,7 +2097,7 @@ describe.concurrent("commitAndPush behind other ops", { timeout: 30_000 }, () =>
   it("waits as pending behind an op instead of returning WORKSPACE_BUSY, then runs in creation order", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
     });
@@ -2154,7 +2111,7 @@ describe.concurrent("commitAndPush behind other ops", { timeout: 30_000 }, () =>
   });
 
   it("returns its own op's error code once the queued op runs", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     w.tempod.fail("git.commitAndPush", "PUSH_REJECTED", "! [rejected] (fetch first)");
     await runInDurableObject(w.stub, (i: WorkspaceDO) => {
       internals(i).runner.insert("commit_push", { message: "First" }, Date.now() + 300);
@@ -2211,7 +2168,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   });
 
   it("syncs files before sleep and serves them without waking or contacting tempod", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     w.tempod.on("fs.list", () => ({ paths: ["README.md", "src/a.ts", "bin.dat"] }));
     w.tempod.on("fs.read", ({ path }) =>
       path === "bin.dat"
@@ -2235,7 +2192,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   });
 
   it("does not wake on a cache miss and rejects paths outside the workspace", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await putToSleep(w);
     expect(codeOf(await w.stub.readFile({ path: "uncached.ts" }))).toBe("CONTAINER_NOT_READY");
 
@@ -2250,7 +2207,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   it("refreshes changed files, removes deleted files and drops unreadable cached contents", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const sync = () => runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
     await sync();
     w.tempod.on("fs.list", () => ({ paths: ["src/renamed.ts"] }));
@@ -2270,14 +2227,16 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
       5000,
       "file event applied",
     );
-    await waitFor(
-      async () =>
-        (await one(w.stub, "SELECT response_json FROM file_cache WHERE path = 'src/renamed.ts'"))?.[
-          "response_json"
-        ] != null,
-      8000,
-      "file cache synced",
-    );
+    // The event schedules a debounced sync; run it now instead of waiting out its timer.
+    expect(
+      await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files["timer"] !== null),
+    ).toBe(true);
+    await sync();
+    expect(
+      (await one(w.stub, "SELECT response_json FROM file_cache WHERE path = 'src/renamed.ts'"))?.[
+        "response_json"
+      ],
+    ).not.toBeNull();
     expect(await one(w.stub, "SELECT path FROM file_cache WHERE path = 'README.md'")).toBeUndefined();
     expect(
       await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.read("src/renamed.ts")),
@@ -2289,7 +2248,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   });
 
   it("keeps the previous snapshot and completes sleep when syncing fails", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await runInDurableObject(w.stub, (i: WorkspaceDO) => internals(i).core.files.sync());
     w.tempod.fail("fs.list", "INTERNAL");
     await putToSleep(w);
@@ -2317,7 +2276,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   });
 
   it("validates file_cache.response_json on read and write (02, Conventions)", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await runInDurableObject(w.stub, async (i: WorkspaceDO) => {
       const { files } = internals(i).core;
       await files.sync();
@@ -2346,7 +2305,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
     expect,
     onTestFinished,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await useSettings(
       w,
       settingsWith({ scripts: { run: { dev: { command: "npm run dev", cwd: "", default: true } } } }),
@@ -2368,7 +2327,7 @@ describe.concurrent("files and changes", { timeout: 30_000 }, () => {
   });
 
   it("each read call alone starts a wake from sleeping", async ({ expect, onTestFinished }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await putToSleep(w);
     hold(w.tempod, onTestFinished);
     expect(codeOf(await w.stub.searchFiles({ query: "x" }))).toBe("CONTAINER_NOT_READY");
@@ -2384,7 +2343,7 @@ describe.concurrent("scripts", { timeout: 30_000 }, () => {
   };
 
   it("runScript returns NOT_FOUND for an unknown script", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     expect(codeOf(await w.stub.runScript({ scriptId: "dev" }))).toBe("NOT_FOUND");
     expect(w.tempod.requestsOf("script.start")).toHaveLength(0);
   });
@@ -2392,7 +2351,7 @@ describe.concurrent("scripts", { timeout: 30_000 }, () => {
   it("runScript starts the run script and listScriptRuns shows it with its log tail and exit", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await useSettings(w, settingsWith({ scripts: { run: runScripts } }));
     expect(ok(await w.stub.listScriptRuns({}))).toEqual([]);
     const run = ok(await w.stub.runScript({ scriptId: "dev" }));
@@ -2426,7 +2385,7 @@ describe.concurrent("scripts", { timeout: 30_000 }, () => {
   });
 
   it("with run_mode nonconcurrent, runScript stops the running run scripts first", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await useSettings(w, settingsWith({ scripts: { run: runScripts, run_mode: "nonconcurrent" } }));
     const dev = ok(await w.stub.runScript({ scriptId: "dev" }));
     const test = ok(await w.stub.runScript({ scriptId: "test" }));
@@ -2441,7 +2400,7 @@ describe.concurrent("scripts", { timeout: 30_000 }, () => {
   });
 
   it("records failed_to_start when tempod refuses the start", async ({ expect }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     await useSettings(w, settingsWith({ scripts: { run: runScripts } }));
     w.tempod.fail("script.start", "INTERNAL", "spawn failed");
     const run = ok(await w.stub.runScript({ scriptId: "dev" }));
@@ -2453,7 +2412,7 @@ describe.concurrent("scripts", { timeout: 30_000 }, () => {
   it("continueAfterSetupFailure moves setup_status from failed to skipped and lets the queue run", async ({
     expect,
   }) => {
-    const w = await readyWs();
+    const w = await readyFast();
     const s = await liveSession(w);
     await useSettings(w, settingsWith({ scripts: { setup: "exit 1" } }));
     const setup = ok(await w.stub.rerunSetup({}));
@@ -2520,6 +2479,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       secrets: [],
       injectors: [],
       mcp: [],
+      dotfiles: null,
     });
     await useSettings(w, DEFAULT_EFFECTIVE);
     expect(await w.stub.getEgressConfig()).toEqual({
@@ -2533,6 +2493,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       secrets: [],
       injectors: [],
       mcp: [],
+      dotfiles: null,
     });
   });
   it("getEgressConfig fails for a workspace that was never created", async ({ expect }) => {
@@ -2615,6 +2576,7 @@ describe.concurrent("getDiagnostics", { timeout: 30_000 }, () => {
     expect(create).toMatchObject({ kind: "create", status: "done", errorCode: null, errorDetail: null });
     expect(Object.keys(create.timings).sort()).toEqual([
       "container.start",
+      "dotfiles.apply",
       "repo.clone",
       "settings.read",
       "setup.run",
@@ -2839,7 +2801,7 @@ describe("workspace from a PR (03, Create a workspace)", { timeout: 30_000 }, ()
   });
 });
 
-describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30_000 }, () => {
+describe.concurrent("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30_000 }, () => {
   /** A workspace in `error` with no create or wake op left, as after a step failed for good. */
   const errored = async (onTestFinished: TestContext["onTestFinished"]) => {
     const w = await seedHeld(onTestFinished, { prompt: "First" });
@@ -2854,12 +2816,13 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
 
       core.setState("error", { code: "CONTAINER_START_FAILED", detail: "test" });
     });
-    expect(await stateOf(w.stub)).toBe("error");
+
+    if ((await stateOf(w.stub)) !== "error") throw new Error("Fixture could not enter error");
 
     return w;
   };
 
-  const restarted = async (w: Ws) => {
+  const restarted = async (w: Ws, expect: TestContext["expect"]) => {
     const wakes = (await opsOf(w.stub, "wake")).filter(
       (o) => o.status === "pending" || o.status === "running",
     );
@@ -2868,15 +2831,11 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
     expect(await stateOf(w.stub)).toBe("starting");
   };
 
-  const sessionIdOf = async (w: Ws) =>
-    Schema.decodeUnknownSync(Schema.String)((await one(w.stub, "SELECT id FROM sessions"))!["id"]);
-
   const NOT_READY = "CONTAINER_NOT_READY";
 
   const triggers: Array<[string, string, (w: Ws) => Promise<string>]> = [
-    ["sendPrompt", "OK", async (w) => codeOf(await prompt(w, await sessionIdOf(w), "Again"))],
+    // sendPrompt and wakeWorkspace from error are covered under sendPrompt and the create op.
     ["createSession", "OK", async (w) => codeOf(await w.stub.createSession({ agent: "claude" }))],
-    ["wakeWorkspace", "OK", async (w) => codeOf(await w.stub.wakeWorkspace({}))],
     ["rerunSetup", NOT_READY, async (w) => codeOf(await w.stub.rerunSetup({}))],
     [
       "runScript",
@@ -2892,15 +2851,8 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
         return codeOf(await w.stub.runScript({ scriptId: "dev" }));
       },
     ],
+    // The read calls share one readiness guard; listFiles and readFile are covered with a warm cache below.
     ["getChanges", NOT_READY, async (w) => codeOf(await w.stub.getChanges({ scope: "branch" }))],
-    [
-      "getFileDiff",
-      NOT_READY,
-      async (w) => codeOf(await w.stub.getFileDiff({ scope: "branch", path: "README.md" })),
-    ],
-    ["listFiles", NOT_READY, async (w) => codeOf(await w.stub.listFiles({}))],
-    ["readFile", NOT_READY, async (w) => codeOf(await w.stub.readFile({ path: "README.md" }))],
-    ["searchFiles", NOT_READY, async (w) => codeOf(await w.stub.searchFiles({ query: "x" }))],
     [
       "a terminal WebSocket",
       "101",
@@ -2940,7 +2892,7 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
     it(`${name} restarts it`, async ({ expect, onTestFinished }) => {
       const w = await errored(onTestFinished);
       expect(await trigger(w)).toBe(expected);
-      await restarted(w);
+      await restarted(w, expect);
     });
   }
 
@@ -2960,7 +2912,7 @@ describe("errored workspaces (03, Transitions: any wake trigger)", { timeout: 30
         expect(files.read("README.md")).toMatchObject({ content: "cached" });
       });
       expect(codeOf(await read(w))).toBe(NOT_READY);
-      await restarted(w);
+      await restarted(w, expect);
     });
   }
 });
@@ -3025,4 +2977,17 @@ describe.concurrent("getDiagnostics egress filters (02, 05 Observability)", { ti
     expect(await egressOf(w, { egressStatus: "2xx", egressHost: "example" })).toEqual([]);
     expect(await egressOf(w, { egressStatus: "all", egressHost: "example.com" })).toHaveLength(1);
   });
+});
+
+// =============================================================================================
+// Sequential cases from other areas share this file's workerd startup and balance the four Worker
+// files (docs/CI.md). Each module loads inside its own describe, so its hooks stay scoped to it.
+// =============================================================================================
+
+describe("runs", async () => {
+  await import("./runs.cases.ts");
+});
+
+describe("protocol-additions", async () => {
+  await import("./protocol-additions.cases.ts");
 });

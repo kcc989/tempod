@@ -1,0 +1,149 @@
+{
+  "layout": {
+    "status": "fail",
+    "score": 0.85,
+    "dimensions": {
+      "focus": 0.76,
+      "type": 0.92,
+      "overflow": 0.5,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "overflow"
+    ],
+    "majors": [
+      "dimension overflow below 0.6",
+      "focus_space_fit = 0.268 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.268,
+        "uncertain": false,
+        "source": "layout"
+      },
+      {
+        "question": "overflow_scroll_cue",
+        "value": 0,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_content_share",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+      "Make each panel only as wide as its content needs."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.97,
+    "dimensions": {
+      "spacing": 0.91,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.88,
+    "dimensions": {
+      "color": 0.81,
+      "icons": 0.78,
+      "contrast": 0.73,
+      "restraint": 0.84,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:restraint_noise",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.77,
+    "dimensions": {
+      "focus": 0.84,
+      "status": 0.8,
+      "control": 0,
+      "scan": 0.96,
+      "nav": 0.82,
+      "speed": 0.6,
+      "copy": 0.63,
+      "trust": 0.94,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "control"
+    ],
+    "majors": [
+      "dimension control below 0.6",
+      "speed_shortcuts = 0.015 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "control_diff",
+        "value": 0,
+        "uncertain": true,
+        "source": "usability"
+      },
+      {
+        "question": "speed_shortcuts",
+        "value": 0.015,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:control_diff",
+      "usability:nav_groups",
+      "usability:nav_return",
+      "usability:copy_status",
+      "usability:copy_controls_labeled",
+      "usability:quality_repeated_identifier"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [],
+    "fixes": [
+      "Show changes as before and after.",
+      "Show keyboard shortcuts next to frequent actions.",
+      "Use status labels that a new user understands.",
+      "Give each dropdown and selector a label that says what it sets.",
+      "Let the user go back to recent or pinned work in one click."
+    ]
+  }
+}

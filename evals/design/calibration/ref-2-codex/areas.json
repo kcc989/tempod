@@ -1,0 +1,182 @@
+{
+  "layout": {
+    "status": "review",
+    "score": 0.89,
+    "dimensions": {
+      "focus": 0.69,
+      "type": 0.88,
+      "overflow": 1,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [
+      {
+        "question": "focus_space_fit",
+        "value": 0.395,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_primary_path",
+      "layout:focus_content_share",
+      "layout:focus_space_fit",
+      "layout:overflow_scroll_cue",
+      "layout:type_scale"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Give the screen one main path: one filled button, or no control that competes with the content.",
+      "Make each panel only as wide as its content needs."
+    ]
+  },
+  "spacing": {
+    "status": "pass",
+    "score": 0.97,
+    "dimensions": {
+      "spacing": 0.91,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": []
+  },
+  "color-depth": {
+    "status": "review",
+    "score": 0.87,
+    "dimensions": {
+      "color": 0.88,
+      "icons": 0.79,
+      "contrast": 0.6,
+      "restraint": 0.83,
+      "slop": 1,
+      "quality": 1
+    },
+    "blockers": [],
+    "weakDimensions": [],
+    "majors": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:color_role",
+      "color-depth:contrast_secondary",
+      "color-depth:restraint_noise",
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Make secondary text, placeholders, and metadata darker until they are easy to read.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "score": 0.75,
+    "dimensions": {
+      "focus": 0.74,
+      "status": 0.85,
+      "ai": 0.48,
+      "control": 0.56,
+      "scan": 0.71,
+      "nav": 0.88,
+      "speed": 0.22,
+      "states": 1,
+      "copy": 0.73,
+      "slop": 1,
+      "quality": 0.84
+    },
+    "blockers": [],
+    "weakDimensions": [
+      "ai",
+      "control",
+      "speed"
+    ],
+    "majors": [
+      "dimension ai below 0.6",
+      "dimension control below 0.6",
+      "dimension speed below 0.6",
+      "ai_limits = 0.015 (below 0.4)",
+      "ai_feedback = 0.039 (below 0.4)",
+      "control_draft = 0.118 (below 0.4)",
+      "speed_shortcuts = 0.017 (below 0.4)",
+      "speed_views = 0.022 (below 0.4)",
+      "quality_repeated_identifier = 0.345 (below 0.4)"
+    ],
+    "lowAnswers": [
+      {
+        "question": "ai_limits",
+        "value": 0.015,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "ai_feedback",
+        "value": 0.039,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "control_draft",
+        "value": 0.118,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_shortcuts",
+        "value": 0.017,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "speed_views",
+        "value": 0.022,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.345,
+        "uncertain": false,
+        "source": "usability"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:status_items",
+      "usability:scan_rows",
+      "usability:nav_groups",
+      "usability:nav_tabs_current",
+      "usability:speed_search",
+      "usability:states_disabled_clear",
+      "usability:copy_labels"
+    ],
+    "missingEvidence": [
+      "no interaction captures"
+    ],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.66
+      }
+    ],
+    "fixes": [
+      "Let the user save a draft or undo before work is final.",
+      "State the limits of the AI near its output.",
+      "Let the user rate or correct AI output, and confirm the rating.",
+      "Show keyboard shortcuts next to frequent actions.",
+      "Let the user sort, filter, and change the view of the collection.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing."
+    ]
+  }
+}

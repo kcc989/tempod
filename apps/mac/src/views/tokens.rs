@@ -20,10 +20,31 @@ pub enum Token {
     /// `--warning` (04's custom token)
     Warning,
     Border,
+    /// `--input`: edges of text fields and the composer, at least 3:1 against every surface.
+    Input,
     /// Added lines in the diff view (07, Changes); open PRs and passed checks (04, Indicators).
     Success,
     /// `--merged`: merged PRs (04, Indicators).
     Merged,
+}
+
+/// WCAG 2.5.8: icon-only buttons are at least 24 pt. GPUI Kit's small icon size follows the 13 pt rem.
+pub const ICON_BUTTON: f32 = 24.;
+
+/// A toggle or choice that is on: primary text on a primary tint, at least 3:1 against the surface (04).
+pub trait ToggleOn {
+    fn toggle_on(self, on: bool, cx: &App) -> Self;
+}
+
+impl ToggleOn for gpui_kit::component::button::Button {
+    fn toggle_on(self, on: bool, cx: &App) -> Self {
+        use gpui_kit::Styled as _;
+        if !on {
+            return self;
+        }
+        let primary = color(Token::Primary, cx);
+        self.bg(primary.opacity(0.16)).text_color(primary)
+    }
 }
 
 pub fn color(token: Token, cx: &App) -> Hsla {
@@ -43,6 +64,7 @@ pub fn from_theme(colors: &ThemeColor, token: Token) -> Hsla {
         Token::Destructive => colors.danger,
         Token::Warning => colors.warning,
         Token::Border => colors.border,
+        Token::Input => colors.input,
         Token::Success => colors.success,
         Token::Merged => colors.magenta,
     }
@@ -112,15 +134,16 @@ pub fn install(cx: &mut App) {
                 border,
                 primary,
                 on_primary,
+                input,
             ) = if dark {
                 (
                     "#0f0f0f", "#151515", "#161616", "#222222", "#181818", "#262626", "#242424",
-                    "#f2f2f2", "#989898", "#2b2b2b", "#478bfb", "#0a0a0a",
+                    "#f2f2f2", "#989898", "#2b2b2b", "#478bfb", "#0a0a0a", "#707070",
                 )
             } else {
                 (
                     "#ffffff", "#f9f9f9", "#ffffff", "#f5f5f5", "#ffffff", "#f0f0f0", "#ebebeb",
-                    "#0a0a0a", "#696969", "#e6e6e6", "#2563eb", "#fafafa",
+                    "#0a0a0a", "#696969", "#e6e6e6", "#2563eb", "#fafafa", "#858585",
                 )
             };
             c.background = Some(background.into());
@@ -138,7 +161,7 @@ pub fn install(cx: &mut App) {
             c.accent = Some(hover.into());
             c.accent_foreground = Some(text.into());
             c.border = Some(border.into());
-            c.input = Some(border.into());
+            c.input = Some(input.into());
             c.ring = Some(primary.into());
             c.primary = Some(primary.into());
             c.primary_foreground = Some(on_primary.into());

@@ -524,6 +524,14 @@ export const listProjectSecretNames = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listProjectSecretNames">) => data)
   .handler(({ data }) => run("listProjectSecretNames", data));
 
+export const getDotfiles = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getDotfiles">) => data)
+  .handler(({ data }) => run("getDotfiles", data));
+
+export const updateDotfiles = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"updateDotfiles">) => data)
+  .handler(({ data }) => run("updateDotfiles", data));
+
 export const listMcpServers = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listMcpServers">) => data)
   .handler(({ data }) => run("listMcpServers", data));

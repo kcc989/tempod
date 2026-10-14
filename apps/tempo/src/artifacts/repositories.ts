@@ -314,7 +314,8 @@ export const artifactBranchTips = (env: Env, name: string, expectedId?: string):
         Accept: "application/x-git-upload-pack-advertisement",
         "User-Agent": "tempo",
       },
-      redirect: "error",
+      // workerd rejects "error"; a redirect fails the status check below.
+      redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });
 

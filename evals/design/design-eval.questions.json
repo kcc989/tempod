@@ -1,0 +1,720 @@
+{
+  "model": "clef",
+  "screen": {
+    "applies_ai": {
+      "type": "noul",
+      "instructions": "Do the images show output made by an AI, such as an assistant reply, agent steps, or fields that an AI filled?"
+    },
+    "applies_async": {
+      "type": "noul",
+      "instructions": "Do the images show work that runs in the background, such as a running task, a queued job, or a progress indicator?"
+    },
+    "applies_collection": {
+      "type": "noul",
+      "instructions": "Do the images show a list, a table, or a grid of items?"
+    },
+    "applies_editing": {
+      "type": "noul",
+      "instructions": "Do the images show a form, an editor, or a dialog where the user creates or changes something?"
+    },
+    "applies_empty": {
+      "type": "noul",
+      "instructions": "Do the images show an empty state: an area that has no items yet?"
+    },
+    "applies_errors": {
+      "type": "noul",
+      "instructions": "Do the images show an error, a warning, or an account message?"
+    },
+    "applies_limits": {
+      "type": "noul",
+      "instructions": "Do the images show usage limits, such as credits, quotas, or trial days?"
+    },
+    "focus_primary_path": {
+      "type": "score",
+      "instructions": "Given `screen.purpose`, how obvious is the main thing to do in the images?",
+      "criteria": [
+        {
+          "what": "Several controls compete for attention, or nothing shows what to do first",
+          "examples": [
+            "Four filled buttons in different colors in the header",
+            "A promo banner, a tour popup, and a filled button all ask for a click"
+          ]
+        },
+        {
+          "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
+          "examples": ["A filled 'Create' button next to a filled 'Upgrade' button of the same size"]
+        },
+        {
+          "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
+          "examples": [
+            "An agents list where only 'Create Agent' is a filled dark button",
+            "A thread list where the rows are the focus and the header has only text buttons"
+          ]
+        }
+      ]
+    },
+    "focus_content_share": {
+      "type": "score",
+      "instructions": "In the images, how much of the screen goes to the user's own content, compared to controls, banners, and decoration?",
+      "criteria": [
+        "Controls, banners, promotions, or decoration take most of the screen",
+        "Content and controls take similar space",
+        "The user's content takes most of the screen, and controls sit in a sidebar, a header, or a footer"
+      ]
+    },
+    "focus_reading_order": {
+      "type": "noul",
+      "instructions": "Do the images show a clear reading order: navigation at one edge, then a page title, then the main content?"
+    },
+    "focus_affordance": {
+      "type": "score",
+      "instructions": "In the images, can the user tell which elements are actions and which are static text?",
+      "criteria": [
+        {
+          "what": "Actions and static text look the same",
+          "examples": [
+            "A header row where a branch name, a path, and 'Rename branch' all use the same plain text style"
+          ]
+        },
+        {
+          "what": "Most actions look clickable, but some look like labels or labels look like buttons",
+          "examples": ["Buttons have borders, but one text action in the header has no style"]
+        },
+        {
+          "what": "Every action looks clickable through a button shape, an icon, a link color, or a chevron, and static text never does",
+          "examples": [
+            "'Filters' and 'Display' are text buttons with icons and shortcut hints, and the page title is plain bold text"
+          ]
+        }
+      ]
+    },
+    "focus_space_fit": {
+      "type": "noul",
+      "instructions": "In the images, does each panel's width fit its content, with no large panel that holds only a few items?"
+    },
+    "status_items": {
+      "type": "score",
+      "instructions": "In the images, how well does each item show its current state without the user opening it?",
+      "criteria": [
+        {
+          "what": "Items show no state; the user must open each item to learn it",
+          "examples": ["A list of project names with no status, owner, or date"]
+        },
+        {
+          "what": "Some items show state, or state uses color only, with no icon, label, or count",
+          "examples": ["Rows have a colored left border but no label"]
+        },
+        {
+          "what": "Each item that can change shows its state inline with an icon, a label, or a count",
+          "examples": [
+            "Sidebar threads show a spinner while running and a 'Needs input' badge when blocked",
+            "Each queue in the sidebar shows a count, such as 'First response 4'",
+            "A project chip shows 'On track' with a green icon"
+          ]
+        }
+      ]
+    },
+    "status_async": {
+      "type": "score",
+      "instructions": "In the images, how well does the screen show the progress of background work?",
+      "criteria": [
+        {
+          "what": "No sign that work is running",
+          "examples": ["The button returns to normal and nothing else changes until the result appears"]
+        },
+        {
+          "what": "A generic spinner or 'Loading' with no detail",
+          "examples": ["A full-page spinner with no text"]
+        },
+        {
+          "what": "A live line says what is happening now, with elapsed time or steps, and the item shows its state in the navigation so the user can leave and come back",
+          "examples": [
+            "'Naming a page about restructuring agent roles 8s' while the conversation shows a running dot in the sidebar",
+            "'Running bun run test' under a collapsed list of finished steps"
+          ]
+        }
+      ]
+    },
+    "status_attention": {
+      "type": "noul",
+      "instructions": "Do the images show which items need the user's input, separately from items that are only running or done?"
+    },
+    "status_consistent": {
+      "type": "noul",
+      "instructions": "In the images, do all status signals agree, with no spinner or running sign next to a label that says the work is stopped, sleeping, or done?"
+    },
+    "status_lifecycle": {
+      "type": "choice",
+      "instructions": "In the images, when work or a workspace is sleeping, paused, or stopped, how does the screen explain it?",
+      "criteria": {
+        "explains": "It names the state and says how to resume, such as 'Message Claude Code to wake this workspace'",
+        "bare": "It names the state, but does not say what it means or how to resume",
+        "not_shown": "Nothing in the images is sleeping, paused, or stopped"
+      }
+    },
+    "ai_steps": {
+      "type": "score",
+      "instructions": "In the images, how does the screen show what the AI did to get its result?",
+      "criteria": [
+        "Only the final result appears; the steps are hidden",
+        "The steps appear as long raw logs or full tool output that push the result out of view",
+        "Each step appears as one short line that the user can expand, such as 'Searched docs', 'Thought for 2 seconds', or 'Ran commands'"
+      ]
+    },
+    "ai_evidence": {
+      "type": "noul",
+      "instructions": "In the images, does the AI output show the evidence it used, such as references, files it read, or commands it ran?"
+    },
+    "ai_marked": {
+      "type": "choice",
+      "instructions": "In the images, can the user tell values that the AI made from values that a person entered?",
+      "criteria": {
+        "marked": "Values the AI made carry a mark, such as a sparkle icon or an 'AI' label",
+        "unmarked": "Values the AI made look the same as values a person entered",
+        "not_shown": "The AI does not fill values or fields on this screen; it only answers in a chat or a panel"
+      }
+    },
+    "ai_limits": {
+      "type": "noul",
+      "instructions": "Do the images state a limit of the AI, such as that it can make mistakes or how long chats are kept?"
+    },
+    "ai_feedback": {
+      "type": "noul",
+      "instructions": "In the images, can the user rate or correct the AI output, for example with thumbs-up and thumbs-down buttons?"
+    },
+    "control_ask": {
+      "type": "choice",
+      "instructions": "In the images, when the AI needs a decision from the user, how does it ask?",
+      "criteria": {
+        "structured": "It asks one specific question with a short list of options, a free-text field, and a way to skip",
+        "free_text": "It asks inside its message text, and the user must type a reply",
+        "none": "It does not ask; it guesses, or it stops without a question",
+        "not_shown": "The images do not show the AI needing a decision"
+      }
+    },
+    "control_draft": {
+      "type": "noul",
+      "instructions": "In the images, can the user keep work in progress before it becomes final, such as with 'Save as draft', or undo a change?"
+    },
+    "control_diff": {
+      "type": "choice",
+      "instructions": "In the images, when an action changes data or state, how does the screen show the change?",
+      "criteria": {
+        "shown": "It shows before and after, such as 'Backlog → In Progress' or '+12 −3'",
+        "hidden": "The change happens with no view of what was there before",
+        "not_shown": "The images show no action that changes data or state"
+      }
+    },
+    "control_consent": {
+      "type": "choice",
+      "instructions": "In the images, how does the app ask for permissions, such as notifications?",
+      "criteria": {
+        "in_context": "It asks inside the page, at the moment the permission helps, with a way to dismiss",
+        "upfront": "It asks in a blocking dialog, or before the user has a reason to agree",
+        "not_shown": "The images show no request for a permission"
+      }
+    },
+    "scan_rows": {
+      "type": "score",
+      "instructions": "In the lists or tables in the images, how easy is it to scan the rows?",
+      "criteria": [
+        "Rows mix layouts, values do not line up, and long text wraps freely",
+        "Columns line up, but rows carry too much text or have no clear main field",
+        "Each row has one bold main field, aligned secondary fields in grey, long text cut with an ellipsis, and short relative times such as '11h ago'"
+      ]
+    },
+    "scan_missing": {
+      "type": "choice",
+      "instructions": "In the images, how are missing values shown?",
+      "criteria": {
+        "muted": "As a muted placeholder, such as '—' or 'No contact'",
+        "raw": "As blank cells, 'null', 'undefined', or error text",
+        "not_shown": "No values are missing in the images"
+      }
+    },
+    "scan_overflow": {
+      "type": "choice",
+      "instructions": "In the images, what happens when a row has more tags, icons, or people than fit?",
+      "criteria": {
+        "count": "It shows a few and a '+N' count",
+        "clipped": "Extra items are cut off with no count, wrap to new lines, or make the row taller",
+        "not_shown": "No row has more items than fit"
+      }
+    },
+    "nav_current": {
+      "type": "noul",
+      "instructions": "Do the images show which navigation item is the current location, with a visible selected state?"
+    },
+    "nav_groups": {
+      "type": "score",
+      "instructions": "In the images, how is the navigation organized?",
+      "criteria": [
+        "One long flat list, or items with no clear groups",
+        "Groups exist, but names are vague or items repeat",
+        "Short groups with clear names, such as pinned items, recent items by day, records, or workflow states, with counts where they help"
+      ]
+    },
+    "nav_return": {
+      "type": "noul",
+      "instructions": "In the images, can the user go back to recent or pinned work from the navigation in one click?"
+    },
+    "nav_tabs_current": {
+      "type": "choice",
+      "instructions": "In the images, how clearly does the active tab differ from the other tabs?",
+      "criteria": {
+        "clear": "The active tab has a clear mark, such as a different background, an underline, or bold text",
+        "weak": "The active tab differs only by a small change in text color",
+        "not_shown": "The images show no tabs"
+      }
+    },
+    "speed_search": {
+      "type": "noul",
+      "instructions": "Do the images show search or a command menu, such as a search field or a '⌘K' hint?"
+    },
+    "speed_shortcuts": {
+      "type": "noul",
+      "instructions": "In the images, do frequent actions show their keyboard shortcut next to the label, such as 'Filters F'?"
+    },
+    "speed_views": {
+      "type": "noul",
+      "instructions": "In the images, can the user change how the collection appears, such as with sort, filter, grid or list, or saved views?"
+    },
+    "states_empty": {
+      "type": "score",
+      "instructions": "In the images, how helpful is the empty state?",
+      "criteria": [
+        {
+          "what": "A blank area, or only 'No data'",
+          "examples": ["An empty table with column headers and no rows"]
+        },
+        {
+          "what": "Says that nothing is here and offers an action, but does not say what will appear",
+          "examples": ["'No items yet' with a 'Create' button"]
+        },
+        {
+          "what": "Says what will appear here and why, and offers one clear action to start",
+          "examples": ["'Updates from projects you are part of will show here' with one 'New update' button"]
+        }
+      ]
+    },
+    "states_errors": {
+      "type": "noul",
+      "instructions": "In the images, do the error, warning, or account messages say what happened and what the user must do next?"
+    },
+    "states_disabled_clear": {
+      "type": "choice",
+      "instructions": "In the images, can the user tell disabled controls from enabled controls?",
+      "criteria": {
+        "clear": "Disabled controls look clearly faded, and enabled controls never look faded",
+        "confusing": "Some enabled controls look faded or disabled, or disabled controls look active",
+        "not_shown": "The images show no disabled controls"
+      }
+    },
+    "copy_labels": {
+      "type": "score",
+      "instructions": "How clear are the words in the images and in `page_text`?",
+      "criteria": [
+        "Vague, clever, or jargon words; buttons say 'Submit', 'OK', or 'Click here'",
+        "Mostly clear, with some vague labels or mixed capitalization",
+        "Plain, specific words; buttons start with a verb that names the result, such as 'Post update' or 'Add billing'; capitalization is consistent"
+      ]
+    },
+    "copy_status": {
+      "type": "noul",
+      "instructions": "In the images, do status labels use plain words that a new user understands, such as 'Waiting for customer' or 'On track'?"
+    },
+    "copy_controls_labeled": {
+      "type": "noul",
+      "instructions": "In the images, does every dropdown, toggle, and selector show what it sets, through a label, an icon, or a value that explains itself?"
+    },
+    "trust_usage": {
+      "type": "noul",
+      "instructions": "In the images, do usage limits, such as credits left or trial days, come with a clear next step, such as 'Add billing'?"
+    },
+    "trust_onboarding": {
+      "type": "choice",
+      "instructions": "In the images, how does the screen guide new users?",
+      "criteria": {
+        "light": "Small, optional help that does not block work, such as a checklist with progress or a 'What's new' note",
+        "blocking": "Tours, popups, or dialogs that block the work until the user closes them",
+        "none": "No guidance for new users"
+      }
+    }
+  },
+  "visual": {
+    "color_role": {
+      "type": "score",
+      "instructions": "In the images, what job does color do?",
+      "criteria": [
+        "Color is decoration: gradients, many accent colors, or colored surfaces with no meaning",
+        "The base is neutral, but some color is decoration only",
+        "The base is neutral, and color appears only where it means something: status, category tags, the selected item, or the one main action"
+      ]
+    },
+    "color_accents": {
+      "type": "score",
+      "instructions": "In the images, how many accent colors appear, apart from status colors?",
+      "criteria": [
+        "Many accent colors with no clear system",
+        "Two or three accent colors compete for attention",
+        "One accent color, plus a small set of status colors such as green, amber, and red"
+      ]
+    },
+    "color_semantic": {
+      "type": "noul",
+      "instructions": "In the images, does each color keep one meaning, such as red only for errors and destructive actions, and the accent only for the main action and selection?"
+    },
+    "color_not_alone": {
+      "type": "noul",
+      "instructions": "In the images, when color shows a state or a category, does an icon, a label, or a shape show it too?"
+    },
+    "color_dark_layers": {
+      "type": "choice",
+      "instructions": "In the images, how does a dark theme show layers, such as panels, menus, and cards?",
+      "criteria": {
+        "tonal": "Higher layers use lighter surfaces or subtle borders",
+        "flat": "Layers use the same black, or only shadows that do not show on a dark background",
+        "not_shown": "The images show a light theme"
+      }
+    },
+    "spacing_grouping": {
+      "type": "score",
+      "instructions": "In the images, how does spacing show what belongs together?",
+      "criteria": [
+        "Gaps are random, or the same everywhere, so groups are hard to see",
+        "Groups exist, but some gaps break them or join unrelated items",
+        "Related items sit close together, gaps between groups are wider, and the same gap sizes repeat"
+      ]
+    },
+    "spacing_alignment": {
+      "type": "noul",
+      "instructions": "In the images, do elements line up on shared left edges and columns?"
+    },
+    "spacing_consistent": {
+      "type": "noul",
+      "instructions": "In the images, do repeated components, such as rows, cards, tabs, and buttons, use the same padding and height?"
+    },
+    "type_hierarchy": {
+      "type": "noul",
+      "instructions": "Do the images show clear type hierarchy, made with size, weight, and grey tone, with at most two type families?"
+    },
+    "type_scale": {
+      "type": "score",
+      "instructions": "In the images, how are text sizes and weights used?",
+      "criteria": [
+        "Many sizes with small differences, or no clear pattern",
+        "A few sizes, but some styles look almost the same",
+        "A small set of clearly different sizes and weights, used the same way for the same role everywhere"
+      ]
+    },
+    "type_line_height": {
+      "type": "noul",
+      "instructions": "In the images, does text with several lines have comfortable space between the lines?"
+    },
+    "type_numbers": {
+      "type": "choice",
+      "instructions": "In the images, in tables or columns of numbers, do the digits line up?",
+      "criteria": {
+        "aligned": "Digits line up in columns, and numbers align to the right or on a shared edge",
+        "ragged": "Digits do not line up, so values are hard to compare",
+        "not_shown": "The images show no columns of numbers"
+      }
+    },
+    "type_mono": {
+      "type": "choice",
+      "instructions": "In the images, what font do code, commands, IDs, and file paths use?",
+      "criteria": {
+        "mono": "A monospace font, often on a subtle background",
+        "mixed": "Some use monospace and some use the body font",
+        "not_shown": "The images show no code, commands, IDs, or file paths"
+      }
+    },
+    "icons_one_set": {
+      "type": "noul",
+      "instructions": "Do the images use one icon set, with the same style and stroke weight everywhere?"
+    },
+    "icons_size": {
+      "type": "noul",
+      "instructions": "In the images, do icons have one size in each context, and do they sit centered with their labels?"
+    },
+    "icons_meaning": {
+      "type": "score",
+      "instructions": "In the images, how clear are the icon-only buttons?",
+      "criteria": [
+        "Icons are unusual or abstract, and they have no labels",
+        "Most icons are common symbols, but some are unclear",
+        "Every icon-only button is a common symbol, such as search, close, or add, or it has a label"
+      ]
+    },
+    "contrast_secondary": {
+      "type": "score",
+      "instructions": "In the images, how readable is the faintest text that the user needs, such as metadata, placeholders, and secondary labels?",
+      "criteria": [
+        "Some needed text is very faint and hard to read",
+        "Faint text is readable, but only with effort",
+        "All needed text is easy to read; only decorative or disabled items are faint"
+      ]
+    },
+    "contrast_boundaries": {
+      "type": "noul",
+      "instructions": "In the images, can the user see the edges of inputs, buttons, and selected items against their background?"
+    },
+    "restraint_noise": {
+      "type": "score",
+      "instructions": "In the images, how much decoration competes with the content?",
+      "criteria": [
+        "Many borders, shadows, badges, illustrations, or glows compete with the content",
+        "Some extra decoration, but the main content is still easy to find",
+        "Flat surfaces, thin dividers, and few shadows; illustrations appear only in empty states or onboarding"
+      ]
+    },
+    "overflow_long_text": {
+      "type": "choice",
+      "instructions": "In the images, how does long text, such as names, titles, and file paths, fit its space?",
+      "criteria": {
+        "ellipsis": "It is cut at the end with an ellipsis, and the layout stays the same",
+        "cut": "It is cut with no ellipsis, or cut in the middle of a letter",
+        "breaks_layout": "It wraps or pushes other elements out of place",
+        "not_shown": "No text in the images is too long for its space"
+      }
+    },
+    "overflow_scroll_cue": {
+      "type": "choice",
+      "instructions": "In the images, when a region scrolls, does it show that more content exists?",
+      "criteria": {
+        "cue": "Yes: a partly visible item, a fade, a shadow, or a scrollbar shows more content",
+        "no_cue": "The region ends at an item edge, with no sign that more content exists",
+        "not_shown": "No region in the images scrolls"
+      }
+    }
+  },
+  "slop": {
+    "slop_grid_background": {
+      "type": "noul",
+      "instructions": "Do the images show a decorative grid-line pattern in the background, on a screen that is not a canvas, a map, or a measuring tool?"
+    },
+    "slop_rounded_border_accent": {
+      "type": "noul",
+      "instructions": "Do the images show a rounded card or button with a thick colored border?"
+    },
+    "slop_side_stripe": {
+      "type": "noul",
+      "instructions": "Do the images show a card with a thick colored stripe on one side, where the stripe does not show a status or a warning?"
+    },
+    "slop_border_and_shadow": {
+      "type": "noul",
+      "instructions": "Do the images show a card with both a thin border and a wide, soft shadow?"
+    },
+    "slop_glass": {
+      "type": "noul",
+      "instructions": "Do the images show blur, frosted glass, or glowing borders used as decoration on cards or panels?"
+    },
+    "slop_stripes": {
+      "type": "noul",
+      "instructions": "Do the images show empty areas filled with repeating stripes or repeating gradients?"
+    },
+    "slop_extreme_radius": {
+      "type": "noul",
+      "instructions": "Do the images show small cards with very large rounded corners for their size?"
+    },
+    "slop_rough_illustration": {
+      "type": "noul",
+      "instructions": "Do the images show a crude, quickly drawn illustration, mascot, or scene?"
+    },
+    "slop_placeholder_illustration": {
+      "type": "noul",
+      "instructions": "Do the images show an illustration made from generic circles, blobs, and blocks that says nothing specific about the product?"
+    },
+    "slop_eyebrow_label": {
+      "type": "noul",
+      "instructions": "Do the images show a small label above a heading that repeats the heading or adds little to it?"
+    },
+    "slop_icon_tile_heading": {
+      "type": "noul",
+      "instructions": "Do the images show an icon inside a rounded square, placed above a heading?"
+    },
+    "slop_badge_headline": {
+      "type": "noul",
+      "instructions": "Do the images show a small pill or badge above the main headline?"
+    },
+    "slop_italic_serif_headline": {
+      "type": "noul",
+      "instructions": "Do the images show an oversized italic serif headline?"
+    },
+    "slop_hero_headline": {
+      "type": "noul",
+      "instructions": "Do the images show a long headline at display size that fills most of the first screen?"
+    },
+    "slop_flat_hierarchy": {
+      "type": "noul",
+      "instructions": "In the images, do headings and body text look almost the same in size and weight?"
+    },
+    "slop_tight_tracking": {
+      "type": "noul",
+      "instructions": "In the images, are the letters of headings or text pushed too close together?"
+    },
+    "slop_glow": {
+      "type": "noul",
+      "instructions": "Do the images show a bright radial glow, a halo, or a soft spotlight behind content?"
+    },
+    "slop_ai_palette": {
+      "type": "noul",
+      "instructions": "Do the images use purple gradients, or bright cyan on a dark background?"
+    },
+    "slop_dark_glow": {
+      "type": "noul",
+      "instructions": "Do the images show a dark interface where borders and accents glow?"
+    },
+    "slop_gradient_text": {
+      "type": "noul",
+      "instructions": "Do the images show a heading or a number in gradient text, where the color changes across the letters?"
+    },
+    "slop_numbered_labels": {
+      "type": "noul",
+      "instructions": "Do the images show small numbers beside headings, such as '01' and '02', when the sections are not steps in an order?"
+    },
+    "slop_hero_metric": {
+      "type": "noul",
+      "instructions": "Do the images show a huge number with a small label and small supporting stats, with no context about what the number means?"
+    },
+    "slop_card_grid": {
+      "type": "noul",
+      "instructions": "Do the images show a grid of identical cards, each with an icon, a heading, and a short text?"
+    },
+    "slop_nested_cards": {
+      "type": "noul",
+      "instructions": "Do the images show cards inside other cards?"
+    },
+    "slop_monotonous_spacing": {
+      "type": "noul",
+      "instructions": "In the images, are all gaps the same size, so that related items are no closer together than separate groups?"
+    },
+    "slop_hidden_image": {
+      "type": "noul",
+      "instructions": "Do the images show a photo or picture almost hidden under a dark or colored overlay?"
+    },
+    "slop_em_dash": {
+      "type": "noul",
+      "instructions": "In the images and in `page_text`, does a long dash (—) appear in almost every sentence?"
+    },
+    "slop_marketing_claims": {
+      "type": "noul",
+      "instructions": "In the images and in `page_text`, does the text use generic marketing claims, such as 'supercharge', 'seamless', or 'world-class'?"
+    },
+    "slop_forced_contrast": {
+      "type": "noul",
+      "instructions": "In the images and in `page_text`, does the text use slogan lines built on a contrast, such as 'Not a feature. A platform.'?"
+    },
+    "slop_theater": {
+      "type": "noul",
+      "instructions": "In the images and in `page_text`, does the text dismiss something as 'theater'?"
+    },
+    "quality_tiny_text": {
+      "type": "noul",
+      "instructions": "In the images, is navigation, link, control, or body text set very small?"
+    },
+    "quality_all_caps": {
+      "type": "noul",
+      "instructions": "In the images, are long passages of body text set in all capital letters?"
+    },
+    "quality_gray_on_color": {
+      "type": "noul",
+      "instructions": "In the images, is grey text placed on a colored surface, where it looks washed out?"
+    },
+    "quality_heading_spacing": {
+      "type": "noul",
+      "instructions": "In the images, is a heading closer to the section above it than to its own content?"
+    },
+    "quality_cramped": {
+      "type": "noul",
+      "instructions": "In the images, is text pressed against the edge of a button, a card, or the screen?"
+    },
+    "quality_long_lines": {
+      "type": "noul",
+      "instructions": "In the images, do lines of body text run very long, much wider than a comfortable paragraph?"
+    },
+    "quality_repeated_text": {
+      "type": "noul",
+      "instructions": "In the images, does the same label appear in several places inside one card or panel?"
+    },
+    "quality_text_covered": {
+      "type": "noul",
+      "instructions": "In the images, does an element cover text that the user needs to read?"
+    },
+    "quality_overflow": {
+      "type": "noul",
+      "instructions": "In the images, does content spill out of its container, or is a menu, a tooltip, or a popover cut off?"
+    },
+    "quality_broken_image": {
+      "type": "noul",
+      "instructions": "Do the images show a broken, empty, or placeholder image?"
+    },
+    "quality_scroll_edge": {
+      "type": "noul",
+      "instructions": "In the images, does scrolled content run under a fixed header or tab bar with no divider or shadow, so the content looks cut off?"
+    },
+    "quality_repeated_identifier": {
+      "type": "noul",
+      "instructions": "In the images, does the same name, such as a branch, project, or file name, appear in three or more regions of the screen?"
+    }
+  },
+  "interaction": {
+    "states_feedback": {
+      "type": "score",
+      "instructions": "Image 1 is the screen before `action`. Image 2 is the screen after it. How clear is the result of the action?",
+      "criteria": [
+        {
+          "what": "Nothing visible changes in image 2, or the user cannot tell if the action worked",
+          "examples": ["The user clicks an option and it shows no selected state"]
+        },
+        {
+          "what": "A result appears, but far from the control, or only as a change that is easy to miss",
+          "examples": ["A save works, but the only sign is a small toast in the far corner"]
+        },
+        {
+          "what": "The control shows a pressed or selected state, and the result or a short confirmation appears near the action",
+          "examples": ["After a thumbs-up, the button fills and a toast says 'Thank you for your feedback!'"]
+        }
+      ]
+    },
+    "feedback_selected": {
+      "type": "noul",
+      "instructions": "In image 2, does the control named in `action` show a pressed, selected, or changed state?"
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "instructions": "From image 1 to image 2, did content that `action` did not target move or change size?"
+    },
+    "feedback_focus_visible": {
+      "type": "choice",
+      "instructions": "If `action` used the keyboard, such as pressing Tab, does image 2 show a clear focus ring or focus mark on the focused element?",
+      "criteria": {
+        "visible": "A clear focus ring or mark shows which element has focus",
+        "missing": "No element shows that it has focus",
+        "not_keyboard": "The action did not use the keyboard"
+      }
+    }
+  },
+  "consistency": {
+    "consistency_terms": {
+      "type": "noul",
+      "instructions": "Across the screens in the images and `page_text`, does each concept have one name, with no two names for the same thing?"
+    },
+    "consistency_components": {
+      "type": "noul",
+      "instructions": "Across the screens in the images, do the same components, such as buttons, rows, tabs, and inputs, look the same?"
+    },
+    "consistency_navigation": {
+      "type": "noul",
+      "instructions": "Across the screens in the images, does the navigation stay in the same place with the same items?"
+    },
+    "consistency_color": {
+      "type": "noul",
+      "instructions": "Across the screens in the images, does each color keep the same meaning?"
+    },
+    "consistency_type": {
+      "type": "noul",
+      "instructions": "Across the screens in the images, do the same roles, such as page titles and body text, use the same type size and weight?"
+    }
+  }
+}

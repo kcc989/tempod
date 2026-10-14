@@ -1,0 +1,77 @@
+{
+  "verdict": "review",
+  "score": 0.66,
+  "dimensions": {
+    "focus": 0.57,
+    "status": 0.8,
+    "ai": 0.24,
+    "control": 0.08,
+    "scan": 0.73,
+    "nav": 0.86,
+    "speed": 0.62,
+    "states": 1,
+    "copy": 0.7,
+    "color": 0.88,
+    "spacing": 0.88,
+    "type": 0.76,
+    "icons": 0.81,
+    "contrast": 0.58,
+    "restraint": 0.82,
+    "overflow": 0,
+    "slop": 1,
+    "quality": 0.62
+  },
+  "blockers": [
+    "Text covered by another element."
+  ],
+  "weakDimensions": [
+    "focus",
+    "ai",
+    "control",
+    "contrast",
+    "overflow"
+  ],
+  "issues": [
+    {
+      "rule": "Text covered by another element",
+      "kind": "quality",
+      "p": 0.8
+    },
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.72
+    }
+  ],
+  "fixes": [
+    "Show that a region scrolls: let the last item show partly, or add a fade or a scrollbar.",
+    "Show changes as before and after.",
+    "Let the user save a draft or undo before work is final.",
+    "Let the user rate or correct AI output, and confirm the rating.",
+    "State the limits of the AI near its output.",
+    "Make secondary text, placeholders, and metadata darker until they are easy to read."
+  ],
+  "uncertain": [
+    "focus_primary_path",
+    "focus_content_share",
+    "focus_affordance",
+    "status_items",
+    "status_lifecycle",
+    "ai_steps",
+    "control_diff",
+    "scan_rows",
+    "nav_groups",
+    "nav_tabs_current",
+    "states_disabled_clear",
+    "copy_labels",
+    "copy_controls_labeled",
+    "type_scale",
+    "type_mono",
+    "icons_meaning",
+    "contrast_secondary",
+    "contrast_boundaries",
+    "restraint_noise",
+    "overflow_scroll_cue",
+    "quality_scroll_edge"
+  ]
+}

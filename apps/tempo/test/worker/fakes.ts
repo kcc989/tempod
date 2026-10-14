@@ -111,6 +111,7 @@ export class FakeTempod {
       errors: [],
       sources: {},
     }));
+    this.on("dotfiles.apply", () => ({ applied: [], restored: [] }));
     this.on("env.set", ok);
     this.on("environment.set", ok);
     this.on("script.start", () => ({ pid: 1234 }));
@@ -430,6 +431,12 @@ export const installFakes = async (
   return { tempod, container };
 };
 
+/** Shortens this workspace's in-process waits (health polls, reconnect, uploads); each case owns its DO. */
+export const fastRetries = (stub: WorkspaceStub): Promise<void> =>
+  runInDurableObject(stub, (instance: WorkspaceDO) => {
+    internals(instance).core.retryDelayScale = 0.01;
+  });
+
 /** Polls until `check` holds (DO work runs on alarms and microtasks). */
 export const waitFor = async (
   check: () => boolean | Promise<boolean>,
@@ -442,7 +449,7 @@ export const waitFor = async (
     if (await check()) return;
 
     if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 5));
   }
 };
 
@@ -495,7 +502,7 @@ export const driveToState = async (
       );
     });
     await runDurableObjectAlarm(stub);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 5));
   }
 };
 

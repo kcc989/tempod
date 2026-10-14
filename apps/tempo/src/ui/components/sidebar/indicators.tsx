@@ -107,9 +107,13 @@ export function ContainerPill({
     );
   }
 
-  return (
+  // The header shows the state only; the instance is on hover and in Info (04, Container pill).
+  const [state, ...rest] = pill.text.split(" · ");
+
+  const status = (
     <span
       role="status"
+      aria-label={pill.text}
       className={cn(
         "inline-flex h-6 max-w-56 min-w-0 shrink items-center gap-1.5 rounded-full border px-2 text-xs whitespace-nowrap",
         pill.tone === "error" && "border-destructive/40 bg-destructive/10 text-destructive",
@@ -120,7 +124,13 @@ export function ContainerPill({
     >
       {pill.tone === "busy" && <LoaderCircleIcon aria-hidden className="size-3 shrink-0 animate-spin" />}
       {pill.tone === "default" && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success" />}
-      <span className="truncate">{pill.text}</span>
+      <span className="truncate">{state}</span>
     </span>
+  );
+
+  return rest.length ? (
+    <SimpleTooltip label={`Running on ${rest.join(" · ")}`}>{status}</SimpleTooltip>
+  ) : (
+    status
   );
 }

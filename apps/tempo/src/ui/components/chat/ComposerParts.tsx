@@ -276,7 +276,6 @@ export function ContextMeter({ usage }: { usage: ContextUsage }) {
             className="h-7 gap-2 px-2 text-xs text-muted-foreground"
             aria-label={`Context usage: ${label}`}
           >
-            Context
             <span
               aria-hidden="true"
               className="h-1.5 w-12 overflow-hidden rounded-full bg-muted-foreground/25"

@@ -3651,6 +3651,8 @@ pub enum ErrorCode {
     ModelRequired,
     #[serde(rename = "SETTINGS_INVALID")]
     SettingsInvalid,
+    #[serde(rename = "DOTFILES_CHANGED")]
+    DotfilesChanged,
     #[serde(rename = "ENVIRONMENT_EXISTS")]
     EnvironmentExists,
     #[serde(rename = "EGRESS_BLOCKED")]
@@ -3731,6 +3733,7 @@ impl ::std::fmt::Display for ErrorCode {
             Self::ArtifactNotReady => f.write_str("ARTIFACT_NOT_READY"),
             Self::ModelRequired => f.write_str("MODEL_REQUIRED"),
             Self::SettingsInvalid => f.write_str("SETTINGS_INVALID"),
+            Self::DotfilesChanged => f.write_str("DOTFILES_CHANGED"),
             Self::EnvironmentExists => f.write_str("ENVIRONMENT_EXISTS"),
             Self::EgressBlocked => f.write_str("EGRESS_BLOCKED"),
             Self::EventInvalid => f.write_str("EVENT_INVALID"),
@@ -3800,6 +3803,7 @@ impl ::std::str::FromStr for ErrorCode {
             "ARTIFACT_NOT_READY" => Ok(Self::ArtifactNotReady),
             "MODEL_REQUIRED" => Ok(Self::ModelRequired),
             "SETTINGS_INVALID" => Ok(Self::SettingsInvalid),
+            "DOTFILES_CHANGED" => Ok(Self::DotfilesChanged),
             "ENVIRONMENT_EXISTS" => Ok(Self::EnvironmentExists),
             "EGRESS_BLOCKED" => Ok(Self::EgressBlocked),
             "EVENT_INVALID" => Ok(Self::EventInvalid),
@@ -4067,6 +4071,30 @@ pub struct GetDiagnosticsIn {
     pub egress_status: ::std::option::Option<EgressStatusFilter>,
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
+}
+///`GetDotfilesOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetDotfilesOut {
+    pub defaults: ::std::vec::Vec<GetDotfilesOutDefaultsItem>,
+    pub files: ::std::vec::Vec<GetDotfilesOutFilesItem>,
+    pub saved: bool,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
+///`GetDotfilesOutDefaultsItem`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetDotfilesOutDefaultsItem {
+    pub content: ::std::string::String,
+    pub path: ::std::string::String,
+}
+///`GetDotfilesOutFilesItem`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetDotfilesOutFilesItem {
+    pub content: ::std::string::String,
+    pub path: ::std::string::String,
 }
 ///`GetFileDiffIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -11074,6 +11102,17 @@ pub struct UpdateCiPipelineIn {
     pub revision: f64,
     pub source: ::std::string::String,
 }
+///`UpdateDotfilesIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct UpdateDotfilesIn {
+    pub files: ::std::vec::Vec<UpdateDotfilesInFilesItem>,
+}
+///`UpdateDotfilesInFilesItem`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct UpdateDotfilesInFilesItem {
+    pub content: ::std::string::String,
+    pub path: ::std::string::String,
+}
 ///`UpdateEnvironmentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct UpdateEnvironmentIn {
@@ -13231,6 +13270,15 @@ pub mod api {
         type Input = crate::GetDiagnosticsIn;
         type Output = crate::Diagnostics;
     }
+    /// `getDotfiles`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetDotfiles;
+    impl crate::Function for GetDotfiles {
+        const NAME: &'static str = "getDotfiles";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = crate::GetDotfilesOut;
+    }
     /// `getFileDiff`
     #[derive(Clone, Copy, Debug)]
     pub struct GetFileDiff;
@@ -13987,6 +14035,15 @@ pub mod api {
         type Input = crate::UpdateCiPipelineIn;
         type Output = crate::CiPipeline;
     }
+    /// `updateDotfiles`
+    #[derive(Clone, Copy, Debug)]
+    pub struct UpdateDotfiles;
+    impl crate::Function for UpdateDotfiles {
+        const NAME: &'static str = "updateDotfiles";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::UpdateDotfilesIn;
+        type Output = crate::GetDotfilesOut;
+    }
     /// `updateEnvironment`
     #[derive(Clone, Copy, Debug)]
     pub struct UpdateEnvironment;
@@ -14092,6 +14149,7 @@ pub mod api {
         ("getCiRun", crate::Method::Get),
         ("getCredentialStatus", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
+        ("getDotfiles", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
         ("getRepository", crate::Method::Get),
@@ -14176,6 +14234,7 @@ pub mod api {
         ("stopScript", crate::Method::Post),
         ("unlinkProject", crate::Method::Post),
         ("updateCiPipeline", crate::Method::Post),
+        ("updateDotfiles", crate::Method::Post),
         ("updateEnvironment", crate::Method::Post),
         ("updateProjectSettings", crate::Method::Post),
         ("updateRepositoryIssue", crate::Method::Post),
@@ -14294,6 +14353,7 @@ pub mod wire {
         "GetCiPipelineIn",
         "GetCiRunIn",
         "GetDiagnosticsIn",
+        "GetDotfilesOut",
         "GetFileDiffIn",
         "GetFileDiffOut",
         "GetProjectConversationIn",
@@ -14492,6 +14552,7 @@ pub mod wire {
         "TurnUsage",
         "UnlinkProjectIn",
         "UpdateCiPipelineIn",
+        "UpdateDotfilesIn",
         "UpdateEnvironmentIn",
         "UpdateProjectSettingsIn",
         "UpdateRepositoryIssueCommentIn",
@@ -14643,6 +14704,7 @@ pub mod wire {
             "GetCiPipelineIn" => crate::roundtrip::<crate::GetCiPipelineIn>(text),
             "GetCiRunIn" => crate::roundtrip::<crate::GetCiRunIn>(text),
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),
+            "GetDotfilesOut" => crate::roundtrip::<crate::GetDotfilesOut>(text),
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
             "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
@@ -14877,6 +14939,7 @@ pub mod wire {
             "TurnUsage" => crate::roundtrip::<crate::TurnUsage>(text),
             "UnlinkProjectIn" => crate::roundtrip::<crate::UnlinkProjectIn>(text),
             "UpdateCiPipelineIn" => crate::roundtrip::<crate::UpdateCiPipelineIn>(text),
+            "UpdateDotfilesIn" => crate::roundtrip::<crate::UpdateDotfilesIn>(text),
             "UpdateEnvironmentIn" => crate::roundtrip::<crate::UpdateEnvironmentIn>(text),
             "UpdateProjectSettingsIn" => crate::roundtrip::<crate::UpdateProjectSettingsIn>(text),
             "UpdateRepositoryIssueCommentIn" => {
