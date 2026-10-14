@@ -294,7 +294,7 @@ test("sleep and archive expose the correct read-only and restore states", async 
 
 test("desktop review, comments and file navigation", async ({ page, fixture }) => {
   test.skip(test.info().project.name.startsWith("phone"), "phone review has its own flow");
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await page.getByRole("button", { name: /^Changes\b/ }).click();
   await page.getByRole("option", { name: /README.md/ }).click();
   await expect(page.getByText("new README", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: /Comment on file/ }).click();
