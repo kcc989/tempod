@@ -43,3 +43,9 @@ Oxlint and Oxfmt run through `bun run lint`, `bun run format`, and `bun run form
 With Docker available, `bun run test:tempod:container` builds the pinned Linux workspace image and runs daemon tests in a derived test image as user `tempo`. It checks the production image's 6 GB size limit. On shared engines, serialize this command with other full CI runs.
 
 Deployed e2e and adapter conformance tests skip until their environments and logins are configured. They remain required for the gates in [`06 Build Plan`](docs/06%20Build%20Plan.md). Deployment requires a Workers Paid account and explicit owner approval.
+
+## Local Mac terminal
+
+The Mac process panel can open its cloud shell in Terminal.app or iTerm. After signing in to the Mac app, run `tempo terminal <workspace-id-or-slug> [t1..t9]` from any terminal to attach to the same cloud tmux session. Ctrl+C goes to the cloud shell; Ctrl+] disconnects locally.
+
+`bun run mac:bundle` builds the signed development bundle with both the CLI and the stable Keychain helper. After installing Tempo.app, `bun run mac:install-cli` installs the CLI symlink in `~/.local/bin` without replacing an existing command; add that directory to PATH. The bundled executable can also be run directly as `/Applications/Tempo.app/Contents/MacOS/tempo terminal lisbon`.

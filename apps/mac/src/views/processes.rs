@@ -31,6 +31,7 @@ pub struct ProcessPanel {
     terminals: BTreeMap<String, RemoteTerminal>,
     terminal: Option<String>,
     terminal_ids: Vec<String>,
+    terminal_launch_pending: bool,
     _changed: Subscription,
 }
 impl ProcessPanel {
@@ -48,6 +49,7 @@ impl ProcessPanel {
             terminals: BTreeMap::new(),
             terminal: None,
             terminal_ids: vec![],
+            terminal_launch_pending: false,
             _changed: changed,
         };
         this.refresh(cx);
@@ -339,6 +341,39 @@ impl ProcessPanel {
         );
         cx.notify();
     }
+    fn open_external_terminal(
+        &mut self,
+        application: crate::terminal_launch::TerminalApplication,
+        cx: &mut Context<Self>,
+    ) {
+        if self.terminal_launch_pending {
+            return;
+        }
+        let workspace = self.id(cx);
+        let terminal = self.terminal.clone().unwrap_or_else(|| "t1".into());
+        self.terminal_launch_pending = true;
+        self.error = None;
+        let (send, result) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let _ = send.send_blocking(crate::terminal_launch::open(
+                application,
+                &workspace,
+                &terminal,
+            ));
+        });
+        cx.spawn(async move |this, cx| {
+            if let Ok(result) = result.recv().await {
+                let _ = this.update(cx, |panel, cx| {
+                    panel.terminal_launch_pending = false;
+                    panel.error = result.err().map(String::from);
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn add_terminal(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = tempo_client::TERMINAL_IDS
             .iter()
@@ -459,6 +494,32 @@ impl Render for ProcessPanel {
                                 .label("+")
                                 .disabled(self.terminal_ids.len() >= 9)
                                 .on_click(cx.listener(|this, _, _, cx| this.add_terminal(cx))),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(
+                            Button::new("open-terminal-app")
+                                .label("Open in Terminal")
+                                .disabled(self.terminal_launch_pending)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.open_external_terminal(
+                                        crate::terminal_launch::TerminalApplication::Terminal,
+                                        cx,
+                                    )
+                                })),
+                        )
+                        .child(
+                            Button::new("open-iterm-app")
+                                .label("Open in iTerm")
+                                .disabled(self.terminal_launch_pending)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.open_external_terminal(
+                                        crate::terminal_launch::TerminalApplication::ITerm,
+                                        cx,
+                                    )
+                                })),
                         ),
                 )
                 .child(

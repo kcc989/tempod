@@ -28,6 +28,7 @@ export default defineConfig({
       optimizer: {
         ssr: {
           enabled: true,
+          exclude: ["node:crypto", "node:async_hooks"],
           include: [
             "effect",
             "@tempo/protocol",
@@ -39,6 +40,10 @@ export default defineConfig({
             "drizzle-orm/durable-sqlite",
             "drizzle-orm/durable-sqlite/migrator",
             "drizzle-orm/sqlite-core",
+            "better-auth/minimal",
+            "better-auth/adapters/drizzle",
+            "better-auth/plugins/bearer",
+            "better-auth/plugins/device-authorization",
           ],
         },
       },

@@ -70,6 +70,7 @@ export class WebFixture {
   calls: { name: FnName; input: Schema.JsonObject }[] = [];
   failures = new Map<FnName, TempoError>();
   hold = new Map<FnName, Promise<void>>();
+  terminalInput = "";
   workspaceSockets: WebSocketRoute[] = [];
   hubSockets: WebSocketRoute[] = [];
   unexpected: string[] = [];
@@ -150,6 +151,12 @@ export class WebFixture {
       }
 
       socket.onMessage((data) => {
+        if (path.includes("/terminal/") && Buffer.isBuffer(data)) {
+          this.terminalInput += data.toString("utf8");
+
+          return;
+        }
+
         if (Schema.is(Schema.String)(data) && JSON.parse(data).type === "ping")
           socket.send('{"type":"pong"}');
       });

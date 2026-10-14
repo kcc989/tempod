@@ -1408,6 +1408,12 @@ mod view_tests {
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            window.scroll(
+                "project-settings-nav-b-3",
+                gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-400.))),
+                cx,
+            );
+            window.render_frame(cx);
             window.click("settings-project-c", cx);
         })
         .unwrap();

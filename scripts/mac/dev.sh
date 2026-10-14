@@ -43,10 +43,12 @@ codesign --verify --strict "$helper_cache/TempoKeychain"
 cp "$helper_cache/TempoKeychain" "$app/Contents/Helpers/TempoKeychain"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$target_dir/debug/Tempo" "$app/Contents/MacOS/Tempo"
+cp "$target_dir/debug/tempo" "$app/Contents/MacOS/tempo"
+codesign --force --sign "$identity" --identifier dev.tempo.mac.terminal "$app/Contents/MacOS/tempo"
 cp apps/mac/resources/Info.plist "$app/Contents/Info.plist"
 python3 scripts/mac/icon.py dist/mac/dev/Tempo.iconset
 iconutil --convert icns --output "$app/Contents/Resources/AppIcon.icns" dist/mac/dev/Tempo.iconset
-codesign --force --sign "$identity" --identifier dev.tempo.mac "$app"
+codesign --force --sign "$identity" --entitlements apps/mac/resources/Tempo.entitlements --identifier dev.tempo.mac "$app"
 codesign --verify --deep --strict "$app"
 python3 scripts/mac/verify-dev-signing.py "$app"
 printf 'Built %s\n' "$app"

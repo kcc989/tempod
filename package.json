@@ -24,6 +24,8 @@
     "protocol:gen": "bun packages/protocol/scripts/gen-schema.ts",
     "protocol:fixtures": "bun packages/protocol/scripts/gen-fixtures.ts",
     "mac:dev": "bash scripts/mac/dev.sh",
+    "mac:bundle": "bash scripts/mac/bundle.sh",
+    "mac:install-cli": "bash scripts/mac/install-cli.sh",
     "mac:test": "cargo test --workspace",
     "mac:release": "bash scripts/mac/release.sh",
     "test:tempod:container": "bun scripts/test-tempod-container.ts",
