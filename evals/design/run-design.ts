@@ -248,7 +248,10 @@ async function ask(path: string, body: Job["body"]): Promise<AnswerSet | null> {
   const statuses: number[] = [];
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { status, text } = await send(body);
+    if (attempt > 0) await Bun.sleep(5000);
+
+    // A dropped connection counts as a failed attempt, like an error status.
+    const { status, text } = await send(body).catch((error: Error) => ({ status: 0, text: error.message }));
 
     statuses.push(status);
 
