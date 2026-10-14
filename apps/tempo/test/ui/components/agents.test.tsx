@@ -6,9 +6,9 @@ const call = environment.request;
 
 import { elementOf } from "../elements.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Agent, AgentSummary } from "@tempo/protocol";
+import type { Agent, AgentSummary, CredentialStatus } from "@tempo/protocol";
 import { SettingsPage } from "../../../src/ui/components/settings/SettingsPage";
 
 import { openDialog, resetUiState } from "../../../src/ui/state/workspace-ui";
@@ -35,8 +35,22 @@ const reviewer: Agent = {
   updatedAt: 1,
 };
 
-const show = (agents: AgentSummary[] = []) => {
+const status = (connected: string[]): CredentialStatus => ({
+  claude: { set: connected.includes("claude"), updatedAt: null },
+  codex: { set: connected.includes("codex"), updatedAt: null, lastRefresh: null },
+  openrouter: { set: connected.includes("openrouter"), updatedAt: null },
+  anthropic: { set: connected.includes("anthropic"), updatedAt: null },
+  openai: { set: connected.includes("openai"), updatedAt: null },
+});
+
+const show = (
+  agents: AgentSummary[] = [],
+  connected = ["claude", "codex"],
+  loginResponse?: Promise<CredentialStatus>,
+) => {
   vi.mocked(call).mockImplementation(async (name, input) => {
+    if (name === "getCredentialStatus") return loginResponse ?? status(connected);
+
     if (name === "saveAgent")
       return { ...reviewer, ...requestInput("saveAgent", input).definition, id: "01new" };
 
@@ -49,14 +63,18 @@ const show = (agents: AgentSummary[] = []) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(["call", "listProjects", {}], []);
   client.setQueryData(["call", "listAgents", {}], agents);
+
+  if (!loginResponse) client.setQueryData(["call", "getCredentialStatus", {}], status(connected));
   openDialog({ kind: "settings", tab: "agents" });
 
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <SettingsPage />
     </QueryClientProvider>,
     { wrapper: environment.Provider },
   );
+
+  return { ...rendered, client };
 };
 
 afterEach(resetUiState);
@@ -77,6 +95,11 @@ describe("Settings → Agents", () => {
     fireEvent.change(screen.getByLabelText("Handle"), { target: { value: "tester" } });
     fireEvent.change(screen.getByLabelText("System prompt"), { target: { value: "Write tests." } });
     fireEvent.change(screen.getByLabelText("Reasoning level"), { target: { value: "medium" } });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Base agent" }), { key: "ArrowDown" });
+    expect(screen.queryByRole("option", { name: "OpenCode" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "Pi" })).toBeNull();
+    fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
+    expect(screen.getByRole("combobox", { name: "Base agent" }).textContent).toBe("Codex");
     const deny = screen.getByRole("textbox", { name: "Denied tools" });
     fireEvent.change(deny, { target: { value: "Edit" } });
     fireEvent.keyDown(deny, { key: "Enter" });
@@ -90,13 +113,79 @@ describe("Settings → Agents", () => {
           access: "read-only",
           outputKind: "note",
           description: "",
-          baseAgent: "auto",
+          baseAgent: "codex",
           model: "",
           thoughtLevel: "medium",
           prompt: "Write tests.",
           tools: { allow: [], deny: ["Edit"] },
           mcp: { playwright: false, servers: [] },
         },
+      }),
+    );
+  });
+
+  it("starts a new definition from the first connected base rather than an unconnected Claude", async () => {
+    show([], ["openai"]);
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    expect(screen.getByRole("combobox", { name: "Base agent" }).textContent).toBe("Codex");
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Connected" } });
+    fireEvent.change(screen.getByLabelText("Handle"), { target: { value: "connected" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("saveAgent", {
+        definition: expect.objectContaining({ name: "Connected", baseAgent: "codex" }),
+      }),
+    );
+  });
+
+  it("prevents creation until logins are confirmed and exposes recovery when loading fails", async () => {
+    let reject!: (error: Error) => void;
+
+    const response = new Promise<CredentialStatus>((_, fail) => {
+      reject = fail;
+    });
+
+    show([], [], response);
+    expect(screen.getByRole("button", { name: "New agent" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Loading logins…")).toBeTruthy();
+    reject(new Error("Login status unavailable"));
+    await screen.findByRole("button", { name: "Retry" });
+    expect(screen.getByRole("button", { name: "New agent" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Connect another agent" }));
+    expect(screen.getByRole("heading", { name: "Logins" })).toBeTruthy();
+  });
+
+  it("blocks a new draft after its selected base loses its login", async () => {
+    const { client } = show();
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Draft" } });
+    await act(async () => {
+      client.setQueryData(["call", "getCredentialStatus", {}], status([]));
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Save/ }).hasAttribute("disabled")).toBe(true),
+    );
+    expect(screen.getByRole("combobox", { name: "Base agent" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.submit(screen.getByRole("form", { name: "New agent" }));
+    expect(call).not.toHaveBeenCalledWith("saveAgent", expect.anything());
+  });
+
+  it("preserves a saved disconnected base without offering it as a choice", async () => {
+    show([{ ...reviewer, baseAgent: "codex" }], ["claude"]);
+    fireEvent.click(screen.getByRole("button", { name: /Reviewer/ }));
+    await screen.findByText(/Codex is not connected/);
+    expect(screen.getByRole("combobox", { name: "Base agent" }).textContent).toBe("Codex");
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Base agent" }), { key: "ArrowDown" });
+    expect(await screen.findByRole("option", { name: "Claude" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "Codex" })).toBeNull();
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Updated" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("saveAgent", {
+        agentId: "01ca",
+        definition: expect.objectContaining({ baseAgent: "codex", description: "Updated" }),
       }),
     );
   });

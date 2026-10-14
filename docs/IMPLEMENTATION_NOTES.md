@@ -463,3 +463,11 @@ The owner asked for stage 5 of `CLOUDFLARE-CODE-HOSTING-PLAN.md` on the Artifact
 | YAML parser | `parseCiPipeline` in `@tempo/settings`, with the already-approved `yaml` 2.9.1. Aliases are refused. | No new dependency. |
 
 Verification: Worker tests cover pipeline validation and revisions, ingestion dedupe, supersede and cancel, `needs`, the two-job limit, stale results, merge gating with workspace check events, runner launch/log/report, checkout failure, timeout, a lost container, a lost report and CI egress. tempod tests cover `ci.checkout`. Web model/component and Mac tests cover the Checks tab and PR checks. Live Artifacts, hosted container CI and native visual acceptance are not run.
+
+## Connected base agents in Settings (2026-10-14)
+
+The connected-base editor changes were rebased onto the current agent library. Web and Mac keep Project default and saved disconnected bases, hide unconnected concrete choices, and require confirmed credentials for a new definition. A new definition selects the first connected concrete base. Loading/error states provide recovery; native editor scrolling keeps Save reachable. The former custom-agent and Roles APIs remain removed.
+
+Model discovery starts configured adapters concurrently and preserves result order. The existing detached-event callback accepts Codex auth refreshes and updates only matching credential-version metadata in the cache signature. Secrets remain outside workspace event storage; CI detached events retain their replay owner.
+
+Pre-rebase historical validation and native observations are not acceptance evidence for this revision. Current validation is recorded in the PR; no local test suite is run during this design pass. Native visual acceptance and the four-area calibration remain incomplete.

@@ -74,6 +74,37 @@ describe("model discovery", { timeout: 30_000 }, () => {
     expect(w.container.starts).toHaveLength(2);
   });
 
+  it("starts other adapters while one adapter is still loading", async () => {
+    const w = await setup();
+    await seedCredentials(w.userId);
+    let release: () => void = () => undefined;
+
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    w.tempod.on("session.start", async ({ agent }) => {
+      if (agent === "claude") await gate;
+
+      return sessionResult(agent);
+    });
+    const discovery = w.stub.discoverModels(w.userId);
+
+    try {
+      await waitFor(() => w.tempod.requestsOf("session.close").length === 3, 5000, "other adapters ready");
+      expect(w.tempod.requestsOf("session.start")).toHaveLength(4);
+    } finally {
+      release();
+    }
+
+    expect(unwrap(await discovery).map((entry) => entry.agent)).toEqual([
+      "claude",
+      "codex",
+      "opencode",
+      "pi",
+    ]);
+  });
+
   it("includes newly configured agents when credentials change during discovery", async () => {
     const w = await setup();
     await w.credentials.putSecret("claude.oauth_token", "claude-token");
@@ -138,6 +169,11 @@ describe("model discovery", { timeout: 30_000 }, () => {
     });
     await w.stub.discoverModels(w.userId);
     expect((await w.credentials.getCodexAuth())?.content).toBe(refreshed);
+    expect(unwrap(await w.stub.discoverModels(w.userId))).toHaveLength(1);
+    expect(w.container.starts).toHaveLength(1);
+    await w.credentials.replaceCodexAuth(initial, Date.parse("2026-10-11T00:00:00Z"));
+    expect(unwrap(await w.stub.discoverModels(w.userId))).toHaveLength(1);
+    expect(w.container.starts).toHaveLength(2);
     expect(
       await runInDurableObject(w.stub, (_, state) =>
         state.storage.sql.exec("SELECT id FROM events").toArray(),
