@@ -12,7 +12,7 @@ import type { AuthedUser } from "../../auth/auth.ts";
 import { organization, projectMembers, projectStars, projects, user, type ProjectRow } from "../../db/d1.ts";
 import type { Env } from "../../env.ts";
 import type { HandlerCtx, PublicCtx } from "../run.ts";
-import { d1, namespaceOf, projectView } from "./common.ts";
+import { d1, namespaceOf, projectToWire, projectView } from "./common.ts";
 
 const PAGE = 50;
 
@@ -47,12 +47,12 @@ const summaries = async (
   viewer: AuthedUser | null,
   rows: ReadonlyArray<ProjectRow>,
 ): Promise<ProjectSummary[]> => {
-  const visible: Array<{ row: ProjectRow; role: ProjectRole }> = [];
+  const visible: Array<{ row: ProjectRow; role: ProjectRole | null }> = [];
 
   for (const row of rows) {
-    const { role } = await accessOf(env, viewer, row);
+    const { role, memberRole } = await accessOf(env, viewer, row);
 
-    if (role !== null) visible.push({ row, role });
+    if (role !== null) visible.push({ row, role: memberRole });
   }
 
   const ids = visible.map((v) => v.row.id);
@@ -66,6 +66,8 @@ const summaries = async (
       organizationId: row.organizationId,
       visibility: row.visibility,
       provider: row.provider,
+      owner: projectToWire(row).owner,
+      name: projectToWire(row).name,
       defaultBranch: row.defaultBranch,
       stars: stars.get(row.id) ?? 0,
       starred: starred.has(row.id),

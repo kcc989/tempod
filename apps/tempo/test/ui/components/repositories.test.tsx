@@ -236,9 +236,17 @@ describe("repository workflows", () => {
     fireEvent.change(screen.getByLabelText("Repository name"), { target: { value: "new-demo" } });
     fireEvent.keyDown(screen.getByLabelText("Repository name"), { code: "Enter", metaKey: true });
     await waitFor(() =>
-      expect(done).toHaveBeenCalledWith(project, { name: "new-demo", defaultBranch: "main" }),
+      expect(done).toHaveBeenCalledWith(project, {
+        name: "new-demo",
+        visibility: "private",
+        defaultBranch: "main",
+      }),
     );
-    expect(request).toHaveBeenCalledWith("createRepository", { name: "new-demo", defaultBranch: "main" });
+    expect(request).toHaveBeenCalledWith("createRepository", {
+      name: "new-demo",
+      visibility: "private",
+      defaultBranch: "main",
+    });
     expect(request).not.toHaveBeenCalledWith("listInstallations", expect.anything());
   });
 
@@ -261,11 +269,13 @@ describe("repository workflows", () => {
     await waitFor(() =>
       expect(done).toHaveBeenCalledWith(project, {
         name: "imported",
+        visibility: "private",
         url: "https://github.com/me/demo.git",
       }),
     );
     expect(request).toHaveBeenCalledWith("importRepository", {
       name: "imported",
+      visibility: "private",
       url: "https://github.com/me/demo.git",
     });
   });

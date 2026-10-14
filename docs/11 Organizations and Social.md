@@ -31,7 +31,7 @@ The owner asked for Tempo to work like GitHub: users, organizations, public repo
 
 - Use the Better Auth `organization` plugin from the pinned `better-auth` package. Clients call its endpoints under `/api/auth/organization/*` directly: the web client with the cookie, the Mac client with its bearer token. They are not Tempo server functions and are not in `packages/protocol`.
 - Any signed-in user can create an organization and becomes its `owner`. Invitations are by email address and expire after 48 hours. Tempo sends no email. The invited user sees pending invitations through `/api/auth/organization/list-user-invitations` and accepts one. Acceptance requires the invited email to equal the user's GitHub primary email.
-- The organization `slug` is its namespace. It MUST match `^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`. It MUST NOT equal a username or a reserved word (`api`, `admin`, `device`, `explore`, `login`, `logout`, `new`, `organizations`, `settings`, `setup`, `stars`, `w`). A bad or taken slug is refused with Better Auth error code `NAMESPACE_TAKEN`.
+- The organization `slug` is its namespace. It MUST match `^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`. It MUST NOT equal a username or a reserved word (`api`, `admin`, `device`, `downloads`, `explore`, `history`, `login`, `logout`, `new`, `organizations`, `repositories`, `settings`, `setup`, `stars`, `w`, `workspaces`). The list holds every top-level web route, so `/:namespace` never shadows one. A bad or taken slug is refused with Better Auth error code `NAMESPACE_TAKEN`.
 - An organization that owns a project cannot be deleted. Better Auth returns error code `ORGANIZATION_HAS_PROJECTS`.
 
 ## Namespaces and project names
@@ -131,9 +131,9 @@ Agent credentials and MCP servers belong to the user who starts the workspace (O
 | `unstarProject` | POST | `{projectId}` | `{stars, starred}` | — |
 | `listStarredProjects` | GET | `{offset?}` | `ProjectSummary[]` the caller can still read, at most 50, most recent star first | — |
 
-- `ProjectSummary` = `{id, namespace, slug, organizationId (nullable), visibility, provider, defaultBranch, stars, starred, role (nullable), updatedAt}`. `starred` is false for anonymous callers. `role` is the caller's effective role, or null.
+- `ProjectSummary` = `{id, namespace, slug, organizationId (nullable), visibility, provider, owner, name, defaultBranch, stars, starred, role (nullable), updatedAt}`. `owner` and `name` are the same as in `Project`, so a client can link a GitHub-linked project to GitHub. `starred` is false for anonymous callers. `role` is the caller's membership role, or null; a public grant is not a role here, because `visibility` already shows it.
 - `ProjectMember` = `{userId, username (nullable), name, image (nullable), role}`.
-- `Project` gains optional `organizationId`, `namespace`, `slug`, `visibility` and `role`. They are optional so older fixtures still decode. For an Artifacts project, `Project.name` and `RepositoryDetail.name` are the slug, not the Artifacts storage name.
+- `Project` gains optional `organizationId`, `namespace`, `slug`, `visibility` and `role`. They are optional so older fixtures still decode. `role` is the membership role, as in `ProjectSummary`. For an Artifacts project, `Project.name` and `RepositoryDetail.name` are the slug, not the Artifacts storage name.
 - `starProject` and `unstarProject` are idempotent.
 - `listNamespaceProjects` and `exploreProjects` never return a project the caller cannot read. Anonymous callers see only public projects.
 
@@ -146,10 +146,7 @@ Agent credentials and MCP servers belong to the user who starts the workspace (O
 
 ## Phase 2: web and Mac
 
-Not built in phase 1. Phase 2 MUST change the web UI (04) and the Mac client (07) together:
-
-- Routes `/:namespace` and `/:namespace/:slug` that work without a session. `_app` still sends anonymous users to `/login` for everything else.
-- Explore, starred and star buttons; organization create, invite and member pages; project members and visibility in project settings.
+Phase 2 changes the web UI and the Mac client together. The pages, controls and copy are in 04, Public projects, stars and organizations, and the Mac rows of 07, Scope.
 
 ## Validation
 

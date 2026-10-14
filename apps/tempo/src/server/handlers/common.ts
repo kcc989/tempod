@@ -67,7 +67,7 @@ export const projectView = async (
 ): Promise<Project> => ({
   ...projectToWire(r),
   namespace: await namespaceOf(env, r),
-  role: role !== undefined ? role : (await accessOf(env, viewer, r)).role,
+  role: role !== undefined ? role : (await accessOf(env, viewer, r)).memberRole,
 });
 
 /** The owner key of a project's namespace: its organization id, else its owner's user id (11). */

@@ -1,3 +1,4 @@
+import { projectLabel } from "~/ui/components/sidebar/sidebar-logic";
 import {
   ArrowLeftIcon,
   BellIcon,
@@ -71,7 +72,7 @@ const PERSONAL = [
   { id: "devices", label: "Devices", description: "Manage devices signed in to Tempo.", icon: MonitorIcon },
 ] as const;
 
-const PROJECT_SECTIONS = [...new Set(SECTIONS.map(sectionPage)), "Secrets", "General"];
+const PROJECT_SECTIONS = [...new Set(SECTIONS.map(sectionPage)), "Secrets", "General", "Access"];
 
 export function SettingsPage() {
   const settings = useSettings();
@@ -201,7 +202,7 @@ export function SettingsPage() {
               </NavItem>
             )}
             {projects.data
-              ?.filter((p) => matches(`${p.owner}/${p.name}`) || PROJECT_SECTIONS.some(matches))
+              ?.filter((p) => matches(projectLabel(p)) || PROJECT_SECTIONS.some(matches))
               .map((p) => (
                 <div key={p.id}>
                   <NavItem
@@ -209,14 +210,14 @@ export function SettingsPage() {
                     onClick={() => go("project", p.id)}
                   >
                     <FolderGit2Icon aria-hidden className="size-4 shrink-0" />
-                    <span className="truncate" title={`${p.owner}/${p.name}`}>
-                      {p.owner}/{p.name}
+                    <span className="truncate" title={projectLabel(p)}>
+                      {projectLabel(p)}
                     </span>
                   </NavItem>
                   {tab === "project" && project?.id === p.id && (
                     <div className="my-1 ml-4 border-l pl-2">
                       {PROJECT_SECTIONS.flatMap((s) =>
-                        matches(s) || matches(`${p.owner}/${p.name}`)
+                        matches(s) || matches(projectLabel(p))
                           ? [
                               <NavItem key={s} active={section === s} onClick={() => setSection(s)}>
                                 {s === "Agent" ? "Agents" : s}
@@ -237,9 +238,7 @@ export function SettingsPage() {
       >
         <div className="max-w-4xl">
           {tab === "project" && project && (
-            <p className="mb-2 text-sm text-muted-foreground">
-              {project.owner}/{project.name}
-            </p>
+            <p className="mb-2 text-sm text-muted-foreground">{projectLabel(project)}</p>
           )}
           <h1
             ref={heading}

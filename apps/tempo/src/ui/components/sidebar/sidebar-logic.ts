@@ -119,5 +119,10 @@ export const CHECKS_LABELS: Record<ChecksState, string> = {
 export const isBold = (w: Pick<WorkspaceSummary, "attention">): boolean =>
   w.attention === "unread" || w.attention === "needs_input";
 
-export const projectLabel = (p: { readonly owner: string; readonly name: string }): string =>
-  `${p.owner}/${p.name}`;
+/** `namespace/slug` (11), or `owner/name` for a project from before namespaces. */
+export const projectLabel = (p: {
+  readonly owner: string;
+  readonly name: string;
+  readonly namespace?: string | undefined;
+  readonly slug?: string | undefined;
+}): string => (p.namespace && p.slug ? `${p.namespace}/${p.slug}` : `${p.owner}/${p.name}`);

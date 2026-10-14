@@ -201,6 +201,8 @@ const PROJECT_SUMMARY: P.ProjectSummary = {
   organizationId: ORG_ID,
   visibility: "public",
   provider: "artifacts",
+  owner: "tempo",
+  name: "site",
   defaultBranch: "main",
   stars: 3,
   starred: true,

@@ -21,6 +21,7 @@ import { setupStatusQueryOptions } from "~/ui/auth";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
+import { errorCode } from "~/ui/lib/toast";
 import { closeDialog } from "~/ui/state/workspace-ui";
 
 /** 04, Add project: each GitHub App installation with its repos; Link calls linkProject. */
@@ -77,12 +78,16 @@ function InstallLink({ installUrl, label }: { installUrl: string | null; label: 
 }
 
 function Installations() {
-  const installations = useCallQuery("listInstallations", {});
+  const installations = useCallQuery("listInstallations", {}, { retry: false });
   const setup = useQuery(setupStatusQueryOptions);
   const [search, setSearch] = useState("");
   const installUrl = setup.data?.installUrl ?? null;
 
   if (installations.isPending) return <SkeletonRows rows={4} />;
+
+  // 11: the GitHub App belongs to the deployment; only its admin links GitHub repositories.
+  if (installations.isError && errorCode(installations.error) === "FORBIDDEN")
+    return <EmptyState icon={FolderGit2Icon} title="Ask the Tempo admin to link GitHub repositories." />;
 
   if (installations.isError) {
     return <ErrorState error={installations.error} onRetry={() => void installations.refetch()} />;

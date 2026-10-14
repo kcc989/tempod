@@ -763,6 +763,28 @@ export const CONFIRM_TEXT = {
     confirmLabel: "Delete",
     destructive: true,
   }),
+  makePublic: (): ConfirmOptions => ({
+    title: "Make this repository public?",
+    description: "Anyone, signed in or not, can read this repository, its issues and its pull requests.",
+    confirmLabel: "Make public",
+  }),
+  removeMember: (name: string): ConfirmOptions => ({
+    title: `Remove ${name}?`,
+    confirmLabel: "Remove",
+    destructive: true,
+  }),
+  cancelInvitation: (email: string): ConfirmOptions => ({
+    title: `Cancel the invitation for ${email}?`,
+    confirmLabel: "Cancel invitation",
+    cancelLabel: "Keep",
+    destructive: true,
+  }),
+  leaveProject: (): ConfirmOptions => ({
+    title: "Leave this project?",
+    description: "You lose the access this project gave you.",
+    confirmLabel: "Leave",
+    destructive: true,
+  }),
 } as const;
 
 /** Clears every store. Tests only. */

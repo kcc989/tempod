@@ -84,7 +84,7 @@ describe("organizations, project roles and stars (11)", () => {
     });
     expect(await anonymously("getProject", { namespace: name.toUpperCase(), slug: "APP" })).toMatchObject({
       ok: true,
-      value: { id: seeded.projectId, role: "read", starred: false, stars: 0 },
+      value: { id: seeded.projectId, role: null, starred: false, stars: 0 },
     });
 
     // A public grant reads, but it is not a membership role: member lists and changes are refused.

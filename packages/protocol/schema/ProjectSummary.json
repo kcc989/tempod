@@ -29,6 +29,12 @@
       "type": "string",
       "enum": ["github", "artifacts"]
     },
+    "owner": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
     "defaultBranch": {
       "type": "string"
     },
@@ -75,6 +81,8 @@
     "organizationId",
     "visibility",
     "provider",
+    "owner",
+    "name",
     "defaultBranch",
     "stars",
     "starred",

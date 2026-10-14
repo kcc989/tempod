@@ -79,6 +79,8 @@ export const ProjectSummary = Schema.Struct({
   organizationId: N(Schema.String),
   visibility: ProjectVisibility,
   provider: Schema.Literals(["github", "artifacts"]),
+  owner: Schema.String,
+  name: Schema.String,
   defaultBranch: Schema.String,
   stars: Schema.Number,
   starred: Schema.Boolean,

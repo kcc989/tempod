@@ -28,15 +28,19 @@ export const RESERVED_NAMESPACES: ReadonlySet<string> = new Set([
   "api",
   "admin",
   "device",
+  "downloads",
   "explore",
+  "history",
   "login",
   "logout",
   "new",
   "organizations",
+  "repositories",
   "settings",
   "setup",
   "stars",
   "w",
+  "workspaces",
 ]);
 
 export const INVITATION_SECONDS = 60 * 60 * 48;

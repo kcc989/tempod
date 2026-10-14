@@ -1,6 +1,7 @@
-import type { Project } from "@tempo/protocol";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, ExternalLinkIcon, FolderGit2Icon, GitBranchIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { sessionQueryOptions } from "~/ui/auth";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Badge } from "~/ui/components/ui/badge";
 import { Button } from "~/ui/components/ui/button";
@@ -14,7 +15,9 @@ import { RepositoryCode, RepositoryCommits } from "./RepositoryCode";
 import { RepositoryPullRequests } from "./RepositoryPullRequests";
 import { RepositoryChecks } from "./RepositoryChecks";
 import { RepositoryIssues } from "./RepositoryIssues";
-import { isRepositoryTab, repositoryInput, type RepositorySearch } from "./model";
+import { projectLabel } from "~/ui/components/sidebar/sidebar-logic";
+import { isRepositoryTab, repositoryInput, type RepositoryProject, type RepositorySearch } from "./model";
+import { RepositoryAccessContext, canWrite as roleCanWrite, isMember, type RepositoryAccess } from "./access";
 
 export interface RepositoryHubProps {
   readonly search: RepositorySearch;
@@ -23,6 +26,7 @@ export interface RepositoryHubProps {
 
 export function RepositoryHub({ search, onNavigate }: RepositoryHubProps) {
   const projects = useProjects();
+  const session = useQuery(sessionQueryOptions);
   const [query, setQuery] = useState("");
 
   if (projects.isPending) return <SkeletonRows rows={6} />;
@@ -39,9 +43,19 @@ export function RepositoryHub({ search, onNavigate }: RepositoryHubProps) {
     );
 
   if (project)
-    return <RepositoryDetail key={project.id} project={project} search={search} onNavigate={onNavigate} />;
+    return (
+      <RepositoryDetail
+        key={project.id}
+        project={project}
+        access={{ role: project.role ?? "admin", userId: session.data?.user.id ?? null }}
+        title={projectLabel(project)}
+        search={search}
+        onNavigate={onNavigate}
+        onBack={() => onNavigate({})}
+      />
+    );
   const q = query.trim().toLowerCase();
-  const shown = projects.data.filter((p) => `${p.owner}/${p.name}`.toLowerCase().includes(q));
+  const shown = projects.data.filter((p) => projectLabel(p).toLowerCase().includes(q));
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -91,9 +105,7 @@ export function RepositoryHub({ search, onNavigate }: RepositoryHubProps) {
                     onClick={() => onNavigate({ project: p.id })}
                   >
                     <FolderGit2Icon className="size-4 shrink-0" />
-                    <span className="truncate">
-                      {p.owner}/{p.name}
-                    </span>
+                    <span className="truncate">{projectLabel(p)}</span>
                   </button>
                   <Badge variant="muted">{p.provider === "artifacts" ? "Artifacts" : "GitHub"}</Badge>
                 </div>
@@ -123,8 +135,30 @@ export function RepositoryHub({ search, onNavigate }: RepositoryHubProps) {
   );
 }
 
-function RepositoryDetail({ project, search, onNavigate }: RepositoryHubProps & { project: Project }) {
-  const tab = search.tab ?? "code";
+export interface RepositoryDetailProps extends RepositoryHubProps {
+  readonly project: RepositoryProject;
+  readonly access: RepositoryAccess;
+  /** `namespace/slug`; defaults to `owner/name`. */
+  readonly title?: string | undefined;
+  /** Header items after the title, such as the visibility badge and the star button (04). */
+  readonly badges?: ReactNode;
+  readonly onBack: () => void;
+  readonly backLabel?: string;
+}
+
+/** One repository: Code, Commits, Pull requests, Issues and, for members, Checks (09, 11). */
+export function RepositoryDetail({
+  project,
+  access,
+  title,
+  badges,
+  search,
+  onNavigate,
+  onBack,
+  backLabel = "All repositories",
+}: RepositoryDetailProps) {
+  const member = isMember(access);
+  const tab = search.tab === "checks" && !member ? "code" : (search.tab ?? "code");
 
   const metadata = useCallQuery(
     "getRepository",
@@ -136,116 +170,124 @@ function RepositoryDetail({ project, search, onNavigate }: RepositoryHubProps & 
     { enabled: project.provider === "artifacts" && tab !== "issues" && tab !== "checks" },
   );
 
-  const canWrite = project.provider !== "artifacts" || (!!metadata.data && !metadata.data.readOnly);
+  const writer = roleCanWrite(access);
+
+  const canWrite =
+    writer && (project.provider !== "artifacts" || (!!metadata.data && !metadata.data.readOnly));
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b px-5 py-4">
-        <Button variant="ghost" size="icon-sm" aria-label="All repositories" onClick={() => onNavigate({})}>
-          <ArrowLeftIcon />
-        </Button>
-        <FolderGit2Icon className="size-5 text-muted-foreground" />
-        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
-          {project.owner}/{project.name}
-        </h1>
-        <Badge variant="muted">{project.provider === "artifacts" ? "Artifacts" : "GitHub"}</Badge>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => openDialog({ kind: "newWorkspace", projectId: project.id })}
-          disabled={!canWrite}
-        >
-          New workspace
-        </Button>
-      </header>
-      {project.provider !== "artifacts" ? (
-        <EmptyState
-          title="GitHub repository"
-          description="Browse this repository on GitHub, or open a Tempo workspace to work on it."
-          action={
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button asChild>
-                <a
-                  href={githubRepoUrl(project.owner, project.name)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open on GitHub
-                  <ExternalLinkIcon />
-                </a>
-              </Button>
-              <Button asChild variant="outline">
-                <a
-                  href={`${githubRepoUrl(project.owner, project.name)}/issues`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Issues on GitHub
-                  <ExternalLinkIcon />
-                </a>
-              </Button>
-            </div>
-          }
-        />
-      ) : (
-        <>
-          {metadata.data?.readOnly && (
-            <p role="note" className="border-b px-5 py-3 text-sm text-muted-foreground">
-              This repository is read-only.
-            </p>
-          )}
-          {metadata.isError && tab !== "code" && tab !== "issues" && tab !== "checks" && (
-            <ErrorState error={metadata.error} onRetry={() => void metadata.refetch()} />
-          )}
-          <div className="border-b px-5 py-2">
-            <Tabs
-              value={tab}
-              onValueChange={(value) => {
-                if (!isRepositoryTab(value)) return;
-
-                let next: RepositorySearch = { project: project.id, tab: value };
-
-                if (search.ref) next = { ...next, ref: search.ref };
-
-                onNavigate(next);
-              }}
+    <RepositoryAccessContext.Provider value={access}>
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="flex flex-wrap items-center gap-3 border-b px-5 py-4">
+          <Button variant="ghost" size="icon-sm" aria-label={backLabel} onClick={onBack}>
+            <ArrowLeftIcon />
+          </Button>
+          <FolderGit2Icon className="size-5 text-muted-foreground" />
+          <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
+            {title ?? `${project.owner}/${project.name}`}
+          </h1>
+          {badges}
+          <Badge variant="muted">{project.provider === "artifacts" ? "Artifacts" : "GitHub"}</Badge>
+          {writer && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openDialog({ kind: "newWorkspace", projectId: project.id })}
+              disabled={!canWrite}
             >
-              <TabsList aria-label="Repository sections">
-                <TabsTrigger value="code">Code</TabsTrigger>
-                <TabsTrigger value="commits">Commits</TabsTrigger>
-                <TabsTrigger value="pulls">Pull requests</TabsTrigger>
-                <TabsTrigger value="issues">Issues</TabsTrigger>
-                <TabsTrigger value="checks">Checks</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto">
-            {tab === "pulls" && (
-              <RepositoryPullRequests
-                project={project}
-                search={search}
-                onNavigate={onNavigate}
-                canWrite={canWrite}
-              />
+              New workspace
+            </Button>
+          )}
+        </header>
+        {project.provider !== "artifacts" ? (
+          <EmptyState
+            title="GitHub repository"
+            description="Browse this repository on GitHub, or open a Tempo workspace to work on it."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button asChild>
+                  <a
+                    href={githubRepoUrl(project.owner, project.name)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open on GitHub
+                    <ExternalLinkIcon />
+                  </a>
+                </Button>
+                <Button asChild variant="outline">
+                  <a
+                    href={`${githubRepoUrl(project.owner, project.name)}/issues`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Issues on GitHub
+                    <ExternalLinkIcon />
+                  </a>
+                </Button>
+              </div>
+            }
+          />
+        ) : (
+          <>
+            {metadata.data?.readOnly && (
+              <p role="note" className="border-b px-5 py-3 text-sm text-muted-foreground">
+                This repository is read-only.
+              </p>
             )}
-            {tab === "commits" && (
-              <RepositoryCommits
-                key={search.ref ?? project.defaultBranch}
-                project={project}
-                search={search}
-                onNavigate={onNavigate}
-              />
+            {metadata.isError && tab !== "code" && tab !== "issues" && tab !== "checks" && (
+              <ErrorState error={metadata.error} onRetry={() => void metadata.refetch()} />
             )}
-            {tab === "code" && <RepositoryCode project={project} search={search} onNavigate={onNavigate} />}
-            {tab === "issues" && (
-              <RepositoryIssues project={project} search={search} onNavigate={onNavigate} />
-            )}
-            {tab === "checks" && (
-              <RepositoryChecks project={project} search={search} onNavigate={onNavigate} />
-            )}
-          </div>
-        </>
-      )}
-    </div>
+            <div className="border-b px-5 py-2">
+              <Tabs
+                value={tab}
+                onValueChange={(value) => {
+                  if (!isRepositoryTab(value)) return;
+
+                  let next: RepositorySearch = { project: project.id, tab: value };
+
+                  if (search.ref) next = { ...next, ref: search.ref };
+
+                  onNavigate(next);
+                }}
+              >
+                <TabsList aria-label="Repository sections">
+                  <TabsTrigger value="code">Code</TabsTrigger>
+                  <TabsTrigger value="commits">Commits</TabsTrigger>
+                  <TabsTrigger value="pulls">Pull requests</TabsTrigger>
+                  <TabsTrigger value="issues">Issues</TabsTrigger>
+                  {member && <TabsTrigger value="checks">Checks</TabsTrigger>}
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto">
+              {tab === "pulls" && (
+                <RepositoryPullRequests
+                  project={project}
+                  search={search}
+                  onNavigate={onNavigate}
+                  canWrite={canWrite}
+                />
+              )}
+              {tab === "commits" && (
+                <RepositoryCommits
+                  key={search.ref ?? project.defaultBranch}
+                  project={project}
+                  search={search}
+                  onNavigate={onNavigate}
+                />
+              )}
+              {tab === "code" && <RepositoryCode project={project} search={search} onNavigate={onNavigate} />}
+              {tab === "issues" && (
+                <RepositoryIssues project={project} search={search} onNavigate={onNavigate} />
+              )}
+              {tab === "checks" && (
+                <RepositoryChecks project={project} search={search} onNavigate={onNavigate} />
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </RepositoryAccessContext.Provider>
   );
 }

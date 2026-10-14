@@ -122,6 +122,7 @@ describe("settings page", () => {
       "Prompts",
       "Secrets",
       "General",
+      "Access",
       "tempo/second",
     ]);
     expect(screen.getByRole("heading", { name: "Agents" })).toBeTruthy();

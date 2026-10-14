@@ -1,9 +1,12 @@
 import { Schema } from "effect";
-import type { CiJob, CiRun, FnInput } from "@tempo/protocol";
+import type { CiJob, CiRun, FnInput, Project } from "@tempo/protocol";
 
 export const RepositoryTab = Schema.Literals(["code", "commits", "pulls", "issues", "checks"]);
 
 export type RepositoryTab = typeof RepositoryTab.Type;
+
+/** The project fields a repository view needs, from `Project` or `ProjectSummary` (11). */
+export type RepositoryProject = Pick<Project, "id" | "provider" | "owner" | "name" | "defaultBranch">;
 
 export interface RepositorySearch {
   readonly project?: string;

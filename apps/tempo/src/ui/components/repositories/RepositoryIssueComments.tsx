@@ -9,12 +9,14 @@ import { Textarea } from "~/ui/components/ui/textarea";
 import { callKey, useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { formatRelative } from "~/ui/lib/format";
 import { isSubmitShortcut } from "./model";
+import { canEditComment, canWrite, useRepositoryAccess } from "./access";
 
 export function RepositoryIssueComments({ projectId, number }: { projectId: string; number: number }) {
   const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
   const comments = useCallQuery("listRepositoryIssueComments", { projectId, number, offset });
   const [body, setBody] = useState("");
+  const writer = canWrite(useRepositoryAccess());
 
   const create = useCallMutation("createRepositoryIssueComment", {
     invalidates: ["listRepositoryIssueComments", "getRepositoryIssue", "listRepositoryIssues"],
@@ -86,38 +88,40 @@ export function RepositoryIssueComments({ projectId, number }: { projectId: stri
           </Button>
         </div>
       )}
-      <form
-        className="grid gap-2 rounded-lg border p-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-        onKeyDown={(event) => {
-          if (isSubmitShortcut(event)) {
+      {writer && (
+        <form
+          className="grid gap-2 rounded-lg border p-4"
+          onSubmit={(event) => {
             event.preventDefault();
             submit();
-          }
-        }}
-      >
-        <Label htmlFor="issue-comment">Add a comment</Label>
-        <Textarea
-          id="issue-comment"
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          maxLength={65536}
-          rows={4}
-          placeholder="Write a comment…"
-          required
-        />
-        <Button
-          type="submit"
-          size="sm"
-          className="justify-self-start"
-          disabled={!body.trim() || create.isPending}
+          }}
+          onKeyDown={(event) => {
+            if (isSubmitShortcut(event)) {
+              event.preventDefault();
+              submit();
+            }
+          }}
         >
-          {create.isPending ? "Posting…" : "Comment"}
-        </Button>
-      </form>
+          <Label htmlFor="issue-comment">Add a comment</Label>
+          <Textarea
+            id="issue-comment"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            maxLength={65536}
+            rows={4}
+            placeholder="Write a comment…"
+            required
+          />
+          <Button
+            type="submit"
+            size="sm"
+            className="justify-self-start"
+            disabled={!body.trim() || create.isPending}
+          >
+            {create.isPending ? "Posting…" : "Comment"}
+          </Button>
+        </form>
+      )}
     </section>
   );
 }
@@ -135,6 +139,7 @@ function IssueComment({
 }) {
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(comment.body);
+  const editable = canEditComment(useRepositoryAccess(), comment.authorId);
 
   const options = {
     invalidates: ["listRepositoryIssueComments", "getRepositoryIssue", "listRepositoryIssues"] as const,
@@ -159,31 +164,33 @@ function IssueComment({
           {formatRelative(comment.createdAt)}
           {comment.updatedAt !== comment.createdAt ? " · edited" : ""}
         </span>
-        <div className="flex gap-1">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => {
-              setBody(comment.body);
-              setEditing(true);
-            }}
-          >
-            Edit comment
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => remove.mutate({ projectId, number, commentId: comment.id })}
-          >
-            Delete comment
-          </Button>
-        </div>
+        {editable && (
+          <div className="flex gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => {
+                setBody(comment.body);
+                setEditing(true);
+              }}
+            >
+              Edit comment
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => remove.mutate({ projectId, number, commentId: comment.id })}
+            >
+              Delete comment
+            </Button>
+          </div>
+        )}
       </div>
-      {editing ? (
+      {editing && editable ? (
         <form
           className="grid gap-2 p-4"
           onSubmit={(event) => {

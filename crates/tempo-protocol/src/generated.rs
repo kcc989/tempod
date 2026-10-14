@@ -8607,12 +8607,14 @@ pub struct ProjectSummary {
     #[serde(rename = "defaultBranch")]
     pub default_branch: ::std::string::String,
     pub id: ::std::string::String,
+    pub name: ::std::string::String,
     pub namespace: ::std::string::String,
     #[serde(
         rename = "organizationId",
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub organization_id: ::std::option::Option<::std::string::String>,
+    pub owner: ::std::string::String,
     pub provider: ProjectSummaryProvider,
     #[serde(deserialize_with = "::std::option::Option::deserialize")]
     pub role: ::std::option::Option<ProjectRole>,

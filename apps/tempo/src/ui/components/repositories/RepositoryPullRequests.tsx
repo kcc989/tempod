@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Project, RepositoryPullRequest } from "@tempo/protocol";
+import type { RepositoryPullRequest } from "@tempo/protocol";
 import { ArrowLeftIcon, GitPullRequestIcon } from "lucide-react";
 import { useState } from "react";
 import { MessageMarkdown } from "~/ui/components/chat/Markdown";
@@ -25,9 +25,10 @@ import { toastError } from "~/ui/lib/toast";
 import { getHubStore } from "~/ui/stores/hub-store";
 import { setPhonePane } from "~/ui/state/workspace-ui";
 import type { RepositoryHubProps } from "./RepositoryHub";
-import { ciState, isSubmitShortcut, shortSha } from "./model";
+import { canWrite as roleCanWrite, isMember, useRepositoryAccess } from "./access";
+import { ciState, isSubmitShortcut, shortSha, type RepositoryProject } from "./model";
 
-type Props = RepositoryHubProps & { project: Project; canWrite?: boolean };
+type Props = RepositoryHubProps & { project: RepositoryProject; canWrite?: boolean };
 
 const PR_TONE = {
   merged: "text-merged",
@@ -42,6 +43,7 @@ const tone = (state: RepositoryPullRequest["state"]) => PR_TONE[state];
 
 export function RepositoryPullRequests(props: Props) {
   const { project, search, onNavigate, canWrite = true } = props;
+  const writer = roleCanWrite(useRepositoryAccess());
   const [state, setState] = useState<"open" | "closed" | "all">("open");
   const [creating, setCreating] = useState(false);
   const pulls = useCallQuery("listRepositoryPullRequests", { projectId: project.id, state });
@@ -63,9 +65,11 @@ export function RepositoryPullRequests(props: Props) {
             </Button>
           ))}
         </div>
-        <Button size="sm" disabled={!canWrite} onClick={() => setCreating(true)}>
-          New pull request
-        </Button>
+        {writer && (
+          <Button size="sm" disabled={!canWrite} onClick={() => setCreating(true)}>
+            New pull request
+          </Button>
+        )}
       </div>
       {pulls.isPending ? (
         <SkeletonRows rows={5} />
@@ -126,7 +130,7 @@ export function PullRequestForm({
   project,
   onSuccess,
 }: {
-  project: Project;
+  project: RepositoryProject;
   onSuccess: (pull: RepositoryPullRequest) => void;
 }) {
   const [title, setTitle] = useState("");
@@ -235,6 +239,8 @@ function PullRequestDetail({
   const queryClient = useQueryClient();
   const invoke = useApiCall();
   const pull = useCallQuery("getRepositoryPullRequest", { projectId: project.id, number });
+  const access = useRepositoryAccess();
+  const writer = roleCanWrite(access);
 
   const update = useCallMutation("updateRepositoryPullRequest", {
     invalidates: [
@@ -316,14 +322,16 @@ function PullRequestDetail({
           <span className="text-xs text-muted-foreground">Updated {formatRelative(p.updatedAt)}</span>
         </div>
       </div>
-      <PullRequestChecks project={project} branch={p.headBranch} onNavigate={onNavigate} />
+      {isMember(access) && (
+        <PullRequestChecks project={project} branch={p.headBranch} onNavigate={onNavigate} />
+      )}
       <div className="flex flex-wrap gap-2">
-        {open && (
+        {open && writer && (
           <Button size="sm" disabled={workspace.isPending || !canWrite} onClick={() => workspace.mutate()}>
             {workspace.isPending ? "Opening…" : "Review and merge in workspace"}
           </Button>
         )}
-        {p.state !== "merged" && (
+        {p.state !== "merged" && writer && (
           <>
             <Button
               size="sm"
@@ -410,7 +418,7 @@ function PullRequestChecks({
   branch,
   onNavigate,
 }: {
-  project: Project;
+  project: RepositoryProject;
   branch: string;
   onNavigate: RepositoryHubProps["onNavigate"];
 }) {

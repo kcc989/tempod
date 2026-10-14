@@ -2,10 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { ERROR_MESSAGES, type AppSetupStatus } from "@tempo/protocol";
 import { Option, Schema } from "effect";
 import { createAuthClient } from "better-auth/client";
-import { deviceAuthorizationClient } from "better-auth/client/plugins";
+import { deviceAuthorizationClient, organizationClient } from "better-auth/client/plugins";
 
-/** Better Auth in the browser (05, Authentication). Mounted by the Worker at /api/auth. */
-const makeClient = () => createAuthClient({ basePath: "/api/auth", plugins: [deviceAuthorizationClient()] });
+/** Better Auth in the browser (05, Authentication; 11, Organizations). Mounted by the Worker at /api/auth. */
+const makeClient = () =>
+  createAuthClient({ basePath: "/api/auth", plugins: [deviceAuthorizationClient(), organizationClient()] });
 
 let client: ReturnType<typeof makeClient> | null = null;
 
