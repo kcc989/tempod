@@ -384,11 +384,13 @@ impl Render for WorkspaceInfo {
             .unwrap_or_else(|| w.title.clone());
         let sleep = w.state == p::WorkspaceState::Sleeping;
         let changes = changes.or(w.changes.clone());
+        // Same words as the header pill, with the instance the header leaves to hover.
         let state = match w.state {
-            p::WorkspaceState::Sleeping => "Sleeping".into(),
-            p::WorkspaceState::Working | p::WorkspaceState::Ready => "Running".into(),
             p::WorkspaceState::Error => "Needs attention".into(),
-            _ => w.state.to_string(),
+            _ => {
+                super::indicators::pill_text(w.state, w.op.as_ref(), Some(&w.settings.environment.instance))
+                    .text
+            }
         };
         let body = v_flex()
             .id("workspace-info")

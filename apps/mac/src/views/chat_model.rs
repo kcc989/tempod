@@ -866,6 +866,16 @@ pub fn format_tokens(n: f64) -> String {
         format!("{:.1}M", n / 1_000_000.)
     }
 }
+/// The token split shown on hover over the turn footer (04, Transcript).
+pub fn turn_usage_detail(turn: &Turn) -> Option<String> {
+    turn.usage.as_ref().map(|u| {
+        format!(
+            "{} in, {} out",
+            format_tokens(u.input_tokens),
+            format_tokens(u.output_tokens)
+        )
+    })
+}
 /// The turn footer (04, Transcript): duration unless the work row shows it, tokens when the agent
 /// sent usage, and how it ended when that is not plain success.
 pub fn turn_footer(turn: &Turn, work_row: bool) -> String {
@@ -874,14 +884,10 @@ pub fn turn_footer(turn: &Turn, work_row: bool) -> String {
         .zip(turn.ended_at)
         .filter(|_| !work_row)
         .map(|(start, end)| format_duration((end - start).max(0.)));
-    let tokens = turn.usage.as_ref().map(|u| {
-        format!(
-            "{} tokens ({} in, {} out)",
-            format_tokens(u.total_tokens),
-            format_tokens(u.input_tokens),
-            format_tokens(u.output_tokens)
-        )
-    });
+    let tokens = turn
+        .usage
+        .as_ref()
+        .map(|u| format!("{} tokens", format_tokens(u.total_tokens)));
     let outcome = match turn.status {
         TurnStatus::Cancelled => Some("Stopped"),
         TurnStatus::Failed => Some("Failed"),
@@ -978,10 +984,8 @@ mod tests {
             cached_read_tokens: None,
             cached_write_tokens: None,
         });
-        assert_eq!(
-            turn_footer(&turn, false),
-            "12 s · 15k tokens (12k in, 3.3k out)"
-        );
+        assert_eq!(turn_footer(&turn, false), "12 s · 15k tokens");
+        assert_eq!(turn_usage_detail(&turn).as_deref(), Some("12k in, 3.3k out"));
         turn.status = TurnStatus::Cancelled;
         turn.usage = None;
         assert_eq!(turn_footer(&turn, false), "12 s · Stopped");

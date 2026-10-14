@@ -7,6 +7,7 @@ use super::tokens::{Token, color};
 use crate::image_policy::LocalImageCache;
 use crate::links::{self, LinkTarget};
 use crate::markdown::{escape_raw_html, tool_text};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
@@ -995,13 +996,22 @@ fn render_native_row(
                 )
                 .into_any_element()
         }
-        RowContent::Footer { turn, work_row } => div()
-            .px_4()
-            .py_2()
-            .opacity(if turn.reverted { 0.5 } else { 1. })
-            .text_color(color(Token::MutedForeground, cx))
-            .child(chat_model::turn_footer(&turn, work_row))
-            .into_any_element(),
+        RowContent::Footer { turn, work_row } => {
+            let detail = chat_model::turn_usage_detail(&turn).map(SharedString::from);
+            div()
+                .id(SharedString::from(format!("turn-footer-{id}")))
+                .px_4()
+                .py_2()
+                .opacity(if turn.reverted { 0.5 } else { 1. })
+                .text_color(color(Token::MutedForeground, cx))
+                .when_some(detail, |this, detail| {
+                    this.tooltip(move |window, cx| {
+                        gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx)
+                    })
+                })
+                .child(chat_model::turn_footer(&turn, work_row))
+                .into_any_element()
+        }
         RowContent::Item {
             item,
             dim,

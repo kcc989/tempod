@@ -833,26 +833,10 @@ fn render_row(
         .px_3()
         .py_2()
         .w_full()
-        .min_h(px(48.))
+        .min_h(px(36.))
         .rounded_md()
         .hover(move |style| style.bg(muted.opacity(0.08)))
         .child(line)
-        .child(
-            div()
-                .pl(px(20.))
-                .text_size(px(12.))
-                .text_color(muted)
-                .child(
-                    h_flex()
-                        .min_w_0()
-                        .gap_2()
-                        .children(
-                            (!row.detail.is_empty())
-                                .then(|| div().min_w_0().truncate().child(row.detail.clone())),
-                        )
-                        .child(div().flex_shrink_0().child(status)),
-                ),
-        )
         .on_click(move |_, window, cx| {
             if let Some(f) = &select {
                 f(&workspace_id, window, cx);
@@ -1079,6 +1063,10 @@ fn hover_card(summary: &p::WorkspaceSummary, window: &mut Window, cx: &mut App) 
         .child(
             v_flex()
                 .gap_1()
+                .child(row(
+                    "Branch",
+                    div().min_w_0().truncate().child(summary.branch.clone()).into_any_element(),
+                ))
                 .child(row(
                     "State",
                     div()

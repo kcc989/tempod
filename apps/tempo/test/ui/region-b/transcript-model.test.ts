@@ -16,6 +16,7 @@ import {
   toUnifiedHunks,
   turnDuration,
   turnOutcome,
+  turnTokenSplit,
   turnTokens,
   workspacePath,
 } from "~/ui/components/chat/transcript-model";
@@ -304,7 +305,10 @@ describe("turn footer", () => {
     expect(turnTokens(turn({}))).toBeNull();
     expect(
       turnTokens(turn({ usage: { totalTokens: 15_300, inputTokens: 12_000, outputTokens: 3_300 } })),
-    ).toBe("15k tokens (12k in, 3.3k out)");
+    ).toBe("15k tokens");
+    expect(
+      turnTokenSplit(turn({ usage: { totalTokens: 15_300, inputTokens: 12_000, outputTokens: 3_300 } })),
+    ).toBe("12k in, 3.3k out");
   });
 
   it("counts plan entries", () => {

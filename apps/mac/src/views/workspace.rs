@@ -16,6 +16,7 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
     Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
 };
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
     Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
@@ -1124,9 +1125,7 @@ impl WorkspaceView {
                 None => "Starting…".into(),
             },
             p::WorkspaceState::SettingUp => "Running setup".into(),
-            p::WorkspaceState::Ready | p::WorkspaceState::Working => {
-                format!("Running · {instance}")
-            }
+            p::WorkspaceState::Ready | p::WorkspaceState::Working => "Running".into(),
             p::WorkspaceState::Stopping => "Going to sleep".into(),
             p::WorkspaceState::Sleeping => "Sleeping".into(),
             p::WorkspaceState::Error => "Error".into(),
@@ -1223,7 +1222,13 @@ impl WorkspaceView {
                     }))
                     .into_any_element()
             } else {
+                let tip = SharedString::from(format!("Running on {instance}"));
+                let running = matches!(w.state, p::WorkspaceState::Ready | p::WorkspaceState::Working);
                 div()
+                    .id("workspace-state")
+                    .when(running, |this| {
+                        this.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                    })
                     .flex_shrink_0()
                     .whitespace_nowrap()
                     .text_color(color(

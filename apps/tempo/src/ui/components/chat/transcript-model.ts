@@ -459,11 +459,10 @@ export const turnOutcome = (turn: Pick<Turn, "status" | "stopReason">): string |
 export const turnDuration = (turn: Pick<Turn, "startedAt" | "endedAt">): number | null =>
   turn.startedAt !== null && turn.endedAt !== null ? Math.max(0, turn.endedAt - turn.startedAt) : null;
 
-/** The footer's token text, from the usage the agent reported for this turn. */
-export const turnTokens = (turn: Pick<Turn, "usage">): string | null => {
-  const u = turn.usage;
+/** The footer's token total, from the usage the agent reported for this turn. */
+export const turnTokens = (turn: Pick<Turn, "usage">): string | null =>
+  turn.usage ? `${formatTokens(turn.usage.totalTokens)} tokens` : null;
 
-  if (!u) return null;
-
-  return `${formatTokens(u.totalTokens)} tokens (${formatTokens(u.inputTokens)} in, ${formatTokens(u.outputTokens)} out)`;
-};
+/** The input/output split shown on hover over the token total. */
+export const turnTokenSplit = (turn: Pick<Turn, "usage">): string | null =>
+  turn.usage ? `${formatTokens(turn.usage.inputTokens)} in, ${formatTokens(turn.usage.outputTokens)} out` : null;

@@ -677,12 +677,6 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
               </div>
             )}
             <div className="relative">
-              <span
-                className="pointer-events-none absolute top-0 right-0 hidden text-xs text-muted-foreground sm:block"
-                aria-hidden="true"
-              >
-                {formatBinding("focusComposer")} to focus
-              </span>
               {sendPending && (
                 <p role="status" className="pb-1 text-xs text-muted-foreground">
                   Saving message…
