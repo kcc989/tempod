@@ -50,8 +50,8 @@
       "focusCandidate": {
         "commit": "7ed0178",
         "review": "workspace-options-focus-review.md",
-        "nativeConfirmed": false,
-        "clefAfter": "missing: Mac locked"
+        "nativeConfirmed": true,
+        "clefAfter": "visible, confidence 0.5361; dark/workspace-options-focus/interaction-tab.answers.json"
       }
     },
     "New chat": {
@@ -79,18 +79,22 @@
       "accepted": false
     },
     "Info": {
-      "status": "pending",
+      "status": "needs_work",
       "accepted": false,
-      "implementationCommit": "81a566d",
-      "review": "workspace-info-panels-review.md",
-      "nativeCapture": "missing: Mac locked"
+      "implementationCommit": "52b026c",
+      "nativeCapture": "dark/info-freestanding/full.png",
+      "review": "info-card-review.md",
+      "nativeShapeConfirmed": true,
+      "areaReviews": "four before and four after returned HTTP 200; 51 questions each",
+      "interactionReviews": "two corrected requests returned HTTP 200; focus visible; feedback uncertain"
     },
     "Guides": {
       "status": "pending",
       "accepted": false,
       "implementationCommit": "81a566d",
       "nativeCoverage": "overview and chapter-file preview; authenticated web renderer retains comparisons, flows and interactive artifacts",
-      "nativeCapture": "missing: Mac locked"
+      "nativeCapture": "dark/info-freestanding/guides-open.png",
+      "nativeTransitionConfirmed": true
     }
   },
   "remaining": [
@@ -119,21 +123,23 @@
     {
       "scope": "current native desktop control",
       "reason": "cua.getApp(/Applications/Tempo.app) reports Mac locked. The previous unlock request remains pending. No new screenshots accepted.",
-      "requiredAction": "Manual unlock"
+      "requiredAction": "Manual unlock",
+      "resolvedBy": "Desktop access resumed; current app was quit, rebuilt, installed, relaunched and captured through CUA."
     }
   ],
   "installedRebuild": {
-    "binarySha256": "7ac70b027d8599283abc054d99ad727f584d3824783a0db5aae7c83786d87086",
+    "binarySha256": "be815552981e3a94f8718fc6727d53eced31bd72a874d601576f18d0d800c181",
     "build": "cargo build --locked -p tempo-mac --bin Tempo",
-    "sourceHead": "7ed017843b7b5a7b95b61c4bb235c019b2d0dbb7",
+    "sourceHead": "52b026c plus height correction and preserved pending edits",
     "workingTreeIncludesPendingEdits": true,
     "signingVerified": true,
     "keychainHelperPreserved": true,
     "testsRun": false,
-    "relaunched": false,
-    "capturePendingReason": "Mac locked"
+    "relaunched": true,
+    "capturePendingReason": null,
+    "receipt": "info-card-built.json"
   },
-  "lastGoalTurn": "No progress: desktop access revalidated and still reports Mac locked. The same condition recurred across three consecutive turns. Installed binary still matches its receipt. No new capture, review, test or product change.",
+  "lastGoalTurn": "progress: native freestanding Info shape and transitions confirmed; height regression fixed; four area reviews and four original interaction reviews completed; no tests ran",
   "nextVerifiedIssue": {
     "area": "usability",
     "screen": "New workspace options",
@@ -145,16 +151,17 @@
     "sourceEvidence": "workspace-options-popover has no explicit track_focus; gpui-component 0.7.1 popover.rs:275-280 documents focus on open via track_focus",
     "selectionEvidence": "Branch rows do not call selected or expose a persistent checkmark; picked.jpg only proves nearby draft value changes.",
     "candidateCommit": "7ed0178",
-    "verification": "pending: fresh native open and Tab captures plus original interaction questions"
+    "verification": "Input focus and Tab ring visibly confirmed; Clef visible confidence 0.5361. Persistent branch selection remains review."
   },
   "blockedAudit": {
-    "sameConditionConsecutiveTurns": 3,
+    "sameConditionConsecutiveTurns": 0,
     "condition": "Mac locked; desktop control cannot open Tempo for native interaction and capture",
     "authoritativeObservation": "cua.getApp(/Applications/Tempo.app): Mac is locked and automatic unlock could not unlock it",
     "previousTurnClassification": "progress: creation-composer prerequisite and focus candidate committed, built and installed",
-    "currentTurnClassification": "no progress; blocker revalidated",
+    "currentTurnClassification": "progress: installed card, fixed native height regression, confirmed transitions and keyboard focus, completed 8 successful review calls",
     "nextActionAfterUnlock": "Open installed Tempo; verify Info and Guides; capture workspace options opening and Tab; submit fresh separate stateless area and interaction reviews",
     "completionClaim": false,
-    "originalScopePreserved": true
+    "originalScopePreserved": true,
+    "resolved": true
   }
 }

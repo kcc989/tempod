@@ -1,0 +1,216 @@
+{
+  "requestSha256": "d5f1353c79d9b5a4c338b8b703f52c64489376859b2abbe85a33e6fc828de308",
+  "bodyWithoutImages": {
+    "model": "clef",
+    "state": {
+      "app": {
+        "name": "Tempo",
+        "category": "Agent coding workspace",
+        "platform": "desktop",
+        "primary_user": "Developer",
+        "primary_job": "Read agent work and manage project workspaces"
+      },
+      "screen": {
+        "name": "Workspace Info",
+        "purpose": "Inspect workspace state and open related work"
+      },
+      "image_legend": [
+        "Image 1: app window",
+        "Image 2: workspace sidebar",
+        "Image 3: workspace header",
+        "Image 4: workspace information"
+      ],
+      "page_text": "Window: \"Tempo\", App: Tempo.\n0 standard window Tempo, Secondary Actions: Raise\n\t1 container\n\t\t2 button New workspace\n\t\t3 button Search workspaces\n\t\t4 button Sort workspaces: Last activity\n\t\t5 button Add project\n\t\t6 button kcc989/farstep, expanded\n\t\t7 button New workspace in kcc989/farstep\n\t\t8 list kcc989/farstep\n\t\t\t9 container (selectable) lisbon \u00b7 Sleeping\nSleeping\n\t\t10 button Archived workspaces\n\t\t11 button Saved chats\n\t\t12 button Settings\n\t\t13 button Rename branch\n\t\t14 button Copy branch name\n\t\t15 button Sleeping\n\t\t16 button Workspace info\n\t\t17 button Toggle right side\n\t\t18 tab group\n\t\t\t19 tab (settable, boolean) Farstep project README overview, Value: on\n\t\t\t\t20 button Close chat\n\t\t\t21 tab (settable, boolean) Mac E2E Probe \u00b7 Codex, Value: off\n\t\t\t\t22 button Close chat\n\t\t\t23 button\n\t\t24 button New chat\n\t\t25 container (selectable)\n\t\t26 text entry area (settable) Message, Placeholder: Message Claude Code to wake this workspace\n\t\t27 button Model and thinking: Opus 5.5\n\t\t28 button Context usage: 30785 of 1000000 tokens (3%)\n\t\t29 button Attach file\n\t\t30 button Send\n\t\t31 button Close Info\n\t\t32 button Wake\n\t\t33 button Changes\n\t\t34 button Guides\n\t\t35 button Farstep project README overview\n\t\t36 button Turn summaries and check reporting\n\t\t37 button Open artifacts \u00b7 0\n\t\t38 button Workspace controls, collapsed\n39 menu bar\n\t40 Tempo\n\t41 File\n\t42 Edit\n\t43 View\n\t44 Workspace\n\t45 Window\n\t46 Help\n\nThe focused UI element is 0 standard window Tempo, Secondary Actions: Raise"
+    },
+    "questions": {
+      "focus_primary_path": {
+        "type": "score",
+        "instructions": "Given `screen.purpose`, how obvious is the main thing to do in the images?",
+        "criteria": [
+          {
+            "what": "Several controls compete for attention, or nothing shows what to do first",
+            "examples": [
+              "Four filled buttons in different colors in the header",
+              "A promo banner, a tour popup, and a filled button all ask for a click"
+            ]
+          },
+          {
+            "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
+            "examples": [
+              "A filled 'Create' button next to a filled 'Upgrade' button of the same size"
+            ]
+          },
+          {
+            "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
+            "examples": [
+              "An agents list where only 'Create Agent' is a filled dark button",
+              "A thread list where the rows are the focus and the header has only text buttons"
+            ]
+          }
+        ]
+      },
+      "focus_affordance": {
+        "type": "score",
+        "instructions": "In the images, can the user tell which elements are actions and which are static text?",
+        "criteria": [
+          {
+            "what": "Actions and static text look the same",
+            "examples": [
+              "A header row where a branch name, a path, and 'Rename branch' all use the same plain text style"
+            ]
+          },
+          {
+            "what": "Most actions look clickable, but some look like labels or labels look like buttons",
+            "examples": [
+              "Buttons have borders, but one text action in the header has no style"
+            ]
+          },
+          {
+            "what": "Every action looks clickable through a button shape, an icon, a link color, or a chevron, and static text never does",
+            "examples": [
+              "'Filters' and 'Display' are text buttons with icons and shortcut hints, and the page title is plain bold text"
+            ]
+          }
+        ]
+      },
+      "status_items": {
+        "type": "score",
+        "instructions": "In the images, how well does each item show its current state without the user opening it?",
+        "criteria": [
+          {
+            "what": "Items show no state; the user must open each item to learn it",
+            "examples": [
+              "A list of project names with no status, owner, or date"
+            ]
+          },
+          {
+            "what": "Some items show state, or state uses color only, with no icon, label, or count",
+            "examples": [
+              "Rows have a colored left border but no label"
+            ]
+          },
+          {
+            "what": "Each item that can change shows its state inline with an icon, a label, or a count",
+            "examples": [
+              "Sidebar threads show a spinner while running and a 'Needs input' badge when blocked",
+              "Each queue in the sidebar shows a count, such as 'First response 4'",
+              "A project chip shows 'On track' with a green icon"
+            ]
+          }
+        ]
+      },
+      "status_consistent": {
+        "type": "noul",
+        "instructions": "In the images, do all status signals agree, with no spinner or running sign next to a label that says the work is stopped, sleeping, or done?"
+      },
+      "status_lifecycle": {
+        "type": "choice",
+        "instructions": "In the images, when work or a workspace is sleeping, paused, or stopped, how does the screen explain it?",
+        "criteria": {
+          "explains": "It names the state and says how to resume, such as 'Message Claude Code to wake this workspace'",
+          "bare": "It names the state, but does not say what it means or how to resume",
+          "not_shown": "Nothing in the images is sleeping, paused, or stopped"
+        }
+      },
+      "nav_current": {
+        "type": "noul",
+        "instructions": "Do the images show which navigation item is the current location, with a visible selected state?"
+      },
+      "nav_groups": {
+        "type": "score",
+        "instructions": "In the images, how is the navigation organized?",
+        "criteria": [
+          "One long flat list, or items with no clear groups",
+          "Groups exist, but names are vague or items repeat",
+          "Short groups with clear names, such as pinned items, recent items by day, records, or workflow states, with counts where they help"
+        ]
+      },
+      "nav_return": {
+        "type": "noul",
+        "instructions": "In the images, can the user go back to recent or pinned work from the navigation in one click?"
+      },
+      "nav_tabs_current": {
+        "type": "choice",
+        "instructions": "In the images, how clearly does the active tab differ from the other tabs?",
+        "criteria": {
+          "clear": "The active tab has a clear mark, such as a different background, an underline, or bold text",
+          "weak": "The active tab differs only by a small change in text color",
+          "not_shown": "The images show no tabs"
+        }
+      },
+      "speed_search": {
+        "type": "noul",
+        "instructions": "Do the images show search or a command menu, such as a search field or a '\u2318K' hint?"
+      },
+      "speed_shortcuts": {
+        "type": "noul",
+        "instructions": "In the images, do frequent actions show their keyboard shortcut next to the label, such as 'Filters F'?"
+      },
+      "copy_labels": {
+        "type": "score",
+        "instructions": "How clear are the words in the images and in `page_text`?",
+        "criteria": [
+          "Vague, clever, or jargon words; buttons say 'Submit', 'OK', or 'Click here'",
+          "Mostly clear, with some vague labels or mixed capitalization",
+          "Plain, specific words; buttons start with a verb that names the result, such as 'Post update' or 'Add billing'; capitalization is consistent"
+        ]
+      },
+      "copy_status": {
+        "type": "noul",
+        "instructions": "In the images, do status labels use plain words that a new user understands, such as 'Waiting for customer' or 'On track'?"
+      },
+      "copy_controls_labeled": {
+        "type": "noul",
+        "instructions": "In the images, does every dropdown, toggle, and selector show what it sets, through a label, an icon, or a value that explains itself?"
+      },
+      "states_disabled_clear": {
+        "type": "choice",
+        "instructions": "In the images, can the user tell disabled controls from enabled controls?",
+        "criteria": {
+          "clear": "Disabled controls look clearly faded, and enabled controls never look faded",
+          "confusing": "Some enabled controls look faded or disabled, or disabled controls look active",
+          "not_shown": "The images show no disabled controls"
+        }
+      },
+      "icons_one_set": {
+        "type": "noul",
+        "instructions": "Do the images use one icon set, with the same style and stroke weight everywhere?"
+      },
+      "icons_size": {
+        "type": "noul",
+        "instructions": "In the images, do icons have one size in each context, and do they sit centered with their labels?"
+      },
+      "icons_meaning": {
+        "type": "score",
+        "instructions": "In the images, how clear are the icon-only buttons?",
+        "criteria": [
+          "Icons are unusual or abstract, and they have no labels",
+          "Most icons are common symbols, but some are unclear",
+          "Every icon-only button is a common symbol, such as search, close, or add, or it has a label"
+        ]
+      },
+      "quality_tiny_text": {
+        "type": "noul",
+        "instructions": "In the images, is navigation, link, control, or body text set very small?"
+      }
+    }
+  },
+  "images": [
+    {
+      "contentType": "image/png",
+      "sha256": "91922ced8070eb962317716641d921e5934704b946d5fa37a00bab22cfcbc2ea"
+    },
+    {
+      "contentType": "image/png",
+      "sha256": "8b038c8e53b5a241f44574bace769dcc2678fc1e78bd26e286b1e6dbeb3601a2"
+    },
+    {
+      "contentType": "image/png",
+      "sha256": "6ac0d58c43cf5cedb5baa6cb164fd5f353a5d89d689eecb5d9e03c405862ca46"
+    },
+    {
+      "contentType": "image/png",
+      "sha256": "8f8b8f596c58c7a572fa7ac31501b6bb65906e8563df56d785d340eed0330fe6"
+    }
+  ]
+}

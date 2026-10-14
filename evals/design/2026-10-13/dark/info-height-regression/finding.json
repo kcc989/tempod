@@ -1,0 +1,1 @@
+{"acceptanceEnabled":false,"severity":"major","area":"layout","finding":"Workspace shrinks vertically; large blank area above navigation and chat.","status":"rejected","fix":"Fill available height on the main resizable wrapper and Info rail."}

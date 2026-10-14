@@ -1,0 +1,77 @@
+{
+  "requestSha256": "75802f3e3513479b790b2b58574d5c4ee132b24c40ce07b6adee7ee56bf68c17",
+  "bodyWithoutImages": {
+    "model": "clef",
+    "state": {
+      "app": {
+        "name": "Tempo",
+        "category": "Agent coding workspace",
+        "platform": "desktop",
+        "primary_user": "Developer",
+        "primary_job": "Read agent work and manage project workspaces"
+      },
+      "screen": {
+        "name": "Workspace Info",
+        "purpose": "Inspect workspace state and open related work"
+      },
+      "action": "Clicked Workspace controls",
+      "image_legend": [
+        "Image 1: screen before the action",
+        "Image 2: screen after the action"
+      ]
+    },
+    "questions": {
+      "states_feedback": {
+        "type": "score",
+        "instructions": "Image 1 is the screen before `action`. Image 2 is the screen after it. How clear is the result of the action?",
+        "criteria": [
+          {
+            "what": "Nothing visible changes in image 2, or the user cannot tell if the action worked",
+            "examples": [
+              "The user clicks an option and it shows no selected state"
+            ]
+          },
+          {
+            "what": "A result appears, but far from the control, or only as a change that is easy to miss",
+            "examples": [
+              "A save works, but the only sign is a small toast in the far corner"
+            ]
+          },
+          {
+            "what": "The control shows a pressed or selected state, and the result or a short confirmation appears near the action",
+            "examples": [
+              "After a thumbs-up, the button fills and a toast says 'Thank you for your feedback!'"
+            ]
+          }
+        ]
+      },
+      "feedback_selected": {
+        "type": "noul",
+        "instructions": "In image 2, does the control named in `action` show a pressed, selected, or changed state?"
+      },
+      "feedback_layout_shift": {
+        "type": "noul",
+        "instructions": "From image 1 to image 2, did content that `action` did not target move or change size?"
+      },
+      "feedback_focus_visible": {
+        "type": "choice",
+        "instructions": "If `action` used the keyboard, such as pressing Tab, does image 2 show a clear focus ring or focus mark on the focused element?",
+        "criteria": {
+          "visible": "A clear focus ring or mark shows which element has focus",
+          "missing": "No element shows that it has focus",
+          "not_keyboard": "The action did not use the keyboard"
+        }
+      }
+    }
+  },
+  "images": [
+    {
+      "contentType": "image/png",
+      "sha256": "91922ced8070eb962317716641d921e5934704b946d5fa37a00bab22cfcbc2ea"
+    },
+    {
+      "contentType": "image/png",
+      "sha256": "f254ad4d19e9c8f05ec9ed888098d3304e55875644303cfbe3bcc090386ea1c3"
+    }
+  ]
+}

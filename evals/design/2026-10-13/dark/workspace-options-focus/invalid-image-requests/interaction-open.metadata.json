@@ -1,0 +1,13 @@
+{
+  "area": "interaction-open",
+  "version": "original-interaction",
+  "calibrated": false,
+  "requestSha256": "853b0545247e9e44b45254190b10ac093e345e667bacfc667b246a513fc629d5",
+  "attemptStatuses": [
+    422,
+    422
+  ],
+  "timestamp": "2026-10-14T00:55:09Z",
+  "stateless": true,
+  "priorResultsIncluded": false
+}

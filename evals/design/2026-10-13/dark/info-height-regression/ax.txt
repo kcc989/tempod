@@ -1,0 +1,45 @@
+Window: "Tempo", App: Tempo.
+0 standard window Tempo, Secondary Actions: Raise
+	1 container
+		2 button New workspace
+		3 button Search workspaces
+		4 button Sort workspaces: Last activity
+		5 button Add project
+		6 button Archived workspaces
+		7 button Saved chats
+		8 button Settings
+		9 button Rename branch
+		10 button Copy branch name
+		11 button Sleeping
+		12 button Workspace info
+		13 button Toggle right side
+		14 tab group
+			15 tab (settable, boolean) Farstep project README overview, Value: on
+				16 button Close chat
+			17 tab (settable, boolean) Mac E2E Probe · Codex, Value: off
+				18 button Close chat
+			19 button
+		20 button New chat
+		21 text entry area (settable) Message, Placeholder: Message Claude Code to wake this workspace
+		22 button Model and thinking: Opus 5.5
+		23 button Context usage: 30785 of 1000000 tokens (3%)
+		24 button Attach file
+		25 button Send
+		26 button Close Info
+		27 button Wake
+		28 button Changes
+		29 button Guides
+		30 button Farstep project README overview
+		31 button Turn summaries and check reporting
+		32 button Open artifacts · 0
+		33 button Workspace controls, collapsed
+34 menu bar
+	35 Tempo
+	36 File
+	37 Edit
+	38 View
+	39 Workspace
+	40 Window
+	41 Help
+
+The focused UI element is 0 standard window Tempo, Secondary Actions: Raise

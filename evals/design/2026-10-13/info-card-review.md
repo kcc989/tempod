@@ -1,27 +1,28 @@
-# Freestanding workspace Info correction
+# Freestanding workspace Info correction: native shape confirmed
 
-The user requested a freestanding panel like the attached Codex reference. Info was previously a full-height tool tab. That interpretation was wrong.
+The user requested a freestanding panel like the Codex reference. Info was previously a full-height tool tab. It now uses a separate 360 px/pt rail, 12 px/pt outer space, a content-height muted card, 16 px/pt padding and 16 px/pt corners. It has no tool tab bar. Workspace controls are a disclosure. Related tools retain their tabs and saved width. Web and Mac specs changed together in 52b026c.
 
-## Change
+## Native evidence
 
-Info now has a separate 360 px/pt rail, 12 px/pt outer space, a content-height muted card, 16 px/pt inner padding and 16 px/pt corners. It has no tool tab bar. Related tools retain their tabs and saved width. Close Info hides the rail. Workspace controls are inside a disclosure. Action rows have contextual icons; changes align additions and deletions at the right. Web and Mac specifications were updated together.
+The first installed card build exposed a major layout regression: the workspace shrank vertically and left a large blank area above it. That capture is retained in `dark/info-height-regression` and is rejected. Explicit full height on the resizable wrapper and Info rail corrected it.
 
-## Evidence and limits
+The corrected application build passed. Tempo was quit, installed, signed and relaunched through desktop control. App and Keychain-helper identities match. Fresh full-window captures in `dark/info-freestanding` show the compact card at the top of the rail, with space below. The controls disclosure, base-branch accessible name, Close Info, transitions to Changes and Guides, retained tabs and restored tool width were confirmed. Wake, guide authoring, archive, preview reset and external review submission were not performed.
 
-- Mac binary build passed: `cargo build --locked -p tempo-mac --bin Tempo`, using the shared target directory. This built the application only.
-- Web TypeScript check and changed-file lint passed.
-- No tests or native test targets ran, as requested.
-- The corrected binary is built but has not been installed or verified in the native app. Desktop control reports the Mac locked. A manual-unlock request is pending. Keeping the Mac awake is also pending explicit authorization.
-- No screen is accepted. There is no app aggregate pass.
+No tests or native test targets ran. Web type checking and changed-file lint passed for the feature. The height-only correction built successfully. Seven-pair calibration and all-core-screen acceptance remain incomplete.
 
-## Before review
+## Four stateless area reviews
 
-The old installed panel was captured in `dark/info-initial/full.png`, with accessibility text in `ax.txt`. The fresh Guides capture is in `dark/guides-initial/full.png`. The visible chat title differs from the accessibility label because the tab sets its accessible name to the agent tooltip; that difference alone does not prove stale pixels. Earlier startup frames were excluded.
+Four before and four after requests returned HTTP 200 and all 51 unchanged draft-v2.1 area answers. Full frames and detail crops remain in each capture folder. There is no overall or area acceptance score. Comparisons include changes in the chat pane width and cannot isolate every answer to the Info card.
 
-Four stateless Cloudflare Workers AI Clef requests returned HTTP 200 for layout, spacing, color/depth and usability, using unchanged review-v2.1 area questions. Raw answers and request hashes are in `dark/info-initial`. Layout's space-fit answer was 0.1753. Secondary contrast, action affordance and disabled-control answers had low confidence; they require review, not a pass. These observations support the structural correction but do not establish acceptance or validate the new card.
+| Area | Result retained |
+| --- | --- |
+| Layout | Needs work: panel space-fit probability changed from 0.1753 to 0.2268 and remains low. Clef supplies no location-specific reason. |
+| Spacing | Grouping, alignment and consistency answers increased slightly; the uncalibrated rubric does not establish a pass. |
+| Color/depth | Tonal layers confidence is 0.7288. Secondary contrast remains review, confidence 0.0386. |
+| Usability | Several answers remain uncertain. Affordance increased, but primary-path and navigation answers declined. The shape correction does not establish a screen pass. |
 
-The user's Codex reference screenshot was used locally only. It was not uploaded to Clef.
+Original-question interactions show controls selected probability 0.7053, with uncertain overall feedback confidence 0.1093. Keyboard focus is `visible`, confidence 0.8446. The same Tab pair has a low, uncertain generic action-feedback score, which is retained rather than suppressed. The full answers, uncertainty list and comparisons are in `dark/info-freestanding/review.json`.
 
-## Next native check
+The first interaction submissions failed validation because JPEG screenshot bytes were labelled PNG. Those HTTP 422 attempts are retained under `invalid-image-requests`. Re-encoding unchanged pixels as PNG corrected the request; both Info interaction requests then returned HTTP 200. Provider failures are not design evidence.
 
-Quit Tempo, install/sign the built binary without re-signing the Keychain helper, relaunch, and capture Info. Confirm content height, outer space, no Info tab, controls disclosure, Close Info, and transitions to/from Changes and Guides. Then obtain the four independent Clef reviews of the corrected capture. No test suites are part of this check.
+The user's Codex screenshot was used locally only, not sent to Clef. No screen or app is marked accepted.

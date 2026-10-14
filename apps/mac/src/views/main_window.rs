@@ -860,7 +860,7 @@ impl Render for MainWindow {
                     h_flex()
                         .size_full()
                         .child(
-                            div().flex_1().min_w_0().child(
+                            div().h_full().flex_1().min_w_0().child(
                                 h_resizable("main-panes")
                                     .on_resize(move |state, _, cx| {
                                         let sizes = state.read(cx).sizes();
@@ -921,6 +921,7 @@ impl Render for MainWindow {
                         .children((show_right && info_mode).then(|| {
                             div()
                                 .w(px(360.))
+                                .h_full()
                                 .flex_none()
                                 .min_h_0()
                                 .child(right.take().unwrap())

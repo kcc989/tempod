@@ -1,0 +1,119 @@
+{
+  "requestSha256": "0c6429f1b5f64b159b1dd058f1b1eddcedd4e3136b6e5a774963b5bb885dc55e",
+  "bodyWithoutImages": {
+    "model": "clef",
+    "state": {
+      "app": {
+        "name": "Tempo",
+        "category": "Agent coding workspace",
+        "platform": "desktop",
+        "primary_user": "Developer",
+        "primary_job": "Read agent work and manage project workspaces"
+      },
+      "screen": {
+        "name": "Workspace Info",
+        "purpose": "Inspect workspace state and open related work"
+      },
+      "image_legend": [
+        "Image 1: app window",
+        "Image 2: workspace sidebar",
+        "Image 3: workspace header",
+        "Image 4: workspace information"
+      ],
+      "page_text": "Window: \"Tempo\", App: Tempo.\n0 standard window Tempo, Secondary Actions: Raise\n\t1 container\n\t\t2 button New workspace\n\t\t3 button Search workspaces\n\t\t4 button Sort workspaces: Last activity\n\t\t5 button Add project\n\t\t6 button kcc989/farstep, expanded\n\t\t7 button New workspace in kcc989/farstep\n\t\t8 list kcc989/farstep\n\t\t\t9 container (selectable) lisbon \u00b7 Sleeping\nSleeping\n\t\t10 button Archived workspaces\n\t\t11 button Saved chats\n\t\t12 button Settings\n\t\t13 button Rename branch\n\t\t14 button Copy branch name\n\t\t15 button Sleeping\n\t\t16 button Workspace info\n\t\t17 button Toggle right side\n\t\t18 tab group\n\t\t\t19 tab (settable, boolean) Farstep project README overview, Value: on\n\t\t\t\t20 button Close chat\n\t\t\t21 tab (settable, boolean) Mac E2E Probe \u00b7 Codex, Value: off\n\t\t\t\t22 button Close chat\n\t\t\t23 button\n\t\t24 button New chat\n\t\t25 container (selectable)\n\t\t26 text entry area (settable) Message, Placeholder: Message Claude Code to wake this workspace\n\t\t27 button Model and thinking: Opus 5.5\n\t\t28 button Context usage: 30785 of 1000000 tokens (3%)\n\t\t29 button Attach file\n\t\t30 button Send\n\t\t31 button Close Info\n\t\t32 button Wake\n\t\t33 button Changes\n\t\t34 button Guides\n\t\t35 button Farstep project README overview\n\t\t36 button Turn summaries and check reporting\n\t\t37 button Open artifacts \u00b7 0\n\t\t38 button Workspace controls, collapsed\n39 menu bar\n\t40 Tempo\n\t41 File\n\t42 Edit\n\t43 View\n\t44 Workspace\n\t45 Window\n\t46 Help\n\nThe focused UI element is 0 standard window Tempo, Secondary Actions: Raise"
+    },
+    "questions": {
+      "color_role": {
+        "type": "score",
+        "instructions": "In the images, what job does color do?",
+        "criteria": [
+          "Color is decoration: gradients, many accent colors, or colored surfaces with no meaning",
+          "The base is neutral, but some color is decoration only",
+          "The base is neutral, and color appears only where it means something: status, category tags, the selected item, or the one main action"
+        ]
+      },
+      "color_accents": {
+        "type": "score",
+        "instructions": "In the images, how many accent colors appear, apart from status colors?",
+        "criteria": [
+          "Many accent colors with no clear system",
+          "Two or three accent colors compete for attention",
+          "One accent color, plus a small set of status colors such as green, amber, and red"
+        ]
+      },
+      "color_semantic": {
+        "type": "noul",
+        "instructions": "In the images, does each color keep one meaning, such as red only for errors and destructive actions, and the accent only for the main action and selection?"
+      },
+      "color_not_alone": {
+        "type": "noul",
+        "instructions": "In the images, when color shows a state or a category, does an icon, a label, or a shape show it too?"
+      },
+      "color_dark_layers": {
+        "type": "choice",
+        "instructions": "In the images, how does a dark theme show layers, such as panels, menus, and cards?",
+        "criteria": {
+          "tonal": "Higher layers use lighter surfaces or subtle borders",
+          "flat": "Layers use the same black, or only shadows that do not show on a dark background",
+          "not_shown": "The images show a light theme"
+        }
+      },
+      "contrast_secondary": {
+        "type": "score",
+        "instructions": "In the images, how readable is the faintest text that the user needs, such as metadata, placeholders, and secondary labels?",
+        "criteria": [
+          "Some needed text is very faint and hard to read",
+          "Faint text is readable, but only with effort",
+          "All needed text is easy to read; only decorative or disabled items are faint"
+        ]
+      },
+      "contrast_boundaries": {
+        "type": "noul",
+        "instructions": "In the images, can the user see the edges of inputs, buttons, and selected items against their background?"
+      },
+      "quality_gray_on_color": {
+        "type": "noul",
+        "instructions": "In the images, is grey text placed on a colored surface, where it looks washed out?"
+      },
+      "slop_dark_glow": {
+        "type": "noul",
+        "instructions": "Do the images show a dark interface where borders and accents glow?"
+      },
+      "slop_glass": {
+        "type": "noul",
+        "instructions": "Do the images show blur, frosted glass, or glowing borders used as decoration on cards or panels?"
+      },
+      "slop_border_and_shadow": {
+        "type": "noul",
+        "instructions": "Do the images show a card with both a thin border and a wide, soft shadow?"
+      },
+      "restraint_noise": {
+        "type": "score",
+        "instructions": "In the images, how much decoration competes with the content?",
+        "criteria": [
+          "Many borders, shadows, badges, illustrations, or glows compete with the content",
+          "Some extra decoration, but the main content is still easy to find",
+          "Flat surfaces, thin dividers, and few shadows; illustrations appear only in empty states or onboarding"
+        ]
+      }
+    }
+  },
+  "images": [
+    {
+      "contentType": "image/png",
+      "sha256": "91922ced8070eb962317716641d921e5934704b946d5fa37a00bab22cfcbc2ea"
+    },
+    {
+      "contentType": "image/png",
+      "sha256": "8b038c8e53b5a241f44574bace769dcc2678fc1e78bd26e286b1e6dbeb3601a2"
+    },
+    {
+      "contentType": "image/png",
+      "sha256": "6ac0d58c43cf5cedb5baa6cb164fd5f353a5d89d689eecb5d9e03c405862ca46"
+    },
+    {
+      "contentType": "image/png",
+      "sha256": "8f8b8f596c58c7a572fa7ac31501b6bb65906e8563df56d785d340eed0330fe6"
+    }
+  ]
+}
