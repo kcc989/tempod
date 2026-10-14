@@ -28,8 +28,8 @@ import {
   toggleSidebar,
 } from "~/ui/state/workspace-ui";
 
-/** 04, Sidebar: 280 px by default, resizable from 220 to 400 px. */
-export const SIDEBAR_WIDTH = { default: 280, min: 220, max: 400 } as const;
+/** 04, Sidebar: 240 px by default, resizable from 220 to 320 px. */
+export const SIDEBAR_WIDTH = { default: 240, min: 220, max: 320 } as const;
 
 const SIDEBAR_KEY = "layout:sidebar-width";
 

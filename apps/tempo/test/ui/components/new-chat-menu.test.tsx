@@ -105,21 +105,21 @@ describe("New chat model choices (04, Tabs)", () => {
   it("offers discovered models even without a configured OpenRouter model", async () => {
     show(withModels({}));
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Model" }).textContent).toContain("Sonnet"),
+      expect(screen.getByRole("button", { name: "Model" }).textContent).toContain("Sonnet"),
     );
-    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
-    expect(screen.getByRole("option", { name: /Pi test/ })).toBeDefined();
-    await waitFor(() => expect(screen.getByRole("option", { name: /Reviewer/ })).toBeDefined());
+    fireEvent.keyDown(screen.getByRole("button", { name: "Model" }), { key: "ArrowDown" });
+    expect(screen.getByRole("menuitemradio", { name: /Pi test/ })).toBeDefined();
+    await waitFor(() => expect(screen.getByRole("menuitemradio", { name: /Reviewer/ })).toBeDefined());
   });
   it("hides models and saved agents without a confirmed login", async () => {
     show(DEFAULT_SETTINGS, { ...credentials, openrouter: { set: false, updatedAt: null } });
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Model" }).textContent).toContain("Sonnet"),
+      expect(screen.getByRole("button", { name: "Model" }).textContent).toContain("Sonnet"),
     );
-    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
-    expect(screen.queryByRole("option", { name: /Pi test/ })).toBeNull();
-    expect(screen.queryByRole("option", { name: /Router tester/ })).toBeNull();
-    expect(screen.getByRole("option", { name: /Manage agents/ })).toBeDefined();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Model" }), { key: "ArrowDown" });
+    expect(screen.queryByRole("menuitemradio", { name: /Pi test/ })).toBeNull();
+    expect(screen.queryByRole("menuitemradio", { name: /Router tester/ })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /Manage agents/ })).toBeDefined();
   });
   it("keeps Manage agents available with no confirmed login", async () => {
     const off = { set: false, updatedAt: null };
@@ -131,12 +131,12 @@ describe("New chat model choices (04, Tabs)", () => {
       openai: off,
     });
     await waitFor(() => expect(vi.mocked(call)).toHaveBeenCalledWith("getCredentialStatus", {}));
-    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
-    expect(screen.getAllByRole("option").map((e) => e.textContent)).toEqual(["Manage agents…"]);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Model" }), { key: "ArrowDown" });
+    expect(screen.getAllByRole("menuitem").map((e) => e.textContent)).toEqual(["Manage agents…"]);
   });
   it("offers only Manage agents while logins load", () => {
     show(DEFAULT_SETTINGS, new Promise(() => undefined));
-    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
-    expect(screen.getAllByRole("option").map((e) => e.textContent)).toEqual(["Manage agents…"]);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Model" }), { key: "ArrowDown" });
+    expect(screen.getAllByRole("menuitem").map((e) => e.textContent)).toEqual(["Manage agents…"]);
   });
 });

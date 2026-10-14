@@ -4069,16 +4069,30 @@ mod tests {
             .client(tempo_client::Token::new("test-token"));
         let (window, view) = mount(cx, state, client);
         cx.update_window(window, |_, window, cx| {
+            window.click("branch-name", cx);
+            assert!(view.read(cx).branch_editor.is_none());
+            window.double_click("branch-name", cx);
+            assert!(view.read(cx).branch_editor.is_some());
+            window.press("escape", cx);
+            assert!(view.read(cx).branch_editor.is_none());
+            assert!(
+                server
+                    .requests
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|(path, _)| !path.ends_with("/renameBranch"))
+            );
+            window.double_click("branch-name", cx);
             view.update(cx, |view, cx| {
-                view.edit_branch(window, cx);
                 view.branch_editor
                     .as_ref()
                     .unwrap()
                     .update(cx, |input, cx| {
                         input.set_value("feature/my-name", window, cx);
                     });
-                view.save_branch(cx);
             });
+            window.press("enter", cx);
         })
         .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -4097,6 +4111,13 @@ mod tests {
             .find(|(path, _)| path.ends_with("/renameBranch"))
             .unwrap();
         assert_eq!(input["branch"], "feature/my-name");
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|(path, _)| path.ends_with("/renameBranch"))
+                .count(),
+            1
+        );
     }
 
     #[gpui_kit::test]

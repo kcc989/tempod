@@ -13,12 +13,15 @@ import { formatRelative } from "~/ui/lib/format";
 import { CONFIRM_TEXT, confirm } from "~/ui/state/workspace-ui";
 
 export const Route = createFileRoute("/_app/history")({
+  validateSearch: (search: Record<string, unknown>): { view?: "saved" } => ({
+    view: search.view === "saved" ? "saved" : undefined,
+  }),
   component: HistoryPage,
 });
 
 /** 04, Sidebar → History: archived workspaces with Restore and Delete. */
 function HistoryPage() {
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(Route.useSearch().view === "saved");
   const list = useCallQuery("listWorkspaces", { includeArchived: true });
   const hub = useHub();
   const projects = useProjects();
@@ -52,7 +55,7 @@ function HistoryPage() {
           aria-pressed={!saved}
           onClick={() => setSaved(false)}
         >
-          Workspaces
+          Archived workspaces
         </Button>
         <Button
           size="sm"
@@ -60,7 +63,7 @@ function HistoryPage() {
           aria-pressed={saved}
           onClick={() => setSaved(true)}
         >
-          Saved conversations
+          Saved chats
         </Button>
       </header>
       <ScrollArea className="min-h-0 flex-1">

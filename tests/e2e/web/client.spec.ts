@@ -204,8 +204,8 @@ test(
     const prompt = dialog.getByRole("textbox", { name: "Prompt", exact: true });
     await expect(prompt).toBeFocused();
     await prompt.fill("Update keeled documentation");
-    await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
-    await page.getByRole("option", { name: "Fixture Sonnet · Claude", exact: true }).click();
+    await dialog.getByRole("button", { name: "Model", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Fixture Sonnet · Claude", exact: true }).click();
     await dialog.getByRole("button", { name: /^Create/ }).click();
     await expect.poll(() => fixture.inputs("createWorkspace").length).toBe(1);
     expect(fixture.inputs("createWorkspace")[0]).toMatchObject({

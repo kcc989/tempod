@@ -59,7 +59,7 @@ describe("new workspace composer", () => {
     const prompt = await screen.findByRole("textbox", { name: "Prompt" });
     await waitFor(() => expect(document.activeElement).toBe(prompt));
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Model" }).textContent).toContain("Reported model"),
+      expect(screen.getByRole("button", { name: "Model" }).textContent).toContain("Reported model"),
     );
     expect(screen.queryByRole("combobox", { name: "Agent" })).toBeNull();
     expect(screen.queryByRole("tablist", { name: "Source" })).toBeNull();

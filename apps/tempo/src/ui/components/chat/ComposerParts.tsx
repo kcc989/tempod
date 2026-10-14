@@ -1,4 +1,5 @@
 import { Match } from "effect";
+import { ComposerModelMenu, COMPOSER_PICKER_TRIGGER as pickerTrigger } from "./ComposerControls";
 import type { ConfigOption, Session, Turn } from "@tempo/protocol";
 import {
   ChevronDownIcon,
@@ -324,51 +325,122 @@ function SelectOptionItems({ option, onPick }: { option: ConfigOption; onPick: (
   );
 }
 
-const pickerTrigger =
-  "inline-flex h-7 max-w-36 items-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
-
 /** Model picker (⌘/) from the agent's `model` config option; set with setSessionConfig. */
 export function ModelPicker({
   option,
+  thoughtLevel,
+  children,
   open,
   onOpenChange,
   disabled,
   onPick,
   onClosed,
 }: {
-  option: ConfigOption;
+  option?: ConfigOption;
+  thoughtLevel?: ConfigOption;
+  children?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
   onPick: (value: string) => void;
   onClosed: () => void;
 }) {
+  const level = thoughtLevel ? currentValueLabel(thoughtLevel) : "";
+  const suffix = level && !/^(agent )?default$/i.test(level) ? ` · ${level}` : "";
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger
-        className={cn(pickerTrigger, "text-foreground")}
-        disabled={disabled}
-        aria-label={`Model: ${currentValueLabel(option)}`}
-      >
-        <span className="truncate">{currentValueLabel(option)}</span>
-        <ChevronDownIcon className="size-3 shrink-0" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        side="top"
-        className="max-h-80 min-w-48"
-        onCloseAutoFocus={(e) => {
-          e.preventDefault();
-          onClosed();
-        }}
-      >
-        <DropdownMenuLabel className="flex items-center justify-between gap-4">
-          {option.name || "Model"}
-          <ShortcutKbd action="modelPicker" />
-        </DropdownMenuLabel>
-        <SelectOptionItems option={option} onPick={onPick} />
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <ComposerModelMenu
+      label={`${option ? currentValueLabel(option) : "Agent settings"}${suffix}`}
+      ariaLabel={`Model and thinking: ${option ? currentValueLabel(option) : "Agent settings"}${level ? `, ${level}` : ""}`}
+      open={open}
+      onOpenChange={onOpenChange}
+      disabled={disabled}
+      onClosed={onClosed}
+    >
+      <DropdownMenuLabel className="flex items-center justify-between gap-4">
+        {option?.name || "Model"}
+        <ShortcutKbd action="modelPicker" />
+      </DropdownMenuLabel>
+      {option && <SelectOptionItems option={option} onPick={onPick} />}
+      {children && (
+        <>
+          <DropdownMenuSeparator />
+          {children}
+        </>
+      )}
+    </ComposerModelMenu>
+  );
+}
+
+export function ModelSettings({
+  session,
+  thoughtLevel,
+  modeOption,
+  options,
+  onConfig,
+  onMode,
+}: {
+  session: Session;
+  thoughtLevel?: ConfigOption;
+  modeOption?: ConfigOption;
+  options: ReadonlyArray<ConfigOption>;
+  onConfig: (option: ConfigOption, value: string | boolean) => void;
+  onMode: (id: string) => void;
+}) {
+  const configs = [...(thoughtLevel ? [thoughtLevel] : []), ...options];
+  return (
+    <>
+      {configs.map((o) =>
+        o.type === "boolean" ? (
+          <DropdownMenuCheckboxItem
+            key={o.id}
+            checked={o.currentValue === true}
+            onCheckedChange={(value) => onConfig(o, value === true)}
+          >
+            {o.name}
+          </DropdownMenuCheckboxItem>
+        ) : (
+          <DropdownMenuSub key={o.id}>
+            <DropdownMenuSubTrigger>
+              <span className="flex-1">{o === thoughtLevel ? "Thinking" : o.name}</span>
+              <span className="ml-4 text-xs text-muted-foreground">{currentValueLabel(o)}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-h-80">
+              <SelectOptionItems option={o} onPick={(value) => onConfig(o, value)} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ),
+      )}
+      {(session.modes.length > 0 || modeOption) && (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="flex-1">Mode</span>
+            <span className="ml-4 text-xs text-muted-foreground">
+              {session.modes.length > 0
+                ? (session.modes.find((m) => m.id === session.modeId)?.name ?? session.modeId)
+                : currentValueLabel(modeOption!)}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="max-h-80">
+            {session.modes.length > 0 ? (
+              <DropdownMenuRadioGroup value={session.modeId ?? ""} onValueChange={onMode}>
+                {session.modes.map((m) => (
+                  <DropdownMenuRadioItem key={m.id} value={m.id}>
+                    <span className="flex flex-col">
+                      {m.name}
+                      {m.description && (
+                        <span className="text-xs text-muted-foreground">{m.description}</span>
+                      )}
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            ) : (
+              <SelectOptionItems option={modeOption!} onPick={(value) => onConfig(modeOption!, value)} />
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      )}
+    </>
   );
 }
 
@@ -391,6 +463,7 @@ export function LevelPicker({
         disabled={disabled}
         aria-label={`Reasoning level: ${currentValueLabel(option)}`}
       >
+        <span className="shrink-0 text-xs text-muted-foreground">Reasoning:</span>
         <span className="truncate">{currentValueLabel(option)}</span>
         <ChevronDownIcon className="size-3 shrink-0" />
       </DropdownMenuTrigger>
@@ -436,6 +509,7 @@ export function ModePicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className={pickerTrigger} disabled={disabled} aria-label={`Mode: ${current}`}>
+        <span className="shrink-0 text-xs text-muted-foreground">Mode:</span>
         <span className="truncate">{current}</span>
         <ChevronDownIcon className="size-3 shrink-0" />
       </DropdownMenuTrigger>
