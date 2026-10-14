@@ -262,7 +262,7 @@ function AgentMessage({ ctx, item }: { ctx: ItemContext; item: ItemOf<"agent_mes
 function Collapsed({ label, text, mono = false }: { label: string; text: string; mono?: boolean }) {
   return (
     <Collapsible className="group/c">
-      <CollapsibleTrigger className="flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground">
+      <CollapsibleTrigger className="flex items-center gap-1 rounded-sm text-left text-xs text-muted-foreground hover:text-foreground">
         <ChevronRightIcon className="size-3 transition-transform group-data-[state=open]/c:rotate-90" />
         {label}
       </CollapsibleTrigger>

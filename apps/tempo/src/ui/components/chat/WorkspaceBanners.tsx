@@ -1,6 +1,6 @@
 import { useApiCall } from "~/ui/hooks/useCall";
 import { AlertCircleIcon, TriangleAlertIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/ui/components/ui/button";
 import { Spinner } from "~/ui/components/ui/spinner";
@@ -17,8 +17,7 @@ export interface WorkspaceBannersProps {
 }
 
 /**
- * Banners above the center tabs (04, Empty, loading and error states): the current status while the
- * workspace is created or started, error and setup failed.
+ * Error and setup-failure banners. Startup progress appears in the transcript.
  */
 export function WorkspaceBanners({ workspaceId }: WorkspaceBannersProps) {
   const workspace = useWorkspaceSelector(workspaceId, (s) => s.workspace);
@@ -26,20 +25,15 @@ export function WorkspaceBanners({ workspaceId }: WorkspaceBannersProps) {
   const codes = bannerCodes(banners);
   useBanner(codes, codes.length > 0);
 
-  const state = workspace?.state;
-  const lastState = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (state === "setting_up" && lastState.current !== "setting_up") showBottomTab(workspaceId, "setup");
-    lastState.current = state;
-  }, [state, workspaceId]);
-
   if (banners.length === 0) return null;
 
   return (
     <div className="flex shrink-0 flex-col">
-      {banners.map((b) => (
-        <Banner key={b.kind} workspaceId={workspaceId} banner={b} />
-      ))}
+      {banners
+        .filter((b) => b.kind !== "progress")
+        .map((b) => (
+          <Banner key={b.kind} workspaceId={workspaceId} banner={b} />
+        ))}
     </div>
   );
 }
@@ -56,7 +50,7 @@ function Banner({ workspaceId, banner }: { workspaceId: string; banner: Workspac
 }
 
 /** creating, starting, setting_up: show only the current status. */
-function ProgressBanner({
+export function ProgressBanner({
   workspaceId,
   title,
   setup,
@@ -66,14 +60,14 @@ function ProgressBanner({
   setup: boolean;
 }) {
   return (
-    <div role="status" aria-label={title} className="border-b px-3 py-2">
-      <div className="flex items-center gap-2 text-sm">
-        <Spinner aria-hidden className="text-primary" />
-        <span className="font-medium">{title}</span>
+    <div role="status" aria-label={title} className="py-2">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner aria-hidden />
+        <span>{title}</span>
         {setup && (
           <Button
             size="sm"
-            variant="outline"
+            variant="ghost"
             className="ml-auto"
             onClick={() => showBottomTab(workspaceId, "setup")}
           >

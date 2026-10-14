@@ -35,6 +35,7 @@ import {
   startAttachmentUpload,
 } from "./attachment-cache";
 import { runningTurnOf } from "./chat-tabs-model";
+import { isInitialPrompt } from "./transcript-model";
 import { useComposerDraft } from "./useComposerDraft";
 import {
   applyInsertions,
@@ -265,13 +266,16 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const reorder = useCallMutation("reorderQueue");
   const running = runningTurnOf(turns, sessionId);
 
-  const queued = useMemo(
+  const queuedAll = useMemo(
     () =>
       Object.values(turns)
         .filter((t) => t.status === "queued" && t.sessionId === sessionId)
         .sort((a, b) => (a.queuePos ?? Infinity) - (b.queuePos ?? Infinity) || a.queuedAt - b.queuedAt),
     [turns, sessionId],
   );
+
+  const initialPrompt = queuedAll.find(isInitialPrompt);
+  const queued = queuedAll.filter((t) => t.id !== initialPrompt?.id);
 
   const pickers = configPickers(session);
   const planId = planModeId(session);
@@ -587,7 +591,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
   const refocus = () => textRef.current?.focus();
 
   const moveQueued = (turnId: string, toIndex: number) => {
-    const turnIds = reorderedQueue(store.getSnapshot(), sessionId, turnId, toIndex);
+    const turnIds = reorderedQueue(store.getSnapshot(), sessionId, turnId, toIndex, initialPrompt?.id);
     reorder.mutate({ workspaceId, turnIds });
   };
 

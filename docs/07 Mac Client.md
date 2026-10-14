@@ -201,6 +201,10 @@ Behavior follows 04, Center. These rules are for the Mac app only.
 
 Tool calls use a borderless disclosure with indented content. Tool text renders as Markdown; unfenced execute output preserves literal lines in a code block, matching 04.
 
+Work, thinking and tool disclosure buttons fill the reading track with left-aligned content at the reply text's leading edge. Their labels truncate, and expanded details indent from that edge.
+
+The desktop header is one 40 pt row with a shrinking, truncated branch label and existing git, Info and tool controls. Titles stay in the sidebar; only Sleeping keeps a header state pill for Wake. During workspace creation, startup and setup, the current progress line follows the submitted prompt in the chat track. Setup output opens only through `Open Setup tab` or an explicit tool action.
+
 - **No raw HTML (05).** Render agent text with `TextView::markdown`. MUST NOT render raw HTML. If spike S11 shows that `TextView` renders HTML blocks, escape `<` outside code before the text reaches it.
 - **No remote images (05).** Wrap the transcript in an `ImageCache` whose `load` refuses `http://` and `https://` URIs, and show those images as links. Images from ACP `image` blocks load from their inline data.
 - **Links.** Install `on_link_click`. Open `http` and `https` URLs in the default browser. A `file:///workspace/<path>` link opens a file tab at that path. Ignore every other scheme.
@@ -213,6 +217,7 @@ Tool calls use a borderless disclosure with indented content. Tool text renders 
 - **Workspace options focus.** Opening Workspace options focuses its branch input using the popover's tracked focus handle. The input retains the theme focus mark; Tab moves to the following option.
 - **New chat.** Opens a focused prompt with the shared model and custom-agent picker in its footer. Enter creates the session and sends a nonempty prompt; blank prompts open an empty chat.
 - **Composer keys.** Enter sends, ⇧Enter adds a line, Esc stops the turn, ⇧Tab toggles plan mode, as in 04. Space inserts text in the focused composer input, including while its mention picker is available; it must not activate the surrounding popover.
+- **Initial prompt.** The first accepted workspace prompt (`Turn.seq = 1`) stays in the transcript as a normal user message during startup and after the turn starts, without a queue chip or Edit/Delete row. Later queued prompts keep their controls. Use the workspace's startup/error state for progress and recovery; do not change the server turn status for this presentation.
 - **Slash commands.** Use `Command` with the agent's reported commands and Tempo's `/plan`. An inner `ComposerPicker` key context gives its selection keys priority over composer keys. Choosing an agent command inserts its name and keeps the text after the caret; choosing `/plan` changes mode without sending a prompt.
 - **File mentions.** `@` opens a `Popover` with a fuzzy `List` from `listFiles`. Show loading, empty and error states, with Retry after a failure. Up and Down choose a file, Enter adds its mention chip, and Esc dismisses the picker. Keep text after the caret. Queue and Send now include the same mentions; a failed send keeps the draft and chips.
 - **Attachments.** Paste an image, drag files from Finder, or press ⌘U. Each file is at most 10 MiB and is sent to `POST /api/workspaces/<workspaceId>/attachments` with the bearer token.

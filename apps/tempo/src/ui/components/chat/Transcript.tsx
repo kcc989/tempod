@@ -9,6 +9,8 @@ import { useWorkspace } from "~/ui/hooks/useWorkspace";
 import { cn } from "~/ui/lib/utils";
 import { useTranscriptDetail } from "~/ui/lib/transcript-detail";
 import { ItemView, TurnFooter, WorkingRow, WorkRow, type ItemContext } from "./TranscriptItems";
+import { workspaceBanners } from "./banners-model";
+import { ProgressBanner } from "./WorkspaceBanners";
 import {
   announceText,
   buildTranscriptRows,
@@ -44,8 +46,15 @@ export function Transcript({ workspaceId, sessionId }: TranscriptProps) {
   const detail = useTranscriptDetail();
 
   const rows = useMemo(
-    () => buildTranscriptRows(order, ws.items, ws.turns, detail),
-    [order, ws.items, ws.turns, detail],
+    () =>
+      buildTranscriptRows(
+        order,
+        ws.items,
+        ws.turns,
+        detail,
+        ws.workspace ? workspaceBanners(ws.workspace).find((b) => b.kind === "progress") : undefined,
+      ),
+    [order, ws.items, ws.turns, detail, ws.workspace],
   );
 
   const archived = ws.workspace?.state === "archived" || ws.workspace?.state === "archiving";
@@ -246,6 +255,10 @@ function Row({
   items: TranscriptItemsMap;
   turns: Readonly<Record<string, Turn>>;
 }) {
+  if (row.kind === "startup") {
+    return <ProgressBanner workspaceId={ctx.workspaceId} title={row.title} setup={row.setup} />;
+  }
+
   if (row.kind === "working") {
     const turn = turns[row.turnId];
 

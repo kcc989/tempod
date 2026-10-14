@@ -224,6 +224,19 @@ describe("selectors", () => {
     expect(reorderedQueue(s, "s1", "q2", 0)).toEqual(["q2", "x", "q1"]);
   });
 
+  it("keeps the initial prompt in its slot when reordering follow-up messages", () => {
+    const s = apply(
+      live(),
+      { type: "turn", turn: turn({ id: "t1", seq: 1, status: "queued", queuePos: 0 }) },
+      { type: "turn", turn: turn({ id: "q1", seq: 2, status: "queued", queuePos: 1 }) },
+      { type: "turn", turn: turn({ id: "x", seq: 3, sessionId: "s2", status: "queued", queuePos: 2 }) },
+      { type: "turn", turn: turn({ id: "q2", seq: 4, status: "queued", queuePos: 3 }) },
+    );
+
+    expect(reorderedQueue(s, "s1", "q2", 0, "t1")).toEqual(["t1", "q2", "x", "q1"]);
+    expect(reorderedQueue(s, "s1", "t1", 1, "t1")).toEqual(["t1", "q1", "x", "q2"]);
+  });
+
   it("reports the running plan progress", () => {
     let s = live();
 

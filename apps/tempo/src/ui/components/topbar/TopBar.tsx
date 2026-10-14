@@ -31,7 +31,7 @@ export interface TopBarProps {
 
 /**
  * 04, Top bar, one row. Left: branch with copy on hover or focus, and the PR link. Middle: preview
- * ports, then `Live` during a Browser Run session. Right: container pill, the primary git action, the
+ * ports, then `Live` during a Browser Run session. Right: Wake while sleeping, the primary git action, the
  * Info button and the right-side toggle.
  */
 export function TopBar({ workspaceId, variant = "desktop" }: TopBarProps) {
@@ -88,12 +88,12 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
   return (
     <header
       className={cn(
-        "flex h-10 shrink-0 items-center gap-x-3 overflow-hidden px-2",
+        "flex h-10 min-w-0 shrink-0 items-center gap-3 px-2 py-1",
         sharedHeader ? "bg-transparent" : "border-b bg-card",
       )}
     >
-      <div className="flex min-w-0 shrink items-center gap-1.5">
-        <span className="group/branch flex min-w-0 items-center gap-0.5 font-mono text-xs text-muted-foreground">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="group/branch flex min-w-0 flex-1 items-center gap-0.5 font-mono text-xs text-muted-foreground">
           <GitBranchIcon aria-hidden className="size-3 shrink-0" />
           <EditableBranch view={view} onSave={actions.renameBranch} />
           <Button
@@ -115,7 +115,7 @@ function DesktopTopBar({ view, actions }: { view: WorkspaceView; actions: Worksp
         className="flex-1 justify-center"
       />
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <ContainerPill pill={pillFor(view)} onWake={w.state === "sleeping" ? actions.wake : undefined} />
+        {w.state === "sleeping" && <ContainerPill pill={pillFor(view)} onWake={actions.wake} />}
         <PrimaryActionButton workspaceId={w.id} />
         <WorkspaceInfoButton view={view} />
         <SimpleTooltip label="Toggle right side (⌘⌥B)">
