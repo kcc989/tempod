@@ -19,6 +19,7 @@ import {
   Attention,
   CheckpointReason,
   ChecksState,
+  IssueState,
   NoticeLevel,
   OpKind,
   OpStatus,
@@ -44,8 +45,11 @@ const Ms = Schema.Number;
 
 export const Project = Schema.Struct({
   id: Schema.String,
-  installationId: Schema.Number,
-  repoId: Schema.Number,
+  installationId: N(Schema.Number),
+  repoId: N(Schema.Number),
+  provider: Schema.optional(Schema.Literals(["github", "artifacts"])),
+  artifactRepoId: Schema.optional(N(Schema.String)),
+  cloneUrl: Schema.optional(N(Schema.String)),
   owner: Schema.String,
   name: Schema.String,
   defaultBranch: Schema.String,
@@ -55,6 +59,104 @@ export const Project = Schema.Struct({
 });
 
 export type Project = typeof Project.Type;
+
+export const RepositoryCommit = Schema.Struct({
+  hash: Schema.String,
+  treeHash: Schema.String,
+  message: Schema.String,
+  author: Schema.Struct({ name: Schema.String, email: Schema.String }),
+  committer: Schema.Struct({ name: Schema.String, email: Schema.String }),
+  parents: Schema.Array(Schema.String),
+  authoredAt: Schema.Number,
+  committedAt: Schema.Number,
+});
+
+export type RepositoryCommit = typeof RepositoryCommit.Type;
+
+export const RepositoryEntry = Schema.Struct({
+  name: Schema.String,
+  path: Schema.String,
+  hash: Schema.String,
+  type: Schema.Literals(["tree", "blob", "symlink", "gitlink", "exec"]),
+});
+
+export type RepositoryEntry = typeof RepositoryEntry.Type;
+
+export const RepositoryDetail = Schema.Struct({
+  projectId: Schema.String,
+  name: Schema.String,
+  description: N(Schema.String),
+  defaultBranch: Schema.String,
+  remote: Schema.String,
+  readOnly: Schema.Boolean,
+  ref: Schema.String,
+  empty: Schema.Boolean,
+  entries: Schema.Array(RepositoryEntry),
+  commit: N(RepositoryCommit),
+});
+
+export type RepositoryDetail = typeof RepositoryDetail.Type;
+
+export const RepositoryPullRequest = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  title: Schema.String,
+  body: Schema.String,
+  headBranch: Schema.String,
+  baseBranch: Schema.String,
+  state: PrState,
+  url: Schema.String,
+  headSha: N(Schema.String),
+  baseSha: N(Schema.String),
+  mergeSha: N(Schema.String),
+  createdAt: Schema.Number,
+  updatedAt: Schema.Number,
+  mergedAt: N(Schema.Number),
+});
+
+export type RepositoryPullRequest = typeof RepositoryPullRequest.Type;
+
+export const RepositoryLabel = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  name: Schema.String,
+  color: Schema.String,
+  description: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+});
+
+export type RepositoryLabel = typeof RepositoryLabel.Type;
+
+export const RepositoryIssue = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  title: Schema.String,
+  body: Schema.String,
+  state: IssueState,
+  authorId: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+  closedAt: N(Ms),
+  url: Schema.String,
+  labels: Schema.Array(RepositoryLabel),
+  commentCount: Schema.Number,
+});
+
+export type RepositoryIssue = typeof RepositoryIssue.Type;
+
+export const RepositoryIssueComment = Schema.Struct({
+  id: Schema.String,
+  issueId: Schema.String,
+  authorId: Schema.String,
+  body: Schema.String,
+  createdAt: Ms,
+  updatedAt: Ms,
+});
+
+export type RepositoryIssueComment = typeof RepositoryIssueComment.Type;
 
 export const WorkspaceSummary = Schema.Struct({
   id: Schema.String,

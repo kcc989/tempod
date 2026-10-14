@@ -1,7 +1,13 @@
 import { Schema } from "effect";
 import { workspaceStub, type WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import type { Result } from "@tempo/protocol";
-import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import {
+  createExecutionContext,
+  env,
+  runDurableObjectAlarm,
+  runInDurableObject,
+  waitOnExecutionContext,
+} from "cloudflare:test";
 import { describe, expect, it, vi, type TestContext } from "vitest";
 import { newId, type AgentId, type TempodEvent } from "@tempo/protocol";
 import { github } from "../../src/github/provider.ts";
@@ -1574,18 +1580,54 @@ describe.concurrent("sendPrompt", { timeout: 30_000 }, () => {
     expect(await rows(w.stub, "SELECT id FROM turns")).toHaveLength(1);
   });
 
-  it("starts the turn at once when the workspace is ready and idle", async ({ expect }) => {
+  it("keeps starting a ready, idle turn in the request lifetime until the prompt is delivered", async ({
+    expect,
+    onTestFinished,
+  }) => {
     const w = await readyWs();
     const s = await liveSession(w);
+    let releaseRename!: () => void;
+    let markRenameEntered!: () => void;
+    let background!: ExecutionContext;
+
+    const renameEntered = new Promise<void>((resolve) => {
+      markRenameEntered = resolve;
+    });
+
+    const renameGate = new Promise<void>((resolve) => {
+      releaseRename = resolve;
+    });
+
+    onTestFinished(() => runInDurableObject(w.stub, releaseRename));
+    w.tempod.on("git.renameBranch", async () => {
+      markRenameEntered();
+      await renameGate;
+
+      return {};
+    });
+    await runInDurableObject(w.stub, (instance: WorkspaceDO) => {
+      const core = internals(instance).core;
+      background = createExecutionContext();
+      const waitUntil = core.ctx.waitUntil.bind(core.ctx);
+      core.ctx.waitUntil = (work) => {
+        waitUntil(work);
+        background.waitUntil(work);
+      };
+    });
     const t = ok(await prompt(w, s.id, "Add a health check"));
     expect(t.status).toBe("queued");
+    await runInDurableObject(w.stub, () => renameEntered);
+    await runInDurableObject(w.stub, async () => {
+      releaseRename();
+      await waitOnExecutionContext(background);
+    });
     // 03 Start the turn 3: session.prompt; turn running, session running, state working, queue_pos = null
-    await waitFor(() => w.tempod.requestsOf("session.prompt").length === 1, 5000, "session.prompt");
+    expect(w.tempod.requestsOf("session.prompt")).toHaveLength(1);
     const req = w.tempod.requestsOf("session.prompt")[0];
     expect(req).toMatchObject({ sessionId: s.id, turnId: t.id });
     expect(req.content.at(-1)).toEqual({ type: "text", text: "Add a health check" });
-    await waitFor(async () => (await turnOf(w.stub, t.id))?.["status"] === "running", 5000, "running");
     const row = (await turnOf(w.stub, t.id))!;
+    expect(row["status"]).toBe("running");
     expect(row["queue_pos"]).toBeNull();
     expect(row["started_at"]).not.toBeNull();
     expect((await sessionOf(w.stub, s.id))!["status"]).toBe("running");
@@ -2472,6 +2514,8 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       repo: "app",
       environmentId: null,
       policy: "allowlist",
+      provider: "github",
+      cloneUrl: null,
       allowlist: ["*.npmjs.org", "example.com"],
       secrets: [],
       injectors: [],
@@ -2483,6 +2527,8 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       repo: "app",
       environmentId: null,
       policy: "open",
+      provider: "github",
+      cloneUrl: null,
       allowlist: [],
       secrets: [],
       injectors: [],

@@ -62,8 +62,11 @@ export type DB = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
 export interface ProjectInfo {
   readonly id: string;
-  readonly installationId: number;
-  readonly repoId: number;
+  readonly installationId: number | null;
+  readonly repoId: number | null;
+  readonly provider: "github" | "artifacts";
+  readonly artifactRepoId: string | null;
+  readonly cloneUrl: string | null;
   readonly owner: string;
   readonly name: string;
   readonly defaultBranch: string;
@@ -275,6 +278,9 @@ export class WorkspaceCore {
       id: row.id,
       installationId: row.installationId,
       repoId: row.repoId,
+      provider: row.provider,
+      artifactRepoId: row.artifactRepoId,
+      cloneUrl: row.cloneUrl,
       owner: row.repoOwner,
       name: row.repoName,
       defaultBranch: row.defaultBranch,

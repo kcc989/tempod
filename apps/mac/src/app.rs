@@ -26,6 +26,7 @@ pub struct AppState {
     /// Open workspace stores, the one shown most recently first.
     pub workspaces: Vec<Entity<WorkspaceStore>>,
     pub active_workspace: Option<String>,
+    pub workspace_navigation_rev: u64,
     pub tokens: std::sync::Arc<dyn TokenStore>,
     cleanup_task: Option<Task<()>>,
     runtime: ClientRuntime,
@@ -62,6 +63,7 @@ impl AppState {
             hub: cx.new(|_| HubStore::new()),
             workspaces: Vec::new(),
             active_workspace: None,
+            workspace_navigation_rev: 0,
             tokens: platform::token_store().into(),
             cleanup_task: None,
             runtime,
@@ -141,6 +143,7 @@ impl AppState {
             .update_state(|state| state.last_workspace = Some(workspace_id));
         self.workspaces.insert(0, store.clone());
         self.active_workspace = Some(id.to_string());
+        self.workspace_navigation_rev = self.workspace_navigation_rev.wrapping_add(1);
         cx.notify();
         store
     }

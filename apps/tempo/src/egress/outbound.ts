@@ -117,6 +117,11 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         if (!decision.set && !decision.mcp) return { response: await fetch(request) };
         const headers = new Headers(request.headers);
 
+        if (decision.set?.value === "artifact-bearer") {
+          for (const name of ["authorization", "proxy-authorization", "cookie", "x-api-key"])
+            headers.delete(name);
+        }
+
         if (decision.set) {
           const value = await this.credential(decision.set.value, userId);
 
@@ -136,7 +141,11 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
           }
         }
 
-        return { response: await fetch(new Request(request, { headers })) };
+        const init: RequestInit = { headers };
+
+        if (decision.set?.value === "artifact-bearer") init.redirect = "manual";
+
+        return { response: await fetch(new Request(request, init)) };
       }
     }
   }
@@ -192,9 +201,15 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     return config;
   }
   private async credential(
-    kind: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai",
+    kind: "github-basic" | "github-bearer" | "artifact-bearer" | "openrouter" | "anthropic" | "openai",
     userId: string,
   ): Promise<string | null> {
+    if (kind === "artifact-bearer") {
+      const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getRepositoryToken();
+
+      return token === null ? null : `Bearer ${token}`;
+    }
+
     if (kind === "github-basic" || kind === "github-bearer") {
       const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getGithubToken();
 

@@ -2,6 +2,8 @@
 
 This tab defines everything inside and around one container: the image, `tempod`, the four agents, credentials, egress, scripts, previews, terminal, browser tests, artifacts and durability.
 
+The native Artifacts Git transport, token scope and additional daemon operations are defined in [09 Git Forge](09%20Git%20Forge.md), which extends this tab's GitHub-only repository rules.
+
 ## Container image
 
 One image, named `workspace`, holds all four agents, Chromium and the dev tools. It runs as user `tempo` (uid 1000) with `tini` as PID 1 launching `tempod`. `tini` forwards signals to the daemon and reaps orphaned child processes.

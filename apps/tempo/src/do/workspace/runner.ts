@@ -44,6 +44,7 @@ export const OP_STEPS: Record<OpKind, ReadonlyArray<string>> = {
     "bundle.upload",
     "home.backup",
     "artifacts.upload",
+    "repo.deleteBranch",
     "tempod.shutdown",
     "container.snapshot",
     "container.destroy",
@@ -52,6 +53,7 @@ export const OP_STEPS: Record<OpKind, ReadonlyArray<string>> = {
   restore: ["branch.check"],
   revert: ["git.checkpoint", "bundle.upload", "git.revert", "transcript.mark"],
   commit_push: ["git.commitAndPush"],
+  merge_pr: ["git.merge"],
   housekeeping: ["events.prune", "r2.retention", "egress.trim"],
 };
 
@@ -106,7 +108,17 @@ export const STEP_LIMITS = {
     maxAttempts: 1,
     onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true },
   },
+  "git.merge": {
+    timeoutMs: 5 * 60_000,
+    maxAttempts: 1,
+    onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true },
+  },
   "github.deleteBranch": { timeoutMs: 30_000, maxAttempts: 3, onPermanent: { kind: "skip" } },
+  "repo.deleteBranch": {
+    timeoutMs: 30_000,
+    maxAttempts: 3,
+    onPermanent: { kind: "fail", code: "INTERNAL", passthrough: true },
+  },
   "branch.check": {
     timeoutMs: 30_000,
     maxAttempts: 3,
@@ -145,12 +157,16 @@ export interface OpState {
   checkpointRequestId?: string;
   pendingBundle?: PendingBundle | null;
   headSha?: string;
+  pushedMergeSha?: string;
   result?: OpResult;
 }
 
 export interface OpInput {
   readonly checkpointId?: string;
   readonly message?: string;
+  readonly number?: number;
+  readonly method?: "merge" | "squash";
+  readonly pushedMergeSha?: string;
 }
 
 export interface OpResult {
@@ -174,12 +190,16 @@ export const OpStateSchema = Schema.Struct({
     ),
   ),
   headSha: Schema.optional(Schema.String),
+  pushedMergeSha: Schema.optional(Schema.String),
   result: Schema.optional(Schema.Struct({ commitSha: Schema.optional(Schema.String) })),
 });
 
 const OpInputSchema = Schema.Struct({
   checkpointId: Schema.optional(Schema.String),
   message: Schema.optional(Schema.String),
+  number: Schema.optional(Schema.Number),
+  method: Schema.optional(Schema.Literals(["merge", "squash"])),
+  pushedMergeSha: Schema.optional(Schema.String),
 });
 
 export type StepOutcome = "next" | "wait" | "cancel" | "done";

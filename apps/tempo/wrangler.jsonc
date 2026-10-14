@@ -54,4 +54,5 @@
   "browser": { "binding": "BROWSER" },
   "ai": { "binding": "AI" },
   "worker_loaders": [{ "binding": "LOADER" }],
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "tempo-repos", "remote": true }],
 }

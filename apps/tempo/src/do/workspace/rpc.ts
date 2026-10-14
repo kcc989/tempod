@@ -15,6 +15,7 @@ import {
   type FnInput,
   type FnOutput,
   type ReviewComment,
+  type RepositoryPullRequest,
   type Session,
   type Turn,
   type WorkspaceFnName,
@@ -39,12 +40,20 @@ import {
 } from "../../db/workspace-do.ts";
 import { WORKSPACE_MIGRATIONS, runMigrations } from "../../db/do-migrations.ts";
 import { github } from "../../github/provider.ts";
+import { artifactHeadSha } from "../../artifacts/repositories.ts";
+import { createArtifactPullRequest, findArtifactOpenPullRequest } from "../../artifacts/pull-requests.ts";
 import { errorText, log } from "../../log.ts";
 import { containerRunning, requireTempod } from "./container.ts";
 import { parseJson, type WorkspaceCore } from "./core.ts";
 import { saveConversation } from "./conversations.ts";
 import { sendEnv } from "./events.ts";
-import { defaultPrBody, getGithubToken, refreshPullRequest, requirePushed } from "./git.ts";
+import {
+  defaultPrBody,
+  getGithubToken,
+  refreshPullRequest,
+  requirePushed,
+  repositoryBranchExists,
+} from "./git.ts";
 import {
   DEFAULT_MODE,
   dropQueuedTurnsOf,
@@ -274,7 +283,7 @@ export const applyPromptBranch = async (
 export const workspaceMethods = (rt: RpcRuntime): Methods => {
   const { core, runner } = rt;
 
-  const awaitOp = async (kind: "revert" | "commit_push", input: OpInput): Promise<OpResult> => {
+  const awaitOp = async (kind: "revert" | "commit_push" | "merge_pr", input: OpInput): Promise<OpResult> => {
     const op = runner.insert(kind, input);
     core.broadcastDetailSoon();
 
@@ -311,6 +320,7 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
     },
     renameBranch: async ({ branch }) =>
       withBranchNaming(core, async () => {
+        if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
         const row = core.ws();
         const next = branch.trim();
 
@@ -419,6 +429,28 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       if (s === "archived" || s === "archiving") return {};
 
       if (!["ready", "working", "sleeping", "error"].includes(s)) throw new TempoError("WORKSPACE_BUSY");
+
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
+      const project = await core.project();
+      const row = core.ws();
+
+      if (
+        project.provider === "artifacts" &&
+        core.settings().git.delete_branch_on_archive &&
+        row.pushed === 1 &&
+        row.prState !== "open" &&
+        row.prState !== "draft" &&
+        row.branch !== project.defaultBranch &&
+        row.branch !== row.baseBranch &&
+        !containerRunning(core) &&
+        !(await findArtifactOpenPullRequest(core.env, project, row.branch))
+      )
+        throw new TempoError(
+          "WORKSPACE_BUSY",
+          "Wake this workspace before archiving with branch deletion enabled.",
+        );
+
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
       core.setState("archiving");
       runner.insert("archive");
 
@@ -482,16 +514,13 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
     },
     getBrowserLiveView: () => browserLiveView(core),
     setBaseBranch: async ({ baseBranch }) => {
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
       const row = core.ws();
 
       if (row.prNumber !== null) throw new TempoError("PR_EXISTS");
-      const project = await core.project();
+      const exists = await repositoryBranchExists(core, baseBranch);
 
-      const exists = await github.branchExists(
-        await getGithubToken(core),
-        { owner: project.owner, name: project.name },
-        baseBranch,
-      );
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
 
       if (!exists) throw new TempoError("NOT_FOUND", undefined, "branch not on origin");
       core.updateWs({ baseBranch });
@@ -984,6 +1013,8 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
     },
     commitAndPush: async ({ message }) => {
       notArchived(core);
+
+      if (runner.find("merge_pr")) throw new TempoError("WORKSPACE_BUSY");
       rt.requireReady();
       // 03 Step runner: the op waits as pending behind other ops and starts in creation order.
       const msg = message.trim() || core.ws().title || "Update from Tempo";
@@ -994,11 +1025,93 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
     },
     createPullRequest: async ({ title, body, draft }) => {
       const row = core.ws();
+      const project = await core.project();
+
+      if (project.provider === "artifacts") {
+        const bind = async (pr: RepositoryPullRequest, adopt: boolean) => {
+          let remoteHead: string | null = null;
+
+          if (adopt) {
+            if (runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
+            remoteHead = await artifactHeadSha(
+              core.env,
+              project.name,
+              row.branch,
+              project.artifactRepoId ?? undefined,
+            );
+
+            if (!remoteHead)
+              throw new TempoError("NOT_FOUND", "The pull request's head branch is not on origin.");
+
+            if (!/^[a-f0-9]{40}$/.test(remoteHead)) throw new TempoError("ARTIFACTS_API_ERROR");
+
+            if (runner.hasPendingOrRunning()) throw new TempoError("WORKSPACE_BUSY");
+            const current = core.ws();
+
+            if (current.forcePushLease === 1 && current.lastPushedSha !== remoteHead)
+              throw new TempoError(
+                "PUSH_REJECTED",
+                "The remote branch changed after the revert. Reconcile it before opening this pull request.",
+              );
+          }
+
+          const baseChanged = core.ws().baseBranch !== pr.baseBranch;
+
+          const patch: Parameters<typeof core.updateWs>[0] = {
+            prNumber: pr.number,
+            prState: pr.state,
+            checksState: null,
+            baseBranch: pr.baseBranch,
+          };
+
+          if (remoteHead !== null) {
+            patch.pushed = 1;
+            patch.lastPushedSha = remoteHead;
+          }
+
+          core.updateWs(patch);
+          core.setKv("prTitle", pr.title);
+          core.publish();
+          core.scheduleAlarm();
+
+          if (baseChanged) await rt.resendHello();
+
+          return { number: pr.number, url: pr.url };
+        };
+
+        const existing = await findArtifactOpenPullRequest(core.env, project, row.branch);
+
+        if (existing) return bind(existing, true);
+        requirePushed(core);
+
+        if (row.prNumber !== null && (row.prState === "open" || row.prState === "draft"))
+          throw new TempoError("PR_EXISTS");
+        let pr;
+
+        try {
+          pr = await createArtifactPullRequest(core.env, project, {
+            title: title.trim() || row.title || row.branch,
+            headBranch: row.branch,
+            baseBranch: row.baseBranch,
+            body: body.trim() || defaultPrBody(core),
+            draft,
+          });
+        } catch (cause) {
+          if (!(cause instanceof TempoError && cause.code === "PR_EXISTS")) throw cause;
+          pr = await findArtifactOpenPullRequest(core.env, project, row.branch);
+
+          if (!pr) throw cause;
+
+          return bind(pr, true);
+        }
+
+        return bind(pr, false);
+      }
+
       requirePushed(core);
 
       if (row.prNumber !== null && (row.prState === "open" || row.prState === "draft"))
         throw new TempoError("PR_EXISTS");
-      const project = await core.project();
 
       const pr = await github.createPullRequest(
         await getGithubToken(core),
@@ -1024,12 +1137,49 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
 
       if (row.prNumber === null) throw new TempoError("PR_NOT_MERGEABLE");
       const project = await core.project();
-      await github.mergePullRequest(
-        await getGithubToken(core),
-        { owner: project.owner, name: project.name },
-        row.prNumber,
-        method,
-      );
+
+      if (project.provider === "artifacts") {
+        if (method === "rebase")
+          throw new TempoError("PR_NOT_MERGEABLE", "Choose merge or squash for this repository.");
+
+        if (
+          core.queueBusy ||
+          core.turnEndInProgress ||
+          core.runningTurn() ||
+          core.queuedTurns().length > 0 ||
+          runner.hasPendingOrRunning()
+        )
+          throw new TempoError("WORKSPACE_BUSY");
+        rt.requireReady();
+
+        const prior = runner
+          .recent(50)
+          .find(
+            (op) =>
+              op.kind === "merge_pr" &&
+              parseJson(Schema.Struct({ number: Schema.optional(Schema.Number) }))(op.inputJson, {})
+                .number === row.prNumber,
+          );
+
+        const pushedMergeSha = prior
+          ? parseJson(Schema.Struct({ pushedMergeSha: Schema.optional(Schema.String) }))(prior.stateJson, {})
+              .pushedMergeSha
+          : undefined;
+
+        await awaitOp("merge_pr", {
+          number: row.prNumber,
+          method,
+          pushedMergeSha,
+        });
+      } else {
+        await github.mergePullRequest(
+          await getGithubToken(core),
+          { owner: project.owner, name: project.name },
+          row.prNumber,
+          method,
+        );
+      }
+
       core.updateWs({ prState: "merged" });
       core.publish();
 
@@ -1049,6 +1199,8 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
 
       if (row.prNumber === null) return [];
       const project = await core.project();
+
+      if (project.provider === "artifacts") return [];
       const token = await getGithubToken(core);
       const repo = { owner: project.owner, name: project.name };
       const pr = await github.getPullRequest(token, repo, row.prNumber);

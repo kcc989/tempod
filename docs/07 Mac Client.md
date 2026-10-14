@@ -1,5 +1,7 @@
 # 07 Mac Client
 
+Version 0.2.0 adds native repository browsing, pull request controls and issue tracking with comments and labels alongside the workspace client, as specified in [09 Git Forge](09%20Git%20Forge.md). Nullable native repository identities require this client minimum.
+
 This tab plans a native macOS client for Tempo, built with GPUI Kit. It talks to the same Worker as the web UI.
 
 ## Summary and decisions

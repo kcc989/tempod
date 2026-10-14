@@ -962,7 +962,7 @@ impl Render for Dialogs {
                             .read(cx)
                             .projects
                             .iter()
-                            .map(|p| p.repo_id)
+                            .filter_map(|p| p.repo_id)
                             .collect()
                     })
                     .unwrap_or_default();

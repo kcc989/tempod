@@ -374,6 +374,8 @@ export class Tempod {
         return r;
       },
       "git.commitAndPush": (p) => this.git.commitAndPush(p, this.baseBranch),
+      "git.merge": (p) => this.git.merge(p),
+      "git.deleteBranch": (p) => this.git.deleteBranch(p),
       "git.renameBranch": async (p) => {
         const r = await this.git.renameBranch(p);
 

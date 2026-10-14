@@ -2,6 +2,8 @@
 
 This tab is the contract. Every table, column, message type and error code here is exact.
 
+[09 Git Forge](09%20Git%20Forge.md) extends these contracts with native repositories, nullable GitHub project identities, repository pull requests and issue/comment/label APIs.
+
 ## Conventions
 
 One set of rules for every store and every wire format.
@@ -38,8 +40,11 @@ CREATE TABLE github_installations (
 CREATE TABLE projects (
   id               TEXT PRIMARY KEY,
   user_id          TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
-  installation_id  INTEGER NOT NULL REFERENCES github_installations(installation_id),
-  repo_id          INTEGER NOT NULL,
+  installation_id  INTEGER REFERENCES github_installations(installation_id),
+  repo_id          INTEGER,
+  provider         TEXT NOT NULL DEFAULT 'github' CHECK (provider IN ('github','artifacts')),
+  artifact_repo_id TEXT,
+  clone_url        TEXT,
   repo_owner       TEXT NOT NULL,
   repo_name        TEXT NOT NULL,
   default_branch   TEXT NOT NULL,
@@ -48,7 +53,10 @@ CREATE TABLE projects (
   environment_id   TEXT REFERENCES environments(id) ON DELETE SET NULL,
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL,
-  UNIQUE (user_id, repo_id)
+  UNIQUE (user_id, repo_id),
+  UNIQUE (user_id, artifact_repo_id),
+  CHECK ((provider = 'github' AND installation_id IS NOT NULL AND repo_id IS NOT NULL)
+      OR (provider = 'artifacts' AND artifact_repo_id IS NOT NULL AND clone_url IS NOT NULL))
 );
 
 -- Named environments (01, Environments). No secret values: those live in CredentialDO.

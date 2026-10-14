@@ -6,6 +6,7 @@ interface TempoEnv {
   readonly DB: D1Database;
   readonly AI?: Ai;
   readonly DATA: R2Bucket;
+  readonly ARTIFACTS?: Artifacts;
   readonly WORKSPACE: DurableObjectNamespace<WorkspaceDO>;
   readonly USER_HUB: DurableObjectNamespace<UserHubDO>;
   readonly CREDENTIALS: DurableObjectNamespace<CredentialDO>;

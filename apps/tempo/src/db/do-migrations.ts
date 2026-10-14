@@ -578,6 +578,30 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       "ALTER TABLE sessions ADD COLUMN agent_version INTEGER",
     ],
   },
+  {
+    tag: "0013_repository_merge",
+    when: 1792785600000,
+    statements: [
+      `CREATE TABLE ops_new (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('create','wake','sleep','archive','restore','revert','commit_push','merge_pr','housekeeping')),
+  step TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending','running','done','failed','cancelled')),
+  attempt INTEGER NOT NULL DEFAULT 0,
+  next_run_at INTEGER NOT NULL,
+  input_json TEXT NOT NULL DEFAULT '{}',
+  state_json TEXT NOT NULL DEFAULT '{}',
+  error_code TEXT,
+  error_detail TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)`,
+      "INSERT INTO ops_new SELECT * FROM ops",
+      "DROP TABLE ops",
+      "ALTER TABLE ops_new RENAME TO ops",
+      "CREATE INDEX ops_due ON ops(status, next_run_at)",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [

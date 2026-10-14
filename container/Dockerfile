@@ -25,7 +25,7 @@ RUN corepack enable
 COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
-COPY container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
+COPY --chmod=0644 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
 
 RUN groupmod -n tempo node \
  && usermod -l tempo -d /home/tempo -s /bin/bash node \

@@ -25,6 +25,7 @@
       "database_id": "test",
       "migrations_dir": "../src/db/migrations",
     },
+    { "binding": "TEST_LEGACY_DB", "database_name": "tempo-legacy", "database_id": "test-legacy" },
   ],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "tempo-data" }],
   "worker_loaders": [{ "binding": "LOADER" }],

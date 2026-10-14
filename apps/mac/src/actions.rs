@@ -30,6 +30,8 @@ gpui_kit::actions!(
         ToggleRightSide,
         ToggleBottomPanel,
         ShowDiff,
+        ShowRepositories,
+        HideRepositories,
         CommitAndPush,
         CreatePr,
         Merge,

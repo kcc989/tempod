@@ -1,6 +1,6 @@
 [package]
 name = "tempo-mac"
-version = "0.1.0"
+version = "0.2.0"
 description = "Tempo for Mac (07): the native client"
 edition.workspace = true
 license.workspace = true

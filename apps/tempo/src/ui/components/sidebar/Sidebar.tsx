@@ -147,6 +147,14 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
         </Button>
       </div>
       <ScrollArea className="min-h-0 flex-1">{content}</ScrollArea>
+      <div className="shrink-0 border-t px-2 py-1.5">
+        <Button asChild size="sm" variant="ghost" className="w-full justify-start">
+          <Link to="/repositories">
+            <FolderGit2Icon />
+            Repositories
+          </Link>
+        </Button>
+      </div>
       <div className="flex shrink-0 items-center justify-between border-t px-2 py-1.5">
         <Button asChild size="sm" variant="ghost">
           <Link to="/history">

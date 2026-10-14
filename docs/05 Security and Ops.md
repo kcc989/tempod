@@ -185,10 +185,10 @@ Every log line is structured JSON, and every workspace has a Diagnostics view th
 
 A deploy MUST NOT break running containers. Old `tempod` binaries keep running until their container is destroyed.
 
-- **Protocol changes are additive only** within protocol version 1: new ops, new events and new optional fields. The DO logs and ignores unknown event kinds. `tempod` answers unknown ops with `{ok: false, error: {code: "UNKNOWN_OP"}}`.
+- **Protocol changes are additive only** within protocol version 1: new ops, new events and new optional fields. The explicit native repository extension in 08 also permits nullable GitHub identities on Project and requires Mac client 0.2.0. The DO logs and ignores unknown event kinds. `tempod` answers unknown ops with `{ok: false, error: {code: "UNKNOWN_OP"}}`.
 - The DO reads `tempod`'s version from `/v1/health` and logs a `warn` when it differs from its own build.
 - **Image changes** make every snapshot unusable, so the next wake of each workspace takes the fresh path. Release notes MUST say when the image changed.
-- **Migrations** are forward only. Version 1 MUST NOT drop or rename a column; add new ones instead.
+- **Migrations** are forward only. Add columns by default. The preservation-tested `projects` and DO `ops` reconstructions in 08 are the permitted exceptions to relax GitHub-only NOT NULL constraints and extend the operation-kind CHECK without dropping existing data.
 - **Agent upgrades:** change `container/versions.json`, rebuild, run the adapter conformance tests (06), deploy.
 - **Rollback:** deploy the previous build. Containers started on the newer image keep it until they sleep.
 

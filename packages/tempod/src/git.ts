@@ -9,6 +9,7 @@ import {
   type CheckpointResult,
   type DiffScope,
   type Source,
+  type TempodParams,
 } from "@tempo/protocol";
 import { MESSAGE_BUDGET } from "./bounds.ts";
 import type { TempodDb } from "./db.ts";
@@ -38,6 +39,8 @@ export const GIT_OP_MS = {
   commitAndPush: 5 * 60_000 - 10_000,
   read: 30_000 - 2_000,
   renameBranch: 30_000 - 2_000,
+  merge: 5 * 60_000 - 10_000,
+  deleteBranch: 30_000 - 5_000,
 } as const;
 
 const DEFAULT_GIT_MS = 60_000;
@@ -184,6 +187,7 @@ export class Git {
     source: Source;
     author: { name: string; email: string };
     mode?: CloneMode | undefined;
+    initializeEmpty?: boolean | undefined;
   }): Promise<{ headSha: string; remoteHeadSha: string | null }> {
     return this.op("clone", true, async () => {
       const ws = this.deps.workspace;
@@ -212,7 +216,13 @@ export class Git {
         await this.gitOk(["config", "user.name", p.author.name]);
         await this.gitOk(["config", "user.email", p.author.email]);
 
-        if ((await this.currentBranch()) !== p.branch) await this.checkoutBranch(p, p.mode ?? "wake");
+        if (p.initializeEmpty && p.source.kind === "new" && !(await this.revParse("HEAD"))) {
+          await this.initializeEmpty(p.baseBranch);
+        }
+
+        if ((await this.currentBranch()) !== p.branch || !(await this.revParse("HEAD"))) {
+          await this.checkoutBranch(p, p.mode ?? "wake");
+        }
 
         return {
           headSha: await this.headSha(),
@@ -232,6 +242,35 @@ export class Git {
       }
     });
   }
+
+  private async initializeEmpty(baseBranch: string): Promise<void> {
+    const refs = await this.git(["ls-remote", "origin"]);
+
+    if (refs.code !== 0) throw new TempoError("CLONE_FAILED", "Could not read the repository refs.");
+
+    if (refs.stdout.trim() === "") {
+      const tree = (await this.gitOk(["mktree"], { input: "" })).trim();
+      const commit = (await this.gitOk(["commit-tree", tree, "-m", "Initial commit"])).trim();
+      await this.git([
+        "push",
+        `--force-with-lease=refs/heads/${baseBranch}:`,
+        "origin",
+        `${commit}:refs/heads/${baseBranch}`,
+      ]);
+    }
+
+    const fetched = await this.git([
+      "fetch",
+      "--no-tags",
+      "origin",
+      `+refs/heads/${baseBranch}:refs/remotes/origin/${baseBranch}`,
+    ]);
+
+    if (fetched.code !== 0 || !(await this.revParse(`refs/remotes/origin/${baseBranch}`))) {
+      throw new TempoError("CLONE_FAILED", `The base branch ${baseBranch} is not on origin.`);
+    }
+  }
+
   private async checkoutBranch(
     p: { branch: string; baseBranch: string; source: Source },
     mode: CloneMode,
@@ -657,6 +696,214 @@ export class Git {
       return { commitSha: head };
     });
   }
+
+  private mergeMessage(p: TempodParams<"git.merge">): string {
+    return `tempo ${p.method} ${p.headBranch} into ${p.baseBranch}\n\nTempo-Operation: ${p.operationId}\nTempo-Base: ${p.baseSha}\nTempo-Head: ${p.headSha}\nTempo-Method: ${p.method}`;
+  }
+
+  private async fetchMergeBranch(branch: string, ref: string): Promise<string> {
+    const fetched = await this.git(["fetch", "--no-tags", "origin", `+refs/heads/${branch}:${ref}`]);
+    const sha = fetched.code === 0 ? await this.revParse(ref) : null;
+
+    if (!sha) throw new TempoError("PR_NOT_MERGEABLE", "The pull request branch is unavailable.");
+
+    return sha;
+  }
+
+  private async matchesMerge(sha: string, p: TempodParams<"git.merge">): Promise<boolean> {
+    const r = await this.git(["show", "-s", "--format=%P%x00%B", sha], { readOnly: true });
+    const [parents, message] = r.stdout.trimEnd().split("\0");
+    const expectedParents = p.method === "merge" ? `${p.baseSha} ${p.headSha}` : p.baseSha;
+
+    return r.code === 0 && parents === expectedParents && message === this.mergeMessage(p);
+  }
+
+  private async matchesPublishedMerge(sha: string, p: TempodParams<"git.merge">): Promise<boolean> {
+    const r = await this.git(["show", "-s", "--format=%P%x00%B", sha], { readOnly: true });
+    const [parents, message] = r.stdout.trimEnd().split("\0");
+    const lines = message?.split("\n") ?? [];
+    const method = lines[5]?.slice("Tempo-Method: ".length);
+    const baseSha = lines[3]?.slice("Tempo-Base: ".length) ?? "";
+    const headSha = lines[4]?.slice("Tempo-Head: ".length) ?? "";
+
+    if (
+      r.code !== 0 ||
+      (method !== "merge" && method !== "squash") ||
+      !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(baseSha) ||
+      !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(headSha)
+    ) {
+      return false;
+    }
+
+    const expectedParents = method === "merge" ? `${baseSha} ${headSha}` : baseSha;
+
+    if (parents !== expectedParents || message !== this.mergeMessage({ ...p, method, baseSha, headSha })) {
+      return false;
+    }
+
+    if (!(await this.revParse(headSha))) {
+      const fetched = await this.git(["fetch", "--no-tags", "origin", headSha]);
+
+      if (fetched.code !== 0) return false;
+    }
+
+    const merged = await this.git(["merge-tree", "--write-tree", baseSha, headSha]);
+    const tree = await this.git(["rev-parse", `${sha}^{tree}`], { readOnly: true });
+
+    return merged.code === 0 && tree.code === 0 && merged.stdout.split("\n")[0] === tree.stdout.trim();
+  }
+
+  private async completedMerge(
+    p: TempodParams<"git.merge">,
+    base: string,
+    operationRef: string,
+  ): Promise<string | null> {
+    const saved = await this.revParse(operationRef);
+
+    if (saved && (await this.matchesPublishedMerge(saved, p))) {
+      const ancestor = await this.git(["merge-base", "--is-ancestor", saved, base], { readOnly: true });
+
+      if (ancestor.code === 0) return saved;
+    }
+
+    // The marker also recovers a lost response after the container's local refs have been lost.
+    const commits = await this.git(
+      [
+        "log",
+        "--first-parent",
+        "--format=%H",
+        "--fixed-strings",
+        `--grep=Tempo-Operation: ${p.operationId}`,
+        base,
+      ],
+      { readOnly: true },
+    );
+
+    if (commits.code === 0) {
+      for (const sha of commits.stdout.trim().split("\n").filter(Boolean)) {
+        if (await this.matchesPublishedMerge(sha, p)) return sha;
+      }
+    }
+
+    return null;
+  }
+
+  merge(p: TempodParams<"git.merge">): Promise<{ commitSha: string }> {
+    return this.op("merge", true, async () => {
+      if (!(await this.validBranch(p.baseBranch)) || !(await this.validBranch(p.headBranch))) {
+        throw new TempoError("BRANCH_INVALID");
+      }
+
+      if (
+        !SAFE_ID.test(p.operationId) ||
+        !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(p.baseSha) ||
+        !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(p.headSha)
+      ) {
+        throw new TempoError("VALIDATION_FAILED", "Invalid merge operation or commit SHA.");
+      }
+
+      if (p.baseBranch === p.headBranch) {
+        throw new TempoError("PR_NOT_MERGEABLE");
+      }
+
+      const operationRef = `refs/tempo/merges/${p.operationId}`;
+      const baseRef = `refs/tempo/merge-inputs/${p.operationId}/base`;
+      const headRef = `refs/tempo/merge-inputs/${p.operationId}/head`;
+      const base = await this.fetchMergeBranch(p.baseBranch, baseRef);
+      const completed = await this.completedMerge(p, base, operationRef);
+
+      if (completed) return { commitSha: completed };
+      const head = await this.fetchMergeBranch(p.headBranch, headRef);
+
+      if (base !== p.baseSha || head !== p.headSha || p.baseSha === p.headSha) {
+        throw new TempoError("PR_NOT_MERGEABLE", "The pull request branches changed. Refresh and retry.");
+      }
+
+      const merged = await this.git(["merge-tree", "--write-tree", p.baseSha, p.headSha]);
+
+      if (merged.code !== 0) {
+        throw new TempoError("PR_NOT_MERGEABLE", "The pull request has merge conflicts.");
+      }
+
+      const tree = merged.stdout.trim().split("\n")[0]!;
+      const saved = await this.revParse(operationRef);
+      const savedTree = saved ? await this.git(["rev-parse", `${saved}^{tree}`], { readOnly: true }) : null;
+
+      let commit =
+        saved && savedTree?.stdout.trim() === tree && (await this.matchesMerge(saved, p)) ? saved : null;
+
+      if (!commit) {
+        const times = await this.gitOk(["show", "-s", "--format=%ct", p.baseSha, p.headSha], {
+          readOnly: true,
+        });
+
+        const date = `@${Math.max(...times.trim().split("\n").map(Number))} +0000`;
+        commit = (
+          await this.gitOk(
+            [
+              "commit-tree",
+              tree,
+              "-p",
+              p.baseSha,
+              ...(p.method === "merge" ? ["-p", p.headSha] : []),
+              "-m",
+              this.mergeMessage(p),
+            ],
+            {
+              extraEnv: {
+                ...(await this.identityEnv()),
+                GIT_AUTHOR_DATE: date,
+                GIT_COMMITTER_DATE: date,
+              },
+            },
+          )
+        ).trim();
+        await this.gitOk(["update-ref", operationRef, commit]);
+      }
+
+      const pushed = await this.git([
+        "push",
+        `--force-with-lease=refs/heads/${p.baseBranch}:${p.baseSha}`,
+        "origin",
+        `${commit}:refs/heads/${p.baseBranch}`,
+      ]);
+
+      if (pushed.code === 0) return { commitSha: commit };
+      const current = await this.fetchMergeBranch(p.baseBranch, baseRef);
+      const recovered = await this.completedMerge(p, current, operationRef);
+
+      if (recovered) return { commitSha: recovered };
+      throw new TempoError(
+        current !== p.baseSha || PUSH_REJECTED.test(pushed.stderr || pushed.stdout)
+          ? "PR_NOT_MERGEABLE"
+          : "INTERNAL",
+        "The merge push did not complete. Refresh and retry.",
+      );
+    });
+  }
+
+  deleteBranch(p: TempodParams<"git.deleteBranch">): Promise<Record<string, never>> {
+    return this.op("deleteBranch", true, async () => {
+      if (!(await this.validBranch(p.branch))) throw new TempoError("BRANCH_INVALID");
+      const refs = await this.git(["ls-remote", "--heads", "origin", `refs/heads/${p.branch}`]);
+
+      if (refs.code !== 0) throw new TempoError("INTERNAL", "Could not read the repository refs.");
+
+      if (refs.stdout.trim() === "") return {};
+      const deleted = await this.git(["push", "origin", "--delete", p.branch]);
+
+      if (deleted.code !== 0) {
+        const remaining = await this.git(["ls-remote", "--heads", "origin", `refs/heads/${p.branch}`]);
+
+        if (remaining.code !== 0 || remaining.stdout.trim() !== "") {
+          throw new TempoError("INTERNAL", "Could not delete the remote branch.");
+        }
+      }
+
+      return {};
+    });
+  }
+
   renameBranch(p: { from: string; to: string }): Promise<Record<string, never>> {
     return this.op("renameBranch", true, async () => {
       if (!(await this.validBranch(p.to))) throw new TempoError("BRANCH_INVALID");

@@ -5,6 +5,9 @@ import * as credentials from "./handlers/credentials.ts";
 import * as environments from "./handlers/environments.ts";
 import * as mcp from "./handlers/mcp.ts";
 import * as projects from "./handlers/projects.ts";
+import * as repositories from "./handlers/repositories.ts";
+import * as issues from "./handlers/issues.ts";
+import * as pullRequests from "./handlers/pull-requests.ts";
 import {
   createSession,
   createWorkspace,
@@ -17,6 +20,28 @@ import type { Handler } from "./run.ts";
 type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
 
 const own = {
+  createRepository: repositories.createRepository,
+  importRepository: repositories.importRepository,
+  linkArtifactRepository: repositories.linkArtifactRepository,
+  getRepository: repositories.getRepository,
+  getRepositoryFile: repositories.getRepositoryFile,
+  listRepositoryCommits: repositories.listRepositoryCommits,
+  listRepositoryPullRequests: pullRequests.listRepositoryPullRequests,
+  getRepositoryPullRequest: pullRequests.getRepositoryPullRequest,
+  createRepositoryPullRequest: pullRequests.createRepositoryPullRequest,
+  updateRepositoryPullRequest: pullRequests.updateRepositoryPullRequest,
+  listRepositoryIssues: issues.listRepositoryIssues,
+  getRepositoryIssue: issues.getRepositoryIssue,
+  createRepositoryIssue: issues.createRepositoryIssue,
+  updateRepositoryIssue: issues.updateRepositoryIssue,
+  listRepositoryIssueComments: issues.listRepositoryIssueComments,
+  createRepositoryIssueComment: issues.createRepositoryIssueComment,
+  updateRepositoryIssueComment: issues.updateRepositoryIssueComment,
+  deleteRepositoryIssueComment: issues.deleteRepositoryIssueComment,
+  listRepositoryLabels: issues.listRepositoryLabels,
+  createRepositoryLabel: issues.createRepositoryLabel,
+  updateRepositoryLabel: issues.updateRepositoryLabel,
+  deleteRepositoryLabel: issues.deleteRepositoryLabel,
   listAgents: library.listAgents,
   getAgent: library.getAgent,
   saveAgent: library.saveAgent,

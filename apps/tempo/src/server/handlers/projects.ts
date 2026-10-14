@@ -7,6 +7,8 @@ import { requireGithubAppConfig } from "../../github/app.ts";
 import { getRepoById, listAppInstallations, listInstallationRepos } from "../../github/api.ts";
 import { GithubHttpError } from "../../github/client.ts";
 import { github } from "../../github/provider.ts";
+import { listArtifactBranches } from "../../artifacts/repositories.ts";
+import { listArtifactPullRequests } from "../../artifacts/pull-requests.ts";
 import type { HandlerCtx } from "../run.ts";
 import {
   d1,
@@ -121,6 +123,9 @@ export const linkProject = async (
     userId: user.id,
     installationId,
     repoId,
+    provider: "github" as const,
+    artifactRepoId: null,
+    cloneUrl: null,
     repoOwner: repo.owner.login,
     repoName: repo.name,
     defaultBranch: repo.default_branch,
@@ -215,6 +220,12 @@ export const listBranches = async (
 ): Promise<FnOutput<"listBranches">> => {
   const p = await requireProject(env, user.id, projectId);
 
+  if (p.provider === "artifacts") {
+    if (!p.artifactRepoId) throw new TempoError("REPO_NOT_ACCESSIBLE");
+
+    return listArtifactBranches(env, p.repoName, query, p.artifactRepoId);
+  }
+
   return github.listBranches(await projectToken(env, p), repoOf(p), query);
 };
 
@@ -223,6 +234,12 @@ export const listOpenPullRequests = async (
   { projectId }: FnInput<"listOpenPullRequests">,
 ): Promise<FnOutput<"listOpenPullRequests">> => {
   const p = await requireProject(env, user.id, projectId);
+
+  if (p.provider === "artifacts") {
+    const pulls = await listArtifactPullRequests(env, { ...p, name: p.repoName });
+
+    return pulls.map((pr) => ({ number: pr.number, title: pr.title, headBranch: pr.headBranch }));
+  }
 
   return github.listOpenPullRequests(await projectToken(env, p), repoOf(p));
 };

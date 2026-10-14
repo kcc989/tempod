@@ -15,7 +15,7 @@ import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useHubWorkspace } from "~/ui/hooks/useHub";
 import { useProject } from "~/ui/hooks/useProjects";
 import { useWorkspaceSelector } from "~/ui/hooks/useWorkspace";
-import { githubPullUrl } from "~/ui/lib/links";
+import { projectPullUrl } from "~/ui/lib/links";
 import { cn } from "~/ui/lib/utils";
 import {
   checksStateLabel,
@@ -66,7 +66,7 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
   if (prNumber === null) return <EmptyState title="No pull request yet." />;
   const pr = prStateLabel(prState);
   const checks = checksStateLabel(checksState);
-  const url = project ? githubPullUrl(project.owner, project.name, prNumber) : null;
+  const url = project ? projectPullUrl(project, prNumber) : null;
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
@@ -81,7 +81,9 @@ export function ChecksView({ workspaceId }: { workspaceId: string }) {
             >
               #{prNumber}
               <ExternalLinkIcon aria-hidden className="size-3" />
-              <span className="sr-only">Open on GitHub</span>
+              <span className="sr-only">
+                {project?.provider === "artifacts" ? "Open pull request" : "Open on GitHub"}
+              </span>
             </a>
           ) : (
             <span className="font-mono text-sm font-medium">#{prNumber}</span>

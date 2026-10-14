@@ -78,6 +78,77 @@ const LIFE_EVENT = {
 
 const LIFE_LOG = { seq: 1, event: LIFE_EVENT };
 
+const repositoryCommit: P.RepositoryCommit = {
+  hash: "a".repeat(40),
+  treeHash: "b".repeat(40),
+  message: "Initial commit",
+  author: { name: "Tempo", email: "tempo@localhost" },
+  committer: { name: "Tempo", email: "tempo@localhost" },
+  parents: [],
+  authoredAt: 1791849600,
+  committedAt: 1791849600,
+};
+
+const repositoryEntry: P.RepositoryEntry = {
+  name: "README.md",
+  path: "README.md",
+  hash: "c".repeat(40),
+  type: "blob",
+};
+
+const repositoryPullRequest: P.RepositoryPullRequest = {
+  id: uid(100),
+  projectId: PROJECT_ID,
+  number: 1,
+  title: "Add repository docs",
+  body: "Ready for review.",
+  headBranch: "tempo/oslo",
+  baseBranch: "main",
+  state: "open",
+  url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=pulls&pull=1`,
+  headSha: "a".repeat(40),
+  baseSha: "d".repeat(40),
+  mergeSha: null,
+  createdAt: at(0),
+  updatedAt: at(0),
+  mergedAt: null,
+};
+
+const repositoryLabel: P.RepositoryLabel = {
+  id: uid(110),
+  projectId: PROJECT_ID,
+  name: "bug",
+  color: "d73a4a",
+  description: "Something is broken",
+  createdAt: at(0),
+  updatedAt: at(0),
+};
+
+const repositoryIssue: P.RepositoryIssue = {
+  id: uid(111),
+  projectId: PROJECT_ID,
+  number: 1,
+  title: "Fix repository browsing",
+  body: "Directory navigation needs a fix.",
+  state: "open",
+  authorId: uid(1),
+  createdAt: at(0),
+  updatedAt: at(1),
+  closedAt: null,
+  url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=issues&issue=1`,
+  labels: [repositoryLabel],
+  commentCount: 1,
+};
+
+const repositoryIssueComment: P.RepositoryIssueComment = {
+  id: uid(112),
+  issueId: repositoryIssue.id,
+  authorId: uid(1),
+  body: "I can reproduce this.",
+  createdAt: at(1),
+  updatedAt: at(1),
+};
+
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 const ENV_ID = uid(901);
 
@@ -324,7 +395,41 @@ export const SHARED_SAMPLES = {
     w.project,
     { ...w.project, id: uid(2), name: "docs", repoId: 812345679, settings: {}, sortOrder: 1 },
     { ...w.project, id: uid(3), name: "pay", repoId: 812345680, sortOrder: 2, environmentId: ENV_ID },
+    {
+      ...w.project,
+      id: uid(3),
+      owner: "tempo",
+      name: "native",
+      installationId: null,
+      repoId: null,
+      provider: "artifacts",
+      artifactRepoId: "repo-native",
+      cloneUrl: null,
+    },
   ],
+  RepositoryCommit: [repositoryCommit],
+  RepositoryEntry: [repositoryEntry],
+  RepositoryDetail: [
+    {
+      projectId: PROJECT_ID,
+      name: "native",
+      description: null,
+      defaultBranch: "main",
+      remote: "https://0123456789abcdef0123456789abcdef.artifacts.cloudflare.net/git/tempo-repos/native.git",
+      readOnly: false,
+      ref: "main",
+      empty: false,
+      entries: [repositoryEntry],
+      commit: repositoryCommit,
+    },
+  ],
+  RepositoryPullRequest: [
+    repositoryPullRequest,
+    { ...repositoryPullRequest, state: "merged", mergeSha: "e".repeat(40), mergedAt: at(1) },
+  ],
+  RepositoryLabel: [repositoryLabel],
+  RepositoryIssue: [repositoryIssue, { ...repositoryIssue, state: "closed", closedAt: at(2) }],
+  RepositoryIssueComment: [repositoryIssueComment],
   WorkspaceSummary: [w.lisbon, w.oslo, w.kyoto],
   OpProgress: [w.opProgress],
   ChangedFile: w.changedFiles,
@@ -602,7 +707,57 @@ const ws = { workspaceId: W1 };
 
 /** At least one input per server function, typed against the function's schema. */
 export const INPUT_SAMPLES = {
+  createRepository: [{ name: "native", defaultBranch: "main" }],
+  importRepository: [{ name: "native", url: "https://github.com/acme/demo.git" }],
+  linkArtifactRepository: [{ name: "native" }],
+  getRepository: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, ref: "main", path: "src" }],
+  getRepositoryFile: [{ projectId: PROJECT_ID, ref: "main", path: "README.md" }],
+  listRepositoryCommits: [{ projectId: PROJECT_ID, ref: "main", offset: 0 }],
+  listRepositoryPullRequests: [{ projectId: PROJECT_ID, state: "all" }],
+  getRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1 }],
+  createRepositoryPullRequest: [
+    {
+      projectId: PROJECT_ID,
+      title: "Add docs",
+      body: "",
+      headBranch: "tempo/oslo",
+      baseBranch: "main",
+      draft: false,
+    },
+  ],
+  updateRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1, state: "closed" }],
   resolveAgentProposal: [{ workspaceId: W1, proposalId: uid(704), apply: true }],
+  listRepositoryIssues: [
+    { projectId: PROJECT_ID },
+    { projectId: PROJECT_ID, state: "all", query: "browsing", labelId: repositoryLabel.id, offset: 0 },
+  ],
+  getRepositoryIssue: [{ projectId: PROJECT_ID, number: 1 }],
+  createRepositoryIssue: [
+    {
+      projectId: PROJECT_ID,
+      title: "Fix repository browsing",
+      body: "Directory navigation needs a fix.",
+      labelIds: [repositoryLabel.id],
+    },
+  ],
+  updateRepositoryIssue: [
+    { projectId: PROJECT_ID, number: 1, state: "closed" },
+    { projectId: PROJECT_ID, number: 1, title: "Updated title", body: "Updated description", labelIds: [] },
+  ],
+  listRepositoryIssueComments: [{ projectId: PROJECT_ID, number: 1, offset: 0 }],
+  createRepositoryIssueComment: [{ projectId: PROJECT_ID, number: 1, body: "I can reproduce this." }],
+  updateRepositoryIssueComment: [
+    { projectId: PROJECT_ID, number: 1, commentId: repositoryIssueComment.id, body: "Updated reply" },
+  ],
+  deleteRepositoryIssueComment: [{ projectId: PROJECT_ID, number: 1, commentId: repositoryIssueComment.id }],
+  listRepositoryLabels: [{ projectId: PROJECT_ID }],
+  createRepositoryLabel: [
+    { projectId: PROJECT_ID, name: "bug", color: "d73a4a", description: "Something is broken" },
+  ],
+  updateRepositoryLabel: [
+    { projectId: PROJECT_ID, labelId: repositoryLabel.id, name: "defect", color: "ffffff", description: "" },
+  ],
+  deleteRepositoryLabel: [{ projectId: PROJECT_ID, labelId: repositoryLabel.id }],
   listAgents: [{}],
   getAgent: [{ agentId: LIBRARY_AGENT.id }],
   saveAgent: [
@@ -827,6 +982,7 @@ export const OUTPUT_SAMPLES = {
     },
   ],
   PollCodexLoginOut: [{ status: "pending" }, { status: "connected" }, { status: "expired" }],
+  GetRepositoryFileOut: [{ content: "# Native repository\n", encoding: "utf8", size: 20 }],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },
     { repoId: 812345679, owner: "acme", name: "docs", defaultBranch: "trunk", private: false },

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { BuildingIcon, ExternalLinkIcon, FolderGit2Icon, LockIcon, UserIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -14,23 +15,49 @@ import {
   DialogTitle,
 } from "~/ui/components/ui/dialog";
 import { Input } from "~/ui/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/components/ui/tabs";
+import { RepositoryForm } from "~/ui/components/repositories/RepositoryForm";
 import { setupStatusQueryOptions } from "~/ui/auth";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { useProjects } from "~/ui/hooks/useProjects";
 import { useDialog } from "~/ui/hooks/useWorkspaceUi";
+import { closeDialog } from "~/ui/state/workspace-ui";
 
 /** 04, Add project: each GitHub App installation with its repos; Link calls linkProject. */
 export function AddProjectDialog() {
   const { open, onOpenChange } = useDialog("addProject");
 
+  const navigate = useNavigate();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add project</DialogTitle>
-          <DialogDescription>Link a repo that the GitHub App can reach.</DialogDescription>
+          <DialogTitle>Add repository</DialogTitle>
+          <DialogDescription>
+            Host code on Cloudflare Artifacts or link a GitHub repository.
+          </DialogDescription>
         </DialogHeader>
-        {open && <Installations />}
+        {open && (
+          <Tabs defaultValue="artifacts" className="gap-4">
+            <TabsList aria-label="Repository provider" className="w-full">
+              <TabsTrigger value="artifacts">Cloudflare Artifacts</TabsTrigger>
+              <TabsTrigger value="github">GitHub</TabsTrigger>
+            </TabsList>
+            <TabsContent value="artifacts">
+              <RepositoryForm
+                onSuccess={(project) => {
+                  toast.success(`Added ${project.name}`);
+                  closeDialog("addProject");
+                  void navigate({ to: "/repositories", search: { project: project.id } });
+                }}
+              />
+            </TabsContent>
+            <TabsContent value="github">
+              <Installations />
+            </TabsContent>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );

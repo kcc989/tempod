@@ -29,6 +29,7 @@ import type { EgressConfig } from "../../egress/rules.ts";
 import { BROWSER_APP_HEADER, BROWSER_CDP_HEADER, PREVIEW_HEADER } from "../../http/preview.ts";
 import { mcpToEgress } from "../../lib/mcp.ts";
 import { errorText, log } from "../../log.ts";
+import { assertArtifactRemote, assertArtifactRepositoryIdentity } from "../../artifacts/repositories.ts";
 import { openUiChannel } from "./channel.ts";
 import {
   connectTempod,
@@ -42,7 +43,7 @@ import { CONVERSATION_INTERVAL_MS, markConversationDirty, saveConversation } fro
 import { discoverModels } from "./model-catalog.ts";
 import { WorkspaceCore, type Author } from "./core.ts";
 import { applyTempodEvent, sendEnv, sendEnvironment } from "./events.ts";
-import { getGithubToken, pollPullRequestSafe } from "./git.ts";
+import { getGithubToken, getRepositoryToken, pollPullRequestSafe } from "./git.ts";
 import { WorkspaceRpcBase } from "./methods.gen.ts";
 import { BROWSER_IDLE_MS, browserConnect, browserFetch, browserIdleCheck, closeBrowser } from "./browser.ts";
 import { newPreviewKey, previewEnter, previewFetch } from "./preview.ts";
@@ -354,6 +355,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   }
   async getEgressConfig(): Promise<EgressConfig> {
     const project = await this.core.project();
+
+    if (project.provider === "artifacts")
+      await assertArtifactRepositoryIdentity(this.core.env, project.name, project.artifactRepoId);
     const environment = await this.core.environment();
     const settings = this.core.settings().environment;
     this.core.setKv("egressPolicy", environment?.egressPolicy ?? settings.egress_policy);
@@ -361,6 +365,11 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     return {
       owner: project.owner,
       repo: project.name,
+      provider: project.provider,
+      cloneUrl:
+        project.provider === "artifacts"
+          ? assertArtifactRemote(project.cloneUrl ?? "", project.name).href
+          : null,
       environmentId: environment?.id ?? null,
       policy: environment?.egressPolicy ?? settings.egress_policy,
       allowlist: environment?.egressAllowlist ?? settings.egress_allowlist,
@@ -368,6 +377,18 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       injectors: environment?.injectors ?? [],
       mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
     };
+  }
+
+  async getRepositoryToken(): Promise<string | null> {
+    if (!this.core.wsOrNull()) return null;
+
+    try {
+      return await getRepositoryToken(this.core);
+    } catch {
+      log("warn", "repository credential unavailable", { workspaceId: this.core.workspaceId });
+
+      return null;
+    }
   }
   async logEgress(row: {
     ts: number;
@@ -657,7 +678,9 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     this.alarmScheduled = true;
     queueMicrotask(() => {
       this.alarmScheduled = false;
-      void this.armAlarm().catch((e) => log("error", "arm alarm failed", { error: errorText(e) }));
+      this.ctx.waitUntil(
+        this.armAlarm().catch((e) => log("error", "arm alarm failed", { error: errorText(e) })),
+      );
     });
   }
   private scheduleHousekeeping(): void {
@@ -672,12 +695,14 @@ export class WorkspaceDO extends WorkspaceRpcBase {
 
       if (!this.core.wsOrNull()) return;
       this.core.lifecycle.kick();
-      void runQueue(
-        this.core,
-        () => this.runner.hasPendingOrRunning(),
-        () => applyPromptBranch(this.core, () => this.resendHello()),
-      ).catch((e) =>
-        log("error", "queue runner failed", { workspaceId: this.core.workspaceId, error: errorText(e) }),
+      this.ctx.waitUntil(
+        runQueue(
+          this.core,
+          () => this.runner.hasPendingOrRunning(),
+          () => applyPromptBranch(this.core, () => this.resendHello()),
+        ).catch((e) =>
+          log("error", "queue runner failed", { workspaceId: this.core.workspaceId, error: errorText(e) }),
+        ),
       );
     });
   }

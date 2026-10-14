@@ -1,8 +1,12 @@
 # Tempo
 
-Tempo is a self-hosted agent workspace for one owner. Each workspace has a GitHub branch, a container, agent chats, checkpoints, terminals and previews. The web app runs on Cloudflare Workers; Tempo for Mac uses GPUI Kit.
+Tempo is an owner-operated Git forge and agent workspace on Cloudflare. It hosts repositories in Cloudflare Artifacts, browses code and commit history, and manages pull requests and issues in Tempo. GitHub-linked repositories remain supported. Workspaces add a branch, a container, agent chats, checkpoints, terminals and previews. The web app runs on Workers; Tempo for Mac uses GPUI Kit.
 
-The spec in [`docs/`](docs/00%20Overview.md) is the source of truth. See [`docs/PROGRESS.md`](docs/PROGRESS.md) for verified work, remaining work and acceptance gates. The product is still in development.
+The spec in [`docs/`](docs/00%20Overview.md) is the source of truth. [`09 Git Forge`](docs/09%20Git%20Forge.md) defines the Artifacts extension. See [`docs/PROGRESS.md`](docs/PROGRESS.md) for verified work, remaining work and acceptance gates. The product is still in development.
+
+Open **Repositories** to create a repo, import a public HTTPS Git remote, or link an existing Artifacts repo. Native repos support folder and file browsing, branch/tag/commit refs, commit history, and pull request creation, editing, closing and reopening. Issues support creation and editing, close/reopen, comments, and colored labels in both clients. Open a PR in a workspace to review its diff and merge or squash it. Native merges preserve workspace edits and reject conflicts or concurrent remote changes. Artifacts repositories have no CI checks integration yet.
+
+Deployment binds `ARTIFACTS` to `tempo-repos`; set `TEMPO_ARTIFACTS_NAMESPACE` to use another namespace. Artifacts requires Workers Paid. Apply the preservation-tested D1 and DO migrations and use Tempo for Mac 0.2.0 or newer. GitHub remains the owner sign-in provider, while native repo storage and PR operations do not require a GitHub repository or installation.
 
 ## Local development
 
@@ -14,6 +18,8 @@ bun run dev
 ```
 
 The web app needs the owner and GitHub App setup described in [`05 Security and Ops`](docs/05%20Security%20and%20Ops.md). Local tests use fake containers and test credentials; a local test pass does not prove a hosted agent session works.
+
+Wrangler's Artifacts binding uses the real cloud service during local development; it has no local simulator. The test suite uses explicit fake capabilities.
 
 ```sh
 bun run typecheck

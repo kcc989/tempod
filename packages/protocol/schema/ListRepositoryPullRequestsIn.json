@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ListRepositoryPullRequestsIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["open", "closed", "all"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["projectId"],
+  "additionalProperties": true
+}

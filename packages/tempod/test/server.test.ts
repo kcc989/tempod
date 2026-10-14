@@ -39,7 +39,7 @@ describe("HTTP", () => {
     const res = await fetch(h.base + "/v1/health", { headers: auth });
     expect(res.status).toBe(200);
     const body = Schema.decodeUnknownSync(HealthResponse)(await res.json());
-    expect(body.version).toBe("0.1.0");
+    expect(body.version).toBe("0.2.0");
     expect(body.incarnation).toBe(h.app.outbox.incarnation);
     expect(body.incarnation).toMatch(/^[0-9a-hjkmnp-tv-z]{26}$/);
   });

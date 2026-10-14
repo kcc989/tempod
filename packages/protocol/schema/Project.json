@@ -9,22 +9,81 @@
     "installationId": {
       "anyOf": [
         {
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
         },
         {
-          "type": "string",
-          "enum": ["Infinity", "-Infinity", "NaN"]
+          "type": "null"
         }
       ]
     },
     "repoId": {
       "anyOf": [
         {
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
         },
         {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "anyOf": [
+        {
           "type": "string",
-          "enum": ["Infinity", "-Infinity", "NaN"]
+          "enum": ["github", "artifacts"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "artifactRepoId": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cloneUrl": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "type": "null"
         }
       ]
     },

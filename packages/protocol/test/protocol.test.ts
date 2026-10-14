@@ -163,6 +163,8 @@ describe("contract", () => {
         "git.renameBranch",
         "git.readFile",
         "artifact.release",
+        "git.merge",
+        "git.deleteBranch",
         "fs.list",
         "fs.read",
         "fs.search",

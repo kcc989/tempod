@@ -5,7 +5,7 @@ import type { Env } from "../env.ts";
 import { runFn } from "../server/run.ts";
 import { errorOf, errorResponse } from "./common.ts";
 
-export const MIN_MAC_CLIENT = "0.1.0";
+export const MIN_MAC_CLIENT = "0.2.0";
 
 /** /api/v1 (07, Server changes for native clients). Bearer tokens only. */
 export const handleApiV1 = async (request: Request, env: Env, url: URL): Promise<Response> => {

@@ -111,7 +111,7 @@
     },
     "packages/tempod": {
       "name": "@tempo/tempod",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@agentclientprotocol/sdk": "1.8.0",
         "@tempo/protocol": "workspace:*",

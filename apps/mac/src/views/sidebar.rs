@@ -366,6 +366,15 @@ fn footer(cx: &App) -> impl IntoElement {
         .border_t_1()
         .border_color(color(Token::Border, cx))
         .child(
+            Button::new("repositories")
+                .ghost()
+                .small()
+                .label("Repositories")
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(crate::actions::ShowRepositories), cx)
+                }),
+        )
+        .child(
             Button::new("history")
                 .ghost()
                 .small()
@@ -430,9 +439,9 @@ impl RenderOnce for WorkspaceSidebar {
                 .child(
                     Button::new("add-project")
                         .primary()
-                        .label("Add project")
+                        .label("Add repository")
                         .on_click(|_, window, cx| {
-                            window.dispatch_action(Box::new(crate::actions::AddProject), cx)
+                            window.dispatch_action(Box::new(crate::actions::ShowRepositories), cx)
                         }),
                 )
                 .into_any_element()

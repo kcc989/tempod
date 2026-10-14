@@ -35,6 +35,8 @@ export const AGENT_HOSTS = [
 export interface EgressConfig {
   readonly owner: string;
   readonly repo: string;
+  readonly provider?: "github" | "artifacts";
+  readonly cloneUrl?: string | null;
   readonly policy: EgressPolicy;
   readonly allowlist: ReadonlyArray<string>;
   readonly mcp: ReadonlyArray<McpEgress>;
@@ -137,7 +139,13 @@ export type Decision =
       readonly action: "forward";
       readonly set?: {
         readonly name: string;
-        readonly value: "github-basic" | "github-bearer" | "openrouter" | "anthropic" | "openai";
+        readonly value:
+          | "github-basic"
+          | "github-bearer"
+          | "artifact-bearer"
+          | "openrouter"
+          | "anthropic"
+          | "openai";
       };
       /** Rule 12: headers to replace with the CredentialDO value under `key`. */
       readonly mcp?: ReadonlyArray<{ readonly name: string; readonly key: string }>;
@@ -158,14 +166,30 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
 
   if (url.protocol === "http:") return policy(8, host, config);
 
+  if (config.provider === "artifacts" && config.cloneUrl) {
+    const remote = new URL(config.cloneUrl);
+    const endpoint = url.pathname.slice(remote.pathname.length);
+
+    if (
+      remote.protocol === "https:" &&
+      url.protocol === "https:" &&
+      url.origin === remote.origin &&
+      url.pathname.startsWith(remote.pathname) &&
+      ["", "/info/refs", "/git-upload-pack", "/git-receive-pack"].includes(endpoint)
+    ) {
+      return { rule: 2, action: "forward", set: { name: "authorization", value: "artifact-bearer" } };
+    }
+  }
+
   if (
+    config.provider !== "artifacts" &&
     (host === "github.com" || host === "codeload.github.com") &&
     isRepoPath(url.pathname, config.owner, config.repo)
   ) {
     return { rule: 2, action: "forward", set: { name: "authorization", value: "github-basic" } };
   }
 
-  if (host === "api.github.com" || host === "uploads.github.com") {
+  if (config.provider !== "artifacts" && (host === "api.github.com" || host === "uploads.github.com")) {
     return { rule: 3, action: "forward", set: { name: "authorization", value: "github-bearer" } };
   }
 

@@ -35,6 +35,10 @@ export const PrState = Schema.Literals(PR_STATES);
 
 export type PrState = typeof PrState.Type;
 
+export const IssueState = Schema.Literals(["open", "closed"]);
+
+export type IssueState = typeof IssueState.Type;
+
 export const CHECKS_STATES = ["pending", "success", "failure"] as const;
 
 export const ChecksState = Schema.Literals(CHECKS_STATES);
@@ -55,6 +59,7 @@ export const OP_KINDS = [
   "restore",
   "revert",
   "commit_push",
+  "merge_pr",
   "housekeeping",
 ] as const;
 

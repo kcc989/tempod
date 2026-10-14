@@ -88,6 +88,10 @@ pub struct MainWindow {
     /// An action for the shown workspace that arrived before its view existed.
     pending_action: Option<Box<dyn gpui_kit::Action>>,
     live_subscriptions: Vec<(gpui_kit::EntityId, Subscription)>,
+    repositories: Option<Entity<super::repositories::RepositoryView>>,
+    repository_events: Option<Subscription>,
+    show_repositories: bool,
+    workspace_navigation_rev: u64,
 }
 
 impl MainWindow {
@@ -134,6 +138,11 @@ impl MainWindow {
                 if this.settings_active && !settings_open {
                     window.focus(&this.focus, cx);
                 }
+                let navigation_rev = state.read(cx).workspace_navigation_rev;
+                if this.workspace_navigation_rev != navigation_rev {
+                    this.workspace_navigation_rev = navigation_rev;
+                    this.show_repositories = false;
+                }
                 this.settings_active = settings_open;
                 this.signed_in = signed_in;
                 cx.notify();
@@ -146,6 +155,9 @@ impl MainWindow {
         let signed_in = live_state
             .as_ref()
             .is_some_and(|s| matches!(s.read(cx).auth, crate::app::AuthState::SignedIn));
+        let workspace_navigation_rev = live_state
+            .as_ref()
+            .map_or(0, |state| state.read(cx).workspace_navigation_rev);
         let sign_in = live_state.map(|_| cx.new(|cx| super::sign_in::SignInView::new(window, cx)));
         let bounds = cx.observe_window_bounds(window, |_, window, cx| {
             if let WindowBounds::Windowed(bounds) = window.window_bounds() {
@@ -202,6 +214,10 @@ impl MainWindow {
             live_workspaces: Vec::new(),
             pending_action: None,
             live_subscriptions: Vec::new(),
+            repositories: None,
+            repository_events: None,
+            show_repositories: false,
+            workspace_navigation_rev,
             top_bar,
             tabs,
             transcript: cx.new(|cx| TranscriptView::new(rows, cx)),
@@ -335,6 +351,9 @@ impl MainWindow {
     }
 
     fn right_visible(&self, cx: &App) -> bool {
+        if self.show_repositories {
+            return false;
+        }
         match self.live_active(cx) {
             Some(view) => {
                 let view = view.read(cx);
@@ -397,6 +416,30 @@ impl MainWindow {
 
     fn render_center(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         if let Some(app) = crate::app::AppState::try_global(cx) {
+            if self.show_repositories || app.read(cx).active_workspace.is_none() {
+                self.show_repositories = true;
+                if self.repositories.is_none()
+                    && let Some(client) = app.read(cx).client()
+                {
+                    let view =
+                        cx.new(|cx| super::repositories::RepositoryView::new(client, window, cx));
+                    self.repository_events = Some(cx.subscribe(
+                        &view,
+                        |this, _, event: &super::repositories::RepositoryEvent, cx| {
+                            let super::repositories::RepositoryEvent::OpenWorkspace(id) = event;
+                            crate::app::AppState::global(cx).update(cx, |state, cx| {
+                                state.show_workspace(id, cx);
+                            });
+                            this.show_repositories = false;
+                            cx.notify();
+                        },
+                    ));
+                    self.repositories = Some(view);
+                }
+                if let Some(view) = &self.repositories {
+                    return div().size_full().child(view.clone()).into_any_element();
+                }
+            }
             let cached: Vec<_> = app
                 .read(cx)
                 .workspaces
@@ -582,6 +625,9 @@ impl Render for MainWindow {
         {
             self.hide_browser_views(None, cx);
             self.live_workspaces.clear();
+            self.repositories = None;
+            self.repository_events = None;
+            self.show_repositories = false;
             return v_flex()
                 .size_full()
                 .bg(color(Token::Background, cx))
@@ -616,7 +662,11 @@ impl Render for MainWindow {
         let width = f32::from(window.viewport_size().width);
         self.narrow = width < RIGHT_COLLAPSE_WIDTH;
         let pane_sizes = cx.global::<crate::storage::Local>().state().panes;
-        let show_right = right_side_visible(width, self.panes.right, self.panes.right_when_narrow)
+        let repository_center = self.show_repositories
+            || crate::app::AppState::try_global(cx)
+                .is_some_and(|app| app.read(cx).active_workspace.is_none());
+        let show_right = !repository_center
+            && right_side_visible(width, self.panes.right, self.panes.right_when_narrow)
             && self.right_visible(cx);
         let sidebar = if let Some(app_state) = crate::app::AppState::try_global(cx) {
             let hub = app_state.read(cx).hub.read(cx);
@@ -632,7 +682,8 @@ impl Render for MainWindow {
             } else {
                 WorkspaceSidebar::from_hub(cx)
                     .active(app_state.read(cx).active_workspace.clone().map(Into::into))
-                    .on_select(|id, _, cx| {
+                    .on_select(|id, window, cx| {
+                        window.dispatch_action(Box::new(HideRepositories), cx);
                         crate::app::AppState::global(cx).update(cx, |state, cx| {
                             state.show_workspace(id, cx);
                         });
@@ -732,6 +783,14 @@ impl Render for MainWindow {
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &ToggleRightSide, _, cx| this.toggle_right(cx)))
+            .on_action(cx.listener(|this, _: &ShowRepositories, _, cx| {
+                this.show_repositories = true;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &HideRepositories, _, cx| {
+                this.show_repositories = false;
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &ToggleBottomPanel, _, cx| {
                 if let Some(view) = this.live_active(cx) {
                     let tools = view.read(cx).tools.clone();
@@ -907,6 +966,42 @@ mod tests {
         assert!(!right_side_visible(1280., false, true));
         assert!(!right_side_visible(1099., true, false));
         assert!(right_side_visible(1099., true, true));
+    }
+
+    #[gpui_kit::test]
+    fn repositories_survive_settings_updates_and_return_to_a_reselected_workspace(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        cx.background_executor.allow_parking();
+        let (view, app) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_global(crate::storage::Local::load(None));
+            let (_sender, urls) = async_channel::unbounded();
+            crate::app::init(crate::client::ClientRuntime::start().unwrap(), urls, cx);
+            let app = crate::app::AppState::global(cx);
+            let (_, view) = open(MainWindowContent::default(), cx).unwrap();
+            app.update(cx, |app, cx| {
+                app.auth = crate::app::AuthState::SignedIn;
+                app.show_workspace("workspace-1", cx);
+            });
+            (view, app)
+        });
+        cx.run_until_parked();
+        view.update(cx, |view, cx| {
+            view.show_repositories = true;
+            cx.notify();
+        });
+        app.update(cx, |app, cx| {
+            app.agent_library_rev += 1;
+            cx.notify();
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| assert!(view.show_repositories));
+        app.update(cx, |app, cx| {
+            app.show_workspace("workspace-1", cx);
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| assert!(!view.show_repositories));
     }
 }
 

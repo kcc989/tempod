@@ -6,6 +6,8 @@ import { turns } from "../../db/workspace-do.ts";
 import { requireGithubAppConfig } from "../../github/app.ts";
 import { mintInstallationToken } from "../../github/api.ts";
 import { checksStateOf, github, prStateOf } from "../../github/provider.ts";
+import { artifactBranchExists, artifactToken } from "../../artifacts/repositories.ts";
+import { getArtifactPullRequest } from "../../artifacts/pull-requests.ts";
 import { errorText, log } from "../../log.ts";
 import { requireTempod } from "./container.ts";
 import type { WorkspaceCore } from "./core.ts";
@@ -14,13 +16,43 @@ const TOKEN_MARGIN_MS = 5 * 60_000;
 
 /** Repo-scoped installation token, cached in memory until 5 minutes before expiry (01). */
 export const getGithubToken = async (core: WorkspaceCore): Promise<string> => {
-  if (core.ghToken && core.ghToken.expiresAt - TOKEN_MARGIN_MS > Date.now()) return core.ghToken.token;
   const project = await core.project();
+
+  if (project.provider !== "github" || project.installationId === null || project.repoId === null)
+    throw new TempoError("REPO_NOT_ACCESSIBLE");
+
+  if (core.ghToken && core.ghToken.expiresAt - TOKEN_MARGIN_MS > Date.now()) return core.ghToken.token;
   const config = await requireGithubAppConfig(core.env);
   const token = await mintInstallationToken(config, project.installationId, [project.repoId]);
   core.ghToken = token;
 
   return token.token;
+};
+
+export const getRepositoryToken = async (core: WorkspaceCore): Promise<string> => {
+  const project = await core.project();
+
+  if (project.provider === "github") return getGithubToken(core);
+
+  if (!project.artifactRepoId) throw new TempoError("REPO_NOT_ACCESSIBLE");
+
+  return artifactToken(core.env, project.name, "write", project.artifactRepoId);
+};
+
+export const repositoryBranchExists = async (core: WorkspaceCore, branch: string): Promise<boolean> => {
+  const project = await core.project();
+
+  if (project.provider === "artifacts") {
+    if (!project.artifactRepoId) throw new TempoError("REPO_NOT_ACCESSIBLE");
+
+    return artifactBranchExists(core.env, project.name, branch, project.artifactRepoId);
+  }
+
+  return github.branchExists(
+    await getGithubToken(core),
+    { owner: project.owner, name: project.name },
+    branch,
+  );
 };
 
 export const summarize = (files: ReadonlyArray<ChangedFile>): ChangesSummary => ({
@@ -52,6 +84,21 @@ export const refreshPullRequest = async (core: WorkspaceCore): Promise<FnOutput<
 
   if (row.prNumber === null) return { prNumber: null, prState: null, checksState: null, prTitle: null };
   const project = await core.project();
+
+  if (project.provider === "artifacts") {
+    const pr = await getArtifactPullRequest(core.env, project, row.prNumber);
+    const titleChanged = core.kv<string>("prTitle") !== pr.title;
+    core.setKv("prTitle", pr.title);
+    core.setKv("checkRuns", []);
+
+    if (pr.state !== row.prState || titleChanged || row.checksState !== null) {
+      core.updateWs({ prState: pr.state, checksState: null });
+      core.publish();
+    }
+
+    return { prNumber: row.prNumber, prState: pr.state, prTitle: pr.title, checksState: null };
+  }
+
   const token = await getGithubToken(core);
   const repo = { owner: project.owner, name: project.name };
   const pr = await github.getPullRequest(token, repo, row.prNumber);

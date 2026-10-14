@@ -51,10 +51,13 @@ export const projects = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    installationId: integer("installation_id")
+    installationId: integer("installation_id").references(() => githubInstallations.installationId),
+    repoId: integer("repo_id"),
+    provider: text("provider", { enum: ["github", "artifacts"] })
       .notNull()
-      .references(() => githubInstallations.installationId),
-    repoId: integer("repo_id").notNull(),
+      .default("github"),
+    artifactRepoId: text("artifact_repo_id"),
+    cloneUrl: text("clone_url"),
     repoOwner: text("repo_owner").notNull(),
     repoName: text("repo_name").notNull(),
     defaultBranch: text("default_branch").notNull(),
@@ -64,7 +67,121 @@ export const projects = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (t) => [uniqueIndex("projects_user_repo").on(t.userId, t.repoId)],
+  (t) => [
+    uniqueIndex("projects_user_repo").on(t.userId, t.repoId),
+    uniqueIndex("projects_user_artifact_repo").on(t.userId, t.artifactRepoId),
+    check("projects_provider", sql`${t.provider} IN ('github','artifacts')`),
+    check(
+      "projects_repository",
+      sql`(${t.provider} = 'github' AND ${t.installationId} IS NOT NULL AND ${t.repoId} IS NOT NULL) OR (${t.provider} = 'artifacts' AND ${t.artifactRepoId} IS NOT NULL AND ${t.cloneUrl} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const pullRequests = sqliteTable(
+  "pull_requests",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    headBranch: text("head_branch").notNull(),
+    baseBranch: text("base_branch").notNull(),
+    state: text("state", { enum: ["open", "draft", "merged", "closed"] }).notNull(),
+    headSha: text("head_sha"),
+    baseSha: text("base_sha"),
+    mergeSha: text("merge_sha"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    mergedAt: integer("merged_at"),
+  },
+  (t) => [
+    uniqueIndex("pull_requests_project_number").on(t.projectId, t.number),
+    uniqueIndex("pull_requests_project_open_head")
+      .on(t.projectId, t.headBranch)
+      .where(sql`state IN ('open','draft')`),
+    check("pull_requests_state", sql`${t.state} IN ('open','draft','merged','closed')`),
+  ],
+);
+
+export const issues = sqliteTable(
+  "issues",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    state: text("state", { enum: ["open", "closed"] })
+      .notNull()
+      .default("open"),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    closedAt: integer("closed_at"),
+  },
+  (t) => [
+    uniqueIndex("issues_project_number").on(t.projectId, t.number),
+    index("issues_project_state_number").on(t.projectId, t.state, sql`${t.number} DESC`),
+    check("issues_state", sql`${t.state} IN ('open','closed')`),
+  ],
+);
+
+export const issueComments = sqliteTable(
+  "issue_comments",
+  {
+    id: text("id").primaryKey(),
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => issues.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [index("issue_comments_issue_created").on(t.issueId, t.createdAt, t.id)],
+);
+
+export const repositoryLabels = sqliteTable(
+  "labels",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    nameKey: text("name_key").notNull(),
+    color: text("color").notNull(),
+    description: text("description").notNull().default(""),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("labels_project_name").on(t.projectId, t.nameKey),
+    check("labels_color", sql`length(${t.color}) = 6 AND ${t.color} NOT GLOB '*[^0-9a-f]*'`),
+  ],
+);
+
+export const issueLabels = sqliteTable(
+  "issue_labels",
+  {
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => issues.id, { onDelete: "cascade" }),
+    labelId: text("label_id")
+      .notNull()
+      .references(() => repositoryLabels.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.issueId, t.labelId] })],
 );
 
 export const mcpServers = sqliteTable(
@@ -263,3 +380,11 @@ export const agentProposalApplications = sqliteTable(
   },
   (t) => [check("agent_proposal_guard", sql`${t.guard} = 1`)],
 );
+
+export type PullRequestRow = typeof pullRequests.$inferSelect;
+
+export type IssueRow = typeof issues.$inferSelect;
+
+export type IssueCommentRow = typeof issueComments.$inferSelect;
+
+export type RepositoryLabelRow = typeof repositoryLabels.$inferSelect;

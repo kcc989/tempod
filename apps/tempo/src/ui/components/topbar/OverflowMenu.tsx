@@ -97,7 +97,7 @@ export function OverflowMenu({
           <DropdownMenuItem asChild>
             <a href={githubUrlFor(project, w, d?.pushed)} target="_blank" rel="noopener noreferrer">
               <ExternalLinkIcon />
-              Open on GitHub
+              {project.provider === "artifacts" ? "Open repository" : "Open on GitHub"}
             </a>
           </DropdownMenuItem>
         ) : (
