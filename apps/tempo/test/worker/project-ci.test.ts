@@ -27,6 +27,11 @@ const PIPELINE = [
   "required: [c]",
 ].join("\n");
 
+interface StartHooks {
+  onStart: (job: CiJobStart) => void;
+  instance: RepositoryCiDO | null;
+}
+
 /** A native project whose coordinator talks to fake runners and fake branch tips. */
 const nativeCi = async () => {
   const seed = await seedProject();
@@ -40,9 +45,12 @@ const nativeCi = async () => {
   const cancels: string[] = [];
   const tips = new Map<string, string>([["main", sha("1")]]);
 
+  const hooks: StartHooks = { onStart: () => undefined, instance: null };
+
   const runner: CiRunner = {
     ciStart: async (job) => {
       starts.push(job);
+      hooks.onStart(job);
 
       return { ok: true, value: {} };
     },
@@ -54,6 +62,7 @@ const nativeCi = async () => {
   };
 
   await runInDurableObject(stub, (instance: RepositoryCiDO) => {
+    hooks.instance = instance;
     instance.runners = { getByName: () => runner };
     instance.branchTips = async () => [...tips].map(([name, tip]) => ({ name, sha: tip }));
     instance.headSha = async (_project, branch) => tips.get(branch) ?? null;
@@ -86,7 +95,7 @@ const nativeCi = async () => {
 
   const detail = (runId: string) => ci.getCiRun(ctx, { projectId: seed.projectId, runId });
 
-  return { ...seed, stub, starts, cancels, tips, ctx, save, finish, detail };
+  return { ...seed, stub, starts, cancels, tips, ctx, save, finish, detail, hooks };
 };
 
 const code = async <T>(work: () => Promise<T>) => {
@@ -220,6 +229,23 @@ describe("project CI pipeline", () => {
     expect(await code(() => ci.startCiRun(w.ctx, { projectId: w.projectId, branch: "a..b" }))).toMatchObject({
       code: "BRANCH_INVALID",
     });
+  });
+
+  it.concurrent("stops a runner whose start raced a cancel", async ({ expect }) => {
+    const w = await nativeCi();
+    await w.save("version: 1\njobs:\n  only:\n    run: x\n");
+    let runId = "";
+
+    // The cancel's state change is synchronous; its runner stop waits for this start to return.
+    w.hooks.onStart = (job) => {
+      runId = job.runId;
+      void w.hooks.instance!.cancel(job.runId);
+    };
+
+    await w.stub.ingest({ branch: "main", sha: sha("7") });
+    expect((await w.detail(runId)).run).toMatchObject({ status: "completed", conclusion: "cancelled" });
+    // One stop from the cancel itself (which may reach the runner first) and one after the start returned.
+    await expect.poll(() => w.cancels.filter((token) => token === w.starts[0]!.token).length).toBe(2);
   });
 
   it.concurrent("gates merges on required jobs of the current revision, reports checks and cleans up", async ({

@@ -452,13 +452,15 @@ export class RepositoryCiDO extends DurableObject<Env> {
     extra: { exitCode: number | null; summary: string | null },
     finalize = true,
   ): void {
-    this.db
+    // Conditional: a job read before an await may have completed since (cancel, result, watchdog).
+    const changed = this.db
       .update(ciJobs)
       .set({ status: "completed", conclusion, ...extra, token: null, completedAt: Date.now() })
-      .where(and(eq(ciJobs.runId, job.runId), eq(ciJobs.key, job.key)))
-      .run();
+      .where(and(eq(ciJobs.runId, job.runId), eq(ciJobs.key, job.key), ne(ciJobs.status, "completed")))
+      .returning({ key: ciJobs.key })
+      .all();
 
-    if (finalize) this.finalize(job.runId);
+    if (changed.length && finalize) this.finalize(job.runId);
   }
 
   /** Completes a run whose jobs all completed. */
@@ -532,8 +534,8 @@ export class RepositoryCiDO extends DurableObject<Env> {
         }
 
         if (!needs.every((need) => need?.status === "completed") || running >= CI.parallelJobs) continue;
-        running++;
-        await this.startJob(run, job);
+
+        if (await this.startJob(run, job)) running++;
       }
 
       this.finalize(run.id);
@@ -542,19 +544,27 @@ export class RepositoryCiDO extends DurableObject<Env> {
     await this.arm();
   }
 
-  private async startJob(run: RunRow, job: JobRow): Promise<void> {
+  private async startJob(run: RunRow, job: JobRow): Promise<boolean> {
     const token = newId();
     const now = Date.now();
-    this.db
+
+    const claimed = this.db
       .update(ciJobs)
       .set({ status: "running", token, startedAt: now })
-      .where(and(eq(ciJobs.runId, run.id), eq(ciJobs.key, job.key)))
-      .run();
+      .where(and(eq(ciJobs.runId, run.id), eq(ciJobs.key, job.key), eq(ciJobs.status, "queued")))
+      .returning({ key: ciJobs.key })
+      .all();
 
-    if (run.status === "queued") {
-      this.db.update(ciRuns).set({ status: "running", startedAt: now }).where(eq(ciRuns.id, run.id)).run();
-      this.notify(run.branch);
-    }
+    if (!claimed.length) return false;
+
+    const begun = this.db
+      .update(ciRuns)
+      .set({ status: "running", startedAt: now })
+      .where(and(eq(ciRuns.id, run.id), eq(ciRuns.status, "queued")))
+      .returning({ id: ciRuns.id })
+      .all();
+
+    if (begun.length) this.notify(run.branch);
 
     try {
       const project = await this.project();
@@ -576,6 +586,15 @@ export class RepositoryCiDO extends DurableObject<Env> {
       });
 
       if (!started.ok) throw new TempoError(started.error.code, started.error.message);
+
+      const after = this.db
+        .select({ token: ciJobs.token })
+        .from(ciJobs)
+        .where(and(eq(ciJobs.runId, run.id), eq(ciJobs.key, job.key)))
+        .get();
+
+      // A cancel during the start reached the runner before its job did.
+      if (after?.token !== token) await this.runners.getByName(ciRunnerName(run.id, job.key)).ciCancel(token);
     } catch (e) {
       log("warn", "ci job start failed", { projectId: this.projectId, error: errorText(e) });
 
@@ -588,6 +607,8 @@ export class RepositoryCiDO extends DurableObject<Env> {
       if (current?.status === "running" && current.token === token)
         this.completeJob(current, "failure", { exitCode: null, summary: "The CI container did not start." });
     }
+
+    return true;
   }
 
   /** Jobs past their timeout plus grace complete as timed out (10, Runs and jobs). */
