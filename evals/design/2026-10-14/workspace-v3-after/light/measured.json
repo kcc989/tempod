@@ -193,7 +193,8 @@
           "muted": "#696969",
           "border": "#e6e6e6",
           "primary": "#2563eb",
-          "on_primary": "#fafafa"
+          "on_primary": "#fafafa",
+          "input": "#e6e6e6"
         },
         "textPairs": [
           {
@@ -302,34 +303,34 @@
         ],
         "inputBoundaries": [
           {
-            "input": "border or surface fill",
+            "input": "input border or surface fill",
             "on": "background",
             "ratio": 1.25
           },
           {
-            "input": "border or surface fill",
+            "input": "input border or surface fill",
             "on": "sidebar",
             "ratio": 1.19
           },
           {
-            "input": "border or surface fill",
+            "input": "input border or surface fill",
             "on": "popup",
             "ratio": 1.25
           }
         ],
         "failing": [
           {
-            "input": "border or surface fill",
+            "input": "input border or surface fill",
             "on": "background",
             "ratio": 1.25
           },
           {
-            "input": "border or surface fill",
+            "input": "input border or surface fill",
             "on": "sidebar",
             "ratio": 1.19
           },
           {
-            "input": "border or surface fill",
+            "input": "input border or surface fill",
             "on": "popup",
             "ratio": 1.25
           }

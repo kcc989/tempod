@@ -3,7 +3,7 @@
 Usage: python3 evals/design/measure.py <case-dir>
 
 Reads from the case directory:
-  capture.json  "theme" (dark|light), "framePixels" [w, h] of the AX coordinate frame,
+  capture.json  "theme" (dark|light), optional "tokensRev" (git revision of the build's tokens.rs), "framePixels" [w, h] of the AX coordinate frame,
                 "windowPoints" [w, h] of the window, and "axStates" {state: file}
   ax/<state>.txt  the AX summary lines from the desktop tool for each state
   full.png      the window at 2x the AX frame
@@ -12,6 +12,7 @@ Writes measured.json. Thresholds come from WCAG 2.2 and tab 07; nothing is tuned
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,15 +21,21 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[2]
 TOKENS = ROOT / "apps/mac/src/views/tokens.rs"
 LINE = re.compile(r"\[(\d+)\] (\S+) \[(-?\d+),(-?\d+) (\d+)×(\d+)\](?: \"(.*)\")?")
-SLOTS = ["background", "sidebar", "panel", "surface", "popup", "hover", "selected", "text", "muted", "border", "primary", "on_primary"]
+SLOTS = ["background", "sidebar", "panel", "surface", "popup", "hover", "selected", "text", "muted", "border", "primary", "on_primary", "input"]
 
 
-def palette(theme):
-    src = TOKENS.read_text()
+def palette(theme, rev=None):
+    if rev:
+        src = subprocess.run(["git", "-C", str(ROOT), "show", f"{rev}:{TOKENS.relative_to(ROOT)}"], capture_output=True, text=True, check=True).stdout
+    else:
+        src = TOKENS.read_text()
     block = src[src.index("let (\n                background,"):]
-    hexes = re.findall(r'"(#[0-9a-fA-F]{6})"', block)[:24]
-    values = hexes[:12] if theme == "dark" else hexes[12:24]
-    return dict(zip(SLOTS, values))
+    n = len(SLOTS) if "                input,\n" in block[:600] else len(SLOTS) - 1
+    hexes = re.findall(r'"(#[0-9a-fA-F]{6})"', block)[: 2 * n]
+    values = hexes[:n] if theme == "dark" else hexes[n : 2 * n]
+    pal = dict(zip(SLOTS, values))
+    pal.setdefault("input", pal["border"])
+    return pal
 
 
 def luminance(hex_):
@@ -135,9 +142,10 @@ def chat_bar_inset(elems, img, frame_to_px, scale):
     return abs(inset - 12) <= 1, {"dividerPt": round(divider_pt, 1), "chatBarPt": round(bar["x"], 1), "insetPt": inset, "expectedPt": 12}
 
 
-def target_size(elems):
+def target_size(elems, slack):
+    # AX frames are whole pixels of a scaled frame, so a true 24 pt edge can read up to one frame pixel short.
     targets = [e for e in elems if e["role"].startswith(("AXButton/AXUnknown", "AXRadioButton", "AXCheckBox"))]
-    small = [e for e in targets if e["w"] < 24 or e["h"] < 24]
+    small = [e for e in targets if e["w"] < 24 - slack or e["h"] < 24 - slack]
     fails = []
     for e in small:
         cx, cy = e["x"] + e["w"] / 2, e["y"] + e["h"] / 2
@@ -153,8 +161,8 @@ def target_size(elems):
     return not fails, {"undersized": len(small), "failingSpacingException": fails}
 
 
-def colors(theme):
-    p = palette(theme)
+def colors(theme, rev=None):
+    p = palette(theme, rev)
     text_bgs = ["background", "sidebar", "panel", "surface", "popup", "hover", "selected"]
     pairs = [{"fg": fg, "bg": bg, "ratio": contrast(p[fg], p[bg])} for fg in ("text", "muted") for bg in text_bgs]
     pairs.append({"fg": "on_primary", "bg": "primary", "ratio": contrast(p["on_primary"], p["primary"])})
@@ -162,8 +170,8 @@ def colors(theme):
     ring = [{"fg": "primary", "bg": bg, "ratio": contrast(p["primary"], p[bg])} for bg in ("background", "sidebar", "surface", "popup")]
     inputs = []
     for container in ("background", "sidebar", "popup"):
-        edge = max(contrast(p["border"], p[container]), contrast(p["surface"], p[container]))
-        inputs.append({"input": "border or surface fill", "on": container, "ratio": round(edge, 2)})
+        edge = max(contrast(p["input"], p[container]), contrast(p["surface"], p[container]))
+        inputs.append({"input": "input border or surface fill", "on": container, "ratio": round(edge, 2)})
     nontext_fail = [x for x in ring if x["ratio"] < 3] + [x for x in inputs if x["ratio"] < 3]
     info = {
         "selectedVsSidebar": contrast(p["selected"], p["sidebar"]),
@@ -189,7 +197,7 @@ def main(case):
     default = states["default"]
     img = Image.open(case / "full.png").convert("RGB")
     frame_to_px = img.width / fw
-    pal = palette(cap["theme"])
+    pal = palette(cap["theme"], cap.get("tokensRev"))
     sidebar_bg = tuple(int(pal["sidebar"][i : i + 2], 16) for i in (1, 3, 5))
 
     results = {}
@@ -198,8 +206,8 @@ def main(case):
     results["footerLeftAligned"] = footer_rows(default, img, sidebar_bg, frame_to_px, scale)
     results["spacingOnScale"] = spacing_on_scale(default)
     results["chatBarInset"] = chat_bar_inset(default, img, frame_to_px, scale)
-    results["targetSize24px"] = target_size(default)
-    text_ok, text_detail, nontext_ok, nontext_detail, info = colors(cap["theme"])
+    results["targetSize24px"] = target_size(default, scale)
+    text_ok, text_detail, nontext_ok, nontext_detail, info = colors(cap["theme"], cap.get("tokensRev"))
     results["textContrastAA"] = (text_ok, text_detail)
     results["nonTextContrast3"] = (nontext_ok, nontext_detail)
 
