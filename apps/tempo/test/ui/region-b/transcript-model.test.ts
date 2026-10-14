@@ -92,6 +92,17 @@ describe("transcript rows", () => {
 
     expect(buildTranscriptRows(["u1", "u2"], items, turns)).toEqual([]);
   });
+  it("places startup progress after the prompt and removes it when startup finishes", () => {
+    const turns = map(turn({ id: "t1", status: "queued", seq: 1, startedAt: null }));
+    const items = map(userMessage("u1", "Read the README", { turnId: "t1" }));
+    const startup = { title: "Cloning repo", setup: false };
+
+    expect(buildTranscriptRows(["u1"], items, turns, "default", startup)).toEqual([
+      expect.objectContaining({ kind: "item", key: "u1" }),
+      { kind: "startup", key: "workspace-startup", ...startup },
+    ]);
+    expect(buildTranscriptRows(["u1"], items, turns).map((r) => r.key)).toEqual(["u1"]);
+  });
   it("shows items with a footer after each ended turn and a working row for the running one", () => {
     const turns = map(
       turn({ id: "t1", seq: 1, status: "completed", startedAt: 100, endedAt: 900 }),

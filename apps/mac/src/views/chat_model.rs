@@ -531,6 +531,10 @@ pub enum RowContent {
     Working {
         turn_id: String,
     },
+    Startup {
+        title: String,
+        setup: bool,
+    },
 }
 impl RowContent {
     pub fn id(&self) -> String {
@@ -539,6 +543,7 @@ impl RowContent {
             Self::Work { turn, .. } => format!("work:{}", turn.id),
             Self::Footer { turn, .. } => format!("footer:{}", turn.id),
             Self::Working { turn_id } => format!("working:{turn_id}"),
+            Self::Startup { .. } => "workspace-startup".into(),
         }
     }
 }
@@ -688,6 +693,15 @@ pub fn transcript_rows(
     }
     if let Some(turn_id) = working {
         rows.push(RowContent::Working { turn_id });
+    }
+    if let Some(WorkspaceBanner::Progress { title, setup }) =
+        state.workspace.as_ref().and_then(|workspace| {
+            workspace_banners(workspace)
+                .into_iter()
+                .find(|banner| matches!(banner, WorkspaceBanner::Progress { .. }))
+        })
+    {
+        rows.push(RowContent::Startup { title, setup });
     }
     rows
 }
@@ -1327,6 +1341,30 @@ mod tests {
         );
         assert!(reordered_queue(&state, "t1", "t2").is_none());
         assert!(reordered_queue(&state, "t2", "t1").is_none());
+    }
+    #[test]
+    fn startup_progress_follows_the_prompt_and_disappears_when_ready() {
+        let mut state = turn_state("queued", vec![]);
+        let mut workspace = self::state().workspace.unwrap();
+        workspace.state = p::WorkspaceState::Starting;
+        workspace.setup_status = p::SetupStatus::None;
+        workspace.op = None;
+        state.workspace = Some(workspace);
+        let rows = transcript_rows(&state, "s", TranscriptDetail::Default);
+        assert_eq!(ids(&rows), ["u", "workspace-startup"]);
+        assert!(
+            matches!(&rows[1], RowContent::Startup { title, setup: false } if title == "Starting the workspace")
+        );
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::SettingUp;
+        let rows = transcript_rows(&state, "s", TranscriptDetail::Default);
+        assert!(
+            matches!(&rows[1], RowContent::Startup { title, setup: true } if title == "Running setup")
+        );
+        state.workspace.as_mut().unwrap().state = p::WorkspaceState::Ready;
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Default)),
+            ["u"]
+        );
     }
     #[test]
     fn work_types_follow_tool_kind_and_command() {

@@ -81,7 +81,6 @@ pub struct WorkspaceView {
     seen_permissions: HashSet<String>,
     window_handle: Option<gpui_kit::AnyWindowHandle>,
     toasted_store_error: Option<String>,
-    last_state: Option<p::WorkspaceState>,
     error_details_open: bool,
     banner_pending: bool,
     queue_editor: Option<QueueEditor>,
@@ -309,7 +308,6 @@ impl WorkspaceView {
             seen_permissions: HashSet::new(),
             window_handle: Some(window.window_handle()),
             toasted_store_error: None,
-            last_state: None,
             error_details_open: false,
             banner_pending: false,
             queue_editor: None,
@@ -1104,60 +1102,19 @@ impl WorkspaceView {
             let project = hub.projects.iter().find(|p| p.id == w.project_id)?;
             super::indicators::pr_link(&project.owner, &project.name, w.pr_number, w.pr_state)
         });
-        let instance = match &w.settings.environment.instance {
-            p::Instance::InstanceName(name) => name.to_string(),
-            p::Instance::CustomInstance(instance) => format!(
-                "{} vCPU, {} GiB",
-                instance.vcpu,
-                (instance.memory_mib as f64 / 1024.).round()
-            ),
-        };
-        let pill = match w.state {
-            p::WorkspaceState::Starting => match w
-                .op
-                .as_ref()
-                .map(|op| op.step.as_str())
-                .filter(|step| !step.is_empty())
-            {
-                Some(step) => format!("Starting… {}", chat_model::step_label(step)),
-                None => "Starting…".into(),
-            },
-            p::WorkspaceState::SettingUp => "Running setup".into(),
-            p::WorkspaceState::Ready | p::WorkspaceState::Working => {
-                format!("Running · {instance}")
-            }
-            p::WorkspaceState::Stopping => "Going to sleep".into(),
-            p::WorkspaceState::Sleeping => "Sleeping".into(),
-            p::WorkspaceState::Error => "Error".into(),
-            p::WorkspaceState::Creating => "Creating".into(),
-            p::WorkspaceState::Archiving => "Archiving".into(),
-            p::WorkspaceState::Archived => "Archived".into(),
-        };
         let bar = h_flex()
             .group("workspace-branch")
-            .flex_wrap()
-            .min_h(gpui_kit::px(40.))
+            .w_full()
+            .min_w_0()
+            .h(gpui_kit::px(40.))
             .bg(color(if self.shared_header { Token::Muted } else { Token::Panel }, cx))
             .gap_2()
             .px_2()
             .py_1()
             .border_b(gpui_kit::px(if self.shared_header { 0. } else { 1. }))
             .border_color(color(Token::Border, cx))
-            .children(
-                (w.title != w.slug && w.branch.rsplit('/').next() != Some(w.title.as_str())).then(
-                    || {
-                        Button::new("workspace-title")
-                            .ghost()
-                            .small()
-                            .label(w.title)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.operation("Rename", window, cx)
-                            }))
-                    },
-                ),
-            )
             .child(if let Some(input) = &self.branch_editor {
-                div().id("branch-editor").w(gpui_kit::px(220.))
+                div().id("branch-editor").flex_1().min_w_0().max_w(gpui_kit::px(220.))
                     .capture_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
                         if event.keystroke.key == "escape" && !this.branch_pending {
                             this.branch_editor = None;
@@ -1169,7 +1126,8 @@ impl WorkspaceView {
                     .into_any_element()
             } else {
                 Button::new("branch-name").ghost().small()
-                    .label(w.branch.clone())
+                    .flex_1().min_w_0()
+                    .child(div().w_full().min_w_0().truncate().child(w.branch.clone()))
                     .accessibility_label("Rename branch")
                     .tooltip("Double-click to rename branch")
                     .disabled(self.branch_pending || w.pushed || !matches!(w.state, p::WorkspaceState::Ready | p::WorkspaceState::Working | p::WorkspaceState::Sleeping))
@@ -1215,12 +1173,11 @@ impl WorkspaceView {
                             .on_click(cx.listener(|this, _, _, cx| this.open_live_view(cx))),
                     }),
             )
-            .child(div().flex_1())
-            .child(if sleep {
+            .children(sleep.then(|| {
                 Button::new("wake-pill")
                     .ghost()
                     .small()
-                    .label(pill)
+                    .label("Sleeping")
                     .tooltip("Wake. Sending a message also wakes it.")
                     .disabled(self.operation_pending)
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -1231,20 +1188,7 @@ impl WorkspaceView {
                             cx,
                         )
                     }))
-                    .into_any_element()
-            } else {
-                div()
-                    .text_color(color(
-                        if w.state == p::WorkspaceState::Error {
-                            Token::Destructive
-                        } else {
-                            Token::MutedForeground
-                        },
-                        cx,
-                    ))
-                    .child(pill)
-                    .into_any_element()
-            })
+            }))
             .children(primary.map(|label| {
                 Button::new("primary-action")
                     .label(label)
@@ -1435,6 +1379,7 @@ impl WorkspaceView {
             &transcript,
             window,
             move |this, _, event: &TranscriptEvent, window, cx| match event {
+                TranscriptEvent::OpenSetup => this.show_setup_tab(window, cx),
                 TranscriptEvent::Permission {
                     request_id,
                     option_id,
@@ -1567,13 +1512,9 @@ impl WorkspaceView {
             .workspace
             .as_ref()
             .map(|w| w.state);
-        if state == Some(p::WorkspaceState::SettingUp) && self.last_state != state {
-            self.show_setup_tab(window, cx);
-        }
         if state != Some(p::WorkspaceState::Error) {
             self.error_details_open = false;
         }
-        self.last_state = state;
         if let Some(id) = self.closing.clone()
             && !self.close_request
             && chat_model::running_turn(&self.store.read(cx).state, &id).is_none()
@@ -3007,6 +2948,9 @@ impl Render for WorkspaceView {
             .children(
                 banners
                     .into_iter()
+                    .filter(|banner| {
+                        !matches!(banner, chat_model::WorkspaceBanner::Progress { .. })
+                    })
                     .map(|banner| self.render_banner(banner, cx)),
             )
             .child(

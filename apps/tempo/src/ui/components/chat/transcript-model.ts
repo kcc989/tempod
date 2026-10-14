@@ -42,7 +42,8 @@ export type TranscriptRow =
       /** The turn has a work row, which shows the duration. */
       readonly worked: boolean;
     }
-  | { readonly kind: "working"; readonly key: string; readonly turnId: string };
+  | { readonly kind: "working"; readonly key: string; readonly turnId: string }
+  | { readonly kind: "startup"; readonly key: string; readonly title: string; readonly setup: boolean };
 
 const ENDED = new Set<Turn["status"]>(["completed", "cancelled", "failed", "interrupted"]);
 
@@ -63,6 +64,7 @@ export const buildTranscriptRows = (
   items: Readonly<Record<string, Item>>,
   turns: Readonly<Record<string, Turn>>,
   detail: TranscriptDetail = "default",
+  startup?: { readonly title: string; readonly setup: boolean },
 ): TranscriptRow[] => {
   const placed: Array<{ item: Item; at: number; rank: number; index: number }> = [];
   order.forEach((id, index) => {
@@ -163,6 +165,9 @@ export const buildTranscriptRows = (
   });
 
   if (running) rows.push({ kind: "working", key: `working:${running.id}`, turnId: running.id });
+
+  if (startup)
+    rows.push({ kind: "startup", key: "workspace-startup", title: startup.title, setup: startup.setup });
 
   return rows;
 };

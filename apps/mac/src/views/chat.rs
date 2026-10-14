@@ -12,7 +12,7 @@ use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::{TextView, TextViewStyle};
-use gpui_kit::component::{Disableable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
     ImageFormat, ImageSource, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
@@ -78,6 +78,7 @@ impl TranscriptRow {
 
 #[derive(Clone, Debug)]
 pub enum TranscriptEvent {
+    OpenSetup,
     ResolveAgentProposal {
         proposal_id: String,
         apply: bool,
@@ -917,6 +918,26 @@ fn render_native_row(
         return markdown(id, &row.source);
     };
     match content {
+        RowContent::Startup { title, setup } => h_flex()
+            .id("workspace-startup")
+            .role(Role::Status)
+            .aria_label(title.clone())
+            .px_4()
+            .py_2()
+            .gap_2()
+            .text_color(color(Token::MutedForeground, cx))
+            .child(Spinner::new().small())
+            .child(div().flex_1().min_w_0().child(title))
+            .children(setup.then(|| {
+                Button::new("transcript-open-setup")
+                    .ghost()
+                    .small()
+                    .label("Open Setup tab")
+                    .on_click(move |_, _, cx| {
+                        let _ = view.update(cx, |_, cx| cx.emit(TranscriptEvent::OpenSetup));
+                    })
+            }))
+            .into_any_element(),
         RowContent::Working { .. } => div()
             .px_4()
             .py_2()
