@@ -1,4 +1,0 @@
-{
-  "status": 422,
-  "error": "{\"errors\":[{\"message\":\"AiError: AiError: Request body failed validation: images.1: image payload does not match its content type (8e82b824-ea7f-478d-8fee-3aab55c1a26d)\",\"code\":3030}],\"success\":false,\"result\":{},\"messages\":[]}"
-}

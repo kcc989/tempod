@@ -1,7 +1,0 @@
-{
-  "attemptStatuses": [
-    429,
-    429
-  ],
-  "response": "{\"errors\":[{\"message\":\"AiError: AiError: Capacity temporarily exceeded, please try again. (f19f1d2a-9cc8-475a-8bb2-d4c6efbd5171)\",\"code\":3040}],\"success\":false,\"result\":{},\"messages\":[]}"
-}

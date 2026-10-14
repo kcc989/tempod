@@ -1,4 +1,4 @@
-// Usage: bun evals/design/run-clef.ts <case-dir> [--rubric v2] [--reuse]
+// Usage: bun evals/design/run-clef.ts <case-dir> [--rubric <subdir>] [--reuse]
 // Needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN unless --reuse rescores saved answers.
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

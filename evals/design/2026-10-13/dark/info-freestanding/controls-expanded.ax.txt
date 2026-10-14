@@ -1,9 +1,0 @@
-The following is a diff from the previous accessibility tree for Window: "Tempo" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
-~		38 button Workspace controls, expanded
-+		47 button Base branch: main
-+		48 button Copy workspace link
-+		49 button Environment…
-+		50 button Diagnostics
-+		51 button Reset preview access
-+		52 button Archive workspace
-The focused UI element is 0 standard window Tempo, Secondary Actions: Raise
