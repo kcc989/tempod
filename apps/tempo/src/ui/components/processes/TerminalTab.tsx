@@ -31,7 +31,7 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
 
   const known = terminalTabs(
     (listed.data ?? []).map((t) => t.terminalId),
-    opened,
+    [...opened, ...visited],
   );
   const settled = listed.isSuccess || listed.isError;
   const tabs: ReadonlyArray<TerminalId> = known.length === 0 && settled ? ["t1"] : known;
@@ -63,7 +63,7 @@ export function TerminalTab({ workspaceId, visible }: { workspaceId: string; vis
 
   return (
     <Tabs value={current} onValueChange={(v) => isTerminalId(v) && show(v)} className="h-full min-h-0 gap-0">
-      <div className="flex items-center gap-1 border-b px-2">
+      <div className="flex shrink-0 items-center gap-1 border-b px-2">
         <TabsList variant="line" aria-label="Terminals" className="h-7 border-b-0">
           {tabs.map((id) => (
             <TabsTrigger key={id} value={id} className="font-mono text-xs">

@@ -411,6 +411,12 @@ async fn terminal_frames_follow_01() {
         .open_terminal("01k7000000000000000000000b", "t1", 80, 24)
         .expect("valid id");
     let mut conn = server.next().await;
+    assert!(term.send_keys(b"before-ready\r".to_vec()));
+    assert!(
+        timeout(Duration::from_millis(100), conn.ws.next())
+            .await
+            .is_err()
+    );
     send_text(&mut conn, json!({"type": "ready"}).to_string()).await;
     conn.ws
         .send(Message::binary(b"\x1b[1mhi".to_vec()))

@@ -17,7 +17,7 @@ The Mac app is a client of the cloud Tempo only. It does not run workspaces on t
 | C5 | Wire types | Rust types generated from `packages/protocol` (Effect Schema to JSON Schema to `typify`), checked against shared fixtures | One definition of every message |
 | C6 | Networking | One tokio runtime on background threads: `reqwest` for HTTP, `tokio-tungstenite` for WebSockets. The GPUI main thread does no I/O. | GPUI's executors are not tokio; the UI thread stays free |
 | C7 | Previews | Open in the default browser. No in-app Browser tab in this version. | GPUI Kit's WebView (`gpui-wry`) is experimental and draws over popovers, dialogs and menus |
-| C8 | Terminal | `crates/tempo-terminal`: a fork of `gpui-terminal` 0.1.0 (MIT or Apache-2.0) on `alacritty_terminal` 0.25.1, ported to GPUI Kit's GPUI | GPUI Kit has no terminal; `gpui-terminal` targets a different GPUI release |
+| C8 | Terminal | The bundled `tempo terminal` bridge opens the cloud shell in the user's Terminal.app or iTerm | The user keeps their preferred terminal profile, shortcuts and rendering |
 | C9 | Platform | macOS 15 or later, Apple silicon (arm64) only | GPUI Kit needs macOS 15; one architecture halves the test matrix |
 | C10 | Shortcuts | Conductor's ⌘ bindings: the Conductor column of the shortcut table in 04 | No browser reserves keys in a native app |
 | C11 | Distribution | Signed with the owner's Developer ID, notarized, and served as a DMG by the owner's own Tempo (R2). The app checks for updates; the owner installs them. | Self-hosted end to end; no third-party update service |
@@ -39,7 +39,8 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | Changes, Diff, review comments, Mark as viewed | Same | `DiffView` is custom (below) |
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode |
 | Checks | Same |  |
-| Setup, Run and Terminal tabs | Same |  |
+| Setup and Run tabs | Same |  |
+| Terminal | Different | Opens Terminal.app or iTerm through a bundled authenticated CLI bridge; commands still run in the cloud |
 | Previews | Different | Open in the default browser; no Browser tab |
 | Commit and push, PR, merge, archive, restore, delete | Same |  |
 | Command palette | Same |  |
@@ -158,7 +159,7 @@ The main window has the five regions of 04. Each region uses the GPUI Kit compon
 | File tab | `Editor`, read-only, with syntax highlighting |
 | Diff tab | **custom** `DiffView` (Changes, diff view and review comments) |
 | Setup and Run output | **custom** log view on `VirtualList`, monospace |
-| Terminal | **custom**, from `tempo-terminal` |
+| Terminal | Terminal ID picker with **Open in Terminal** and **Open in iTerm** buttons |
 | Dialogs | `Dialog`, `AlertDialog`, `Form`, `Input`, `Select`, `Checkbox` |
 | Command palette | `Command` |
 | Toasts | `Notification` |
@@ -203,11 +204,14 @@ The Changes tab and review comments work as in 04 and use the same functions in 
 
 **Terminal**
 
-- `crates/tempo-terminal` forks `gpui-terminal` 0.1.0 and ports it to the GPUI that `gpui-kit` 0.7.1 bundles. Keep its license file and headers. It uses `alacritty_terminal = "=0.25.1"` for parsing and the grid.
-- It reads bytes from the terminal channel (02) instead of a local PTY. Received frames feed the parser; keystrokes and resizes go out on the same socket, as defined in 01, Terminal.
-- Scrollback: 10,000 lines. Mouse selection and ⌘C copy are required; `gpui-terminal` lists selection as planned, so Tempo adds it.
-- Tabs `t1` to `t9` and the `+` button as in 04. A reconnect attaches to the same tmux session, so tmux restores the screen.
-- In the `Terminal` key context, only ⌘ shortcuts leave the terminal. Every other key goes to the shell.
+- The native Terminal panel selects a cloud terminal ID `t1` to `t9` and offers **Open in Terminal** and **Open in iTerm**. Each opens a new local terminal window with that application's default profile. The web UI continues to use xterm.
+- The bundle includes `Contents/MacOS/tempo`. `tempo terminal <workspace-id-or-slug> [t1..t9]` uses `t1` by default. Workspace IDs take precedence over slugs; ambiguous slugs require the ID. Workspaces come from the existing `listWorkspaces` RPC.
+- The helper reads the saved server URL from `config.toml` and the existing `dev.tempo.mac` Keychain session for that host. No token is put in process arguments, shell commands, temporary files, environment variables or logs. Revoked credentials are removed, and the user is directed to sign in to Tempo for Mac again.
+- Launching uses `/usr/bin/osascript` with a script on stdin. The helper path and workspace arguments are quoted for both the shell and AppleScript. Process launching runs off the GPUI main thread. The app declares the Apple events usage description and automation entitlement; the helper is signed before the app bundle.
+- The bridge uses the terminal channel in 01 and 02, with bearer authentication and no `Origin`. It runs no workspace commands locally. The cloud PTY and tmux session still live in the workspace container.
+- The CLI requires terminal stdin and stdout. It saves TTY settings, uses raw mode without local echo, and restores those settings and cursor/screen state on completion, error, or handled SIGINT, SIGTERM and SIGHUP. Ctrl+C goes to the cloud shell; Ctrl+] disconnects locally without ending tmux.
+- Keyboard input is discarded while connecting or reconnecting and sent as binary bytes only after `ready`. SIGWINCH forwards the local size, clamped to 10–500 columns and 5–200 rows. Reconnection uses the latest size, resets the local screen and reattaches to the same tmux session. Terminal close code 1000 ends the CLI instead of starting another shell.
+- Users can run the bundled command directly from any terminal. `bun run mac:install-cli` installs a symlink in `~/.local/bin` without replacing an existing command; users add that directory to PATH. The installer also accepts a helper path and a destination directory.
 
 **Setup and Run.** Same as 04: output from `script.output`, Start and Stop, and ⌘R to start or stop the default run script.
 
@@ -264,7 +268,9 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 
 | Command | Does |
 | --- | --- |
-| `bun run mac:dev` | `cargo run -p tempo-mac` |
+| `bun run mac:dev` | Builds both binaries, then runs `Tempo` |
+| `bun run mac:bundle` | Builds and signs a local `dist/mac/Tempo.app`, including the `tempo` helper |
+| `bun run mac:install-cli` | Links the installed app's `tempo` command into `~/.local/bin` |
 | `bun run mac:test` | `cargo test --workspace` |
 | `bun run protocol:gen` | Writes `packages/protocol/schema/*.json` (JSON Schema Draft-07) and `crates/tempo-protocol/src/generated.rs` |
 | `bun run protocol:fixtures` | Writes `packages/protocol/fixtures/` from the TypeScript schema tests |
@@ -273,16 +279,16 @@ The owner builds, signs and publishes the app from a Mac. The owner's Tempo serv
 **`mac:release`** (`scripts/mac/release.sh`). It MUST stop at the first failed step.
 
 1. Read the version from `apps/mac/Cargo.toml`. It MUST be newer than `clients/mac/latest.json`.
-2. `cargo build --release -p tempo-mac --target aarch64-apple-darwin`.
-3. Build `Tempo.app`: `Contents/MacOS/Tempo`, `Contents/Info.plist` (`CFBundleIdentifier` `dev.tempo.mac`, the version, `LSMinimumSystemVersion` `15.0`, `CFBundleURLTypes` for `tempo`), and `Contents/Resources/AppIcon.icns`.
-4. `codesign --force --options runtime --timestamp --entitlements apps/mac/resources/Tempo.entitlements --sign "$TEMPO_MAC_SIGN_IDENTITY" Tempo.app`
+2. `cargo build --release -p tempo-mac --bins --target aarch64-apple-darwin`.
+3. Build `Tempo.app`: `Contents/MacOS/Tempo`, `Contents/MacOS/tempo`, `Contents/Info.plist` (`CFBundleIdentifier` `dev.tempo.mac`, the version, `LSMinimumSystemVersion` `15.0`, `CFBundleURLTypes` for `tempo`), and `Contents/Resources/AppIcon.icns`.
+4. Sign `Contents/MacOS/tempo` with the same identity first, then `codesign --force --options runtime --timestamp --entitlements apps/mac/resources/Tempo.entitlements --sign "$TEMPO_MAC_SIGN_IDENTITY" Tempo.app`
 5. `hdiutil create -volname Tempo -srcfolder Tempo.app -ov -format UDZO Tempo-<version>.dmg`, then sign the DMG with the same identity.
 6. `xcrun notarytool submit Tempo-<version>.dmg --keychain-profile "$TEMPO_MAC_NOTARY_PROFILE" --wait`, then `xcrun stapler staple Tempo-<version>.dmg`.
 7. Upload the DMG to R2 at `clients/mac/<version>/Tempo-<version>.dmg`. Then write `clients/mac/latest.json` as `{version, sha256, size, publishedAt}`. Write `latest.json` last.
 
 - `TEMPO_MAC_SIGN_IDENTITY` is a "Developer ID Application" identity. `TEMPO_MAC_NOTARY_PROFILE` is made once with `xcrun notarytool store-credentials`. Both need a paid Apple Developer Program membership.
 - Without them, `mac:dev` and local builds use ad-hoc signing (`codesign --sign -`). Those builds are for the owner's own Mac only; macOS may ask again for Keychain access after each rebuild.
-- `Tempo.entitlements` turns on the hardened runtime with no exceptions. No App Sandbox in this version.
+- `Tempo.entitlements` permits Apple events automation for terminal launch, with no hardened-runtime code-signing exceptions. No App Sandbox in this version.
 
 **Updates.** On launch and every 24 h, read `latestMacClient` from `GET /api/v1/meta`. If it is newer than the app, show `Tempo <version> is available.` with **Download**. Download fetches `GET /downloads/mac/<version>` with the bearer token, checks the SHA-256 from `meta`, saves the DMG to `~/Downloads`, and opens it in Finder. The owner drags the app to Applications. If the app is older than `minMacClient`, it shows only this update screen.
 
@@ -318,7 +324,7 @@ Phase 4 starts after gate D passes. Server changes come first, so the web UI nev
 | --- | --- | --- |
 | S11 | Can GPUI Kit 0.7.1 carry the Tempo transcript? | A window with `Sidebar`, `Resizable`, `Tabs` and a `MessageScroller` of 10,000 `TextView::markdown` rows, one row streaming 200 deltas a second: frame time p99 under 16 ms on an M1. Record the Rust version that builds, the action, key-binding and menu APIs, whether `TextView` renders raw HTML, and that an `ImageCache` blocks remote images. |
 | S12 | Do native channels work through Cloudflare with a bearer token? | `tokio-tungstenite` (rustls) opens the workspace channel with `Authorization: Bearer` and no `Origin`; the DO accepts it with hibernation; 1 hour of streaming with a reconnect every 5 minutes loses no item. |
-| S13 | Can `gpui-terminal` run on GPUI Kit's GPUI and a socket? | The fork builds against `gpui-kit` 0.7.1, runs `vim` and `htop` over the terminal channel, resizes, and restores the screen after a reconnect. |
+| S13 | Can the local terminal bridge run cloud programs? | Terminal.app and iTerm run `vim` and `htop` through the authenticated bridge, resize the PTY, restore the screen after reconnecting and restore local TTY settings on exit. |
 | S14 | Does device sign-in work with Better Auth on Workers and D1? | `deviceAuthorization()` and `bearer()` migrate on D1. The full flow returns a token; `/api/v1` accepts it; revoking the session makes the next call return 401. |
 | S15 | Do notifications, the Dock badge and `tempo://` work? | From a Developer ID-signed bundle: a notification appears while the app is in the background and a click opens the right workspace; the badge updates; a `tempo://` link from Safari opens the workspace. |
 | S16 | Can every protocol schema become Rust types? | `Schema.toJsonSchemaDocument` plus `JsonSchema.toDocumentDraft07` plus `typify` produce types for every schema in `packages/protocol`, and every fixture round-trips. List any type that needs a hand-written Rust version. |
@@ -335,7 +341,7 @@ Phase 4 starts after gate D passes. Server changes come first, so the web UI nev
 | AT-28 | A permission request is approved from the Mac app, and the web card closes at the same time. |
 | AT-29 | The diff is correct for added, changed, deleted, renamed and untracked files in both scopes. A review comment from the Mac reaches the agent. |
 | AT-30 | Commit and push, create PR and squash-merge from the Mac app. |
-| AT-31 | The terminal runs `vim`; resize works; after a reconnect, the screen is restored. |
+| AT-31 | Terminal.app and iTerm run cloud `vim`; resize and reconnect work; local TTY settings are restored after disconnect. |
 | AT-32 | With the app in the background, a turn end shows a notification; a click opens that workspace. The Dock badge matches the web tab-title count. |
 | AT-33 | `Open in Tempo for Mac` in the web UI opens the same workspace in the app. |
 | AT-34 | The notarized DMG from `mac:release` installs and opens on a clean macOS 15 Mac with Gatekeeper on. |

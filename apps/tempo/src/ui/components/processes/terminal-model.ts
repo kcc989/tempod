@@ -33,16 +33,23 @@ export const nextTerminalId = (tabs: ReadonlyArray<string>): TerminalId | null =
 const clamp = (n: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Number.isFinite(n) ? Math.floor(n) : min));
 
+export const terminalSize = (cols: number, rows: number) => ({
+  cols: clamp(cols, 10, 500),
+  rows: clamp(rows, 5, 200),
+});
+
 export const terminalPath = (
   workspaceId: string,
   terminalId: TerminalId,
   cols: number,
   rows: number,
-): string =>
-  `/api/ws/terminal/${encodeURIComponent(workspaceId)}/${terminalId}?cols=${clamp(cols, 10, 500)}&rows=${clamp(rows, 5, 200)}`;
+): string => {
+  const size = terminalSize(cols, rows);
+  return `/api/ws/terminal/${encodeURIComponent(workspaceId)}/${terminalId}?cols=${size.cols}&rows=${size.rows}`;
+};
 
 export const resizeFrame = (cols: number, rows: number): string =>
-  JSON.stringify({ type: "resize", cols: clamp(cols, 10, 500), rows: clamp(rows, 5, 200) });
+  JSON.stringify({ type: "resize", ...terminalSize(cols, rows) });
 
 /** True for the server's one text frame, `{"type":"ready"}`. */
 export const isReadyFrame = (data: string): boolean => {

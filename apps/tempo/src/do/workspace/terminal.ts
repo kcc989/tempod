@@ -23,15 +23,20 @@ export const openTerminal = (
 ): Response => {
   const pair = new WebSocketPair();
   const [client, server] = [pair[0], pair[1]];
+  server.binaryType = "arraybuffer";
   server.accept();
   const entry: { terminalId: string; proc: ExecProcess | null } = { terminalId, proc: null };
   core.terminals.set(server, entry);
   core.touchActivity();
   let closed = false;
+  let writer: WritableStreamDefaultWriter | undefined;
+  let reader: ReadableStreamDefaultReader | undefined;
   const close = () => {
     if (closed) return;
     closed = true;
     core.terminals.delete(server);
+    void reader?.cancel().catch(() => undefined);
+    void writer?.abort().catch(() => undefined);
     try {
       entry.proc?.kill();
     } catch {
@@ -41,11 +46,27 @@ export const openTerminal = (
   server.addEventListener("close", close);
   server.addEventListener("error", close);
 
+  const fail = (e: unknown) => {
+    if (closed) return;
+    log("warn", "terminal failed", {
+      workspaceId: core.wsOrNull()?.workspaceId,
+      terminalId,
+      error: errorText(e),
+    });
+    try {
+      server.close(1011, containerRunning(core) ? "terminal failed" : "container not ready");
+    } catch {
+      // already closed
+    }
+    close();
+  };
+
   void (async () => {
     try {
       await waitReady(Date.now() + READY_WAIT_MS);
       if (closed) return;
       const env = { TERM: "xterm-256color", HOME: "/home/tempo", ...(await core.scriptEnv()) };
+      if (closed) return;
       const proc = await core.container!.exec(
         ["tmux", "new-session", "-A", "-s", terminalId, "-c", "/workspace"],
         {
@@ -57,27 +78,37 @@ export const openTerminal = (
         },
       );
       entry.proc = proc;
-      if (closed) return close();
-      const writer = proc.stdin?.getWriter();
+      if (closed) {
+        proc.kill();
+        return;
+      }
+      if (!proc.stdin || !proc.stdout) throw new Error("terminal streams unavailable");
+      writer = proc.stdin.getWriter();
+      reader = proc.stdout.getReader();
       server.addEventListener("message", (e) => {
+        if (closed) return;
         if (typeof e.data === "string") {
           const r = decodeResize(e.data);
-          if (r._tag === "Some") proc.resize(clamp(r.value.cols, 10, 500), clamp(r.value.rows, 5, 200));
+          if (r._tag === "Some") {
+            try {
+              proc.resize(clamp(r.value.cols, 10, 500), clamp(r.value.rows, 5, 200));
+            } catch (e) {
+              fail(e);
+            }
+          }
           return;
         }
         const data = e.data instanceof ArrayBuffer ? new Uint8Array(e.data) : (e.data as Uint8Array);
-        void writer?.write(data).catch(() => close());
+        void writer!.write(data).catch(fail);
         core.touchActivity();
       });
       server.send(JSON.stringify({ type: "ready" }));
-      const reader = proc.stdout?.getReader();
-      if (reader) {
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done || closed) break;
-          server.send(value as Uint8Array);
-        }
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done || closed) break;
+        server.send(value as Uint8Array);
       }
+      if (closed) return;
       await proc.exitCode.catch(() => undefined);
       try {
         server.close(1000, "terminal exited");
@@ -86,17 +117,10 @@ export const openTerminal = (
       }
       close();
     } catch (e) {
-      log("warn", "terminal failed", {
-        workspaceId: core.wsOrNull()?.workspaceId,
-        terminalId,
-        error: errorText(e),
-      });
-      try {
-        server.close(1011, containerRunning(core) ? "terminal failed" : "container not ready");
-      } catch {
-        // already closed
-      }
-      close();
+      fail(e);
+    } finally {
+      reader?.releaseLock();
+      writer?.releaseLock();
     }
   })();
 

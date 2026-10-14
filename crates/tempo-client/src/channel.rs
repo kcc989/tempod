@@ -52,6 +52,8 @@ pub fn reconnect_delay(attempt: u32, random: f64) -> Duration {
 /// Why a channel stopped for good.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CloseReason {
+    /// Terminal close code 1000: the cloud shell exited.
+    ShellExited,
     /// 4001: another connection replaced this one. Do not reconnect.
     Replaced,
     /// 4400: the server speaks another protocol version. Show the update screen.
@@ -172,6 +174,7 @@ impl TerminalHandle {
 
     /// Queues a resize; a reconnect also opens with this size.
     pub fn resize(&self, cols: u16, rows: u16) -> bool {
+        let (cols, rows) = (cols.clamp(10, 500), rows.clamp(5, 200));
         self.size.store(pack(cols, rows), Ordering::Relaxed);
         self.input
             .try_send(TerminalInput::Resize { cols, rows })
@@ -260,6 +263,7 @@ impl Client {
         if !TERMINAL_IDS.contains(&terminal_id) {
             return Err(InvalidTerminalId);
         }
+        let (cols, rows) = (cols.clamp(10, 500), rows.clamp(5, 200));
         let size = Arc::new(AtomicU32::new(pack(cols, rows)));
         let base = self
             .server()
@@ -454,6 +458,7 @@ impl<M: Send + 'static> Engine<M> {
         let mut next_ping = Instant::now() + PING_EVERY;
         let mut pong_deadline: Option<Instant> = None;
         let input_rx = self.spec.input.as_ref().map(|(rx, _)| rx.clone());
+        let mut terminal_ready = input_rx.is_none();
         loop {
             let input = async {
                 match &input_rx {
@@ -482,11 +487,16 @@ impl<M: Send + 'static> Engine<M> {
                 }
                 Some(input) = input => {
                     let frame = match input {
-                        TerminalInput::Keys(bytes) => Message::Binary(bytes.into()),
+                        TerminalInput::Keys(bytes) => {
+                            if !terminal_ready { continue; }
+                            Message::Binary(bytes.into())
+                        }
                         TerminalInput::Resize { cols, rows } => {
+                            let (cols, rows) = (cols.clamp(10, 500), rows.clamp(5, 200));
                             if let Some((_, size)) = &self.spec.input {
                                 size.store(pack(cols, rows), Ordering::Relaxed);
                             }
+                            if !terminal_ready { continue; }
                             let resize = TerminalResize {
                                 cols: i64::from(cols),
                                 rows: i64::from(rows),
@@ -507,6 +517,7 @@ impl<M: Send + 'static> Engine<M> {
                         None | Some(Err(_)) => return Outcome::Reconnect,
                         Some(Ok(Message::Close(frame))) => {
                             return match frame.map(|f| u16::from(f.code)) {
+                                Some(1000) if input_rx.is_some() => Outcome::Closed(CloseReason::ShellExited),
                                 Some(close_code::REPLACED) => Outcome::Closed(CloseReason::Replaced),
                                 Some(close_code::BAD_PROTOCOL_VERSION) => {
                                     Outcome::Closed(CloseReason::UpdateRequired)
@@ -517,7 +528,11 @@ impl<M: Send + 'static> Engine<M> {
                                 _ => Outcome::Reconnect,
                             };
                         }
-                        Some(Ok(Message::Text(text))) => (self.spec.decode_text)(text.as_str()),
+                        Some(Ok(Message::Text(text))) => {
+                            let decoded = (self.spec.decode_text)(text.as_str());
+                            if input_rx.is_some() && decoded.is_some() { terminal_ready = true; }
+                            decoded
+                        }
                         Some(Ok(Message::Binary(bytes))) => {
                             (self.spec.decode_binary)(bytes.to_vec()).map(|m| (m, false))
                         }

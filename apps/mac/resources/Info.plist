@@ -39,5 +39,7 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Tempo opens your cloud workspace in your terminal.</string>
 </dict>
 </plist>

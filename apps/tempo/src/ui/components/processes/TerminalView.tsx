@@ -14,6 +14,7 @@ import {
   TERMINAL_CLOSE_TEXT,
   terminalCloseAction,
   terminalPath,
+  terminalSize,
   type TerminalClose,
   type TerminalId,
 } from "./terminal-model";
@@ -47,6 +48,7 @@ export function TerminalView({
 }) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
+  const fitTerminal = useRef<(() => void) | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [generation, setGeneration] = useState(0);
   const { resolved } = useTheme();
@@ -64,22 +66,33 @@ export function TerminalView({
     let retry: ReturnType<typeof setTimeout> | null = null;
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     let observer: ResizeObserver | null = null;
+    let fitFrame: number | null = null;
+    let started = false;
+    setStatus("loading");
 
     const send = (data: Uint8Array | string) => {
       if (ws && ready && ws.readyState === WebSocket.OPEN) ws.send(data);
     };
 
     const safeFit = () => {
-      if (!fit || el.clientWidth === 0 || el.clientHeight === 0) return;
+      if (!fit || !t || el.clientWidth === 0 || el.clientHeight === 0) return false;
       try {
-        fit.fit();
+        const size = fit.proposeDimensions();
+        if (!size || !Number.isFinite(size.cols) || !Number.isFinite(size.rows)) return false;
+        const { cols, rows } = terminalSize(size.cols, size.rows);
+        t.resize(cols, rows);
+        return true;
       } catch {
         // Not measurable yet; the next resize fits.
+        return false;
       }
     };
 
     const connect = () => {
       if (disposed || !t) return;
+      safeFit();
+      ready = false;
+      t.options.disableStdin = true;
       setStatus(connections === 0 ? "connecting" : "reconnecting");
       const sock = new WebSocket(wsUrl(terminalPath(workspaceId, terminalId, t.cols, t.rows)));
       sock.binaryType = "arraybuffer";
@@ -87,27 +100,47 @@ export function TerminalView({
       sock.onmessage = (e: MessageEvent) => {
         if (ws !== sock || !t) return;
         if (typeof e.data === "string") {
-          if (!isReadyFrame(e.data)) return;
-          if (connections > 0) t.reset();
+          if (ready || !isReadyFrame(e.data)) return;
+          if (connections > 0) t.write("\x1bc");
           connections++;
           attempts = 0;
           ready = true;
+          t.options.disableStdin = false;
           setStatus("ready");
+          if (resizeTimer) clearTimeout(resizeTimer);
+          resizeTimer = null;
           sock.send(resizeFrame(t.cols, t.rows));
           return;
         }
-        t.write(new Uint8Array(e.data as ArrayBuffer));
+        if (ready) t.write(new Uint8Array(e.data as ArrayBuffer));
       };
       sock.onclose = (e: CloseEvent) => {
         if (ws !== sock || disposed) return;
         ws = null;
         ready = false;
+        if (t) t.options.disableStdin = true;
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = null;
         const action = terminalCloseAction(e.code);
         if (action !== "reconnect") return setStatus(action);
         setStatus("reconnecting");
-        retry = setTimeout(connect, reconnectDelay(attempts++));
+        retry = setTimeout(() => {
+          retry = null;
+          connect();
+        }, reconnectDelay(attempts++));
       };
     };
+
+    const scheduleFit = () => {
+      if (disposed || fitFrame !== null) return;
+      fitFrame = requestAnimationFrame(() => {
+        fitFrame = null;
+        if (!safeFit() || started) return;
+        started = true;
+        connect();
+      });
+    };
+    fitTerminal.current = scheduleFit;
 
     void (async () => {
       const [{ Terminal }, { FitAddon }] = await Promise.all([
@@ -120,6 +153,7 @@ export function TerminalView({
         fontFamily: terminalFont(),
         fontSize: 12,
         cursorBlink: true,
+        disableStdin: true,
         scrollback: 5000,
         theme: terminalTheme(),
       });
@@ -127,16 +161,16 @@ export function TerminalView({
       t.loadAddon(fit);
       t.open(el);
       term.current = t;
-      safeFit();
       t.onData((d) => send(encodeInput(d)));
       t.onBinary((d) => send(encodeBinary(d)));
       t.onResize(({ cols, rows }) => {
         if (resizeTimer) clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => send(resizeFrame(cols, rows)), RESIZE_DEBOUNCE_MS);
       });
-      observer = new ResizeObserver(() => safeFit());
+      observer = new ResizeObserver(scheduleFit);
       observer.observe(el);
-      connect();
+      scheduleFit();
+      void document.fonts?.ready.then(scheduleFit);
     })().catch(() => {
       if (!disposed) setStatus("failed");
     });
@@ -145,6 +179,7 @@ export function TerminalView({
       disposed = true;
       if (retry) clearTimeout(retry);
       if (resizeTimer) clearTimeout(resizeTimer);
+      if (fitFrame !== null) cancelAnimationFrame(fitFrame);
       observer?.disconnect();
       const sock = ws;
       ws = null;
@@ -159,6 +194,7 @@ export function TerminalView({
       }
       t?.dispose();
       term.current = null;
+      fitTerminal.current = null;
     };
   }, [workspaceId, terminalId, generation]);
 
@@ -170,17 +206,19 @@ export function TerminalView({
   }, [resolved]);
 
   useEffect(() => {
-    if (active && focusSeq > 0) term.current?.focus();
-  }, [active, focusSeq]);
+    if (!active) return;
+    fitTerminal.current?.();
+    if (status === "ready") term.current?.focus();
+  }, [active, focusSeq, status]);
 
   const ended =
     status === "exited" || status === "replaced" || status === "notFound" || status === "badVersion";
   return (
-    <div className="relative h-full w-full bg-background">
+    <div className="relative h-full min-h-0 w-full min-w-0 overflow-hidden bg-background">
       <div
         ref={host}
         aria-label={`Terminal ${terminalId}`}
-        className="absolute inset-0 overflow-hidden py-1 pl-2 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-ring"
+        className="absolute inset-1 left-2 overflow-hidden focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-ring"
       />
       {(status === "loading" || status === "connecting" || status === "reconnecting") && (
         <div className="pointer-events-none absolute top-1 right-2 rounded-md bg-background/90 px-2 py-0.5">

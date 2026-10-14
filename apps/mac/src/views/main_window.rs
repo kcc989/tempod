@@ -66,6 +66,7 @@ pub struct MainWindow {
     center_tab: usize,
     review_tab: usize,
     process_tab: usize,
+    terminal: Entity<TerminalPanel>,
     top_bar: Option<TopBar>,
     tabs: Vec<SharedString>,
     transcript: Entity<TranscriptView>,
@@ -117,6 +118,7 @@ impl MainWindow {
             center_tab: 0,
             review_tab: 0,
             process_tab: 0,
+            terminal: cx.new(|_| TerminalPanel::default()),
             sections: content.sections,
             active: content.active,
             live_workspaces: Vec::new(),
@@ -232,6 +234,10 @@ impl MainWindow {
     }
 
     fn render_right(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let workspace = crate::app::AppState::try_global(cx)
+            .and_then(|app| app.read(cx).active_workspace.clone());
+        self.terminal
+            .update(cx, |panel, _| panel.set_workspace(workspace));
         let review = v_flex()
             .size_full()
             .child(
@@ -262,7 +268,7 @@ impl MainWindow {
             .child(match self.process_tab {
                 0 => SetupPanel.into_any_element(),
                 1 => RunPanel.into_any_element(),
-                _ => TerminalPanel.into_any_element(),
+                _ => self.terminal.clone().into_any_element(),
             });
         v_resizable("right-side")
             .child(resizable_panel().child(review))

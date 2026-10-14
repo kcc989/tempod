@@ -26,7 +26,16 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-`bun run mac:dev` opens the native app on a Mac. Its sign-in and live view wiring are not complete.
+`bun run mac:dev` builds the app and terminal helper, then opens the native app on a Mac. After signing in, the Terminal panel can open a cloud shell in Terminal.app or iTerm.
+
+To use any local terminal, run the bundled command:
+
+```sh
+/Applications/Tempo.app/Contents/MacOS/tempo terminal lisbon
+/Applications/Tempo.app/Contents/MacOS/tempo terminal <workspace-id> t2
+```
+
+The command reuses the app's saved Keychain sign-in. Commands and files belong to the cloud workspace. Ctrl+C goes to the cloud shell; Ctrl+] disconnects locally and leaves tmux running. `bun run mac:bundle` builds a local app bundle containing both binaries. After installing the app, `bun run mac:install-cli` links the helper into `~/.local/bin`; add that directory to PATH to use `tempo terminal lisbon`.
 
 With Docker available, `bun run test:tempod:container` builds the pinned Linux workspace image and runs daemon tests in a derived test image as user `tempo`. It checks the production image's 6 GB size limit. On shared engines, serialize this command with other full CI runs.
 
