@@ -10,7 +10,7 @@ export const listProjectConversations = async (
   { env, user }: HandlerCtx,
   { projectId, cursor }: FnInput<"listProjectConversations">,
 ): Promise<FnOutput<"listProjectConversations">> => {
-  await requireProject(env, user.id, projectId);
+  await requireProject(env, user, projectId, "read");
 
   const existing = await d1(env)
     .select({ id: workspaces.id })
@@ -50,7 +50,7 @@ export const getProjectConversation = async (
   { env, user }: HandlerCtx,
   { projectId, conversationId }: FnInput<"getProjectConversation">,
 ): Promise<FnOutput<"getProjectConversation">> => {
-  await requireProject(env, user.id, projectId);
+  await requireProject(env, user, projectId, "read");
 
   if (!/^[0-9a-hjkmnp-tv-z]{26}$/.test(conversationId)) throw new TempoError("NOT_FOUND");
 

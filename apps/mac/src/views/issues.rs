@@ -55,11 +55,25 @@ pub struct IssuesView {
     issue_generation: u64,
     labels_generation: u64,
     error: Option<String>,
+    access: super::social_model::Access,
+    user_id: Option<String>,
     inputs: Inputs,
     _subscriptions: Vec<Subscription>,
 }
 
 impl IssuesView {
+    /// Hides controls the caller's project role does not allow (04, Public projects; 11).
+    pub fn set_access(
+        &mut self,
+        access: super::social_model::Access,
+        user_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.access = access;
+        self.user_id = user_id;
+        cx.notify();
+    }
+
     pub fn new(
         client: Client,
         project_id: String,
@@ -116,6 +130,10 @@ impl IssuesView {
             issue_generation: 0,
             labels_generation: 0,
             error: None,
+            access: super::social_model::Access {
+                role: Some(p::ProjectRole::Admin),
+            },
+            user_id: None,
             inputs: Inputs {
                 search,
                 title,
@@ -965,7 +983,7 @@ impl IssuesView {
                                 this.load_issues(false, cx);
                             })),
                     )
-                    .child(
+                    .children(self.access.can_write().then(|| {
                         Button::new("edit-repository-issue")
                             .ghost()
                             .label("Edit")
@@ -974,9 +992,9 @@ impl IssuesView {
                                 cx.listener(|this, _, window, cx| {
                                     this.edit_issue(true, window, cx)
                                 }),
-                            ),
-                    )
-                    .child(
+                            )
+                    }))
+                    .children(self.access.can_write().then(|| {
                         Button::new("toggle-repository-issue")
                             .ghost()
                             .label(if issue.state == p::IssueState::Open {
@@ -985,8 +1003,8 @@ impl IssuesView {
                                 "Reopen issue"
                             })
                             .disabled(self.pending)
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_state(cx))),
-                    ),
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_state(cx)))
+                    })),
             )
             .child(
                 div()
@@ -1022,13 +1040,16 @@ impl IssuesView {
                     .into_iter()
                     .enumerate()
                     .map(|(index, comment)| {
+                        let editable = self
+                            .access
+                            .can_edit_comment(&comment.author_id, self.user_id.as_deref());
                         v_flex()
                             .gap_2()
                             .border_b_1()
                             .border_color(color(Token::Border, cx))
                             .pb_3()
                             .child(div().child(comment.body.clone()))
-                            .child(
+                            .children(editable.then(|| {
                                 h_flex()
                                     .gap_2()
                                     .child(
@@ -1051,8 +1072,8 @@ impl IssuesView {
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 this.delete_comment(comment.id.clone(), window, cx)
                                             })),
-                                    ),
-                            )
+                                    )
+                            }))
                     }),
             )
             .children(self.more_comments.then(|| {
@@ -1062,39 +1083,46 @@ impl IssuesView {
                     .disabled(self.comments_loading || self.pending)
                     .on_click(cx.listener(|this, _, _, cx| this.load_comments(true, cx)))
             }))
-            .child(Textarea::new(&self.inputs.comment))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Button::new("save-issue-comment")
-                            .primary()
-                            .label(if self.editing_comment.is_some() {
-                                "Save comment"
-                            } else {
-                                "Comment"
-                            })
-                            .disabled(
-                                self.pending
-                                    || self.inputs.comment.read(cx).value().trim().is_empty(),
-                            )
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.save_comment(window, cx)),
-                            ),
-                    )
-                    .children(self.editing_comment.as_ref().map(|_| {
-                        Button::new("cancel-comment-edit")
-                            .ghost()
-                            .label("Cancel")
-                            .disabled(self.pending)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.editing_comment = None;
-                                this.inputs
-                                    .comment
-                                    .update(cx, |input, cx| input.set_value("", window, cx));
-                                cx.notify();
-                            }))
-                    })),
+            .children(
+                (self.access.can_write() || self.editing_comment.is_some())
+                    .then(|| Textarea::new(&self.inputs.comment)),
+            )
+            .children(
+                (self.access.can_write() || self.editing_comment.is_some()).then(|| {
+                    h_flex()
+                        .gap_2()
+                        .child(
+                            Button::new("save-issue-comment")
+                                .primary()
+                                .label(if self.editing_comment.is_some() {
+                                    "Save comment"
+                                } else {
+                                    "Comment"
+                                })
+                                .disabled(
+                                    self.pending
+                                        || self.inputs.comment.read(cx).value().trim().is_empty(),
+                                )
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| {
+                                        this.save_comment(window, cx)
+                                    }),
+                                ),
+                        )
+                        .children(self.editing_comment.as_ref().map(|_| {
+                            Button::new("cancel-comment-edit")
+                                .ghost()
+                                .label("Cancel")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.editing_comment = None;
+                                    this.inputs
+                                        .comment
+                                        .update(cx, |input, cx| input.set_value("", window, cx));
+                                    cx.notify();
+                                }))
+                        }))
+                }),
             )
             .into_any_element()
     }
@@ -1102,7 +1130,7 @@ impl IssuesView {
     fn render_list(&self, cx: &mut Context<Self>) -> AnyElement {
         v_flex()
             .gap_3()
-            .child(
+            .children(self.access.can_write().then(|| {
                 h_flex()
                     .gap_2()
                     .child(
@@ -1123,8 +1151,8 @@ impl IssuesView {
                                 this.manage_labels = true;
                                 cx.notify();
                             })),
-                    ),
-            )
+                    )
+            }))
             .child(
                 h_flex().gap_2().children(
                     [

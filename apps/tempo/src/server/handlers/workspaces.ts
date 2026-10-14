@@ -17,7 +17,8 @@ import { getUserById } from "../../github/api.ts";
 import { github, prStateOf } from "../../github/provider.ts";
 import { artifactBranchExists, assertArtifactRepositoryIdentity } from "../../artifacts/repositories.ts";
 import { getArtifactPullRequest } from "../../artifacts/pull-requests.ts";
-import { getOwnedWorkspace } from "../../http/common.ts";
+import { getOwnedWorkspace, getWritableWorkspace } from "../../http/common.ts";
+import { CLEANUP_WORKSPACE_FNS } from "../policy.ts";
 import { summaryFromD1Row } from "../../lib/summary.ts";
 import { workspaceStub } from "../../do/workspace/stub.ts";
 import type { InitInput } from "../../do/workspace/index.ts";
@@ -57,7 +58,7 @@ export const createWorkspace = async (
   { env, user }: HandlerCtx,
   { projectId, source, agent, model, agentId, prompt }: FnInput<"createWorkspace">,
 ): Promise<FnOutput<"createWorkspace">> => {
-  const p = await requireProject(env, user.id, projectId);
+  const p = await requireProject(env, user, projectId, "write");
   const project = projectToWire(p);
   const defaults = resolveSettings(project.settings, {}).effective;
 
@@ -224,9 +225,7 @@ const resolveLibraryProfile = async (
 export const createSession: Handler<"createSession"> = async ({ env, user }, input) => {
   const { workspaceId, agentId, ...rest } = input;
 
-  const workspace = await getOwnedWorkspace(env, user.id, workspaceId);
-
-  if (!workspace) throw new TempoError("NOT_FOUND");
+  await requireWritableWorkspace(env, user.id, workspaceId);
 
   const savedProfile = agentId
     ? (
@@ -260,17 +259,30 @@ export const listWorkspaces = async (
   return rows.map(summaryFromD1Row);
 };
 
+/** The caller's own workspace, while they have `write` on its project (11, Function access). */
+const requireWritableWorkspace = async (env: HandlerCtx["env"], userId: string, workspaceId: string) => {
+  const ws = await getWritableWorkspace(env, userId, workspaceId);
+
+  if (!ws) throw new TempoError("NOT_FOUND");
+
+  if (ws === "forbidden") throw new TempoError("FORBIDDEN");
+};
+
 /**
- * Workspace functions (02): check ownership, then call the WorkspaceDO method with the same name
- * and the same input minus workspaceId. The Worker never writes WorkspaceDO data itself.
+ * Workspace functions (02): check ownership and, except for cleanup functions, `write` on the
+ * project (11); then call the WorkspaceDO method with the same name and the same input minus
+ * workspaceId. The Worker never writes WorkspaceDO data itself.
  */
 export const viaWorkspace =
   <K extends WorkspaceFnName>(name: K): Handler<K> =>
   async ({ env, user }, input) => {
     const { workspaceId, ...rest } = input;
 
-    if (!workspaceId || !(await getOwnedWorkspace(env, user.id, workspaceId)))
-      throw new TempoError("NOT_FOUND");
+    if (!workspaceId) throw new TempoError("NOT_FOUND");
+
+    if (CLEANUP_WORKSPACE_FNS.has(name)) {
+      if (!(await getOwnedWorkspace(env, user.id, workspaceId))) throw new TempoError("NOT_FOUND");
+    } else await requireWritableWorkspace(env, user.id, workspaceId);
     const stub = workspaceStub(env.WORKSPACE, workspaceId);
 
     // SAFETY: name indexes the generated RPC method and its matching MethodInput<K>/FnOutput<K> contract.

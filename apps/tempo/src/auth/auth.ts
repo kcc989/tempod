@@ -1,12 +1,54 @@
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { TempoError } from "@tempo/protocol";
 import * as schema from "../db/d1.ts";
 import type { Env } from "../env.ts";
 import { getGithubAppConfig } from "../github/app.ts";
-import { authOptions } from "./options.ts";
+import { authOptions, type AuthNamespaces } from "./options.ts";
+
+/** One shared set of names for users and organizations (11, Namespaces). */
+export const d1Namespaces = (env: Env): AuthNamespaces => {
+  const db = drizzle(env.DB, { schema });
+
+  return {
+    taken: async (name, githubId) => {
+      const org = await db
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.slug, name))
+        .get();
+
+      if (org) return true;
+
+      const other = await db
+        .select({ id: schema.user.id })
+        .from(schema.user)
+        .leftJoin(
+          schema.account,
+          and(eq(schema.account.userId, schema.user.id), eq(schema.account.providerId, "github")),
+        )
+        .where(
+          and(
+            eq(schema.user.username, name),
+            githubId === null
+              ? undefined
+              : or(ne(schema.account.accountId, githubId), isNull(schema.account.accountId)),
+          ),
+        )
+        .get();
+
+      return other !== undefined;
+    },
+    organizationHasProjects: async (organizationId) =>
+      (await db
+        .select({ id: schema.projects.id })
+        .from(schema.projects)
+        .where(eq(schema.projects.organizationId, organizationId))
+        .get()) !== undefined,
+  };
+};
 
 const createAuth = (env: Env, github: { clientId: string; clientSecret: string } | null) => {
   const db = drizzle(env.DB, { schema });
@@ -15,8 +57,8 @@ const createAuth = (env: Env, github: { clientId: string; clientSecret: string }
     ...authOptions({
       baseURL: `https://${env.APP_HOST}`,
       secret: env.BETTER_AUTH_SECRET,
-      ownerGithubId: env.TEMPO_OWNER_GITHUB_ID,
       github,
+      namespaces: d1Namespaces(env),
     }),
     database: drizzleAdapter(db, { provider: "sqlite", schema }),
   });
@@ -44,11 +86,11 @@ export interface AuthedUser {
   readonly image: string | null;
 }
 
-const ownerCache = new Map<string, boolean>();
+const adminCache = new Map<string, boolean>();
 
-/** The signed-in user must be the owner: their GitHub account id equals TEMPO_OWNER_GITHUB_ID (05). */
-export const isOwner = async (env: Env, userId: string): Promise<boolean> => {
-  const hit = ownerCache.get(userId);
+/** The instance admin's GitHub account id equals TEMPO_OWNER_GITHUB_ID (11, Identity). */
+export const isInstanceAdmin = async (env: Env, userId: string): Promise<boolean> => {
+  const hit = adminCache.get(userId);
 
   if (hit !== undefined) return hit;
   const db = drizzle(env.DB, { schema });
@@ -59,10 +101,10 @@ export const isOwner = async (env: Env, userId: string): Promise<boolean> => {
     .where(and(eq(schema.account.userId, userId), eq(schema.account.providerId, "github")))
     .get();
 
-  const owner = row?.accountId === env.TEMPO_OWNER_GITHUB_ID;
-  ownerCache.set(userId, owner);
+  const admin = row?.accountId === env.TEMPO_OWNER_GITHUB_ID;
+  adminCache.set(userId, admin);
 
-  return owner;
+  return admin;
 };
 
 /** Session from the cookie or (with `allowBearer`) an `Authorization: Bearer` token. */
@@ -88,7 +130,7 @@ export const getSessionUser = async (
   return { id: u.id, name: u.name, email: u.email, image: u.image ?? null };
 };
 
-export const requireOwner = async (
+export const requireUser = async (
   env: Env,
   headers: Headers,
   opts?: { allowCookie?: boolean; allowBearer?: boolean },
@@ -97,7 +139,9 @@ export const requireOwner = async (
 
   if (!user) throw new TempoError("UNAUTHENTICATED");
 
-  if (!(await isOwner(env, user.id))) throw new TempoError("FORBIDDEN");
-
   return user;
+};
+
+export const requireInstanceAdmin = async (env: Env, userId: string): Promise<void> => {
+  if (!(await isInstanceAdmin(env, userId))) throw new TempoError("FORBIDDEN");
 };

@@ -7,8 +7,8 @@ export const auth = betterAuth({
   ...authOptions({
     baseURL: "http://localhost:5173",
     secret: "cli-only-cli-only-cli-only-cli-only",
-    ownerGithubId: "0",
     github: { clientId: "x", clientSecret: "x" },
+    namespaces: { taken: async () => false, organizationHasProjects: async () => false },
   }),
   database: drizzleAdapter({}, { provider: "sqlite" }),
 });

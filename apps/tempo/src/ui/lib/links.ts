@@ -26,6 +26,12 @@ export const githubPullUrl = (owner: string, name: string, prNumber: number): st
 export const githubChecksUrl = (owner: string, name: string, prNumber: number): string =>
   `${githubPullUrl(owner, name, prNumber)}/checks`;
 
+/** A namespace page, or one project's page (04, Public projects). */
+export const namespacePath = (namespace: string): string => `/${encodeURIComponent(namespace)}`;
+
+export const projectPagePath = (namespace: string, slug: string): string =>
+  `${namespacePath(namespace)}/${encodeURIComponent(slug)}`;
+
 export const repositoryPath = (projectId: string, options: { ref?: string; pull?: number } = {}): string => {
   const search = new URLSearchParams({ project: projectId });
 

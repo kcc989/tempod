@@ -2,7 +2,9 @@ import { Link } from "@tanstack/react-router";
 import type { Project } from "@tempo/protocol";
 import {
   ArrowUpDownIcon,
+  Building2Icon,
   ChevronRightIcon,
+  CompassIcon,
   FolderGit2Icon,
   FolderPlusIcon,
   HistoryIcon,
@@ -10,6 +12,7 @@ import {
   PinIcon,
   SearchIcon,
   SettingsIcon,
+  StarIcon,
 } from "lucide-react";
 import { useMemo } from "react";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
@@ -156,6 +159,39 @@ export function Sidebar({ variant = "panel" }: SidebarProps) {
           <Link to="/repositories">
             <FolderGit2Icon />
             Repositories
+          </Link>
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          variant="ghost"
+          className="h-9 w-full justify-start gap-3 text-sm font-normal"
+        >
+          <Link to="/explore">
+            <CompassIcon />
+            Explore
+          </Link>
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          variant="ghost"
+          className="h-9 w-full justify-start gap-3 text-sm font-normal"
+        >
+          <Link to="/stars">
+            <StarIcon />
+            Stars
+          </Link>
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          variant="ghost"
+          className="h-9 w-full justify-start gap-3 text-sm font-normal"
+        >
+          <Link to="/organizations">
+            <Building2Icon />
+            Organizations
           </Link>
         </Button>
         <Button

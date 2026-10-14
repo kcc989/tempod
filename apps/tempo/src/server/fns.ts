@@ -228,6 +228,46 @@ export const setProjectEnvironment = createServerFn({ method: "POST" })
   .validator((data: FnInput<"setProjectEnvironment">) => data)
   .handler(({ data }) => run("setProjectEnvironment", data));
 
+export const getProject = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getProject">) => data)
+  .handler(({ data }) => run("getProject", data));
+
+export const listNamespaceProjects = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listNamespaceProjects">) => data)
+  .handler(({ data }) => run("listNamespaceProjects", data));
+
+export const exploreProjects = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"exploreProjects">) => data)
+  .handler(({ data }) => run("exploreProjects", data));
+
+export const listStarredProjects = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listStarredProjects">) => data)
+  .handler(({ data }) => run("listStarredProjects", data));
+
+export const setProjectVisibility = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setProjectVisibility">) => data)
+  .handler(({ data }) => run("setProjectVisibility", data));
+
+export const listProjectMembers = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listProjectMembers">) => data)
+  .handler(({ data }) => run("listProjectMembers", data));
+
+export const putProjectMember = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"putProjectMember">) => data)
+  .handler(({ data }) => run("putProjectMember", data));
+
+export const deleteProjectMember = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteProjectMember">) => data)
+  .handler(({ data }) => run("deleteProjectMember", data));
+
+export const starProject = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"starProject">) => data)
+  .handler(({ data }) => run("starProject", data));
+
+export const unstarProject = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"unstarProject">) => data)
+  .handler(({ data }) => run("unstarProject", data));
+
 export const listEnvironments = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listEnvironments">) => data)
   .handler(({ data }) => run("listEnvironments", data));

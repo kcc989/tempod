@@ -33,12 +33,19 @@ pub struct ChecksView {
     generation: u64,
     error: Option<String>,
     problem: Option<(String, bool)>,
+    access: super::social_model::Access,
     branch: Entity<InputState>,
     source: Entity<TextareaState>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl ChecksView {
+    /// Run, Cancel and Rerun need `write`; the pipeline editor needs `admin` (04; 11).
+    pub fn set_access(&mut self, access: super::social_model::Access, cx: &mut Context<Self>) {
+        self.access = access;
+        cx.notify();
+    }
+
     pub fn new(
         client: Client,
         project_id: String,
@@ -67,6 +74,9 @@ impl ChecksView {
             generation: 0,
             error: None,
             problem: None,
+            access: super::social_model::Access {
+                role: Some(p::ProjectRole::Admin),
+            },
             branch,
             source,
             _subscriptions: subscriptions,
@@ -361,15 +371,15 @@ impl ChecksView {
                                 this.load_runs(cx);
                             })),
                     )
-                    .child(
+                    .children(self.access.can_write().then(|| {
                         Button::new("ci-run-branch")
                             .primary()
                             .label("Run checks")
                             .disabled(
                                 self.pending || self.branch.read(cx).value().trim().is_empty(),
                             )
-                            .on_click(cx.listener(|this, _, _, cx| this.start_run(cx))),
-                    ),
+                            .on_click(cx.listener(|this, _, _, cx| this.start_run(cx)))
+                    })),
             )
             .children(self.loading.then(|| div().child("Loading check runs…")))
             .children((!self.loading && self.runs.is_empty()).then(|| {
@@ -427,7 +437,7 @@ impl ChecksView {
                             }))
                     })),
             )
-            .child(self.render_pipeline(cx))
+            .children(self.access.can_admin().then(|| self.render_pipeline(cx)))
             .into_any_element()
     }
 
@@ -517,19 +527,21 @@ impl ChecksView {
                                 run.revision
                             )),
                     )
-                    .child(if run.status == p::CiRunStatus::Completed {
-                        Button::new("ci-rerun")
-                            .ghost()
-                            .label("Rerun")
-                            .disabled(self.pending)
-                            .on_click(cx.listener(|this, _, _, cx| this.rerun(cx)))
-                    } else {
-                        Button::new("ci-cancel")
-                            .ghost()
-                            .label("Cancel")
-                            .disabled(self.pending)
-                            .on_click(cx.listener(|this, _, _, cx| this.cancel_run(cx)))
-                    }),
+                    .children(self.access.can_write().then(|| {
+                        if run.status == p::CiRunStatus::Completed {
+                            Button::new("ci-rerun")
+                                .ghost()
+                                .label("Rerun")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(|this, _, _, cx| this.rerun(cx)))
+                        } else {
+                            Button::new("ci-cancel")
+                                .ghost()
+                                .label("Cancel")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(|this, _, _, cx| this.cancel_run(cx)))
+                        }
+                    })),
             )
             .children(
                 detail

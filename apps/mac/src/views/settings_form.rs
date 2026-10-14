@@ -35,7 +35,7 @@ pub const TAB_MCP: usize = 6;
 pub const TAB_AGENTS: usize = 7;
 
 /// The pages of a project (04), each with the field sections of [`model::SECTIONS`] it shows.
-pub const PROJECT_PAGES: [(&str, &[&str]); 8] = [
+pub const PROJECT_PAGES: [(&str, &[&str]); 9] = [
     ("Agents", &["Agent", "Browser"]),
     ("Scripts", &["Scripts"]),
     ("Environment", &["Environment"]),
@@ -44,8 +44,11 @@ pub const PROJECT_PAGES: [(&str, &[&str]); 8] = [
     ("Secrets", &[]),
     ("Roles", &["Roles"]),
     ("General", &[]),
+    ("Access", &[]),
 ];
 const PAGE_ENVIRONMENT: usize = 2;
+const PAGE_GENERAL: usize = 7;
+const PAGE_ACCESS: usize = 8;
 const PAGE_SECRETS: usize = 5;
 
 struct RunEditor {
@@ -370,6 +373,7 @@ pub struct SettingsForm {
     secret_inputs: BTreeMap<String, Entity<InputState>>,
     project: Option<p::Project>,
     agent_attachments: Option<Entity<super::agent_attachments::AgentAttachments>>,
+    project_access: Option<Entity<super::project_access::ProjectAccessView>>,
     workspace: Option<p::WorkspaceDetail>,
     fields: Vec<Field>,
     initial: Vec<FieldState>,
@@ -461,6 +465,7 @@ impl SettingsForm {
             secret_inputs,
             project: None,
             agent_attachments: None,
+            project_access: None,
             workspace: None,
             fields: vec![],
             initial: vec![],
@@ -720,6 +725,11 @@ impl SettingsForm {
         self.agent_attachments = Some(
             cx.new(|cx| super::agent_attachments::AgentAttachments::new(project_id, window, cx)),
         );
+        let access_project = project.clone();
+        self.project_access =
+            Some(cx.new(|cx| {
+                super::project_access::ProjectAccessView::new(access_project, window, cx)
+            }));
         self.project = Some(project);
         self.workspace = workspace;
         cx.notify();
@@ -2633,9 +2643,14 @@ impl SettingsForm {
                         ),
                 )
             })
-            .when(self.section == PROJECT_PAGES.len() - 1, |col| {
-                col.child(format!("{}/{}", project.owner, project.name))
+            .when(self.section == PAGE_GENERAL, |col| {
+                col.child(super::social_model::project_label(&project))
             })
+            .children(
+                (self.section == PAGE_ACCESS)
+                    .then(|| self.project_access.clone())
+                    .flatten(),
+            )
             .children(
                 (self.section == 0)
                     .then(|| self.agent_attachments.clone())

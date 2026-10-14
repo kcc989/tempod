@@ -35,12 +35,12 @@ The main threat is code or text inside a workspace (a hostile dependency, a pois
 
 ## Authentication and authorization
 
-One GitHub account owns a Tempo deployment. Nobody else can sign in.
+Any GitHub account can sign in. Users, organizations and project roles are defined in 11, which takes precedence over this section.
 
 - Sign-in uses Better Auth's GitHub provider with the **GitHub App's own OAuth client id and secret**. One GitHub App does sign-in and repo access.
-- `TEMPO_OWNER_GITHUB_ID` is the owner's numeric GitHub user id. In Better Auth's sign-in hook, refuse any GitHub account whose id is different. Show `This Tempo belongs to someone else.`
+- `TEMPO_OWNER_GITHUB_ID` is the numeric GitHub user id of the instance admin (11). Better Auth refuses every provider except GitHub.
 - Session cookie: Better Auth default, `Secure`, `HttpOnly`, `SameSite=Lax`, 30-day expiry.
-- Every server function runs the owner check (02). Every WebSocket upgrade checks the cookie and `Origin` (02).
+- Every server function runs the access policy of 11 (02). Every WebSocket upgrade checks the cookie and `Origin` (02).
 - The setup pages (`/setup/*`) work only while no GitHub App is configured, and only with `?token=<TEMPO_SETUP_TOKEN>`. After setup they return 404.
 - Cloudflare Access in front of `APP_HOST` is allowed as an extra layer. It MUST NOT be required.
 - No GitHub webhooks in version 1. PR and check status come from polling (03).
@@ -138,7 +138,7 @@ One deploy command builds the image, deploys the Worker and runs migrations. A o
 | --- | --- | --- |
 | `APP_HOST` | var | App hostname |
 | `PREVIEW_DOMAIN` | var | Preview zone apex |
-| `TEMPO_OWNER_GITHUB_ID` | var | Owner's GitHub user id |
+| `TEMPO_OWNER_GITHUB_ID` | var | Instance admin's GitHub user id (11) |
 | `TEMPO_ENCRYPTION_KEY` | secret | 32 random bytes, base64 |
 | `BETTER_AUTH_SECRET` | secret | At least 32 random bytes |
 | `TEMPO_SETUP_TOKEN` | secret | 32 random characters |

@@ -1,6 +1,6 @@
 # 09 Git Forge
 
-The owner requested Artifacts-hosted Git repositories, repository browsing, pull requests and issue tracking in Tempo. This tab extends tabs 00–08 for that scope and takes precedence over their GitHub-only repository assumptions. Tempo remains an owner-operated deployment; GitHub sign-in and optional GitHub-linked projects remain supported. It is not yet a public, multi-user forge.
+The owner requested Artifacts-hosted Git repositories, repository browsing, pull requests and issue tracking in Tempo. This tab extends tabs 00–08 for that scope and takes precedence over their GitHub-only repository assumptions. GitHub sign-in and optional GitHub-linked projects remain supported. Users, organizations, public projects and project roles are in 11, which takes precedence where this tab says "owner".
 
 ## Storage and identity
 
@@ -8,7 +8,7 @@ The owner requested Artifacts-hosted Git repositories, repository browsing, pull
 - The binding is `ARTIFACTS`. The default namespace is `tempo-repos`; deployment may select `TEMPO_ARTIFACTS_NAMESPACE`.
 - `projects` gains `provider` (`github` by default, or `artifacts`), `artifact_repo_id` (nullable text), and `clone_url` (nullable text). `installation_id` and `repo_id` become nullable; native projects have neither. GitHub project rows and workspace rows MUST survive the forward migration.
 - Relaxing the existing SQLite NOT NULL constraint requires reconstruction of `projects`. Extending the Durable Object `ops.kind` CHECK requires reconstruction of `ops`. These preservation-tested forward migrations are permitted by 05 provided they preserve existing columns, values, foreign keys, indexes and dependent rows. Later migrations remain additive by default.
-- Artifacts project `repo_owner` is `tempo`, and `repo_name` is the namespace repository name. Each owner may link a given Artifacts repository only once. `artifact_repo_id` is the service's opaque ID.
+- Artifacts project `repo_owner` is `tempo`, and `repo_name` is the Artifacts repository name (11, Artifacts storage names). An Artifacts repository belongs to at most one project. `artifact_repo_id` is the service's opaque ID.
 - `Project` has nullable `installationId` and `repoId` and optional `provider`, `artifactRepoId` and `cloneUrl`. Missing provider means GitHub for older fixtures. The Mac client minimum version becomes `0.2.0`; the new native client must be deployed alongside this schema extension.
 - Unlinking an Artifacts project removes Tempo metadata according to the existing archive guard. It MUST NOT delete the remote repository. No remote deletion UI is part of this phase.
 

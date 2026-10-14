@@ -5,6 +5,7 @@ mod channel;
 mod codex_login;
 mod environments;
 mod error;
+mod organizations;
 mod prng;
 mod runtime;
 mod server;
@@ -25,6 +26,7 @@ pub use environments::{
     ENVIRONMENT_NAME_MAX, ProposalApplied, ProposalApply, merge_proposal, unique_name,
 };
 pub use error::{ApiError, DENIED_MESSAGE, NOT_TEMPO_MESSAGE, SignInError};
+pub use organizations::{NAMESPACE_TAKEN_MESSAGE, Organization, UserInvitation, slug_from_name};
 pub use runtime::{Runtime, RuntimeHandle, Signal};
 pub use server::{
     AttachmentFile, CLIENT_ID, Client, DEVICE_GRANT_TYPE, DeviceAuthorization, MAX_ARTIFACT_BYTES,

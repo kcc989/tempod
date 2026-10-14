@@ -2,16 +2,70 @@ import { redactPayload } from "@tempo/protocol";
 import type { BetterAuthOptions } from "better-auth/minimal";
 import { bearer } from "better-auth/plugins/bearer";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
+import { organization } from "better-auth/plugins/organization";
+import { APIError } from "better-auth/api";
 import { ERROR_MESSAGES } from "@tempo/protocol";
 import { errorText, log } from "../log.ts";
+
+/** D1 lookups for usernames and organization slugs (11, Identity and Organizations). */
+export interface AuthNamespaces {
+  /** True when an organization, or a user with another GitHub id, already has this name. */
+  readonly taken: (name: string, githubId: string | null) => Promise<boolean>;
+  readonly organizationHasProjects: (organizationId: string) => Promise<boolean>;
+}
 
 /** Pure Better Auth options, so the `auth` CLI can load them to generate the schema. */
 export interface AuthEnv {
   readonly baseURL: string;
   readonly secret: string;
-  readonly ownerGithubId: string;
   readonly github: { readonly clientId: string; readonly clientSecret: string } | null;
+  readonly namespaces: AuthNamespaces;
 }
+
+export const NAMESPACE = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/;
+
+export const RESERVED_NAMESPACES: ReadonlySet<string> = new Set([
+  "api",
+  "admin",
+  "device",
+  "downloads",
+  "explore",
+  "history",
+  "login",
+  "logout",
+  "new",
+  "organizations",
+  "repositories",
+  "settings",
+  "setup",
+  "stars",
+  "w",
+  "workspaces",
+]);
+
+export const INVITATION_SECONDS = 60 * 60 * 48;
+
+/** The lower-case GitHub login, or `<login>-<githubId>` when that name is reserved or taken (11). */
+export const usernameFor = async (
+  namespaces: AuthNamespaces,
+  login: string,
+  githubId: string,
+): Promise<string> => {
+  const name = login.toLowerCase();
+
+  if (RESERVED_NAMESPACES.has(name) || (await namespaces.taken(name, githubId))) return `${name}-${githubId}`;
+
+  return name;
+};
+
+const namespaceTaken = () =>
+  new APIError("BAD_REQUEST", { code: "NAMESPACE_TAKEN", message: "That name is already taken." });
+
+/** Organization slugs share one set of names with usernames (11, Organizations). */
+export const assertOrganizationSlug = async (namespaces: AuthNamespaces, slug: string): Promise<void> => {
+  if (!NAMESPACE.test(slug) || RESERVED_NAMESPACES.has(slug) || (await namespaces.taken(slug, null)))
+    throw namespaceTaken();
+};
 
 export const MAC_CLIENT_ID = "tempo-mac";
 
@@ -47,8 +101,19 @@ export const authOptions = (env: AuthEnv) =>
     secret: env.secret,
     trustedOrigins: [env.baseURL],
     socialProviders: env.github
-      ? { github: { clientId: env.github.clientId, clientSecret: env.github.clientSecret } }
+      ? {
+          github: {
+            clientId: env.github.clientId,
+            clientSecret: env.github.clientSecret,
+            overrideUserInfoOnSignIn: true,
+            mapProfileToUser: async (profile) => ({
+              username: await usernameFor(env.namespaces, profile.login, String(profile.id)),
+            }),
+          },
+        }
       : {},
+    // 11, Identity: users cannot set their own username.
+    disabledPaths: ["/update-user"],
     session: { expiresIn: SESSION_SECONDS, updateAge: 60 * 60 * 24 },
     account: { accountLinking: { enabled: false } },
     databaseHooks: {
@@ -60,15 +125,10 @@ export const authOptions = (env: AuthEnv) =>
     logger: { log: authLog },
     advanced: { defaultCookieAttributes: { sameSite: "lax", httpOnly: true, secure: true } },
     user: {
-      // Runs before create-user, link-account and every OAuth sign-in (05, owner check).
+      additionalFields: { username: { type: "string", required: false, unique: true } },
+      // Runs before create-user, link-account and every OAuth sign-in: GitHub only (11, Identity).
       validateUserInfo: ({ source }) => {
         if (source.method !== "oauth" || source.oauth?.providerId !== "github") {
-          return { error: "forbidden", errorDescription: ERROR_MESSAGES.FORBIDDEN };
-        }
-
-        const githubId = source.oauth.profile?.id;
-
-        if (githubId === undefined || String(githubId) !== env.ownerGithubId) {
           return { error: "forbidden", errorDescription: ERROR_MESSAGES.FORBIDDEN };
         }
 
@@ -82,6 +142,25 @@ export const authOptions = (env: AuthEnv) =>
         expiresIn: "15m",
         interval: "5s",
         validateClient: (clientId) => clientId === MAC_CLIENT_ID,
+      }),
+      organization({
+        teams: { enabled: false },
+        invitationExpiresIn: INVITATION_SECONDS,
+        organizationHooks: {
+          beforeCreateOrganization: async ({ organization: org }) => {
+            await assertOrganizationSlug(env.namespaces, org.slug ?? "");
+          },
+          beforeUpdateOrganization: async ({ organization: org }) => {
+            if (org.slug !== undefined) await assertOrganizationSlug(env.namespaces, org.slug);
+          },
+          beforeDeleteOrganization: async ({ organization: org }) => {
+            if (await env.namespaces.organizationHasProjects(org.id))
+              throw new APIError("BAD_REQUEST", {
+                code: "ORGANIZATION_HAS_PROJECTS",
+                message: "Move or unlink this organization's projects first.",
+              });
+          },
+        },
       }),
     ],
   }) satisfies BetterAuthOptions;

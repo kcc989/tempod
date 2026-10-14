@@ -5,6 +5,8 @@ import { json } from "../db/json.ts";
 /** The parsed, non-secret fields of a D1 environments row (01, Environments). */
 export interface EnvironmentConfig {
   readonly id: string;
+  /** The owner; their CredentialDO holds the secrets (11, Shared project configuration). */
+  readonly userId: string;
   readonly name: string;
   readonly egressPolicy: EgressPolicy;
   readonly egressAllowlist: ReadonlyArray<string>;
@@ -14,6 +16,7 @@ export interface EnvironmentConfig {
 
 export const parseEnvironment = (row: EnvironmentRow): EnvironmentConfig => ({
   id: row.id,
+  userId: row.userId,
   name: row.name,
   egressPolicy: row.egressPolicy,
   egressAllowlist: json.egressAllowlist.read(row.egressAllowlistJson, []),

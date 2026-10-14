@@ -481,3 +481,34 @@ Pre-rebase historical validation and native observations are not acceptance evid
 The owner changed the Claude default mode from `bypassPermissions` to `auto` (01, Agents table). `claude-agent-acp` 0.89.1 advertises `auto` (evidence `docs/evidence/core/claude.json`). If an adapter does not offer it, `tempod` logs the failed mode change and the session keeps the agent's current mode. Leaving plan mode in web and Mac returns to `auto`. Codex, OpenCode and Pi are unchanged.
 
 The turn-summary rule (01, Send a prompt) now asks the agent to report changes and checks only when it made them. The old text made agents end question-only turns with "I changed no files and ran no checks".
+
+## Organizations and social, phase 1 (2026-10-14)
+
+The owner asked for GitHub-style users, organizations, public browsing and stars with the Better Auth `organization` plugin. They chose open GitHub sign-up with anonymous browsing, each member's own agent credentials, user- or organization-owned projects with per-project members, and stars only. Tab 11 defines the contracts. Choices in phase 1:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Organization plugin | `organization()` from the pinned `better-auth` 1.7.7, teams off, hooks for slug rules and deletion. No new dependency. | O3 |
+| Access policy | `runFn` reads an optional session. `PUBLIC_FNS`, `INSTANCE_ADMIN_FNS` and `CLEANUP_WORKSPACE_FNS` in `src/server/policy.ts`; project roles in `src/auth/access.ts`. | One place per rule |
+| D1 migration | `0010_organizations` is additive (`ALTER TABLE ADD`, index swap). Drizzle's generated table rebuild was replaced, and its expression indexes were written by hand. `slug` has a database default `''` that the schema omits, so `ADD COLUMN NOT NULL` works on existing rows. | No rebuild of `projects` and its dependants |
+| Artifacts collision | Before this change, a second user who created an Artifacts repository with an existing name was linked to the first user's repository. New names are `t<hash>-<slug>`, and `artifact_repo_id` is unique across projects. | Security fix found while scoping 11 |
+| Shared configuration | Project secrets, the project environment and project agent attachments use the project holder (`projects.user_id`). `getEgressConfig` carries `environmentUserId`. | Members' workspaces need the project's configuration |
+| Clients | Only protocol compatibility changed: the Mac app passes `None` for the new optional inputs, and the `FORBIDDEN` text changed in both clients. The web UI and Mac screens for organizations are phase 2 (rule 17). | O8 |
+
+Verification: four new Worker cases in `organizations.cases.ts` (roles and public reads, organization roles and the workspace write gate, per-owner Artifacts names and holder secrets, stars and namespaces). The forward-migration case now also checks slugs, visibility and duplicate names. A mutation of the workspace write gate made the new case fail. Hosted sign-in with a second GitHub account (AT-1) is manual and has not been run.
+
+## Organizations and social, phase 2 (2026-10-14)
+
+Web and Mac clients for tab 11, as specified in 04 (Public projects, stars and organizations) and the new 07 Scope rows. Choices:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| `ProjectSummary.role` | The membership role; `null` for a public visitor. `Project.role` matches. | A client must tell a public read from a member read to show Checks (CI needs a membership role). |
+| `ProjectSummary.owner`, `name` | Added | Public GitHub-linked projects link to GitHub |
+| Reserved names | Also `downloads`, `history`, `repositories`, `workspaces` | Every top-level web route is reserved, so `/:namespace` never shadows one |
+| Instance admin in clients | Not exposed. `listInstallations` answering `FORBIDDEN` drives the GitHub tab; `linkArtifactRepository` shows its `FORBIDDEN` inline | No extra API |
+| Mac organization calls | `tempo-client` methods for `/api/auth/organization/{list,create,list-user-invitations,accept-invitation,reject-invitation}` and `get-session` (user id). Better Auth errors map to the existing error body (`NAMESPACE_TAKEN` → `That name is already taken.`) | The app crate cannot build raw requests; no new `ErrorCode` |
+| Mac namespace pages and organization members | Open in the default browser, as Saved chats does | 07 Scope row |
+| Owner select (web) | Lists all the caller's organizations; the server refuses non-admins with `FORBIDDEN` | Better Auth's list has no role |
+
+Verification: Web component cases for role gating (public visitor), the star button and project members; UI model cases for labels, slugs and organization roles; one desktop web browser case for an anonymous visitor on `/:namespace/:slug` (20 web and 9 workspace browser cases pass). Mac: `social_model` unit cases and a view case (Explore → public project → star) against the local fake server; 293 Mac cases pass on Linux with `libxkbcommon` installed. Hosted sign-in with a second GitHub account, real Better Auth organization flows and native visual acceptance are not run.

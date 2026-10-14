@@ -42,6 +42,8 @@ export interface EgressConfig {
   readonly mcp: ReadonlyArray<McpEgress>;
   /** The workspace's environment (01, Environments); absent or null means none. */
   readonly environmentId?: string | null;
+  /** The user whose CredentialDO holds the environment's secrets (11); absent means the workspace user. */
+  readonly environmentUserId?: string | null;
   readonly secrets?: ReadonlyArray<SecretBinding>;
   readonly injectors?: ReadonlyArray<Injector>;
   /** A CI job's container (10, Egress): read-only repository access and no credentials. */

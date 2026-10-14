@@ -1,3 +1,4 @@
+use super::social_model::{self as social, Access};
 use super::tokens::{Token, color};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
@@ -8,7 +9,7 @@ use gpui_kit::{
     IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _,
     Subscription, Window, div,
 };
-use tempo_client::Client;
+use tempo_client::{Client, Organization};
 use tempo_protocol::{self as p, api};
 
 pub enum RepositoryEvent {
@@ -22,6 +23,14 @@ enum RepositoryTab {
     PullRequests,
     Issues,
     Checks,
+}
+
+/// The repository list: linked projects, or a browsing list (04, Public projects).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListSource {
+    Yours,
+    Explore,
+    Stars,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -47,6 +56,17 @@ pub struct RepositoryView {
     client: Client,
     projects: Vec<p::Project>,
     project: Option<p::Project>,
+    access: Access,
+    user_id: Option<String>,
+    star: Option<p::StarState>,
+    source: ListSource,
+    summaries: Vec<p::ProjectSummary>,
+    summaries_loading: bool,
+    summaries_generation: u64,
+    organizations: Vec<Organization>,
+    /// Add repository: the organization that owns it; `None` is the caller (11).
+    owner: Option<String>,
+    visibility: p::ProjectVisibility,
     detail: Option<p::RepositoryDetail>,
     file: Option<(String, p::GetRepositoryFileOut)>,
     commits: Vec<p::RepositoryCommit>,
@@ -125,6 +145,18 @@ impl RepositoryView {
             client,
             projects: Vec::new(),
             project: None,
+            access: Access {
+                role: Some(p::ProjectRole::Admin),
+            },
+            user_id: None,
+            star: None,
+            source: ListSource::Yours,
+            summaries: Vec::new(),
+            summaries_loading: false,
+            summaries_generation: 0,
+            organizations: Vec::new(),
+            owner: None,
+            visibility: p::ProjectVisibility::Private,
             detail: None,
             file: None,
             commits: Vec::new(),
@@ -164,7 +196,158 @@ impl RepositoryView {
             _subscriptions: subscriptions,
         };
         view.refresh_projects(cx);
+        view.load_identity(cx);
         view
+    }
+
+    /// The user id for comment author checks, and the organizations for Add repository.
+    fn load_identity(&mut self, cx: &mut Context<Self>) {
+        let user = self.client.session_user_id();
+        let organizations = self.client.organizations();
+        cx.spawn(async move |this, cx| {
+            let (user, organizations) = (user.await, organizations.await);
+            let _ = this.update(cx, |this, cx| {
+                this.user_id = user.ok();
+                this.organizations = organizations.unwrap_or_default();
+                if let Some(issues) = &this.issues {
+                    let (access, user_id) = (this.access, this.user_id.clone());
+                    issues.update(cx, |issues, cx| issues.set_access(access, user_id, cx));
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Shows linked projects, Explore or Stars in the list (04; the sidebar footer opens these).
+    pub fn show_source(&mut self, source: ListSource, cx: &mut Context<Self>) {
+        self.source = source;
+        self.summaries_generation += 1;
+        let generation = self.summaries_generation;
+        self.summaries.clear();
+        if source == ListSource::Yours {
+            self.summaries_loading = false;
+            self.refresh_projects(cx);
+            cx.notify();
+            return;
+        }
+        self.summaries_loading = true;
+        self.error = None;
+        let request: std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<Vec<p::ProjectSummary>, tempo_client::ApiError>,
+                    > + Send,
+            >,
+        > = if source == ListSource::Explore {
+            Box::pin(self.client.call::<api::ExploreProjects>(Default::default()))
+        } else {
+            Box::pin(
+                self.client
+                    .call::<api::ListStarredProjects>(Default::default()),
+            )
+        };
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                if this.summaries_generation != generation {
+                    return;
+                }
+                this.summaries_loading = false;
+                match result {
+                    Ok(summaries) => this.summaries = summaries,
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn select_summary(
+        &mut self,
+        summary: p::ProjectSummary,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let access = Access::of_summary(&summary);
+        self.select_project_with(social::project_from_summary(&summary), access, window, cx);
+        self.star = Some(p::StarState {
+            stars: summary.stars,
+            starred: summary.starred,
+        });
+    }
+
+    /// The header star state for a linked project, from `getProject` (04, Star button).
+    fn load_star(&mut self, cx: &mut Context<Self>) {
+        let Some(project) = &self.project else {
+            return;
+        };
+        let (Some(namespace), Some(slug)) = (project.namespace.clone(), project.slug.clone())
+        else {
+            return;
+        };
+        let (Ok(namespace), Ok(slug)) = (namespace.try_into(), slug.try_into()) else {
+            return;
+        };
+        let generation = self.generation;
+        let request = self
+            .client
+            .call::<api::GetProject>(p::GetProjectIn { namespace, slug });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                if let (Ok(summary), true) = (result, this.generation == generation) {
+                    this.star = Some(p::StarState {
+                        stars: summary.stars,
+                        starred: summary.starred,
+                    });
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn toggle_star(&mut self, cx: &mut Context<Self>) {
+        let (Some(project), Some(star)) = (&self.project, &self.star) else {
+            return;
+        };
+        if self.pending {
+            return;
+        }
+        let project_id = project.id.clone();
+        let request: std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<p::StarState, tempo_client::ApiError>>
+                    + Send,
+            >,
+        > = if star.starred {
+            Box::pin(
+                self.client
+                    .call::<api::UnstarProject>(p::UnstarProjectIn { project_id }),
+            )
+        } else {
+            Box::pin(
+                self.client
+                    .call::<api::StarProject>(p::StarProjectIn { project_id }),
+            )
+        };
+        self.pending = true;
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.pending = false;
+                match result {
+                    Ok(state) => this.star = Some(state),
+                    Err(error) => this.error = Some(super::toast::error_text(&error, None)),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
     }
 
     fn refresh_projects(&mut self, cx: &mut Context<Self>) {
@@ -212,7 +395,21 @@ impl RepositoryView {
     }
 
     fn select_project(&mut self, project: p::Project, window: &mut Window, cx: &mut Context<Self>) {
+        let access = Access::of_project(&project);
+        self.select_project_with(project, access, window, cx);
+        self.load_star(cx);
+    }
+
+    fn select_project_with(
+        &mut self,
+        project: p::Project,
+        access: Access,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.generation += 1;
+        self.access = access;
+        self.star = None;
         self.detail = None;
         self.file = None;
         self.commits.clear();
@@ -263,8 +460,12 @@ impl RepositoryView {
             };
             let client = self.client.clone();
             let project_id = project.id.clone();
-            self.issues =
-                Some(cx.new(|cx| super::issues::IssuesView::new(client, project_id, window, cx)));
+            let (access, user_id) = (self.access, self.user_id.clone());
+            self.issues = Some(cx.new(|cx| {
+                let mut view = super::issues::IssuesView::new(client, project_id, window, cx);
+                view.set_access(access, user_id, cx);
+                view
+            }));
             self.loading = false;
             self.error = None;
             cx.notify();
@@ -274,8 +475,12 @@ impl RepositoryView {
             };
             let client = self.client.clone();
             let project_id = project.id.clone();
+            let access = self.access;
             self.checks = Some(cx.new(|cx| {
-                super::repository_checks::ChecksView::new(client, project_id, window, cx)
+                let mut view =
+                    super::repository_checks::ChecksView::new(client, project_id, window, cx);
+                view.set_access(access, cx);
+                view
             }));
             self.loading = false;
             self.error = None;
@@ -519,6 +724,8 @@ impl RepositoryView {
                             name,
                             description,
                             default_branch,
+                            organization_id: self.owner.clone().and_then(|id| id.try_into().ok()),
+                            visibility: Some(self.visibility),
                         }),
                 )
             }
@@ -543,6 +750,8 @@ impl RepositoryView {
                             name,
                             url,
                             description,
+                            organization_id: self.owner.clone().and_then(|id| id.try_into().ok()),
+                            visibility: Some(self.visibility),
                         }),
                 )
             }
@@ -604,8 +813,12 @@ impl RepositoryView {
                 match result {
                     Ok(pr) => {
                         this.pull_request = Some(pr);
-                        this.load_pr_workspace(cx);
-                        this.load_pr_check(cx);
+                        if this.access.can_write() {
+                            this.load_pr_workspace(cx);
+                        }
+                        if this.access.is_member() {
+                            this.load_pr_check(cx);
+                        }
                     }
                     Err(error) => this.error = Some(error.to_string()),
                 }
@@ -1110,6 +1323,52 @@ impl RepositoryView {
                         ["Create", "Import", "Link existing"].map(|name| Tab::new().label(name)),
                     ),
             )
+            .children((mode != AddMode::Link).then(|| {
+                let owners: Vec<(Option<String>, String)> =
+                    std::iter::once((None, "You".to_string()))
+                        .chain(
+                            self.organizations
+                                .iter()
+                                .map(|o| (Some(o.id.clone()), o.name.clone())),
+                        )
+                        .collect();
+                let selected = owners
+                    .iter()
+                    .position(|(id, _)| *id == self.owner)
+                    .unwrap_or(0);
+                v_flex()
+                    .gap_2()
+                    .child("Owner")
+                    .child(
+                        TabBar::new("add-repository-owner")
+                            .selected_index(selected)
+                            .on_click(cx.listener({
+                                let owners = owners.clone();
+                                move |this, index: &usize, _, cx| {
+                                    this.owner = owners.get(*index).and_then(|(id, _)| id.clone());
+                                    cx.notify();
+                                }
+                            }))
+                            .children(owners.into_iter().map(|(_, name)| Tab::new().label(name))),
+                    )
+                    .child("Visibility")
+                    .child(
+                        TabBar::new("add-repository-visibility")
+                            .selected_index(match self.visibility {
+                                p::ProjectVisibility::Private => 0,
+                                p::ProjectVisibility::Public => 1,
+                            })
+                            .on_click(cx.listener(|this, index: &usize, _, cx| {
+                                this.visibility = if *index == 1 {
+                                    p::ProjectVisibility::Public
+                                } else {
+                                    p::ProjectVisibility::Private
+                                };
+                                cx.notify();
+                            }))
+                            .children(["Private", "Public"].map(|name| Tab::new().label(name))),
+                    )
+            }))
             .child("Repository name")
             .child(
                 Input::new(&self.inputs.name)
@@ -1524,7 +1783,7 @@ impl RepositoryView {
                     None => format!("No checks have run for {}.", pr.head_branch),
                 }))
                 .child(pr.body.clone())
-                .child(
+                .children(self.access.can_write().then(|| {
                     h_flex()
                         .gap_2()
                         .child(
@@ -1551,40 +1810,44 @@ impl RepositoryView {
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.update_pull_request(!closed, cx)
                                 }))
-                        })),
-                )
-                .children((pr.state != p::PrState::Merged).then(|| {
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Button::new("edit-repository-pr")
-                                .label("Edit title and description")
-                                .disabled(self.pending)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.edit_pull_request(window, cx)
-                                })),
-                        )
-                        .children(
-                            matches!(pr.state, p::PrState::Open | p::PrState::Draft).then(|| {
-                                Button::new("change-repository-pr-draft")
-                                    .label(if pr.state == p::PrState::Draft {
-                                        "Ready for review"
-                                    } else {
-                                        "Convert to draft"
-                                    })
-                                    .disabled(self.pending)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.toggle_pull_request_draft(cx)
-                                    }))
-                            }),
-                        )
+                        }))
                 }))
-                .child(merge_controls)
+                .children(
+                    (self.access.can_write() && pr.state != p::PrState::Merged).then(|| {
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new("edit-repository-pr")
+                                    .label("Edit title and description")
+                                    .disabled(self.pending)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.edit_pull_request(window, cx)
+                                    })),
+                            )
+                            .children(
+                                matches!(pr.state, p::PrState::Open | p::PrState::Draft).then(
+                                    || {
+                                        Button::new("change-repository-pr-draft")
+                                            .label(if pr.state == p::PrState::Draft {
+                                                "Ready for review"
+                                            } else {
+                                                "Convert to draft"
+                                            })
+                                            .disabled(self.pending)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.toggle_pull_request_draft(cx)
+                                            }))
+                                    },
+                                ),
+                            )
+                    }),
+                )
+                .children(self.access.can_write().then_some(merge_controls))
                 .into_any_element();
         }
         v_flex()
             .gap_3()
-            .child(
+            .children(self.access.can_write().then(|| {
                 Button::new("new-repository-pr")
                     .primary()
                     .label("New pull request")
@@ -1594,8 +1857,8 @@ impl RepositoryView {
                         this.editing_pr = false;
                         this.draft = false;
                         cx.notify();
-                    })),
-            )
+                    }))
+            }))
             .children(
                 self.pull_requests
                     .is_empty()
@@ -1616,6 +1879,62 @@ impl RepositoryView {
                     }),
             )
             .into_any_element()
+    }
+
+    fn list_items(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        if self.source == ListSource::Yours {
+            let mut items: Vec<AnyElement> = Vec::new();
+            if self.projects_loading {
+                items.push(div().child("Loading repositories…").into_any_element());
+            }
+            items.extend(
+                self.projects
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, project)| {
+                        Button::new(("select-repository", index))
+                            .ghost()
+                            .label(social::project_label(&project))
+                            .disabled(self.pending)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.select_project(project.clone(), window, cx)
+                            }))
+                            .into_any_element()
+                    }),
+            );
+            return items;
+        }
+        if self.summaries_loading {
+            return vec![div().child("Loading projects…").into_any_element()];
+        }
+        if self.summaries.is_empty() {
+            return vec![
+                div()
+                    .text_color(color(Token::MutedForeground, cx))
+                    .child(if self.source == ListSource::Explore {
+                        social::EXPLORE_EMPTY
+                    } else {
+                        social::STARS_EMPTY
+                    })
+                    .into_any_element(),
+            ];
+        }
+        self.summaries
+            .clone()
+            .into_iter()
+            .enumerate()
+            .map(|(index, summary)| {
+                Button::new(("select-summary", index))
+                    .ghost()
+                    .label(social::card_label(&summary))
+                    .disabled(self.pending)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.select_summary(summary.clone(), window, cx)
+                    }))
+                    .into_any_element()
+            })
+            .collect()
     }
 
     fn render_project(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -1675,9 +1994,35 @@ impl RepositoryView {
             }
         };
         let base_branch = project.default_branch.clone();
+        let writer = self.access.can_write();
+        let member = self.access.is_member();
+        let tab_names: &[&str] = if member {
+            &["Code", "Commits", "Pull requests", "Issues", "Checks"]
+        } else {
+            &["Code", "Commits", "Pull requests", "Issues"]
+        };
         v_flex()
             .gap_3()
-            .child(div().text_xl().child(project.name))
+            .child(
+                h_flex()
+                    .gap_3()
+                    .child(div().text_xl().child(social::project_label(&project)))
+                    .children(project.visibility.map(|visibility| {
+                        div()
+                            .text_sm()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(match visibility {
+                                p::ProjectVisibility::Private => "Private",
+                                p::ProjectVisibility::Public => "Public",
+                            })
+                    }))
+                    .children(self.star.clone().map(|star| {
+                        Button::new("star-repository")
+                            .label(social::star_label(&star))
+                            .disabled(self.pending)
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_star(cx)))
+                    })),
+            )
             .children(
                 self.detail
                     .as_ref()
@@ -1731,7 +2076,7 @@ impl RepositoryView {
                                 this.load_tab(cx);
                             })),
                     )
-                    .child(
+                    .children(writer.then(|| {
                         Button::new("new-repository-workspace")
                             .label("New workspace")
                             .disabled(self.pending || self.read_only() || self.detail.is_none())
@@ -1742,8 +2087,8 @@ impl RepositoryView {
                                     },
                                     cx,
                                 )
-                            })),
-                    ),
+                            }))
+                    })),
             )
             .child(
                 TabBar::new("repository-tabs")
@@ -1757,10 +2102,7 @@ impl RepositoryView {
                     .on_click(cx.listener(|this, index: &usize, window, cx| {
                         this.select_tab(*index, window, cx)
                     }))
-                    .children(
-                        ["Code", "Commits", "Pull requests", "Issues", "Checks"]
-                            .map(|name| Tab::new().label(name)),
-                    ),
+                    .children(tab_names.iter().map(|name| Tab::new().label(*name))),
             )
             .child(body)
             .into_any_element()
@@ -1823,26 +2165,27 @@ impl Render for RepositoryView {
                             .w_64()
                             .gap_2()
                             .overflow_y_scroll()
-                            .children(
-                                self.projects_loading
-                                    .then(|| div().child("Loading repositories…")),
+                            .child(
+                                TabBar::new("repository-list-source")
+                                    .selected_index(match self.source {
+                                        ListSource::Yours => 0,
+                                        ListSource::Explore => 1,
+                                        ListSource::Stars => 2,
+                                    })
+                                    .on_click(cx.listener(|this, index: &usize, _, cx| {
+                                        let source = match index {
+                                            1 => ListSource::Explore,
+                                            2 => ListSource::Stars,
+                                            _ => ListSource::Yours,
+                                        };
+                                        this.show_source(source, cx);
+                                    }))
+                                    .children(
+                                        ["Yours", "Explore", "Stars"]
+                                            .map(|name| Tab::new().label(name)),
+                                    ),
                             )
-                            .children(self.projects.clone().into_iter().enumerate().map(
-                                |(index, project)| {
-                                    let label = if is_artifacts(&project) {
-                                        project.name.clone()
-                                    } else {
-                                        format!("{}/{}", project.owner, project.name)
-                                    };
-                                    Button::new(("select-repository", index))
-                                        .ghost()
-                                        .label(label)
-                                        .disabled(self.pending)
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.select_project(project.clone(), window, cx)
-                                        }))
-                                },
-                            )),
+                            .children(self.list_items(cx)),
                     )
                     .child(
                         div()
@@ -1876,6 +2219,15 @@ mod tests {
             "owner":"owner", "name":"repo", "defaultBranch":"main", "settings":{}, "sortOrder":0
         }))
         .unwrap()
+    }
+
+    /// A public project of someone else: the caller has no membership role (11).
+    fn public_summary() -> Value {
+        json!({
+            "id":"project-artifacts", "namespace":"acme", "slug":"site", "organizationId":null,
+            "visibility":"public", "provider":"artifacts", "owner":"tempo", "name":"site",
+            "defaultBranch":"main", "stars":3, "starred":false, "role":null, "updatedAt":1
+        })
     }
 
     fn pull_request() -> Value {
@@ -1965,7 +2317,11 @@ mod tests {
                         }
                         bytes.extend_from_slice(&chunk[..n]);
                     }
-                    let input: Value = serde_json::from_slice(&bytes[head_end..]).unwrap();
+                    let input: Value = if bytes.len() == head_end {
+                        Value::Null
+                    } else {
+                        serde_json::from_slice(&bytes[head_end..]).unwrap()
+                    };
                     log.lock().unwrap().push((path.clone(), input.clone()));
                     let commit = json!({"hash":"commit-1","treeHash":"tree-1","message":"First commit",
                         "author":{"name":"Owner","email":"owner@example.com"},"committer":{"name":"Owner","email":"owner@example.com"},
@@ -2081,6 +2437,8 @@ mod tests {
                             };
                             (200, json!(workspace.workspace))
                         }
+                        "exploreProjects" => (200, json!([public_summary()])),
+                        "starProject" => (200, json!({"stars": 4, "starred": true})),
                         _ => (
                             404,
                             json!({"code":"NOT_FOUND","message":"Unknown function."}),
@@ -2149,13 +2507,65 @@ mod tests {
         loop {
             cx.run_until_parked();
             if view.read_with(cx, |view, _| {
-                !view.projects_loading && !view.loading && !view.pending && !view.workspace_loading
+                !view.projects_loading
+                    && !view.loading
+                    && !view.pending
+                    && !view.workspace_loading
+                    && !view.summaries_loading
             }) {
                 return;
             }
             assert!(Instant::now() < deadline, "repository RPC did not finish");
             std::thread::yield_now();
         }
+    }
+
+    #[gpui_kit::test]
+    fn public_projects_open_from_explore_without_write_controls_and_star(cx: &mut TestAppContext) {
+        let server = LocalServer::new(false, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, client);
+        settle(cx, &view);
+        view.update(cx, |view, cx| view.show_source(ListSource::Explore, cx));
+        settle(cx, &view);
+        let summary = view.read_with(cx, |view, _| view.summaries[0].clone());
+        assert_eq!(summary.namespace, "acme");
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.select_summary(summary, window, cx))
+        })
+        .unwrap();
+        settle(cx, &view);
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                social::project_label(view.project.as_ref().unwrap()),
+                "acme/site"
+            );
+            assert!(!view.access.can_write() && !view.access.is_member());
+            assert_eq!(
+                view.star.as_ref().map(social::star_label).as_deref(),
+                Some("Star 3")
+            );
+        });
+        view.update(cx, |view, cx| view.toggle_star(cx));
+        settle(cx, &view);
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                view.star.as_ref().map(social::star_label).as_deref(),
+                Some("Starred 4")
+            );
+        });
+        let paths: Vec<String> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(path, _)| path.clone())
+            .collect();
+        assert!(paths.iter().any(|p| p == "/api/v1/rpc/exploreProjects"));
+        assert!(paths.iter().any(|p| p == "/api/v1/rpc/starProject"));
     }
 
     #[gpui_kit::test]

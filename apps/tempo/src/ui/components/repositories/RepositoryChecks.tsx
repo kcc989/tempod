@@ -1,4 +1,4 @@
-import { TempoError, type CiPipeline, type CiRun, type Project } from "@tempo/protocol";
+import { TempoError, type CiPipeline, type CiRun } from "@tempo/protocol";
 import { ArrowLeftIcon, CircleCheckBigIcon, PlayIcon } from "lucide-react";
 import { useState } from "react";
 import { BranchPicker } from "~/ui/components/dialogs/BranchPicker";
@@ -10,9 +10,10 @@ import { Textarea } from "~/ui/components/ui/textarea";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { formatRelative } from "~/ui/lib/format";
 import type { RepositoryHubProps } from "./RepositoryHub";
-import { ciDuration, ciRunsInput, ciState, selectedJob, shortSha } from "./model";
+import { canAdmin, canWrite, useRepositoryAccess } from "./access";
+import { ciDuration, ciRunsInput, ciState, selectedJob, shortSha, type RepositoryProject } from "./model";
 
-type Props = RepositoryHubProps & { project: Project };
+type Props = RepositoryHubProps & { project: RepositoryProject };
 
 const LIVE_MS = 5_000;
 
@@ -20,12 +21,14 @@ const PAGE = 50;
 
 /** 10, Clients: runs, run detail with logs, and the owner pipeline. */
 export function RepositoryChecks(props: Props) {
+  const admin = canAdmin(useRepositoryAccess());
+
   if (props.search.run) return <CiRunDetail {...props} runId={props.search.run} />;
 
   return (
     <div className="flex flex-col gap-6 p-5">
       <CiRuns {...props} />
-      <CiPipelineEditor projectId={props.project.id} />
+      {admin && <CiPipelineEditor projectId={props.project.id} />}
     </div>
   );
 }
@@ -37,6 +40,7 @@ function StateBadge({ item }: { item: Parameters<typeof ciState>[0] }) {
 }
 
 function CiRuns({ project, onNavigate }: Props) {
+  const writer = canWrite(useRepositoryAccess());
   const [branch, setBranch] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
 
@@ -69,15 +73,17 @@ function CiRuns({ project, onNavigate }: Props) {
             All branches
           </Button>
         )}
-        <Button
-          size="sm"
-          className="ml-auto"
-          disabled={!branch || start.isPending}
-          onClick={() => branch && start.mutate({ projectId: project.id, branch })}
-        >
-          <PlayIcon />
-          {start.isPending ? "Starting…" : "Run checks"}
-        </Button>
+        {writer && (
+          <Button
+            size="sm"
+            className="ml-auto"
+            disabled={!branch || start.isPending}
+            onClick={() => branch && start.mutate({ projectId: project.id, branch })}
+          >
+            <PlayIcon />
+            {start.isPending ? "Starting…" : "Run checks"}
+          </Button>
+        )}
       </div>
       {runs.isPending ? (
         <SkeletonRows rows={4} />
@@ -137,6 +143,7 @@ function CiRunDetail({ project, search, onNavigate, runId }: Props & { runId: st
   );
 
   const cancel = useCallMutation("cancelCiRun", { invalidates: ["getCiRun", "listCiRuns"] });
+  const writer = canWrite(useRepositoryAccess());
 
   const rerun = useCallMutation("rerunCiRun", {
     invalidates: ["listCiRuns"],
@@ -186,7 +193,7 @@ function CiRunDetail({ project, search, onNavigate, runId }: Props & { runId: st
           {run.attempt > 1 ? ` · attempt ${run.attempt}` : ""} · pipeline revision {run.revision}
         </span>
         <span className="ml-auto flex gap-2">
-          {run.status === "completed" ? (
+          {!writer ? null : run.status === "completed" ? (
             <Button
               size="sm"
               variant="outline"

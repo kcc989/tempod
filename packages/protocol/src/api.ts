@@ -9,6 +9,8 @@ import {
   MergeMethod,
   ReviewSide,
   IssueState,
+  ProjectRole,
+  ProjectVisibility,
 } from "./enums.ts";
 import { EgressPolicy } from "./enums.ts";
 import {
@@ -33,6 +35,9 @@ import {
   Diagnostics,
   Mention,
   Project,
+  ProjectMember,
+  ProjectSummary,
+  StarState,
   CiPipeline,
   CiRun,
   CiRunDetail,
@@ -87,16 +92,21 @@ export type ScriptRunWithLog = typeof ScriptRunWithLog.Type;
 
 const NonEmpty = S.check(Schema.isMinLength(1));
 
+/** Optional owner and visibility for new projects (11, Function access). */
+const NewProject = { organizationId: opt(NonEmpty), visibility: opt(ProjectVisibility) };
+
+const Offset = opt(N.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)));
+
 export const API = {
   // Artifacts repositories and Tempo pull requests and issues (09).
   createRepository: fn(
     "POST",
-    Schema.Struct({ name: NonEmpty, description: opt(S), defaultBranch: opt(NonEmpty) }),
+    Schema.Struct({ name: NonEmpty, description: opt(S), defaultBranch: opt(NonEmpty), ...NewProject }),
     Project,
   ),
   importRepository: fn(
     "POST",
-    Schema.Struct({ name: NonEmpty, url: NonEmpty, description: opt(S) }),
+    Schema.Struct({ name: NonEmpty, url: NonEmpty, description: opt(S), ...NewProject }),
     Project,
   ),
   linkArtifactRepository: fn("POST", Schema.Struct({ name: NonEmpty }), Project),
@@ -258,7 +268,7 @@ export const API = {
       }),
     ),
   ),
-  linkProject: fn("POST", Schema.Struct({ installationId: N, repoId: N }), Project),
+  linkProject: fn("POST", Schema.Struct({ installationId: N, repoId: N, ...NewProject }), Project),
   listProjects: fn("GET", Empty, Schema.Array(Project)),
   /** `settings` is checked by the handler, so bad values and unknown keys give SETTINGS_INVALID. */
   updateProjectSettings: fn(
@@ -282,6 +292,26 @@ export const API = {
     Schema.Struct({ projectId: S, environmentId: Schema.NullOr(S) }),
     Project,
   ),
+
+  // Namespaces, members and stars (11)
+  getProject: fn("GET", Schema.Struct({ namespace: NonEmpty, slug: NonEmpty }), ProjectSummary),
+  listNamespaceProjects: fn(
+    "GET",
+    Schema.Struct({ namespace: NonEmpty, offset: Offset }),
+    Schema.Array(ProjectSummary),
+  ),
+  exploreProjects: fn("GET", Schema.Struct({ offset: Offset }), Schema.Array(ProjectSummary)),
+  listStarredProjects: fn("GET", Schema.Struct({ offset: Offset }), Schema.Array(ProjectSummary)),
+  setProjectVisibility: fn("POST", Schema.Struct({ projectId: S, visibility: ProjectVisibility }), Project),
+  listProjectMembers: fn("GET", Schema.Struct({ projectId: S }), Schema.Array(ProjectMember)),
+  putProjectMember: fn(
+    "POST",
+    Schema.Struct({ projectId: S, username: NonEmpty, role: ProjectRole }),
+    ProjectMember,
+  ),
+  deleteProjectMember: fn("POST", Schema.Struct({ projectId: S, userId: NonEmpty }), Empty),
+  starProject: fn("POST", Schema.Struct({ projectId: S }), StarState),
+  unstarProject: fn("POST", Schema.Struct({ projectId: S }), StarState),
 
   // Environments (01, Environments)
   listEnvironments: fn("GET", Empty, Schema.Array(Environment)),

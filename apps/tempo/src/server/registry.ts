@@ -9,6 +9,7 @@ import * as repositories from "./handlers/repositories.ts";
 import * as issues from "./handlers/issues.ts";
 import * as pullRequests from "./handlers/pull-requests.ts";
 import * as ci from "./handlers/ci.ts";
+import * as social from "./handlers/social.ts";
 import {
   createSession,
   createWorkspace,
@@ -16,19 +17,33 @@ import {
   listWorkspaces,
   viaWorkspace,
 } from "./handlers/workspaces.ts";
-import type { Handler } from "./run.ts";
+import type { PublicFnName } from "./policy.ts";
+import type { Handler, PublicHandler } from "./run.ts";
 
-type NonWorkspace = Exclude<FnName, WorkspaceFnName>;
+type NonWorkspace = Exclude<FnName, WorkspaceFnName | PublicFnName>;
+
+/** Functions that also run without a session (11, policy `public`). */
+export const PUBLIC_HANDLERS = {
+  getProject: social.getProject,
+  listNamespaceProjects: social.listNamespaceProjects,
+  exploreProjects: social.exploreProjects,
+  getRepository: repositories.getRepository,
+  getRepositoryFile: repositories.getRepositoryFile,
+  listRepositoryCommits: repositories.listRepositoryCommits,
+  listBranches: projects.listBranches,
+  listOpenPullRequests: projects.listOpenPullRequests,
+  listRepositoryPullRequests: pullRequests.listRepositoryPullRequests,
+  getRepositoryPullRequest: pullRequests.getRepositoryPullRequest,
+  listRepositoryIssues: issues.listRepositoryIssues,
+  getRepositoryIssue: issues.getRepositoryIssue,
+  listRepositoryIssueComments: issues.listRepositoryIssueComments,
+  listRepositoryLabels: issues.listRepositoryLabels,
+} satisfies { [K in PublicFnName]: PublicHandler<K> };
 
 const own = {
   createRepository: repositories.createRepository,
   importRepository: repositories.importRepository,
   linkArtifactRepository: repositories.linkArtifactRepository,
-  getRepository: repositories.getRepository,
-  getRepositoryFile: repositories.getRepositoryFile,
-  listRepositoryCommits: repositories.listRepositoryCommits,
-  listRepositoryPullRequests: pullRequests.listRepositoryPullRequests,
-  getRepositoryPullRequest: pullRequests.getRepositoryPullRequest,
   createRepositoryPullRequest: pullRequests.createRepositoryPullRequest,
   updateRepositoryPullRequest: pullRequests.updateRepositoryPullRequest,
   getCiPipeline: ci.getCiPipeline,
@@ -39,16 +54,12 @@ const own = {
   rerunCiRun: ci.rerunCiRun,
   cancelCiRun: ci.cancelCiRun,
   getCiJobLog: ci.getCiJobLog,
-  listRepositoryIssues: issues.listRepositoryIssues,
-  getRepositoryIssue: issues.getRepositoryIssue,
   createRepositoryIssue: issues.createRepositoryIssue,
   updateRepositoryIssue: issues.updateRepositoryIssue,
   deleteRepositoryIssue: issues.deleteRepositoryIssue,
-  listRepositoryIssueComments: issues.listRepositoryIssueComments,
   createRepositoryIssueComment: issues.createRepositoryIssueComment,
   updateRepositoryIssueComment: issues.updateRepositoryIssueComment,
   deleteRepositoryIssueComment: issues.deleteRepositoryIssueComment,
-  listRepositoryLabels: issues.listRepositoryLabels,
   createRepositoryLabel: issues.createRepositoryLabel,
   updateRepositoryLabel: issues.updateRepositoryLabel,
   deleteRepositoryLabel: issues.deleteRepositoryLabel,
@@ -67,8 +78,6 @@ const own = {
   getProjectConversation: conversations.getProjectConversation,
   updateProjectSettings: projects.updateProjectSettings,
   unlinkProject: projects.unlinkProject,
-  listBranches: projects.listBranches,
-  listOpenPullRequests: projects.listOpenPullRequests,
   setProjectEnvironment: environments.setProjectEnvironment,
   listEnvironments: environments.listEnvironments,
   createEnvironment: environments.createEnvironment,
@@ -93,6 +102,13 @@ const own = {
   listMcpServers: mcp.listMcpServers,
   saveMcpServer: mcp.saveMcpServer,
   deleteMcpServer: mcp.deleteMcpServer,
+  listStarredProjects: social.listStarredProjects,
+  setProjectVisibility: social.setProjectVisibility,
+  listProjectMembers: social.listProjectMembers,
+  putProjectMember: social.putProjectMember,
+  deleteProjectMember: social.deleteProjectMember,
+  starProject: social.starProject,
+  unstarProject: social.unstarProject,
 } satisfies { [K in NonWorkspace]: Handler<K> };
 
 /** One handler per function in the API contract (07, One handler per function). */
@@ -102,6 +118,7 @@ const workspaceHandlers = Object.fromEntries(WORKSPACE_FNS.map((name) => [name, 
 const workspace = workspaceHandlers as { [K in WorkspaceFnName]: Handler<K> };
 
 export const HANDLERS = {
+  ...PUBLIC_HANDLERS,
   ...own,
   ...workspace,
   createSession,

@@ -1,3 +1,5 @@
+import { sessionQueryOptions } from "~/ui/auth";
+import { organizationsQueryOptions } from "~/ui/organizations";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HubStoreContext } from "../../src/ui/hooks/useHub";
 import { HubStore } from "../../src/ui/stores/hub-store";
@@ -96,9 +98,19 @@ export const createUiEnvironment = () => {
   const history = createMemoryHistory({ initialEntries: ["/"] });
 
   function Provider({ children }: { children: ReactNode }) {
-    const [client] = useState(
-      () => new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
-    );
+    const [client] = useState(() => {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      // Better Auth reads go over fetch, not the server-function stub: answer them here.
+
+      for (const key of [sessionQueryOptions.queryKey, organizationsQueryOptions.queryKey])
+        client.setQueryDefaults(key, { staleTime: Infinity });
+      client.setQueryData(sessionQueryOptions.queryKey, null);
+      client.setQueryData(organizationsQueryOptions.queryKey, []);
+
+      return client;
+    });
 
     const [router] = useState(() => {
       const root = createRootRoute({ component: Content });

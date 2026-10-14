@@ -11,10 +11,15 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as DeviceRouteImport } from './routes/device'
+import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NamespaceIndexRouteImport } from './routes/$namespace/index'
+import { Route as NamespaceSlugRouteImport } from './routes/$namespace/$slug'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
+import { Route as AppOrganizationsRouteImport } from './routes/_app/organizations'
 import { Route as AppRepositoriesRouteImport } from './routes/_app/repositories'
+import { Route as AppStarsRouteImport } from './routes/_app/stars'
 import { Route as AppWorkspacesRouteImport } from './routes/_app/workspaces'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/_app/w.$workspaceId'
 
@@ -27,9 +32,24 @@ const DeviceRoute = DeviceRouteImport.update({
   path: '/device',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExploreRoute = ExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NamespaceIndexRoute = NamespaceIndexRouteImport.update({
+  id: '/$namespace/',
+  path: '/$namespace/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NamespaceSlugRoute = NamespaceSlugRouteImport.update({
+  id: '/$namespace/$slug',
+  path: '/$namespace/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -42,9 +62,19 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrganizationsRoute = AppOrganizationsRouteImport.update({
+  id: '/organizations',
+  path: '/organizations',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRepositoriesRoute = AppRepositoriesRouteImport.update({
   id: '/repositories',
   path: '/repositories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppStarsRoute = AppStarsRouteImport.update({
+  id: '/stars',
+  path: '/stars',
   getParentRoute: () => AppRoute,
 } as any)
 const AppWorkspacesRoute = AppWorkspacesRouteImport.update({
@@ -61,18 +91,28 @@ const AppWWorkspaceIdRoute = AppWWorkspaceIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/device': typeof DeviceRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
+  '/$namespace/$slug': typeof NamespaceSlugRoute
   '/history': typeof AppHistoryRoute
+  '/organizations': typeof AppOrganizationsRoute
   '/repositories': typeof AppRepositoriesRoute
+  '/stars': typeof AppStarsRoute
   '/workspaces': typeof AppWorkspacesRoute
+  '/$namespace/': typeof NamespaceIndexRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
 export interface FileRoutesByTo {
   '/device': typeof DeviceRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
+  '/$namespace/$slug': typeof NamespaceSlugRoute
   '/history': typeof AppHistoryRoute
+  '/organizations': typeof AppOrganizationsRoute
   '/repositories': typeof AppRepositoriesRoute
+  '/stars': typeof AppStarsRoute
   '/workspaces': typeof AppWorkspacesRoute
+  '/$namespace': typeof NamespaceIndexRoute
   '/': typeof AppIndexRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
@@ -80,10 +120,15 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/device': typeof DeviceRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
+  '/$namespace/$slug': typeof NamespaceSlugRoute
   '/_app/history': typeof AppHistoryRoute
+  '/_app/organizations': typeof AppOrganizationsRoute
   '/_app/repositories': typeof AppRepositoriesRoute
+  '/_app/stars': typeof AppStarsRoute
   '/_app/workspaces': typeof AppWorkspacesRoute
+  '/$namespace/': typeof NamespaceIndexRoute
   '/_app/': typeof AppIndexRoute
   '/_app/w/$workspaceId': typeof AppWWorkspaceIdRoute
 }
@@ -92,28 +137,43 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/device'
+    | '/explore'
     | '/login'
+    | '/$namespace/$slug'
     | '/history'
+    | '/organizations'
     | '/repositories'
+    | '/stars'
     | '/workspaces'
+    | '/$namespace/'
     | '/w/$workspaceId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/device'
+    | '/explore'
     | '/login'
+    | '/$namespace/$slug'
     | '/history'
+    | '/organizations'
     | '/repositories'
+    | '/stars'
     | '/workspaces'
+    | '/$namespace'
     | '/'
     | '/w/$workspaceId'
   id:
     | '__root__'
     | '/_app'
     | '/device'
+    | '/explore'
     | '/login'
+    | '/$namespace/$slug'
     | '/_app/history'
+    | '/_app/organizations'
     | '/_app/repositories'
+    | '/_app/stars'
     | '/_app/workspaces'
+    | '/$namespace/'
     | '/_app/'
     | '/_app/w/$workspaceId'
   fileRoutesById: FileRoutesById
@@ -121,7 +181,10 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   DeviceRoute: typeof DeviceRoute
+  ExploreRoute: typeof ExploreRoute
   LoginRoute: typeof LoginRoute
+  NamespaceSlugRoute: typeof NamespaceSlugRoute
+  NamespaceIndexRoute: typeof NamespaceIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -140,11 +203,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DeviceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/explore': {
+      id: '/explore'
+      path: '/explore'
+      fullPath: '/explore'
+      preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$namespace/': {
+      id: '/$namespace/'
+      path: '/$namespace'
+      fullPath: '/$namespace/'
+      preLoaderRoute: typeof NamespaceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$namespace/$slug': {
+      id: '/$namespace/$slug'
+      path: '/$namespace/$slug'
+      fullPath: '/$namespace/$slug'
+      preLoaderRoute: typeof NamespaceSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -161,11 +245,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHistoryRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/organizations': {
+      id: '/_app/organizations'
+      path: '/organizations'
+      fullPath: '/organizations'
+      preLoaderRoute: typeof AppOrganizationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/repositories': {
       id: '/_app/repositories'
       path: '/repositories'
       fullPath: '/repositories'
       preLoaderRoute: typeof AppRepositoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/stars': {
+      id: '/_app/stars'
+      path: '/stars'
+      fullPath: '/stars'
+      preLoaderRoute: typeof AppStarsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/workspaces': {
@@ -187,7 +285,9 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppHistoryRoute: typeof AppHistoryRoute
+  AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppRepositoriesRoute: typeof AppRepositoriesRoute
+  AppStarsRoute: typeof AppStarsRoute
   AppWorkspacesRoute: typeof AppWorkspacesRoute
   AppIndexRoute: typeof AppIndexRoute
   AppWWorkspaceIdRoute: typeof AppWWorkspaceIdRoute
@@ -195,7 +295,9 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppHistoryRoute: AppHistoryRoute,
+  AppOrganizationsRoute: AppOrganizationsRoute,
   AppRepositoriesRoute: AppRepositoriesRoute,
+  AppStarsRoute: AppStarsRoute,
   AppWorkspacesRoute: AppWorkspacesRoute,
   AppIndexRoute: AppIndexRoute,
   AppWWorkspaceIdRoute: AppWWorkspaceIdRoute,
@@ -206,7 +308,10 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   DeviceRoute: DeviceRoute,
+  ExploreRoute: ExploreRoute,
   LoginRoute: LoginRoute,
+  NamespaceSlugRoute: NamespaceSlugRoute,
+  NamespaceIndexRoute: NamespaceIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

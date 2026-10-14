@@ -12,17 +12,26 @@ Rules for every region:
 
 ## Routes (`routes/`)
 
-| File                      | Path                    | What it renders                                                                                                                                                                                          |
-| ------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `__root.tsx`              | —                       | Document shell (`<HeadContent/>`, `<Scripts/>`, theme boot script), `AppProviders`, root not-found and error pages. Title `Tempo`.                                                                       |
-| `login.tsx`               | `/login?redirect&error` | Sign in with GitHub. `?error=forbidden` shows `This Tempo belongs to someone else.` Shows a setup note when `/api/setup/status` says `configured: false`. Signed in → `redirect` (same-site paths only). |
-| `device.tsx`              | `/device?user_code`     | Tempo for Mac approval (07). Claims the code with `GET /api/auth/device`, then Approve or Deny. Signed out → `/login?redirect=…`.                                                                        |
-| `_app.tsx`                | layout                  | Session check (signed out → `/login?redirect=…`), then `AppShell`.                                                                                                                                       |
-| `_app/index.tsx`          | `/`                     | Repository dashboard with create/import/link actions; repository access does not require an agent login or GitHub installation.                                                                          |
-| `_app/w.$workspaceId.tsx` | `/w/$workspaceId`       | `<WorkspaceLayout workspaceId key={workspaceId}/>`.                                                                                                                                                      |
-| `_app/history.tsx`        | `/history`              | Archived workspaces with Restore and Delete (type the slug).                                                                                                                                             |
+| File                      | Path                    | What it renders                                                                                                                                                                                     |
+| ------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `__root.tsx`              | —                       | Document shell (`<HeadContent/>`, `<Scripts/>`, theme boot script), `AppProviders`, root not-found and error pages. Title `Tempo`.                                                                  |
+| `login.tsx`               | `/login?redirect&error` | Sign in with GitHub. `?error=forbidden` shows `You don't have access to this.` Shows a setup note when `/api/setup/status` says `configured: false`. Signed in → `redirect` (same-site paths only). |
+| `device.tsx`              | `/device?user_code`     | Tempo for Mac approval (07). Claims the code with `GET /api/auth/device`, then Approve or Deny. Signed out → `/login?redirect=…`.                                                                   |
+| `_app.tsx`                | layout                  | Session check (signed out → `/login?redirect=…`), then `AppShell`.                                                                                                                                  |
+| `_app/index.tsx`          | `/`                     | Repository dashboard with create/import/link actions; repository access does not require an agent login or GitHub installation.                                                                     |
+| `_app/w.$workspaceId.tsx` | `/w/$workspaceId`       | `<WorkspaceLayout workspaceId key={workspaceId}/>`.                                                                                                                                                 |
+| `_app/history.tsx`        | `/history`              | Archived workspaces with Restore and Delete (type the slug).                                                                                                                                        |
+| `_app/stars.tsx`          | `/stars`                | `StarsPage`: the caller's starred projects (04, Public projects).                                                                                                                                   |
+| `_app/organizations.tsx`  | `/organizations`        | `OrganizationsPage`: organizations, New organization, invitations.                                                                                                                                  |
+| `explore.tsx`             | `/explore`              | `PublicFrame` + `ExplorePage`; works without a session.                                                                                                                                             |
+| `$namespace/index.tsx`    | `/$namespace`           | `PublicFrame` + `NamespacePage` (projects; Members for organization members); works without a session.                                                                                              |
+| `$namespace/$slug.tsx`    | `/$namespace/$slug`     | `PublicFrame` + `PublicProjectPage` (the repository view, with `repositorySearch` minus `project`); works without a session.                                                                        |
 
 `routeTree.gen.ts` is generated by `bunx vite build` (or `vite dev`). Never edit it.
+
+## Public projects, stars and organizations (`ui/components/social/`)
+
+`PublicFrame` renders `AppShell` for a signed-in user and a slim top bar otherwise; a failed session check counts as anonymous. `RepositoryDetail {project, access, title?, badges?, onBack}` is exported from `RepositoryHub` and reads `RepositoryAccessContext` (`repositories/access.ts`): write controls need `write`, the pipeline editor `admin`, and Checks a membership role (11). `ProjectAccess` is Settings → project → Access. Organization calls go through `ui/organizations.ts` (Better Auth plugin client), not server functions.
 
 ## Shell (`ui/components/shell/`)
 

@@ -161,7 +161,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     userId: string,
   ): Promise<Record<string, string> | null> {
     if (!config.environmentId) return null;
-    const creds = this.env.CREDENTIALS.getByName(userId);
+    const creds = this.env.CREDENTIALS.getByName(config.environmentUserId ?? userId);
     const out: Record<string, string> = {};
 
     for (const name of names) {
@@ -188,7 +188,11 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
       globalOutbound: this.ctx.exports.TempoOutbound({
         props: { workspaceId, userId, injector: injector.name },
       }),
-      env: { SECRETS: this.ctx.exports.InjectorSecrets({ props: { userId, environmentId } }) },
+      env: {
+        SECRETS: this.ctx.exports.InjectorSecrets({
+          props: { userId: config.environmentUserId ?? userId, environmentId },
+        }),
+      },
     }));
 
     try {

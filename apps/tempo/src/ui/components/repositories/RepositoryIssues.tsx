@@ -1,4 +1,4 @@
-import type { FnInput, Project, RepositoryIssue } from "@tempo/protocol";
+import type { FnInput, RepositoryIssue } from "@tempo/protocol";
 import { ArrowLeftIcon, CircleCheckIcon, CircleDotIcon, MessageSquareIcon } from "lucide-react";
 import { useState } from "react";
 import { MessageMarkdown } from "~/ui/components/chat/Markdown";
@@ -21,9 +21,10 @@ import { formatRelative } from "~/ui/lib/format";
 import { RepositoryIssueComments } from "./RepositoryIssueComments";
 import { RepositoryLabelBadge, RepositoryLabelManager, RepositoryLabelSelector } from "./RepositoryLabels";
 import type { RepositoryHubProps } from "./RepositoryHub";
-import { isSubmitShortcut } from "./model";
+import { isSubmitShortcut, type RepositoryProject } from "./model";
+import { canWrite, useRepositoryAccess } from "./access";
 
-type Props = RepositoryHubProps & { project: Project };
+type Props = RepositoryHubProps & { project: RepositoryProject };
 
 const FILTERS = { open: "Open", closed: "Closed", all: "All" };
 
@@ -36,6 +37,7 @@ export function RepositoryIssues(props: Props) {
   const [offset, setOffset] = useState(0);
   const [creating, setCreating] = useState(false);
   const [managingLabels, setManagingLabels] = useState(false);
+  const writer = canWrite(useRepositoryAccess());
   let input: FnInput<"listRepositoryIssues"> = { projectId: project.id, state, offset };
 
   if (query) input = { ...input, query };
@@ -65,14 +67,16 @@ export function RepositoryIssues(props: Props) {
             </Button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setManagingLabels(true)}>
-            Manage labels
-          </Button>
-          <Button size="sm" onClick={() => setCreating(true)}>
-            New issue
-          </Button>
-        </div>
+        {writer && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setManagingLabels(true)}>
+              Manage labels
+            </Button>
+            <Button size="sm" onClick={() => setCreating(true)}>
+              New issue
+            </Button>
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap gap-3">
         <form
@@ -306,6 +310,7 @@ function IssueDetail({ project, search, onNavigate, number }: Props & { number: 
   });
 
   const [editing, setEditing] = useState(false);
+  const writer = canWrite(useRepositoryAccess());
 
   if (issue.isPending) return <SkeletonRows rows={5} />;
 
@@ -342,27 +347,29 @@ function IssueDetail({ project, search, onNavigate, number }: Props & { number: 
           ))}
         </div>
       </div>
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={update.isPending}
-          onClick={() => setEditing(true)}
-        >
-          Edit issue
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={update.isPending}
-          onClick={() => update.mutate({ projectId: project.id, number, state: open ? "closed" : "open" })}
-        >
-          {open ? "Close issue" : "Reopen issue"}
-        </Button>
-      </div>
-      {editing ? (
+      {writer && (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={update.isPending}
+            onClick={() => setEditing(true)}
+          >
+            Edit issue
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={update.isPending}
+            onClick={() => update.mutate({ projectId: project.id, number, state: open ? "closed" : "open" })}
+          >
+            {open ? "Close issue" : "Reopen issue"}
+          </Button>
+        </div>
+      )}
+      {editing && writer ? (
         <div className="rounded-lg border p-4">
           <IssueForm
             projectId={project.id}

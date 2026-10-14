@@ -1,5 +1,12 @@
 import { and, eq, sql } from "drizzle-orm";
-import { TempoError, newId, type FnInput, type FnOutput } from "@tempo/protocol";
+import {
+  TempoError,
+  newId,
+  type FnInput,
+  type FnOutput,
+  type Project,
+  type ProjectVisibility,
+} from "@tempo/protocol";
 import {
   artifactCall,
   artifactErrorCode,
@@ -12,41 +19,85 @@ import {
   validateArtifactRef,
   withArtifactRepository,
 } from "../../artifacts/repositories.ts";
+import { requireOrganizationAdmin } from "../../auth/access.ts";
 import { projects, type ProjectRow } from "../../db/d1.ts";
-import { bytesToBase64 } from "../../lib/crypto.ts";
-import type { HandlerCtx } from "../run.ts";
-import { d1, projectToWire, requireProject } from "./common.ts";
+import { bytesToBase64, sha256Hex } from "../../lib/crypto.ts";
+import type { HandlerCtx, PublicCtx } from "../run.ts";
+import { d1, namespaceKey, projectView, requireProject } from "./common.ts";
 
 const MAX_FILE_BYTES = 1024 * 1024;
 
-const existingRepository = async ({ env, user }: HandlerCtx, name: string): Promise<ProjectRow | undefined> =>
+/** Who a new project belongs to (11, Function access). */
+interface NewOwner {
+  readonly organizationId: string | null;
+  readonly key: string;
+  readonly visibility: ProjectVisibility;
+}
+
+const newOwner = async (
+  { env, user }: HandlerCtx,
+  organizationId: string | undefined,
+  visibility: ProjectVisibility | undefined,
+): Promise<NewOwner> => {
+  if (organizationId !== undefined) await requireOrganizationAdmin(env, user.id, organizationId);
+
+  return {
+    organizationId: organizationId ?? null,
+    key: organizationId ?? user.id,
+    visibility: visibility ?? "private",
+  };
+};
+
+const MAX_SLUG = 100;
+
+/** `t<hash>-<slug>`: the flat Artifacts namespace name of a new project (11, Artifacts storage names). */
+export const artifactStorageName = async (key: string, slug: string): Promise<string> =>
+  `t${(await sha256Hex(key)).slice(0, 12)}-${slug}`;
+
+const validateSlug = (slug: string): void => {
+  validateArtifactName(slug);
+
+  if (slug.length > MAX_SLUG)
+    throw new TempoError(
+      "VALIDATION_FAILED",
+      undefined,
+      `Repository names are at most ${MAX_SLUG} characters.`,
+    );
+};
+
+const existingRepository = async (
+  env: HandlerCtx["env"],
+  key: string,
+  slug: string,
+): Promise<ProjectRow | undefined> =>
   d1(env)
     .select()
     .from(projects)
-    .where(and(eq(projects.userId, user.id), eq(projects.provider, "artifacts"), eq(projects.repoName, name)))
+    .where(and(eq(namespaceKey, key), sql`lower(${projects.slug}) = lower(${slug})`))
     .get();
 
 const linkRepository = async (
   ctx: HandlerCtx,
   info: ArtifactsRepoInfo,
+  owner: NewOwner,
+  slug: string,
 ): Promise<FnOutput<"createRepository">> => {
   const { env, user } = ctx;
   assertArtifactRemote(info.remote, info.name);
   const db = d1(env);
+  const byRepo = () => db.select().from(projects).where(eq(projects.artifactRepoId, info.id)).get();
+  const linked = await byRepo();
 
-  const linked = await db
-    .select()
-    .from(projects)
-    .where(
-      and(
-        eq(projects.userId, user.id),
-        eq(projects.provider, "artifacts"),
-        eq(projects.artifactRepoId, info.id),
-      ),
-    )
-    .get();
+  if (linked) {
+    if (linked.provider !== "artifacts" || (linked.organizationId ?? linked.userId) !== owner.key)
+      throw new TempoError("PROJECT_EXISTS");
 
-  if (linked) return projectToWire(linked);
+    return projectView(env, user, linked);
+  }
+
+  const taken = await existingRepository(env, owner.key, slug);
+
+  if (taken) throw new TempoError("PROJECT_EXISTS");
 
   const max = await db
     .select({ m: sql<number>`coalesce(max(${projects.sortOrder}), 0)` })
@@ -70,27 +121,33 @@ const linkRepository = async (
     settingsJson: "{}",
     sortOrder: (max?.m ?? 0) + 1,
     environmentId: null,
+    organizationId: owner.organizationId,
+    slug,
+    visibility: owner.visibility,
     createdAt: now,
     updatedAt: now,
   };
 
   await db.insert(projects).values(row).onConflictDoNothing().run();
-
-  const saved = await db
-    .select()
-    .from(projects)
-    .where(
-      and(
-        eq(projects.userId, user.id),
-        eq(projects.provider, "artifacts"),
-        eq(projects.artifactRepoId, info.id),
-      ),
-    )
-    .get();
+  const saved = await byRepo();
 
   if (!saved) throw new TempoError("ARTIFACTS_API_ERROR", undefined, "The repository could not be linked.");
 
-  return projectToWire(saved);
+  if ((saved.organizationId ?? saved.userId) !== owner.key) throw new TempoError("PROJECT_EXISTS");
+
+  return projectView(env, user, saved);
+};
+
+/** A retry finds the project it already linked, if its Artifacts repository is the same (09). */
+const recovered = async (ctx: HandlerCtx, owner: NewOwner, slug: string): Promise<Project | null> => {
+  const linked = await existingRepository(ctx.env, owner.key, slug);
+
+  if (!linked) return null;
+
+  if (linked.provider !== "artifacts") throw new TempoError("PROJECT_EXISTS");
+  await assertArtifactRepositoryIdentity(ctx.env, linked.repoName, linked.artifactRepoId);
+
+  return projectView(ctx.env, ctx.user, linked);
 };
 
 const revokeInitialToken = async (env: HandlerCtx["env"], name: string, token: string): Promise<void> => {
@@ -103,18 +160,16 @@ const revokeInitialToken = async (env: HandlerCtx["env"], name: string, token: s
 
 export const createRepository = async (
   ctx: HandlerCtx,
-  { name, description, defaultBranch }: FnInput<"createRepository">,
+  { name: slug, description, defaultBranch, organizationId, visibility }: FnInput<"createRepository">,
 ): Promise<FnOutput<"createRepository">> => {
-  validateArtifactName(name);
+  validateSlug(slug);
   validateArtifactBranch(defaultBranch ?? "main");
   requireArtifacts(ctx.env);
-  const linked = await existingRepository(ctx, name);
+  const owner = await newOwner(ctx, organizationId, visibility);
+  const linked = await recovered(ctx, owner, slug);
 
-  if (linked) {
-    await assertArtifactRepositoryIdentity(ctx.env, name, linked.artifactRepoId);
-
-    return projectToWire(linked);
-  }
+  if (linked) return linked;
+  const name = await artifactStorageName(owner.key, slug);
 
   await artifactCall(async () => {
     try {
@@ -131,14 +186,14 @@ export const createRepository = async (
     }
   });
 
-  return linkRepository(ctx, await repoInfo(ctx.env, name));
+  return linkRepository(ctx, await repoInfo(ctx.env, name), owner, slug);
 };
 
 export const importRepository = async (
   ctx: HandlerCtx,
-  { name, url, description }: FnInput<"importRepository">,
+  { name: slug, url, description, organizationId, visibility }: FnInput<"importRepository">,
 ): Promise<FnOutput<"importRepository">> => {
-  validateArtifactName(name);
+  validateSlug(slug);
   let remote: URL;
 
   try {
@@ -154,13 +209,11 @@ export const importRepository = async (
       "Use a public HTTPS Git remote without credentials.",
     );
   requireArtifacts(ctx.env);
-  const linked = await existingRepository(ctx, name);
+  const owner = await newOwner(ctx, organizationId, visibility);
+  const linked = await recovered(ctx, owner, slug);
 
-  if (linked) {
-    await assertArtifactRepositoryIdentity(ctx.env, name, linked.artifactRepoId);
-
-    return projectToWire(linked);
-  }
+  if (linked) return linked;
+  const name = await artifactStorageName(owner.key, slug);
 
   await artifactCall(async () => {
     try {
@@ -179,20 +232,26 @@ export const importRepository = async (
     }
   });
 
-  return linkRepository(ctx, await repoInfo(ctx.env, name));
+  return linkRepository(ctx, await repoInfo(ctx.env, name), owner, slug);
 };
 
+/** Instance admin only (11): links an Artifacts repository into the caller's own namespace. */
 export const linkArtifactRepository = async (
   ctx: HandlerCtx,
   { name }: FnInput<"linkArtifactRepository">,
 ): Promise<FnOutput<"linkArtifactRepository">> => {
-  validateArtifactName(name);
+  validateSlug(name);
 
-  return linkRepository(ctx, await repoInfo(ctx.env, name));
+  return linkRepository(
+    ctx,
+    await repoInfo(ctx.env, name),
+    { organizationId: null, key: ctx.user.id, visibility: "private" },
+    name,
+  );
 };
 
-const requireNativeProject = async (ctx: HandlerCtx, projectId: string): Promise<ProjectRow> => {
-  const project = await requireProject(ctx.env, ctx.user.id, projectId);
+const requireNativeProject = async (ctx: PublicCtx, projectId: string): Promise<ProjectRow> => {
+  const project = await requireProject(ctx.env, ctx.user, projectId, "public");
 
   if (project.provider !== "artifacts" || !project.artifactRepoId)
     throw new TempoError(
@@ -232,7 +291,7 @@ const requireRepositoryIdentity = async (
 };
 
 export const getRepository = async (
-  ctx: HandlerCtx,
+  ctx: PublicCtx,
   { projectId, ref, path = "" }: FnInput<"getRepository">,
 ): Promise<FnOutput<"getRepository">> => {
   const project = await requireNativeProject(ctx, projectId);
@@ -267,7 +326,7 @@ export const getRepository = async (
 
     return {
       projectId,
-      name: info.name,
+      name: project.slug,
       description: info.description,
       defaultBranch: info.defaultBranch,
       remote: info.remote,
@@ -286,7 +345,7 @@ export const getRepository = async (
 };
 
 export const getRepositoryFile = async (
-  ctx: HandlerCtx,
+  ctx: PublicCtx,
   { projectId, ref, path }: FnInput<"getRepositoryFile">,
 ): Promise<FnOutput<"getRepositoryFile">> => {
   const project = await requireNativeProject(ctx, projectId);
@@ -315,7 +374,7 @@ export const getRepositoryFile = async (
 };
 
 export const listRepositoryCommits = async (
-  ctx: HandlerCtx,
+  ctx: PublicCtx,
   { projectId, ref, offset }: FnInput<"listRepositoryCommits">,
 ): Promise<FnOutput<"listRepositoryCommits">> => {
   const project = await requireNativeProject(ctx, projectId);

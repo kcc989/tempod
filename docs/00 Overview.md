@@ -6,7 +6,7 @@ Oct 10, 2026 · @Casey Collins
 
 Tempo hosts Git repositories on Cloudflare Artifacts and runs Claude Code, Codex, OpenCode and Pi in parallel workspaces on your own Cloudflare account, with your own subscriptions. Repository browsing, Tempo pull requests and issue tracking are defined in [09 Git Forge](09%20Git%20Forge.md). GitHub-linked projects remain supported. A workspace is one branch of a repo, one agent chat, and one Linux container that runs while the agent works and sleeps when it stops.
 
-This version is for **one trusted user on their own Cloudflare account**. The schema allows many users. The code allows one.
+Tempo runs on one Cloudflare account. Any GitHub user can sign in, and users and organizations own projects. Anyone can browse public projects. Only project members with `write` or higher can trigger agents ([11 Organizations and Social](11%20Organizations%20and%20Social.md)).
 
 | # | Decision | Choice | Reason |
 | --- | --- | --- | --- |
@@ -45,6 +45,8 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 07 Mac Client | Tempo for Mac on GPUI Kit: native API, device sign-in, layout, macOS integration, release, phase 4 and gate E |
 | 08 Events and Agents | Lifecycle events, agent libraries, attachments, decisions, runs, phase 7 and gate I |
 | 09 Git Forge | Artifacts-hosted repositories, browsing, pull requests, issues, comments and labels |
+| 10 Project CI | Project CI pipelines and runs |
+| 11 Organizations and Social | Users, organizations, project roles, public projects, stars |
 
 ## Goals and non-goals
 
@@ -69,14 +71,13 @@ Version 1 succeeds when one user can run five agent workspaces at once, kill any
 
 **Non-goals for version 1**
 
-- More than one user, teams, or sharing.
+- Teams, follows, forks, and comments by users who are not project members (11).
 - A hosted service for other people. Anthropic does not allow third parties to offer Claude sign-in.
 - Billing, quotas, or a platform model proxy (SAM's `sam` mode).
 - Tempo's own agent harness. Agents (08) drive the existing agents through ACP; they are not a harness.
 - Devcontainers. Version 1 uses one Tempo base image plus a per-project setup script.
 - Docker inside the container.
 - Approval policies. Version 1 runs each agent in its most permissive mode inside the container. It MUST still show any permission request an agent sends, such as a plan approval.
-- A public multi-user Git hosting service. This deployment hosts the owner's native repositories; see 08.
 - Native mobile apps. The web UI MUST work at phone width for reading and sending prompts.
 
 ## Vocabulary
@@ -191,7 +192,7 @@ All four agents speak ACP v1 to `tempod`. Claude Code and Codex use your subscri
 | OpenCode | `opencode acp` | OpenRouter API key, added by `TempoOutbound` | OpenRouter usage |
 | Pi | `pi-acp`, which runs `pi --mode rpc` | OpenRouter API key, added by `TempoOutbound` | OpenRouter usage |
 
-**Policy.** Anthropic's Help Center (updated 2026-10-07) says you can use the Agent SDK and `claude -p` with your own plan ([source](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)). Its legal page forbids third parties from offering Claude login or routing other people's plan credentials ([source](https://code.claude.com/docs/en/legal-and-compliance)). Tempo is self-hosted for one user, so it stays inside both rules. A hosted multi-user Tempo MUST use API keys for Claude.
+**Policy.** Anthropic's Help Center (updated 2026-10-07) says you can use the Agent SDK and `claude -p` with your own plan ([source](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)). Its legal page forbids third parties from offering Claude login or routing other people's plan credentials ([source](https://code.claude.com/docs/en/legal-and-compliance)). A hosted multi-user Tempo MUST use API keys for Claude. So only the instance admin can store a Claude subscription token; other users use an Anthropic API key (11).
 
 ## Git and repos
 
@@ -243,7 +244,7 @@ The UI copies Conductor's three-pane layout in the browser. Full spec is in 04 U
 
 The container is the security boundary, and the only way out of it is `TempoOutbound`. Full model is in 05 Security and Ops.
 
-- One owner. Better Auth signs in with GitHub, and only the GitHub user id in `TEMPO_OWNER_GITHUB_ID` may sign in.
+- Better Auth signs in with GitHub. Any GitHub account may sign in; `TEMPO_OWNER_GITHUB_ID` names the instance admin (11).
 - Containers start with `enableInternet: false`. All HTTP and HTTPS goes through `TempoOutbound`.
 - GitHub tokens and the OpenRouter key never enter a container. Claude and Codex credentials do. This is an accepted risk for one trusted user and is logged as R4.
 - Secrets are encrypted with AES-256-GCM in CredentialDO, keyed by `TEMPO_ENCRYPTION_KEY`.

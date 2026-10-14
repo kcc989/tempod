@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PutProjectMemberIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "username": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "$ref": "ProjectRole.json"
+    }
+  },
+  "required": ["projectId", "username", "role"],
+  "additionalProperties": true
+}

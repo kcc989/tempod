@@ -27,6 +27,8 @@ import {
   type FieldState,
   type SettingsForm,
 } from "../settings-model";
+import { ProjectAccess } from "~/ui/components/social/ProjectAccess";
+import { projectLabel } from "~/ui/components/sidebar/sidebar-logic";
 import { FieldRow } from "./ProjectFields";
 import { ProjectModels } from "./ProjectModels";
 import { useOpenWorkspaceDetail } from "./useOpenWorkspace";
@@ -87,7 +89,7 @@ export function ProjectTab({
             <SelectContent>
               {list.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
-                  {p.owner}/{p.name}
+                  {projectLabel(p)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -118,6 +120,9 @@ export function ProjectTab({
       </div>
       <div hidden={section !== undefined && section !== "General"}>
         <UnlinkProject project={project} />
+      </div>
+      <div hidden={section !== undefined && section !== "Access"}>
+        <ProjectAccess key={project.id} project={project} />
       </div>
     </div>
   );

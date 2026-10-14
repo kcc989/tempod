@@ -92,6 +92,8 @@ pub struct MainWindow {
     repositories: Option<Entity<super::repositories::RepositoryView>>,
     repository_events: Option<Subscription>,
     show_repositories: bool,
+    /// A list to show once the repository view exists (04: sidebar Explore and Stars).
+    pending_source: Option<super::repositories::ListSource>,
     workspace_navigation_rev: u64,
     measured_sidebar_width: Option<f32>,
     measured_right_width: Option<f32>,
@@ -222,6 +224,7 @@ impl MainWindow {
             repositories: None,
             repository_events: None,
             show_repositories: false,
+            pending_source: None,
             workspace_navigation_rev,
             measured_sidebar_width: None,
             measured_right_width: None,
@@ -463,6 +466,15 @@ impl MainWindow {
         cx.notify();
     }
 
+    fn show_list(&mut self, source: super::repositories::ListSource, cx: &mut Context<Self>) {
+        self.show_repositories = true;
+        match &self.repositories {
+            Some(view) => view.update(cx, |view, cx| view.show_source(source, cx)),
+            None => self.pending_source = Some(source),
+        }
+        cx.notify();
+    }
+
     fn render_center(
         &mut self,
         window: &mut Window,
@@ -492,6 +504,9 @@ impl MainWindow {
                     self.repositories = Some(view);
                 }
                 if let Some(view) = &self.repositories {
+                    if let Some(source) = self.pending_source.take() {
+                        view.update(cx, |view, cx| view.show_source(source, cx));
+                    }
                     return div().size_full().child(view.clone()).into_any_element();
                 }
             }
@@ -960,6 +975,28 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &ShowRepositories, _, cx| {
                 this.show_repositories = true;
                 cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ShowExplore, _, cx| {
+                this.show_list(super::repositories::ListSource::Explore, cx)
+            }))
+            .on_action(cx.listener(|this, _: &ShowStars, _, cx| {
+                this.show_list(super::repositories::ListSource::Stars, cx)
+            }))
+            .on_action(cx.listener(|_, _: &ShowOrganizations, window, cx| {
+                let app = crate::app::AppState::global(cx);
+                let (client, server_url) = (app.read(cx).client(), app.read(cx).server_url.clone());
+                let Some(client) = client else {
+                    return;
+                };
+                let view = cx.new(|cx| {
+                    super::organizations::OrganizationsView::new(client, server_url, window, cx)
+                });
+                window.open_dialog(cx, move |dialog, _, _| {
+                    dialog
+                        .title("Organizations")
+                        .w(gpui_kit::px(680.))
+                        .child(view.clone())
+                });
             }))
             .on_action(cx.listener(|this, _: &HideRepositories, _, cx| {
                 this.show_repositories = false;

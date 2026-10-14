@@ -6,7 +6,7 @@ export const ERROR_MESSAGES = {
   AGENT_NAME_TAKEN: "Another agent has this name or handle.",
   ATTACHMENT_INVALID: "The agent's hooks or limits are not valid.",
   UNAUTHENTICATED: "Sign in to continue.",
-  FORBIDDEN: "This Tempo belongs to someone else.",
+  FORBIDDEN: "You don't have access to this.",
   NOT_FOUND: "Not found.",
   VALIDATION_FAILED: "Check the highlighted fields.",
   PROJECT_EXISTS: "This repo is already a project.",

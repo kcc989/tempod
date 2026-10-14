@@ -6,11 +6,16 @@ import {
   updateArtifactPullRequest,
   type ArtifactProject,
 } from "../../artifacts/pull-requests.ts";
-import type { HandlerCtx } from "../run.ts";
+import type { ProjectNeed } from "../../auth/access.ts";
+import type { HandlerCtx, PublicCtx } from "../run.ts";
 import { requireProject } from "./common.ts";
 
-const ownedRepository = async ({ env, user }: HandlerCtx, projectId: string): Promise<ArtifactProject> => {
-  const project = await requireProject(env, user.id, projectId);
+const repository = async (
+  { env, user }: PublicCtx,
+  projectId: string,
+  need: ProjectNeed,
+): Promise<ArtifactProject> => {
+  const project = await requireProject(env, user, projectId, need);
 
   if (project.provider !== "artifacts")
     throw new TempoError(
@@ -22,13 +27,14 @@ const ownedRepository = async ({ env, user }: HandlerCtx, projectId: string): Pr
   return { id: project.id, name: project.repoName, artifactRepoId: project.artifactRepoId };
 };
 
-const withOwnedRepository = async <T>(
-  ctx: HandlerCtx,
+const withRepository = async <T>(
+  ctx: PublicCtx,
   projectId: string,
+  need: ProjectNeed,
   action: (project: ArtifactProject) => Promise<T>,
 ): Promise<T> => {
   try {
-    return await action(await ownedRepository(ctx, projectId));
+    return await action(await repository(ctx, projectId, need));
   } catch (cause) {
     if (cause instanceof TempoError) throw cause;
     throw new TempoError("INTERNAL");
@@ -36,25 +42,25 @@ const withOwnedRepository = async <T>(
 };
 
 export const listRepositoryPullRequests = async (
-  ctx: HandlerCtx,
+  ctx: PublicCtx,
   { projectId, state }: FnInput<"listRepositoryPullRequests">,
 ): Promise<FnOutput<"listRepositoryPullRequests">> =>
-  withOwnedRepository(ctx, projectId, (project) => listArtifactPullRequests(ctx.env, project, state));
+  withRepository(ctx, projectId, "public", (project) => listArtifactPullRequests(ctx.env, project, state));
 
 export const getRepositoryPullRequest = async (
-  ctx: HandlerCtx,
+  ctx: PublicCtx,
   { projectId, number }: FnInput<"getRepositoryPullRequest">,
 ): Promise<FnOutput<"getRepositoryPullRequest">> =>
-  withOwnedRepository(ctx, projectId, (project) => getArtifactPullRequest(ctx.env, project, number));
+  withRepository(ctx, projectId, "public", (project) => getArtifactPullRequest(ctx.env, project, number));
 
 export const createRepositoryPullRequest = async (
   ctx: HandlerCtx,
   { projectId, ...input }: FnInput<"createRepositoryPullRequest">,
 ): Promise<FnOutput<"createRepositoryPullRequest">> =>
-  withOwnedRepository(ctx, projectId, (project) => createArtifactPullRequest(ctx.env, project, input));
+  withRepository(ctx, projectId, "write", (project) => createArtifactPullRequest(ctx.env, project, input));
 
 export const updateRepositoryPullRequest = async (
   ctx: HandlerCtx,
   { projectId, ...input }: FnInput<"updateRepositoryPullRequest">,
 ): Promise<FnOutput<"updateRepositoryPullRequest">> =>
-  withOwnedRepository(ctx, projectId, (project) => updateArtifactPullRequest(ctx.env, project, input));
+  withRepository(ctx, projectId, "write", (project) => updateArtifactPullRequest(ctx.env, project, input));

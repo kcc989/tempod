@@ -1,7 +1,7 @@
 import { TempoError, newId, toErrorBody } from "@tempo/protocol";
-import { requireOwner } from "../auth/auth.ts";
+import { requireUser } from "../auth/auth.ts";
 import type { Env } from "../env.ts";
-import { appOrigin, errorOf, errorResponse, getOwnedWorkspace } from "./common.ts";
+import { appOrigin, errorOf, errorResponse, getWritableWorkspace } from "./common.ts";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -16,13 +16,15 @@ export const handleAttachment = async (
     const bearer = request.headers.get("Authorization")?.toLowerCase().startsWith("bearer ") ?? false;
 
     if (origin !== null && origin !== appOrigin(env)) return errorOf("FORBIDDEN");
-    const user = await requireOwner(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
+    const user = await requireUser(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
 
     // 05, CSRF: a cookie-authenticated write must come from the app's own origin.
     if (origin === null && !bearer) return errorOf("FORBIDDEN");
-    const ws = await getOwnedWorkspace(env, user.id, workspaceId);
+    const ws = await getWritableWorkspace(env, user.id, workspaceId);
 
     if (!ws) return errorOf("NOT_FOUND");
+
+    if (ws === "forbidden") return errorOf("FORBIDDEN");
 
     if (ws.archivedAt !== null) return errorOf("WORKSPACE_ARCHIVED");
     const declared = Number(request.headers.get("Content-Length") ?? "0");
@@ -76,9 +78,12 @@ export const handleAttachmentRead = async (
 
     if (origin !== null && origin !== appOrigin(env)) return errorOf("FORBIDDEN");
     const bearer = request.headers.get("Authorization")?.toLowerCase().startsWith("bearer ") ?? false;
-    const user = await requireOwner(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
+    const user = await requireUser(env, request.headers, { allowCookie: !bearer, allowBearer: bearer });
+    const ws = await getWritableWorkspace(env, user.id, workspaceId);
 
-    if (!(await getOwnedWorkspace(env, user.id, workspaceId))) return errorOf("NOT_FOUND");
+    if (!ws) return errorOf("NOT_FOUND");
+
+    if (ws === "forbidden") return errorOf("FORBIDDEN");
     const a = await env.WORKSPACE.getByName(workspaceId).getAttachment(attachmentId);
 
     if (!a) return errorOf("NOT_FOUND");

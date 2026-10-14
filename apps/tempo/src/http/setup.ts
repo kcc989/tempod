@@ -5,7 +5,7 @@ import type { Env } from "../env.ts";
 import { clearGithubAppConfigCache, getGithubAppConfig } from "../github/app.ts";
 import { timingSafeEqual } from "../lib/crypto.ts";
 import { errorText, log } from "../log.ts";
-import { getSessionUser, isOwner } from "../auth/auth.ts";
+import { getSessionUser, isInstanceAdmin } from "../auth/auth.ts";
 import { listInstallations } from "../server/handlers/projects.ts";
 import { appOrigin, escapeHtml, html } from "./common.ts";
 
@@ -86,7 +86,7 @@ const storeInstallation = async (
   try {
     const user = await getSessionUser(env, request.headers, { allowCookie: true, allowBearer: false });
 
-    if (!user || !(await isOwner(env, user.id))) return;
+    if (!user || !(await isInstanceAdmin(env, user.id))) return;
     const stored = await listInstallations({ env, user });
 
     if (!stored.some((i) => i.installationId === Number(installationId)))
