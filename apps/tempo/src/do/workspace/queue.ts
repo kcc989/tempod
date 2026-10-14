@@ -37,7 +37,7 @@ import { refreshChanges } from "./git.ts";
 
 /** Default modes (01, Agents table). OpenCode and Pi use the agent's own default. */
 export const DEFAULT_MODE: Record<AgentId, string | null> = {
-  claude: "bypassPermissions",
+  claude: "auto",
   codex: "agent-full-access",
   opencode: null,
   pi: null,
