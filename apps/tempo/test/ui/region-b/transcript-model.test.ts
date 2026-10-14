@@ -8,6 +8,7 @@ import {
   fileLinkTarget,
   firstPermissionOption,
   isPermissionAnswered,
+  isInitialPrompt,
   locationLabel,
   messagesToAnnounce,
   planProgress,
@@ -65,6 +66,32 @@ const permission = (
 });
 
 describe("transcript rows", () => {
+  it("keeps the initial prompt visible through startup without showing queued follow-ups", () => {
+    const first = turn({ id: "t1", seq: 1, status: "queued", startedAt: null, queuePos: 0 });
+    const later = turn({ id: "t2", seq: 2, status: "queued", startedAt: null, queuePos: 1 });
+
+    const items = map(
+      userMessage("u1", "Read the README", { turnId: "t1" }),
+      userMessage("u2", "Explain setup", { turnId: "t2" }),
+    );
+
+    const turns = map(first, later);
+
+    expect(buildTranscriptRows(["u1", "u2"], items, turns).map((r) => r.key)).toEqual(["u1"]);
+    expect(buildTranscriptRows(["u1", "u2"], items, turns, "detailed").map((r) => r.key)).toEqual(["u1"]);
+    expect(
+      Object.values(turns)
+        .filter((t) => t.status === "queued" && !isInitialPrompt(t))
+        .map((t) => t.id),
+    ).toEqual(["t2"]);
+
+    turns["t1"] = { ...first, status: "running", startedAt: 1000, queuePos: null };
+
+    expect(buildTranscriptRows(["u1", "u2"], items, turns).map((r) => r.key)).toEqual(["u1", "working:t1"]);
+    delete turns["t1"];
+
+    expect(buildTranscriptRows(["u1", "u2"], items, turns)).toEqual([]);
+  });
   it("shows items with a footer after each ended turn and a working row for the running one", () => {
     const turns = map(
       turn({ id: "t1", seq: 1, status: "completed", startedAt: 100, endedAt: 900 }),

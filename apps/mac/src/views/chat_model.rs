@@ -99,6 +99,9 @@ pub fn running_turn<'a>(state: &'a WorkspaceState, session_id: &str) -> Option<&
         .values()
         .find(|t| t.session_id == session_id && t.status == TurnStatus::Running)
 }
+pub fn is_initial_prompt(turn: &Turn) -> bool {
+    turn.seq == 1. && turn.status == TurnStatus::Queued && turn.steering_pending != Some(true)
+}
 pub fn queued_turns<'a>(state: &'a WorkspaceState, session_id: &str) -> Vec<&'a Turn> {
     let mut turns: Vec<_> = state
         .turns
@@ -112,6 +115,43 @@ pub fn queued_turns<'a>(state: &'a WorkspaceState, session_id: &str) -> Vec<&'a 
             .then_with(|| a.queued_at.total_cmp(&b.queued_at))
     });
     turns
+}
+pub fn reordered_queue(state: &WorkspaceState, dragged: &str, before: &str) -> Option<Vec<String>> {
+    let mut turns: Vec<_> = state
+        .turns
+        .values()
+        .filter(|turn| turn.status == TurnStatus::Queued)
+        .collect();
+    turns.sort_by(|a, b| {
+        a.queue_pos
+            .unwrap_or(f64::INFINITY)
+            .total_cmp(&b.queue_pos.unwrap_or(f64::INFINITY))
+            .then_with(|| a.queued_at.total_cmp(&b.queued_at))
+    });
+    let mut movable: Vec<_> = turns
+        .iter()
+        .filter(|turn| !is_initial_prompt(turn))
+        .map(|turn| turn.id.clone())
+        .collect();
+    if dragged == before || !movable.iter().any(|id| id == dragged) {
+        return None;
+    }
+    movable.retain(|id| id != dragged);
+    let index = movable.iter().position(|id| id == before)?;
+    movable.insert(index, dragged.into());
+    let mut moved = movable.into_iter();
+    Some(
+        turns
+            .into_iter()
+            .map(|turn| {
+                if is_initial_prompt(turn) {
+                    turn.id.clone()
+                } else {
+                    moved.next().unwrap()
+                }
+            })
+            .collect(),
+    )
 }
 pub fn first_permission_option<'a>(
     options: &'a [PermissionOption],
@@ -523,7 +563,7 @@ pub fn transcript_rows(
         let user = matches!(item.content, ItemContent::UserMessage(_));
         if user
             && ((item.turn_id.is_some() && turn.is_none())
-                || turn.is_some_and(|t| t.status == TurnStatus::Queued))
+                || turn.is_some_and(|t| t.status == TurnStatus::Queued && !is_initial_prompt(t)))
         {
             continue;
         }
@@ -1229,6 +1269,64 @@ mod tests {
     }
     fn ids(rows: &[RowContent]) -> Vec<String> {
         rows.iter().map(RowContent::id).collect()
+    }
+    #[test]
+    fn initial_prompt_stays_in_the_transcript_through_startup_and_deletion() {
+        let mut state = turn_state("queued", vec![]);
+        let first = state.turns.get_mut("t1").unwrap();
+        first.started_at = None;
+        first.ended_at = None;
+        first.queue_pos = Some(0.);
+        let mut follow_up = first.clone();
+        follow_up.id = "t2".into();
+        follow_up.seq = 2.;
+        follow_up.queue_pos = Some(1.);
+        state.turns.insert("t2".into(), follow_up);
+        let mut message = state.items["u"].clone();
+        message.id = "u2".into();
+        message.turn_id = Some("t2".into());
+        state.order.get_mut("s").unwrap().push("u2".into());
+        state.items.insert("u2".into(), message);
+
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Default)),
+            ["u"]
+        );
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Detailed)),
+            ["u"]
+        );
+        let first = state.turns.get_mut("t1").unwrap();
+        first.status = TurnStatus::Running;
+        first.started_at = Some(100.);
+        assert_eq!(
+            ids(&transcript_rows(&state, "s", TranscriptDetail::Default)),
+            ["u", "work:t1"]
+        );
+        state.turns.remove("t1");
+        assert!(transcript_rows(&state, "s", TranscriptDetail::Default).is_empty());
+    }
+    #[test]
+    fn queue_reordering_keeps_the_initial_prompt_fixed() {
+        let mut state = turn_state("queued", vec![]);
+        state.turns.get_mut("t1").unwrap().queue_pos = Some(0.);
+        for (id, seq, position) in [("t2", 2., 1.), ("t3", 3., 2.), ("t4", 4., 3.)] {
+            let mut turn = state.turns["t1"].clone();
+            turn.id = id.into();
+            turn.seq = seq;
+            turn.queue_pos = Some(position);
+            state.turns.insert(id.into(), turn);
+        }
+        assert_eq!(
+            reordered_queue(&state, "t4", "t2").unwrap(),
+            ["t1", "t4", "t2", "t3"]
+        );
+        assert_eq!(
+            reordered_queue(&state, "t2", "t4").unwrap(),
+            ["t1", "t3", "t2", "t4"]
+        );
+        assert!(reordered_queue(&state, "t1", "t2").is_none());
+        assert!(reordered_queue(&state, "t2", "t1").is_none());
     }
     #[test]
     fn work_types_follow_tool_kind_and_command() {

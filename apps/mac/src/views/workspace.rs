@@ -2189,28 +2189,9 @@ impl WorkspaceView {
         if self.queue_pending || dragged.workspace_id != store.workspace_id {
             return;
         }
-        let mut turns: Vec<_> = store
-            .state
-            .turns
-            .values()
-            .filter(|t| t.status == p::TurnStatus::Queued)
-            .collect();
-        turns.sort_by(|a, b| {
-            a.queue_pos
-                .unwrap_or(f64::INFINITY)
-                .total_cmp(&b.queue_pos.unwrap_or(f64::INFINITY))
-                .then_with(|| a.id.cmp(&b.id))
-        });
-        let mut ids: Vec<_> = turns.into_iter().map(|t| t.id.clone()).collect();
-        if dragged.turn_id == before
-            || !ids.contains(&dragged.turn_id)
-            || !ids.iter().any(|id| id == before)
-        {
+        let Some(ids) = chat_model::reordered_queue(&store.state, &dragged.turn_id, before) else {
             return;
-        }
-        let ix = ids.iter().position(|id| id == before).unwrap();
-        ids.retain(|id| id != &dragged.turn_id);
-        ids.insert(ix, dragged.turn_id.clone());
+        };
         let request = self.client.call::<api::ReorderQueue>(p::ReorderQueueIn {
             workspace_id: store.workspace_id.clone(),
             turn_ids: ids,
@@ -2766,6 +2747,7 @@ impl Render for WorkspaceView {
             .as_ref()
             .into_iter()
             .flat_map(|id| chat_model::queued_turns(&self.store.read(cx).state, id))
+            .filter(|turn| !chat_model::is_initial_prompt(turn))
             .map(|turn| {
                 (
                     turn.id.clone(),

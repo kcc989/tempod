@@ -330,11 +330,12 @@ export const reorderedQueue = (
   sessionId: string,
   turnId: string,
   toIndex: number,
+  fixedTurnId?: string,
 ): string[] => {
   const all = queuedTurns(state).map((t) => t.id);
 
   const mine = queuedTurns(state)
-    .filter((t) => t.sessionId === sessionId)
+    .filter((t) => t.sessionId === sessionId && t.id !== fixedTurnId)
     .map((t) => t.id);
 
   const from = mine.indexOf(turnId);

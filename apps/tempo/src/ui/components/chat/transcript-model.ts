@@ -48,9 +48,12 @@ const ENDED = new Set<Turn["status"]>(["completed", "cancelled", "failed", "inte
 
 export const isEnded = (t: Pick<Turn, "status">): boolean => ENDED.has(t.status);
 
+export const isInitialPrompt = (turn: Turn): boolean =>
+  turn.seq === 1 && turn.status === "queued" && turn.steeringPending !== true;
+
 /**
- * The rows of one session's transcript. A user message of a queued turn shows as a chip above the
- * composer, so it is left out; one whose turn was deleted is gone. A started turn's user message
+ * The rows of one session's transcript. The first accepted prompt stays in the transcript during
+ * startup. Later queued prompts show above the composer; a deleted turn's prompt is gone. A started turn's user message
  * sits at the turn's start, so prompts that waited in the queue come after the turn before them.
  * Each ended turn gets a footer; a running turn gets a working row at the end. In Default detail a
  * turn's work items fold into one work row, placed before the turn's first other item.
@@ -71,7 +74,7 @@ export const buildTranscriptRows = (
     if (item.kind === "user_message") {
       if (item.turnId && !turn) return;
 
-      if (turn?.status === "queued") return;
+      if (turn?.status === "queued" && !isInitialPrompt(turn)) return;
       placed.push({ item, at: turn?.startedAt ?? item.createdAt, rank: 0, index });
 
       return;
