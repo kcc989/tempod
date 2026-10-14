@@ -1,0 +1,634 @@
+{
+  "layout": {
+    "focus_primary_path": {
+      "type": "score",
+      "score": 1.7,
+      "confidence": 0.500975,
+      "probabilities": {
+        "0": 0.10495,
+        "1": 0.09015000000000001,
+        "2": 0.8049
+      }
+    },
+    "focus_content_share": {
+      "type": "score",
+      "score": 1.6987,
+      "confidence": 0.39765,
+      "probabilities": {
+        "0": 0.0426,
+        "1": 0.21612499999999998,
+        "2": 0.7412750000000001
+      }
+    },
+    "focus_reading_order": {
+      "type": "noul",
+      "noul": 0.9134500000000001
+    },
+    "overflow_long_text": {
+      "type": "choice",
+      "choice": "ellipsis",
+      "confidence": 0.848875,
+      "probabilities": {
+        "ellipsis": 0.940875,
+        "cut": 0.02325,
+        "breaks_layout": 0.010225,
+        "not_shown": 0.02565
+      }
+    },
+    "type_hierarchy": {
+      "type": "noul",
+      "noul": 0.927975
+    },
+    "type_scale": {
+      "type": "score",
+      "score": 1.64385,
+      "confidence": 0.35905,
+      "probabilities": {
+        "0": 0.08365,
+        "1": 0.18889999999999998,
+        "2": 0.72745
+      }
+    },
+    "type_line_height": {
+      "type": "noul",
+      "noul": 0.91465
+    },
+    "type_numbers": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.82155,
+      "probabilities": {
+        "aligned": 0.036325,
+        "ragged": 0.026125,
+        "not_shown": 0.9375499999999999
+      }
+    },
+    "type_mono": {
+      "type": "choice",
+      "choice": "mixed",
+      "confidence": 0.06737499999999999,
+      "probabilities": {
+        "mono": 0.31625,
+        "mixed": 0.489625,
+        "not_shown": 0.19412500000000002
+      }
+    },
+    "slop_eyebrow_label": {
+      "type": "noul",
+      "noul": 0.02615
+    },
+    "slop_icon_tile_heading": {
+      "type": "noul",
+      "noul": 0.020374999999999997
+    },
+    "slop_badge_headline": {
+      "type": "noul",
+      "noul": 0.01535
+    },
+    "slop_italic_serif_headline": {
+      "type": "noul",
+      "noul": 0.00675
+    },
+    "slop_hero_headline": {
+      "type": "noul",
+      "noul": 0.014374999999999999
+    },
+    "slop_flat_hierarchy": {
+      "type": "noul",
+      "noul": 0.0694
+    },
+    "slop_tight_tracking": {
+      "type": "noul",
+      "noul": 0.015125
+    },
+    "slop_numbered_labels": {
+      "type": "noul",
+      "noul": 0.011450000000000002
+    },
+    "slop_hero_metric": {
+      "type": "noul",
+      "noul": 0.0132
+    },
+    "slop_card_grid": {
+      "type": "noul",
+      "noul": 0.013675
+    },
+    "slop_nested_cards": {
+      "type": "noul",
+      "noul": 0.04675
+    },
+    "slop_hidden_image": {
+      "type": "noul",
+      "noul": 0.014974999999999999
+    },
+    "quality_tiny_text": {
+      "type": "noul",
+      "noul": 0.1874
+    },
+    "quality_all_caps": {
+      "type": "noul",
+      "noul": 0.0095
+    },
+    "quality_long_lines": {
+      "type": "noul",
+      "noul": 0.1697
+    },
+    "quality_text_covered": {
+      "type": "noul",
+      "noul": 0.014175
+    },
+    "quality_overflow": {
+      "type": "noul",
+      "noul": 0.042525
+    },
+    "quality_broken_image": {
+      "type": "noul",
+      "noul": 0.012875
+    },
+    "quality_scroll_edge": {
+      "type": "noul",
+      "noul": 0.1163
+    }
+  },
+  "spacing": {
+    "slop_monotonous_spacing": {
+      "type": "noul",
+      "noul": 0.10952500000000001
+    },
+    "quality_cramped": {
+      "type": "noul",
+      "noul": 0.0811
+    },
+    "quality_heading_spacing": {
+      "type": "noul",
+      "noul": 0.243925
+    }
+  },
+  "color-depth": {
+    "restraint_noise": {
+      "type": "score",
+      "score": 1.7322499999999998,
+      "confidence": 0.44585,
+      "probabilities": {
+        "0": 0.036774999999999995,
+        "1": 0.194225,
+        "2": 0.769
+      }
+    },
+    "icons_one_set": {
+      "type": "noul",
+      "noul": 0.87275
+    },
+    "icons_size": {
+      "type": "noul",
+      "noul": 0.6535250000000001
+    },
+    "icons_meaning": {
+      "type": "score",
+      "score": 1.212925,
+      "confidence": 0.060425,
+      "probabilities": {
+        "0": 0.17409999999999998,
+        "1": 0.4389,
+        "2": 0.387
+      }
+    },
+    "slop_grid_background": {
+      "type": "noul",
+      "noul": 0.019275
+    },
+    "slop_rounded_border_accent": {
+      "type": "noul",
+      "noul": 0.027950000000000003
+    },
+    "slop_side_stripe": {
+      "type": "noul",
+      "noul": 0.033275
+    },
+    "slop_border_and_shadow": {
+      "type": "noul",
+      "noul": 0.215125
+    },
+    "slop_glass": {
+      "type": "noul",
+      "noul": 0.030674999999999997
+    },
+    "slop_stripes": {
+      "type": "noul",
+      "noul": 0.0172
+    },
+    "slop_extreme_radius": {
+      "type": "noul",
+      "noul": 0.14552500000000002
+    },
+    "slop_rough_illustration": {
+      "type": "noul",
+      "noul": 0.015175000000000001
+    },
+    "slop_placeholder_illustration": {
+      "type": "noul",
+      "noul": 0.028650000000000002
+    },
+    "slop_glow": {
+      "type": "noul",
+      "noul": 0.0343
+    },
+    "slop_ai_palette": {
+      "type": "noul",
+      "noul": 0.03645
+    },
+    "slop_dark_glow": {
+      "type": "noul",
+      "noul": 0.02435
+    },
+    "slop_gradient_text": {
+      "type": "noul",
+      "noul": 0.016900000000000002
+    },
+    "quality_gray_on_color": {
+      "type": "noul",
+      "noul": 0.094525
+    }
+  },
+  "usability": {
+    "focus_affordance": {
+      "type": "score",
+      "score": 1.45515,
+      "confidence": 0.1729,
+      "probabilities": {
+        "0": 0.1486,
+        "1": 0.247575,
+        "2": 0.6038250000000001
+      }
+    },
+    "status_items": {
+      "type": "score",
+      "score": 1.8199750000000001,
+      "confidence": 0.6231249999999999,
+      "probabilities": {
+        "0": 0.038025,
+        "1": 0.10392499999999999,
+        "2": 0.85805
+      }
+    },
+    "status_async": {
+      "type": "score",
+      "score": 1.83585,
+      "confidence": 0.692775,
+      "probabilities": {
+        "0": 0.052325,
+        "1": 0.05952500000000001,
+        "2": 0.88815
+      }
+    },
+    "status_attention": {
+      "type": "noul",
+      "noul": 0.1569
+    },
+    "status_consistent": {
+      "type": "noul",
+      "noul": 0.856225
+    },
+    "status_lifecycle": {
+      "type": "choice",
+      "choice": "bare",
+      "confidence": 0.7178,
+      "probabilities": {
+        "explains": 0.08225,
+        "bare": 0.896375,
+        "not_shown": 0.021374999999999998
+      }
+    },
+    "ai_steps": {
+      "type": "score",
+      "score": 1.3281749999999999,
+      "confidence": 0.30152500000000004,
+      "probabilities": {
+        "0": 0.32317499999999993,
+        "1": 0.025474999999999998,
+        "2": 0.6513500000000001
+      }
+    },
+    "ai_marked": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.31835,
+      "probabilities": {
+        "marked": 0.129325,
+        "unmarked": 0.162875,
+        "not_shown": 0.7078
+      }
+    },
+    "control_ask": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.148475,
+      "probabilities": {
+        "structured": 0.010925,
+        "free_text": 0.18889999999999998,
+        "none": 0.360825,
+        "not_shown": 0.43935
+      }
+    },
+    "control_diff": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.3342,
+      "probabilities": {
+        "shown": 0.097825,
+        "hidden": 0.190475,
+        "not_shown": 0.7117
+      }
+    },
+    "control_consent": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.897675,
+      "probabilities": {
+        "in_context": 0.0219,
+        "upfront": 0.013150000000000002,
+        "not_shown": 0.96495
+      }
+    },
+    "scan_rows": {
+      "type": "score",
+      "score": 1.7004249999999999,
+      "confidence": 0.48312499999999997,
+      "probabilities": {
+        "0": 0.096125,
+        "1": 0.107325,
+        "2": 0.79655
+      }
+    },
+    "scan_missing": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.8377,
+      "probabilities": {
+        "muted": 0.04245,
+        "raw": 0.014325000000000001,
+        "not_shown": 0.9432250000000001
+      }
+    },
+    "scan_overflow": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.557725,
+      "probabilities": {
+        "count": 0.05125,
+        "clipped": 0.119375,
+        "not_shown": 0.829375
+      }
+    },
+    "nav_current": {
+      "type": "noul",
+      "noul": 0.9405749999999999
+    },
+    "nav_groups": {
+      "type": "score",
+      "score": 1.6498,
+      "confidence": 0.403175,
+      "probabilities": {
+        "0": 0.10605,
+        "1": 0.1381,
+        "2": 0.7558499999999999
+      }
+    },
+    "nav_return": {
+      "type": "noul",
+      "noul": 0.8570249999999999
+    },
+    "nav_tabs_current": {
+      "type": "choice",
+      "choice": "clear",
+      "confidence": 0.898475,
+      "probabilities": {
+        "clear": 0.965225,
+        "weak": 0.021475,
+        "not_shown": 0.0133
+      }
+    },
+    "speed_search": {
+      "type": "noul",
+      "noul": 0.9539
+    },
+    "states_empty": {
+      "type": "score",
+      "score": 0.7878000000000001,
+      "confidence": 0.07725,
+      "probabilities": {
+        "0": 0.37265000000000004,
+        "1": 0.46695000000000003,
+        "2": 0.16040000000000001
+      }
+    },
+    "states_errors": {
+      "type": "noul",
+      "noul": 0.0358
+    },
+    "states_disabled_clear": {
+      "type": "choice",
+      "choice": "clear",
+      "confidence": 0.071125,
+      "probabilities": {
+        "clear": 0.47304999999999997,
+        "confusing": 0.344425,
+        "not_shown": 0.182525
+      }
+    },
+    "copy_labels": {
+      "type": "score",
+      "score": 1.58165,
+      "confidence": 0.2548,
+      "probabilities": {
+        "0": 0.03255,
+        "1": 0.35325,
+        "2": 0.6142000000000001
+      }
+    },
+    "copy_status": {
+      "type": "noul",
+      "noul": 0.803925
+    },
+    "copy_controls_labeled": {
+      "type": "noul",
+      "noul": 0.59845
+    },
+    "trust_usage": {
+      "type": "noul",
+      "noul": 0.068925
+    },
+    "trust_onboarding": {
+      "type": "choice",
+      "choice": "none",
+      "confidence": 0.36272499999999996,
+      "probabilities": {
+        "light": 0.285075,
+        "blocking": 0.015525,
+        "none": 0.6994
+      }
+    },
+    "slop_em_dash": {
+      "type": "noul",
+      "noul": 0.020925
+    },
+    "slop_marketing_claims": {
+      "type": "noul",
+      "noul": 0.01385
+    },
+    "slop_forced_contrast": {
+      "type": "noul",
+      "noul": 0.013725
+    },
+    "slop_theater": {
+      "type": "noul",
+      "noul": 0.017224999999999997
+    },
+    "quality_repeated_text": {
+      "type": "noul",
+      "noul": 0.2392
+    },
+    "quality_repeated_identifier": {
+      "type": "noul",
+      "noul": 0.78735
+    }
+  },
+  "coverage": {
+    "speed_shortcuts": {
+      "type": "noul",
+      "noul": 0.740375
+    },
+    "speed_views": {
+      "type": "noul",
+      "noul": 0.0443
+    },
+    "ai_limits": {
+      "type": "noul",
+      "noul": 0.03825
+    },
+    "ai_feedback": {
+      "type": "noul",
+      "noul": 0.090875
+    },
+    "ai_evidence": {
+      "type": "noul",
+      "noul": 0.8531500000000001
+    },
+    "control_draft": {
+      "type": "noul",
+      "noul": 0.25687499999999996
+    },
+    "focus_space_fit": {
+      "type": "noul",
+      "noul": 0.257675
+    },
+    "overflow_scroll_cue": {
+      "type": "choice",
+      "choice": "no_cue",
+      "confidence": 0.17385,
+      "probabilities": {
+        "cue": 0.153825,
+        "no_cue": 0.6045,
+        "not_shown": 0.241675
+      }
+    }
+  },
+  "interaction-1": {
+    "states_feedback": {
+      "type": "score",
+      "score": 1.1202750000000001,
+      "confidence": 0.021775,
+      "probabilities": {
+        "0": 0.298075,
+        "1": 0.283625,
+        "2": 0.4183
+      }
+    },
+    "feedback_selected": {
+      "type": "noul",
+      "noul": 0.47387500000000005
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "noul": 0.15005
+    },
+    "feedback_focus_visible": {
+      "type": "choice",
+      "choice": "not_keyboard",
+      "confidence": 0.6967749999999999,
+      "probabilities": {
+        "visible": 0.0207,
+        "missing": 0.09107499999999999,
+        "not_keyboard": 0.888225
+      }
+    }
+  },
+  "interaction-2": {
+    "states_feedback": {
+      "type": "score",
+      "score": 0.8585499999999999,
+      "confidence": 0.0325,
+      "probabilities": {
+        "0": 0.445925,
+        "1": 0.24964999999999998,
+        "2": 0.304425
+      }
+    },
+    "feedback_selected": {
+      "type": "noul",
+      "noul": 0.350075
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "noul": 0.22310000000000002
+    },
+    "feedback_focus_visible": {
+      "type": "choice",
+      "choice": "not_keyboard",
+      "confidence": 0.7554500000000001,
+      "probabilities": {
+        "visible": 0.015449999999999998,
+        "missing": 0.073175,
+        "not_keyboard": 0.9113749999999999
+      }
+    }
+  },
+  "interaction-3": {
+    "feedback_focus_visible": {
+      "type": "choice",
+      "choice": "visible",
+      "confidence": 0.33344999999999997,
+      "probabilities": {
+        "visible": 0.67635,
+        "missing": 0.306425,
+        "not_keyboard": 0.017225
+      }
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "noul": 0.09982500000000001
+    }
+  },
+  "consistency": {
+    "consistency_terms": {
+      "type": "noul",
+      "noul": 0.90065
+    },
+    "consistency_components": {
+      "type": "noul",
+      "noul": 0.8966
+    },
+    "consistency_navigation": {
+      "type": "noul",
+      "noul": 0.875625
+    },
+    "consistency_color": {
+      "type": "noul",
+      "noul": 0.901125
+    },
+    "consistency_type": {
+      "type": "noul",
+      "noul": 0.9057999999999999
+    }
+  }
+}

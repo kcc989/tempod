@@ -1,0 +1,10 @@
+[0] AXButton/AXUnknown [235,10 20×20] "Toggle sidebar"
+[1] AXButton/AXUnknown [266,3 368×20] (title withheld)
+[2] AXButton/AXUnknown [641,3 419×20] "Rename branch"
+[3] AXButton/AXUnknown [1066,3 20×20] "Copy branch name"
+[4] AXButton/AXUnknown [1099,3 59×20] "Sleeping"
+[5] AXButton/AXUnknown [266,28 20×20] "Workspace info"
+[6] AXButton/AXUnknown [292,28 20×20] "Toggle right side"
+[8] AXRadioButton/AXTabButton [1164,2 69×35] "Changes"
+[9] AXButton/AXUnknown [1214,9 20×20] "Close Changes"
+[10] AXButton/AXUnknown [1437,10 20×20] "New tool tab"

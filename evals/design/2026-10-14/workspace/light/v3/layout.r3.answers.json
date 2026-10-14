@@ -1,0 +1,202 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T16:05:08.235Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "focus_primary_path": {
+          "type": "score",
+          "score": 1.7158,
+          "legend": {
+            "0": {
+              "what": "Several controls compete for attention, or nothing shows what to do first",
+              "examples": [
+                "Four filled buttons in different colors in the header",
+                "A promo banner, a tour popup, and a filled button all ask for a click"
+              ]
+            },
+            "1": {
+              "what": "A main action exists, but other strong buttons, banners, or promotions compete with it",
+              "examples": [
+                "A filled 'Create' button next to a filled 'Upgrade' button of the same size"
+              ]
+            },
+            "2": {
+              "what": "One main path is obvious: one filled button whose label names the job of the screen, or the job is to pick an item from the content and no control competes with it",
+              "examples": [
+                "An agents list where only 'Create Agent' is a filled dark button",
+                "A thread list where the rows are the focus and the header has only text buttons"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.0926,
+            "1": 0.099,
+            "2": 0.8084
+          },
+          "confidence": 0.5078
+        },
+        "focus_content_share": {
+          "type": "score",
+          "score": 1.7098,
+          "legend": {
+            "0": "Controls, banners, promotions, or decoration take most of the screen",
+            "1": "Content and controls take similar space",
+            "2": "The user's content takes most of the screen, and controls sit in a sidebar, a header, or a footer"
+          },
+          "probabilities": {
+            "0": 0.0397,
+            "1": 0.2108,
+            "2": 0.7495
+          },
+          "confidence": 0.4116
+        },
+        "focus_reading_order": {
+          "type": "noul",
+          "noul": 0.9146
+        },
+        "overflow_long_text": {
+          "type": "choice",
+          "choice": "ellipsis",
+          "probabilities": {
+            "ellipsis": 0.9362,
+            "cut": 0.0278,
+            "breaks_layout": 0.011,
+            "not_shown": 0.025
+          },
+          "confidence": 0.8374
+        },
+        "type_hierarchy": {
+          "type": "noul",
+          "noul": 0.9356
+        },
+        "type_scale": {
+          "type": "score",
+          "score": 1.6626,
+          "legend": {
+            "0": "Many sizes with small differences, or no clear pattern",
+            "1": "A few sizes, but some styles look almost the same",
+            "2": "A small set of clearly different sizes and weights, used the same way for the same role everywhere"
+          },
+          "probabilities": {
+            "0": 0.0744,
+            "1": 0.1886,
+            "2": 0.737
+          },
+          "confidence": 0.3764
+        },
+        "type_line_height": {
+          "type": "noul",
+          "noul": 0.917
+        },
+        "type_numbers": {
+          "type": "choice",
+          "choice": "not_shown",
+          "probabilities": {
+            "aligned": 0.0408,
+            "ragged": 0.0281,
+            "not_shown": 0.9311
+          },
+          "confidence": 0.804
+        },
+        "type_mono": {
+          "type": "choice",
+          "choice": "mixed",
+          "probabilities": {
+            "mono": 0.283,
+            "mixed": 0.5186,
+            "not_shown": 0.1984
+          },
+          "confidence": 0.0826
+        },
+        "slop_eyebrow_label": {
+          "type": "noul",
+          "noul": 0.0228
+        },
+        "slop_icon_tile_heading": {
+          "type": "noul",
+          "noul": 0.0225
+        },
+        "slop_badge_headline": {
+          "type": "noul",
+          "noul": 0.0153
+        },
+        "slop_italic_serif_headline": {
+          "type": "noul",
+          "noul": 0.007
+        },
+        "slop_hero_headline": {
+          "type": "noul",
+          "noul": 0.013
+        },
+        "slop_flat_hierarchy": {
+          "type": "noul",
+          "noul": 0.069
+        },
+        "slop_tight_tracking": {
+          "type": "noul",
+          "noul": 0.016
+        },
+        "slop_numbered_labels": {
+          "type": "noul",
+          "noul": 0.0108
+        },
+        "slop_hero_metric": {
+          "type": "noul",
+          "noul": 0.0143
+        },
+        "slop_card_grid": {
+          "type": "noul",
+          "noul": 0.0134
+        },
+        "slop_nested_cards": {
+          "type": "noul",
+          "noul": 0.0396
+        },
+        "slop_hidden_image": {
+          "type": "noul",
+          "noul": 0.0174
+        },
+        "quality_tiny_text": {
+          "type": "noul",
+          "noul": 0.1611
+        },
+        "quality_all_caps": {
+          "type": "noul",
+          "noul": 0.0099
+        },
+        "quality_long_lines": {
+          "type": "noul",
+          "noul": 0.159
+        },
+        "quality_text_covered": {
+          "type": "noul",
+          "noul": 0.0137
+        },
+        "quality_overflow": {
+          "type": "noul",
+          "noul": 0.068
+        },
+        "quality_broken_image": {
+          "type": "noul",
+          "noul": 0.01
+        },
+        "quality_scroll_edge": {
+          "type": "noul",
+          "noul": 0.1382
+        }
+      },
+      "usage": {
+        "input_tokens": 6492,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

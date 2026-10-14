@@ -42,5 +42,18 @@
     "errors": false,
     "limits": false
   },
-  "knownSource": "Verified in the running Mac app (repo build, dark theme): finished agent reply with a collapsed step line; no agent turn running (workspace container state 'Running', turn complete); workspace list; editable message field; no empty area, error or usage limit in the main capture."
+  "knownSource": "Verified in the running Mac app (repo build, dark theme): finished agent reply with a collapsed step line; no agent turn running (workspace container state 'Running', turn complete); workspace list; editable message field; no empty area, error or usage limit in the main capture.",
+  "theme": "dark",
+  "framePixels": [
+    1456,
+    822
+  ],
+  "windowPoints": [
+    1492,
+    842
+  ],
+  "axStates": {
+    "default": "ax/default.txt",
+    "tools-open": "ax/tools-open.txt"
+  }
 }

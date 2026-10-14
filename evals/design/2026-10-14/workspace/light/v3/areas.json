@@ -1,0 +1,199 @@
+{
+  "layout": {
+    "status": "fail",
+    "gate": "clef+measured",
+    "measured": {
+      "headerOneRow": false
+    },
+    "clefScore": 0.87,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.87,
+      "type": 0.78,
+      "overflow": 1,
+      "craft": 0.33,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured headerOneRow: fail",
+      "An element is wider than its container.",
+      "dimension craft below 0.6"
+    ],
+    "informational": [],
+    "lowAnswers": [
+      {
+        "question": "type_mono",
+        "value": 0.3,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_content_share",
+      "layout:type_scale",
+      "layout:type_mono"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Set code, commands, IDs, and paths in one monospace font.",
+      "Give icons, input borders, and focus rings at least 3:1 contrast.",
+      "Make click and tap targets at least 24 by 24 px.",
+      "Use only the fonts, colors, radii, and sizes in DESIGN.md, or update DESIGN.md.",
+      "Remove elements that are wider than their container."
+    ]
+  },
+  "spacing": {
+    "status": "fail",
+    "gate": "measured",
+    "measured": {
+      "specRowHeights": true,
+      "footerLeftAligned": false,
+      "spacingOnScale": true,
+      "chatBarInset": false,
+      "targetSize24px": false
+    },
+    "clefScore": 0.87,
+    "clefCounts": false,
+    "dimensions": {
+      "craft": 0.33,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured footerLeftAligned: fail",
+      "measured chatBarInset: fail",
+      "measured targetSize24px: fail"
+    ],
+    "informational": [
+      "An element is wider than its container.",
+      "dimension craft below 0.6"
+    ],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Give icons, input borders, and focus rings at least 3:1 contrast.",
+      "Make click and tap targets at least 24 by 24 px.",
+      "Use only the fonts, colors, radii, and sizes in DESIGN.md, or update DESIGN.md.",
+      "Remove elements that are wider than their container."
+    ]
+  },
+  "color-depth": {
+    "status": "fail",
+    "gate": "measured",
+    "measured": {
+      "textContrastAA": true,
+      "nonTextContrast3": false
+    },
+    "clefScore": 0.84,
+    "clefCounts": false,
+    "dimensions": {
+      "icons": 0.71,
+      "restraint": 0.87,
+      "craft": 0.33,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured nonTextContrast3: fail"
+    ],
+    "informational": [
+      "An element is wider than its container.",
+      "dimension craft below 0.6"
+    ],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Give icons, input borders, and focus rings at least 3:1 contrast.",
+      "Make click and tap targets at least 24 by 24 px.",
+      "Use only the fonts, colors, radii, and sizes in DESIGN.md, or update DESIGN.md.",
+      "Remove elements that are wider than their container.",
+      "Use common symbols for icon-only buttons, or add a label.",
+      "Use one icon size in each context, and center icons with their labels."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "gate": "clef",
+    "measured": {},
+    "clefScore": 0.79,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.73,
+      "status": 0.77,
+      "ai": 0.66,
+      "scan": 0.85,
+      "nav": 0.91,
+      "speed": 0.95,
+      "states": 0.6,
+      "copy": 0.73,
+      "consistency": 0.9,
+      "contrast": 1,
+      "craft": 0.33,
+      "slop": 1,
+      "quality": 0.8
+    },
+    "majors": [
+      "An element is wider than its container.",
+      "dimension craft below 0.6",
+      "status_lifecycle = 0.3 (below 0.40)",
+      "quality_repeated_identifier = 0.213 (below 0.40)"
+    ],
+    "informational": [],
+    "lowAnswers": [
+      {
+        "question": "status_lifecycle",
+        "value": 0.3,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.213,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "feedback_selected",
+        "value": 0.35,
+        "uncertain": true,
+        "source": "interaction-2"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:ai_steps",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "usability:copy_controls_labeled",
+      "interaction-1:states_feedback",
+      "interaction-1:feedback_selected",
+      "interaction-2:states_feedback",
+      "interaction-2:feedback_selected",
+      "interaction-3:feedback_focus_visible"
+    ],
+    "missingEvidence": [],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.79
+      }
+    ],
+    "fixes": [
+      "Show each AI step as one short line that the user can expand.",
+      "Show a pressed or selected state at once, and confirm the result near the control.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+      "When work sleeps or pauses, say what that means and how to resume.",
+      "Give the control a visible pressed or selected state.",
+      "Give each dropdown and selector a label that says what it sets."
+    ]
+  }
+}

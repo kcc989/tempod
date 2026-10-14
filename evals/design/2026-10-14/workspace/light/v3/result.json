@@ -1,0 +1,58 @@
+{
+  "verdict": "review",
+  "score": 0.81,
+  "dimensions": {
+    "focus": 0.82,
+    "status": 0.77,
+    "ai": 0.66,
+    "scan": 0.85,
+    "nav": 0.91,
+    "speed": 0.95,
+    "states": 0.6,
+    "copy": 0.73,
+    "type": 0.78,
+    "icons": 0.71,
+    "restraint": 0.87,
+    "overflow": 1,
+    "consistency": 0.9,
+    "contrast": 1,
+    "craft": 0.33,
+    "slop": 1,
+    "quality": 0.8
+  },
+  "blockers": [
+    "An element is wider than its container."
+  ],
+  "weakDimensions": [
+    "craft"
+  ],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.79
+    }
+  ],
+  "fixes": [
+    "Show each AI step as one short line that the user can expand.",
+    "Show a pressed or selected state at once, and confirm the result near the control.",
+    "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+    "When work sleeps or pauses, say what that means and how to resume.",
+    "Give the control a visible pressed or selected state.",
+    "Set code, commands, IDs, and paths in one monospace font."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "ai_steps",
+    "states_disabled_clear",
+    "states_feedback",
+    "feedback_selected",
+    "copy_labels",
+    "copy_controls_labeled",
+    "type_scale",
+    "type_mono",
+    "icons_meaning",
+    "feedback_focus_visible"
+  ]
+}

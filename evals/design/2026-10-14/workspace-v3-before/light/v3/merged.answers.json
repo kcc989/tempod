@@ -1,0 +1,634 @@
+{
+  "layout": {
+    "focus_primary_path": {
+      "type": "score",
+      "score": 1.679425,
+      "confidence": 0.47882499999999995,
+      "probabilities": {
+        "0": 0.114525,
+        "1": 0.0915,
+        "2": 0.7939750000000001
+      }
+    },
+    "focus_content_share": {
+      "type": "score",
+      "score": 1.62415,
+      "confidence": 0.306525,
+      "probabilities": {
+        "0": 0.058875000000000004,
+        "1": 0.2581,
+        "2": 0.683025
+      }
+    },
+    "focus_reading_order": {
+      "type": "noul",
+      "noul": 0.906175
+    },
+    "overflow_long_text": {
+      "type": "choice",
+      "choice": "ellipsis",
+      "confidence": 0.8375250000000001,
+      "probabilities": {
+        "ellipsis": 0.9362250000000001,
+        "cut": 0.027125000000000003,
+        "breaks_layout": 0.010875,
+        "not_shown": 0.025775
+      }
+    },
+    "type_hierarchy": {
+      "type": "noul",
+      "noul": 0.9309000000000001
+    },
+    "type_scale": {
+      "type": "score",
+      "score": 1.6266999999999998,
+      "confidence": 0.3459,
+      "probabilities": {
+        "0": 0.094625,
+        "1": 0.184025,
+        "2": 0.7213499999999999
+      }
+    },
+    "type_line_height": {
+      "type": "noul",
+      "noul": 0.9125749999999999
+    },
+    "type_numbers": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.836025,
+      "probabilities": {
+        "aligned": 0.0311,
+        "ragged": 0.026025,
+        "not_shown": 0.942875
+      }
+    },
+    "type_mono": {
+      "type": "choice",
+      "choice": "mixed",
+      "confidence": 0.07965,
+      "probabilities": {
+        "mono": 0.26132500000000003,
+        "mixed": 0.516925,
+        "not_shown": 0.22175
+      }
+    },
+    "slop_eyebrow_label": {
+      "type": "noul",
+      "noul": 0.025075000000000004
+    },
+    "slop_icon_tile_heading": {
+      "type": "noul",
+      "noul": 0.02015
+    },
+    "slop_badge_headline": {
+      "type": "noul",
+      "noul": 0.015549999999999998
+    },
+    "slop_italic_serif_headline": {
+      "type": "noul",
+      "noul": 0.00725
+    },
+    "slop_hero_headline": {
+      "type": "noul",
+      "noul": 0.015825
+    },
+    "slop_flat_hierarchy": {
+      "type": "noul",
+      "noul": 0.065525
+    },
+    "slop_tight_tracking": {
+      "type": "noul",
+      "noul": 0.016275
+    },
+    "slop_numbered_labels": {
+      "type": "noul",
+      "noul": 0.01285
+    },
+    "slop_hero_metric": {
+      "type": "noul",
+      "noul": 0.014825
+    },
+    "slop_card_grid": {
+      "type": "noul",
+      "noul": 0.013975
+    },
+    "slop_nested_cards": {
+      "type": "noul",
+      "noul": 0.047799999999999995
+    },
+    "slop_hidden_image": {
+      "type": "noul",
+      "noul": 0.015175
+    },
+    "quality_tiny_text": {
+      "type": "noul",
+      "noul": 0.20055
+    },
+    "quality_all_caps": {
+      "type": "noul",
+      "noul": 0.0095
+    },
+    "quality_long_lines": {
+      "type": "noul",
+      "noul": 0.188925
+    },
+    "quality_text_covered": {
+      "type": "noul",
+      "noul": 0.022475
+    },
+    "quality_overflow": {
+      "type": "noul",
+      "noul": 0.051175
+    },
+    "quality_broken_image": {
+      "type": "noul",
+      "noul": 0.0113
+    },
+    "quality_scroll_edge": {
+      "type": "noul",
+      "noul": 0.108075
+    }
+  },
+  "spacing": {
+    "slop_monotonous_spacing": {
+      "type": "noul",
+      "noul": 0.12390000000000001
+    },
+    "quality_cramped": {
+      "type": "noul",
+      "noul": 0.0816
+    },
+    "quality_heading_spacing": {
+      "type": "noul",
+      "noul": 0.270175
+    }
+  },
+  "color-depth": {
+    "restraint_noise": {
+      "type": "score",
+      "score": 1.718675,
+      "confidence": 0.428825,
+      "probabilities": {
+        "0": 0.040225000000000004,
+        "1": 0.20092500000000002,
+        "2": 0.75885
+      }
+    },
+    "icons_one_set": {
+      "type": "noul",
+      "noul": 0.851525
+    },
+    "icons_size": {
+      "type": "noul",
+      "noul": 0.639925
+    },
+    "icons_meaning": {
+      "type": "score",
+      "score": 1.16925,
+      "confidence": 0.05315,
+      "probabilities": {
+        "0": 0.189725,
+        "1": 0.451275,
+        "2": 0.359
+      }
+    },
+    "slop_grid_background": {
+      "type": "noul",
+      "noul": 0.01865
+    },
+    "slop_rounded_border_accent": {
+      "type": "noul",
+      "noul": 0.030275
+    },
+    "slop_side_stripe": {
+      "type": "noul",
+      "noul": 0.036675
+    },
+    "slop_border_and_shadow": {
+      "type": "noul",
+      "noul": 0.214075
+    },
+    "slop_glass": {
+      "type": "noul",
+      "noul": 0.037974999999999995
+    },
+    "slop_stripes": {
+      "type": "noul",
+      "noul": 0.0161
+    },
+    "slop_extreme_radius": {
+      "type": "noul",
+      "noul": 0.11195
+    },
+    "slop_rough_illustration": {
+      "type": "noul",
+      "noul": 0.0152
+    },
+    "slop_placeholder_illustration": {
+      "type": "noul",
+      "noul": 0.028825
+    },
+    "slop_glow": {
+      "type": "noul",
+      "noul": 0.051375
+    },
+    "slop_ai_palette": {
+      "type": "noul",
+      "noul": 0.036750000000000005
+    },
+    "slop_dark_glow": {
+      "type": "noul",
+      "noul": 0.034825
+    },
+    "slop_gradient_text": {
+      "type": "noul",
+      "noul": 0.01665
+    },
+    "quality_gray_on_color": {
+      "type": "noul",
+      "noul": 0.085675
+    }
+  },
+  "usability": {
+    "focus_affordance": {
+      "type": "score",
+      "score": 1.320675,
+      "confidence": 0.084875,
+      "probabilities": {
+        "0": 0.19995,
+        "1": 0.279425,
+        "2": 0.5206250000000001
+      }
+    },
+    "status_items": {
+      "type": "score",
+      "score": 1.76325,
+      "confidence": 0.5478500000000001,
+      "probabilities": {
+        "0": 0.06257499999999999,
+        "1": 0.111575,
+        "2": 0.82585
+      }
+    },
+    "status_async": {
+      "type": "score",
+      "score": 1.4067749999999999,
+      "confidence": 0.267475,
+      "probabilities": {
+        "0": 0.254625,
+        "1": 0.08395,
+        "2": 0.661425
+      }
+    },
+    "status_attention": {
+      "type": "noul",
+      "noul": 0.111675
+    },
+    "status_consistent": {
+      "type": "noul",
+      "noul": 0.909075
+    },
+    "status_lifecycle": {
+      "type": "choice",
+      "choice": "explains",
+      "confidence": 0.42012499999999997,
+      "probabilities": {
+        "explains": 0.742225,
+        "bare": 0.249675,
+        "not_shown": 0.0081
+      }
+    },
+    "ai_steps": {
+      "type": "score",
+      "score": 1.4841749999999998,
+      "confidence": 0.39604999999999996,
+      "probabilities": {
+        "0": 0.2476,
+        "1": 0.0206,
+        "2": 0.7318
+      }
+    },
+    "ai_marked": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.42095,
+      "probabilities": {
+        "marked": 0.10055,
+        "unmarked": 0.1347,
+        "not_shown": 0.76475
+      }
+    },
+    "control_ask": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.14485,
+      "probabilities": {
+        "structured": 0.01135,
+        "free_text": 0.19782500000000003,
+        "none": 0.3495,
+        "not_shown": 0.441325
+      }
+    },
+    "control_diff": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.300275,
+      "probabilities": {
+        "shown": 0.097125,
+        "hidden": 0.210725,
+        "not_shown": 0.69215
+      }
+    },
+    "control_consent": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.9032749999999999,
+      "probabilities": {
+        "in_context": 0.020874999999999998,
+        "upfront": 0.012225,
+        "not_shown": 0.9668999999999999
+      }
+    },
+    "scan_rows": {
+      "type": "score",
+      "score": 1.712475,
+      "confidence": 0.49265000000000003,
+      "probabilities": {
+        "0": 0.0885,
+        "1": 0.110575,
+        "2": 0.800925
+      }
+    },
+    "scan_missing": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.82345,
+      "probabilities": {
+        "muted": 0.048375,
+        "raw": 0.01385,
+        "not_shown": 0.9377749999999999
+      }
+    },
+    "scan_overflow": {
+      "type": "choice",
+      "choice": "not_shown",
+      "confidence": 0.5214000000000001,
+      "probabilities": {
+        "count": 0.05707500000000001,
+        "clipped": 0.13065,
+        "not_shown": 0.812275
+      }
+    },
+    "nav_current": {
+      "type": "noul",
+      "noul": 0.925
+    },
+    "nav_groups": {
+      "type": "score",
+      "score": 1.6457,
+      "confidence": 0.407425,
+      "probabilities": {
+        "0": 0.1125,
+        "1": 0.12935,
+        "2": 0.7581500000000001
+      }
+    },
+    "nav_return": {
+      "type": "noul",
+      "noul": 0.870175
+    },
+    "nav_tabs_current": {
+      "type": "choice",
+      "choice": "clear",
+      "confidence": 0.875225,
+      "probabilities": {
+        "clear": 0.9569500000000001,
+        "weak": 0.028825000000000003,
+        "not_shown": 0.014225000000000002
+      }
+    },
+    "speed_search": {
+      "type": "noul",
+      "noul": 0.9632000000000001
+    },
+    "states_empty": {
+      "type": "score",
+      "score": 0.767825,
+      "confidence": 0.07517499999999999,
+      "probabilities": {
+        "0": 0.393475,
+        "1": 0.445275,
+        "2": 0.16125
+      }
+    },
+    "states_errors": {
+      "type": "noul",
+      "noul": 0.0334
+    },
+    "states_disabled_clear": {
+      "type": "choice",
+      "choice": "clear",
+      "confidence": 0.09242500000000001,
+      "probabilities": {
+        "clear": 0.502225,
+        "confusing": 0.341525,
+        "not_shown": 0.15625000000000003
+      }
+    },
+    "copy_labels": {
+      "type": "score",
+      "score": 1.629575,
+      "confidence": 0.3031,
+      "probabilities": {
+        "0": 0.0338,
+        "1": 0.302825,
+        "2": 0.663375
+      }
+    },
+    "copy_status": {
+      "type": "noul",
+      "noul": 0.7658999999999999
+    },
+    "copy_controls_labeled": {
+      "type": "noul",
+      "noul": 0.6445000000000001
+    },
+    "trust_usage": {
+      "type": "noul",
+      "noul": 0.058
+    },
+    "trust_onboarding": {
+      "type": "choice",
+      "choice": "none",
+      "confidence": 0.35597500000000004,
+      "probabilities": {
+        "light": 0.2868,
+        "blocking": 0.015375,
+        "none": 0.697825
+      }
+    },
+    "slop_em_dash": {
+      "type": "noul",
+      "noul": 0.018349999999999998
+    },
+    "slop_marketing_claims": {
+      "type": "noul",
+      "noul": 0.010825000000000001
+    },
+    "slop_forced_contrast": {
+      "type": "noul",
+      "noul": 0.01225
+    },
+    "slop_theater": {
+      "type": "noul",
+      "noul": 0.014575
+    },
+    "quality_repeated_text": {
+      "type": "noul",
+      "noul": 0.18564999999999998
+    },
+    "quality_repeated_identifier": {
+      "type": "noul",
+      "noul": 0.78655
+    }
+  },
+  "coverage": {
+    "speed_shortcuts": {
+      "type": "noul",
+      "noul": 0.6668
+    },
+    "speed_views": {
+      "type": "noul",
+      "noul": 0.037325000000000004
+    },
+    "ai_limits": {
+      "type": "noul",
+      "noul": 0.036425
+    },
+    "ai_feedback": {
+      "type": "noul",
+      "noul": 0.07117499999999999
+    },
+    "ai_evidence": {
+      "type": "noul",
+      "noul": 0.8305750000000001
+    },
+    "control_draft": {
+      "type": "noul",
+      "noul": 0.24632500000000002
+    },
+    "focus_space_fit": {
+      "type": "noul",
+      "noul": 0.28302499999999997
+    },
+    "overflow_scroll_cue": {
+      "type": "choice",
+      "choice": "no_cue",
+      "confidence": 0.174725,
+      "probabilities": {
+        "cue": 0.1481,
+        "no_cue": 0.60515,
+        "not_shown": 0.24675
+      }
+    }
+  },
+  "interaction-1": {
+    "states_feedback": {
+      "type": "score",
+      "score": 1.109375,
+      "confidence": 0.0361,
+      "probabilities": {
+        "0": 0.330675,
+        "1": 0.229225,
+        "2": 0.44010000000000005
+      }
+    },
+    "feedback_selected": {
+      "type": "noul",
+      "noul": 0.387575
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "noul": 0.089975
+    },
+    "feedback_focus_visible": {
+      "type": "choice",
+      "choice": "not_keyboard",
+      "confidence": 0.6868000000000001,
+      "probabilities": {
+        "visible": 0.021325,
+        "missing": 0.0955,
+        "not_keyboard": 0.883175
+      }
+    }
+  },
+  "interaction-2": {
+    "states_feedback": {
+      "type": "score",
+      "score": 1.031525,
+      "confidence": 0.029449999999999997,
+      "probabilities": {
+        "0": 0.3727,
+        "1": 0.223,
+        "2": 0.4043
+      }
+    },
+    "feedback_selected": {
+      "type": "noul",
+      "noul": 0.664425
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "noul": 0.452475
+    },
+    "feedback_focus_visible": {
+      "type": "choice",
+      "choice": "not_keyboard",
+      "confidence": 0.7971,
+      "probabilities": {
+        "visible": 0.014525,
+        "missing": 0.0575,
+        "not_keyboard": 0.9279750000000001
+      }
+    }
+  },
+  "interaction-3": {
+    "feedback_focus_visible": {
+      "type": "choice",
+      "choice": "visible",
+      "confidence": 0.691925,
+      "probabilities": {
+        "visible": 0.8851,
+        "missing": 0.105625,
+        "not_keyboard": 0.009274999999999999
+      }
+    },
+    "feedback_layout_shift": {
+      "type": "noul",
+      "noul": 0.052475
+    }
+  },
+  "consistency": {
+    "consistency_terms": {
+      "type": "noul",
+      "noul": 0.8705
+    },
+    "consistency_components": {
+      "type": "noul",
+      "noul": 0.8732249999999999
+    },
+    "consistency_navigation": {
+      "type": "noul",
+      "noul": 0.791725
+    },
+    "consistency_color": {
+      "type": "noul",
+      "noul": 0.893125
+    },
+    "consistency_type": {
+      "type": "noul",
+      "noul": 0.9017250000000001
+    }
+  }
+}

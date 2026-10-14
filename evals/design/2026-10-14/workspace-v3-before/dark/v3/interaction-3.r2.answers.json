@@ -1,0 +1,35 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T16:13:43.242Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "feedback_focus_visible": {
+          "type": "choice",
+          "choice": "visible",
+          "probabilities": {
+            "visible": 0.7258,
+            "missing": 0.2575,
+            "not_keyboard": 0.0167
+          },
+          "confidence": 0.39
+        },
+        "feedback_layout_shift": {
+          "type": "noul",
+          "noul": 0.0741
+        }
+      },
+      "usage": {
+        "input_tokens": 2407,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

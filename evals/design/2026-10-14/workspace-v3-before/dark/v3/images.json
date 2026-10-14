@@ -1,0 +1,146 @@
+{
+  "full.png": {
+    "bytes": 682218,
+    "sha256": "f37467aa203ad35a136c2d08f42e8b4cf1e6415dff7c7d9f59137473a2c366cb"
+  },
+  "sidebar.png": {
+    "bytes": 188180,
+    "sha256": "7a002ca4f25b5e4307ea478e5381ee24ca816604f5ca4332c620cc1e3fd5c2c7"
+  },
+  "header.png": {
+    "bytes": 220216,
+    "sha256": "c15175f88a32e9cc721154a69137e929089d01ba6469e46079147e243cd8c955"
+  },
+  "composer.png": {
+    "bytes": 44080,
+    "sha256": "86cc81b126f3d1af2e50375bfcef2402cf855597fbc7604a8c1b96622871451d"
+  },
+  "interactions/info-before.jpg": {
+    "bytes": 103466,
+    "sha256": "e525b7b5650fbb7fb1b219692159aa67fe9407cb466bf35836ec63ccfc110bed"
+  },
+  "interactions/info-after.jpg": {
+    "bytes": 114154,
+    "sha256": "ba47a6ef2395d4c2eba8de0759b3d9309f4ac363a62ebfb8ca966622ee7fe27d"
+  },
+  "interactions/changes-after.jpg": {
+    "bytes": 114334,
+    "sha256": "351a921969ee3d45a48311eca1f9043c2ae3fec159279c640477c2920d067022"
+  },
+  "interactions/tab-before.jpg": {
+    "bytes": 111788,
+    "sha256": "12c6b897d157f0cf63b2a657458e63a412afff0343ba1ecd4c13cecdb9d66330"
+  },
+  "interactions/tab-after.jpg": {
+    "bytes": 112068,
+    "sha256": "2e60e1c5dd18cc1ecb160e168b7a90fd1e576bf629a97ae4dd510d62051d2711"
+  },
+  "v3/replicates/q95/full.png.jpg": {
+    "bytes": 400287,
+    "sha256": "01e31572c8eca07144d077fea11b38c2231eb187814b943c5ddde27bba46cc0b"
+  },
+  "v3/replicates/q95/sidebar.png.jpg": {
+    "bytes": 102340,
+    "sha256": "a882c383648b757656e64893ac473180ccb1ebf3bcb3340e75b08dc8a4f2faf1"
+  },
+  "v3/replicates/q95/header.png.jpg": {
+    "bytes": 124795,
+    "sha256": "88d6adf26032f3945821135d0ae0e1633207183cc13cd91c0fd8c4878b708417"
+  },
+  "v3/replicates/q95/composer.png.jpg": {
+    "bytes": 34104,
+    "sha256": "4ac0758f2116aa1062dee95d65c00158862c40b0cd8e6881d9873f1ea750a52b"
+  },
+  "v3/replicates/q95/interactions__info-before.jpg.jpg": {
+    "bytes": 122215,
+    "sha256": "678c8dd385828f31316f1537d03174b89ae7eeb7dd30dd13c8937f57d30aa1bf"
+  },
+  "v3/replicates/q95/interactions__info-after.jpg.jpg": {
+    "bytes": 135783,
+    "sha256": "dfad775b6897e12ad93b2042327a443f472d5f0d1e7806a4ec226a2a27f646de"
+  },
+  "v3/replicates/q95/interactions__changes-after.jpg.jpg": {
+    "bytes": 135325,
+    "sha256": "df364edc99fcbf8edb3c170107a9ed3bf8c0064172de360c378613a8d8425ea7"
+  },
+  "v3/replicates/q95/interactions__tab-before.jpg.jpg": {
+    "bytes": 132586,
+    "sha256": "ce7f2e23051c1a9e9c248876fcf825d867a57b1a624ab38c337576a72fa385d7"
+  },
+  "v3/replicates/q95/interactions__tab-after.jpg.jpg": {
+    "bytes": 132931,
+    "sha256": "7ce3520beecb119137c09d6cec6e3b925ef013a8ae62b977b6b0534e99b34bc8"
+  },
+  "v3/replicates/q90/full.png.jpg": {
+    "bytes": 381070,
+    "sha256": "ae54108a2daf32203e5cc7bf780fa573d5553d92d4c28294550a0e220f9f8249"
+  },
+  "v3/replicates/q90/sidebar.png.jpg": {
+    "bytes": 97162,
+    "sha256": "adee18231ae36b35ca4b8c701efd666a9838cab6a92f06e6d88327f41d67355e"
+  },
+  "v3/replicates/q90/header.png.jpg": {
+    "bytes": 118698,
+    "sha256": "cf88a65daa9b3d5f1ea0441c152406ee8d1eaa77a11cd63f4219538b6677cad4"
+  },
+  "v3/replicates/q90/composer.png.jpg": {
+    "bytes": 32673,
+    "sha256": "0fe25c422909ab60fd9444eadd267bec7aa1606a1a1331834b8e626594f899e6"
+  },
+  "v3/replicates/q90/interactions__info-before.jpg.jpg": {
+    "bytes": 116954,
+    "sha256": "e985c16f3b0005b55ed9087085a2e37e9e54200a9ad47bd4364216a92479452a"
+  },
+  "v3/replicates/q90/interactions__info-after.jpg.jpg": {
+    "bytes": 129814,
+    "sha256": "25a700cce6bd7b7ea885e773e3e80c664e38ad8dbd4aad3f43bfef320f387e2b"
+  },
+  "v3/replicates/q90/interactions__changes-after.jpg.jpg": {
+    "bytes": 129558,
+    "sha256": "3a7fd88442fa21a965383b59304bfe4b545b7220bc35340e1d743239b0f5b0ac"
+  },
+  "v3/replicates/q90/interactions__tab-before.jpg.jpg": {
+    "bytes": 126987,
+    "sha256": "48dcef3dd59b78dfddd9f768860657301cc46e40287eb4fe5429f49a29d0c0fe"
+  },
+  "v3/replicates/q90/interactions__tab-after.jpg.jpg": {
+    "bytes": 127276,
+    "sha256": "0a7cd309a7ff2e7ca98d6dcb69abefdb8c3966b5afc557f7fbb302e8f4dc8ef2"
+  },
+  "v3/replicates/q85/full.png.jpg": {
+    "bytes": 370482,
+    "sha256": "4e7ba0d899dac7f23dbe5a6be5ca43774bd198f9af97ca42f4d184ded85aa6e0"
+  },
+  "v3/replicates/q85/sidebar.png.jpg": {
+    "bytes": 94217,
+    "sha256": "ebe6208e3f490f7460700d9ba9e594de1ecae717254c38b75f559f997ecc8aa5"
+  },
+  "v3/replicates/q85/header.png.jpg": {
+    "bytes": 115057,
+    "sha256": "a7dca2d6ad52a66d73e50b8ca9186b752f1c449e3b54af94285a48d3964a2ba4"
+  },
+  "v3/replicates/q85/composer.png.jpg": {
+    "bytes": 32199,
+    "sha256": "b927935d97ea4011e44ca9ed76eed9fdad6bf70233d1e6c6fa01a7cccc5df52e"
+  },
+  "v3/replicates/q85/interactions__info-before.jpg.jpg": {
+    "bytes": 116954,
+    "sha256": "e985c16f3b0005b55ed9087085a2e37e9e54200a9ad47bd4364216a92479452a"
+  },
+  "v3/replicates/q85/interactions__info-after.jpg.jpg": {
+    "bytes": 129814,
+    "sha256": "25a700cce6bd7b7ea885e773e3e80c664e38ad8dbd4aad3f43bfef320f387e2b"
+  },
+  "v3/replicates/q85/interactions__changes-after.jpg.jpg": {
+    "bytes": 129558,
+    "sha256": "3a7fd88442fa21a965383b59304bfe4b545b7220bc35340e1d743239b0f5b0ac"
+  },
+  "v3/replicates/q85/interactions__tab-before.jpg.jpg": {
+    "bytes": 126987,
+    "sha256": "48dcef3dd59b78dfddd9f768860657301cc46e40287eb4fe5429f49a29d0c0fe"
+  },
+  "v3/replicates/q85/interactions__tab-after.jpg.jpg": {
+    "bytes": 127276,
+    "sha256": "0a7cd309a7ff2e7ca98d6dcb69abefdb8c3966b5afc557f7fbb302e8f4dc8ef2"
+  }
+}
