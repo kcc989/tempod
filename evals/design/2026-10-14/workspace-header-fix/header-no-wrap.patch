@@ -1,0 +1,47 @@
+diff --git a/apps/mac/src/views/workspace.rs b/apps/mac/src/views/workspace.rs
+index 3590189..c5edaa7 100644
+--- a/apps/mac/src/views/workspace.rs
++++ b/apps/mac/src/views/workspace.rs
+@@ -1135,8 +1135,9 @@ impl WorkspaceView {
+         };
+         let bar = h_flex()
+             .group("workspace-branch")
+-            .flex_wrap()
+-            .min_h(gpui_kit::px(40.))
++            .h(gpui_kit::px(40.))
++            .min_w_0()
++            .overflow_hidden()
+             .bg(color(if self.shared_header { Token::Muted } else { Token::Panel }, cx))
+             .gap_2()
+             .px_2()
+@@ -1149,7 +1150,10 @@ impl WorkspaceView {
+                         Button::new("workspace-title")
+                             .ghost()
+                             .small()
+-                            .label(w.title)
++                            .min_w_0()
++                            .flex_shrink_1()
++                            .accessibility_label(w.title.clone())
++                            .child(div().min_w_0().truncate().child(w.title))
+                             .on_click(cx.listener(|this, _, window, cx| {
+                                 this.operation("Rename", window, cx)
+                             }))
+@@ -1169,7 +1173,8 @@ impl WorkspaceView {
+                     .into_any_element()
+             } else {
+                 Button::new("branch-name").ghost().small()
+-                    .label(w.branch.clone())
++                    .min_w_0().flex_shrink_1()
++                    .child(div().min_w_0().truncate().child(w.branch.clone()))
+                     .accessibility_label("Rename branch")
+                     .tooltip("Double-click to rename branch")
+                     .disabled(self.branch_pending || w.pushed || !matches!(w.state, p::WorkspaceState::Ready | p::WorkspaceState::Working | p::WorkspaceState::Sleeping))
+@@ -1234,6 +1239,8 @@ impl WorkspaceView {
+                     .into_any_element()
+             } else {
+                 div()
++                    .flex_shrink_0()
++                    .whitespace_nowrap()
+                     .text_color(color(
+                         if w.state == p::WorkspaceState::Error {
+                             Token::Destructive

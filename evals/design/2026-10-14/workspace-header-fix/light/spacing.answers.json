@@ -1,0 +1,56 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T15:42:08.856Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "spacing_grouping": {
+          "type": "score",
+          "score": 1.8367,
+          "legend": {
+            "0": "Gaps are random, or the same everywhere, so groups are hard to see",
+            "1": "Groups exist, but some gaps break them or join unrelated items",
+            "2": "Related items sit close together, gaps between groups are wider, and the same gap sizes repeat"
+          },
+          "probabilities": {
+            "0": 0.0307,
+            "1": 0.1018,
+            "2": 0.8675
+          },
+          "confidence": 0.6457
+        },
+        "spacing_alignment": {
+          "type": "noul",
+          "noul": 0.9043
+        },
+        "spacing_consistent": {
+          "type": "noul",
+          "noul": 0.8589
+        },
+        "slop_monotonous_spacing": {
+          "type": "noul",
+          "noul": 0.0639
+        },
+        "quality_cramped": {
+          "type": "noul",
+          "noul": 0.0595
+        },
+        "quality_heading_spacing": {
+          "type": "noul",
+          "noul": 0.2391
+        }
+      },
+      "usage": {
+        "input_tokens": 4023,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}
