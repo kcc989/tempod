@@ -1,0 +1,69 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T16:13:32.860Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "states_feedback": {
+          "type": "score",
+          "score": 1.1978,
+          "legend": {
+            "0": {
+              "what": "Nothing visible changes in image 2, or the user cannot tell if the action worked",
+              "examples": [
+                "The user clicks an option and it shows no selected state"
+              ]
+            },
+            "1": {
+              "what": "A result appears, but far from the control, or only as a change that is easy to miss",
+              "examples": [
+                "A save works, but the only sign is a small toast in the far corner"
+              ]
+            },
+            "2": {
+              "what": "The control shows a pressed or selected state, and the result or a short confirmation appears near the action",
+              "examples": [
+                "After a thumbs-up, the button fills and a toast says 'Thank you for your feedback!'"
+              ]
+            }
+          },
+          "probabilities": {
+            "0": 0.2742,
+            "1": 0.2537,
+            "2": 0.4721
+          },
+          "confidence": 0.0436
+        },
+        "feedback_selected": {
+          "type": "noul",
+          "noul": 0.3316
+        },
+        "feedback_layout_shift": {
+          "type": "noul",
+          "noul": 0.0816
+        },
+        "feedback_focus_visible": {
+          "type": "choice",
+          "choice": "not_keyboard",
+          "probabilities": {
+            "visible": 0.0167,
+            "missing": 0.1812,
+            "not_keyboard": 0.8021
+          },
+          "confidence": 0.5148
+        }
+      },
+      "usage": {
+        "input_tokens": 2730,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

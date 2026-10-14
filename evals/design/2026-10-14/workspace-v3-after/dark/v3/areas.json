@@ -1,0 +1,172 @@
+{
+  "layout": {
+    "status": "review",
+    "gate": "clef+measured",
+    "measured": {
+      "headerOneRow": true
+    },
+    "clefScore": 0.89,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.85,
+      "type": 0.77,
+      "overflow": 1,
+      "craft": 0.67,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [],
+    "informational": [],
+    "lowAnswers": [
+      {
+        "question": "type_mono",
+        "value": 0.3,
+        "uncertain": true,
+        "source": "layout"
+      }
+    ],
+    "uncertain": [
+      "layout:focus_content_share",
+      "layout:type_scale",
+      "layout:type_mono"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Set code, commands, IDs, and paths in one monospace font.",
+      "Give icons, input borders, and focus rings at least 3:1 contrast.",
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "spacing": {
+    "status": "fail",
+    "gate": "measured",
+    "measured": {
+      "specRowHeights": true,
+      "footerLeftAligned": true,
+      "spacingOnScale": true,
+      "chatBarInset": true,
+      "targetSize24px": false
+    },
+    "clefScore": 0.93,
+    "clefCounts": false,
+    "dimensions": {
+      "craft": 0.67,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured targetSize24px: fail"
+    ],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Give icons, input borders, and focus rings at least 3:1 contrast.",
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  },
+  "color-depth": {
+    "status": "fail",
+    "gate": "measured",
+    "measured": {
+      "textContrastAA": true,
+      "nonTextContrast3": false
+    },
+    "clefScore": 0.89,
+    "clefCounts": false,
+    "dimensions": {
+      "icons": 0.72,
+      "restraint": 0.86,
+      "craft": 0.67,
+      "slop": 1,
+      "quality": 1
+    },
+    "majors": [
+      "measured nonTextContrast3: fail"
+    ],
+    "informational": [],
+    "lowAnswers": [],
+    "uncertain": [
+      "color-depth:icons_meaning"
+    ],
+    "missingEvidence": [],
+    "issues": [],
+    "fixes": [
+      "Give icons, input borders, and focus rings at least 3:1 contrast.",
+      "Make click and tap targets at least 24 by 24 px.",
+      "Use common symbols for icon-only buttons, or add a label."
+    ]
+  },
+  "usability": {
+    "status": "fail",
+    "gate": "clef",
+    "measured": {},
+    "clefScore": 0.81,
+    "clefCounts": true,
+    "dimensions": {
+      "focus": 0.69,
+      "status": 0.92,
+      "ai": 0.65,
+      "scan": 0.84,
+      "nav": 0.9,
+      "speed": 0.95,
+      "states": 0.64,
+      "copy": 0.73,
+      "consistency": 0.87,
+      "contrast": 1,
+      "craft": 0.67,
+      "slop": 1,
+      "quality": 0.8
+    },
+    "majors": [
+      "quality_repeated_identifier = 0.205 (below 0.40)",
+      "feedback_selected = 0.323 (below 0.40)"
+    ],
+    "informational": [],
+    "lowAnswers": [
+      {
+        "question": "quality_repeated_identifier",
+        "value": 0.205,
+        "uncertain": false,
+        "source": "usability"
+      },
+      {
+        "question": "feedback_selected",
+        "value": 0.323,
+        "uncertain": false,
+        "source": "interaction-1"
+      }
+    ],
+    "uncertain": [
+      "usability:focus_affordance",
+      "usability:ai_steps",
+      "usability:nav_groups",
+      "usability:states_disabled_clear",
+      "usability:copy_labels",
+      "interaction-1:states_feedback",
+      "interaction-2:states_feedback",
+      "interaction-2:feedback_selected",
+      "interaction-2:feedback_layout_shift",
+      "interaction-3:feedback_focus_visible"
+    ],
+    "missingEvidence": [],
+    "issues": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.79
+      }
+    ],
+    "fixes": [
+      "Show each AI step as one short line that the user can expand.",
+      "Show a pressed or selected state at once, and confirm the result near the control.",
+      "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+      "Give the control a visible pressed or selected state.",
+      "Give icons, input borders, and focus rings at least 3:1 contrast.",
+      "Make click and tap targets at least 24 by 24 px."
+    ]
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "verdict": "review",
+  "score": 0.84,
+  "dimensions": {
+    "focus": 0.8,
+    "status": 0.92,
+    "ai": 0.71,
+    "scan": 0.86,
+    "nav": 0.9,
+    "speed": 0.96,
+    "states": 0.65,
+    "copy": 0.75,
+    "type": 0.77,
+    "icons": 0.72,
+    "restraint": 0.87,
+    "overflow": 1,
+    "consistency": 0.88,
+    "contrast": 1,
+    "craft": 0.67,
+    "slop": 1,
+    "quality": 0.8
+  },
+  "blockers": [],
+  "weakDimensions": [],
+  "issues": [
+    {
+      "rule": "Same name repeated across regions",
+      "kind": "quality",
+      "p": 0.8
+    }
+  ],
+  "fixes": [
+    "Show a pressed or selected state at once, and confirm the result near the control.",
+    "Same name repeated across regions: Show each name once in each region, and remove copies that add nothing.",
+    "Set code, commands, IDs, and paths in one monospace font.",
+    "Give the control a visible pressed or selected state.",
+    "Give icons, input borders, and focus rings at least 3:1 contrast.",
+    "Make click and tap targets at least 24 by 24 px."
+  ],
+  "uncertain": [
+    "focus_content_share",
+    "focus_affordance",
+    "status_lifecycle",
+    "ai_steps",
+    "states_disabled_clear",
+    "states_feedback",
+    "copy_controls_labeled",
+    "type_scale",
+    "type_mono",
+    "icons_meaning"
+  ]
+}

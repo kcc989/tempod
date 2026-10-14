@@ -1,0 +1,41 @@
+{
+  "status": 200,
+  "attemptStatuses": [
+    200
+  ],
+  "timestamp": "2026-10-14T16:13:42.010Z",
+  "response": {
+    "result": {
+      "model": "clef",
+      "answers": {
+        "consistency_terms": {
+          "type": "noul",
+          "noul": 0.8617
+        },
+        "consistency_components": {
+          "type": "noul",
+          "noul": 0.8565
+        },
+        "consistency_navigation": {
+          "type": "noul",
+          "noul": 0.8096
+        },
+        "consistency_color": {
+          "type": "noul",
+          "noul": 0.9135
+        },
+        "consistency_type": {
+          "type": "noul",
+          "noul": 0.9023
+        }
+      },
+      "usage": {
+        "input_tokens": 3757,
+        "output_tokens": 0
+      }
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
+}

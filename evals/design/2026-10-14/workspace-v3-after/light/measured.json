@@ -1,0 +1,349 @@
+{
+  "checks": {
+    "headerOneRow": {
+      "pass": true,
+      "detail": {
+        "default": {
+          "controls": 6,
+          "centerSpreadPt": 0.0,
+          "lowestBottomPt": 30.7,
+          "pass": true
+        },
+        "tools-open": {
+          "controls": 8,
+          "centerSpreadPt": 1.0,
+          "lowestBottomPt": 30.7,
+          "pass": true
+        }
+      }
+    },
+    "specRowHeights": {
+      "pass": true,
+      "detail": {
+        "rows": 8,
+        "expectedPt": 36,
+        "offSpec": []
+      }
+    },
+    "footerLeftAligned": {
+      "pass": true,
+      "detail": {
+        "rows": [
+          {
+            "title": "Repositories",
+            "leftPt": 16.4,
+            "heightPt": 35.9
+          },
+          {
+            "title": "Archived workspaces",
+            "leftPt": 16.4,
+            "heightPt": 35.9
+          },
+          {
+            "title": "Saved chats",
+            "leftPt": 16.9,
+            "heightPt": 35.9
+          },
+          {
+            "title": "Settings",
+            "leftPt": 16.9,
+            "heightPt": 35.9
+          }
+        ],
+        "leftSpreadPt": 0.5,
+        "heightSpreadPt": 0.0
+      }
+    },
+    "spacingOnScale": {
+      "pass": true,
+      "detail": {
+        "step": 4,
+        "tolerancePt": 1,
+        "gaps": [
+          {
+            "between": [
+              "New workspace",
+              "Search workspaces"
+            ],
+            "gapPt": 3.1,
+            "onScale": true
+          },
+          {
+            "between": [
+              "Repositories",
+              "Archived workspaces"
+            ],
+            "gapPt": 3.1,
+            "onScale": true
+          },
+          {
+            "between": [
+              "Archived workspaces",
+              "Saved chats"
+            ],
+            "gapPt": 3.1,
+            "onScale": true
+          },
+          {
+            "between": [
+              "Saved chats",
+              "Settings"
+            ],
+            "gapPt": 3.1,
+            "onScale": true
+          }
+        ],
+        "heights": [
+          {
+            "title": "New workspace",
+            "heightPt": 35.9,
+            "onScale": true
+          },
+          {
+            "title": "Search workspaces",
+            "heightPt": 35.9,
+            "onScale": true
+          },
+          {
+            "title": null,
+            "heightPt": 35.9,
+            "onScale": true
+          },
+          {
+            "title": null,
+            "heightPt": 35.9,
+            "onScale": true
+          },
+          {
+            "title": "Repositories",
+            "heightPt": 35.9,
+            "onScale": true
+          },
+          {
+            "title": "Archived workspaces",
+            "heightPt": 35.9,
+            "onScale": true
+          },
+          {
+            "title": "Saved chats",
+            "heightPt": 35.9,
+            "onScale": true
+          },
+          {
+            "title": "Settings",
+            "heightPt": 35.9,
+            "onScale": true
+          }
+        ]
+      }
+    },
+    "chatBarInset": {
+      "pass": true,
+      "detail": {
+        "dividerPt": 265.9,
+        "chatBarPt": 278.7,
+        "insetPt": 12.8,
+        "expectedPt": 12
+      }
+    },
+    "targetSize24px": {
+      "pass": false,
+      "detail": {
+        "undersized": 17,
+        "failingSpacingException": [
+          {
+            "target": "Close chat",
+            "sizePt": [
+              20.5,
+              20.5
+            ],
+            "conflictsWith": "Tempo README summary"
+          },
+          {
+            "target": null,
+            "sizePt": [
+              16.4,
+              16.4
+            ],
+            "conflictsWith": "New chat"
+          },
+          {
+            "target": "New chat",
+            "sizePt": [
+              20.5,
+              20.5
+            ],
+            "conflictsWith": null
+          }
+        ]
+      }
+    },
+    "textContrastAA": {
+      "pass": true,
+      "detail": {
+        "palette": {
+          "background": "#ffffff",
+          "sidebar": "#f9f9f9",
+          "panel": "#ffffff",
+          "surface": "#f5f5f5",
+          "popup": "#ffffff",
+          "hover": "#f0f0f0",
+          "selected": "#ebebeb",
+          "text": "#0a0a0a",
+          "muted": "#696969",
+          "border": "#e6e6e6",
+          "primary": "#2563eb",
+          "on_primary": "#fafafa"
+        },
+        "textPairs": [
+          {
+            "fg": "text",
+            "bg": "background",
+            "ratio": 19.8
+          },
+          {
+            "fg": "text",
+            "bg": "sidebar",
+            "ratio": 18.8
+          },
+          {
+            "fg": "text",
+            "bg": "panel",
+            "ratio": 19.8
+          },
+          {
+            "fg": "text",
+            "bg": "surface",
+            "ratio": 18.16
+          },
+          {
+            "fg": "text",
+            "bg": "popup",
+            "ratio": 19.8
+          },
+          {
+            "fg": "text",
+            "bg": "hover",
+            "ratio": 17.37
+          },
+          {
+            "fg": "text",
+            "bg": "selected",
+            "ratio": 16.61
+          },
+          {
+            "fg": "muted",
+            "bg": "background",
+            "ratio": 5.49
+          },
+          {
+            "fg": "muted",
+            "bg": "sidebar",
+            "ratio": 5.21
+          },
+          {
+            "fg": "muted",
+            "bg": "panel",
+            "ratio": 5.49
+          },
+          {
+            "fg": "muted",
+            "bg": "surface",
+            "ratio": 5.04
+          },
+          {
+            "fg": "muted",
+            "bg": "popup",
+            "ratio": 5.49
+          },
+          {
+            "fg": "muted",
+            "bg": "hover",
+            "ratio": 4.82
+          },
+          {
+            "fg": "muted",
+            "bg": "selected",
+            "ratio": 4.61
+          },
+          {
+            "fg": "on_primary",
+            "bg": "primary",
+            "ratio": 4.95
+          }
+        ],
+        "failing": []
+      }
+    },
+    "nonTextContrast3": {
+      "pass": false,
+      "detail": {
+        "focusRing": [
+          {
+            "fg": "primary",
+            "bg": "background",
+            "ratio": 5.17
+          },
+          {
+            "fg": "primary",
+            "bg": "sidebar",
+            "ratio": 4.91
+          },
+          {
+            "fg": "primary",
+            "bg": "surface",
+            "ratio": 4.74
+          },
+          {
+            "fg": "primary",
+            "bg": "popup",
+            "ratio": 5.17
+          }
+        ],
+        "inputBoundaries": [
+          {
+            "input": "border or surface fill",
+            "on": "background",
+            "ratio": 1.25
+          },
+          {
+            "input": "border or surface fill",
+            "on": "sidebar",
+            "ratio": 1.19
+          },
+          {
+            "input": "border or surface fill",
+            "on": "popup",
+            "ratio": 1.25
+          }
+        ],
+        "failing": [
+          {
+            "input": "border or surface fill",
+            "on": "background",
+            "ratio": 1.25
+          },
+          {
+            "input": "border or surface fill",
+            "on": "sidebar",
+            "ratio": 1.19
+          },
+          {
+            "input": "border or surface fill",
+            "on": "popup",
+            "ratio": 1.25
+          }
+        ]
+      }
+    }
+  },
+  "info": {
+    "theme": "light",
+    "pointsPerFramePixel": 1.0247,
+    "surfaceRatios": {
+      "selectedVsSidebar": 1.13,
+      "surfaceVsBackground": 1.09,
+      "sidebarVsBackground": 1.05
+    }
+  }
+}

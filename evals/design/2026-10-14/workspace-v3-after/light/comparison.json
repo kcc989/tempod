@@ -1,0 +1,246 @@
+{
+  "before": "evals/design/2026-10-14/workspace-v3-before/light",
+  "after": "evals/design/2026-10-14/workspace-v3-after/light",
+  "score": {
+    "before": 0.82,
+    "after": 0.833,
+    "band": 0.03
+  },
+  "dimensions": [
+    {
+      "dimension": "ai",
+      "before": 0.742,
+      "after": 0.708,
+      "change": -0.035,
+      "band": 0.07,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "consistency",
+      "before": 0.868,
+      "after": 0.875,
+      "change": 0.007,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "contrast",
+      "before": 1,
+      "after": 1,
+      "change": 0,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "copy",
+      "before": 0.742,
+      "after": 0.745,
+      "change": 0.003,
+      "band": 0.076,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "craft",
+      "before": 0.33,
+      "after": 0.67,
+      "change": 0.34,
+      "band": 0.03,
+      "verdict": "gain"
+    },
+    {
+      "dimension": "focus",
+      "before": 0.788,
+      "after": 0.802,
+      "change": 0.015,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "icons",
+      "before": 0.69,
+      "after": 0.715,
+      "change": 0.025,
+      "band": 0.056,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "nav",
+      "before": 0.905,
+      "after": 0.897,
+      "change": -0.008,
+      "band": 0.031,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "overflow",
+      "before": 1,
+      "after": 1,
+      "change": 0,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "quality",
+      "before": 0.705,
+      "after": 0.74,
+      "change": 0.035,
+      "band": 0.171,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "restraint",
+      "before": 0.86,
+      "after": 0.867,
+      "change": 0.007,
+      "band": 0.038,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "scan",
+      "before": 0.855,
+      "after": 0.86,
+      "change": 0.005,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "slop",
+      "before": 1,
+      "after": 1,
+      "change": 0,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "speed",
+      "before": 0.962,
+      "after": 0.958,
+      "change": -0.005,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "states",
+      "before": 0.65,
+      "after": 0.647,
+      "change": -0.003,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "status",
+      "before": 0.915,
+      "after": 0.92,
+      "change": 0.005,
+      "band": 0.03,
+      "verdict": "within noise"
+    },
+    {
+      "dimension": "type",
+      "before": 0.777,
+      "after": 0.775,
+      "change": -0.002,
+      "band": 0.03,
+      "verdict": "within noise"
+    }
+  ],
+  "drops": [],
+  "gains": [
+    "craft"
+  ],
+  "measured": {
+    "chatBarInset": {
+      "before": false,
+      "after": true
+    },
+    "footerLeftAligned": {
+      "before": false,
+      "after": true
+    },
+    "headerOneRow": {
+      "before": false,
+      "after": true
+    },
+    "nonTextContrast3": {
+      "before": false,
+      "after": false
+    },
+    "spacingOnScale": {
+      "before": true,
+      "after": true
+    },
+    "specRowHeights": {
+      "before": true,
+      "after": true
+    },
+    "targetSize24px": {
+      "before": false,
+      "after": false
+    },
+    "textContrastAA": {
+      "before": true,
+      "after": true
+    }
+  },
+  "areas": {
+    "layout": {
+      "before": "fail",
+      "after": "review"
+    },
+    "spacing": {
+      "before": "fail",
+      "after": "fail"
+    },
+    "color-depth": {
+      "before": "fail",
+      "after": "fail"
+    },
+    "usability": {
+      "before": "fail",
+      "after": "fail"
+    }
+  },
+  "blockers": {
+    "before": [
+      "An element is wider than its container."
+    ],
+    "after": []
+  },
+  "issues": {
+    "before": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.79
+      }
+    ],
+    "after": [
+      {
+        "rule": "Same name repeated across regions",
+        "kind": "quality",
+        "p": 0.8
+      }
+    ]
+  },
+  "reasons": {
+    "before": [
+      "blocker: An element is wider than its container.",
+      "weak dimension: craft",
+      "verdict is review",
+      "answer below 0.40: quality_repeated_identifier = 0.213",
+      "area layout: fail",
+      "area spacing: fail",
+      "area color-depth: fail",
+      "area usability: fail"
+    ],
+    "after": [
+      "verdict is review",
+      "answer below 0.40: quality_repeated_identifier = 0.202",
+      "answer below 0.40: feedback_selected = 0.345",
+      "area layout: review",
+      "area spacing: fail",
+      "area color-depth: fail",
+      "area usability: fail"
+    ]
+  }
+}
