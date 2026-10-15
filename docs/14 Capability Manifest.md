@@ -1,6 +1,8 @@
 # 14 Capability Manifest
 
-Status: **Draft.** Waits for the owner's answers to Open questions. It extends 01 (Credentials and egress, Environments, Agent profiles), 05 and 12, and 13 (L-ADR-3).
+Status: **Draft, partly approved** (2026-10-15). It extends 01 (Credentials and egress, Environments, Agent profiles), 05, 12 and 13 (L-ADR-3, L-ADR-8).
+
+In short: the **project profile** (13) is what the owner writes once about a project. The **manifest** is what Tempo makes from it for one agent session: the exact list of what that agent may read, call and deploy. The agent reads the list, so it knows what it can use. `TempoOutbound` checks every request against the list, so the agent cannot use more.
 
 Each agent session gets one manifest. It tells the agent what it can read, call and deploy. `TempoOutbound` enforces it. The agent learns its access from the manifest, so it does not guess (ACCESS_UNAWARE), ask for keys (API_KEYS), restate the stack (STACK) or fight Cloudflare tokens (CF_PERMS).
 
@@ -10,7 +12,8 @@ Agents stay on ACP v1. The manifest reaches the agent through the `tempo` MCP se
 
 ### C-ADR-1. Compiled, versioned and frozen per session
 
-- Tempo compiles the manifest from the project profile (13), the workspace's environment (01), the deploy configuration (12) and the session kind.
+- Tempo compiles the manifest from the project profile (13), the workspace's environment (01), the deploy configuration (12) and the session kind. The profile and deploy configuration are stored in the project's `AppDeployDO`.
+- The WorkspaceDO stores the compiled manifest of each session in its own SQLite, with the session. No other DO writes it (rule 4).
 - `schemaVersion` is the format. It is `1`. A change to the format adds a new number; old sessions keep theirs.
 - `revision` counts changes for each project. `sha256` is the hash of the canonical JSON.
 - A session stores `{revision, sha256}` when it starts and uses that manifest until it ends, as it does with its agent profile (01). A changed manifest applies to new sessions. The owner can apply it to a running session with one action, which starts the next turn with the new manifest.
@@ -22,6 +25,14 @@ A capability names something the agent can do. The egress rules in 01 become che
 ### C-ADR-3. No secret value in the manifest or the container
 
 The manifest names credentials by reference only. Values stay in CredentialDO. `TempoOutbound` swaps a placeholder for the value, as rules 4–6, 12 and 14 do today.
+
+**Named exceptions (owner-approved 2026-10-15).** These enter the container, as 01 specifies today. The manifest lists each one under `exceptions`, so the agent and the owner can see them:
+
+| Exception | Why |
+|---|---|
+| Claude OAuth token, as env of the adapter process (D11) | The `claude` CLI owns its login |
+| Codex `auth.json`, as a 0600 file (D11) | The `codex` CLI owns its login and refresh |
+| Environment and project secrets with no `hosts` (01, Environments) | Scripts that need a raw value; the UI marks them "visible to the agent" |
 
 ## Format
 
@@ -47,6 +58,10 @@ call:
     methods: [GET, POST]
   - id: openrouter
     builtin: true                           # rules 4–6
+cloudflare:                                 # 13, L-ADR-8
+  resources: [farstep-web, farstep-core, farstep-app-db-preview]
+  permissions: [workers, d1]                # 12, Permissions; read for all, write per L-ADR-8
+exceptions: [claude_login, secrets_without_hosts]
 deploy:
   - target: preview
     workers: [farstep-web, farstep-core]
@@ -58,6 +73,8 @@ deploy:
 |---|---|
 | `read` | Closed list: `repo`, `deployments`, `prod_errors`, `issues`, `pull_requests`, `ci_runs`. Each maps to `tempo` MCP tools. Tools not granted are not listed. |
 | `call[]` | `id` unique. `hosts` are patterns as in 05. `credential.ref` names an environment secret or a built-in key. `methods` is optional; empty means all. |
+| `cloudflare` | The project's Cloudflare resources and the permissions of the session token (13, L-ADR-8). Absent means the agent cannot call `api.cloudflare.com`. |
+| `exceptions` | The named exceptions (C-ADR-3) that apply to this session |
 | `deploy[]` | One entry per deploy target with `agent: true` in 12. `cloudflare` is a subset of the target's permissions. |
 | Session kind | `run` sessions with `read-only` access get no `deploy` and no `call` methods other than `GET` and `HEAD`. `ci` and `deploy` sessions keep their rule sets from 10 and 12. |
 
@@ -78,6 +95,7 @@ deploy:
 | 12 (MCP headers) | A `call` entry for that server's host |
 | 13, 14 (injectors, secret swap) | A `call` entry whose `hosts` match and whose `credential.ref` names that secret |
 | 9 (allowlist pass) | A `call` entry for the host, or a built-in agent host |
+| New: `api.cloudflare.com` with `Bearer tempo-placeholder` | `cloudflare`; then the checks of 13, L-ADR-8 |
 
 - A refusal returns 403 with body `tempo: capability <id> not granted for <host>`, or `tempo: no capability for <host>`. The agent reads this text, so it can tell the owner what to add.
 - `egress_log` gets a new column `capability` with the id used, or empty.
@@ -85,8 +103,7 @@ deploy:
 
 ## Open questions
 
-1. **M-Q1. "No secret enters a container."** Today three kinds do: the Claude OAuth token (process env, D11), the Codex `auth.json` (a file, D11), and environment and project secrets with no `hosts` (01, Environments). Options: (a) keep D11 as a named exception, because each CLI owns its own login, and refuse secrets with no `hosts` for loop projects; (b) remove all three, which needs a proxy for the Claude and Codex logins and is not shown to work.
-2. **M-Q2. Cloudflare from the workspace.** May an agent call `api.cloudflare.com` from a workspace (for example `wrangler dev --remote`, D1 queries on a preview database) with a minted token swapped by `TempoOutbound`, as in deploy mode? Or only through `tempo` MCP tools?
-3. **M-Q3. Live changes.** Is frozen-per-session with an owner "apply" action right, or must a revoked capability stop at once in running sessions?
-4. **M-Q4. Method limits.** Are `methods` enough for `call`, or do some services need path limits too?
-5. **M-Q5. Where the profile and manifest are stored.** Rule 4 lets only a WorkspaceDO write its own SQLite. The profile is per project. A new project-level DO (like `AppDeployDO`), or D1 `projects.settings_json`?
+Answered on 2026-10-15: M-Q1 (named exceptions, C-ADR-3), M-Q2 (Cloudflare API allowed with checks, 13 L-ADR-8), M-Q5 (storage, C-ADR-1).
+
+1. **M-Q3. Live changes.** When the owner removes a capability, does it stop at once in running sessions, or only in new sessions (with an "apply now" action)? The draft says new sessions.
+2. **M-Q4. Path limits.** Is a list of HTTP methods enough to limit a `call`, or do some services need path limits too?

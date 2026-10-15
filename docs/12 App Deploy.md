@@ -1,6 +1,6 @@
 # 12 App Deploy
 
-The owner asked for a Cloudflare control plane that deploys the owner's applications from Tempo-hosted ("native") repositories. A deploy runs in a dedicated container, like a CI job (10). It supports Alchemy v2 (`alchemy.run.ts`) and the Cloudflare CLI's typed configuration (`cloudflare.config.ts`). Tempo holds one owner master token and mints a short-lived, scoped token for each deployment from what the project's deploy configuration declares. This tab extends 09 and 10. GitHub projects are not in this stage.
+The owner asked for a Cloudflare control plane that deploys the owner's applications from Tempo-hosted ("native") repositories. A deploy runs in a dedicated container, like a CI job (10). It supports Alchemy v2 (`alchemy.run.ts`) and the Cloudflare CLI's typed configuration (`cloudflare.config.ts`). Tempo holds one owner master token and mints a short-lived, scoped token for each deployment from what the project's deploy configuration declares. This tab extends 09 and 10. GitHub projects are not in this stage. [13 Loop](13%20Loop.md) changes this tab (owner-approved 2026-10-15): gradual deploys with Durable Object rules, a Rollback action and deploy events (L-ADR-4, L-ADR-7). Where they differ, 13 is correct.
 
 ## Scope
 
@@ -17,8 +17,8 @@ Not in this stage (recorded in `IMPLEMENTATION_NOTES.md`):
 - GitHub projects. Deploys need the native clone path and CI ingestion.
 - Application secrets and environment variables in deploys. The deploy command gets no secrets except the Cloudflare token swap below.
 - Container applications and anything else that needs Docker. The workspace image has no Docker (05).
-- Rollback to an earlier deployment as its own action. **Redeploy** of an earlier deployment is the rollback path.
-- Lifecycle events for deployments. Agents read state with the deploy tools.
+- Rollback to an earlier deployment as its own action. **Redeploy** of an earlier deployment is the rollback path. Changed by 13, L-ADR-4: Rollback becomes its own action.
+- Lifecycle events for deployments. Agents read state with the deploy tools. Changed by 13, L-ADR-7.
 - Tempo-managed Alchemy state. The project's `alchemy.run.ts` chooses its own state store; see Tools.
 
 ## Components
@@ -117,7 +117,7 @@ The deploy command runs with `bash -lc` in `root`. Tempo builds it from the depl
 - Both tools come from the project's own dependencies (`alchemy` 2.x and `cf`). Tempo installs neither. `npx --no` never downloads a package.
 - `cf` loads `cloudflare.config.ts` only on Node.js 22.18 or later and refuses Bun. The workspace image's Node.js 24 runs it.
 - Alchemy v2 stacks declare their own state store. A deploy container is new each time, so a stack that keeps only local state loses it. Projects should use a remote store such as `Cloudflare.state()`, which needs `secrets_store`.
-- The command's environment adds exactly: `CI=1`, `CF_SEND_TELEMETRY=false`, `DO_NOT_TRACK=1`, `CLOUDFLARE_ACCOUNT_ID=<accountId>`, `CLOUDFLARE_API_TOKEN=tempo-placeholder`, `TEMPO_DEPLOY_TARGET=<target>` and `TEMPO_DEPLOY_STAGE=<stage>`. The placeholder is the fixed `PLACEHOLDER` (01) and is not a secret.
+- The command's environment adds exactly: `CI=1`, `CF_SEND_TELEMETRY=false`, `DO_NOT_TRACK=1`, `CLOUDFLARE_ACCOUNT_ID=<accountId>`, `CLOUDFLARE_API_TOKEN=tempo-placeholder`, `TEMPO_DEPLOY_TARGET=<target>` and `TEMPO_DEPLOY_STAGE=<stage>`. 13, L-ADR-4 adds `TEMPO_DEPLOY_TRAFFIC=0`. The placeholder is the fixed `PLACEHOLDER` (01) and is not a secret.
 
 ## Deployments
 

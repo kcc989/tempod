@@ -1,8 +1,8 @@
 # 13 Loop
 
-Status: **Draft.** The owner has not approved the targets (Targets) or answered the open questions (Open questions). Do not build from this tab until both are done. Phase 3 also waits for one week of the friction log (`docs/evidence/friction-log/`).
+Status: **Draft, partly approved.** The owner approved the targets and answered most questions on 2026-10-15 (Decisions log). The remaining questions are in Open questions. Phase 3 starts after they are answered and after one week of the friction log (`docs/evidence/friction-log/`).
 
-Tempo becomes the owner's command center to build and run apps on Cloudflare. This tab defines one closed loop and makes it measurable. It extends 01, 04, 07, 08 and 12. It does not add features outside the loop (Kill list).
+Tempo becomes the owner's command center to build and run apps on Cloudflare. This tab defines one closed loop and makes it measurable. It changes 12 (gradual deploys, rollback, deploy events) and extends 01, 04, 07 and 08. It adds no feature outside the loop (Kill list).
 
 ```
 prompt → intent check → preview with proof → merge → deploy (gradual, one-action rollback) → observe → production error into a workspace session
@@ -32,6 +32,30 @@ From `docs/evidence/loop-baseline/` (README and LOOP.md). Rates are per 100 owne
 | Production error → fix live | 10.7 | — | n = 1, outside Tempo, not seen in Tempo |
 | Intent → preview | — | — | No event exists |
 
+## Words
+
+| Word | Meaning |
+|---|---|
+| Task | A change (08): the work that starts with a new owner prompt and ends with `tempo.change.ended` |
+| Project profile | The facts about a project that the owner writes once: stack, services, credential names, checks, screens (L-ADR-3) |
+| Capability manifest | What Tempo makes from the profile for one agent session: the exact list of what that agent may read, call and deploy. `TempoOutbound` enforces it (14). |
+| Proof | The evidence an agent gives that a preview works and looks right (L-ADR-2) |
+| Observe window | The time a new version runs at a traffic step before Tempo moves to the next step |
+
+## First project
+
+The loop is first proven on one new native (Artifacts) project, built with Tempo: a **smart todo list**. It uses the standard stack (00, D7) and is deployed with Alchemy v2 (12).
+
+| Feature | Rule |
+|---|---|
+| Todos | Create, edit, complete, delete and order todos. Web UI at desktop and phone width. |
+| MCP | The app is a remote MCP server. Agents (Claude, Codex and others) can list, create, update, complete and tag todos with MCP tools. |
+| Smart tagging | When a todo is created or changed, the app suggests tags from its text. |
+| Background research | A todo can have a research job. An agent researches it in the background and attaches what it found to the todo. |
+| Durable Objects | The research job runs in a Durable Object, so the project exercises graceful Durable Object deploys (L-ADR-4). |
+
+The features are proposed from the owner's one-line brief. Q-T1 to Q-T4 (Open questions) must be answered before the first task starts. Tempo's own repo, `tempod`, joins the loop after the todo app meets the targets.
+
 ## Architecture decisions
 
 ### L-ADR-1. The intent check is a Tempo gate, not an agent feature
@@ -40,12 +64,13 @@ From `docs/evidence/loop-baseline/` (README and LOOP.md). Rates are per 100 owne
 
 **Decision.**
 
-1. A change with `origin: "prompt"` starts its session read-only, through the existing read-only path (08, Read-only).
+1. A task with `origin: "prompt"` starts its session read-only, through the existing read-only path (08, Read-only).
 2. Add the tool `propose_intent` to the `tempo` MCP server. Input: `goal`, `approach`, `not_doing`. Together they are at most 5 lines, each line at most 160 characters. The WorkspaceDO refuses a longer input with the tool error `Intent must be at most 5 lines.`, so the agent corrects it in the same turn.
 3. The chat shows an intent card with two actions: **Confirm** (one click or ⌘↩) and **Correct** (a text field; sending it is the one action).
 4. **Confirm** switches the session to write with `session/set_config_option` (category `mode`), or removes the profile's edit-tool deny list, and queues the turn `Intent confirmed. Do the work.`
 5. **Correct** queues the correction as a user turn. The agent calls `propose_intent` again.
-6. The fixed prompt text that asks for the intent is given with the first turn of the change, as the run header is in 08.
+6. **When it applies (proposed default, Q2).** The intent check runs once at the start of each task. Later messages in the same task do not need it. The agent calls `propose_intent` again, and the session goes back to read-only, when it plans work outside the confirmed `goal`. A message that starts with `/go` skips the check for that task.
+7. The fixed prompt text that asks for the intent is given with the first turn of the task, as the run header is in 08.
 
 **Not chosen.** Plan mode only (not the same for four agents). ACP elicitation (needs a change to 02, and SDK 1.8.0 support is not verified). A free-text plan (the length is not enforceable).
 
@@ -62,7 +87,7 @@ From `docs/evidence/loop-baseline/` (README and LOOP.md). Rates are per 100 owne
 2. Images and recordings are published as artifacts (01, Artifacts) and linked from the proof. They stay readable while the workspace sleeps.
 3. `checks` are not reported by the agent. When the proof is submitted, `tempod` runs the project profile's `checks` (L-ADR-3) itself and records each command, exit code and duration. The agent cannot change these results.
 4. A proof is **complete** only when every changed screen has an image, every open checklist item is resolved, and every check exited 0. The preview pane shows the proof above the preview. An incomplete proof shows what is missing.
-5. **Changed screens** come from the profile's `screens` map: `{route, files: [glob]}`. A route is changed when the branch diff touches one of its files. Without a map entry for a changed file, the agent names the routes.
+5. **Changed screens.** The profile has a `screens` map: `{route, files: [glob]}`. A route is changed when the branch diff touches one of its files. When a changed file is in no entry, the agent names the routes it changed, and the proof card says the list came from the agent.
 6. **Checklist.** When the owner sends a message with design critique, Tempo shows **Add to checklist** on that message. Each item is stored on the workspace with `open` status, the message ID and the text. The next proof must resolve each open item. The owner can reopen an item with one action.
 
 **Not chosen.** Proof as free Markdown (cannot be checked). A full MCP Apps proof panel (Kill list).
@@ -71,61 +96,77 @@ From `docs/evidence/loop-baseline/` (README and LOOP.md). Rates are per 100 owne
 
 ### L-ADR-3. One project profile, given to every session
 
-**Decision.** Each project has one profile, edited in Tempo and stored by Tempo, with revisions as in 12. It holds:
+**Decision.** Each project has one profile. The owner edits it in Tempo, once. It is stored in the project's `AppDeployDO` with revisions, as the deploy configuration is (12), so one DO holds all owner-approved project configuration. It holds:
 
 | Key | Holds |
 |---|---|
-| `stack` | Runtime, package manager, frameworks and libraries, with versions, as the owner states them |
-| `services` | Each external service: name, purpose, hosts, and the name of the credential reference (never a value) |
-| `cloudflare` | Account, the Workers that make up the app, and the deploy targets (12) |
+| `stack` | Runtime, package manager, frameworks and libraries, with versions |
+| `services` | Each external service: name, purpose, hosts, and the name of the credential (never a value) |
+| `cloudflare` | The Workers that make up the app, and the deploy targets (12) |
 | `checks` | The commands that prove a change: typecheck, lint, tests, build. Each has a timeout. |
 | `screens` | Routes and the source files that change them (L-ADR-2) |
 | `notes` | At most 40 lines of free text |
 
 - Every session gets the profile as the first content block of its first turn, and the tool `get_project_profile`.
-- The profile compiles to the session's capability manifest (14). The agent can use what the manifest grants, and Tempo tells it so.
+- The profile makes the session's capability manifest (14).
 - The agent can propose a profile change with a proposal card, like `propose_agent_change` (08). Only the owner applies it.
 
 **Reduces.** STACK, API_KEYS, ACCESS_UNAWARE.
 
-### L-ADR-4. Deploy uploads a version, then Tempo moves traffic
+### L-ADR-4. Gradual deploys, also with Durable Objects
 
-**Context.** Every deployment in the evidence went to 100% at once. 12 runs `alchemy deploy` or `cf deploy`, which deploy at 100%, and makes Redeploy the only rollback. The Versions API can split traffic and roll back in seconds with `Workers Scripts Write`, which the minted token already has.
+**Context.** Every deployment in the evidence went to 100% at once. 12 runs `alchemy deploy` or `cf deploy` at 100% and makes Redeploy the only rollback. The Versions API splits traffic and rolls back in seconds with `Workers Scripts Write`, which the minted token already has. Alchemy v2 (2.0.0-beta.81, `Worker.version.traffic`) can upload a version with `traffic: 0`, which does not change traffic, and forces Durable Object class migrations to 100%.
 
-**Decision (depends on Q4 and spike L-S1).**
+**Decision. This changes 12 (owner-approved 2026-10-15).**
 
-1. The deploy container uploads a new version for each Worker of the target and does not deploy it.
-2. `AppDeployDO` stores each Worker's new `version_id` and the version that was at 100% before, with annotations `workers/commit_sha` and `workers/message = tempo-deploy-<number>`.
-3. Tempo smoke-tests the new version at 0% with `Cloudflare-Workers-Version-Overrides`, then moves traffic in steps: 10% for the observe window, then 100%. The steps and window are in Targets.
-4. Between steps, the health gate (L-ADR-5) compares the new and old versions. A failed gate rolls back with no owner action and starts the production-error path.
-5. **Rollback** is one action in web and Mac: `POST /deployments` with the previous version at 100%. It needs no container and no build. Tempo mints a short token for it, as for a deployment.
-6. Tempo shows the Cloudflare deployment ID and version ID for each Tempo deployment, so they can be matched with the Cloudflare API (done-proof 2).
+1. **Upload.** The deploy command gets `TEMPO_DEPLOY_TRAFFIC=0`. The project's `alchemy.run.ts` passes it to each Worker's `version.traffic`, with `tag` = the commit SHA and `message` = `tempo-deploy-<number>`. Spike L-S1 confirms the same for `cf`.
+2. **Record.** `AppDeployDO` reads each Worker's deployments with the minted token and stores the new `version_id` and the version that was at 100% before.
+3. **Smoke test.** Tempo calls the new version at 0% with `Cloudflare-Workers-Version-Overrides` on the profile's smoke paths.
+4. **Steps.** 10% for the observe window, then 100%. Each step is one `POST /deployments` with the new and old versions.
+5. **Gate.** Between steps, Tempo checks for new Issues on the new version (L-ADR-5). A new Issue stops the rollout. What happens next is Q6.
+6. **Rollback** is one action in web and Mac: `POST /deployments` with the previous version at 100%. It needs no container and no build. Tempo mints a short token for it, as for a deployment.
+7. **Match.** Tempo shows the Cloudflare deployment ID and version ID for each Tempo deployment (done-proof 2).
+8. **Many Workers.** When a target has more than one Worker, Tempo moves each Worker one step at a time, in the order of the profile's `cloudflare.workers` list, and rolls back all of them together.
 
-**Limits from Cloudflare.** A Durable Object migration needs `wrangler deploy`, not a version upload. Rollback does not revert D1, KV or R2 data, and is refused across a DO lifecycle change. These deployments go to 100% and Tempo marks them "no rollback".
+**Durable Objects.**
+
+| Change in the deploy | What Tempo does |
+|---|---|
+| DO code only (no class added, renamed or deleted) | Gradual, as above. Cloudflare pins each DO to one version for a deployment; Tempo only raises the new version's percentage and keeps the order of the versions, so no DO moves back during a rollout. |
+| DO class migration (class added, renamed or deleted) | Alchemy deploys at 100%. Cloudflare refuses a rollback across it. Tempo splits the deploy: first a **migration deploy** that holds only the migration and code that does not use it yet, then the code that uses it as a normal gradual deploy. Rollback can then go back to the migration deploy. |
+| DO SQLite schema change (Alchemy `withSqlMigrations`) | A rollback runs old code on the new schema. The migration must add, never drop or rename, until the next deploy. A check in the profile's `checks` refuses a migration that drops or renames. |
+| D1, KV or R2 data | Not reverted by a rollback. The same add-only rule applies to D1 migrations. |
+
+- Tempo shows "no rollback past this deploy" on a migration deploy.
+- When the agent's change holds a DO class migration and the code that uses it, the proof step tells the agent to split it into two tasks.
 
 **Reduces.** VERIFY, UNCLEAR_IMPL, CF_PERMS, EXIT_CF_DASHBOARD.
 
-### L-ADR-5. Observe through the Workers Observability API
+### L-ADR-5. Observe through Workers Issues webhooks
 
-**Decision (depends on Q5).**
+**Decision (owner-approved 2026-10-15).**
 
-1. `AppDeployDO` reads errors for each deployed Worker with `POST /workers/observability/telemetry/query`, grouped by `scriptVersion.id`. It needs no change to the app. The app must have `observability.enabled`.
-2. During the observe window it reads every 60 s. After it, every 5 minutes for 24 hours, then hourly.
-3. Errors are grouped by fingerprint: Worker, exception name, the message with numbers and IDs replaced, and the first stack frame. Tempo stores counts, first and last time, version, request method and path without query, and one redacted stack. It stores no headers, bodies or log text other than the exception.
-4. Workers Logs keep 7 days. Tempo keeps its own fingerprints for 90 days.
-5. A new token permission `observability` (`Workers Observability Write`, the only group the query endpoint accepts) is added to 12, Permissions, for Tempo's own reads. The token never enters a container.
+1. Each loop project's Workers enable `observability.issues.enabled` and `upload_source_maps`, in `alchemy.run.ts`.
+2. For each project, Tempo makes a webhook URL on `APP_HOST`, `/api/hooks/cloudflare-issues/<projectId>`, and a random secret. The secret is stored in the owner's `CredentialDO` under `issues.<projectId>.webhook_secret`. Tempo shows the URL once and the steps to add a generic webhook destination and an automation (occurrence threshold 1) in the dashboard or with `cf`. Tempo cannot do this setup by API: Cloudflare documents no REST API for automations.
+3. Tempo accepts a webhook only when its `cf-webhook-auth` header equals the secret, compared in constant time. Else 404.
+4. `AppDeployDO` stores, per Issue: the Worker, the version, counts, first and last time, the request method and path without query, and one redacted stack. It stores no headers, bodies or logs. It keeps them for 90 days.
+5. Tempo maps the version to its Tempo deployment and commit range.
+6. Spike L-S2 records the exact webhook payload for an Issue. Until it passes, the stored fields above are the target, not a promise.
 
-**Not chosen.** Tail Workers (change the app's configuration). Workers Issues webhooks (setup only in the dashboard or `cf`; no REST API found). Analytics Engine (needs app code).
+**Not chosen.** Polling the telemetry query API (needs a new `Workers Observability Write` permission). Tail Workers (change the app's configuration). Analytics Engine (needs app code).
 
 **Reduces.** VERIFY, EXIT_CF_DASHBOARD.
 
 ### L-ADR-6. A production error becomes a workspace session
 
-**Decision (depends on Q6).**
+**Decision (owner-approved 2026-10-15).**
 
-1. The first occurrence of a new fingerprint after a deployment, or a failed health gate, writes `prod.error.seen` and creates a workspace on a new branch from the deployed SHA.
-2. Its first prompt holds: the fingerprint, counts, first and last time, the Tempo deployment, the Cloudflare version, the redacted stack, and the commit range from the previous version to this one.
-3. The fix goes through the same loop: intent check, proof, merge, deploy. The deployment links to the error. When the new version runs for the observe window with no occurrence of the fingerprint, Tempo writes `prod.error.fixed`.
+1. A new Issue writes `prod.error.seen` and shows an error card in the project with **Start fix**.
+2. The project setting **Start fixes on their own** (`auto_fix`, default off) decides what happens next:
+   - Off: the owner selects **Start fix**. That one action creates the workspace and starts the agent.
+   - On: Tempo creates the workspace and starts the agent with no owner action.
+3. The workspace is on a new branch from the deployed SHA. Its first prompt holds: the Issue, counts, first and last time, the Tempo deployment, the Cloudflare version, the redacted stack, and the commit range from the previous version.
+4. The fix goes through the same loop: intent check, proof, merge, deploy. When the new version runs for the observe window with no new occurrence of the Issue, Tempo writes `prod.error.fixed`.
 
 **Reduces.** VERIFY, EXIT_CF_DASHBOARD. It creates the "production error → fix" step that has no baseline today.
 
@@ -141,45 +182,72 @@ Each step writes one lifecycle event (08), so loop times come from the event log
 | `loop.proof.submitted` | `agent` | `submit_proof` stored, with `complete: boolean` |
 | `loop.checklist.added`, `loop.checklist.reopened` | `tempo` | Owner action |
 | `tempo.pr.merged` | `tempo` | Merge seen |
-| `deploy.version.uploaded`, `deploy.traffic.changed`, `deploy.rolled_back` | `tempo` | 12 with L-ADR-4; payload has Cloudflare version and deployment IDs |
+| `deploy.version.uploaded`, `deploy.traffic.changed`, `deploy.rolled_back` | `tempo` | L-ADR-4; payload has Cloudflare version and deployment IDs |
 | `prod.error.seen`, `prod.error.fixed` | `tempo` | L-ADR-5 and L-ADR-6 |
 
-These names are proposed. They are not final until the owner approves this tab.
+`getLoopReport {from, to}` returns, for each step, n, median and p90 from these events.
 
-`getLoopReport {from, to}` returns, for each step, n, median and p90 from these events. A weekly export writes the same numbers to `docs/evidence/loop-weekly/<date>.json`.
+### L-ADR-8. Agents may call the Cloudflare API, inside the intent
 
-## Targets (proposed, not approved)
+**Decision (owner-approved 2026-10-15, details proposed).** An agent in a workspace may call `api.cloudflare.com`, for example to query a preview D1 database or to run `wrangler dev --remote`. A call is forwarded only when it is safe and matches the confirmed intent:
 
-Times are from the events in L-ADR-7. "Owner time" excludes time the owner is away (a gap of more than 30 minutes).
+1. The agent sends `Authorization: Bearer tempo-placeholder`. `TempoOutbound` swaps it for a token that Tempo mints for the session from the manifest's `cloudflare` capability (14), as deploy mode does (12). The token never enters the container. It expires when the session ends.
+2. `GET` requests to resources of this project pass.
+3. A request that changes something passes only when all are true:
+   - The resource belongs to this project (one of its Workers, databases, buckets or namespaces).
+   - It is not a production target.
+   - It is not on the hold list: delete a Worker, database, bucket, namespace, queue or token; change DNS, routes or a deployment's traffic.
+   - It matches the task's confirmed intent. A decision (08, Decision) compares the request (method, path, resource) with the intent's `goal` and `approach`.
+4. Anything else is held. The chat shows an approval card with the request and the reason. The owner allows it once or refuses it. The agent gets a 403 with `tempo: held for owner approval` until then.
+5. Every Cloudflare call is in `egress_log` with the decision.
+
+**Reduces.** CF_PERMS, ACCESS_UNAWARE.
+
+## Targets (owner-approved 2026-10-15)
+
+Times are from the events in L-ADR-7. Gaps of more than 30 minutes with no owner or agent activity are not counted.
 
 | Step | From → to | Baseline | Target median | Target p90 |
 |---|---|---|---|---|
 | Intent shown | `tempo.change.created` → `loop.intent.proposed` | none | 1 min | 3 min |
-| Intent agreed | `loop.intent.proposed` → `loop.intent.confirmed` | none | 1 correction or fewer per change | 2 corrections |
+| Intent agreed | `loop.intent.proposed` → `loop.intent.confirmed` | none | 1 correction or fewer per task | 2 corrections |
 | Preview with proof | `loop.intent.confirmed` → first complete `loop.proof.submitted` | none | 20 min | 45 min |
 | Proof → merge | complete proof → `tempo.pr.merged` | 23.6 / 131.3 (PR open → merge) | 15 min | 60 min |
 | CI | first check run → green on final head | 12.9 / 53.6 | 6 min | 15 min |
 | Merge → 100% live | `tempo.pr.merged` → last `deploy.traffic.changed` at 100% | 157.2 / 1,062.4 | 20 min | 30 min |
 | Rollback | owner action → previous version at 100% | none | 30 s | 60 s |
-| Error seen | first error in Cloudflare → `prod.error.seen` | not seen | 3 min | 6 min |
+| Error seen | first occurrence in Cloudflare → `prod.error.seen` | not seen | 3 min | 6 min |
 | Error fixed | `prod.error.seen` → `prod.error.fixed` | 10.7 (n = 1, outside Tempo) | 60 min | 4 h |
+
+The observe window is 10 minutes at 10%. A migration deploy (L-ADR-4) is counted in "Merge → 100% live" with the gradual deploy that follows it.
 
 | Friction (per 100 messages) | Baseline | Target after 4 weeks |
 |---|---|---|
-| DIRECTION | 10.7 | ≤ 5.3 (owner's done-proof 4) |
-| VERIFY | 8.8 | ≤ 4.4 (done-proof 4) |
-| UNCLEAR_IMPL | 6.8 | ≤ 3.4 (done-proof 4) |
-| STACK, API_KEYS, CF_PERMS, ACCESS_UNAWARE | 4.9, 2.4, 2.6, 1.7 | 0 (done-proof 4) |
-| DESIGN_IGNORED | 3.4 | 0 (proposed: the checklist makes a repeat visible) |
-| CI_SLOW | 4.1 | ≤ 2.0 (proposed) |
-| PRs with a failed CI run | 47% | ≤ 20% (proposed) |
-| EXIT_GITHUB, EXIT_CF_DASHBOARD | friction-log week | 0 rows in one week (done-proof 5) |
+| DIRECTION | 10.7 | ≤ 5.3 |
+| VERIFY | 8.8 | ≤ 4.4 |
+| UNCLEAR_IMPL | 6.8 | ≤ 3.4 |
+| STACK, API_KEYS, CF_PERMS, ACCESS_UNAWARE | 4.9, 2.4, 2.6, 1.7 | 0 |
+| DESIGN_IGNORED | 3.4 | 0 |
+| CI_SLOW | 4.1 | ≤ 2.0 |
+| PRs with a failed CI run | 47% | ≤ 20% |
+| EXIT_GITHUB, EXIT_CF_DASHBOARD | friction-log week | 0 rows in one week |
 
 ## Phase 3: fitness checks
 
-- A fitness check fails CI when a loop contract breaks: an event is missing or out of order, the intent or summary is longer than 5 lines, a proof is complete with an open checklist item, a rollback needs more than one action. These run in the existing `check` job, inside its budget (CLAUDE.md, CI).
-- Time targets come from production events, not from CI. Q8 decides where that check runs.
-- Each week: run the label pipeline (`score.py`) on the owner's Tempo sessions, hand-check 40 messages (seed 7, as the baseline), and report each code against the baseline.
+**Contract checks fail CI.** They run in the existing `check` job, inside its budget (CLAUDE.md, CI). A check fails when an event is missing or out of order, an intent or summary is longer than 5 lines, a proof is complete with an open checklist item, or a rollback needs more than one action.
+
+**Time checks are reported in CI and handled in another process (owner-approved 2026-10-15).**
+
+1. A scheduled loop report runs in Tempo each day. It calls `getLoopReport` for the last 7 days and compares each step with Targets.
+2. It writes the result to R2 at `loop/<date>.json`, and the weekly result to `docs/evidence/loop-weekly/<date>.json` through a Tempo PR.
+3. When a target is missed for 2 reports in a row, it opens a Tempo issue (09) in the project with the step, the numbers and the events behind them.
+4. The `check` job prints the newest report from `docs/evidence/loop-weekly/` in the CI summary. A missed time target does not fail CI.
+
+**Labels.** Each week: run the label pipeline (`score.py`) on the owner's Tempo sessions, hand-check 40 messages (seed 7, as the baseline), and report each code against the baseline.
+
+## Clients
+
+Each loop screen is in web (04) and Mac (07) in the same phase (CLAUDE.md rule 17, owner-confirmed 2026-10-15): the intent card, the proof, the checklist, the deploy steps and rollback, the error card and the Cloudflare approval card.
 
 ## Done means
 
@@ -189,7 +257,7 @@ From the owner's brief. Each needs no trust in the agent or the owner.
 2. Cloudflare API deployment and version IDs match what Tempo shows. One production rollback drill.
 3. One real production error seen, fixed and redeployed from inside Tempo.
 4. After four weeks: DIRECTION, VERIFY and UNCLEAR_IMPL each at most half the baseline; STACK, API_KEYS, CF_PERMS and ACCESS_UNAWARE zero.
-5. The friction log shows zero exits to GitHub or the Cloudflare dashboard for one week.
+5. The friction log shows zero exits to GitHub or the Cloudflare dashboard for one week. The one-time Issues automation setup (L-ADR-5) is not counted.
 
 ## Kill list
 
@@ -200,9 +268,9 @@ Tempo will not build these while this loop is the goal.
 | A full extension contract for dynamic UI: the artifact runtime and `ui://` resources (MCP Apps) | ACP v1 has no standard way to carry `ui://`; it needs a sandbox proxy origin and Mac parity. Static proof covers VERIFY first. | Phase 3 is done (done-proofs 1–5 met), **and** the four-week label report shows VERIFY or DESIGN_IGNORED above target, **and** at least 3 friction-log rows say a static image or recording could not show the problem. |
 | A general MCP Apps host for other servers | Same as above, plus agent-written HTML that can call tools | Same condition, and a named server the owner uses |
 | ACP v2 and unstable v1 features (`plan_update`, `session/fork`, MCP over ACP) | CLAUDE.md rule 8 | ACP v2 becomes stable and the owner approves a spec change |
-| Log search, metrics dashboards, traces UI | Only errors feed the loop | An error-to-fix that the fingerprint and stack cannot explain, three times |
+| Log search, metrics dashboards, traces UI | Only errors feed the loop | An error-to-fix that the Issue and stack cannot explain, three times |
 | Alert channels (email, Slack, phone) | The loop ends in a workspace session, not a message | Owner asks |
-| Analytics Engine metrics for apps | Needs app code and a new scope | The health gate misses a bad deploy that per-version counters would catch |
+| Analytics Engine metrics for apps | Needs app code and a new scope | The Issues gate misses a bad deploy that per-version counters would catch |
 | Cloudflare Workflows for the deploy pipeline | `AppDeployDO` alarms do the same; a new primitive (rule 11) | Two pipeline bugs from hand-written alarm state |
 | Deploys outside Cloudflare Workers (Pages, containers, other clouds) | One loop | Owner asks |
 | Teams, sharing, more users | 00 non-goals | — |
@@ -212,21 +280,31 @@ Tempo will not build these while this loop is the goal.
 
 | ID | Question | Pass |
 |---|---|---|
-| L-S1 | Can Alchemy v2 and `cf` upload a version without deploying it, for each Worker of a stack? | A version ID is returned and traffic does not change |
-| L-S2 | Does the telemetry query return `scriptVersion.id` and the exception for the owner's apps, with the minted token? | The Oct 12 `tempo` incident is found by version |
+| L-S1 | Does `version.traffic: 0` in Alchemy 2.0.0-beta.81 upload a version for each Worker of a stack with no traffic change, and force 100% for a DO class migration? Can `cf` do the same? | A version ID per Worker, traffic unchanged; a migration deploy at 100% |
+| L-S2 | What does a Workers Issues generic webhook send for a new Issue? | The payload is recorded, with the Worker and version |
 | L-S3 | Do Claude, Codex, OpenCode and Pi call `propose_intent` before they write, when the session starts read-only? | Each agent, 5 of 5 prompts |
 | L-S4 | Can each agent make a phone and desktop screenshot of a route with the Playwright already in the image? | Images published with `submit_proof` |
 
+## Decisions log
+
+| Date | Question | Owner answer |
+|---|---|---|
+| 2026-10-15 | Targets | Approved. Gradual deploys must handle Durable Objects. |
+| 2026-10-15 | First project | A smart todo list: MCP-enabled, smart tagging, background research by agents |
+| 2026-10-15 | Gradual deploy (changes 12) | Approved |
+| 2026-10-15 | Observe | Workers Issues webhooks |
+| 2026-10-15 | Error sessions | An option: start on its own, or the owner starts it |
+| 2026-10-15 | Time checks | Report in CI; handle in another process |
+| 2026-10-15 | Secrets in containers | D11 logins and secrets with no `hosts` are named exceptions (14) |
+| 2026-10-15 | Mac parity | Yes, every loop screen |
+| 2026-10-15 | Cloudflare API from workspaces | Allowed, when the operation is safe and matches the owner's intent |
+
 ## Open questions
 
-The spec is silent or in conflict here. The owner decides each one before this tab is approved.
-
-1. **Q1. Which projects run the loop first?** `tempod` is GitHub-linked and deployed with `wrangler`; 12 covers native (Artifacts) projects only. `farstep` holds most CF_PERMS, API_KEYS and CI_SLOW friction.
-2. **Q2. When is the intent check required?** Every new change, or also each follow-up turn? Is there a way to skip it for a small change?
-3. **Q3. Changed screens.** Is the profile's `screens` map acceptable, or must Tempo find changed screens another way?
-4. **Q4. Gradual deploy.** Accept the change to 12 (upload only, then Tempo moves traffic; Rollback becomes its own action)? Approve the steps (0% smoke test, 10%, 100%) and the observe window?
-5. **Q5. Observe.** Accept the polling of the telemetry query API and the new `observability` permission? Or use Workers Issues webhooks, set up once in the dashboard?
-6. **Q6. Error sessions.** Does Tempo start the agent on a production error by itself, or create the workspace and wait for the owner's one action? Is an automatic rollback on a failed gate acceptable?
-7. **Q7. Targets.** Approve, or change, each number in Targets.
-8. **Q8. Time fitness.** Time targets need production events. Where does that check run: a scheduled Tempo job that writes the weekly report, or a second CI job (needs your approval under the CI budget)?
-9. **Q9. Mac parity.** CLAUDE.md rule 17 requires each web change in the Mac client in the same phase. Does this hold for every loop screen (intent card, proof, checklist, rollback)?
+1. **Q2. Intent check scope.** Is the default in L-ADR-1 step 6 right: once per task, again only when the agent goes outside the confirmed goal, and `/go` to skip?
+2. **Q6. Failed gate.** When a new Issue appears during a rollout, does Tempo roll back by itself, or stop the rollout and wait for the owner?
+3. **Q10. "Jev".** The answer on Cloudflare API calls says "(Jev)". What does it name? L-ADR-8 assumes it means the intent check.
+4. **Q-T1. Who uses the todo app?** Only the owner, or other signed-in users too?
+5. **Q-T2. Smart tagging.** Tags from Workers AI in the app (no API key), or from an outside model?
+6. **Q-T3. Background research.** What does the research agent use: Workers AI with a web search service (which one), or a call to Claude or another model through an API key? What starts it: the owner, a tag, or an MCP call?
+7. **Q-T4. MCP access.** Which agents connect to the app's MCP server, and how do they sign in: OAuth through Better Auth, or a per-agent token?
