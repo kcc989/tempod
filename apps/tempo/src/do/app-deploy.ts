@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { ProjectResources } from "../deploy/cf-gate.ts";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import {
@@ -367,6 +367,24 @@ export class AppDeployDO extends DurableObject<Env> {
     this.db.update(deployments).set({ gateFailure: reason }).where(eq(deployments.id, row.id)).run();
     await this.rollback(this.require(row.id), reason, "failure");
     await this.pump();
+  }
+
+  /** 13, L-ADR-7: deploy and production error events in [from, to), for the loop report. */
+  async loopEvents(
+    from: number,
+    to: number,
+  ): Promise<Array<{ deploymentId: string; type: string; at: number; payloadJson: string }>> {
+    return this.db
+      .select({
+        deploymentId: deployEvents.deploymentId,
+        type: deployEvents.type,
+        at: deployEvents.at,
+        payloadJson: deployEvents.payloadJson,
+      })
+      .from(deployEvents)
+      .where(and(gte(deployEvents.at, from), lt(deployEvents.at, to)))
+      .orderBy(asc(deployEvents.at), asc(deployEvents.id))
+      .all();
   }
 
   // ---------- agent Cloudflare API access (13, L-ADR-8) ----------

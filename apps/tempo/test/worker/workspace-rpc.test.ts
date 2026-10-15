@@ -2492,6 +2492,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
           builtin: false,
         },
       ],
+      cloudflare: false,
     });
     await useSettings(w, DEFAULT_EFFECTIVE);
     expect(await w.stub.getEgressConfig()).toEqual({
@@ -2507,6 +2508,7 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       mcp: [],
       dotfiles: null,
       calls: [],
+      cloudflare: false,
     });
   });
   it("getEgressConfig fails for a workspace that was never created", async ({ expect }) => {

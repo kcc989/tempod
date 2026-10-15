@@ -2096,6 +2096,7 @@ describe("Issues webhook parsing (12, Production errors)", () => {
         text: "boom token=s3cr3t&page=2",
         alert_correlation_id: "corr-1",
         data: { a: [{ b: { script_name: "api", version_id: "v9", issue_id: "iss-7" } }] },
+        ts: 1792000000,
       }),
     ).toEqual({
       issueKey: "iss-7",
@@ -2103,7 +2104,11 @@ describe("Issues webhook parsing (12, Production errors)", () => {
       versionId: "v9",
       title: "Error in api",
       text: "boom token [redacted]&page=2",
+      occurredAt: 1792000000000,
     });
+    expect((await parseIssue({ text: "x", ts: "2026-10-15T10:00:00Z" }))?.occurredAt).toBe(
+      Date.parse("2026-10-15T10:00:00Z"),
+    );
 
     expect(await parseIssue({ text: "boom", alert_correlation_id: "corr-1" })).toMatchObject({
       issueKey: "corr-1",

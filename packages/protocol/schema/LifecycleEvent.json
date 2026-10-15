@@ -1430,6 +1430,102 @@
         },
         "type": {
           "type": "string",
+          "enum": ["tempo.pr.merged"]
+        },
+        "source": {
+          "$ref": "LifecycleTempoSource.json"
+        },
+        "payload": {
+          "$ref": "LifecyclePrMergedPayload.json"
+        }
+      },
+      "required": ["id", "occurredAt", "workspaceId", "dedupeKey", "type", "source", "payload"],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "allOf": [
+            {
+              "minimum": 0
+            }
+          ]
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "changeId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agent": {
+          "anyOf": [
+            {
+              "$ref": "AgentId.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "causationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dedupeKey": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
           "enum": ["loop.checklist.added"]
         },
         "source": {

@@ -620,3 +620,17 @@ Tab 14. Choices made without the owner:
 | Removed access | Checked when the workspace refreshes its environment: after an environment, secret, profile or deploy configuration change, and on each egress config read | The outbound cache keeps an old config for up to 60 seconds, so a script outside a session may still use a removed capability for that long. Agent sessions end at once. |
 | Not built yet | Hiding `tempo` MCP tools that are not granted (Delivery 3) | Tools check their own access today. |
 | Cloudflare token | One token per workspace, for 1 hour, not one per session | A request carries no session (above). The token is revoked when the manifest loses `cloudflare`; otherwise it expires. |
+
+## Loop report (2026-10-15)
+
+Tab 13, L-ADR-7 and Phase 3. Choices made without the owner:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Pairing | Intent steps pair events by `changeId`; corrections count per `intentId`; proof → merge takes the last complete proof before `tempo.pr.merged` in the same workspace; CI is the first to the last check event of a PR, counted only when the last one passed; merge → live is the merge to the last 100% `deploy.traffic.changed` of the first deployment that reached 100% after it | The events carry these keys; no new id was needed. |
+| CI start | The first `tempo.check.*` event, not the first check run's start | Lifecycle events record check results, not starts. |
+| Idle gaps | Gaps of more than 30 minutes between a workspace's lifecycle events are left out of intent, proof, merge and CI times. Deploy, rollback and error times are machine times and keep every gap. | 13, Targets. |
+| New payload fields | `prod.error.seen` has `occurredAt` (the webhook's `ts`); an owner `deploy.rolled_back` has `requestedAt` | "Error seen" and "Rollback" need their start times. |
+| Contract checks | `getLoopReport` lists intent order and length violations. Proof completeness and one-action rollback are enforced by worker tests. | These cannot happen from the event log once the code holds them. |
+| Daily job | Cron `41 5 * * *` (UTC). It writes `loop/<date>.json` for the owner (`TEMPO_OWNER_GITHUB_ID`) and opens the issue in the owner's first native project, at most once a week per step. The body gives the window and the numbers, and names the report key. | Tempo has one owner; issues (09) exist only in native projects. |
+| Not built yet | The weekly file in `docs/evidence/loop-weekly/` through a Tempo PR | Tempo has no API yet that commits a file and opens a PR from the Worker. The CI summary already prints the newest file there. |

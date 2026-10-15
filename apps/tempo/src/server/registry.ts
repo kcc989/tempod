@@ -11,6 +11,7 @@ import * as issues from "./handlers/issues.ts";
 import * as pullRequests from "./handlers/pull-requests.ts";
 import * as ci from "./handlers/ci.ts";
 import * as judge from "./handlers/judge.ts";
+import * as loop from "./handlers/loop.ts";
 import * as projectProfile from "./handlers/project-profile.ts";
 import * as deploy from "./handlers/deploy.ts";
 import * as profile from "./handlers/profile.ts";
@@ -65,6 +66,7 @@ const own = {
   cancelDeployment: deploy.cancelDeployment,
   rollbackDeployment: deploy.rollbackDeployment,
   getJudgeSettings: judge.getJudgeSettings,
+  getLoopReport: loop.getLoopReport,
   getProjectProfile: projectProfile.getProjectProfile,
   updateProjectProfile: projectProfile.updateProjectProfile,
   setJudgeKey: judge.setJudgeKey,

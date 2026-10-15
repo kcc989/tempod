@@ -95,6 +95,8 @@ export const LifecycleIntentDecidedPayload = Schema.Struct({
 
 export const LifecycleIntentCorrectedPayload = Schema.Struct({ intentId: Ulid });
 
+export const LifecyclePrMergedPayload = Schema.Struct({ prNumber: Int });
+
 export const LifecycleProofPayload = Schema.Struct({ proofId: Ulid, complete: Schema.Boolean });
 
 export const LifecycleChecklistPayload = Schema.Struct({ checklistId: Ulid });
@@ -128,6 +130,7 @@ export const LifecycleEvent = Schema.Union([
   event("loop.intent.confirmed", "tempo", LifecycleIntentDecidedPayload),
   event("loop.intent.corrected", "tempo", LifecycleIntentCorrectedPayload),
   event("loop.proof.submitted", "agent", LifecycleProofPayload),
+  event("tempo.pr.merged", "tempo", LifecyclePrMergedPayload),
   event("loop.checklist.added", "tempo", LifecycleChecklistPayload),
   event("loop.checklist.reopened", "tempo", LifecycleChecklistPayload),
 ]);

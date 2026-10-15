@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 
 const docsOnly = process.argv.includes("--docs-only");
 
@@ -110,6 +110,42 @@ const total = (Date.now() - started) / 1000;
 
 const workSeconds = (Date.now() - checksStarted) / 1000;
 
+/** 13, Phase 3: the newest weekly loop report. A missed time target does not fail CI. */
+const loopSummary = (): string[] => {
+  const dir = new URL("../docs/evidence/loop-weekly/", import.meta.url);
+  let newest: string | undefined;
+
+  try {
+    newest = readdirSync(dir)
+      .filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f))
+      .sort()
+      .at(-1);
+  } catch {
+    newest = undefined;
+  }
+
+  if (!newest) return ["## Loop report", "", "No weekly loop report yet.", ""];
+
+  const report: {
+    steps: { step: string; n: number; median: number | null; p90: number | null; met: boolean | null }[];
+  } = JSON.parse(readFileSync(new URL(newest, dir), "utf8"));
+
+  const value = (step: string, v: number | null) =>
+    v === null ? "–" : step === "intent_corrections" ? String(v) : `${(v / 60_000).toFixed(1)} min`;
+
+  return [
+    `## Loop report (${newest.replace(".json", "")})`,
+    "",
+    "| Step | n | Median | p90 | Target met |",
+    "| --- | ---: | ---: | ---: | --- |",
+    ...report.steps.map(
+      (r) =>
+        `| ${r.step} | ${r.n} | ${value(r.step, r.median)} | ${value(r.step, r.p90)} | ${r.met === null ? "no data" : r.met ? "yes" : "no"} |`,
+    ),
+    "",
+  ];
+};
+
 const summary = [
   "## CI runtime",
   docsOnly
@@ -124,6 +160,7 @@ const summary = [
   "",
   "Check deadline: 300 seconds after setup. Target: under five total runner minutes, including setup and cleanup; six-minute hard job limit.",
   "",
+  ...loopSummary(),
 ].join("\n");
 
 console.log(summary);

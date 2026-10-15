@@ -130,6 +130,8 @@ const config = {
   main: "./src/worker.ts",
   compatibility_date: "2026-10-10",
   compatibility_flags: ["nodejs_compat"],
+  // 13, Phase 3: the daily loop report.
+  triggers: { crons: ["41 5 * * *"] },
   // Disable invocation logs because request URLs can contain setup and preview tokens.
   observability: {
     enabled: true,

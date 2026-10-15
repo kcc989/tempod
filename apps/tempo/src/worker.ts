@@ -1,4 +1,5 @@
 import { handleIssuesWebhook } from "./server/handlers/deploy.ts";
+import { runDailyLoopReport } from "./loop/daily.ts";
 import startHandler from "@tanstack/react-start/server-entry";
 import type { Env } from "./env.ts";
 import { getAuth } from "./auth/auth.ts";
@@ -13,7 +14,7 @@ import { handleChannel } from "./http/channels.ts";
 import { handleApiV1, handleDownload } from "./http/native.ts";
 import { handlePreview, isPreviewHost } from "./http/preview.ts";
 import { handleSetup, handleSetupStatus } from "./http/setup.ts";
-import { log } from "./log.ts";
+import { errorText, log } from "./log.ts";
 
 export { WorkspaceDO } from "./do/workspace/index.ts";
 
@@ -87,6 +88,16 @@ export const handleRequest = async (request: Request, env: Env, ctx: ExecutionCo
   }
 };
 
+/** 13, Phase 3: the daily loop report (cron in wrangler.jsonc). */
+const scheduled: ExportedHandler<Env>["scheduled"] = (controller, env, ctx) => {
+  ctx.waitUntil(
+    runDailyLoopReport(env, controller.scheduledTime).catch((e) =>
+      log("warn", "loop report failed", { error: errorText(e) }),
+    ),
+  );
+};
+
 export default {
   fetch: handleRequest,
+  scheduled,
 } satisfies ExportedHandler<Env>;

@@ -609,6 +609,37 @@ export const RunContent = Schema.Struct({ runId: Schema.String });
 
 export const AgentProposalContent = Schema.Struct({ proposalId: Schema.String });
 
+/** 13, Targets: one loop step over the report's window. Times are milliseconds; corrections are a count. */
+export const LoopStepResult = Schema.Struct({
+  step: Schema.Literals([
+    "intent_shown",
+    "intent_corrections",
+    "preview_proof",
+    "proof_to_merge",
+    "ci",
+    "merge_to_live",
+    "rollback",
+    "error_seen",
+    "error_fixed",
+  ]),
+  n: Schema.Number,
+  median: N(Schema.Number),
+  p90: N(Schema.Number),
+  targetMedian: Schema.Number,
+  targetP90: Schema.Number,
+  met: N(Schema.Boolean),
+});
+
+export const LoopReport = Schema.Struct({
+  from: Ms,
+  to: Ms,
+  steps: Schema.Array(LoopStepResult),
+  /** 13, Phase 3: contract checks that failed in the window. */
+  violations: Schema.Array(Schema.String),
+});
+
+export type LoopReport = typeof LoopReport.Type;
+
 /** 13, L-ADR-8: a Cloudflare API request held for the owner. */
 export const CloudflareHoldContent = Schema.Struct({
   holdId: Schema.String,

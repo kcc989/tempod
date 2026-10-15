@@ -5467,6 +5467,12 @@ pub struct GetJudgeSettingsOut {
     )]
     pub updated_at: ::std::option::Option<f64>,
 }
+///`GetLoopReportIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetLoopReportIn {
+    pub from: f64,
+    pub to: f64,
+}
 ///`GetProfileIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetProfileIn {
@@ -7493,6 +7499,45 @@ pub enum LifecycleEvent {
         #[serde(rename = "workspaceId")]
         workspace_id: ::std::string::String,
     },
+    #[serde(rename = "tempo.pr.merged")]
+    TempoPrMerged {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecyclePrMergedPayload,
+        #[serde(
+            rename = "runId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
     #[serde(rename = "loop.checklist.added")]
     LoopChecklistAdded {
         #[serde(skip_serializing_if = "::std::option::Option::is_none")]
@@ -7660,6 +7705,12 @@ pub struct LifecyclePage {
         deserialize_with = "::std::option::Option::deserialize"
     )]
     pub next_before_seq: ::std::option::Option<i64>,
+}
+///`LifecyclePrMergedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecyclePrMergedPayload {
+    #[serde(rename = "prNumber")]
+    pub pr_number: i64,
 }
 ///`LifecycleProofPayload`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -8653,6 +8704,109 @@ impl ::std::convert::TryFrom<&str> for LogLevel {
     }
 }
 impl ::std::convert::TryFrom<::std::string::String> for LogLevel {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`LoopReport`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LoopReport {
+    pub from: f64,
+    pub steps: ::std::vec::Vec<LoopReportStepsItem>,
+    pub to: f64,
+    pub violations: ::std::vec::Vec<::std::string::String>,
+}
+///`LoopReportStepsItem`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LoopReportStepsItem {
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub median: ::std::option::Option<f64>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub met: ::std::option::Option<bool>,
+    pub n: f64,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub p90: ::std::option::Option<f64>,
+    pub step: LoopReportStepsItemStep,
+    #[serde(rename = "targetMedian")]
+    pub target_median: f64,
+    #[serde(rename = "targetP90")]
+    pub target_p90: f64,
+}
+///`LoopReportStepsItemStep`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LoopReportStepsItemStep {
+    #[serde(rename = "intent_shown")]
+    IntentShown,
+    #[serde(rename = "intent_corrections")]
+    IntentCorrections,
+    #[serde(rename = "preview_proof")]
+    PreviewProof,
+    #[serde(rename = "proof_to_merge")]
+    ProofToMerge,
+    #[serde(rename = "ci")]
+    Ci,
+    #[serde(rename = "merge_to_live")]
+    MergeToLive,
+    #[serde(rename = "rollback")]
+    Rollback,
+    #[serde(rename = "error_seen")]
+    ErrorSeen,
+    #[serde(rename = "error_fixed")]
+    ErrorFixed,
+}
+impl ::std::fmt::Display for LoopReportStepsItemStep {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::IntentShown => f.write_str("intent_shown"),
+            Self::IntentCorrections => f.write_str("intent_corrections"),
+            Self::PreviewProof => f.write_str("preview_proof"),
+            Self::ProofToMerge => f.write_str("proof_to_merge"),
+            Self::Ci => f.write_str("ci"),
+            Self::MergeToLive => f.write_str("merge_to_live"),
+            Self::Rollback => f.write_str("rollback"),
+            Self::ErrorSeen => f.write_str("error_seen"),
+            Self::ErrorFixed => f.write_str("error_fixed"),
+        }
+    }
+}
+impl ::std::str::FromStr for LoopReportStepsItemStep {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "intent_shown" => Ok(Self::IntentShown),
+            "intent_corrections" => Ok(Self::IntentCorrections),
+            "preview_proof" => Ok(Self::PreviewProof),
+            "proof_to_merge" => Ok(Self::ProofToMerge),
+            "ci" => Ok(Self::Ci),
+            "merge_to_live" => Ok(Self::MergeToLive),
+            "rollback" => Ok(Self::Rollback),
+            "error_seen" => Ok(Self::ErrorSeen),
+            "error_fixed" => Ok(Self::ErrorFixed),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LoopReportStepsItemStep {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LoopReportStepsItemStep {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -16481,6 +16635,15 @@ pub mod api {
         type Input = crate::Empty;
         type Output = crate::GetJudgeSettingsOut;
     }
+    /// `getLoopReport`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetLoopReport;
+    impl crate::Function for GetLoopReport {
+        const NAME: &'static str = "getLoopReport";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetLoopReportIn;
+        type Output = crate::LoopReport;
+    }
     /// `getProfile`
     #[derive(Clone, Copy, Debug)]
     pub struct GetProfile;
@@ -17519,6 +17682,7 @@ pub mod api {
         ("getFileDiff", crate::Method::Get),
         ("getIssuesWebhook", crate::Method::Get),
         ("getJudgeSettings", crate::Method::Get),
+        ("getLoopReport", crate::Method::Get),
         ("getProfile", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
         ("getProjectProfile", crate::Method::Get),
@@ -17771,6 +17935,7 @@ pub mod wire {
         "GetIssuesWebhookIn",
         "GetIssuesWebhookOut",
         "GetJudgeSettingsOut",
+        "GetLoopReportIn",
         "GetProfileIn",
         "GetProjectConversationIn",
         "GetProjectProfileIn",
@@ -17810,6 +17975,7 @@ pub mod wire {
         "LifecycleIntentProposedPayload",
         "LifecycleLogEvent",
         "LifecyclePage",
+        "LifecyclePrMergedPayload",
         "LifecycleProofPayload",
         "LifecycleRunCompletedPayload",
         "LifecycleRunDecidedPayload",
@@ -17855,6 +18021,7 @@ pub mod wire {
         "ListTerminalsItem",
         "ListWorkspacesIn",
         "LogLevel",
+        "LoopReport",
         "MarkViewedIn",
         "McpEnvVar",
         "McpHeader",
@@ -18184,6 +18351,7 @@ pub mod wire {
             "GetIssuesWebhookIn" => crate::roundtrip::<crate::GetIssuesWebhookIn>(text),
             "GetIssuesWebhookOut" => crate::roundtrip::<crate::GetIssuesWebhookOut>(text),
             "GetJudgeSettingsOut" => crate::roundtrip::<crate::GetJudgeSettingsOut>(text),
+            "GetLoopReportIn" => crate::roundtrip::<crate::GetLoopReportIn>(text),
             "GetProfileIn" => crate::roundtrip::<crate::GetProfileIn>(text),
             "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
             "GetProjectProfileIn" => crate::roundtrip::<crate::GetProjectProfileIn>(text),
@@ -18239,6 +18407,7 @@ pub mod wire {
             }
             "LifecycleLogEvent" => crate::roundtrip::<crate::LifecycleLogEvent>(text),
             "LifecyclePage" => crate::roundtrip::<crate::LifecyclePage>(text),
+            "LifecyclePrMergedPayload" => crate::roundtrip::<crate::LifecyclePrMergedPayload>(text),
             "LifecycleProofPayload" => crate::roundtrip::<crate::LifecycleProofPayload>(text),
             "LifecycleRunCompletedPayload" => {
                 crate::roundtrip::<crate::LifecycleRunCompletedPayload>(text)
@@ -18306,6 +18475,7 @@ pub mod wire {
             "ListTerminalsItem" => crate::roundtrip::<crate::ListTerminalsItem>(text),
             "ListWorkspacesIn" => crate::roundtrip::<crate::ListWorkspacesIn>(text),
             "LogLevel" => crate::roundtrip::<crate::LogLevel>(text),
+            "LoopReport" => crate::roundtrip::<crate::LoopReport>(text),
             "MarkViewedIn" => crate::roundtrip::<crate::MarkViewedIn>(text),
             "McpEnvVar" => crate::roundtrip::<crate::McpEnvVar>(text),
             "McpHeader" => crate::roundtrip::<crate::McpHeader>(text),

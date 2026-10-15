@@ -1061,6 +1061,22 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getLoopReport": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetLoopReportIn.json"
+        },
+        "output": {
+          "$ref": "LoopReport.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "decideCloudflareHold": {
       "type": "object",
       "properties": {
@@ -2778,6 +2794,7 @@
     "listRuns",
     "resolveAgentProposal",
     "confirmIntent",
+    "getLoopReport",
     "decideCloudflareHold",
     "addChecklistItem",
     "reopenChecklistItem",

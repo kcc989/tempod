@@ -247,7 +247,19 @@ export class WorkspaceCore {
     return undefined;
   }
   updateWs(patch: Partial<typeof workspace.$inferInsert>): void {
+    const before = patch.prState === "merged" ? this.ws() : null;
     this.db.update(workspace).set(patch).where(eq(workspace.id, 1)).run();
+
+    // 13, L-ADR-7: the merge is a loop step.
+    if (before && before.prState !== "merged" && before.prNumber !== null) {
+      this.lifecycle.append({
+        type: "tempo.pr.merged",
+        source: "tempo",
+        dedupeKey: `pr:${before.prNumber}:merged`,
+        payload: { prNumber: before.prNumber },
+      });
+      this.lifecycle.kick();
+    }
   }
   get state(): WorkspaceState {
     return this.ws().state;

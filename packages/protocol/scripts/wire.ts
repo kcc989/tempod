@@ -39,6 +39,7 @@ export const SHARED = {
   LifecycleIntentDecidedPayload: P.LifecycleIntentDecidedPayload,
   LifecycleIntentCorrectedPayload: P.LifecycleIntentCorrectedPayload,
   LifecycleProofPayload: P.LifecycleProofPayload,
+  LifecyclePrMergedPayload: P.LifecyclePrMergedPayload,
   LifecycleChecklistPayload: P.LifecycleChecklistPayload,
 
   LifecycleLogEvent: P.LifecycleLogEvent,
@@ -153,6 +154,7 @@ export const SHARED = {
   ProjectProfile: P.ProjectProfile,
   ChecklistItem: P.ChecklistItem,
   CapabilityManifest: P.CapabilityManifest,
+  LoopReport: P.LoopReport,
   ConversationSummary: P.ConversationSummary,
   ConversationArtifact: P.ConversationArtifact,
   WorkspaceSummary: P.WorkspaceSummary,

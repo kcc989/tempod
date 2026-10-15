@@ -21,6 +21,7 @@ const Envelope = Schema.Struct({
   name: Schema.optional(Schema.String),
   alert_correlation_id: Schema.optional(Schema.String),
   data: Schema.optional(Schema.Json),
+  ts: Schema.optional(Schema.Union([Schema.Number, Schema.String])),
 });
 
 export interface ParsedIssue {
@@ -29,6 +30,8 @@ export interface ParsedIssue {
   readonly versionId: string | null;
   readonly title: string;
   readonly text: string;
+  /** When Cloudflare saw the error (the envelope's `ts`), or null. */
+  readonly occurredAt: number | null;
 }
 
 const KEYS = {
@@ -86,7 +89,7 @@ export const parseIssue = async (body: Schema.Json): Promise<ParsedIssue | null>
   const envelope = Schema.decodeUnknownOption(Envelope)(body);
 
   if (Option.isNone(envelope)) return null;
-  const { text, name, alert_correlation_id: correlation, data } = envelope.value;
+  const { text, name, alert_correlation_id: correlation, data, ts } = envelope.value;
 
   return {
     issueKey: findString(data, KEYS.issue) ?? correlation ?? (await sha256Hex(text)),
@@ -94,5 +97,14 @@ export const parseIssue = async (body: Schema.Json): Promise<ParsedIssue | null>
     versionId: findString(data, KEYS.version),
     title: (name ?? "Production error").slice(0, ISSUES.titleChars),
     text: scrubText(text),
+    occurredAt: timeOf(ts),
   };
+};
+
+/** Seconds, milliseconds or an ISO date, as milliseconds. */
+const timeOf = (ts: number | string | undefined): number | null => {
+  if (ts === undefined) return null;
+  const ms = Schema.is(Schema.Number)(ts) ? (ts < 1e12 ? ts * 1000 : ts) : Date.parse(ts);
+
+  return Number.isFinite(ms) ? ms : null;
 };

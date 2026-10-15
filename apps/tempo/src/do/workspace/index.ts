@@ -1,4 +1,4 @@
-import { eq, lte, isNull } from "drizzle-orm";
+import { and, asc, eq, gte, lt, lte, isNull } from "drizzle-orm";
 import { endSessionForAccess, enforceRemovedAccess, workspaceManifest } from "./manifest.ts";
 import { agentCloudflareToken, cloudflareGate, type GateAnswer } from "./cloudflare-gate.ts";
 import {
@@ -461,6 +461,26 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     const manifest = await workspaceManifest(this.core);
 
     return { calls: manifest.call, cloudflare: manifest.cloudflare !== null };
+  }
+
+  /** 13, L-ADR-7: lifecycle events in [from, to), for the loop report. */
+  async loopEvents(
+    from: number,
+    to: number,
+  ): Promise<Array<{ changeId: string | null; type: string; at: number; payloadJson: string }>> {
+    if (!this.core.wsOrNull()) return [];
+
+    return this.core.db
+      .select({
+        changeId: lifecycleEvents.changeId,
+        type: lifecycleEvents.type,
+        at: lifecycleEvents.occurredAt,
+        payloadJson: lifecycleEvents.payloadJson,
+      })
+      .from(lifecycleEvents)
+      .where(and(gte(lifecycleEvents.occurredAt, from), lt(lifecycleEvents.occurredAt, to)))
+      .orderBy(asc(lifecycleEvents.seq))
+      .all();
   }
 
   /** 13, L-ADR-8: TempoOutbound asks before it forwards an agent's Cloudflare API request. */
