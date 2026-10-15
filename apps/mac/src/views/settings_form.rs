@@ -1,11 +1,11 @@
 //! Settings pages (04, Settings): General, Logins, Environments, MCP servers, Project and
 //! Appearance. Server data changes with the same functions as the web (07, Local storage and
 //! settings).
-use super::tokens::ToggleOn as _;
 use super::environments::{self, EnvironmentSelect};
 use super::environments_model as env_model;
 use super::mcp_model::{self, McpForm};
 use super::settings_model::{self as model, EditValue, FieldState, Kind};
+use super::tokens::ToggleOn as _;
 use super::tokens::{Token, color};
 use crate::platform::Permission;
 use crate::storage::{Local, Theme as SavedTheme, TranscriptDetail};

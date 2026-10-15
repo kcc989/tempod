@@ -54,7 +54,8 @@ struct QueueEditor {
 }
 
 struct ErrorToast;
-pub(super) const BROWSER_SESSION_ENDED: &str = "Browser session ended. Reload checks for a new one.";
+pub(super) const BROWSER_SESSION_ENDED: &str =
+    "Browser session ended. Reload checks for a new one.";
 
 pub struct WorkspaceView {
     pub store: Entity<WorkspaceStore>,
@@ -4479,7 +4480,10 @@ mod tests {
 
     #[gpui_kit::test]
     fn live_opens_in_the_tool_area_and_reports_request_failures(cx: &mut TestAppContext) {
-        assert_eq!(BROWSER_SESSION_ENDED, "Browser session ended. Reload checks for a new one.");
+        assert_eq!(
+            BROWSER_SESSION_ENDED,
+            "Browser session ended. Reload checks for a new one."
+        );
         for (fail, link) in [(true, None), (false, None), (false, Some(LIVE_VIEW_LINK))] {
             let mut state = fixture();
             state.workspace.as_mut().unwrap().browser_active = true;
