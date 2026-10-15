@@ -852,6 +852,34 @@ impl WorkspaceView {
         })
         .detach();
     }
+    /// Confirm or Correct on an intent card (13, L-ADR-1). The card stays busy until the call ends.
+    fn resolve_intent<F: p::Function>(
+        &mut self,
+        transcript: Entity<TranscriptView>,
+        intent_id: String,
+        input: F::Input,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let request = self.client.call::<F>(input);
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.intent_finished(
+                        &intent_id,
+                        F::NAME == "correctIntent" && result.is_ok(),
+                        window,
+                        cx,
+                    )
+                });
+                if let Err(e) = &result {
+                    this.toast_error(e, cx);
+                }
+            });
+        })
+        .detach();
+    }
     fn operation(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.operation_pending {
             return;
@@ -1387,7 +1415,7 @@ impl WorkspaceView {
         let transcript_events = cx.subscribe_in(
             &transcript,
             window,
-            move |this, _, event: &TranscriptEvent, window, cx| match event {
+            move |this, transcript, event: &TranscriptEvent, window, cx| match event {
                 TranscriptEvent::OpenSetup => this.show_setup_tab(window, cx),
                 TranscriptEvent::Permission {
                     request_id,
@@ -1421,6 +1449,33 @@ impl WorkspaceView {
                             proposal_id: proposal_id.clone(),
                             apply: *apply,
                         },
+                        cx,
+                    )
+                }
+                TranscriptEvent::ConfirmIntent { intent_id } => {
+                    let input = p::ConfirmIntentIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        intent_id: intent_id.clone(),
+                    };
+                    this.resolve_intent::<api::ConfirmIntent>(
+                        transcript.clone(),
+                        intent_id.clone(),
+                        input,
+                        window,
+                        cx,
+                    )
+                }
+                TranscriptEvent::CorrectIntent { intent_id, text } => {
+                    let input = p::CorrectIntentIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        intent_id: intent_id.clone(),
+                        text: text.clone(),
+                    };
+                    this.resolve_intent::<api::CorrectIntent>(
+                        transcript.clone(),
+                        intent_id.clone(),
+                        input,
+                        window,
                         cx,
                     )
                 }
@@ -4155,6 +4210,91 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn intent_card_sends_a_correction_then_confirms(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let mut item = state
+            .items
+            .values()
+            .find(|i| i.session_id == session && i.turn_id.is_some())
+            .unwrap()
+            .clone();
+        item.id = "intent-item".into();
+        item.content = p::ItemContent::Intent(
+            serde_json::from_value(serde_json::json!({
+                "intentId": "intent-1", "status": "proposed", "goal": "Fix the login form",
+                "approach": "Edit the form", "notDoing": "No redesign", "decidedBy": null,
+                "reasons": ["new_access"], "enforced": true
+            }))
+            .unwrap(),
+        );
+        state
+            .order
+            .entry(session.clone())
+            .or_default()
+            .push(item.id.clone());
+        state.items.insert(item.id.clone(), item);
+        let workspace_id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let transcript = view.read_with(cx, |v, _| v.chats[&session].transcript.clone());
+        let submit = |cx: &mut TestAppContext, text: &str| {
+            cx.update_window(window, |_, window, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.sync_intent_inputs(window, cx);
+                    t.intent_input("intent-1")
+                        .unwrap()
+                        .update(cx, |input, cx| input.set_value(text, window, cx));
+                    t.submit_intent("intent-1", cx);
+                    assert!(t.intent_busy("intent-1"));
+                    t.submit_intent("intent-1", cx);
+                })
+            })
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                cx.run_until_parked();
+                if !transcript.read_with(cx, |t, _| t.intent_busy("intent-1")) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "intent call did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        submit(cx, "  Keep the old styles  ");
+        transcript.read_with(cx, |t, cx| {
+            assert_eq!(t.intent_correction("intent-1", cx), "");
+        });
+        submit(cx, "");
+        let requests: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("Intent"))
+            .cloned()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![
+                (
+                    "/api/v1/rpc/correctIntent".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "intentId": "intent-1", "text": "Keep the old styles"})
+                ),
+                (
+                    "/api/v1/rpc/confirmIntent".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "intentId": "intent-1"})
+                ),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
     fn queue_controls_preserve_draft_and_reorder_the_whole_workspace(cx: &mut TestAppContext) {
         let mut state = fixture();
         let session = chat_model::sessions(&state, false)[0].id.clone();
@@ -4162,6 +4302,7 @@ mod tests {
         turn.session_id = session.clone();
         turn.status = p::TurnStatus::Queued;
         turn.queue_pos = Some(1.0);
+        turn.seq = 2.0;
         let first = turn.id.clone();
         state.turns.clear();
         state.turns.insert(first.clone(), turn.clone());

@@ -9,6 +9,7 @@ use crate::links::{self, LinkTarget};
 use crate::markdown::{escape_raw_html, tool_text};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
+use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::{TextView, TextViewStyle};
@@ -18,7 +19,7 @@ use gpui_kit::{
     Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
     ImageFormat, ImageSource, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
     Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
-    Window, div, image_cache, px,
+    Subscription, Window, div, image_cache, px,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -83,6 +84,13 @@ pub enum TranscriptEvent {
     ResolveAgentProposal {
         proposal_id: String,
         apply: bool,
+    },
+    ConfirmIntent {
+        intent_id: String,
+    },
+    CorrectIntent {
+        intent_id: String,
+        text: tempo_protocol::CorrectIntentInText,
     },
     RequestAgent {
         agent_id: String,
@@ -186,6 +194,9 @@ pub struct TranscriptView {
     inline_images: HashMap<String, Arc<Image>>,
     media_pending: HashSet<String>,
     permission_focus: HashMap<String, FocusHandle>,
+    /// Correction fields of intents waiting for the owner, by intent id.
+    intent_inputs: HashMap<String, (Entity<TextareaState>, Subscription)>,
+    intent_pending: HashSet<String>,
     attachment_source: Option<(Client, String)>,
     thumbnails: Thumbnails,
     pub read_only: bool,
@@ -216,6 +227,8 @@ impl TranscriptView {
             inline_images: HashMap::new(),
             media_pending: HashSet::new(),
             permission_focus: HashMap::new(),
+            intent_inputs: HashMap::new(),
+            intent_pending: HashSet::new(),
             attachment_source: None,
             thumbnails: Thumbnails::default(),
             read_only: false,
@@ -451,6 +464,124 @@ impl TranscriptView {
         self.rows.len()
     }
 
+    fn intent_row(&self, intent_id: &str) -> Option<usize> {
+        self.rows.iter().position(|row| matches!(&row.native,
+            Some(RowContent::Item { item, .. }) if matches!(&item.content, ItemContent::Intent(i) if i.intent_id == intent_id)))
+    }
+
+    /// Keeps one correction field per intent the owner can still confirm or correct.
+    pub(crate) fn sync_intent_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let open: HashSet<String> = if self.read_only {
+            HashSet::new()
+        } else {
+            self.rows
+                .iter()
+                .filter_map(|row| match &row.native {
+                    Some(RowContent::Item { item, .. }) => match &item.content {
+                        ItemContent::Intent(i)
+                            if i.status == tempo_protocol::IntentContentStatus::Proposed =>
+                        {
+                            Some(i.intent_id.clone())
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .collect()
+        };
+        self.intent_inputs.retain(|id, _| open.contains(id));
+        self.intent_pending.retain(|id| open.contains(id));
+        for id in open {
+            if self.intent_inputs.contains_key(&id) {
+                continue;
+            }
+            let input = cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .auto_grow(2, 8)
+                    .placeholder("Correct the intent (optional)")
+            });
+            let intent_id = id.clone();
+            let subscription = cx.observe(&input, move |this, _, cx| {
+                if let Some(ix) = this.intent_row(&intent_id) {
+                    this.scroller
+                        .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                }
+                cx.notify();
+            });
+            self.intent_inputs.insert(id, (input, subscription));
+        }
+    }
+
+    pub(crate) fn intent_correction(&self, intent_id: &str, cx: &gpui_kit::App) -> String {
+        self.intent_inputs
+            .get(intent_id)
+            .map(|(input, _)| input.read(cx).value().trim().to_string())
+            .unwrap_or_default()
+    }
+
+    fn confirm_intent(&mut self, intent_id: &str, cx: &mut Context<Self>) {
+        if self.read_only || !self.intent_inputs.contains_key(intent_id) {
+            return;
+        }
+        if self.intent_pending.insert(intent_id.to_string()) {
+            cx.emit(TranscriptEvent::ConfirmIntent {
+                intent_id: intent_id.to_string(),
+            });
+            cx.notify();
+        }
+    }
+
+    fn correct_intent(&mut self, intent_id: &str, cx: &mut Context<Self>) {
+        let Ok(text) = self.intent_correction(intent_id, cx).parse() else {
+            return;
+        };
+        if self.read_only || self.intent_pending.contains(intent_id) {
+            return;
+        }
+        self.intent_pending.insert(intent_id.to_string());
+        cx.emit(TranscriptEvent::CorrectIntent {
+            intent_id: intent_id.to_string(),
+            text,
+        });
+        cx.notify();
+    }
+
+    /// ⌘↩ sends the correction when there is one, else confirms (13, L-ADR-1).
+    pub(crate) fn submit_intent(&mut self, intent_id: &str, cx: &mut Context<Self>) {
+        if self.intent_correction(intent_id, cx).is_empty() {
+            self.confirm_intent(intent_id, cx);
+        } else {
+            self.correct_intent(intent_id, cx);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn intent_input(&self, intent_id: &str) -> Option<Entity<TextareaState>> {
+        self.intent_inputs
+            .get(intent_id)
+            .map(|(input, _)| input.clone())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn intent_busy(&self, intent_id: &str) -> bool {
+        self.intent_pending.contains(intent_id)
+    }
+
+    /// A sent correction clears its field; a failed call keeps it for another try.
+    pub fn intent_finished(
+        &mut self,
+        intent_id: &str,
+        corrected: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.intent_pending.remove(intent_id);
+        if corrected && let Some((input, _)) = self.intent_inputs.get(intent_id) {
+            input.update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        cx.notify();
+    }
+
     /// ⌃O: expands or collapses every work row and every tool call (04, Work row).
     pub fn toggle_tools(&mut self, cx: &mut Context<Self>) {
         let mut keys = Vec::new();
@@ -495,7 +626,8 @@ impl TranscriptView {
 }
 
 impl Render for TranscriptView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_intent_inputs(window, cx);
         let view = cx.weak_entity();
         let images = self.images.clone();
         let background = color(Token::Background, cx);
@@ -904,6 +1036,125 @@ fn plan_card(id: &SharedString, plan: &str, cx: &mut gpui_kit::App) -> AnyElemen
         .into_any_element()
 }
 
+/// 13, L-ADR-1: the agent's goal, approach and non-goals, confirmed or corrected with one action.
+fn intent_card(
+    id: &SharedString,
+    intent: &tempo_protocol::IntentContent,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let muted = color(Token::MutedForeground, cx);
+    let proposed = intent.status == tempo_protocol::IntentContentStatus::Proposed;
+    let (input, busy) = view
+        .upgrade()
+        .and_then(|v| {
+            let v = v.read(cx);
+            v.intent_inputs
+                .get(&intent.intent_id)
+                .map(|(input, _)| (input.clone(), v.intent_pending.contains(&intent.intent_id)))
+        })
+        .unzip();
+    let field = |label: &'static str, value: &str| {
+        h_flex()
+            .gap_3()
+            .items_start()
+            .child(div().w(px(80.)).flex_none().text_color(muted).child(label))
+            .child(div().flex_1().min_w_0().child(value.to_string()))
+    };
+    let mut card = v_flex()
+        .id(SharedString::from(format!("{id}:intent")))
+        .role(Role::Group)
+        .aria_label("Intent")
+        .mx_4()
+        .p_3()
+        .gap_2()
+        .rounded_lg()
+        .border_1()
+        .border_color(color(Token::Border, cx))
+        .text_sm()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(chat_model::intent_status_text(intent)),
+        )
+        .child(field("Goal", &intent.goal))
+        .child(field("Approach", &intent.approach))
+        .child(field("Not doing", &intent.not_doing))
+        .when(proposed && !intent.reasons.is_empty(), |card| {
+            card.child(div().text_xs().text_color(muted).child(format!(
+                "Asking you because: {}",
+                chat_model::intent_reason_text(&intent.reasons)
+            )))
+        })
+        .when(!intent.enforced, |card| {
+            card.child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child("This agent has no read-only mode; it was asked not to change files."),
+            )
+        });
+    if let (true, Some(input), Some(busy)) = (proposed, input, busy) {
+        let can_correct = input
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<tempo_protocol::CorrectIntentInText>()
+            .is_ok();
+        let intent_id = intent.intent_id.clone();
+        let (confirm_view, confirm_id) = (view.clone(), intent_id.clone());
+        let (correct_view, correct_id) = (view.clone(), intent_id.clone());
+        card = card
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(Textarea::new(&input).aria_label("Correction"))
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new(SharedString::from(format!("{id}:confirm")))
+                                    .primary()
+                                    .small()
+                                    .label("Confirm")
+                                    .disabled(busy)
+                                    .on_click(move |_, _, cx| {
+                                        let _ = confirm_view.update(cx, |this, cx| {
+                                            this.confirm_intent(&confirm_id, cx)
+                                        });
+                                    }),
+                            )
+                            .child(
+                                Button::new(SharedString::from(format!("{id}:correct")))
+                                    .outline()
+                                    .small()
+                                    .label("Send correction")
+                                    .disabled(busy || !can_correct)
+                                    .on_click(move |_, _, cx| {
+                                        let _ = correct_view.update(cx, |this, cx| {
+                                            this.correct_intent(&correct_id, cx)
+                                        });
+                                    }),
+                            ),
+                    ),
+            )
+            .capture_key_down(move |event, _, cx| {
+                let modifiers = &event.keystroke.modifiers;
+                if busy
+                    || event.keystroke.key != "enter"
+                    || !(modifiers.platform || modifiers.control)
+                {
+                    return;
+                }
+                let _ = view.update(cx, |this, cx| this.submit_intent(&intent_id, cx));
+                cx.stop_propagation();
+            });
+    }
+    card.into_any_element()
+}
+
 pub(crate) fn markdown(id: SharedString, text: &str) -> AnyElement {
     render_row(id, escape_raw_html(text).into_owned().into()).into_any_element()
 }
@@ -1130,6 +1381,8 @@ fn render_native_row(
                     }
                 }
                 ItemContent::Artifact(a) => artifact_card(&id, &item, a, view.clone(), cx),
+                ItemContent::Intent(intent) => intent_card(&id, intent, view.clone(), cx),
+                ItemContent::Proof(_) => div().mx_4().child("Proof").into_any_element(),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
                         let key: SharedString = format!("{}:block:{index}", id).into();

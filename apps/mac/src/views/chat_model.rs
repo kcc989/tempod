@@ -961,9 +961,67 @@ pub fn turn_footer(turn: &Turn, work_row: bool) -> String {
         .join(" · ")
 }
 
+/// 13, L-ADR-1: the intent card's header.
+pub fn intent_status_text(intent: &p::IntentContent) -> &'static str {
+    match intent.status {
+        p::IntentContentStatus::Awaiting => "Waiting for the agent's intent",
+        p::IntentContentStatus::Proposed => "Intent: confirm or correct",
+        p::IntentContentStatus::Corrected => "Intent corrected",
+        p::IntentContentStatus::Confirmed
+            if intent.decided_by == Some(p::IntentContentDecidedBy::Judge) =>
+        {
+            "Intent confirmed by Tempo (low risk)"
+        }
+        p::IntentContentStatus::Confirmed => "Intent confirmed",
+    }
+}
+
+/// 13, L-ADR-1: why the judge sent an intent to the owner.
+pub fn intent_reason_text(reasons: &[String]) -> String {
+    reasons
+        .iter()
+        .map(|reason| match reason.as_str() {
+            "new_access" => "it needs new access",
+            "security_risk" => "it may add a security risk",
+            "hard_rollback" => "it is hard to roll back",
+            "no_answer" => "the judge did not answer",
+            other => other,
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn intent_texts_match_the_web_card() {
+        let mut intent: p::IntentContent = serde_json::from_value(serde_json::json!({
+            "intentId": "i1", "status": "awaiting", "goal": "g", "approach": "a",
+            "notDoing": "n", "decidedBy": null, "reasons": [], "enforced": true
+        }))
+        .unwrap();
+        assert_eq!(
+            intent_status_text(&intent),
+            "Waiting for the agent's intent"
+        );
+        intent.status = p::IntentContentStatus::Proposed;
+        assert_eq!(intent_status_text(&intent), "Intent: confirm or correct");
+        intent.status = p::IntentContentStatus::Corrected;
+        assert_eq!(intent_status_text(&intent), "Intent corrected");
+        intent.status = p::IntentContentStatus::Confirmed;
+        intent.decided_by = Some(p::IntentContentDecidedBy::Owner);
+        assert_eq!(intent_status_text(&intent), "Intent confirmed");
+        intent.decided_by = Some(p::IntentContentDecidedBy::Judge);
+        assert_eq!(
+            intent_status_text(&intent),
+            "Intent confirmed by Tempo (low risk)"
+        );
+        assert_eq!(
+            intent_reason_text(&["new_access".into(), "hard_rollback".into(), "custom".into()]),
+            "it needs new access, it is hard to roll back, custom"
+        );
+    }
     #[test]
     fn new_chat_only_offers_agents_with_a_confirmed_login() {
         let mut credentials: CredentialStatus = serde_json::from_value(serde_json::json!({

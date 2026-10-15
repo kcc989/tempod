@@ -374,6 +374,7 @@ pub struct SettingsForm {
     secret_inputs: BTreeMap<String, Entity<InputState>>,
     project: Option<p::Project>,
     agent_attachments: Option<Entity<super::agent_attachments::AgentAttachments>>,
+    project_profile: Option<Entity<super::project_profile::ProjectProfileEditor>>,
     workspace: Option<p::WorkspaceDetail>,
     fields: Vec<Field>,
     initial: Vec<FieldState>,
@@ -399,6 +400,7 @@ pub struct SettingsForm {
     mcp_servers: Option<Vec<p::McpServer>>,
     mcp_editor: Option<McpEditor>,
     cloudflare: Entity<super::deploy_settings::CloudflareSettings>,
+    typesafe: Entity<super::judge_settings::TypeSafeSettings>,
 }
 
 impl SettingsForm {
@@ -423,6 +425,9 @@ impl SettingsForm {
             .cloned();
         let cloudflare = cx.new(|cx| {
             super::deploy_settings::CloudflareSettings::with_client(client.clone(), window, cx)
+        });
+        let typesafe = cx.new(|cx| {
+            super::judge_settings::TypeSafeSettings::with_client(client.clone(), window, cx)
         });
         let secret_inputs = ["Claude", "Codex", "OpenRouter", "Anthropic", "OpenAI"]
             .into_iter()
@@ -469,6 +474,7 @@ impl SettingsForm {
             secret_inputs,
             project: None,
             agent_attachments: None,
+            project_profile: None,
             workspace: None,
             fields: vec![],
             initial: vec![],
@@ -498,6 +504,7 @@ impl SettingsForm {
             mcp_servers: None,
             mcp_editor: None,
             cloudflare,
+            typesafe,
         };
         if let Some(project) = project {
             this.load_project(project, window, cx);
@@ -729,6 +736,14 @@ impl SettingsForm {
         self.agent_attachments = Some(
             cx.new(|cx| super::agent_attachments::AgentAttachments::new(project_id, window, cx)),
         );
+        if self.project.as_ref().map(|p| &p.id) != Some(&project.id) {
+            let (client, project_id) = (self.client.clone(), project.id.clone());
+            self.project_profile = Some(cx.new(|cx| {
+                super::project_profile::ProjectProfileEditor::with_client(
+                    client, project_id, window, cx,
+                )
+            }));
+        }
         self.project = Some(project);
         self.workspace = workspace;
         cx.notify();
@@ -2119,6 +2134,7 @@ impl SettingsForm {
                     }),
             )
             .child(self.cloudflare.clone())
+            .child(self.typesafe.clone())
             .into_any_element()
     }
 
@@ -2652,6 +2668,11 @@ impl SettingsForm {
             .children(
                 (self.section == 0)
                     .then(|| self.agent_attachments.clone())
+                    .flatten(),
+            )
+            .children(
+                (self.section == 0)
+                    .then(|| self.project_profile.clone())
                     .flatten(),
             )
             .children(fields)
