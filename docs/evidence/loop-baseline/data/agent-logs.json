@@ -1,0 +1,170 @@
+{
+  "messages": 468,
+  "threads": 55,
+  "period": [
+    "2026-09-16",
+    "2026-10-15"
+  ],
+  "by_source": {
+    "codex": 45,
+    "claude": 299,
+    "codex-archived": 124
+  },
+  "agreement": {
+    "sample": 40,
+    "precision": 0.86,
+    "recall": 0.9,
+    "exact": 35
+  },
+  "codes": {
+    "STACK": {
+      "messages": 23,
+      "per_100": 4.9,
+      "threads": 15
+    },
+    "CF_PERMS": {
+      "messages": 12,
+      "per_100": 2.6,
+      "threads": 3
+    },
+    "API_KEYS": {
+      "messages": 11,
+      "per_100": 2.4,
+      "threads": 6
+    },
+    "CI_SLOW": {
+      "messages": 19,
+      "per_100": 4.1,
+      "threads": 9
+    },
+    "UNCLEAR_IMPL": {
+      "messages": 32,
+      "per_100": 6.8,
+      "threads": 17
+    },
+    "PLAN_VERBOSE": {
+      "messages": 55,
+      "per_100": 11.8,
+      "threads": 21
+    },
+    "DESIGN": {
+      "messages": 73,
+      "per_100": 15.6,
+      "threads": 14
+    },
+    "DESIGN_IGNORED": {
+      "messages": 16,
+      "per_100": 3.4,
+      "threads": 2
+    },
+    "ACCESS_UNAWARE": {
+      "messages": 8,
+      "per_100": 1.7,
+      "threads": 4
+    },
+    "VERIFY": {
+      "messages": 41,
+      "per_100": 8.8,
+      "threads": 12
+    },
+    "HEADLESS": {
+      "messages": 5,
+      "per_100": 1.1,
+      "threads": 5
+    },
+    "NEW_TASK": {
+      "messages": 118,
+      "per_100": 25.2,
+      "threads": 45
+    },
+    "OTHER": {
+      "messages": 135,
+      "per_100": 28.8,
+      "threads": 37
+    }
+  },
+  "friction_messages": 193,
+  "plan_corrections": {
+    "total": 55,
+    "about_length": 5
+  },
+  "by_project": {
+    "tempod": {
+      "messages": 163,
+      "STACK": 4,
+      "CI_SLOW": 5,
+      "UNCLEAR_IMPL": 4,
+      "PLAN_VERBOSE": 4,
+      "DESIGN": 59,
+      "DESIGN_IGNORED": 16,
+      "ACCESS_UNAWARE": 6,
+      "VERIFY": 30,
+      "HEADLESS": 3
+    },
+    "farstep": {
+      "messages": 103,
+      "STACK": 8,
+      "CF_PERMS": 12,
+      "API_KEYS": 7,
+      "CI_SLOW": 14,
+      "UNCLEAR_IMPL": 7,
+      "PLAN_VERBOSE": 17,
+      "DESIGN": 3,
+      "ACCESS_UNAWARE": 1,
+      "VERIFY": 4
+    },
+    "keeled": {
+      "messages": 116,
+      "STACK": 5,
+      "API_KEYS": 4,
+      "UNCLEAR_IMPL": 16,
+      "PLAN_VERBOSE": 27,
+      "VERIFY": 5
+    },
+    "spending": {
+      "messages": 39,
+      "STACK": 4,
+      "UNCLEAR_IMPL": 2,
+      "PLAN_VERBOSE": 5,
+      "DESIGN": 10,
+      "VERIFY": 1
+    },
+    "weathered": {
+      "messages": 19,
+      "STACK": 1,
+      "UNCLEAR_IMPL": 2,
+      "PLAN_VERBOSE": 1,
+      "DESIGN": 1,
+      "ACCESS_UNAWARE": 1,
+      "HEADLESS": 1
+    },
+    "i": {
+      "messages": 19,
+      "STACK": 1,
+      "UNCLEAR_IMPL": 1,
+      "HEADLESS": 1
+    }
+  },
+  "loop": {
+    "final_reply_words": {
+      "median": 326.0,
+      "p90": 627
+    },
+    "human_messages_per_thread": {
+      "median": 5,
+      "p90": 17
+    },
+    "minutes_to_next_human_message": {
+      "median": 1.0,
+      "p90": 28.8
+    },
+    "tool_calls_between_human_messages": {
+      "median": 8,
+      "p90": 53
+    },
+    "messages_after_interrupt": 19,
+    "messages_with_screenshots": 53,
+    "screenshots": 130,
+    "agent_no_access_replies": 2
+  }
+}
