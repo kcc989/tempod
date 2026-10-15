@@ -177,7 +177,13 @@ describe("project conversation artifacts", () => {
       .bind(Date.now(), w.workspaceId)
       .run();
 
-    const get = vi.spyOn(env.DATA, "put").mockRejectedValueOnce(new Error("Unavailable"));
+    const put = env.DATA.put.bind(env.DATA);
+
+    const get = vi.spyOn(env.DATA, "put").mockImplementation(async (...args) => {
+      if (args[0] === w.key) throw new Error("Unavailable");
+
+      return put(...args);
+    });
 
     try {
       await expect(unlinkProject(w.ctx, { projectId: w.project.projectId })).rejects.toMatchObject({

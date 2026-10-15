@@ -37,6 +37,7 @@ COPY --chmod=0644 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
 
 RUN groupmod -n tempo node \
  && usermod -l tempo -d /home/tempo -s /bin/zsh node \
+ && chmod 0755 /opt/tempo /opt/tempo/pi \
  && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent /home/tempo/.oh-my-zsh-custom \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
