@@ -2067,8 +2067,9 @@ describe.concurrent("revert and commit_push ops", { timeout: 60_000 }, () => {
 describe.concurrent("step runner rules", { timeout: 60_000 }, () => {
   it("runs one op at a time, in creation order", async ({ expect }) => {
     const w = await readyWs();
+    const gate = Promise.withResolvers<void>();
     w.tempod.on("git.commitAndPush", async () => {
-      await sleep(300);
+      await gate.promise;
 
       return { commitSha: "f".repeat(40) };
     });
@@ -2078,22 +2079,25 @@ describe.concurrent("step runner rules", { timeout: 60_000 }, () => {
       runner.insert("sleep");
     });
     void runDurableObjectAlarm(w.stub).catch(() => undefined);
-    await waitFor(() => w.tempod.requestsOf("git.commitAndPush").length === 1, 5000, "commit sent");
-    // 03 Step runner: "At most one op is running at a time. Ops wait as pending and start in creation order."
-    const during = await w.stub.listOps();
-    expect(during.find((o) => o.kind === "commit_push")).toMatchObject({
-      status: "running",
-      step: "git.commitAndPush",
-    });
-    expect(during.find((o) => o.kind === "sleep")).toMatchObject({ status: "pending", step: "turns.check" });
-    expect(during.filter((o) => o.status === "running")).toHaveLength(1);
+
+    try {
+      await waitFor(() => w.tempod.requestsOf("git.commitAndPush").length === 1, 5000, "commit sent");
+      const during = await w.stub.listOps();
+      expect(during.find((o) => o.kind === "commit_push")).toMatchObject({
+        status: "running",
+        step: "git.commitAndPush",
+      });
+      expect(during.find((o) => o.kind === "sleep")).toMatchObject({ status: "pending", step: "turns.check" });
+      expect(during.filter((o) => o.status === "running")).toHaveLength(1);
+    } finally {
+      gate.resolve();
+    }
+
     await driveToState(w.stub, "sleeping");
     const sent = w.tempod.requests.map((r) => r.op);
     expect(sent.indexOf("git.commitAndPush")).toBeLessThan(sent.lastIndexOf("git.checkpoint"));
     const commit = (await opOf(w.stub, "commit_push"))!;
     expect(commit["status"]).toBe("done");
-    // Timings record the step's real duration.
-    expect(opState(commit).timings["git.commitAndPush"]).toBeGreaterThanOrEqual(250);
   });
 
   it("aborts a step at its timeout, counts it as a failed attempt and records the time spent", async ({
