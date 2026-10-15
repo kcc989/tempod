@@ -80,6 +80,21 @@ export const LifecycleRunDecidedPayload = Schema.Struct({
   threshold: Schema.Number,
 });
 
+/** 13, L-ADR-7. */
+export const LifecycleIntentProposedPayload = Schema.Struct({
+  intentId: Ulid,
+  lines: Int,
+  enforced: Schema.Boolean,
+});
+
+export const LifecycleIntentDecidedPayload = Schema.Struct({
+  intentId: Ulid,
+  by: Schema.Literals(["owner", "judge"]),
+  reasons: Schema.Array(S),
+});
+
+export const LifecycleIntentCorrectedPayload = Schema.Struct({ intentId: Ulid });
+
 export const LifecycleChangeEndedPayload = Schema.Struct({
   status: Schema.Literals(["done", "failed", "cancelled"]),
 });
@@ -105,6 +120,9 @@ export const LifecycleEvent = Schema.Union([
   event("tempo.branch.pushed", "tempo", LifecycleBranchPushedPayload),
   event("tempo.check.passed", "tempo", LifecycleCheckPayload),
   event("tempo.check.failed", "tempo", LifecycleCheckPayload),
+  event("loop.intent.proposed", "agent", LifecycleIntentProposedPayload),
+  event("loop.intent.confirmed", "tempo", LifecycleIntentDecidedPayload),
+  event("loop.intent.corrected", "tempo", LifecycleIntentCorrectedPayload),
 ]);
 
 export type LifecycleEvent = typeof LifecycleEvent.Type;

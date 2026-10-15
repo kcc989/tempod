@@ -172,7 +172,13 @@ export const ITEM_KINDS = [
   "artifact",
   "run",
   "agent_proposal",
+  "intent",
 ] as const;
+
+/** 13, L-ADR-1. */
+export const IntentStatus = Schema.Literals(["awaiting", "proposed", "confirmed", "corrected"]);
+
+export type IntentStatus = typeof IntentStatus.Type;
 
 export const ItemKind = Schema.Literals(ITEM_KINDS);
 

@@ -15,6 +15,7 @@
     "error",
     "artifact",
     "run",
-    "agent_proposal"
+    "agent_proposal",
+    "intent"
   ]
 }

@@ -1,3 +1,4 @@
+import { confirmIntent, correctIntent } from "./intent.ts";
 import { resolveAgentProposal } from "../../agents/proposals.ts";
 import { Schema } from "effect";
 import { promptSlug } from "@tempo/cities";
@@ -368,6 +369,20 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       core.updateWs({ environmentId });
       core.publish();
       core.ctx.waitUntil(sendEnv(core));
+
+      return {};
+    },
+    confirmIntent: async ({ intentId }) => {
+      notArchived(core);
+      rt.ensureAwake();
+      await confirmIntent(core, intentId);
+
+      return {};
+    },
+    correctIntent: async ({ intentId, text }) => {
+      notArchived(core);
+      rt.ensureAwake();
+      correctIntent(core, intentId, text);
 
       return {};
     },

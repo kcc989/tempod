@@ -1,0 +1,2 @@
+{"intentId":"01k700000000000000000000zm","status":"awaiting","goal":"","approach":"","notDoing":"","decidedBy":null,"reasons":[],"enforced":false}
+{"intentId":"01k700000000000000000000zm","status":"confirmed","goal":"Add due dates","approach":"A nullable column and a picker","notDoing":"No reminders","decidedBy":"judge","reasons":[],"enforced":true}

@@ -44,6 +44,8 @@ export const ERROR_MESSAGES = {
   CI_NOT_CONFIGURED: "Add a CI pipeline for this repository first.",
   DEPLOY_CONFIG_INVALID: "The deploy configuration is not valid.",
   DEPLOY_CONFIG_CHANGED: "The deploy configuration changed. Reload it and try again.",
+  PROFILE_INVALID: "The project profile is not valid.",
+  PROFILE_CHANGED: "The project profile changed. Reload it and try again.",
   DEPLOY_NOT_CONFIGURED: "Add a deploy configuration for this repository first.",
   DEPLOY_ACCOUNT_NOT_SET: "Add a Cloudflare account and token in Settings first.",
   DEPLOY_TOKEN_INVALID: "Cloudflare did not accept the deploy token.",

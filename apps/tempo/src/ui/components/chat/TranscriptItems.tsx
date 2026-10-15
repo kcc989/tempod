@@ -1,4 +1,5 @@
 import { AgentProposalCard } from "./AgentProposalCard";
+import { IntentCard } from "./IntentCard";
 import { RunCard } from "./RunCard";
 import { Match, Schema } from "effect";
 import type { AgentId, Item, ItemOf, Turn } from "@tempo/protocol";
@@ -104,6 +105,8 @@ export const ItemView = memo(function ItemView({
           writable={ctx.writable}
         />
       );
+    case "intent":
+      return <IntentCard workspaceId={ctx.workspaceId} intent={item.content} writable={ctx.writable} />;
     case "user_message":
       return <UserMessage ctx={ctx} item={item} turn={turn} />;
     case "agent_message":

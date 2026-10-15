@@ -78,4 +78,11 @@ export const prodErrors = sqliteTable("errors", {
   fixedAt: integer("fixed_at"),
 });
 
-export const appDeploySchema = { deployConfigs, deployments, deployKv, deployEvents, prodErrors };
+/** 13, L-ADR-3: project profile revisions. */
+export const profiles = sqliteTable("profiles", {
+  revision: integer("revision").primaryKey(),
+  source: text("source").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const appDeploySchema = { deployConfigs, deployments, deployKv, deployEvents, prodErrors, profiles };

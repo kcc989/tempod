@@ -1,3 +1,4 @@
+import { pendingIntent } from "./intent.ts";
 import { proposalRecords } from "../../agents/proposals.ts";
 import type { CiCoordinator } from "../../ci/types.ts";
 import type { DeployCoordinator } from "../../deploy/types.ts";
@@ -450,7 +451,7 @@ export class WorkspaceCore {
       .where(eq(permissions.status, "pending"))
       .get();
 
-    if (pending) return "needs_input";
+    if (pending || pendingIntent(this)) return "needs_input";
 
     const newest = this.db
       .select()

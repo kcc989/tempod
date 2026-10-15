@@ -459,9 +459,10 @@ A session is one ACP session in one adapter process. The adapter process may die
   1. On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set.
   2. On the first prompt after a handoff only: the handoff text block (below); then clear `handoff_pending`. On any prompt: `sessions.pending_note`, if set (for example, the revert note in 03); then clear it.
   3. One text block per review comment group: `Review comments:` followed by one line per comment, `<path>:<line>: <text>`.
-  4. The user's text.
-  5. One `resource_link` per @-mentioned file: `uri` = `file:///workspace/<path>`, `name` = the file name.
-  6. Images: an `image` block if `promptCapabilities.image` is true; else a `resource_link` to the file saved at `/home/tempo/attachments/<turnId>/<name>`.
+  4. On the first prompt of a chat that starts the intent check (13, L-ADR-1): the intent rule text block. A first prompt that starts with `/go` has no rule, and `/go` is removed.
+  5. The user's text.
+  6. One `resource_link` per @-mentioned file: `uri` = `file:///workspace/<path>`, `name` = the file name.
+  7. Images: an `image` block if `promptCapabilities.image` is true; else a `resource_link` to the file saved at `/home/tempo/attachments/<turnId>/<name>`.
 - The turn-summary rule is this fixed text. The web and Mac clients show the last agent message of a turn as its answer (04, Work row), so it must stand alone:
 
   ```text

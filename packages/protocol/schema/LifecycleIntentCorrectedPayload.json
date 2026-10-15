@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleIntentCorrectedPayload",
+  "type": "object",
+  "properties": {
+    "intentId": {
+      "type": "string"
+    }
+  },
+  "required": ["intentId"],
+  "additionalProperties": true
+}

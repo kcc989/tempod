@@ -1,3 +1,4 @@
+import { ProjectProfileEditor } from "./ProjectProfileEditor";
 import { ProjectAgentAttachments } from "./ProjectAgentAttachments";
 import { DEFAULT_SETTINGS, type Environment, type Project, type WorkspaceDetail } from "@tempo/protocol";
 import { FolderGit2Icon, Trash2Icon } from "lucide-react";
@@ -104,6 +105,7 @@ export function ProjectTab({
       </div>
       <div hidden={section !== undefined && section !== "Agent"}>
         <ProjectAgentAttachments key={project.id} projectId={project.id} />
+        <ProjectProfileEditor key={`profile:${project.id}`} projectId={project.id} />
       </div>
       <ProjectSettingsForm
         key={`${project.id}:${JSON.stringify(project.settings)}`}

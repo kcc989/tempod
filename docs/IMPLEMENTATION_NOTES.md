@@ -581,3 +581,16 @@ Tab 12, Production errors (13, L-ADR-5 and L-ADR-6). Choices made without the ow
 | Fix base | A new branch from the error's deployment branch, not its exact SHA | `createWorkspace` starts from a branch tip. |
 
 Mac notes for both slices: the canary end time shows in UTC, because the Mac crate has no time-zone library and rule 11 needs approval to add one. The Mac production-error list reloads when the tab opens and on refresh; it does not poll every 5 seconds as the web does. `cargo test -p tempo-mac` passed 3 of 5 runs; the 2 failures were the existing `queue_controls_preserve_draft_and_reorder_the_whole_workspace` test in `workspace.rs`, which these slices do not touch.
+
+## Loop: intent check (2026-10-15)
+
+Tab 13, L-ADR-1 (Exact rules) and L-ADR-9. Choices made without the owner, as asked:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Scope | Once per chat, not per message | Each message is its own change (08). A check per message would add a round trip to every follow-up. The agent proposes again when it leaves the goal. |
+| Read-only | The chat's mode switches to the agent's plan mode (Claude and OpenCode `plan`, Codex `read-only`) for the first prompt, and back after confirmation | It reuses `session.setMode` and needs no session restart. |
+| Pi | No read-only mode; the instruction alone, shown on the card as not enforced | Pi has no plan mode; a profile restart per chat would be heavy. A later change can add the tree check of 08 Runs step 7.4. |
+| Judge context | Branch and project name | The deploy configuration's targets are not in the WorkspaceDO; adding a cross-DO read to every proposal was not worth it yet. The spec row is updated. |
+| Retry | The rule stays on the turn until the agent proposes | A deferred `session.prompt` retry must keep it, as it keeps the general prompt. |
+| Settings | TypeSafe AI sits under Cloudflare in Settings | Both are owner credentials for loop services. |

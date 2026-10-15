@@ -144,6 +144,34 @@ export const rotateIssuesWebhook = createServerFn({ method: "POST" })
   .validator((data: FnInput<"rotateIssuesWebhook">) => data)
   .handler(({ data }) => run("rotateIssuesWebhook", data));
 
+export const getJudgeSettings = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getJudgeSettings">) => data)
+  .handler(({ data }) => run("getJudgeSettings", data));
+
+export const setJudgeKey = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setJudgeKey">) => data)
+  .handler(({ data }) => run("setJudgeKey", data));
+
+export const deleteJudgeKey = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteJudgeKey">) => data)
+  .handler(({ data }) => run("deleteJudgeKey", data));
+
+export const confirmIntent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"confirmIntent">) => data)
+  .handler(({ data }) => run("confirmIntent", data));
+
+export const correctIntent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"correctIntent">) => data)
+  .handler(({ data }) => run("correctIntent", data));
+
+export const getProjectProfile = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getProjectProfile">) => data)
+  .handler(({ data }) => run("getProjectProfile", data));
+
+export const updateProjectProfile = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"updateProjectProfile">) => data)
+  .handler(({ data }) => run("updateProjectProfile", data));
+
 export const getDeploymentLog = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getDeploymentLog">) => data)
   .handler(({ data }) => run("getDeploymentLog", data));

@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SetJudgeKeyIn",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["key"],
+  "additionalProperties": true
+}

@@ -30,6 +30,7 @@ import {
   DeployStatus,
   DeployTool,
   DeployTrigger,
+  IntentStatus,
   IssueState,
   NoticeLevel,
   OpKind,
@@ -338,6 +339,16 @@ export const DeploySettings = Schema.Struct({
 
 export type DeploySettings = typeof DeploySettings.Type;
 
+/** 13, L-ADR-3. */
+export const ProjectProfile = Schema.Struct({
+  projectId: Schema.String,
+  revision: Schema.Number,
+  source: Schema.String,
+  updatedAt: N(Ms),
+});
+
+export type ProjectProfile = typeof ProjectProfile.Type;
+
 /** 12, Production errors. */
 export const ProductionError = Schema.Struct({
   id: Schema.String,
@@ -584,9 +595,24 @@ export const RunContent = Schema.Struct({ runId: Schema.String });
 
 export const AgentProposalContent = Schema.Struct({ proposalId: Schema.String });
 
+/** 13, L-ADR-1: the intent card. Updated in place as the intent changes. */
+export const IntentContent = Schema.Struct({
+  intentId: Schema.String,
+  status: IntentStatus,
+  goal: Schema.String,
+  approach: Schema.String,
+  notDoing: Schema.String,
+  decidedBy: N(Schema.Literals(["owner", "judge"])),
+  reasons: Schema.Array(Schema.String),
+  enforced: Schema.Boolean,
+});
+
+export type IntentContent = typeof IntentContent.Type;
+
 export const ITEM_CONTENT = {
   run: RunContent,
   agent_proposal: AgentProposalContent,
+  intent: IntentContent,
   user_message: UserMessageContent,
   agent_message: AgentMessageContent,
   agent_thought: AgentThoughtContent,
@@ -616,6 +642,7 @@ const itemOf = <K extends keyof typeof ITEM_CONTENT>(kind: K) =>
 export const Item = Schema.Union([
   itemOf("run"),
   itemOf("agent_proposal"),
+  itemOf("intent"),
   itemOf("user_message"),
   itemOf("agent_message"),
   itemOf("agent_thought"),

@@ -362,7 +362,26 @@ export type LifecycleRow = typeof lifecycleEvents.$inferSelect;
 
 export type RunRow = typeof runs.$inferSelect;
 
+/** 13, L-ADR-1: one intent per chat. */
+export const intents = sqliteTable("intents", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  changeId: text("change_id"),
+  itemId: text("item_id"),
+  status: text("status", { enum: ["awaiting", "proposed", "confirmed", "corrected"] }).notNull(),
+  goal: text("goal").notNull(),
+  approach: text("approach").notNull(),
+  notDoing: text("not_doing").notNull(),
+  decidedBy: text("decided_by", { enum: ["owner", "judge"] }),
+  judgeJson: text("judge_json"),
+  priorModeId: text("prior_mode_id"),
+  enforced: integer("enforced").notNull(),
+  createdAt: integer("created_at").notNull(),
+  decidedAt: integer("decided_at"),
+});
+
 export const workspaceSchema = {
+  intents,
   lifecycleEvents,
   runs,
   artifacts,
@@ -393,6 +412,8 @@ export type WorkspaceRowDO = typeof workspace.$inferSelect;
 export type OpRow = typeof ops.$inferSelect;
 
 export type SessionRow = typeof sessions.$inferSelect;
+
+export type IntentRow = typeof intents.$inferSelect;
 
 export type TurnRow = typeof turns.$inferSelect;
 

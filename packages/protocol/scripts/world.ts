@@ -462,6 +462,22 @@ export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
     content: { code: "AGENT_CRASHED", detail: null },
   }),
   item("artifact", { n: 11, rev: 11, seconds: 110, content: artifactContent }),
+  item("intent", {
+    n: 12,
+    rev: 12,
+    seconds: 111,
+    status: "pending",
+    content: {
+      intentId: uid(1012),
+      status: "proposed",
+      goal: "Add a due date to each todo.",
+      approach: "A nullable due_at column and a date picker on the edit form.",
+      notDoing: "No reminders or notifications.",
+      decidedBy: null,
+      reasons: ["hard_rollback"],
+      enforced: true,
+    },
+  }),
 ];
 
 export const permissionRequest: P.PermissionRequest = {

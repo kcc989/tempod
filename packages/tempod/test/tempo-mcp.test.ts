@@ -57,6 +57,8 @@ describe("tempo MCP server (01, Environments)", () => {
       "publish_artifact",
       ...ISSUE_TOOL_NAMES,
       ...DEPLOY_TOOL_NAMES,
+      "get_project_profile",
+      "propose_intent",
       "list_agents",
       "propose_agent_change",
     ]);
@@ -325,6 +327,43 @@ describe("run MCP reports", () => {
       result: { isError: true, content: [{ type: "text", text: "The agent is not valid." }] },
     });
     expect(JSON.stringify(client.events)).not.toContain("private proposal");
+
+    const intent = handleMcpMessage(
+      {
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "propose_intent",
+          arguments: { goal: "Add due dates", approach: "A nullable column", notDoing: "No reminders" },
+        },
+      },
+      call,
+      "chat-session",
+    );
+
+    await client.waitFor(
+      () => client.raw.filter((m) => m.type === "tool.req").length === 3,
+      5000,
+      "intent request",
+    );
+    const asked = client.raw.filter((m) => m.type === "tool.req")[2]!;
+
+    expect(asked).toMatchObject({
+      op: "propose_intent",
+      sessionId: "chat-session",
+      params: { goal: "Add due dates", approach: "A nullable column", notDoing: "No reminders" },
+    });
+    client.send({
+      type: "tool.res",
+      id: asked.id,
+      ok: true,
+      result: "The owner will confirm or correct the intent. End your turn now.",
+    });
+    expect(await intent).toMatchObject({
+      result: {
+        content: [{ type: "text", text: "The owner will confirm or correct the intent. End your turn now." }],
+      },
+    });
   });
   test("issue tools forward chat and run identity, reject forged inputs, and keep content outside events and logs", async () => {
     const config = testConfig();

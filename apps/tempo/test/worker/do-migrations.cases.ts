@@ -39,6 +39,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0011_agent_proposals",
       "0012_session_agents",
       "0013_repository_merge",
+      "0014_intents",
     ]);
   });
 });
@@ -190,6 +191,7 @@ describe("deployed workspace upgrade", () => {
                     "0011_agent_proposals",
                     "0012_session_agents",
                     "0013_repository_merge",
+                    "0014_intents",
                   ].includes(m.tag),
               )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
@@ -220,7 +222,7 @@ describe("deployed workspace upgrade", () => {
               "SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
             )
             .one().created_at,
-        ).toBe(1792785600000);
+        ).toBe(1792872000000);
         expect(sql.exec("SELECT id, title, status FROM sessions").toArray()).toEqual([
           { id: "legacy-session", title: "Existing chat", status: "idle" },
         ]);

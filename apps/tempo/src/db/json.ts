@@ -115,6 +115,16 @@ const ITEM_DEFAULTS = {
   handoff: { text: "" },
   revert_marker: { checkpointId: "", toTurnSeq: 0 },
   error: { code: "INTERNAL" },
+  intent: {
+    intentId: "",
+    status: "awaiting",
+    goal: "",
+    approach: "",
+    notDoing: "",
+    decidedBy: null,
+    reasons: [],
+    enforced: false,
+  },
   artifact: {
     artifactId: "",
     version: 1,

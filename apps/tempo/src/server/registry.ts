@@ -10,6 +10,8 @@ import * as repositories from "./handlers/repositories.ts";
 import * as issues from "./handlers/issues.ts";
 import * as pullRequests from "./handlers/pull-requests.ts";
 import * as ci from "./handlers/ci.ts";
+import * as judge from "./handlers/judge.ts";
+import * as projectProfile from "./handlers/project-profile.ts";
 import * as deploy from "./handlers/deploy.ts";
 import * as profile from "./handlers/profile.ts";
 import {
@@ -62,6 +64,11 @@ const own = {
   redeploy: deploy.redeploy,
   cancelDeployment: deploy.cancelDeployment,
   rollbackDeployment: deploy.rollbackDeployment,
+  getJudgeSettings: judge.getJudgeSettings,
+  getProjectProfile: projectProfile.getProjectProfile,
+  updateProjectProfile: projectProfile.updateProjectProfile,
+  setJudgeKey: judge.setJudgeKey,
+  deleteJudgeKey: judge.deleteJudgeKey,
   listProductionErrors: deploy.listProductionErrors,
   startErrorFix: deploy.startErrorFix,
   getIssuesWebhook: deploy.getIssuesWebhook,

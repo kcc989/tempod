@@ -272,6 +272,27 @@ export const handleMcpMessage = async (
           ...(!runId
             ? [
                 {
+                  name: "get_project_profile",
+                  description:
+                    "Read this project's profile: its stack, services, checks, screens and notes, as the owner wrote them. Use it instead of asking the owner to restate the stack.",
+                  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+                },
+                {
+                  name: "propose_intent",
+                  description:
+                    "Before you change any file in a new task, state the goal, your approach and what you will not do, in at most 5 lines in total. Then end your turn; Tempo confirms the intent or the owner corrects it. Call it again when your work leaves the confirmed goal.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      goal: { type: "string", minLength: 1 },
+                      approach: { type: "string", minLength: 1 },
+                      notDoing: { type: "string", minLength: 1 },
+                    },
+                    required: ["goal", "approach", "notDoing"],
+                    additionalProperties: false,
+                  },
+                },
+                {
                   name: "list_agents",
                   description:
                     "List the owner's active agent library and this project's attachments and hooks.",
@@ -390,6 +411,42 @@ export const handleMcpMessage = async (
               !res.ok,
             ),
           );
+        }
+
+        if (!runId && params["name"] === "get_project_profile") {
+          const res = await call("/agent-tools", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ op: "get_project_profile", sessionId: sessionId ?? "", params: {} }),
+          });
+
+          const body = Schema.decodeUnknownSync(
+            Schema.Struct({
+              result: Schema.optionalKey(Schema.Json),
+              error: Schema.optionalKey(Schema.String),
+            }),
+          )(await res.json());
+
+          return reply(
+            text(res.ok ? JSON.stringify(body.result) : (body.error ?? "Profile unavailable."), !res.ok),
+          );
+        }
+
+        if (!runId && params["name"] === "propose_intent") {
+          const res = await call("/agent-tools", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ op: "propose_intent", sessionId: sessionId ?? "", params: args }),
+          });
+
+          const body = Schema.decodeUnknownSync(
+            Schema.Struct({
+              result: Schema.optionalKey(Schema.String),
+              error: Schema.optionalKey(Schema.String),
+            }),
+          )(await res.json());
+
+          return reply(text(res.ok ? (body.result ?? "") : (body.error ?? "Intent rejected."), !res.ok));
         }
 
         if (!runId && (params["name"] === "list_agents" || params["name"] === "propose_agent_change")) {

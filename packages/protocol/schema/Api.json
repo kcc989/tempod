@@ -547,6 +547,86 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getProjectProfile": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetProjectProfileIn.json"
+        },
+        "output": {
+          "$ref": "ProjectProfile.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateProjectProfile": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateProjectProfileIn.json"
+        },
+        "output": {
+          "$ref": "ProjectProfile.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getJudgeSettings": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "GetJudgeSettingsOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setJudgeKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetJudgeKeyIn.json"
+        },
+        "output": {
+          "$ref": "SetJudgeKeyOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteJudgeKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "DeleteJudgeKeyOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "getDeploymentLog": {
       "type": "object",
       "properties": {
@@ -957,6 +1037,38 @@
         },
         "input": {
           "$ref": "ResolveAgentProposalIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "confirmIntent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ConfirmIntentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "correctIntent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CorrectIntentIn.json"
         },
         "output": {
           "$ref": "Empty.json"
@@ -2587,6 +2699,11 @@
     "startErrorFix",
     "getIssuesWebhook",
     "rotateIssuesWebhook",
+    "getProjectProfile",
+    "updateProjectProfile",
+    "getJudgeSettings",
+    "setJudgeKey",
+    "deleteJudgeKey",
     "getDeploymentLog",
     "listRepositoryIssues",
     "getRepositoryIssue",
@@ -2612,6 +2729,8 @@
     "cancelRun",
     "listRuns",
     "resolveAgentProposal",
+    "confirmIntent",
+    "correctIntent",
     "sendRunToChat",
     "listLifecycleEvents",
     "getTrace",

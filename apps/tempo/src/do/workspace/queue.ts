@@ -1,3 +1,4 @@
+import { INTENT_TEXT, intentBeforeTurn, intentRuleDue } from "./intent.ts";
 import { syncIdleCredentials } from "./credential-sync.ts";
 import { Match, Schema } from "effect";
 import { Files } from "@cloudflare/sandbox";
@@ -274,6 +275,18 @@ export interface PromptContent {
 }
 
 /** Content blocks in the order of 01, Send a prompt. Changes no session field: see `commitContent`. */
+/** 13, L-ADR-3: Delivery. Null when the project has no saved profile. */
+export const PROFILE_HEADER = (revision: number) =>
+  `Project profile (revision ${revision}). Use this stack and these services; do not ask the owner to restate them.`;
+
+const projectProfile = async (core: WorkspaceCore): Promise<string | null> => {
+  const res = await core.env.APP_DEPLOY.getByName(core.ws().projectId).getProfile();
+
+  return res.ok && res.value.revision > 0
+    ? `${PROFILE_HEADER(res.value.revision)}\n${res.value.source}`
+    : null;
+};
+
 export const buildContent = async (
   core: WorkspaceCore,
   session: SessionRow,
@@ -289,6 +302,9 @@ export const buildContent = async (
     blocks.push(text(TURN_SUMMARY_RULE));
 
     if (settings.prompts.general) blocks.push(text(settings.prompts.general));
+    const profile = await projectProfile(core);
+
+    if (profile) blocks.push(text(profile));
     patch.generalPromptSent = 1;
   }
 
@@ -325,6 +341,8 @@ export const buildContent = async (
       blocks.push(text(["Review comments:", ...lines].join("\n")));
     }
   }
+
+  if (intentRuleDue(core, turn.id)) blocks.push(text(INTENT_TEXT.rule));
 
   if (prompt.text) blocks.push(text(prompt.text));
 
@@ -600,8 +618,9 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
     if (signal.aborted) return;
 
     if (!(await core.lifecycle.runs.beforeTurn(turn))) return;
+    await intentBeforeTurn(core, core.sessionRow(session.id), turn);
     const fresh = core.sessionRow(session.id);
-    content = await buildContent(core, fresh, turn);
+    content = await buildContent(core, fresh, core.turnRow(turn.id));
 
     // The workspace left ready while the agent started (an archive): the turn stays queued and is not sent.
     if (signal.aborted || !turnAllowed(core)) {

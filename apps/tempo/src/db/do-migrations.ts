@@ -602,6 +602,36 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       "CREATE INDEX ops_due ON ops(status, next_run_at)",
     ],
   },
+  {
+    tag: "0014_intents",
+    when: 1792872000000,
+    statements: [
+      `CREATE TABLE intents (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL UNIQUE,
+  change_id     TEXT,
+  item_id       TEXT,
+  status        TEXT NOT NULL CHECK (status IN ('awaiting','proposed','confirmed','corrected')),
+  goal          TEXT NOT NULL DEFAULT '',
+  approach      TEXT NOT NULL DEFAULT '',
+  not_doing     TEXT NOT NULL DEFAULT '',
+  decided_by    TEXT CHECK (decided_by IN ('owner','judge')),
+  judge_json    TEXT,
+  prior_mode_id TEXT,
+  enforced      INTEGER NOT NULL,
+  created_at    INTEGER NOT NULL,
+  decided_at    INTEGER
+)`,
+      `CREATE TABLE items_new(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,turn_id TEXT,
+        kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent')),
+        status TEXT NOT NULL CHECK(status IN ('streaming','pending','in_progress','completed','failed','cancelled')),content_json TEXT NOT NULL,rev INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
+      "INSERT INTO items_new SELECT * FROM items",
+      "DROP TABLE items",
+      "ALTER TABLE items_new RENAME TO items",
+      "CREATE INDEX items_by_session ON items(session_id,created_at)",
+      "CREATE INDEX items_by_rev ON items(rev)",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [
@@ -776,6 +806,17 @@ export const APP_DEPLOY_MIGRATIONS: Migrations = [
   fixed_at          INTEGER
 )`,
       `CREATE INDEX errors_last_seen ON errors (last_seen_at)`,
+    ],
+  },
+  {
+    tag: "0002_profiles",
+    when: 1792713600000,
+    statements: [
+      `CREATE TABLE profiles (
+  revision    INTEGER PRIMARY KEY CHECK (revision >= 1),
+  source      TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+)`,
     ],
   },
 ];

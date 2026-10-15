@@ -2258,6 +2258,14 @@ pub struct ConfigSelectOption {
     pub name: ::std::string::String,
     pub value: ::std::string::String,
 }
+///`ConfirmIntentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ConfirmIntentIn {
+    #[serde(rename = "intentId")]
+    pub intent_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
 ///`ContentBlock`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ContentBlock {
@@ -2348,6 +2356,68 @@ pub struct ConversationSummary {
     pub title: ::std::string::String,
     #[serde(rename = "updatedAt")]
     pub updated_at: f64,
+}
+///`CorrectIntentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CorrectIntentIn {
+    #[serde(rename = "intentId")]
+    pub intent_id: ::std::string::String,
+    pub text: CorrectIntentInText,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
+///`CorrectIntentInText`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CorrectIntentInText(::std::string::String);
+impl ::std::ops::Deref for CorrectIntentInText {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CorrectIntentInText> for ::std::string::String {
+    fn from(value: CorrectIntentInText) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CorrectIntentInText {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 4000usize {
+            return Err("longer than 4000 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CorrectIntentInText {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CorrectIntentInText {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CorrectIntentInText {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`CreateEnvironmentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -3100,6 +3170,17 @@ pub struct DeleteEnvironmentSecretIn {
     #[serde(rename = "environmentId")]
     pub environment_id: ::std::string::String,
     pub name: ::std::string::String,
+}
+///`DeleteJudgeKeyOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeleteJudgeKeyOut {
+    #[serde(rename = "keySet")]
+    pub key_set: bool,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
 }
 ///`DeleteMcpServerIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -4244,6 +4325,10 @@ pub enum ErrorCode {
     DeployConfigInvalid,
     #[serde(rename = "DEPLOY_CONFIG_CHANGED")]
     DeployConfigChanged,
+    #[serde(rename = "PROFILE_INVALID")]
+    ProfileInvalid,
+    #[serde(rename = "PROFILE_CHANGED")]
+    ProfileChanged,
     #[serde(rename = "DEPLOY_NOT_CONFIGURED")]
     DeployNotConfigured,
     #[serde(rename = "DEPLOY_ACCOUNT_NOT_SET")]
@@ -4341,6 +4426,8 @@ impl ::std::fmt::Display for ErrorCode {
             Self::CiNotConfigured => f.write_str("CI_NOT_CONFIGURED"),
             Self::DeployConfigInvalid => f.write_str("DEPLOY_CONFIG_INVALID"),
             Self::DeployConfigChanged => f.write_str("DEPLOY_CONFIG_CHANGED"),
+            Self::ProfileInvalid => f.write_str("PROFILE_INVALID"),
+            Self::ProfileChanged => f.write_str("PROFILE_CHANGED"),
             Self::DeployNotConfigured => f.write_str("DEPLOY_NOT_CONFIGURED"),
             Self::DeployAccountNotSet => f.write_str("DEPLOY_ACCOUNT_NOT_SET"),
             Self::DeployTokenInvalid => f.write_str("DEPLOY_TOKEN_INVALID"),
@@ -4416,6 +4503,8 @@ impl ::std::str::FromStr for ErrorCode {
             "CI_NOT_CONFIGURED" => Ok(Self::CiNotConfigured),
             "DEPLOY_CONFIG_INVALID" => Ok(Self::DeployConfigInvalid),
             "DEPLOY_CONFIG_CHANGED" => Ok(Self::DeployConfigChanged),
+            "PROFILE_INVALID" => Ok(Self::ProfileInvalid),
+            "PROFILE_CHANGED" => Ok(Self::ProfileChanged),
             "DEPLOY_NOT_CONFIGURED" => Ok(Self::DeployNotConfigured),
             "DEPLOY_ACCOUNT_NOT_SET" => Ok(Self::DeployAccountNotSet),
             "DEPLOY_TOKEN_INVALID" => Ok(Self::DeployTokenInvalid),
@@ -4873,6 +4962,17 @@ pub struct GetIssuesWebhookOut {
     pub secret_set: bool,
     pub url: ::std::string::String,
 }
+///`GetJudgeSettingsOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetJudgeSettingsOut {
+    #[serde(rename = "keySet")]
+    pub key_set: bool,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
 ///`GetProfileIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetProfileIn {
@@ -4933,6 +5033,12 @@ impl<'de> ::serde::Deserialize<'de> for GetProfileInUsername {
 pub struct GetProjectConversationIn {
     #[serde(rename = "conversationId")]
     pub conversation_id: ::std::string::String,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`GetProjectProfileIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetProjectProfileIn {
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
 }
@@ -5745,6 +5851,134 @@ impl ::std::convert::TryFrom<::std::string::String> for InstanceName {
         value.parse()
     }
 }
+///`IntentContent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct IntentContent {
+    pub approach: ::std::string::String,
+    #[serde(
+        rename = "decidedBy",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub decided_by: ::std::option::Option<IntentContentDecidedBy>,
+    pub enforced: bool,
+    pub goal: ::std::string::String,
+    #[serde(rename = "intentId")]
+    pub intent_id: ::std::string::String,
+    #[serde(rename = "notDoing")]
+    pub not_doing: ::std::string::String,
+    pub reasons: ::std::vec::Vec<::std::string::String>,
+    pub status: IntentContentStatus,
+}
+///`IntentContentDecidedBy`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum IntentContentDecidedBy {
+    #[serde(rename = "owner")]
+    Owner,
+    #[serde(rename = "judge")]
+    Judge,
+}
+impl ::std::fmt::Display for IntentContentDecidedBy {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Owner => f.write_str("owner"),
+            Self::Judge => f.write_str("judge"),
+        }
+    }
+}
+impl ::std::str::FromStr for IntentContentDecidedBy {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "owner" => Ok(Self::Owner),
+            "judge" => Ok(Self::Judge),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for IntentContentDecidedBy {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for IntentContentDecidedBy {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`IntentContentStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum IntentContentStatus {
+    #[serde(rename = "awaiting")]
+    Awaiting,
+    #[serde(rename = "proposed")]
+    Proposed,
+    #[serde(rename = "confirmed")]
+    Confirmed,
+    #[serde(rename = "corrected")]
+    Corrected,
+}
+impl ::std::fmt::Display for IntentContentStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Awaiting => f.write_str("awaiting"),
+            Self::Proposed => f.write_str("proposed"),
+            Self::Confirmed => f.write_str("confirmed"),
+            Self::Corrected => f.write_str("corrected"),
+        }
+    }
+}
+impl ::std::str::FromStr for IntentContentStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "awaiting" => Ok(Self::Awaiting),
+            "proposed" => Ok(Self::Proposed),
+            "confirmed" => Ok(Self::Confirmed),
+            "corrected" => Ok(Self::Corrected),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for IntentContentStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for IntentContentStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`IssueState`
 #[derive(
     ::serde::Deserialize,
@@ -5836,6 +6070,8 @@ pub enum ItemKind {
     Run,
     #[serde(rename = "agent_proposal")]
     AgentProposal,
+    #[serde(rename = "intent")]
+    Intent,
 }
 impl ::std::fmt::Display for ItemKind {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -5853,6 +6089,7 @@ impl ::std::fmt::Display for ItemKind {
             Self::Artifact => f.write_str("artifact"),
             Self::Run => f.write_str("run"),
             Self::AgentProposal => f.write_str("agent_proposal"),
+            Self::Intent => f.write_str("intent"),
         }
     }
 }
@@ -5873,6 +6110,7 @@ impl ::std::str::FromStr for ItemKind {
             "artifact" => Ok(Self::Artifact),
             "run" => Ok(Self::Run),
             "agent_proposal" => Ok(Self::AgentProposal),
+            "intent" => Ok(Self::Intent),
             _ => Err("invalid value".into()),
         }
     }
@@ -6591,6 +6829,196 @@ pub enum LifecycleEvent {
         #[serde(rename = "workspaceId")]
         workspace_id: ::std::string::String,
     },
+    #[serde(rename = "loop.intent.proposed")]
+    LoopIntentProposed {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleIntentProposedPayload,
+        #[serde(
+            rename = "runId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleAgentSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "loop.intent.confirmed")]
+    LoopIntentConfirmed {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleIntentDecidedPayload,
+        #[serde(
+            rename = "runId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+    #[serde(rename = "loop.intent.corrected")]
+    LoopIntentCorrected {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        agent: ::std::option::Option<AgentId>,
+        #[serde(
+            rename = "causationId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        causation_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "changeId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        change_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "dedupeKey")]
+        dedupe_key: ::std::string::String,
+        id: ::std::string::String,
+        #[serde(rename = "occurredAt")]
+        occurred_at: i64,
+        payload: LifecycleIntentCorrectedPayload,
+        #[serde(
+            rename = "runId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        run_id: ::std::option::Option<::std::string::String>,
+        #[serde(
+            rename = "sessionId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        session_id: ::std::option::Option<::std::string::String>,
+        source: LifecycleTempoSource,
+        #[serde(
+            rename = "turnId",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        turn_id: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "workspaceId")]
+        workspace_id: ::std::string::String,
+    },
+}
+///`LifecycleIntentCorrectedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleIntentCorrectedPayload {
+    #[serde(rename = "intentId")]
+    pub intent_id: ::std::string::String,
+}
+///`LifecycleIntentDecidedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleIntentDecidedPayload {
+    pub by: LifecycleIntentDecidedPayloadBy,
+    #[serde(rename = "intentId")]
+    pub intent_id: ::std::string::String,
+    pub reasons: ::std::vec::Vec<::std::string::String>,
+}
+///`LifecycleIntentDecidedPayloadBy`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LifecycleIntentDecidedPayloadBy {
+    #[serde(rename = "owner")]
+    Owner,
+    #[serde(rename = "judge")]
+    Judge,
+}
+impl ::std::fmt::Display for LifecycleIntentDecidedPayloadBy {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Owner => f.write_str("owner"),
+            Self::Judge => f.write_str("judge"),
+        }
+    }
+}
+impl ::std::str::FromStr for LifecycleIntentDecidedPayloadBy {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "owner" => Ok(Self::Owner),
+            "judge" => Ok(Self::Judge),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LifecycleIntentDecidedPayloadBy {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LifecycleIntentDecidedPayloadBy {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`LifecycleIntentProposedPayload`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct LifecycleIntentProposedPayload {
+    pub enforced: bool,
+    #[serde(rename = "intentId")]
+    pub intent_id: ::std::string::String,
+    pub lines: i64,
 }
 ///`LifecycleLogEvent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -9195,6 +9623,19 @@ pub struct Project {
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub visibility: ::std::option::Option<ProjectVisibility>,
 }
+///`ProjectProfile`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ProjectProfile {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub revision: f64,
+    pub source: ::std::string::String,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
 ///`ProjectProvider`
 #[derive(
     ::serde::Deserialize,
@@ -11682,6 +12123,72 @@ pub struct SetEnvironmentSecretIn {
     pub name: ::std::string::String,
     pub value: ::std::string::String,
 }
+///`SetJudgeKeyIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SetJudgeKeyIn {
+    pub key: SetJudgeKeyInKey,
+}
+///`SetJudgeKeyInKey`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct SetJudgeKeyInKey(::std::string::String);
+impl ::std::ops::Deref for SetJudgeKeyInKey {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<SetJudgeKeyInKey> for ::std::string::String {
+    fn from(value: SetJudgeKeyInKey) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for SetJudgeKeyInKey {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for SetJudgeKeyInKey {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for SetJudgeKeyInKey {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for SetJudgeKeyInKey {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`SetJudgeKeyOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SetJudgeKeyOut {
+    #[serde(rename = "keySet")]
+    pub key_set: bool,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
 ///`SetPinnedIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct SetPinnedIn {
@@ -12841,6 +13348,14 @@ impl<'de> ::serde::Deserialize<'de> for UpdateEnvironmentInName {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
     }
+}
+///`UpdateProjectProfileIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct UpdateProjectProfileIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub revision: f64,
+    pub source: ::std::string::String,
 }
 ///`UpdateProjectSettingsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -14645,6 +15160,15 @@ pub mod api {
         type Input = crate::CommitAndPushIn;
         type Output = crate::CommitAndPushOut;
     }
+    /// `confirmIntent`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ConfirmIntent;
+    impl crate::Function for ConfirmIntent {
+        const NAME: &'static str = "confirmIntent";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::ConfirmIntentIn;
+        type Output = crate::Empty;
+    }
     /// `continueAfterSetupFailure`
     #[derive(Clone, Copy, Debug)]
     pub struct ContinueAfterSetupFailure;
@@ -14652,6 +15176,15 @@ pub mod api {
         const NAME: &'static str = "continueAfterSetupFailure";
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::ContinueAfterSetupFailureIn;
+        type Output = crate::Empty;
+    }
+    /// `correctIntent`
+    #[derive(Clone, Copy, Debug)]
+    pub struct CorrectIntent;
+    impl crate::Function for CorrectIntent {
+        const NAME: &'static str = "correctIntent";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::CorrectIntentIn;
         type Output = crate::Empty;
     }
     /// `createEnvironment`
@@ -14779,6 +15312,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::DeleteEnvironmentSecretIn;
         type Output = crate::Empty;
+    }
+    /// `deleteJudgeKey`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DeleteJudgeKey;
+    impl crate::Function for DeleteJudgeKey {
+        const NAME: &'static str = "deleteJudgeKey";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::Empty;
+        type Output = crate::DeleteJudgeKeyOut;
     }
     /// `deleteMcpServer`
     #[derive(Clone, Copy, Debug)]
@@ -15005,6 +15547,15 @@ pub mod api {
         type Input = crate::GetIssuesWebhookIn;
         type Output = crate::GetIssuesWebhookOut;
     }
+    /// `getJudgeSettings`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetJudgeSettings;
+    impl crate::Function for GetJudgeSettings {
+        const NAME: &'static str = "getJudgeSettings";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = crate::GetJudgeSettingsOut;
+    }
     /// `getProfile`
     #[derive(Clone, Copy, Debug)]
     pub struct GetProfile;
@@ -15022,6 +15573,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::GetProjectConversationIn;
         type Output = crate::ConversationArtifact;
+    }
+    /// `getProjectProfile`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetProjectProfile;
+    impl crate::Function for GetProjectProfile {
+        const NAME: &'static str = "getProjectProfile";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetProjectProfileIn;
+        type Output = crate::ProjectProfile;
     }
     /// `getPublicProject`
     #[derive(Clone, Copy, Debug)]
@@ -15716,6 +16276,15 @@ pub mod api {
         type Input = crate::SetEnvironmentSecretIn;
         type Output = crate::Empty;
     }
+    /// `setJudgeKey`
+    #[derive(Clone, Copy, Debug)]
+    pub struct SetJudgeKey;
+    impl crate::Function for SetJudgeKey {
+        const NAME: &'static str = "setJudgeKey";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::SetJudgeKeyIn;
+        type Output = crate::SetJudgeKeyOut;
+    }
     /// `setPinned`
     #[derive(Clone, Copy, Debug)]
     pub struct SetPinned;
@@ -15896,6 +16465,15 @@ pub mod api {
         type Input = crate::UpdateEnvironmentIn;
         type Output = crate::Environment;
     }
+    /// `updateProjectProfile`
+    #[derive(Clone, Copy, Debug)]
+    pub struct UpdateProjectProfile;
+    impl crate::Function for UpdateProjectProfile {
+        const NAME: &'static str = "updateProjectProfile";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::UpdateProjectProfileIn;
+        type Output = crate::ProjectProfile;
+    }
     /// `updateProjectSettings`
     #[derive(Clone, Copy, Debug)]
     pub struct UpdateProjectSettings;
@@ -15961,7 +16539,9 @@ pub mod api {
         ("cancelTurn", crate::Method::Post),
         ("closeSession", crate::Method::Post),
         ("commitAndPush", crate::Method::Post),
+        ("confirmIntent", crate::Method::Post),
         ("continueAfterSetupFailure", crate::Method::Post),
+        ("correctIntent", crate::Method::Post),
         ("createEnvironment", crate::Method::Post),
         ("createPullRequest", crate::Method::Post),
         ("createRepository", crate::Method::Post),
@@ -15976,6 +16556,7 @@ pub mod api {
         ("deleteDeploySettings", crate::Method::Post),
         ("deleteEnvironment", crate::Method::Post),
         ("deleteEnvironmentSecret", crate::Method::Post),
+        ("deleteJudgeKey", crate::Method::Post),
         ("deleteMcpServer", crate::Method::Post),
         ("deleteProjectAgent", crate::Method::Post),
         ("deleteProjectSecret", crate::Method::Post),
@@ -16001,8 +16582,10 @@ pub mod api {
         ("getDotfiles", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
         ("getIssuesWebhook", crate::Method::Get),
+        ("getJudgeSettings", crate::Method::Get),
         ("getProfile", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
+        ("getProjectProfile", crate::Method::Get),
         ("getPublicProject", crate::Method::Get),
         ("getRepository", crate::Method::Get),
         ("getRepositoryFile", crate::Method::Get),
@@ -16080,6 +16663,7 @@ pub mod api {
         ("setClaudeToken", crate::Method::Post),
         ("setCodexAuth", crate::Method::Post),
         ("setEnvironmentSecret", crate::Method::Post),
+        ("setJudgeKey", crate::Method::Post),
         ("setPinned", crate::Method::Post),
         ("setProjectEnvironment", crate::Method::Post),
         ("setProjectPinned", crate::Method::Post),
@@ -16100,6 +16684,7 @@ pub mod api {
         ("updateDeploySettings", crate::Method::Post),
         ("updateDotfiles", crate::Method::Post),
         ("updateEnvironment", crate::Method::Post),
+        ("updateProjectProfile", crate::Method::Post),
         ("updateProjectSettings", crate::Method::Post),
         ("updateRepositoryIssue", crate::Method::Post),
         ("updateRepositoryIssueComment", crate::Method::Post),
@@ -16165,10 +16750,12 @@ pub mod wire {
         "ConfigOption",
         "ConfigSelectGroup",
         "ConfigSelectOption",
+        "ConfirmIntentIn",
         "ContentBlock",
         "ContinueAfterSetupFailureIn",
         "ConversationArtifact",
         "ConversationSummary",
+        "CorrectIntentIn",
         "CreateEnvironmentIn",
         "CreatePullRequestIn",
         "CreatePullRequestOut",
@@ -16187,6 +16774,7 @@ pub mod wire {
         "DeleteCredentialIn",
         "DeleteEnvironmentIn",
         "DeleteEnvironmentSecretIn",
+        "DeleteJudgeKeyOut",
         "DeleteMcpServerIn",
         "DeleteProjectAgentIn",
         "DeleteProjectSecretIn",
@@ -16240,8 +16828,10 @@ pub mod wire {
         "GetFileDiffOut",
         "GetIssuesWebhookIn",
         "GetIssuesWebhookOut",
+        "GetJudgeSettingsOut",
         "GetProfileIn",
         "GetProjectConversationIn",
+        "GetProjectProfileIn",
         "GetPublicProjectIn",
         "GetRepositoryFileIn",
         "GetRepositoryFileOut",
@@ -16261,6 +16851,7 @@ pub mod wire {
         "InjectorInput",
         "Instance",
         "InstanceName",
+        "IntentContent",
         "IssueState",
         "Item",
         "ItemKind",
@@ -16271,6 +16862,9 @@ pub mod wire {
         "LifecycleChangeEndedPayload",
         "LifecycleCheckPayload",
         "LifecycleEvent",
+        "LifecycleIntentCorrectedPayload",
+        "LifecycleIntentDecidedPayload",
+        "LifecycleIntentProposedPayload",
         "LifecycleLogEvent",
         "LifecyclePage",
         "LifecycleRunCompletedPayload",
@@ -16358,6 +16952,7 @@ pub mod wire {
         "Profile",
         "ProfileIssue",
         "Project",
+        "ProjectProfile",
         "ProjectSummary",
         "ProjectVisibility",
         "PutProjectAgentIn",
@@ -16424,6 +17019,8 @@ pub mod wire {
         "SetClaudeTokenIn",
         "SetCodexAuthIn",
         "SetEnvironmentSecretIn",
+        "SetJudgeKeyIn",
+        "SetJudgeKeyOut",
         "SetPinnedIn",
         "SetProjectEnvironmentIn",
         "SetProjectPinnedIn",
@@ -16458,6 +17055,7 @@ pub mod wire {
         "UpdateDeploySettingsIn",
         "UpdateDotfilesIn",
         "UpdateEnvironmentIn",
+        "UpdateProjectProfileIn",
         "UpdateProjectSettingsIn",
         "UpdateRepositoryIssueCommentIn",
         "UpdateRepositoryIssueIn",
@@ -16546,12 +17144,14 @@ pub mod wire {
             "ConfigOption" => crate::roundtrip::<crate::ConfigOption>(text),
             "ConfigSelectGroup" => crate::roundtrip::<crate::ConfigSelectGroup>(text),
             "ConfigSelectOption" => crate::roundtrip::<crate::ConfigSelectOption>(text),
+            "ConfirmIntentIn" => crate::roundtrip::<crate::ConfirmIntentIn>(text),
             "ContentBlock" => crate::roundtrip::<crate::ContentBlock>(text),
             "ContinueAfterSetupFailureIn" => {
                 crate::roundtrip::<crate::ContinueAfterSetupFailureIn>(text)
             }
             "ConversationArtifact" => crate::roundtrip::<crate::ConversationArtifact>(text),
             "ConversationSummary" => crate::roundtrip::<crate::ConversationSummary>(text),
+            "CorrectIntentIn" => crate::roundtrip::<crate::CorrectIntentIn>(text),
             "CreateEnvironmentIn" => crate::roundtrip::<crate::CreateEnvironmentIn>(text),
             "CreatePullRequestIn" => crate::roundtrip::<crate::CreatePullRequestIn>(text),
             "CreatePullRequestOut" => crate::roundtrip::<crate::CreatePullRequestOut>(text),
@@ -16576,6 +17176,7 @@ pub mod wire {
             "DeleteEnvironmentSecretIn" => {
                 crate::roundtrip::<crate::DeleteEnvironmentSecretIn>(text)
             }
+            "DeleteJudgeKeyOut" => crate::roundtrip::<crate::DeleteJudgeKeyOut>(text),
             "DeleteMcpServerIn" => crate::roundtrip::<crate::DeleteMcpServerIn>(text),
             "DeleteProjectAgentIn" => crate::roundtrip::<crate::DeleteProjectAgentIn>(text),
             "DeleteProjectSecretIn" => crate::roundtrip::<crate::DeleteProjectSecretIn>(text),
@@ -16631,8 +17232,10 @@ pub mod wire {
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
             "GetIssuesWebhookIn" => crate::roundtrip::<crate::GetIssuesWebhookIn>(text),
             "GetIssuesWebhookOut" => crate::roundtrip::<crate::GetIssuesWebhookOut>(text),
+            "GetJudgeSettingsOut" => crate::roundtrip::<crate::GetJudgeSettingsOut>(text),
             "GetProfileIn" => crate::roundtrip::<crate::GetProfileIn>(text),
             "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
+            "GetProjectProfileIn" => crate::roundtrip::<crate::GetProjectProfileIn>(text),
             "GetPublicProjectIn" => crate::roundtrip::<crate::GetPublicProjectIn>(text),
             "GetRepositoryFileIn" => crate::roundtrip::<crate::GetRepositoryFileIn>(text),
             "GetRepositoryFileOut" => crate::roundtrip::<crate::GetRepositoryFileOut>(text),
@@ -16654,6 +17257,7 @@ pub mod wire {
             "InjectorInput" => crate::roundtrip::<crate::InjectorInput>(text),
             "Instance" => crate::roundtrip::<crate::Instance>(text),
             "InstanceName" => crate::roundtrip::<crate::InstanceName>(text),
+            "IntentContent" => crate::roundtrip::<crate::IntentContent>(text),
             "IssueState" => crate::roundtrip::<crate::IssueState>(text),
             "Item" => crate::roundtrip::<crate::Item>(text),
             "ItemKind" => crate::roundtrip::<crate::ItemKind>(text),
@@ -16670,6 +17274,15 @@ pub mod wire {
             }
             "LifecycleCheckPayload" => crate::roundtrip::<crate::LifecycleCheckPayload>(text),
             "LifecycleEvent" => crate::roundtrip::<crate::LifecycleEvent>(text),
+            "LifecycleIntentCorrectedPayload" => {
+                crate::roundtrip::<crate::LifecycleIntentCorrectedPayload>(text)
+            }
+            "LifecycleIntentDecidedPayload" => {
+                crate::roundtrip::<crate::LifecycleIntentDecidedPayload>(text)
+            }
+            "LifecycleIntentProposedPayload" => {
+                crate::roundtrip::<crate::LifecycleIntentProposedPayload>(text)
+            }
             "LifecycleLogEvent" => crate::roundtrip::<crate::LifecycleLogEvent>(text),
             "LifecyclePage" => crate::roundtrip::<crate::LifecyclePage>(text),
             "LifecycleRunCompletedPayload" => {
@@ -16781,6 +17394,7 @@ pub mod wire {
             "Profile" => crate::roundtrip::<crate::Profile>(text),
             "ProfileIssue" => crate::roundtrip::<crate::ProfileIssue>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
+            "ProjectProfile" => crate::roundtrip::<crate::ProjectProfile>(text),
             "ProjectSummary" => crate::roundtrip::<crate::ProjectSummary>(text),
             "ProjectVisibility" => crate::roundtrip::<crate::ProjectVisibility>(text),
             "PutProjectAgentIn" => crate::roundtrip::<crate::PutProjectAgentIn>(text),
@@ -16849,6 +17463,8 @@ pub mod wire {
             "SetClaudeTokenIn" => crate::roundtrip::<crate::SetClaudeTokenIn>(text),
             "SetCodexAuthIn" => crate::roundtrip::<crate::SetCodexAuthIn>(text),
             "SetEnvironmentSecretIn" => crate::roundtrip::<crate::SetEnvironmentSecretIn>(text),
+            "SetJudgeKeyIn" => crate::roundtrip::<crate::SetJudgeKeyIn>(text),
+            "SetJudgeKeyOut" => crate::roundtrip::<crate::SetJudgeKeyOut>(text),
             "SetPinnedIn" => crate::roundtrip::<crate::SetPinnedIn>(text),
             "SetProjectEnvironmentIn" => crate::roundtrip::<crate::SetProjectEnvironmentIn>(text),
             "SetProjectPinnedIn" => crate::roundtrip::<crate::SetProjectPinnedIn>(text),
@@ -16885,6 +17501,7 @@ pub mod wire {
             "UpdateDeploySettingsIn" => crate::roundtrip::<crate::UpdateDeploySettingsIn>(text),
             "UpdateDotfilesIn" => crate::roundtrip::<crate::UpdateDotfilesIn>(text),
             "UpdateEnvironmentIn" => crate::roundtrip::<crate::UpdateEnvironmentIn>(text),
+            "UpdateProjectProfileIn" => crate::roundtrip::<crate::UpdateProjectProfileIn>(text),
             "UpdateProjectSettingsIn" => crate::roundtrip::<crate::UpdateProjectSettingsIn>(text),
             "UpdateRepositoryIssueCommentIn" => {
                 crate::roundtrip::<crate::UpdateRepositoryIssueCommentIn>(text)

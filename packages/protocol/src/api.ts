@@ -41,6 +41,7 @@ import {
   DeployConfig,
   Deployment,
   ProductionError,
+  ProjectProfile,
   DeploySettings,
   CiRun,
   CiRunDetail,
@@ -192,6 +193,15 @@ export const API = {
   ),
   getIssuesWebhook: fn("GET", Schema.Struct({ projectId: S }), Schema.Struct({ url: S, secretSet: B })),
   rotateIssuesWebhook: fn("POST", Schema.Struct({ projectId: S }), Schema.Struct({ url: S, secret: S })),
+  getProjectProfile: fn("GET", Schema.Struct({ projectId: S }), ProjectProfile),
+  updateProjectProfile: fn("POST", Schema.Struct({ projectId: S, source: S, revision: N }), ProjectProfile),
+  getJudgeSettings: fn("GET", Empty, Schema.Struct({ keySet: B, updatedAt: Schema.NullOr(N) })),
+  setJudgeKey: fn(
+    "POST",
+    Schema.Struct({ key: NonEmpty }),
+    Schema.Struct({ keySet: B, updatedAt: Schema.NullOr(N) }),
+  ),
+  deleteJudgeKey: fn("POST", Empty, Schema.Struct({ keySet: B, updatedAt: Schema.NullOr(N) })),
   getDeploymentLog: fn(
     "GET",
     Schema.Struct({ projectId: S, deploymentId: NonEmpty }),
@@ -274,6 +284,12 @@ export const API = {
   cancelRun: fn("POST", Schema.Struct({ ...W, runId: S }), Empty),
   listRuns: fn("GET", Schema.Struct({ ...W, changeId: opt(S) }), Schema.Array(Run)),
   resolveAgentProposal: fn("POST", Schema.Struct({ ...W, proposalId: S, apply: B }), Empty),
+  confirmIntent: fn("POST", Schema.Struct({ ...W, intentId: S }), Empty),
+  correctIntent: fn(
+    "POST",
+    Schema.Struct({ ...W, intentId: S, text: S.check(Schema.isMinLength(1), Schema.isMaxLength(4000)) }),
+    Empty,
+  ),
   sendRunToChat: fn("POST", Schema.Struct({ ...W, runId: S }), Schema.Struct({ turnId: S })),
   listLifecycleEvents: fn(
     "GET",

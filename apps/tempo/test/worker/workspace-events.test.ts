@@ -1,3 +1,4 @@
+import { INTENT_TEXT } from "../../src/do/workspace/intent.ts";
 import { Schema } from "effect";
 import type { WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
@@ -2099,6 +2100,7 @@ describe.concurrent("prompt content blocks", () => {
       expect(p1.content).toEqual([
         { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "First" },
       ]);
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
@@ -2118,6 +2120,7 @@ describe.concurrent("prompt content blocks", () => {
       expect((await waitPrompt(ctx, t3)).content).toEqual([
         { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Third" },
       ]);
     },
@@ -2131,6 +2134,7 @@ describe.concurrent("prompt content blocks", () => {
       const ctx = await runningTurn({ prompt: "Only text" });
       expect(ctx.tempod.requestsOf("session.prompt")[0].content).toEqual([
         { type: "text", text: TURN_SUMMARY_RULE },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Only text" },
       ]);
     },
@@ -2368,6 +2372,7 @@ describe.concurrent("prompt content blocks", () => {
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
         { type: "text", text: "Review comments:\na.ts:1: why" },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Do it" },
         { type: "resource_link", uri: "file:///workspace/b.ts", name: "b.ts" },
       ]);
@@ -2437,6 +2442,7 @@ describe.concurrent("prompt content blocks", () => {
         { type: "text", text: GENERAL },
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Do it" },
       ]);
       expect(await sessionRow(ctx.stub, sessionId)).toMatchObject({

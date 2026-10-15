@@ -17,6 +17,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SECTIONS, sectionPage } from "~/ui/components/dialogs/settings-model";
 import { LibraryTab as AgentsTab } from "~/ui/components/dialogs/settings/LibraryTab";
 import { CloudflareTab } from "~/ui/components/dialogs/settings/CloudflareTab";
+import { TypeSafeSection } from "~/ui/components/dialogs/settings/TypeSafeSection";
 import { AppearanceTab } from "~/ui/components/dialogs/settings/AppearanceTab";
 import { DevicesTab } from "~/ui/components/dialogs/settings/DevicesTab";
 import { EnvironmentsTab } from "~/ui/components/dialogs/settings/EnvironmentsTab";
@@ -274,7 +275,12 @@ export function SettingsPage() {
           {tab === "agents" && <AgentsTab />}
           {tab === "environments" && <EnvironmentsTab />}
           {tab === "mcp" && <McpServersTab />}
-          {tab === "cloudflare" && <CloudflareTab />}
+          {tab === "cloudflare" && (
+            <div className="grid gap-4">
+              <CloudflareTab />
+              <TypeSafeSection />
+            </div>
+          )}
           {tab === "appearance" && <AppearanceTab />}
           {tab === "shortcuts" && <ShortcutsTab />}
           {tab === "devices" && <DevicesTab />}

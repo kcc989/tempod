@@ -28,6 +28,14 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("resolveAgentProposal", input);
   }
 
+  confirmIntent(input: MethodInput<"confirmIntent">): Promise<Result<FnOutput<"confirmIntent">>> {
+    return this.rpc("confirmIntent", input);
+  }
+
+  correctIntent(input: MethodInput<"correctIntent">): Promise<Result<FnOutput<"correctIntent">>> {
+    return this.rpc("correctIntent", input);
+  }
+
   sendRunToChat(input: MethodInput<"sendRunToChat">): Promise<Result<FnOutput<"sendRunToChat">>> {
     return this.rpc("sendRunToChat", input);
   }

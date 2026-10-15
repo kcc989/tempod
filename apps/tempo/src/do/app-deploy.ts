@@ -12,9 +12,10 @@ import {
   type DeployTrigger,
   type Deployment,
   type ProductionError,
+  type ProjectProfile,
   type Result,
 } from "@tempo/protocol";
-import { parseDeployConfig, type DeploySpec } from "@tempo/settings";
+import { parseDeployConfig, parseProfile, type DeploySpec } from "@tempo/settings";
 import { artifactHeadSha, validateArtifactBranch } from "../artifacts/repositories.ts";
 import {
   appDeploySchema,
@@ -23,6 +24,7 @@ import {
   deployKv,
   deployments,
   prodErrors,
+  profiles,
 } from "../db/app-deploy-do.ts";
 import { ISSUES, type ParsedIssue } from "../deploy/issues.ts";
 import { projects } from "../db/d1.ts";
@@ -356,6 +358,43 @@ export class AppDeployDO extends DurableObject<Env> {
     this.db.update(deployments).set({ gateFailure: reason }).where(eq(deployments.id, row.id)).run();
     await this.rollback(this.require(row.id), reason, "failure");
     await this.pump();
+  }
+
+  // ---------- project profile (13, L-ADR-3) ----------
+  async getProfile(): Promise<Result<ProjectProfile>> {
+    return capture(async () => this.profileWire());
+  }
+
+  async updateProfile(input: { source: string; revision: number }): Promise<Result<ProjectProfile>> {
+    return capture(async () => {
+      parseProfile(input.source);
+      const current = this.latestProfile();
+
+      if (input.revision !== (current?.revision ?? 0)) throw new TempoError("PROFILE_CHANGED");
+      const revision = (current?.revision ?? 0) + 1;
+      this.db.insert(profiles).values({ revision, source: input.source, createdAt: Date.now() }).run();
+      this.db
+        .delete(profiles)
+        .where(lt(profiles.revision, revision - DEPLOY.keptRevisions + 1))
+        .run();
+
+      return this.profileWire();
+    });
+  }
+
+  private latestProfile() {
+    return this.db.select().from(profiles).orderBy(desc(profiles.revision)).get();
+  }
+
+  private profileWire(): ProjectProfile {
+    const row = this.latestProfile();
+
+    return {
+      projectId: this.projectId,
+      revision: row?.revision ?? 0,
+      source: row?.source ?? "",
+      updatedAt: row?.createdAt ?? null,
+    };
   }
 
   // ---------- production errors (12, Production errors) ----------

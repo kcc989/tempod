@@ -5,6 +5,7 @@ import {
   errorMessage,
   type AgentId,
   type ErrorCode,
+  type IntentContent,
   type Item,
   type ItemOf,
   type PermissionOption,
@@ -476,3 +477,27 @@ export const turnTokenSplit = (turn: Pick<Turn, "usage">): string | null =>
   turn.usage
     ? `${formatTokens(turn.usage.inputTokens)} in, ${formatTokens(turn.usage.outputTokens)} out`
     : null;
+
+const INTENT_REASONS = new Map([
+  ["new_access", "it needs new access"],
+  ["security_risk", "it may add a security risk"],
+  ["hard_rollback", "it is hard to roll back"],
+  ["no_answer", "the judge did not answer"],
+]);
+
+/** 13, L-ADR-1: why the judge sent an intent to the owner. */
+export const intentReasonText = (reasons: ReadonlyArray<string>): string =>
+  reasons.map((r) => INTENT_REASONS.get(r) ?? r).join(", ");
+
+export const intentStatusText = (intent: Pick<IntentContent, "status" | "decidedBy">): string => {
+  switch (intent.status) {
+    case "awaiting":
+      return "Waiting for the agent's intent";
+    case "proposed":
+      return "Intent: confirm or correct";
+    case "corrected":
+      return "Intent corrected";
+    default:
+      return intent.decidedBy === "judge" ? "Intent confirmed by Tempo (low risk)" : "Intent confirmed";
+  }
+};

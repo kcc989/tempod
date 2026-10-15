@@ -2991,6 +2991,10 @@ describe("runs", async () => {
   await import("./runs.cases.ts");
 });
 
+describe("intent", async () => {
+  await import("./intent.cases.ts");
+});
+
 describe("protocol-additions", async () => {
   await import("./protocol-additions.cases.ts");
 });

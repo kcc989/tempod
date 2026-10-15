@@ -70,13 +70,28 @@ The owner confirmed the user, Jev, the web search API and OAuth sign-in for MCP 
 3. The chat shows an intent card with two actions: **Confirm** (one click or ⌘↩) and **Correct** (a text field; sending it is the one action).
 4. **Confirm** switches the session to write with `session/set_config_option` (category `mode`), or removes the profile's edit-tool deny list, and queues the turn `Intent confirmed. Do the work.`
 5. **Correct** queues the correction as a user turn. The agent calls `propose_intent` again.
-6. **Risk decides who confirms (owner-approved 2026-10-15).** Jev (L-ADR-9) judges each intent with the profile and the session's manifest as state. It asks three questions: does the work open new permissions or capabilities; does it add a security risk; how hard is it to roll back. When all three are low, Tempo confirms the intent itself (`loop.intent.confirmed` with `by: "judge"`) and the work starts. The card stays in the chat, and **Correct** still works. When any one is high, or Jev does not answer, the owner confirms as in step 3.
+6. **Risk decides who confirms (owner-approved 2026-10-15).** Exact rules below. Jev (L-ADR-9) judges each intent with the profile and the session's manifest as state. It asks three questions: does the work open new permissions or capabilities; does it add a security risk; how hard is it to roll back. When all three are low, Tempo confirms the intent itself (`loop.intent.confirmed` with `by: "judge"`) and the work starts. The card stays in the chat, and **Correct** still works. When any one is high, or Jev does not answer, the owner confirms as in step 3.
 7. The intent check runs once at the start of each task. The agent calls `propose_intent` again, and the session goes back to read-only, when it plans work outside the confirmed `goal`. That new intent is judged again.
 8. The fixed prompt text that asks for the intent is given with the first turn of the task, as the run header is in 08.
 
 **Not chosen.** Plan mode only (not the same for four agents). ACP elicitation (needs a change to 02, and SDK 1.8.0 support is not verified). A free-text plan (the length is not enforceable).
 
 **Reduces.** DIRECTION.
+
+**Exact rules (owner-approved 2026-10-15; these are what the code does).**
+
+| Rule | Value |
+| --- | --- |
+| When | The first prompt of each chat (session) with no run. Each message is its own change in Tempo (08), so later prompts in the same chat do not ask again; the agent proposes again when its work leaves the confirmed goal. A first prompt that starts with `/go` skips the check for that chat; Tempo removes `/go` from the text. |
+| Read-only | Before that turn's prompt, when the session's modes include `PLAN_MODE` of its agent (Claude and OpenCode `plan`, Codex `read-only`), Tempo sets that mode with `session.setMode` and keeps the mode it replaced. Pi has no such mode; its intent has `enforced: false` and relies on the instruction. |
+| Instruction | One text block before the prompt, exact: `Before you change any file, call the tempo tool propose_intent with the goal, your approach and what you will not do, in at most 5 lines in total. Then end your turn. Do not change files until Tempo confirms the intent.` |
+| Tool | `propose_intent {goal, approach, notDoing}`, each a nonempty string. All lines together at most 5, each line at most 160 characters. Errors (tool errors, exact): `Intent must be at most 5 lines.`, `Each line must be at most 160 characters.`, `There is no task waiting for an intent.` Listed only in sessions with no run. |
+| Storage | WorkspaceDO table `intents`, one row per chat: `id`, `session_id` (unique), `change_id` (the change it was last proposed in), `item_id`, `status` (`awaiting`, `proposed`, `confirmed`, `corrected`), `goal`, `approach`, `not_doing`, `decided_by` (`owner`, `judge` or null), `judge_json`, `prior_mode_id`, `enforced`, `created_at`, `decided_at`. One `intent` item per chat, updated in place. |
+| Judge | After each proposal, Jev (L-ADR-9) judges it with the branch and the project name as context. Low risk: Tempo confirms with `decided_by: "judge"`. Else the workspace's attention is `needs_input`. |
+| Tool answer | `Tempo confirmed the intent. End your turn; Tempo starts the work next.` or `The owner will confirm or correct the intent. End your turn now.` |
+| Confirm | `confirmIntent {workspaceId, intentId}`, or the judge. Sets `confirmed`, restores the prior mode, and queues the turn `Intent confirmed. Do the work.` in the same session and change. Writes `loop.intent.confirmed` with `by`. A second confirm does nothing. |
+| Correct | `correctIntent {workspaceId, intentId, text}` (1–4,000 characters). Sets `corrected` and queues the text as a turn in the same change. The mode stays read-only. Writes `loop.intent.corrected`. The agent proposes again. |
+| Re-propose | A call in a chat whose intent is `confirmed` sets it back to `proposed` and the mode back to read-only, and is judged again. |
 
 ### L-ADR-2. Proof is a stored object that Tempo checks, not a claim
 
@@ -96,6 +111,19 @@ The owner confirmed the user, Jev, the web search API and OAuth sign-in for MCP 
 
 **Reduces.** VERIFY, UNCLEAR_IMPL, DESIGN_IGNORED.
 
+**Exact rules (these are what the code does).**
+
+| Rule | Value |
+| --- | --- |
+| Tool | `submit_proof {summary, screens, checklist}` on the `tempo` MCP server, in chats with no run. `summary`: at most 5 lines, each at most 160 characters. `screens`: 0–20 of `{route, viewport: "desktop" or "phone", theme: "light" or "dark", image, recording?}`; `image` and `recording` are paths the agent published with `publish_artifact` in this chat. `checklist`: 0–50 of `{itemId, note}`, each note at most 500 characters. |
+| Tool errors | `Summary must be at most 5 lines.`, `Each line must be at most 160 characters.`, `Publish <path> with publish_artifact first.`, `Unknown checklist item <id>.` |
+| Changed screens | The branch's changed files (`git.changes {scope: "branch"}`) are matched against each profile `screens[].files` glob (`*` within a path segment, `**` across segments). Each matched `route` must have at least one screen. |
+| Checks | For each profile check, Tempo starts a script run (kind `run`, `scriptId` `check:<name>`, cwd `/workspace`, the check's timeout) and records its run ID on the proof. A check passes when its run exits 0. |
+| Storage | WorkspaceDO table `proofs`: `id`, `session_id`, `change_id`, `item_id`, `summary`, `screens_json`, `checklist_json`, `checks_json`, `missing_json`, `complete`, `created_at`. One `proof` item per proof in the chat. |
+| Complete | When every required route has a screen, every open checklist item is in `checklist`, and every check passed. Until the checks end, the proof is `checking`. `loop.proof.submitted` is written when the checks end, with `{proofId, complete}`. A proof's resolved checklist items become `resolved` only when the proof is complete. |
+| Tool answer | `Tempo is running the checks. End your turn; the owner sees the proof when they finish.` |
+| Checklist | WorkspaceDO table `checklist`: `id`, `text` (1–2,000 characters), `status` (`open` or `resolved`), `source_item_id`, `resolved_by` (proof ID or null), `created_at`. `addChecklistItem {workspaceId, itemId}` takes the text of that user message item. `reopenChecklistItem {workspaceId, checklistId}` sets it `open`. `WorkspaceDetail.checklist` lists all items. Each writes `loop.checklist.added` or `loop.checklist.reopened`. While items are open, each prompt carries one text block before the user's text: `Open design checklist:` and one line per item, `<id>: <text>`. |
+
 ### L-ADR-3. One project profile, given to every session
 
 **Decision.** Each project has one profile. The owner edits it in Tempo, once. It is stored in the project's `AppDeployDO` with revisions, as the deploy configuration is (12), so one DO holds all owner-approved project configuration. It holds:
@@ -114,6 +142,49 @@ The owner confirmed the user, Jev, the web search API and OAuth sign-in for MCP 
 - The agent can propose a profile change with a proposal card, like `propose_agent_change` (08). Only the owner applies it.
 
 **Reduces.** STACK, API_KEYS, ACCESS_UNAWARE.
+
+**Exact rules (these are what the code does).**
+
+The profile is YAML 1.2, parsed with the existing `yaml` package, at most 32 KiB. The owner edits it in the project's settings (web and Mac). It is not read from the repository.
+
+```yaml
+version: 1
+stack:
+  runtime: bun 1.3
+  package_manager: bun
+  frameworks: [TanStack Start, Effect v4]
+  libraries: [drizzle-orm 0.45, better-auth 1.7]
+services:
+  - name: stripe
+    purpose: Payments
+    hosts: [api.stripe.com]
+    credential: STRIPE_KEY
+    methods: [GET, POST]
+checks:
+  - name: typecheck
+    command: bun run typecheck
+    timeout_minutes: 10
+screens:
+  - route: /todos
+    files: ["src/routes/todos/**", "src/components/todo-*.tsx"]
+notes: |
+  Use Effect for errors. Keep UI copy short.
+```
+
+| Key | Rule |
+| --- | --- |
+| `version` | Required. Exactly `1`. |
+| `stack` | Optional map. `runtime` and `package_manager`: strings of 1–100 characters. `frameworks` and `libraries`: lists of at most 30 strings of 1–100 characters. |
+| `services` | Optional list of at most 20. `name` matches `^[a-z][a-z0-9-]{0,39}$`, unique. `purpose`: 1–200 characters. `hosts`: 1–20 host patterns (05). `credential`: optional environment secret name (`^[A-Z_][A-Z0-9_]*$`). `methods`: optional list of HTTP methods; empty means all. |
+| `checks` | Optional list of at most 10. `name` matches `^[a-z][a-z0-9-]{0,39}$`, unique. `command`: 1–4,096 characters, run with `bash -lc` in `/workspace`. `timeout_minutes`: 1–30, default 10. |
+| `screens` | Optional list of at most 50. `route` starts with `/`, at most 200 characters, unique. `files`: 1–20 glob patterns relative to the repository root. |
+| `notes` | Optional string, at most 40 lines and 4 KiB. |
+
+- A missing key, a wrong type or a broken rule fails with `PROFILE_INVALID`; its detail names the first problem, for example `services[0].hosts: 1 to 20 host patterns`. Unknown keys fail too.
+- Each save makes a new revision, as the deploy configuration does (12). A save sends the revision it edited; a different current revision fails with `PROFILE_CHANGED`. The project's `AppDeployDO` keeps the newest 20 revisions. For a GitHub-linked project it stores only the profile.
+- Server functions: `getProjectProfile {projectId}` → `ProjectProfile {projectId, revision (0 when never saved), source, updatedAt}`; `updateProjectProfile {projectId, source, revision}` → `ProjectProfile`.
+- **Delivery.** On the first prompt of each chat, after the turn-summary rule and `prompts.general`, the WorkspaceDO adds one text block: `Project profile (revision <n>). Use this stack and these services; do not ask the owner to restate them.` followed by the profile source. With no saved profile it adds nothing. The `tempo` MCP tool `get_project_profile {}` returns the current source and revision.
+- Error codes: `PROFILE_INVALID` (`The project profile is not valid.`) and `PROFILE_CHANGED` (`The project profile changed. Reload it and try again.`).
 
 ### L-ADR-4. Gradual deploys, also with Durable Objects
 
@@ -214,7 +285,7 @@ Each step writes one lifecycle event (08), so loop times come from the event log
 | Library | `@typesafe-ai/sdk` 0.7.0 (MIT), pinned. It has no dependencies and runs in the Worker. |
 | Model | `jev-1.14.0` |
 | Endpoint | `POST https://api.typesafe.ai/v1/systemone` (through the SDK) |
-| Key | The owner's `CredentialDO`, key `typesafe.api_key`. It never enters a container, a log or an event. |
+| Key | The owner's `CredentialDO`, key `typesafe.api_key`. It never enters a container, a log or an event. Server functions `getJudgeSettings {}` → `{keySet, updatedAt}`, `setJudgeKey {key}` and `deleteJudgeKey {}` (same output). Save checks the key with one Jev call; a refused key fails with `VALIDATION_FAILED`, detail `TypeSafe AI did not accept the key.` Settings has a **TypeSafe AI** section on web and Mac, next to Cloudflare, with a write-only key field. |
 | Where it runs | The Worker and DOs only. Never in a container. |
 | Timeout | 10 seconds per attempt, one retry. Measured on 2026-10-15 over 12 calls: median 0.7 s, p90 2.2 s, max 9.1 s. No answer counts as high risk: the owner decides. |
 | Checks | Intent risk (L-ADR-1), Cloudflare API calls (L-ADR-8) |

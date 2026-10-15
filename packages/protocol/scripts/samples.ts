@@ -384,6 +384,28 @@ export const SHARED_SAMPLES = {
   NoteReport: [{ status: "done", summary: "Finished" }],
   RunContent: [{ runId: uid(920) }],
   AgentProposalContent: [{ proposalId: uid(925) }],
+  IntentContent: [
+    {
+      intentId: uid(1012),
+      status: "awaiting",
+      goal: "",
+      approach: "",
+      notDoing: "",
+      decidedBy: null,
+      reasons: [],
+      enforced: false,
+    },
+    {
+      intentId: uid(1012),
+      status: "confirmed",
+      goal: "Add due dates",
+      approach: "A nullable column and a picker",
+      notDoing: "No reminders",
+      decidedBy: "judge",
+      reasons: [],
+      enforced: true,
+    },
+  ],
   LifecycleRunDecidedPayload: [RUN_DECIDED],
   LifecycleEvent: [
     LIFE_EVENT,
@@ -415,6 +437,18 @@ export const SHARED_SAMPLES = {
     { ...LIFE_EVENT, type: "tempo.check.passed", payload: { prNumber: 25 } },
     { ...LIFE_EVENT, type: "tempo.check.failed", payload: { prNumber: 25 } },
     { ...LIFE_EVENT, type: "tempo.check.failed", payload: { prNumber: 25, commitSha: "c".repeat(40) } },
+    {
+      ...LIFE_EVENT,
+      type: "loop.intent.proposed",
+      source: "agent",
+      payload: { intentId: uid(1012), lines: 3, enforced: true },
+    },
+    {
+      ...LIFE_EVENT,
+      type: "loop.intent.confirmed",
+      payload: { intentId: uid(1012), by: "judge", reasons: [] },
+    },
+    { ...LIFE_EVENT, type: "loop.intent.corrected", payload: { intentId: uid(1012) } },
   ],
   LifecycleChangeCreatedPayload: [LIFE_EVENT.payload],
   LifecycleTurnEndedPayload: [
@@ -430,6 +464,9 @@ export const SHARED_SAMPLES = {
   LifecycleChangeEndedPayload: [{ status: "done" }],
   LifecycleBranchPushedPayload: [{ branch: "tempo/test", commitSha: "a".repeat(40) }],
   LifecycleCheckPayload: [{ prNumber: 25 }],
+  LifecycleIntentProposedPayload: [{ intentId: uid(1012), lines: 3, enforced: true }],
+  LifecycleIntentDecidedPayload: [{ intentId: uid(1012), by: "owner", reasons: ["new_access"] }],
+  LifecycleIntentCorrectedPayload: [{ intentId: uid(1012) }],
   LifecycleLogEvent: [LIFE_LOG],
   LifecyclePage: [{ events: [LIFE_LOG], nextBeforeSeq: null }],
   LifecycleTrace: [{ chain: [LIFE_LOG], children: [], runs: [RUN] }],
@@ -670,6 +707,15 @@ export const SHARED_SAMPLES = {
     },
   ],
   DeployRolloutWorker: deployment.rollout?.workers ?? [],
+  ProjectProfile: [
+    {
+      projectId: PROJECT_ID,
+      revision: 3,
+      source: "version: 1\nnotes: Use Effect for errors.\n",
+      updatedAt: at(1),
+    },
+    { projectId: PROJECT_ID, revision: 0, source: "", updatedAt: null },
+  ],
   ProductionError: [
     {
       id: uid(140),
@@ -989,6 +1035,10 @@ export const INPUT_SAMPLES = {
   ],
   updateRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1, state: "closed" }],
   resolveAgentProposal: [{ workspaceId: W1, proposalId: uid(704), apply: true }],
+  confirmIntent: [{ workspaceId: W1, intentId: uid(1012) }],
+  correctIntent: [
+    { workspaceId: W1, intentId: uid(1012), text: "Keep the due date optional and skip time zones." },
+  ],
   listRepositoryIssues: [
     { projectId: PROJECT_ID },
     { projectId: PROJECT_ID, state: "all", query: "browsing", labelId: repositoryLabel.id, offset: 0 },
@@ -1040,6 +1090,13 @@ export const INPUT_SAMPLES = {
   startErrorFix: [{ projectId: PROJECT_ID, errorId: uid(140) }],
   getIssuesWebhook: [{ projectId: PROJECT_ID }],
   rotateIssuesWebhook: [{ projectId: PROJECT_ID }],
+  getJudgeSettings: [{}],
+  getProjectProfile: [{ projectId: PROJECT_ID }],
+  updateProjectProfile: [
+    { projectId: PROJECT_ID, source: "version: 1\nnotes: Use Effect for errors.\n", revision: 2 },
+  ],
+  setJudgeKey: [{ key: "n0t-a-real-key" }],
+  deleteJudgeKey: [{}],
   getDeploymentLog: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
   createRepositoryLabel: [
     { projectId: PROJECT_ID, name: "bug", color: "d73a4a", description: "Something is broken" },
@@ -1329,6 +1386,12 @@ export const OUTPUT_SAMPLES = {
   ],
   CommitAndPushOut: [{ commitSha: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d" }],
   StartErrorFixOut: [{ workspaceId: uid(141) }],
+  SetJudgeKeyOut: [{ keySet: true, updatedAt: at(1) }],
+  DeleteJudgeKeyOut: [{ keySet: false, updatedAt: null }],
+  GetJudgeSettingsOut: [
+    { keySet: true, updatedAt: at(1) },
+    { keySet: false, updatedAt: null },
+  ],
   GetIssuesWebhookOut: [
     { url: `https://tempo.example.com/api/hooks/cloudflare-issues/${PROJECT_ID}`, secretSet: true },
     { url: `https://tempo.example.com/api/hooks/cloudflare-issues/${PROJECT_ID}`, secretSet: false },
